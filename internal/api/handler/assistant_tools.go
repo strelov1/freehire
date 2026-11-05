@@ -50,6 +50,33 @@ func (h *assistantHandlers) assistantDiscoveryTools() []assistant.Tool {
 // has seen.
 type assistantFilterArgs map[string][]string
 
+// UnmarshalJSON also reads a bare string as a one-value list. Models routinely send
+// work_mode: "remote"; the strict decode failed the whole call before searching, which on
+// 2026-11-05 was every internal_error search_jobs on the account MCP server (~57/day).
+// The schema keeps publishing lists only, so no model provider is handed a union type.
+func (f *assistantFilterArgs) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	out := make(assistantFilterArgs, len(raw))
+	for name, value := range raw {
+		var list []string
+		if len(value) > 0 && value[0] == '"' {
+			var one string
+			if err := json.Unmarshal(value, &one); err != nil {
+				return err
+			}
+			list = []string{one}
+		} else if err := json.Unmarshal(value, &list); err != nil {
+			return fmt.Errorf("filter %q: give a list of values from the facets tool", name)
+		}
+		out[name] = list
+	}
+	*f = out
+	return nil
+}
+
 // values renders the filter as the query form the search layer already parses,
 // rejecting any facet outside the published vocabulary. An unknown facet is an
 // error rather than a silent no-op: FilterFromValues ignores parameters it does

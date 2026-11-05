@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -112,6 +113,27 @@ func TestSearchJobsToolReturnsFullDescriptionsAsMarkdown(t *testing.T) {
 	}
 	if strings.Contains(string(payload), "<p>") {
 		t.Errorf("result = %s, want markdown rather than raw HTML", payload)
+	}
+}
+
+// Models send a one-value filter as a bare string; on the account MCP server that failed
+// every such call before the search ran.
+func TestSearchJobsToolReadsABareStringFilterAsOneValue(t *testing.T) {
+	s := &recordingSearcher{}
+	a := assistantWith(&searchHandlers{search: s, descriptions: fixedDescriptions{}}, nil)
+
+	tool := toolByName(t, a.assistantDiscoveryTools(), "search_jobs")
+	if _, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"filters":{"work_mode":"remote","seniority":["senior"],"regions":null}}`)); err != nil {
+		t.Fatalf("search_jobs: %v", err)
+	}
+	if s.got.Filter == nil || !strings.Contains(fmt.Sprint(s.got.Filter), "remote") {
+		t.Errorf("filter = %v, want work_mode remote applied", s.got.Filter)
+	}
+
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(`{"filters":{"work_mode":42}}`))
+	if err == nil || !strings.Contains(err.Error(), "work_mode") {
+		t.Errorf("error = %v, want a non-string, non-list value refused by name", err)
 	}
 }
 
