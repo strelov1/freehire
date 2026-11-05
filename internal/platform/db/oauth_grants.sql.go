@@ -240,6 +240,40 @@ func (q *Queries) ListOAuthGrantsByUser(ctx context.Context, userID int64) ([]Li
 	return items, nil
 }
 
+const resolveOAuthGrantIdentity = `-- name: ResolveOAuthGrantIdentity :one
+SELECT g.user_id, g.expires_at, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
+FROM oauth_grants g
+JOIN users u ON u.id = g.user_id
+WHERE g.access_token_hash = $1
+  AND g.expires_at > now()
+  AND g.issued_token_version = u.token_version
+`
+
+type ResolveOAuthGrantIdentityRow struct {
+	UserID             int64              `json:"user_id"`
+	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
+	ApiUntilStripe     pgtype.Timestamptz `json:"api_until_stripe"`
+	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
+	ProUntil           pgtype.Timestamptz `json:"pro_until"`
+	UltraUntil         pgtype.Timestamptz `json:"ultra_until"`
+}
+
+// Read-only credential identity and entitlements with the same liveness rules as
+// AuthenticateOAuthGrant, including the account's current session generation.
+func (q *Queries) ResolveOAuthGrantIdentity(ctx context.Context, accessTokenHash string) (ResolveOAuthGrantIdentityRow, error) {
+	row := q.db.QueryRow(ctx, resolveOAuthGrantIdentity, accessTokenHash)
+	var i ResolveOAuthGrantIdentityRow
+	err := row.Scan(
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.ApiUntilStripe,
+		&i.ApiDataUntilStripe,
+		&i.ProUntil,
+		&i.UltraUntil,
+	)
+	return i, err
+}
+
 const resolveOAuthGrantTier = `-- name: ResolveOAuthGrantTier :one
 SELECT g.user_id, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
 FROM oauth_grants g

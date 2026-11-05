@@ -195,6 +195,41 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAP
 	return items, nil
 }
 
+const resolveAPIKeyIdentity = `-- name: ResolveAPIKeyIdentity :one
+SELECT k.user_id, k.scope, k.expires_at, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
+FROM api_keys k
+JOIN users u ON u.id = k.user_id
+WHERE k.token_hash = $1
+  AND (k.expires_at IS NULL OR k.expires_at > now())
+`
+
+type ResolveAPIKeyIdentityRow struct {
+	UserID             int64              `json:"user_id"`
+	Scope              string             `json:"scope"`
+	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
+	ApiUntilStripe     pgtype.Timestamptz `json:"api_until_stripe"`
+	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
+	ProUntil           pgtype.Timestamptz `json:"pro_until"`
+	UltraUntil         pgtype.Timestamptz `json:"ultra_until"`
+}
+
+// Read-only credential identity and entitlements for trusted infrastructure.
+// No row means unknown, revoked or expired; introspection never changes last_used_at.
+func (q *Queries) ResolveAPIKeyIdentity(ctx context.Context, tokenHash string) (ResolveAPIKeyIdentityRow, error) {
+	row := q.db.QueryRow(ctx, resolveAPIKeyIdentity, tokenHash)
+	var i ResolveAPIKeyIdentityRow
+	err := row.Scan(
+		&i.UserID,
+		&i.Scope,
+		&i.ExpiresAt,
+		&i.ApiUntilStripe,
+		&i.ApiDataUntilStripe,
+		&i.ProUntil,
+		&i.UltraUntil,
+	)
+	return i, err
+}
+
 const resolveAPIKeyTier = `-- name: ResolveAPIKeyTier :one
 SELECT k.user_id, k.scope, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
 FROM api_keys k

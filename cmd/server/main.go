@@ -393,6 +393,7 @@ func runServer(cfg config.Settings) error {
 	}
 
 	handler.Register(app, handler.Config{
+		AuthIntrospectionSecret:     cfg.AuthIntrospectionSecret,
 		Pool:                        pool,
 		AgentViews:                  agentViews,
 		Throttler:                   throttler,

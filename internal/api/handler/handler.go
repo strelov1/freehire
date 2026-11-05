@@ -363,6 +363,8 @@ func ignoredJobValues(c *fiber.Ctx) map[string][]string {
 // cookie flag (CookieSecure), the enabled OAuth providers, and the optional
 // search client (nil disables search).
 type Config struct {
+	AuthIntrospectionSecret string
+
 	Pool *pgxpool.Pool
 	// AgentViews receives the postings served to agents (internal/application/agentview).
 	// Optional: nil records nothing.
@@ -546,6 +548,7 @@ func Register(app *fiber.App, cfg Config) {
 		issuer:       auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
 		browserTools: browsertools.New(),
 	}
+	app.Get("/internal/auth/introspect", newAuthIntrospection(queries, a.issuer, cfg.AuthIntrospectionSecret))
 	authH := newAuthHandlers(queries, cfg.Pool, cfg.Throttler, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
 		cfg.ServedHosts)
 	authH.authV2Enabled = cfg.AuthV2Enabled

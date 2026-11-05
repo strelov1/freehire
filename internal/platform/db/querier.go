@@ -6771,6 +6771,9 @@ type Querier interface {
 	// what stops a group repeated inside one verbose title from outranking a real
 	// cluster. A second count(DISTINCT id) would only add a per-group sort.
 	ResidualTitleGroups(ctx context.Context, arg ResidualTitleGroupsParams) ([]ResidualTitleGroupsRow, error)
+	// Read-only credential identity and entitlements for trusted infrastructure.
+	// No row means unknown, revoked or expired; introspection never changes last_used_at.
+	ResolveAPIKeyIdentity(ctx context.Context, tokenHash string) (ResolveAPIKeyIdentityRow, error)
 	// Resolve a presented token to its owner, the key's scope and how far the owner's paid
 	// plans reach, for the public-read rate limiter. Read-only on purpose: unlike
 	// AuthenticateAPIKey it does NOT touch last_used_at, because it runs on the hottest reads on
@@ -6793,6 +6796,9 @@ type Querier interface {
 	ResolveCompanySlugAliases(ctx context.Context, foldedKeys []string) ([]ResolveCompanySlugAliasesRow, error)
 	// Mark a report handled. An already resolved report keeps its first resolver and time.
 	ResolveConversationReport(ctx context.Context, arg ResolveConversationReportParams) (int64, error)
+	// Read-only credential identity and entitlements with the same liveness rules as
+	// AuthenticateOAuthGrant, including the account's current session generation.
+	ResolveOAuthGrantIdentity(ctx context.Context, accessTokenHash string) (ResolveOAuthGrantIdentityRow, error)
 	// ResolveAPIKeyTier's twin for an MCP or CLI access token: its owner and how far the owner's
 	// paid plans reach, for the public-read rate limiter. The same liveness rule as
 	// AuthenticateOAuthGrant, and read-only for the same reason ResolveAPIKeyTier is. No row

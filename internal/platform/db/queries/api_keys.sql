@@ -83,3 +83,12 @@ SELECT (EXISTS (
              AND g.expires_at > now()
              AND g.issued_token_version = u.token_version
        ))::boolean AS connected;
+
+-- name: ResolveAPIKeyIdentity :one
+-- Read-only credential identity and entitlements for trusted infrastructure.
+-- No row means unknown, revoked or expired; introspection never changes last_used_at.
+SELECT k.user_id, k.scope, k.expires_at, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
+FROM api_keys k
+JOIN users u ON u.id = k.user_id
+WHERE k.token_hash = $1
+  AND (k.expires_at IS NULL OR k.expires_at > now());

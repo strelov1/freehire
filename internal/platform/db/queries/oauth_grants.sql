@@ -101,3 +101,13 @@ WHERE id = $1 AND user_id = $2;
 -- reset should visibly answer for.
 DELETE FROM oauth_grants
 WHERE user_id = $1;
+
+-- name: ResolveOAuthGrantIdentity :one
+-- Read-only credential identity and entitlements with the same liveness rules as
+-- AuthenticateOAuthGrant, including the account's current session generation.
+SELECT g.user_id, g.expires_at, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
+FROM oauth_grants g
+JOIN users u ON u.id = g.user_id
+WHERE g.access_token_hash = $1
+  AND g.expires_at > now()
+  AND g.issued_token_version = u.token_version;

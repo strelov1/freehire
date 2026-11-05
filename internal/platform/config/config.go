@@ -14,6 +14,8 @@ import (
 
 // Settings holds application configuration read from environment variables.
 type Settings struct {
+	AuthIntrospectionSecret string
+
 	Env  string
 	Port string
 	// MetricsPort, if set, serves /metrics on its own listener instead of the
@@ -420,33 +422,34 @@ const defaultAssistantMaxPrompt = 8000
 // Load reads configuration from the environment, falling back to sensible defaults.
 func Load() Settings {
 	s := Settings{
-		Env:                   env("ENV", "development"),
-		LLM:                   LoadLLM(),
-		Port:                  env("PORT", "8080"),
-		MetricsPort:           os.Getenv("METRICS_PORT"),
-		AgentViewLogDir:       os.Getenv("AGENT_VIEW_LOG_DIR"),
-		DatabaseURL:           env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
-		FrontendOrigin:        env("FRONTEND_ORIGIN", "http://localhost:5173"),
-		PublicAnonLimits:      strings.TrimSpace(os.Getenv("PUBLIC_ANON_LIMITS")),
-		VerifiedBotSecret:     strings.TrimSpace(os.Getenv("VERIFIED_BOT_SECRET")),
-		JWTSecret:             os.Getenv("JWT_SECRET"),
-		JWTTTL:                envDuration("JWT_TTL", 30*24*time.Hour),
-		CookieSecure:          envBool("COOKIE_SECURE", false),
-		CookieDomains:         splitDomains(os.Getenv("COOKIE_DOMAIN")),
-		OAuth:                 loadOAuth(),
-		AuthV2Enabled:         envBool("AUTH_V2_ENABLED", false),
-		MobileAuthCallbacks:   parseNamedValues(os.Getenv("MOBILE_AUTH_CALLBACKS")),
-		AppleNativeClientID:   strings.TrimSpace(os.Getenv("APPLE_NATIVE_CLIENT_ID")),
-		OJCPSigningKeyFile:    strings.TrimSpace(os.Getenv("OJCP_SIGNING_KEY_FILE")),
-		AppleGrantActiveKeyID: strings.TrimSpace(os.Getenv("APPLE_GRANT_ACTIVE_KEY_ID")),
-		AppleGrantKeys:        parseKeyRing(os.Getenv("APPLE_GRANT_KEYS")),
-		RecentAuthTTL:         envDuration("RECENT_AUTH_TTL", 10*time.Minute),
-		GmailTokenKey:         decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
-		MailboxDomain:         os.Getenv("MAILBOX_DOMAIN"),
-		TypesafeAPIKey:        os.Getenv("TYPESAFE_API_KEY"),
-		MeiliURL:              env("MEILI_URL", "http://localhost:7700"),
-		MeiliKey:              os.Getenv("MEILI_MASTER_KEY"),
-		RedisURL:              env("REDIS_URL", "redis://localhost:6379/0"),
+		AuthIntrospectionSecret: strings.TrimSpace(os.Getenv("AUTH_INTROSPECTION_SECRET")),
+		Env:                     env("ENV", "development"),
+		LLM:                     LoadLLM(),
+		Port:                    env("PORT", "8080"),
+		MetricsPort:             os.Getenv("METRICS_PORT"),
+		AgentViewLogDir:         os.Getenv("AGENT_VIEW_LOG_DIR"),
+		DatabaseURL:             env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
+		FrontendOrigin:          env("FRONTEND_ORIGIN", "http://localhost:5173"),
+		PublicAnonLimits:        strings.TrimSpace(os.Getenv("PUBLIC_ANON_LIMITS")),
+		VerifiedBotSecret:       strings.TrimSpace(os.Getenv("VERIFIED_BOT_SECRET")),
+		JWTSecret:               os.Getenv("JWT_SECRET"),
+		JWTTTL:                  envDuration("JWT_TTL", 30*24*time.Hour),
+		CookieSecure:            envBool("COOKIE_SECURE", false),
+		CookieDomains:           splitDomains(os.Getenv("COOKIE_DOMAIN")),
+		OAuth:                   loadOAuth(),
+		AuthV2Enabled:           envBool("AUTH_V2_ENABLED", false),
+		MobileAuthCallbacks:     parseNamedValues(os.Getenv("MOBILE_AUTH_CALLBACKS")),
+		AppleNativeClientID:     strings.TrimSpace(os.Getenv("APPLE_NATIVE_CLIENT_ID")),
+		OJCPSigningKeyFile:      strings.TrimSpace(os.Getenv("OJCP_SIGNING_KEY_FILE")),
+		AppleGrantActiveKeyID:   strings.TrimSpace(os.Getenv("APPLE_GRANT_ACTIVE_KEY_ID")),
+		AppleGrantKeys:          parseKeyRing(os.Getenv("APPLE_GRANT_KEYS")),
+		RecentAuthTTL:           envDuration("RECENT_AUTH_TTL", 10*time.Minute),
+		GmailTokenKey:           decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
+		MailboxDomain:           os.Getenv("MAILBOX_DOMAIN"),
+		TypesafeAPIKey:          os.Getenv("TYPESAFE_API_KEY"),
+		MeiliURL:                env("MEILI_URL", "http://localhost:7700"),
+		MeiliKey:                os.Getenv("MEILI_MASTER_KEY"),
+		RedisURL:                env("REDIS_URL", "redis://localhost:6379/0"),
 
 		AutoApplyOrchestratorSecret: os.Getenv("AUTO_APPLY_ORCHESTRATOR_SECRET"),
 		InngestEventAPIURL:          os.Getenv("INNGEST_EVENT_API_URL"),
@@ -541,6 +544,9 @@ func (s Settings) StrictAnonLimits() bool { return s.PublicAnonLimits == "strict
 // rests entirely on secret entropy, so a short secret is brute-forceable offline against
 // any captured token regardless of what ENV happens to be set to.
 func (s Settings) Validate() error {
+	if s.AuthIntrospectionSecret != "" && len(s.AuthIntrospectionSecret) < 32 {
+		return errors.New("AUTH_INTROSPECTION_SECRET must be at least 32 bytes")
+	}
 	if s.Env == "production" && !s.CookieSecure {
 		return errors.New("COOKIE_SECURE must be true in production")
 	}
