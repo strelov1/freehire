@@ -624,8 +624,7 @@ func forEachCompany(ctx context.Context, companies []string, workers int, fn fun
 	return total, nil
 }
 
-// buildRealityLookup precomputes the whole-catalogue role-cluster counts once, so the
-// per-job classification during the rebuild is a map read, not N queries.
+// withLookupMemory runs read in a transaction with the lookups' sort and hash budget.
 func withLookupMemory(ctx context.Context, pool *pgxpool.Pool, read func(*db.Queries) error) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -641,6 +640,8 @@ func withLookupMemory(ctx context.Context, pool *pgxpool.Pool, read func(*db.Que
 	return tx.Commit(ctx)
 }
 
+// buildRealityLookup precomputes the whole-catalogue role-cluster counts once, so the
+// per-job classification during the rebuild is a map read, not N queries.
 func buildRealityLookup(ctx context.Context, q *db.Queries) (realityLookup, error) {
 	rows, err := q.RoleClusterCountsAll(ctx)
 	if err != nil {
