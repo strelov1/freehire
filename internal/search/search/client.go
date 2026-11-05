@@ -157,9 +157,9 @@ func WithEmbedConcurrency(n int) Option {
 func NewClient(url, key string, opts ...Option) *Client {
 	// meilisearch-go v0.36.3 retries POSTs with an already-consumed body,
 	// masking transient 502/503/504 responses with 400 missing_payload, so its
-	// retry loop is off. Body-less GET/HEAD requests are still safe to repeat
-	// and nothing above them retries (a rebuild's task polling), so they get
-	// getRetryTransport instead. Failed POST batches are retried or requeued
+	// retry loop is off. Body-less GET/HEAD/DELETE requests are still safe to
+	// repeat and nothing above them retries (a rebuild's task polling and index
+	// drops), so they get idempotentRetryTransport instead. Failed POST batches are retried or requeued
 	// by the worker callers.
 	m := meilisearch.New(url, meilisearch.WithAPIKey(key), meilisearch.WithCustomClient(newEngineHTTPClient()), meilisearch.DisableRetries())
 	c := &Client{

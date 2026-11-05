@@ -134,16 +134,16 @@ func TestNewClientRetriesTransientGET(t *testing.T) {
 	}
 }
 
-// TestGetRetryTransportBounds pins that a persistent 503 is retried a bounded number
+// TestRetryTransportBounds pins that a persistent 503 is retried a bounded number
 // of times and then surfaced as the 503 itself, and that a POST is never re-sent.
-func TestGetRetryTransportBounds(t *testing.T) {
+func TestRetryTransportBounds(t *testing.T) {
 	var reqs atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reqs.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer srv.Close()
-	rt := &getRetryTransport{base: http.DefaultTransport, backoff: func(int) time.Duration { return time.Millisecond }}
+	rt := &idempotentRetryTransport{base: http.DefaultTransport, backoff: func(int) time.Duration { return time.Millisecond }}
 
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL, nil)
 	resp, err := rt.RoundTrip(req)
@@ -151,8 +151,8 @@ func TestGetRetryTransportBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusServiceUnavailable || reqs.Load() != getRetryAttempts+1 {
-		t.Errorf("GET: status %d after %d requests, want 503 after %d", resp.StatusCode, reqs.Load(), getRetryAttempts+1)
+	if resp.StatusCode != http.StatusServiceUnavailable || reqs.Load() != retryAttempts+1 {
+		t.Errorf("GET: status %d after %d requests, want 503 after %d", resp.StatusCode, reqs.Load(), retryAttempts+1)
 	}
 
 	reqs.Store(0)
@@ -170,9 +170,9 @@ func TestGetRetryTransportBounds(t *testing.T) {
 // TestEngineHTTPClientKeepsIdlePool pins the idle pool the SDK's own transport had:
 // the Go default of two per host would redial under concurrent search traffic.
 func TestEngineHTTPClientKeepsIdlePool(t *testing.T) {
-	rt, ok := newEngineHTTPClient().Transport.(*getRetryTransport)
+	rt, ok := newEngineHTTPClient().Transport.(*idempotentRetryTransport)
 	if !ok {
-		t.Fatal("engine client does not use getRetryTransport")
+		t.Fatal("engine client does not use idempotentRetryTransport")
 	}
 	base, ok := rt.base.(*http.Transport)
 	if !ok {
@@ -180,5 +180,61 @@ func TestEngineHTTPClientKeepsIdlePool(t *testing.T) {
 	}
 	if base.MaxIdleConnsPerHost != engineMaxIdleConnsPerHost {
 		t.Errorf("MaxIdleConnsPerHost = %d, want %d", base.MaxIdleConnsPerHost, engineMaxIdleConnsPerHost)
+	}
+}
+
+// TestNewClientRetriesTransientIndexDelete pins the retry on the body-less DELETE behind
+// dropIndex: one 503 must not abort a rebuild's preparation or teardown.
+func TestNewClientRetriesTransientIndexDelete(t *testing.T) {
+	var deletes atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("stub got %s, want DELETE", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if deletes.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, `{"message":"engine overloaded","code":"unavailable","type":"internal"}`)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, `{"taskUid":9,"indexUid":"jobs_rebuild","status":"enqueued","type":"indexDeletion"}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "test-key")
+	task, err := c.manager.DeleteIndexWithContext(t.Context(), "jobs_rebuild")
+	if err != nil {
+		t.Fatalf("DELETE after one transient 503 failed: %v", err)
+	}
+	if task.TaskUID != 9 || deletes.Load() != 2 {
+		t.Errorf("task uid %d after %d DELETEs, want uid 9 after exactly 2", task.TaskUID, deletes.Load())
+	}
+}
+
+// TestRepeatable pins which requests may be re-sent: only a body-less read or delete.
+func TestRepeatable(t *testing.T) {
+	cases := []struct {
+		method string
+		body   io.Reader
+		want   bool
+	}{
+		{http.MethodGet, nil, true},
+		{http.MethodHead, nil, true},
+		{http.MethodDelete, nil, true},
+		{http.MethodDelete, http.NoBody, true},
+		{http.MethodDelete, strings.NewReader("x"), false},
+		{http.MethodPost, nil, false},
+		{http.MethodPost, strings.NewReader("x"), false},
+		{http.MethodPatch, nil, false},
+	}
+	for _, tc := range cases {
+		req, err := http.NewRequestWithContext(t.Context(), tc.method, "http://engine.test", tc.body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := repeatable(req); got != tc.want {
+			t.Errorf("repeatable(%s, body=%v) = %v, want %v", tc.method, tc.body != nil, got, tc.want)
+		}
 	}
 }
