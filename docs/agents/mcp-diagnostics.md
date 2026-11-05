@@ -71,3 +71,23 @@ Tool schemas are unchanged. Successful `apply_job` calls record tracking, and
 `auto_apply_start` queues an attempt: neither establishes employer submission.
 Free-form intent, model self-reporting, and automatic intent clustering are not
 part of this local telemetry.
+
+## OJCP REST and MCP
+
+The dedicated `freehire-ojcp` Grafana dashboard separates REST operations from MCP
+calls (`surface="ojcp"`). A REST request is not an MCP tool call; discovery
+(`manifest`, `keys`) is shown as separate operations.
+
+`freehire_ojcp_rest_requests_total{operation,status}` records final HTTP status,
+including returned errors and recovered panics. The five operation names are
+fixed; slugs, queries and client headers are never metric labels. REST duration
+and response-body histograms are `freehire_ojcp_rest_duration_seconds` and
+`freehire_ojcp_rest_response_bytes`. The latter measures application body bytes,
+before any proxy compression. The dashboard uses mean bytes and a separate
+64 MiB overflow share, so large responses cannot silently cap a size percentile.
+
+`freehire_ojcp_rest_search_quality_total{signal}` records successful REST searches:
+`all`, `empty`, `ignored_filters`, `semantic_requested`, `semantic_fallback`.
+Signals overlap. Invalid input and failed searches are excluded. These metrics do
+not retain request/response payloads or infer unique users or conversations.
+MCP attribution and optional conversation correlation follow the rules above.
