@@ -53,7 +53,7 @@ func TestOJCPMetricsObserveFinalResponsesExactlyOnce(t *testing.T) {
 			{"POST", "/api/v1/ojcp/v1/search", 200}, {"GET", "/api/v1/ojcp/v1/jobs/private-slug", 404},
 			{"GET", "/api/v1/ojcp/v1/jobs/panic", 500}, {"GET", "/api/v1/ojcp/mcp", 200},
 		} {
-			resp, err := app.Test(httptest.NewRequest(req.method, req.path, nil))
+			resp, err := app.Test(httptest.NewRequestWithContext(t.Context(), req.method, req.path, nil))
 			if err != nil {
 				t.Fatal(err)
 			}
