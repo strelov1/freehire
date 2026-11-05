@@ -250,8 +250,9 @@ type EnqueueSearchTimeCrossingsParams struct {
 // DO NOTHING and id order, unlike the per-row writers' re-stamp: this one statement upserts
 // thousands of entries while every ingest transaction upserts its own, and the re-stamp's row
 // locks taken in scan order deadlocked against them on its first prod run (2026-11-05). An
-// entry already queued is pushed from the row as it stands when claimed; only a wave already
-// in flight at the crossing misses it, and that document is minutes early, not wrong for long.
+// entry already queued is pushed from the row as it stands when claimed. A wave already in
+// flight at the crossing misses it and deletes its entry; the caller's next run re-covers the
+// last hour of this window for exactly that case (cmd/reindex timeCrossingsOverlap).
 func (q *Queries) EnqueueSearchTimeCrossings(ctx context.Context, arg EnqueueSearchTimeCrossingsParams) (int64, error) {
 	result, err := q.db.Exec(ctx, enqueueSearchTimeCrossings,
 		arg.UnseenSeconds,

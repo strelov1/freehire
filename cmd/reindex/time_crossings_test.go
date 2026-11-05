@@ -54,14 +54,14 @@ func TestEnqueueTimeCrossings(t *testing.T) {
 		}
 	})
 
-	t.Run("next run starts where the last one ended", func(t *testing.T) {
+	t.Run("next run reaches back an overlap into the last one's window", func(t *testing.T) {
 		last := now.Add(-8 * time.Hour)
 		f := &crossingsFake{cursor: last.Format(time.RFC3339Nano)}
 		if err := enqueueTimeCrossings(ctx, f, now); err != nil {
 			t.Fatal(err)
 		}
-		if got := f.enqueued[0].Since.Time; !got.Equal(last) {
-			t.Errorf("since = %v, want %v", got, last)
+		if got, want := f.enqueued[0].Since.Time, last.Add(-timeCrossingsOverlap); !got.Equal(want) {
+			t.Errorf("since = %v, want %v", got, want)
 		}
 	})
 
