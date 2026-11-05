@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -157,13 +158,30 @@ func (h *assistantHandlers) facetsTool() assistant.Tool {
 // the same index the public search does and rehydrating each result's full
 // description so the agent screens a whole set in one call.
 func (h *assistantHandlers) searchJobsTool() assistant.Tool {
+	return h.searchJobs(true)
+}
+
+// mcpSearchExcerptRunes bounds the description each MCP search result carries.
+const mcpSearchExcerptRunes = 400
+
+// searchJobs builds search_jobs. full rehydrates each result's whole description for the
+// in-app assistant, whose turn caps a tool result. An MCP client caps nothing and keeps
+// every answer in its context, where ten full descriptions ran to ~130 KB (2026-11-05),
+// so MCP gets the opening of each from the index preview and reads the rest via get_job.
+func (h *assistantHandlers) searchJobs(full bool) assistant.Tool {
+	description := "Search open vacancies by keyword and facet filters. Every result carries its full " +
+		"description as markdown and its public_slug — link a vacancy as https://freehire.me/jobs/<public_slug>. " +
+		"Take filter names and values from the facets tool."
+	if !full {
+		description = "Search open vacancies by keyword and facet filters. Every result carries the opening " +
+			"of its description as markdown and its public_slug; read a vacancy in full with get_job. " +
+			"Link a vacancy as https://freehire.me/jobs/<public_slug>. Take filter names and values from the facets tool."
+	}
 	return assistant.Tool{
-		Name:   "search_jobs",
-		Title:  "Search jobs",
-		Effect: assistant.EffectReads,
-		Description: "Search open vacancies by keyword and facet filters. Every result carries its full " +
-			"description as markdown and its public_slug — link a vacancy as https://freehire.me/jobs/<public_slug>. " +
-			"Take filter names and values from the facets tool.",
+		Name:        "search_jobs",
+		Title:       "Search jobs",
+		Effect:      assistant.EffectReads,
+		Description: description,
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -208,13 +226,18 @@ func (h *assistantHandlers) searchJobsTool() assistant.Tool {
 			if err != nil {
 				return nil, err
 			}
-			if err := h.search.hydrateDescriptions(ctx, res.Hits); err != nil {
-				return nil, err
+			if full {
+				if err := h.search.hydrateDescriptions(ctx, res.Hits); err != nil {
+					return nil, err
+				}
 			}
 			agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 			jobs := make([]jobview.Job, len(res.Hits))
 			for i, hit := range res.Hits {
 				hit.Description = formatDescription(hit.Description, "markdown")
+				if !full {
+					hit.Description = llm.ClipRunesEllipsis(hit.Description, mcpSearchExcerptRunes)
+				}
 				jobs[i] = hit.Job
 			}
 			return map[string]any{"total": res.Total, "limit": limit, "offset": offset, "jobs": jobs}, nil
