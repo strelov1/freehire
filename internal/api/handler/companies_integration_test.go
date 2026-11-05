@@ -400,7 +400,7 @@ func TestCompanySubindustriesEndpoint(t *testing.T) {
 	seed("diagco", "Diagnostics")
 	seed("plainco", nil) // NULL — excluded from the vocabulary
 
-	h := &companiesHandlers{queries: db.New(pool)}
+	h := newCompaniesHandlers(db.New(pool), nil)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/companies/subindustries", h.CompanySubindustries)
 
