@@ -44,7 +44,7 @@ func TestPushNotifier_SingleJobDigestCarriesSlugDeepLink(t *testing.T) {
 		Total:           1,
 		Jobs:            []DigestJob{{Title: "Backend Engineer", Company: "Acme", Slug: "acme-backend-engineer"}},
 	}
-	if err := n.Send(context.Background(), ChannelPush, "42", d); err != nil {
+	if err := n.Send(context.Background(), ChannelPush, "42", msgOf(d)); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if len(transport.calls) != 1 {
@@ -75,7 +75,7 @@ func TestPushNotifier_MultiJobDigestCarriesNoDeepLink(t *testing.T) {
 			{Title: "C", Slug: "c"},
 		},
 	}
-	if err := n.Send(context.Background(), ChannelPush, "42", d); err != nil {
+	if err := n.Send(context.Background(), ChannelPush, "42", msgOf(d)); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if len(transport.calls) != 1 {
@@ -97,7 +97,7 @@ func TestPushNotifier_SendsTheRenderedCopy(t *testing.T) {
 
 	d := Digest{SavedSearchName: "Backend Engineer", Total: 3}
 	wantTitle, wantBody, _ := renderDigest(d)
-	if err := n.Send(context.Background(), ChannelPush, "42", d); err != nil {
+	if err := n.Send(context.Background(), ChannelPush, "42", msgOf(d)); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	call := transport.calls[0]
@@ -151,7 +151,7 @@ func TestPushNotifier_FansOutToEveryRegisteredDevice(t *testing.T) {
 	n := NewPushNotifier(tokens, transport)
 
 	d := Digest{SavedSearchName: "Backend Engineer", Total: 3}
-	if err := n.Send(context.Background(), ChannelPush, "42", d); err != nil {
+	if err := n.Send(context.Background(), ChannelPush, "42", msgOf(d)); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if len(transport.calls) != 2 {
@@ -161,7 +161,30 @@ func TestPushNotifier_FansOutToEveryRegisteredDevice(t *testing.T) {
 
 func TestPushNotifier_InvalidDestErrors(t *testing.T) {
 	n := NewPushNotifier(&fakePushTokenLister{}, &fakePushTransport{})
-	if err := n.Send(context.Background(), ChannelPush, "not-a-user-id", Digest{}); err == nil {
+	if err := n.Send(context.Background(), ChannelPush, "not-a-user-id", msgOf(Digest{})); err == nil {
 		t.Fatal("Send: want error for a non-numeric dest")
+	}
+}
+
+// msgOf wraps one digest as the single-digest message every case here sends.
+func msgOf(d Digest) Message {
+	return Message{Digests: []Digest{d}}
+}
+
+func TestPushNotifier_BundleIsOnePushCountingAlerts(t *testing.T) {
+	tokens := &fakePushTokenLister{tokens: map[int64][]db.UserPushToken{42: {{Token: "ExponentPushToken[abc]"}}}}
+	transport := &fakePushTransport{}
+	m := Message{UserID: 42, Digests: []Digest{
+		{SavedSearchName: "Go", Total: 1, Jobs: []DigestJob{{Slug: "go"}}},
+		{SavedSearchName: "Rust", Total: 3},
+	}}
+	if err := NewPushNotifier(tokens, transport).Send(context.Background(), ChannelPush, "42", m); err != nil {
+		t.Fatal(err)
+	}
+	if len(transport.calls) != 1 {
+		t.Fatalf("pushes = %d, want 1", len(transport.calls))
+	}
+	if c := transport.calls[0]; c.title != "2 job alerts" || c.body != "4 new jobs" || c.data != nil {
+		t.Errorf("push = %+v, want title %q body %q and no deep link", c, "2 job alerts", "4 new jobs")
 	}
 }

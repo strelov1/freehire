@@ -41,10 +41,10 @@ var _ Notifier = (Router)(nil)
 
 // Send routes to the notifier registered for channel, or returns
 // ErrChannelNotConfigured when none is.
-func (r Router) Send(ctx context.Context, channel, dest string, d Digest) error {
+func (r Router) Send(ctx context.Context, channel, dest string, m Message) error {
 	n, ok := r[channel]
 	if !ok {
 		return fmt.Errorf("%w: %q", ErrChannelNotConfigured, channel)
 	}
-	return n.Send(ctx, channel, dest, d)
+	return n.Send(ctx, channel, dest, m)
 }

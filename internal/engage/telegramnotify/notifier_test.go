@@ -26,7 +26,7 @@ func TestNotifier_Render(t *testing.T) {
 			{Title: "Rustacean", Company: "", Slug: "rustacean-foo"},
 		},
 	}
-	got := n.render(d)
+	got := n.render(msgOf(d))
 
 	// Heading reflects the true total and pluralizes; the name is HTML-escaped.
 	if !strings.Contains(got, "<b>3</b> new jobs for") {
@@ -55,7 +55,7 @@ func TestNotifier_Render(t *testing.T) {
 
 func TestNotifier_RenderSingularNoOverflow(t *testing.T) {
 	n := NewNotifier(NewClient("t"), "https://freehire.me")
-	got := n.render(notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}})
+	got := n.render(msgOf(notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}}))
 	if !strings.Contains(got, "<b>1</b> new job for") || strings.Contains(got, "more") {
 		t.Errorf("singular render wrong: %q", got)
 	}
@@ -79,7 +79,7 @@ func TestNotifier_RenderCapsAtTelegramLimit(t *testing.T) {
 			Slug:    strings.Repeat("some-long-job-slug-", 5),
 		}
 	}
-	got := n.render(notify.Digest{SavedSearchName: "big search", Total: total, Jobs: jobs})
+	got := n.render(msgOf(notify.Digest{SavedSearchName: "big search", Total: total, Jobs: jobs}))
 
 	if n16 := len(utf16.Encode([]rune(got))); n16 > 4096 {
 		t.Errorf("rendered %d UTF-16 units, want <= 4096 (Telegram sendMessage limit)", n16)
@@ -108,7 +108,7 @@ func TestNotifier_Send(t *testing.T) {
 	c.base = srv.URL
 	n := NewNotifier(c, "https://freehire.me")
 
-	err := n.Send(context.Background(), notify.ChannelTelegram, "12345", notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}})
+	err := n.Send(context.Background(), notify.ChannelTelegram, "12345", msgOf(notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}}))
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestNotifier_Send(t *testing.T) {
 
 func TestNotifier_SendBadChatID(t *testing.T) {
 	n := NewNotifier(NewClient("t"), "https://freehire.me")
-	if err := n.Send(context.Background(), notify.ChannelTelegram, "not-a-number", notify.Digest{}); err == nil {
+	if err := n.Send(context.Background(), notify.ChannelTelegram, "not-a-number", msgOf(notify.Digest{})); err == nil {
 		t.Error("Send with non-numeric dest succeeded, want error")
 	}
 }
@@ -194,7 +194,7 @@ func tgDigest(n int, notificationID int64) notify.Digest {
 
 func TestNotifier_RenderListsAtMostTenJobs(t *testing.T) {
 	n := NewNotifier(NewClient("t"), "https://freehire.me")
-	got := n.render(tgDigest(67, 42))
+	got := n.render(msgOf(tgDigest(67, 42)))
 
 	if shown := strings.Count(got, "• "); shown != notify.ListLimit {
 		t.Errorf("listed %d jobs, want %d", shown, notify.ListLimit)
@@ -209,7 +209,7 @@ func TestNotifier_RenderListsAtMostTenJobs(t *testing.T) {
 
 func TestNotifier_RenderTailFallsBackWithoutANotificationID(t *testing.T) {
 	n := NewNotifier(NewClient("t"), "https://freehire.me")
-	got := n.render(tgDigest(67, 0))
+	got := n.render(msgOf(tgDigest(67, 0)))
 
 	if strings.Contains(got, "/my/notifications/0/jobs") {
 		t.Errorf("a zero notification id must not be rendered as a URL: %q", got)
@@ -226,7 +226,7 @@ func TestNotifier_OverflowedTailLinksToTheSavedSearch(t *testing.T) {
 	d := tgDigest(67, 42)
 	d.Total = 600
 	d.SearchQuery = `seniority=senior&q="go"`
-	got := n.render(d)
+	got := n.render(msgOf(d))
 
 	if want := `<a href="https://freehire.me/jobs?seniority=senior&amp;q=&#34;go&#34;&amp;utm_source=telegram-bot">+ 590 more</a>`; !strings.Contains(got, want) {
 		t.Errorf("tail missing %q in: %q", want, got)
@@ -241,7 +241,7 @@ func TestNotifier_OverflowedTailWithAHugeQueryFallsBack(t *testing.T) {
 	d := tgDigest(67, 42)
 	d.Total = 600
 	d.SearchQuery = "skills=" + strings.Repeat("x", 3900)
-	got := n.render(d)
+	got := n.render(msgOf(d))
 
 	if want := `<a href="https://freehire.me/my/notifications/searches">+ 590 more</a>`; !strings.Contains(got, want) {
 		t.Errorf("tail missing %q in: %q", want, got)
@@ -330,11 +330,76 @@ func TestNotifier_ForbiddenSurfacesAsRecipientGone(t *testing.T) {
 	c := NewClient("t")
 	c.base = srv.URL
 	n := NewNotifier(c, "https://freehire.me")
-	err := n.Send(context.Background(), notify.ChannelTelegram, "555", notify.Digest{SavedSearchName: "Go", Total: 1})
+	err := n.Send(context.Background(), notify.ChannelTelegram, "555", msgOf(notify.Digest{SavedSearchName: "Go", Total: 1}))
 	if !errors.Is(err, notify.ErrRecipientGone) {
 		t.Errorf("Send err = %v, want it to wrap notify.ErrRecipientGone", err)
 	}
 	if !errors.Is(err, ErrChatUnreachable) {
 		t.Errorf("Send err = %v, want the transport cause kept for the log", err)
+	}
+}
+
+// msgOf wraps one digest as the single-digest message every case here sends.
+func msgOf(d notify.Digest) notify.Message {
+	return notify.Message{Digests: []notify.Digest{d}}
+}
+
+func TestNotifier_RenderBundleHasASectionPerDigest(t *testing.T) {
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
+	a, b := tgDigest(2, 1), tgDigest(1, 2)
+	b.SavedSearchName = "My profile"
+	got := n.render(notify.Message{Digests: []notify.Digest{a, b}})
+
+	for _, want := range []string{"<b>3</b> new jobs from 2 job alerts", "<b>Go</b> · 2 new jobs", "<b>My profile</b> · 1 new job"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("render missing %q:\n%s", want, got)
+		}
+	}
+	if shown := strings.Count(got, "• "); shown != 3 {
+		t.Errorf("listed %d jobs, want 3", shown)
+	}
+}
+
+// Seven busy alerts of long titles must still fit one Telegram message, and the last
+// alert must keep its heading and tail rather than being squeezed out by the first.
+func TestNotifier_RenderBundleStaysWithinTheMessageLimit(t *testing.T) {
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
+	var m notify.Message
+	for i := range 7 {
+		d := notify.Digest{SavedSearchName: "alert " + strconv.Itoa(i), Total: 200, SearchQuery: strings.Repeat("q", 900)}
+		for j := range notify.ListLimit {
+			d.Jobs = append(d.Jobs, notify.DigestJob{Title: strings.Repeat("Very long job title ", 8), Company: "Company", Slug: "job-" + strconv.Itoa(j)})
+		}
+		m.Digests = append(m.Digests, d)
+	}
+	got := n.render(m)
+
+	if l := UTF16Len(got); l > MaxMessageLen {
+		t.Fatalf("message is %d UTF-16 units, limit %d", l, MaxMessageLen)
+	}
+	if !strings.Contains(got, "<b>alert 6</b>") || strings.Count(got, "more</a>") != 7 {
+		t.Errorf("every alert needs its heading and tail:\n%s", got)
+	}
+}
+
+// Fifty alerts' headings and tails alone exceed the limit; the sections that do not
+// fit fold into one closing line rather than making Telegram refuse the message.
+func TestNotifier_RenderFoldsAlertsThatDoNotFit(t *testing.T) {
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
+	var m notify.Message
+	for i := range 50 {
+		m.Digests = append(m.Digests, notify.Digest{
+			SavedSearchName: strings.Repeat("long alert name ", 6) + strconv.Itoa(i),
+			Total:           200, SearchQuery: strings.Repeat("q", 900),
+			Jobs: []notify.DigestJob{{Title: "Job", Slug: "job"}},
+		})
+	}
+	got := n.render(m)
+
+	if l := UTF16Len(got); l > MaxMessageLen {
+		t.Fatalf("message is %d UTF-16 units, limit %d", l, MaxMessageLen)
+	}
+	if !strings.Contains(got, "more job alerts</a>") || !strings.Contains(got, "/my/notifications\">") {
+		t.Errorf("want a folded closing line for the alerts that did not fit:\n%s", got[len(got)-300:])
 	}
 }

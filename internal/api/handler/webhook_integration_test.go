@@ -179,7 +179,7 @@ func TestWebhookEndToEnd(t *testing.T) {
 	}
 }
 
-// RecordWebhookDeliverySuccess (called by notify.Runner's deliverOne on a
+// RecordWebhookDeliverySuccess (called by notify.Runner's deliverMessage on a
 // successful webhook send) actually stamps last_success_at, and GetWebhook
 // surfaces it.
 func TestRecordWebhookDeliverySuccessStampsLastSuccessAt(t *testing.T) {

@@ -59,11 +59,23 @@ type payload struct {
 // will not accept messages again" — so the engine disables the destination
 // and soft-skips instead of counting a delivery failure it would retry to no
 // purpose.
-func (n *Notifier) Send(ctx context.Context, _ string, dest string, d notify.Digest) error {
+//
+// One POST per digest: a receiver is a program reading one saved search's payload,
+// so the engine never bundles a webhook's digests (see notify.Message), and this
+// loop keeps the wire shape intact even if it did.
+func (n *Notifier) Send(ctx context.Context, _ string, dest string, m notify.Message) error {
 	if err := validateScheme(dest); err != nil {
 		return fmt.Errorf("webhooknotify: %w", err)
 	}
+	for _, d := range m.Digests {
+		if err := n.post(ctx, dest, d); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+func (n *Notifier) post(ctx context.Context, dest string, d notify.Digest) error {
 	body, err := json.Marshal(payload{SavedSearchName: d.SavedSearchName, Total: d.Total, Jobs: d.Jobs})
 	if err != nil {
 		return fmt.Errorf("webhooknotify: encode payload: %w", err)
@@ -100,10 +112,10 @@ const TestSearchName = "freehire webhook test"
 // the explicit "test" action. The empty job list is a non-nil slice so it
 // encodes as [] — a receiver's template that ranges over it must not choke.
 func (n *Notifier) Test(ctx context.Context, dest string) error {
-	return n.Send(ctx, notify.ChannelWebhook, dest, notify.Digest{
+	return n.Send(ctx, notify.ChannelWebhook, dest, notify.Message{Digests: []notify.Digest{{
 		SavedSearchName: TestSearchName,
 		Jobs:            []notify.DigestJob{},
-	})
+	}}})
 }
 
 // validateScheme rejects anything but http/https before a request is ever

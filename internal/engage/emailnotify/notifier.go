@@ -62,12 +62,12 @@ func NewNotifier(sender Sender, from, jobBaseURL string, links *emailprefs.Links
 // Send renders the digest and delivers it to the email address in dest. The
 // channel argument is ignored — the worker routes only the email channel to this
 // notifier.
-func (n *Notifier) Send(ctx context.Context, _ string, dest string, d notify.Digest) error {
-	unsubscribe, err := n.links.For(d.UserID, emailprefs.GroupAlerts)
+func (n *Notifier) Send(ctx context.Context, _ string, dest string, m notify.Message) error {
+	unsubscribe, err := n.links.For(m.UserID, emailprefs.GroupAlerts)
 	if err != nil {
-		return fmt.Errorf("emailnotify: unsubscribe link for user %d: %w", d.UserID, err)
+		return fmt.Errorf("emailnotify: unsubscribe link for user %d: %w", m.UserID, err)
 	}
-	e := n.render(d, unsubscribe)
+	e := n.render(m, unsubscribe)
 	return n.sender.Send(ctx, Message{
 		From:           n.from,
 		To:             dest,
@@ -88,12 +88,19 @@ type renderedEmail struct {
 // escaping context by html/template, which is the injection guard for the
 // user/source-derived job titles and company names.
 type htmlData struct {
+	Sections []section
+}
+
+// section is one digest's part of the mail. Title is empty when the mail carries a
+// single digest, whose name is already the mail's heading.
+type section struct {
+	Title      string
 	Jobs       []mailtpl.Job
 	More       int
 	ViewAllURL string
 }
 
-func (n *Notifier) render(d notify.Digest, unsubscribeURL string) renderedEmail {
+func (n *Notifier) section(d notify.Digest, titled bool) section {
 	listed := d.Listed()
 	rows := make([]mailtpl.Job, 0, len(listed))
 	for _, j := range listed {
@@ -102,22 +109,41 @@ func (n *Notifier) render(d notify.Digest, unsubscribeURL string) renderedEmail 
 	// A message itemizes at most notify.ListLimit jobs while Total is the true
 	// count, so the remainder becomes the "and N more" tail — which links to the
 	// page carrying the whole match set, not to the alerts settings.
-	more := d.Total - len(listed)
-	if more < 0 {
-		more = 0
+	s := section{Jobs: rows, More: max(d.Total-len(listed), 0), ViewAllURL: n.viewAllURL(d)}
+	if titled {
+		s.Title = fmt.Sprintf("%s for “%s”", notify.JobCount(d.Total), d.SavedSearchName)
 	}
-	viewAll := n.viewAllURL(d)
+	return s
+}
 
-	subject := fmt.Sprintf(`%s for "%s"`, notify.JobCount(d.Total), d.SavedSearchName)
+func (n *Notifier) render(m notify.Message, unsubscribeURL string) renderedEmail {
+	titled := len(m.Digests) > 1
+	sections := make([]section, len(m.Digests))
+	for i, d := range m.Digests {
+		sections[i] = n.section(d, titled)
+	}
+
+	var subject, preheader, heading, textHeading string
+	if titled {
+		subject = fmt.Sprintf("%s from %d job alerts", notify.JobCount(m.Total()), len(m.Digests))
+		preheader = fmt.Sprintf("%s across %d of your job alerts", notify.JobCount(m.Total()), len(m.Digests))
+		heading, textHeading = subject, subject
+	} else {
+		d := m.Digests[0]
+		subject = fmt.Sprintf(`%s for "%s"`, notify.JobCount(d.Total), d.SavedSearchName)
+		preheader = fmt.Sprintf("%s matching your %q alert", notify.JobCount(d.Total), d.SavedSearchName)
+		heading = fmt.Sprintf("%s for “%s”", notify.JobCount(d.Total), d.SavedSearchName)
+		textHeading = fmt.Sprintf("%s for %q", notify.JobCount(d.Total), d.SavedSearchName)
+	}
 
 	var b bytes.Buffer
 	// The template is a trusted constant and the data is escaped in context, so
 	// Execute can only fail on a template bug — surfaced by the render tests.
-	_ = htmlTemplate.Execute(&b, htmlData{Jobs: rows, More: more, ViewAllURL: viewAll})
+	_ = htmlTemplate.Execute(&b, htmlData{Sections: sections})
 
 	html := n.layout.Render(mailtpl.Body{
-		Preheader: fmt.Sprintf("%s matching your %q alert", notify.JobCount(d.Total), d.SavedSearchName),
-		Heading:   fmt.Sprintf("%s for “%s”", notify.JobCount(d.Total), d.SavedSearchName),
+		Preheader: preheader,
+		Heading:   heading,
 		Content:   template.HTML(b.String()), //nolint:gosec // rendered by the trusted template below, which escaped every field in context
 		// The shell carries the unsubscribe and settings links, so the footer only
 		// has to answer "why am I getting this".
@@ -125,26 +151,32 @@ func (n *Notifier) render(d notify.Digest, unsubscribeURL string) renderedEmail 
 		UnsubscribeURL: unsubscribeURL,
 	})
 
-	return renderedEmail{subject: subject, html: html, text: n.renderText(d, rows, more, viewAll, unsubscribeURL)}
+	return renderedEmail{subject: subject, html: html, text: n.renderText(textHeading, sections, unsubscribeURL)}
 }
 
 // renderText builds the plain-text alternative, mirroring the HTML body so
 // non-HTML clients (and spam scorers) see the same content.
-func (n *Notifier) renderText(d notify.Digest, rows []mailtpl.Job, more int, viewAllURL, unsubscribeURL string) string {
+func (n *Notifier) renderText(heading string, sections []section, unsubscribeURL string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s for %q\n\n", notify.JobCount(d.Total), d.SavedSearchName)
-	for _, l := range rows {
-		b.WriteString("- " + l.Title)
-		if l.Company != "" {
-			b.WriteString(" — " + l.Company)
+	b.WriteString(heading + "\n")
+	for _, s := range sections {
+		if s.Title != "" {
+			b.WriteString("\n" + s.Title + "\n")
 		}
-		if l.Salary != "" {
-			b.WriteString(" · " + l.Salary)
+		b.WriteString("\n")
+		for _, l := range s.Jobs {
+			b.WriteString("- " + l.Title)
+			if l.Company != "" {
+				b.WriteString(" — " + l.Company)
+			}
+			if l.Salary != "" {
+				b.WriteString(" · " + l.Salary)
+			}
+			b.WriteString("\n  " + l.URL + "\n")
 		}
-		b.WriteString("\n  " + l.URL + "\n")
-	}
-	if more > 0 {
-		fmt.Fprintf(&b, "\n+ %d more at %s\n", more, viewAllURL)
+		if s.More > 0 {
+			fmt.Fprintf(&b, "\n+ %d more at %s\n", s.More, s.ViewAllURL)
+		}
 	}
 	b.WriteString("\nManage your alerts: " + n.manageURL() + "\n")
 	b.WriteString(emailprefs.TextFooter(unsubscribeURL))
@@ -187,11 +219,14 @@ func (n *Notifier) jobURL(j notify.DigestJob) string {
 // The list is a table rather than stacked divs because Outlook collapses the
 // margins between block elements unpredictably; table cell padding it honours.
 var htmlTemplate = template.Must(mailtpl.Partials().New("digest").Parse(`
+{{range $n, $s := .Sections}}
+{{if $s.Title}}<h2 class="m-ink" style="margin:{{if $n}}32px{{else}}0{{end}} 0 4px;font-size:16px;line-height:1.4;font-weight:600;color:#070707;">{{$s.Title}}</h2>{{end}}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-  {{range $i, $job := .Jobs}}
+  {{range $i, $job := $s.Jobs}}
   <tr><td class="m-row" style="padding:14px 0;{{if $i}}border-top:1px solid #e4e4e4;{{end}}">{{template "job-row" $job}}</td></tr>
   {{end}}
 </table>
-{{if gt .More 0}}
-<div style="padding-top:20px;">{{template "button-right" (mailLink .ViewAllURL (printf "View all — %d more" .More))}}</div>
+{{if gt $s.More 0}}
+<div style="padding-top:20px;">{{template "button-right" (mailLink $s.ViewAllURL (printf "View all — %d more" $s.More))}}</div>
+{{end}}
 {{end}}`))

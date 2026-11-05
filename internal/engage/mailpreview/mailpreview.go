@@ -102,6 +102,7 @@ var renderers = []func(string) (Sample, error){
 	emailChangedSample,
 	directApplicationSample,
 	digestSample,
+	digestBundleSample,
 	savedJobReminderSample,
 	savedJobReminderBatchSample,
 	followUpNudgeSample,
@@ -286,7 +287,6 @@ func directApplicationSample(baseURL string) (Sample, error) {
 func digestSample(baseURL string) (Sample, error) {
 	return sample("subscription-digest", "Alerts / Subscription digest", func(c *capture) error {
 		d := notify.Digest{
-			UserID:          previewUserID,
 			SavedSearchName: "Senior Go, remote in Europe",
 			SearchQuery:     "q=go&seniority=senior&remote=europe",
 			Total:           14,
@@ -299,7 +299,36 @@ func digestSample(baseURL string) (Sample, error) {
 			},
 		}
 		return emailnotify.NewNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
-			Send(context.Background(), notify.ChannelEmail, "someone@example.com", d)
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", notify.Message{UserID: previewUserID, Digests: []notify.Digest{d}})
+	})
+}
+
+// digestBundleSample is one person's due digests in one mail: a section per alert,
+// one of them overflowing to its saved search.
+func digestBundleSample(baseURL string) (Sample, error) {
+	return sample("subscription-digest-bundle", "Alerts / Several alerts in one digest", func(c *capture) error {
+		m := notify.Message{UserID: previewUserID, Digests: []notify.Digest{
+			{
+				SavedSearchName: "Senior Go, remote in Europe",
+				SearchQuery:     "q=go&seniority=senior&remote=europe",
+				Total:           14,
+				Jobs: []notify.DigestJob{
+					{Title: "Senior Backend Engineer (Go)", Company: "Fingerprint", Slug: "senior-backend-engineer-go-fingerprint",
+						SalaryMin: 120000, SalaryMax: 160000, SalaryCurrency: "EUR", SalaryPeriod: "year"},
+					{Title: "Staff Engineer, Platform", Company: "Speechify", Slug: "staff-engineer-platform-speechify"},
+				},
+			},
+			{
+				SavedSearchName: "My profile",
+				Total:           1,
+				NotificationID:  42,
+				Jobs: []notify.DigestJob{
+					{Title: "Frontend Engineer (React)", Company: "Avenga", Slug: "frontend-engineer-react-avenga"},
+				},
+			},
+		}}
+		return emailnotify.NewNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", m)
 	})
 }
 

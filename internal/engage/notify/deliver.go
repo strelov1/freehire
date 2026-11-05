@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -15,8 +16,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// deliver leases a batch of pending matches, groups them by subscription, and
-// sends one digest per subscription. On success the included matches are marked
+// deliver leases a batch of pending matches, groups them by subscription and the
+// subscriptions by recipient, and sends one message per person and channel, carrying
+// a digest per subscription. On success the included matches are marked
 // notified; on failure the delivery bookkeeping retries/dead-letters them; a
 // subscription that is not currently deliverable (e.g. Telegram unlinked) has its
 // claim released so it is retried promptly rather than waiting out the lease.
@@ -45,15 +47,21 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 		return err
 	}
 
-	// Group the claimed matches by subscription so each becomes one digest.
+	// Group the claimed matches by subscription so each becomes one digest, and the
+	// subscriptions by recipient so each person gets one message per channel.
 	claims := make(map[int64]*subscriptionClaim)
-	order := make([]int64, 0)
+	messages := make(map[messageKey][]int64)
+	order := make([]messageKey, 0)
 	for _, c := range claimed {
 		sc, seen := claims[c.SubscriptionID]
 		if !seen {
-			sc = &subscriptionClaim{oldest: c}
+			sc = &subscriptionClaim{oldest: c, personLastSent: c.PersonLastSentAt}
 			claims[c.SubscriptionID] = sc
-			order = append(order, c.SubscriptionID)
+			key := keyOf(c)
+			if _, ok := messages[key]; !ok {
+				order = append(order, key)
+			}
+			messages[key] = append(messages[key], c.SubscriptionID)
 		}
 		sc.add(c)
 	}
@@ -61,54 +69,104 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 		sc.full = len(sc.jobIDs) >= int(perSubscription)
 	}
 
-	for _, subID := range order {
+	for i, key := range order {
 		// A cancelled run stops here rather than walking the rest of the claimed
-		// subscriptions: each would fail instantly against the same dead context and be
+		// messages: each would fail instantly against the same dead context and be
 		// counted a delivery failure, so one SIGTERM would report as an outage across
-		// every subscription. Their claims simply expire and the next pass retries them,
+		// every recipient. Their claims simply expire and the next pass retries them,
 		// which is what the lease is for.
 		if ctx.Err() != nil {
-			log.Printf("notify: delivery stopped after %d of %d claimed subscriptions: %v",
-				stats.Delivered+stats.SoftSkips+stats.Deferred+stats.Failed, len(order), ctx.Err())
+			log.Printf("notify: delivery stopped after %d of %d claimed messages: %v", i, len(order), ctx.Err())
 			return nil
 		}
-		r.deliverOne(ctx, subID, claims[subID], stats)
+		r.deliverMessage(ctx, messages[key], claims, stats)
 	}
 	return nil
 }
 
-// deliverOne sends one subscription's digest and finalizes its claimed matches.
-func (r *Runner) deliverOne(ctx context.Context, subID int64, claim *subscriptionClaim, stats *Stats) {
-	jobIDs := claim.jobIDs
-	info, err := r.store.GetSubscriptionForDelivery(ctx, subID)
-	if err != nil {
-		// Counted, not merely logged. This digest did not go out and nothing burned an
-		// attempt toward the dead-letter limit, so the only trace it leaves is the exit
-		// code — and a pass that failed to read every subscription it claimed used to
-		// print `delivered=0 failed=0` and exit 0, which reads as an idle queue.
-		log.Printf("notify: load subscription %d for delivery: %v", subID, err)
-		r.release(ctx, subID, jobIDs)
-		stats.Failed++
+// messageKey is who one message goes to: a person on a channel. A webhook is keyed
+// by its subscription too, since its receiver reads one saved search per payload.
+type messageKey struct {
+	userID       int64
+	channel      string
+	subscription int64
+}
+
+func keyOf(c db.ClaimSubscriptionMatchesRow) messageKey {
+	k := messageKey{userID: c.UserID, channel: c.Channel}
+	if c.Channel == ChannelWebhook {
+		k.subscription = c.SubscriptionID
+	}
+	return k
+}
+
+// part is one subscription's digest inside a message being assembled.
+type part struct {
+	subID  int64
+	claim  *subscriptionClaim
+	info   db.GetSubscriptionForDeliveryRow
+	digest Digest
+	// covered is how many pending matches the digest counts without carrying.
+	covered int
+	// createdRow says whether THIS delivery wrote the digest's notification-centre
+	// row or joined one another channel of the same saved search had written; only
+	// the creator may withdraw it.
+	createdRow bool
+}
+
+// deliverMessage sends one person's due digests on one channel as a single message
+// and finalizes every claimed match in it. A subscription whose own reads fail is
+// released and counted, and the rest of the message still goes out.
+func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[int64]*subscriptionClaim, stats *Stats) {
+	// The claim's UPDATE ... RETURNING has no order, so the sections get one here.
+	slices.Sort(subIDs)
+	parts := make([]*part, 0, len(subIDs))
+	for _, subID := range subIDs {
+		info, err := r.store.GetSubscriptionForDelivery(ctx, subID)
+		if err != nil {
+			// Counted, not merely logged. This digest did not go out and nothing burned an
+			// attempt toward the dead-letter limit, so the only trace it leaves is the exit
+			// code — and a pass that failed to read every subscription it claimed used to
+			// print `delivered=0 failed=0` and exit 0, which reads as an idle queue.
+			log.Printf("notify: load subscription %d for delivery: %v", subID, err)
+			r.release(ctx, subID, claims[subID].jobIDs)
+			stats.Failed++
+			continue
+		}
+		parts = append(parts, &part{subID: subID, claim: claims[subID], info: info})
+	}
+	if len(parts) == 0 {
 		return
+	}
+	// One person, one channel: the settings, the timezone and the recipient are the
+	// same in every part, so the first one answers for the message.
+	info := parts[0].info
+	releaseAll := func() {
+		for _, p := range parts {
+			r.release(ctx, p.subID, p.claim.jobIDs)
+		}
 	}
 
 	// Delivery timing: a `daily` subscription waits for its own configured time and
 	// is exempt from quiet hours — a chosen digest time is itself the user's
 	// preference. Everything else defers to quiet hours: `instant`, and `interval`
 	// (the default), whose elapsed-interval gate already ran in the claim — a
-	// subscription that is not due yet never reaches this point
+	// message that is not due yet never reaches this point
 	// (ClaimSubscriptionMatches).
 	daily := info.DigestFrequency == FrequencyDaily
 	stamped := info.DigestFrequency != FrequencyInstant
 	tz := info.Timezone.String
 	if daily {
-		if !deliverywindow.DigestDue(r.now(), tz, pgconv.DurationPtr(info.DigestTime), pgconv.TimePtr(info.LastDigestSentAt)) {
-			r.release(ctx, subID, jobIDs)
+		// When this person was last mailed on this channel, across ALL their alerts on
+		// it (the claim reads it): a sent message stamps every subscription it carried,
+		// and a new alert must wait for tomorrow's digest rather than send its own.
+		if !deliverywindow.DigestDue(r.now(), tz, pgconv.DurationPtr(info.DigestTime), pgconv.TimePtr(parts[0].claim.personLastSent)) {
+			releaseAll()
 			stats.Deferred++
 			return
 		}
 	} else if deliverywindow.InQuietHours(r.now(), tz, pgconv.DurationPtr(info.QuietHoursStart), pgconv.DurationPtr(info.QuietHoursEnd)) {
-		r.release(ctx, subID, jobIDs)
+		releaseAll()
 		stats.Deferred++
 		return
 	}
@@ -117,43 +175,49 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, claim *subscriptio
 	if !ok {
 		// Not deliverable right now (e.g. Telegram not linked): soft-skip, keep the
 		// matches pending for a later pass, do not count a failed attempt.
-		r.release(ctx, subID, jobIDs)
+		releaseAll()
 		stats.SoftSkips++
 		return
 	}
 
-	jobs, err := r.store.GetJobsForDigest(ctx, jobIDs)
-	if err != nil {
-		// Counted for the same reason as the subscription read above: the digest is not
-		// going out, and releasing the claim leaves no other record that it did not.
-		log.Printf("notify: load jobs for subscription %d: %v", subID, err)
-		r.release(ctx, subID, jobIDs)
-		stats.Failed++
+	ready := parts[:0]
+	for _, p := range parts {
+		jobs, err := r.store.GetJobsForDigest(ctx, p.claim.jobIDs)
+		if err != nil {
+			// Counted for the same reason as the subscription read above: the digest is not
+			// going out, and releasing the claim leaves no other record that it did not.
+			log.Printf("notify: load jobs for subscription %d: %v", p.subID, err)
+			r.release(ctx, p.subID, p.claim.jobIDs)
+			stats.Failed++
+			continue
+		}
+		// The claim took the newest SnapshotCap matches. Anything pending behind it is
+		// COUNTED by this digest rather than re-queued for a later one: re-queuing is what
+		// left a busy `daily` subscription mailing the same backlog, oldest first, weeks
+		// behind. The count is read before the send so the message can state it.
+		p.covered = r.countCovered(ctx, p.subID, p.claim)
+		p.digest = buildDigest(p.info.SavedSearchName, jobs, p.covered)
+		p.digest.SearchQuery = p.info.SavedSearchQuery
+		// Record the in-app notification BEFORE sending, so the digest can carry its
+		// own row's id and each channel's "and N more" tail can link to the page
+		// that lists the full match set. A recording failure is not a delivery
+		// failure — the digest goes out with a zero id and the tail falls back to a
+		// generic destination. The notification centre keeps one row per saved
+		// search, so a bundled message still links each section to its own page.
+		p.digest.NotificationID, p.createdRow = r.recordNotification(ctx, p.info, p.digest, p.claim.jobIDs)
+		ready = append(ready, p)
+	}
+	parts = ready
+	if len(parts) == 0 {
 		return
 	}
 
-	// The claim took the newest SnapshotCap matches. Anything pending behind it is
-	// COUNTED by this digest rather than re-queued for a later one: re-queuing is what
-	// left a busy `daily` subscription mailing the same backlog, oldest first, weeks
-	// behind. The count is read before the send so the message can state it.
-	covered := r.countCovered(ctx, subID, claim)
-	digest := buildDigest(info.SavedSearchName, jobs, covered)
-	digest.SearchQuery = info.SavedSearchQuery
-	digest.UserID = info.UserID
+	msg := Message{UserID: info.UserID, Digests: make([]Digest, len(parts))}
+	for i, p := range parts {
+		msg.Digests[i] = p.digest
+	}
 
-	// Record the in-app notification BEFORE sending, so the digest can carry its
-	// own row's id and each channel's "and N more" tail can link to the page
-	// that lists the full match set. A recording failure is not a delivery
-	// failure — the digest goes out with a zero id and the tail falls back to a
-	// generic destination.
-	//
-	// createdRow says whether THIS delivery wrote the row or joined one another
-	// channel of the same saved search had already written; only the creator may
-	// withdraw it below.
-	notificationID, createdRow := r.recordNotification(ctx, info, digest, jobIDs)
-	digest.NotificationID = notificationID
-
-	if err := r.notifier.Send(ctx, info.Channel, dest, digest); err != nil {
+	if err := r.notifier.Send(ctx, info.Channel, dest, msg); err != nil {
 		// Withdraw on EVERY send error, including an ambiguous one (a timeout may
 		// mean the mail went out and only the acknowledgement was lost). Keeping
 		// the row on ambiguous errors would leave one behind per attempt, and the
@@ -180,15 +244,17 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, claim *subscriptio
 		// per-event delivery state for "has anybody delivered" to read, which this
 		// engine does not keep; systemd will not stack this unit on itself, so
 		// reaching it takes a hand-run pass overlapping the timer's.
-		if createdRow {
-			r.withdrawNotification(ctx, subID, digest.NotificationID)
+		for _, p := range parts {
+			if p.createdRow {
+				r.withdrawNotification(ctx, p.subID, p.digest.NotificationID)
+			}
 		}
 		// A channel with no registered notifier (e.g. email while SES is
 		// unconfigured) is not a delivery failure: soft-skip so the matches stay
 		// pending for a pass once the channel is provisioned, without burning an
 		// attempt toward the dead-letter limit.
 		if errors.Is(err, ErrChannelNotConfigured) {
-			r.release(ctx, subID, jobIDs)
+			releaseAll()
 			stats.SoftSkips++
 			return
 		}
@@ -208,32 +274,50 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, claim *subscriptio
 		// unconditional unlinkTelegram here would disable a user's Telegram link
 		// over an unrelated webhook's 410.
 		if errors.Is(err, ErrRecipientGone) {
-			r.forgetRecipient(ctx, subID, info, err)
-			r.release(ctx, subID, jobIDs)
+			r.forgetRecipient(ctx, parts[0].subID, info, err)
+			releaseAll()
 			stats.SoftSkips++
 			return
 		}
-		log.Printf("notify: deliver subscription %d: %v", subID, err)
+		log.Printf("notify: deliver subscriptions %v: %v", subIDsOf(parts), err)
 		// A webhook failure that is NOT a 410 (handled above) still counts toward
 		// the destination's own auto-disable threshold — see recordWebhookFailure
 		// — because subscription_matches.attempts resets with every new match,
 		// so a destination that is simply dead would otherwise fail one match
 		// per pass forever instead of being disabled once.
 		if info.Channel == ChannelWebhook {
-			r.recordWebhookFailure(ctx, subID, info.UserID, err)
+			r.recordWebhookFailure(ctx, parts[0].subID, info.UserID, err)
 		}
-		if ferr := r.store.RecordMatchDeliveryFailure(ctx, db.RecordMatchDeliveryFailureParams{
-			SubscriptionID: subID,
-			JobIds:         jobIDs,
-			LastError:      err.Error(),
-			MaxAttempts:    r.cfg.MaxAttempts,
-		}); ferr != nil {
-			log.Printf("notify: record delivery failure for subscription %d: %v", subID, ferr)
+		for _, p := range parts {
+			if ferr := r.store.RecordMatchDeliveryFailure(ctx, db.RecordMatchDeliveryFailureParams{
+				SubscriptionID: p.subID,
+				JobIds:         p.claim.jobIDs,
+				LastError:      err.Error(),
+				MaxAttempts:    r.cfg.MaxAttempts,
+			}); ferr != nil {
+				log.Printf("notify: record delivery failure for subscription %d: %v", p.subID, ferr)
+			}
 		}
 		stats.Failed++
 		return
 	}
 
+	for _, p := range parts {
+		r.finalize(ctx, p, stamped)
+	}
+	if info.Channel == ChannelWebhook {
+		if err := r.store.RecordWebhookDeliverySuccess(ctx, info.UserID); err != nil {
+			// Read-side only (the settings page's "last delivered" line) — never a
+			// reason to treat an otherwise-successful send as a failure.
+			log.Printf("notify: record webhook delivery success for user %d (subscription %d): %v", info.UserID, parts[0].subID, err)
+		}
+	}
+	stats.Delivered++
+}
+
+// finalize records one delivered digest (deliverMessage's success half): its history row, its matches, and the
+// subscription's last-sent stamp.
+func (r *Runner) finalize(ctx context.Context, p *part, stamped bool) {
 	// The digest went out. If it is carrying a zero id, nothing in the history
 	// names it yet: either the pre-send write failed, or it conflicted with a row
 	// that was then withdrawn before this channel could read it. Record it now.
@@ -246,43 +330,43 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, claim *subscriptio
 	// Safe to attempt blindly: the dedup key makes a redundant insert a no-op, so
 	// a first write that in fact succeeded and only lost its answer cannot become
 	// a second row here.
-	if digest.NotificationID == 0 {
-		r.recordNotification(ctx, info, digest, jobIDs)
+	if p.digest.NotificationID == 0 {
+		r.recordNotification(ctx, p.info, p.digest, p.claim.jobIDs)
 	}
 
 	if _, err := r.store.MarkMatchesNotified(ctx, db.MarkMatchesNotifiedParams{
-		SubscriptionID: subID,
-		JobIds:         jobIDs,
+		SubscriptionID: p.subID,
+		JobIds:         p.claim.jobIDs,
 	}); err != nil {
 		// Delivered but not stamped: the lease expiry will re-deliver (a rare
 		// duplicate), which is preferable to losing the notification.
-		log.Printf("notify: mark notified for subscription %d: %v", subID, err)
+		log.Printf("notify: mark notified for subscription %d: %v", p.subID, err)
 	}
-	if covered > 0 {
-		if _, err := r.store.MarkCoveredMatchesNotified(ctx, db.MarkCoveredMatchesNotifiedParams(claim.coveredParams(subID))); err != nil {
+	if p.covered > 0 {
+		if _, err := r.store.MarkCoveredMatchesNotified(ctx, db.MarkCoveredMatchesNotifiedParams(p.claim.coveredParams(p.subID))); err != nil {
 			// The digest counted them but they stay pending: the next digest carries the
 			// newest of them again or they go stale — a repeat at worst, never a loss.
-			log.Printf("notify: mark covered matches notified for subscription %d: %v", subID, err)
+			log.Printf("notify: mark covered matches notified for subscription %d: %v", p.subID, err)
 		}
 	}
 
-	if info.Channel == ChannelWebhook {
-		if err := r.store.RecordWebhookDeliverySuccess(ctx, info.UserID); err != nil {
-			// Read-side only (the settings page's "last delivered" line) — never a
-			// reason to treat an otherwise-successful send as a failure.
-			log.Printf("notify: record webhook delivery success for user %d (subscription %d): %v", info.UserID, subID, err)
-		}
-	}
-
+	// Every subscription the message carried is stamped, which is what the claim's
+	// per-person interval gate reads.
 	if stamped {
-		if err := r.store.MarkDigestSent(ctx, subID); err != nil {
+		if err := r.store.MarkDigestSent(ctx, p.subID); err != nil {
 			// Delivered but not stamped: the next pass delivers again (a rare
 			// duplicate), preferable to skipping the next digest.
-			log.Printf("notify: mark digest sent for subscription %d: %v", subID, err)
+			log.Printf("notify: mark digest sent for subscription %d: %v", p.subID, err)
 		}
 	}
+}
 
-	stats.Delivered++
+func subIDsOf(parts []*part) []int64 {
+	ids := make([]int64, len(parts))
+	for i, p := range parts {
+		ids[i] = p.subID
+	}
+	return ids
 }
 
 // recordNotification writes the digest's in-app notification-center row and
@@ -339,7 +423,7 @@ func (r *Runner) recordNotification(ctx context.Context, info db.GetSubscription
 		// The send then goes out with a zero id and its tail falls back to a
 		// generic destination — that much is unavoidable, the message has to be
 		// built before it can be sent. What is NOT left to chance is the history:
-		// deliverOne records again after a successful send precisely because of
+		// deliverMessage records again after a successful send precisely because of
 		// this branch. Resurrecting a row another worker withdrew is the right
 		// answer here and only here — that worker withdrew it because ITS OWN send
 		// failed, which says nothing about this one, and the person reading the
@@ -386,7 +470,7 @@ func (r *Runner) unlinkTelegram(ctx context.Context, subID, userID int64, cause 
 // forgetRecipient dispatches an ErrRecipientGone side effect by channel: which
 // stored recipient to forget differs per channel, so this cannot be one call.
 // Anything other than telegram/webhook has no such record to forget — for those,
-// the soft-skip in deliverOne is already the whole response.
+// the soft-skip in deliverMessage is already the whole response.
 func (r *Runner) forgetRecipient(ctx context.Context, subID int64, info db.GetSubscriptionForDeliveryRow, cause error) {
 	switch info.Channel {
 	case ChannelTelegram:
@@ -484,6 +568,9 @@ type subscriptionClaim struct {
 	jobIDs []int64
 	oldest db.ClaimSubscriptionMatchesRow
 	full   bool
+	// personLastSent is when the subscription's owner was last sent a message on its
+	// channel (ClaimSubscriptionMatches) — the same for every subscription of a message.
+	personLastSent pgtype.Timestamptz
 }
 
 // add appends one claimed row. The claim is newest first in SQL, but UPDATE ...

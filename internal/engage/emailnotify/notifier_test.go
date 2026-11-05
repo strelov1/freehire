@@ -51,7 +51,6 @@ func testUnsubscribeURL(t *testing.T) string {
 
 func digest() notify.Digest {
 	return notify.Digest{
-		UserID:          digestUserID,
 		SavedSearchName: "Go & <remote>",
 		Total:           3,
 		Jobs: []notify.DigestJob{
@@ -65,12 +64,12 @@ func digest() notify.Digest {
 func TestNotifier_RenderSubject(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/", testLinks())
 
-	got := n.render(digest(), testUnsubscribeURL(t))
+	got := n.render(msgOf(digest()), testUnsubscribeURL(t))
 	if want := `3 new jobs for "Go & <remote>"`; got.subject != want {
 		t.Errorf("subject = %q, want %q", got.subject, want)
 	}
 
-	one := n.render(notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}}, testUnsubscribeURL(t))
+	one := n.render(msgOf(notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}}), testUnsubscribeURL(t))
 	if want := `1 new job for "x"`; one.subject != want {
 		t.Errorf("singular subject = %q, want %q", one.subject, want)
 	}
@@ -78,7 +77,7 @@ func TestNotifier_RenderSubject(t *testing.T) {
 
 func TestNotifier_RenderHTML(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/", testLinks())
-	got := n.render(digest(), testUnsubscribeURL(t)).html
+	got := n.render(msgOf(digest()), testUnsubscribeURL(t)).html
 
 	// The saved-search name and a hostile title are auto-escaped by html/template.
 	if !strings.Contains(got, "Go &amp; &lt;remote&gt;") {
@@ -109,7 +108,7 @@ func TestNotifier_RenderHTML(t *testing.T) {
 
 func TestNotifier_RenderTextAlternative(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
-	got := n.render(digest(), testUnsubscribeURL(t)).text
+	got := n.render(msgOf(digest()), testUnsubscribeURL(t)).text
 
 	// The text alternative carries the same content in plain form (unescaped).
 	if !strings.Contains(got, "Go Dev <x>") {
@@ -130,7 +129,7 @@ func TestNotifier_Send(t *testing.T) {
 	fs := &fakeSender{}
 	n := NewNotifier(fs, "notifications@freehire.me", "https://freehire.me", testLinks())
 
-	err := n.Send(context.Background(), notify.ChannelEmail, "user@acme.com", digest())
+	err := n.Send(context.Background(), notify.ChannelEmail, "user@acme.com", msgOf(digest()))
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -156,7 +155,7 @@ func TestNotifier_SendPropagatesError(t *testing.T) {
 	fs := &fakeSender{err: errors.New("ses throttled")}
 	n := NewNotifier(fs, "notifications@freehire.me", "https://freehire.me", testLinks())
 
-	if err := n.Send(context.Background(), notify.ChannelEmail, "user@acme.com", digest()); err == nil {
+	if err := n.Send(context.Background(), notify.ChannelEmail, "user@acme.com", msgOf(digest())); err == nil {
 		t.Error("Send should propagate the sender error so the delivery retries")
 	}
 }
@@ -175,7 +174,7 @@ func bigDigest(n int, notificationID int64) notify.Digest {
 
 func TestNotifier_ListsAtMostTenJobs(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
-	got := n.render(bigDigest(67, 42), testUnsubscribeURL(t))
+	got := n.render(msgOf(bigDigest(67, 42)), testUnsubscribeURL(t))
 
 	if c := strings.Count(got.html, "/jobs/job-"); c != notify.ListLimit {
 		t.Errorf("HTML lists %d jobs, want %d", c, notify.ListLimit)
@@ -193,7 +192,7 @@ func TestNotifier_ListsAtMostTenJobs(t *testing.T) {
 
 func TestNotifier_TailLinksToTheDigestsOwnPage(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
-	got := n.render(bigDigest(67, 42), testUnsubscribeURL(t))
+	got := n.render(msgOf(bigDigest(67, 42)), testUnsubscribeURL(t))
 
 	const want = "https://freehire.me/my/notifications/42/jobs?utm_source=email"
 	if !strings.Contains(got.html, want) {
@@ -206,7 +205,7 @@ func TestNotifier_TailLinksToTheDigestsOwnPage(t *testing.T) {
 
 func TestNotifier_TailFallsBackWithoutANotificationID(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
-	got := n.render(bigDigest(67, 0), testUnsubscribeURL(t))
+	got := n.render(msgOf(bigDigest(67, 0)), testUnsubscribeURL(t))
 
 	if strings.Contains(got.html, "/my/notifications/0/jobs") {
 		t.Errorf("a zero notification id must not be rendered as a URL: %s", got.html)
@@ -227,7 +226,7 @@ func TestNotifier_OverflowedTailLinksToTheSavedSearch(t *testing.T) {
 	d := bigDigest(67, 42)
 	d.Total = 600
 	d.SearchQuery = "seniority=senior"
-	got := n.render(d, testUnsubscribeURL(t))
+	got := n.render(msgOf(d), testUnsubscribeURL(t))
 
 	const want = "https://freehire.me/jobs?seniority=senior&utm_source=email"
 	if !strings.Contains(got.text, "+ 590 more at "+want) {
@@ -238,5 +237,30 @@ func TestNotifier_OverflowedTailLinksToTheSavedSearch(t *testing.T) {
 	}
 	if strings.Contains(got.html, "/my/notifications/42/jobs") {
 		t.Errorf("an overflowed digest must not link to its snapshot page: %s", got.html)
+	}
+}
+
+// msgOf wraps one digest as the single-digest message every case here sends.
+func msgOf(d notify.Digest) notify.Message {
+	return notify.Message{UserID: digestUserID, Digests: []notify.Digest{d}}
+}
+
+func TestRender_BundleSubjectCountsAlertsAndSectionsNameThem(t *testing.T) {
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/", testLinks())
+	a := digest()
+	b := notify.Digest{SavedSearchName: "My profile", Total: 1, Jobs: []notify.DigestJob{{Title: "Frontend", Slug: "frontend"}}}
+	got := n.render(notify.Message{UserID: digestUserID, Digests: []notify.Digest{a, b}}, testUnsubscribeURL(t))
+
+	wantSubject := notify.JobCount(a.Total+1) + " from 2 job alerts"
+	if got.subject != wantSubject {
+		t.Errorf("subject = %q, want %q", got.subject, wantSubject)
+	}
+	// The search name is escaped in the HTML, so the first section is checked in the
+	// text part and the plain-named one in both.
+	if want := "for “" + a.SavedSearchName + "”"; !strings.Contains(got.text, want) {
+		t.Errorf("text missing section %q", want)
+	}
+	if want := "1 new job for “My profile”"; !strings.Contains(got.html, want) || !strings.Contains(got.text, want) {
+		t.Errorf("html and text must both carry section %q", want)
 	}
 }

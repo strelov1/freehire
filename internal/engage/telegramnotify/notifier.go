@@ -42,8 +42,8 @@ func NewNotifier(client *Client, jobBaseURL string) *Notifier {
 // A 403 is translated to notify.ErrRecipientGone, the engine-side vocabulary for
 // "this recipient is permanently closed to us" — the engine unlinks the chat and
 // soft-skips instead of counting a delivery failure it would retry to no purpose.
-func (n *Notifier) Send(ctx context.Context, _ string, dest string, d notify.Digest) error {
-	return n.client.SendToChat(ctx, dest, n.render(d))
+func (n *Notifier) Send(ctx context.Context, _ string, dest string, m notify.Message) error {
+	return n.client.SendToChat(ctx, dest, n.render(m))
 }
 
 // SendToChat posts html to the chat encoded in dest. A 403 is translated to
@@ -75,32 +75,92 @@ func (c *Client) SendToChat(ctx context.Context, dest, html string) error {
 // jobs exceeds the limit, Telegram rejects the send deterministically, every retry
 // re-fails, and the whole batch is dead-lettered — silently dropping the user's
 // notifications.
-func (n *Notifier) render(d notify.Digest) string {
+//
+// A message of several digests is one Telegram message with a section per digest.
+// Every section's heading and widest tail are reserved before any job is listed, so
+// the last section is never squeezed out by the first one's jobs.
+func (n *Notifier) render(m notify.Message) string {
 	var b strings.Builder
 	// Not notify.JobCount: the bold wraps the numeral alone, so the markup sits
 	// inside the phrase that helper returns whole.
-	fmt.Fprintf(&b, "🔔 <b>%d</b> new job%s for %q\n\n", d.Total, notify.Plural(d.Total), html.EscapeString(d.SavedSearchName))
+	if len(m.Digests) == 1 {
+		d := m.Digests[0]
+		fmt.Fprintf(&b, "🔔 <b>%d</b> new job%s for %q\n\n", d.Total, notify.Plural(d.Total), html.EscapeString(d.SavedSearchName))
+	} else {
+		total := m.Total()
+		fmt.Fprintf(&b, "🔔 <b>%d</b> new job%s from %d job alerts\n", total, notify.Plural(total), len(m.Digests))
+	}
 
-	// Reserve room for the widest possible tail up front (d.Total is its worst-case
-	// count), so appending the actual tail after the loop can never push past the limit.
-	viewAll := n.viewAllURL(d)
-	tailReserve := UTF16Len(moreLine(d.Total, viewAll))
+	// A search link is the user's own query and may run long; shared between
+	// sections, its allowance shrinks so the reserve below stays bounded.
+	searchTailLen := maxSearchTailLen / len(m.Digests)
+	type part struct {
+		heading, viewAll string
+		d                notify.Digest
+	}
+	parts := make([]part, 0, len(m.Digests))
+	// Reserve room for every widest possible tail up front (d.Total is its worst-case
+	// count), so appending the actual tails can never push past the limit.
+	//
+	// Headings and tails are mandatory, so with enough alerts they alone would overflow
+	// the limit and Telegram would refuse the message on every retry. The sections that
+	// do not fit fold into one closing line instead, reserved first so it always fits.
+	folded := foldedLine(m.Total(), len(m.Digests), n.jobBaseURL)
+	reserve := 0
 	used := UTF16Len(b.String())
-	shown := 0
-	for _, j := range d.Listed() {
-		line := n.jobLine(j)
-		lineLen := UTF16Len(line)
-		if used+lineLen+tailReserve > MaxMessageLen {
+	for i, d := range m.Digests {
+		p := part{d: d, viewAll: n.viewAllURL(d, searchTailLen)}
+		if len(m.Digests) > 1 {
+			p.heading = fmt.Sprintf("\n<b>%s</b> · %s\n", html.EscapeString(d.SavedSearchName), notify.JobCount(d.Total))
+		}
+		cost := UTF16Len(p.heading) + UTF16Len(moreLine(d.Total, p.viewAll))
+		if i < len(m.Digests)-1 && used+reserve+cost+UTF16Len(folded) > MaxMessageLen ||
+			i == len(m.Digests)-1 && used+reserve+cost > MaxMessageLen {
 			break
 		}
-		b.WriteString(line)
-		used += lineLen
-		shown++
+		reserve += cost
+		parts = append(parts, p)
 	}
-	if more := d.Total - shown; more > 0 {
-		b.WriteString(moreLine(more, viewAll))
+	var foldedJobs int
+	for _, d := range m.Digests[len(parts):] {
+		foldedJobs += d.Total
 	}
+	if rest := len(m.Digests) - len(parts); rest > 0 {
+		folded = foldedLine(foldedJobs, rest, n.jobBaseURL)
+		reserve += UTF16Len(folded)
+	} else {
+		folded = ""
+	}
+	for _, p := range parts {
+		b.WriteString(p.heading)
+		reserve -= UTF16Len(p.heading) + UTF16Len(moreLine(p.d.Total, p.viewAll))
+		used += UTF16Len(p.heading)
+		shown := 0
+		for _, j := range p.d.Listed() {
+			line := n.jobLine(j)
+			lineLen := UTF16Len(line)
+			if used+lineLen+UTF16Len(moreLine(p.d.Total, p.viewAll))+reserve > MaxMessageLen {
+				break
+			}
+			b.WriteString(line)
+			used += lineLen
+			shown++
+		}
+		if more := p.d.Total - shown; more > 0 {
+			tail := moreLine(more, p.viewAll)
+			b.WriteString(tail)
+			used += UTF16Len(tail)
+		}
+	}
+	b.WriteString(folded)
 	return b.String()
+}
+
+// foldedLine is the closing line standing for the alerts a message had no room to
+// list: their job count and how many there are, linking to the notification centre,
+// which keeps a page per alert.
+func foldedLine(jobs, alerts int, baseURL string) string {
+	return fmt.Sprintf("\n\n<a href=\"%s/my/notifications\">+ %s in %d more job alert%s</a>", baseURL, notify.JobCount(jobs), alerts, notify.Plural(alerts))
 }
 
 // jobLine renders one digest job on a single line: a bullet linking to the
@@ -136,9 +196,9 @@ func (n *Notifier) applyURL(j notify.DigestJob) string {
 // characters, while the tail is reserved out of MaxMessageLen before any job is
 // listed — so a query longer than maxSearchTailLen falls back to the saved
 // searches page, one click from the same results.
-func (n *Notifier) viewAllURL(d notify.Digest) string {
+func (n *Notifier) viewAllURL(d notify.Digest, searchTailLen int) string {
 	if d.Overflowed() {
-		if u := n.jobBaseURL + d.SearchPath("telegram-bot"); UTF16Len(u) <= maxSearchTailLen {
+		if u := n.jobBaseURL + d.SearchPath("telegram-bot"); UTF16Len(u) <= searchTailLen {
 			return u
 		}
 		return n.jobBaseURL + "/my/notifications/searches"

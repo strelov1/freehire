@@ -29,7 +29,7 @@ func TestSend_PostsJSONBody(t *testing.T) {
 	n := newNotifier(srv.Client())
 	d := notify.Digest{SavedSearchName: "Go jobs", Total: 1, Jobs: []notify.DigestJob{{Title: "Gopher", Slug: "gopher"}}}
 
-	if err := n.Send(context.Background(), notify.ChannelWebhook, srv.URL, d); err != nil {
+	if err := n.Send(context.Background(), notify.ChannelWebhook, srv.URL, msgOf(d)); err != nil {
 		t.Fatalf("Send returned error: %v", err)
 	}
 
@@ -56,7 +56,7 @@ func TestSend_410IsRecipientGone(t *testing.T) {
 	defer srv.Close()
 
 	n := newNotifier(srv.Client())
-	err := n.Send(context.Background(), notify.ChannelWebhook, srv.URL, notify.Digest{})
+	err := n.Send(context.Background(), notify.ChannelWebhook, srv.URL, msgOf(notify.Digest{}))
 	if !errors.Is(err, notify.ErrRecipientGone) {
 		t.Errorf("Send error = %v, want wrapping notify.ErrRecipientGone", err)
 	}
@@ -69,7 +69,7 @@ func TestSend_ServerErrorIsPlainError(t *testing.T) {
 	defer srv.Close()
 
 	n := newNotifier(srv.Client())
-	err := n.Send(context.Background(), notify.ChannelWebhook, srv.URL, notify.Digest{})
+	err := n.Send(context.Background(), notify.ChannelWebhook, srv.URL, msgOf(notify.Digest{}))
 	if err == nil {
 		t.Fatal("Send: want an error for a 500 response")
 	}
@@ -85,21 +85,21 @@ func TestSend_SuccessOnAny2xx(t *testing.T) {
 	defer srv.Close()
 
 	n := newNotifier(srv.Client())
-	if err := n.Send(context.Background(), notify.ChannelWebhook, srv.URL, notify.Digest{}); err != nil {
+	if err := n.Send(context.Background(), notify.ChannelWebhook, srv.URL, msgOf(notify.Digest{})); err != nil {
 		t.Errorf("Send returned error for a 202: %v", err)
 	}
 }
 
 func TestSend_RejectsNonHTTPScheme(t *testing.T) {
 	n := newNotifier(http.DefaultClient)
-	if err := n.Send(context.Background(), notify.ChannelWebhook, "ftp://example.com/hook", notify.Digest{}); err == nil {
+	if err := n.Send(context.Background(), notify.ChannelWebhook, "ftp://example.com/hook", msgOf(notify.Digest{})); err == nil {
 		t.Error("Send: want an error for a non-http(s) URL, got none")
 	}
 }
 
 func TestSend_InvalidDestIsError(t *testing.T) {
 	n := newNotifier(http.DefaultClient)
-	if err := n.Send(context.Background(), notify.ChannelWebhook, "://not a url", notify.Digest{}); err == nil {
+	if err := n.Send(context.Background(), notify.ChannelWebhook, "://not a url", msgOf(notify.Digest{})); err == nil {
 		t.Error("Send: want an error for a malformed dest, got none")
 	}
 }
@@ -108,7 +108,7 @@ func TestSend_InvalidDestIsError(t *testing.T) {
 // pointed at a loopback address, the send must be refused rather than delivered.
 func TestSend_ProductionClientRejectsPrivateAddress(t *testing.T) {
 	n := NewNotifier()
-	if err := n.Send(context.Background(), notify.ChannelWebhook, "http://127.0.0.1:1/hook", notify.Digest{}); err == nil {
+	if err := n.Send(context.Background(), notify.ChannelWebhook, "http://127.0.0.1:1/hook", msgOf(notify.Digest{})); err == nil {
 		t.Error("Send: want an error when the production client targets a loopback address")
 	}
 }
@@ -144,4 +144,9 @@ func TestTest_Non2xxIsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Test: want an error for a 404")
 	}
+}
+
+// msgOf wraps one digest as the single-digest message every case here sends.
+func msgOf(d notify.Digest) notify.Message {
+	return notify.Message{Digests: []notify.Digest{d}}
 }
