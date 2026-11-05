@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -548,15 +549,38 @@ func TestWithoutFailed_LeavesAFailedCollectionsTagsAlone(t *testing.T) {
 }
 
 func TestProxiedClient_PrefersTheScraplingTier(t *testing.T) {
-	t.Setenv("SCRAPLING_FETCH_URL", "http://127.0.0.1:8098")
+	var got struct {
+		Mode  string `json:"mode"`
+		Proxy bool   `json:"proxy"`
+	}
+	svc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = w.Write([]byte(`{"status":200,"url":"https://www.uscis.gov/","headers":{},"body":""}`))
+	}))
+	defer svc.Close()
+	t.Setenv("SCRAPLING_FETCH_URL", svc.URL)
 	t.Setenv("SCRAPLING_FETCH_TOKEN", "token")
 	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
-	got, err := proxiedClient(fetchTimeout)
+
+	client, err := proxiedClient(fetchTimeout)
 	if err != nil {
 		t.Fatalf("proxiedClient: %v", err)
 	}
-	if _, ok := got.Transport.(*scraplingfetch.Transport); !ok {
-		t.Errorf("proxiedClient transport = %T, want the Scrapling tier", got.Transport)
+	if _, ok := client.Transport.(*scraplingfetch.Transport); !ok {
+		t.Fatalf("proxiedClient transport = %T, want the Scrapling tier", client.Transport)
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://www.uscis.gov/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("get through the Scrapling tier: %v", err)
+	}
+	_ = resp.Body.Close()
+	// uscis.gov refuses the Scrapling tier without its proxy too, so both options matter.
+	if got.Mode != "http" || !got.Proxy {
+		t.Errorf("Scrapling request mode=%q proxy=%v, want mode=http proxy=true", got.Mode, got.Proxy)
 	}
 }
 
