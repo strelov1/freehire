@@ -3,6 +3,7 @@ import { defineConfig } from 'vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { svelteOptions } from './svelte.options.ts';
+import { scalarHtmlPlugin } from './src/lib/docs/scalarSsr.ts';
 
 export default defineConfig({
   build: {
@@ -18,6 +19,7 @@ export default defineConfig({
   // alias is needed. tailwindcss() must precede sveltekit().
   plugins: [
     tailwindcss(),
+    scalarHtmlPlugin(),
     // Kit 3 reads no svelte.config.js: what used to live there is passed here.
     sveltekit({
       ...svelteOptions,

@@ -216,6 +216,9 @@ type Store interface {
 	// MarkSubscriptionsSearched stamps when the matching stage last searched these
 	// subscriptions; searchDue and matchQuery's paging read it back.
 	MarkSubscriptionsSearched(ctx context.Context, arg db.MarkSubscriptionsSearchedParams) error
+	// DeactivateSubscriptions pauses the given subscriptions and returns how many it
+	// paused; see pauseUnrunnable.
+	DeactivateSubscriptions(ctx context.Context, arg db.DeactivateSubscriptionsParams) (int64, error)
 	ClaimSubscriptionMatches(ctx context.Context, arg db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error)
 	// ExpireStaleSubscriptionMatches takes up to BatchSize stale matches (older
 	// than the freshness window, or for a closed job) out of the pending set and
@@ -337,6 +340,7 @@ type Stats struct {
 	Queries        int // distinct queries searched this pass
 	SkippedQueries int // distinct queries not searched: none of their subscriptions was due (searchDue)
 	Searches       int // index requests made, counting every page of a paged query
+	Paused         int // subscriptions paused because the search cannot run their query (pauseUnrunnable)
 	FailedQueries  int // distinct queries whose search or record step errored and was skipped
 	Matched        int // newly recorded (subscription, job) matches
 	Delivered      int // messages sent (one per person and channel, carrying a digest per subscription)
@@ -383,8 +387,8 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	// stopped part-way is the pass whose figures somebody actually wants, and printing
 	// them last meant the run that ended early was also the run that said nothing.
 	defer func() {
-		log.Printf("notify: queries=%d skipped_queries=%d searches=%d failed_queries=%d matched=%d expired=%d delivered=%d soft_skips=%d deferred=%d failed=%d",
-			stats.Queries, stats.SkippedQueries, stats.Searches, stats.FailedQueries, stats.Matched, stats.Expired, stats.Delivered, stats.SoftSkips, stats.Deferred, stats.Failed)
+		log.Printf("notify: queries=%d skipped_queries=%d searches=%d paused=%d failed_queries=%d matched=%d expired=%d delivered=%d soft_skips=%d deferred=%d failed=%d",
+			stats.Queries, stats.SkippedQueries, stats.Searches, stats.Paused, stats.FailedQueries, stats.Matched, stats.Expired, stats.Delivered, stats.SoftSkips, stats.Deferred, stats.Failed)
 	}()
 	if err := r.match(ctx, &stats); err != nil {
 		return stats, fmt.Errorf("match: %w", err)

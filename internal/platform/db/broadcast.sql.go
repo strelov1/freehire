@@ -19,12 +19,18 @@ WHERE u.email_verified
       SELECT 1 FROM broadcast_emails be
       WHERE be.user_id = u.id AND be.campaign = $1
   )
+  AND $2::text IN ('', broadcast_half($1::text, u.id))
 `
+
+type CountBroadcastCandidatesParams struct {
+	Campaign string `json:"campaign"`
+	Half     string `json:"half"`
+}
 
 // How many people a campaign would reach right now. Read before sending: a campaign
 // is irreversible and goes to everyone, so the number is worth seeing first.
-func (q *Queries) CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error) {
-	row := q.db.QueryRow(ctx, countBroadcastCandidates, campaign)
+func (q *Queries) CountBroadcastCandidates(ctx context.Context, arg CountBroadcastCandidatesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countBroadcastCandidates, arg.Campaign, arg.Half)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -41,12 +47,14 @@ WHERE u.email_verified
       SELECT 1 FROM broadcast_emails be
       WHERE be.user_id = u.id AND be.campaign = $1
   )
+  AND $2::text IN ('', broadcast_half($1::text, u.id))
 ORDER BY u.created_at
-LIMIT $2::int
+LIMIT $3::int
 `
 
 type ListBroadcastCandidatesParams struct {
 	Campaign string `json:"campaign"`
+	Half     string `json:"half"`
 	MaxRows  int32  `json:"max_rows"`
 }
 
@@ -56,7 +64,8 @@ type ListBroadcastCandidatesRow struct {
 }
 
 // Audience reader and ledger writer for one-off campaigns (internal/engage/broadcast).
-// Everyone who can be mailed and has not received this campaign yet.
+// Everyone who can be mailed and has not received this campaign yet. A non-empty half ('a' or
+// 'b') narrows that to one side of a split test.
 //
 // No signup window, unlike the onboarding queries: a campaign is addressed to the
 // whole audience by definition, and the launch it announces matters as much to
@@ -75,7 +84,7 @@ type ListBroadcastCandidatesRow struct {
 // all, because the only thing that creates the row is a page behind the login.
 // Migration 0153 split the two.
 func (q *Queries) ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error) {
-	rows, err := q.db.Query(ctx, listBroadcastCandidates, arg.Campaign, arg.MaxRows)
+	rows, err := q.db.Query(ctx, listBroadcastCandidates, arg.Campaign, arg.Half, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}

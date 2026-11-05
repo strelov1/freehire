@@ -7,9 +7,12 @@ import (
 	"log"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/job/jobview"
@@ -28,10 +31,16 @@ type companiesHandlers struct {
 	// falls back to the Postgres substring path so /companies never depends on
 	// Meilisearch being up.
 	companySearch companySearcher
+	// subindustries holds the vocabulary CompanySubindustries serves.
+	subindustries subindustryCache
 }
 
 func newCompaniesHandlers(queries *db.Queries, companySearch companySearcher) *companiesHandlers {
-	return &companiesHandlers{queries: queries, companySearch: companySearch}
+	return &companiesHandlers{
+		queries:       queries,
+		companySearch: companySearch,
+		subindustries: subindustryCache{load: queries.CompanySubindustries, now: time.Now},
+	}
 }
 
 func (h *companiesHandlers) register(api fiber.Router, mw middleware) {
@@ -339,15 +348,67 @@ type subindustryFacet struct {
 // most common first, backing the searchable "Industry" facet's option list. Counts are
 // unconditional (they do not reflect other active list filters).
 func (h *companiesHandlers) CompanySubindustries(c *fiber.Ctx) error {
-	rows, err := h.queries.CompanySubindustries(c.Context())
+	out, err := h.subindustries.get(c.Context())
 	if err != nil {
 		return err
 	}
-	out := make([]subindustryFacet, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, subindustryFacet{Value: r.Value.String, Count: r.Count})
-	}
 	return c.JSON(fiber.Map{"data": out})
+}
+
+// subindustryCacheTTL is how long one count of the vocabulary is served. The query is a
+// full scan of companies (~947k rows, 0.2–6.5s), and on 2026-11-05 a ~7 req/s loop of
+// uncached calls took all ten pool connections and starved every other route. The
+// vocabulary moves with ingest, so counts ten minutes old are indistinguishable.
+const subindustryCacheTTL = 10 * time.Minute
+
+// subindustryCache keeps the subindustry vocabulary in process for subindustryCacheTTL.
+// Concurrent misses share one query through flight, so an expired entry under load
+// costs one connection rather than one per request. A failed query is not stored.
+type subindustryCache struct {
+	load func(context.Context) ([]db.CompanySubindustriesRow, error)
+	// now is injectable so expiry is testable without sleeping.
+	now func() time.Time
+
+	flight  singleflight.Group
+	mu      sync.Mutex
+	facets  []subindustryFacet
+	expires time.Time
+}
+
+// get returns the cached vocabulary, loading it when absent or expired. The returned
+// slice is shared between callers and must not be modified.
+func (s *subindustryCache) get(ctx context.Context) ([]subindustryFacet, error) {
+	if facets, ok := s.fresh(); ok {
+		return facets, nil
+	}
+	v, err, _ := s.flight.Do("", func() (any, error) {
+		// A flight that finished between our miss and this call has already stored it.
+		if facets, ok := s.fresh(); ok {
+			return facets, nil
+		}
+		rows, err := s.load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		facets := make([]subindustryFacet, 0, len(rows))
+		for _, r := range rows {
+			facets = append(facets, subindustryFacet{Value: r.Value.String, Count: r.Count})
+		}
+		s.mu.Lock()
+		s.facets, s.expires = facets, s.now().Add(subindustryCacheTTL)
+		s.mu.Unlock()
+		return facets, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.([]subindustryFacet), nil
+}
+
+func (s *subindustryCache) fresh() ([]subindustryFacet, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.facets, s.facets != nil && s.now().Before(s.expires)
 }
 
 // facetValues reads the repeatable values of one facet query param, dropping empty

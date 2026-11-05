@@ -45,6 +45,19 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   `ErrUnfilteredSearch` (400). The guard is at subscribe time, not at save time, because
   that is where the meaning changes.
 
+- **A subscription must carry a query the search can RUN, and stays that way.** Create
+  and resume (`subscription.Service.SetActive(true)`) share one gate (`admit`): the
+  query parses (`search.ParseQuery` — e.g. at most 5 OR alternatives), narrows, and the
+  channel can reach the account. Saved searches check only that the query parses, on
+  create and edit — an unfiltered one is a legitimate "show all" view; narrowing and
+  the channel are a subscription's gates. What predates a rule — a query saved before it existed, or one a tightened rule
+  later invalidates — is caught by `cmd/notify` itself: `pauseUnrunnable` pauses every
+  subscription on a query it cannot parse and does not search it (`paused=` in the run
+  log), and only while the saved search still holds the query it judged, so an owner
+  who fixed it meanwhile keeps the alert on. Measured 2026-11-05, one such subscription had failed every pass for a week
+  while its owner received nothing. Paused, not deleted, so the owner can fix the
+  search and resume.
+
 - **A non-positive per-subscription cap claims nothing and reports success.** It becomes
   `LIMIT 0` inside the `LATERAL`: no rows, no error, the worker quietly idle. It is
   floored at the call site for the same reason `SEARCH_DRAIN_BATCH_SIZE` is — a silent
@@ -344,3 +357,28 @@ Bot API — check which one you're in.
   pass's digests are skipped, and the ledger redelivers them on the next pass only if they
   were never marked notified — and only while they are fresh: an outage longer than the
   freshness window loses what it held back, by design.
+
+## Engagement tracking
+
+Campaigns (`cmd/broadcast`) and the saved-search digest (`cmd/notify`) can be measured; nothing
+else can. A message is tracked only when it names a `Campaign` and its client was given a
+configuration set (`WithEngagementTracking`, from `SES_ENGAGEMENT_CONFIGURATION_SET`), so account,
+security and application mail cannot pick up an open pixel by accident.
+
+- **The flow:** SES configuration set → SNS → SQS (`EMAIL_EVENTS_QUEUE_URL`) → `cmd/email-events`,
+  the same SNS → SQS shape as inbound mail, with no public endpoint to authenticate.
+- **No person in the ledger.** `email_events` holds a message id, campaign, variant, type and time,
+  first sighting per message and type. The consumer does not decode the recipient, IP or link.
+- **Retention:** 90 days, then `email_event_daily` counts only. Events for mail sent longer ago
+  than that are dropped, since the sighting that would deduplicate them may be gone.
+- **A set SES does not know is caught before sending.** `CheckEngagementTracking` needs
+  `ses:GetConfigurationSet`. `cmd/broadcast` refuses to start, because recorded failures would
+  spend the audience; `cmd/notify` falls back to untracked mail, because a digest is retried.
+- **Opens overcount.** Apple Mail Privacy Protection and security scanners fetch the pixel without a
+  person reading anything, typically soon after delivery. Judge send times by clicks.
+- **Comparing two send times:** run `./broadcast -campaign <name> -half a` at one time and
+  `-half b` at the other. The sides are hashed with the campaign name and stable across runs. Then:
+
+```sql
+SELECT variant, type, count(*) FROM email_events WHERE campaign = '<name>' GROUP BY 1, 2 ORDER BY 1, 2;
+```

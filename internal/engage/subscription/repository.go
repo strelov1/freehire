@@ -87,6 +87,18 @@ func (r *QueriesRepository) SavedSearchQuery(ctx context.Context, userID, savedS
 	return row.Query, nil
 }
 
+// Target reads an owner-scoped subscription's channel and saved-search query.
+func (r *QueriesRepository) Target(ctx context.Context, userID, id int64) (string, string, error) {
+	row, err := r.q.GetSubscriptionTarget(ctx, db.GetSubscriptionTargetParams{ID: id, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", ErrNotFound
+	}
+	if err != nil {
+		return "", "", err
+	}
+	return row.Channel, row.Query, nil
+}
+
 func (r *QueriesRepository) SetActive(ctx context.Context, userID, id int64, active bool) (Subscription, error) {
 	row, err := r.q.SetSubscriptionActive(ctx, db.SetSubscriptionActiveParams{
 		Active: active,

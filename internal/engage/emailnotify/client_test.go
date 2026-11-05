@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
@@ -13,8 +14,17 @@ import (
 // fakeSES records the SendEmail input and returns a configurable error, so the
 // Client adapter is verified without a live AWS call.
 type fakeSES struct {
-	in  *sesv2.SendEmailInput
-	err error
+	in     *sesv2.SendEmailInput
+	err    error
+	setErr error
+	setOut *sesv2.GetConfigurationSetOutput
+}
+
+func (f *fakeSES) GetConfigurationSet(context.Context, *sesv2.GetConfigurationSetInput, ...func(*sesv2.Options)) (*sesv2.GetConfigurationSetOutput, error) {
+	if f.setOut != nil {
+		return f.setOut, f.setErr
+	}
+	return &sesv2.GetConfigurationSetOutput{}, f.setErr
 }
 
 func (f *fakeSES) SendEmail(_ context.Context, in *sesv2.SendEmailInput, _ ...func(*sesv2.Options)) (*sesv2.SendEmailOutput, error) {
@@ -160,4 +170,71 @@ func deref(p *string) string {
 		return ""
 	}
 	return *p
+}
+
+func trackedMessage() Message {
+	return Message{
+		From: "from@freehire.me", To: "to@acme.com", Subject: "Subj", HTML: "<b>hi</b>", Text: "hi",
+		Group: emailprefs.GroupEssential, Campaign: "launch", Variant: "a",
+	}
+}
+
+func TestClient_TracksACampaignThroughTheConfigurationSet(t *testing.T) {
+	fake := &fakeSES{}
+	c := (&Client{ses: fake}).WithEngagementTracking("engagement")
+
+	if err := c.Send(context.Background(), trackedMessage()); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if got := fake.in.ConfigurationSetName; got == nil || *got != "engagement" {
+		t.Fatalf("ConfigurationSetName = %v, want engagement", got)
+	}
+	tags := map[string]string{}
+	for _, tag := range fake.in.EmailTags {
+		tags[*tag.Name] = *tag.Value
+	}
+	if tags["campaign"] != "launch" || tags["variant"] != "a" {
+		t.Errorf("tags = %v, want campaign=launch variant=a", tags)
+	}
+}
+
+func TestClient_TracksNothingWithoutBothCampaignAndSet(t *testing.T) {
+	cases := map[string]struct {
+		client  func(*fakeSES) *Client
+		message Message
+	}{
+		"no configuration set": {func(f *fakeSES) *Client { return &Client{ses: f} }, trackedMessage()},
+		"no campaign": {
+			func(f *fakeSES) *Client { return (&Client{ses: f}).WithEngagementTracking("engagement") },
+			Message{From: "from@freehire.me", To: "to@acme.com", Subject: "Subj", HTML: "h", Text: "t", Group: emailprefs.GroupEssential},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fake := &fakeSES{}
+			if err := tc.client(fake).Send(context.Background(), tc.message); err != nil {
+				t.Fatalf("Send: %v", err)
+			}
+			if fake.in.ConfigurationSetName != nil || len(fake.in.EmailTags) != 0 {
+				t.Errorf("mail was tracked: set=%v tags=%v", fake.in.ConfigurationSetName, fake.in.EmailTags)
+			}
+		})
+	}
+}
+
+func TestClient_CheckEngagementTracking(t *testing.T) {
+	missing := &fakeSES{setErr: errors.New("not found")}
+	if err := (&Client{ses: missing}).CheckEngagementTracking(context.Background()); err != nil {
+		t.Errorf("no set configured: %v, want nothing to check", err)
+	}
+	if err := (&Client{ses: missing}).WithEngagementTracking("engagement").CheckEngagementTracking(context.Background()); err == nil {
+		t.Error("an unknown set passed the check")
+	}
+	disabled := &fakeSES{setOut: &sesv2.GetConfigurationSetOutput{SendingOptions: &types.SendingOptions{SendingEnabled: false}}}
+	if err := (&Client{ses: disabled}).WithEngagementTracking("engagement").CheckEngagementTracking(context.Background()); err == nil {
+		t.Error("a set with sending disabled passed the check")
+	}
+	if err := (&Client{ses: &fakeSES{}}).WithEngagementTracking("engagement").CheckEngagementTracking(context.Background()); err != nil {
+		t.Errorf("known set: %v", err)
+	}
 }

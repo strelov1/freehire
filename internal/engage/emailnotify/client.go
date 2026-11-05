@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -30,6 +31,7 @@ var ErrNoWayOut = errors.New("emailnotify: a silenceable mail with no unsubscrib
 // in its place. *sesv2.Client satisfies it.
 type sesAPI interface {
 	SendEmail(ctx context.Context, in *sesv2.SendEmailInput, optFns ...func(*sesv2.Options)) (*sesv2.SendEmailOutput, error)
+	GetConfigurationSet(ctx context.Context, in *sesv2.GetConfigurationSetInput, optFns ...func(*sesv2.Options)) (*sesv2.GetConfigurationSetOutput, error)
 }
 
 // Message is one email. It replaced three near-identical send methods — plain,
@@ -67,6 +69,14 @@ type Message struct {
 	// Attachments switch SES from its simple path to a raw RFC 5322 message. Almost
 	// every mail is body-only; today only a mentorship calendar invitation is not.
 	Attachments []Attachment
+
+	// Campaign names the letter for engagement tracking. Empty, as on anything a person
+	// is waiting for, the mail goes out with no open pixel and no rewritten links. Set
+	// only on campaigns and digests. SES restricts tag values to ASCII letters, digits,
+	// '_', '-' and '.'.
+	Campaign string
+	// Variant is the side of a split test the letter belongs to. Empty outside one.
+	Variant string
 }
 
 // validate refuses a message that cannot be sent honestly.
@@ -104,6 +114,40 @@ func (m Message) unsubscribeHeaders() []types.MessageHeader {
 // the render logic it serves lives in the callers and is covered by their tests.
 type Client struct {
 	ses sesAPI
+	// trackingSet is the SES configuration set that publishes engagement events. Empty
+	// tracks nothing, whatever a message's Campaign says.
+	trackingSet string
+}
+
+// WithEngagementTracking returns the Client with the SES configuration set that
+// publishes opens, clicks, deliveries, bounces and complaints. Only the workers sending
+// campaigns and digests call it; every other worker's client cannot track by construction.
+func (c *Client) WithEngagementTracking(configurationSet string) *Client {
+	return &Client{ses: c.ses, trackingSet: configurationSet}
+}
+
+// trackingCheckTimeout bounds CheckEngagementTracking: the workers calling it have no deadline
+// of their own, and a stalled check must not hold up everything else they deliver.
+const trackingCheckTimeout = 10 * time.Second
+
+// CheckEngagementTracking reports whether SES will send through the configuration set. A send
+// naming a set it does not know, or one with sending disabled, is rejected, which would fail a
+// whole audience, so a sender checks once before its first letter. Without a set there is
+// nothing to check.
+func (c *Client) CheckEngagementTracking(ctx context.Context) error {
+	if c.trackingSet == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, trackingCheckTimeout)
+	defer cancel()
+	out, err := c.ses.GetConfigurationSet(ctx, &sesv2.GetConfigurationSetInput{ConfigurationSetName: aws.String(c.trackingSet)})
+	if err != nil {
+		return fmt.Errorf("emailnotify: configuration set %s: %w", c.trackingSet, err)
+	}
+	if out.SendingOptions != nil && !out.SendingOptions.SendingEnabled {
+		return fmt.Errorf("emailnotify: configuration set %s has sending disabled", c.trackingSet)
+	}
+	return nil
 }
 
 // NewClient builds a Client from AWS config resolved via the default chain
@@ -127,6 +171,7 @@ func (c *Client) Send(ctx context.Context, m Message) error {
 	if err != nil {
 		return err
 	}
+	c.track(in, m)
 	if _, err := c.ses.SendEmail(ctx, in); err != nil {
 		return fmt.Errorf("emailnotify: ses send to %s: %w", m.To, err)
 	}
@@ -164,4 +209,17 @@ func (c *Client) input(m Message) (*sesv2.SendEmailInput, error) {
 		in.ReplyToAddresses = []string{m.ReplyTo}
 	}
 	return in, nil
+}
+
+// track routes a campaign's mail through the configuration set and tags it, which is all
+// the event consumer (internal/engage/emailevents) learns about the letter.
+func (c *Client) track(in *sesv2.SendEmailInput, m Message) {
+	if c.trackingSet == "" || m.Campaign == "" {
+		return
+	}
+	in.ConfigurationSetName = aws.String(c.trackingSet)
+	in.EmailTags = []types.MessageTag{{Name: aws.String("campaign"), Value: aws.String(m.Campaign)}}
+	if m.Variant != "" {
+		in.EmailTags = append(in.EmailTags, types.MessageTag{Name: aws.String("variant"), Value: aws.String(m.Variant)})
+	}
 }

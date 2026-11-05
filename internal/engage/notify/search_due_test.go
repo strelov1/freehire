@@ -152,3 +152,29 @@ func TestMatch_FirstSearchReadsOnePage(t *testing.T) {
 		t.Errorf("search calls=%d, want 1", len(searcher.calls))
 	}
 }
+
+// A saved query the search cannot parse fails every pass and never delivers, so
+// the pass pauses its subscriptions and does not search it; the rest run as usual.
+func TestMatch_PausesASubscriptionWhoseQueryCannotRun(t *testing.T) {
+	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+	broken := "q=go+OR+rust+OR+java+OR+python+OR+ruby+OR+php"
+	store := &fakeStore{active: []db.ListActiveSubscriptionsRow{
+		{ID: 1, UserID: 1, Channel: ChannelEmail, Query: broken, StartAt: ts(now)},
+		{ID: 2, UserID: 2, Channel: ChannelTelegram, Query: broken, StartAt: ts(now)},
+		{ID: 3, UserID: 3, Channel: ChannelEmail, Query: "skills=go", StartAt: ts(now)},
+	}}
+	searcher := &fakeSearcher{}
+	r := New(store, searcher, &fakeNotifier{}, DefaultConfig())
+	r.now = func() time.Time { return now }
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.paused) != 2 || stats.Paused != 2 {
+		t.Errorf("paused=%v stats.Paused=%d, want subscriptions 1 and 2", store.paused, stats.Paused)
+	}
+	if len(searcher.calls) != 1 || stats.FailedQueries != 0 {
+		t.Errorf("search calls=%d failed=%d, want only the runnable query searched", len(searcher.calls), stats.FailedQueries)
+	}
+}

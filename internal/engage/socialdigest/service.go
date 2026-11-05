@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -30,9 +31,10 @@ func New(repo Repository, now func() time.Time) *Service {
 // staleness guard; a non-zero one is used verbatim, because asking to replay an old
 // day is the one case where old data is the point.
 //
-// An empty Digest is a normal result: the day was quiet. The errors it returns
-// (ErrNoViewData, ErrStaleViewData) mean the view pipeline is broken, which is not
-// the same thing and must not be published over.
+// An empty Digest is a normal result: every posting above the floor was published
+// recently. The errors it returns (ErrNoViewData, ErrStaleViewData, ErrThinViewData)
+// mean the view pipeline is broken or behind, which is not the same thing and must not
+// be published over.
 func (s *Service) Build(ctx context.Context, requestedDay time.Time) (Digest, error) {
 	day := truncateDay(requestedDay)
 	if requestedDay.IsZero() {
@@ -49,6 +51,9 @@ func (s *Service) Build(ctx context.Context, requestedDay time.Time) (Digest, er
 	candidates, err := s.repo.TopPageViewed(ctx, day, CandidateLimit)
 	if err != nil {
 		return Digest{}, fmt.Errorf("candidates for %s: %w", day.Format(DayLayout), err)
+	}
+	if !slices.ContainsFunc(candidates, func(p Posting) bool { return p.PageUniques >= MinPageUniques }) {
+		return Digest{}, fmt.Errorf("%s: %w", day.Format(DayLayout), ErrThinViewData)
 	}
 	quarantined, err := s.repo.RecentlyDigested(ctx, QuarantineSince(day), day)
 	if err != nil {

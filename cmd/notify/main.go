@@ -74,7 +74,13 @@ func run() int {
 		if ses, err := emailnotify.NewClient(ctx, cfg.AWSRegion); err != nil {
 			log.Printf("notify: email channel disabled: %v", err)
 		} else {
-			router[notify.ChannelEmail] = emailnotify.NewNotifier(ses, cfg.NotifyEmailFrom, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
+			// A broken set costs the measurement, never the digest.
+			tracked := ses.WithEngagementTracking(cfg.SESEngagementConfigurationSet)
+			if err := tracked.CheckEngagementTracking(ctx); err != nil {
+				log.Printf("notify: sending untracked: %v", err)
+				tracked = ses
+			}
+			router[notify.ChannelEmail] = emailnotify.NewNotifier(tracked, cfg.NotifyEmailFrom, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
 		}
 	}
 	searcher := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)

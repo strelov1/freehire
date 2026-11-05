@@ -39,6 +39,9 @@ type Campaign struct {
 	// links into freehire itself cannot spell the URL as a constant, and the previews
 	// render against a relative base. Campaigns that only link outward ignore it.
 	text func(base string) string
+	// Half limits a run to one side of a split test, "a" or "b". Empty sends to everyone.
+	// Lookup returns a copy, so setting it for one run leaves the registry alone.
+	Half string
 }
 
 // Mailer renders and sends campaigns.
@@ -87,6 +90,7 @@ func (m *Mailer) Send(ctx context.Context, c Campaign, userID int64, to string) 
 		From: m.from, To: to, ReplyTo: m.replyTo, Subject: c.Subject,
 		HTML: html, Text: c.text(m.baseURL) + emailprefs.TextFooter(unsubscribe),
 		Group: emailprefs.GroupNews, UnsubscribeURL: unsubscribe,
+		Campaign: c.Name, Variant: c.Half,
 	})
 }
 

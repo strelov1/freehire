@@ -76,8 +76,12 @@ func (n *Notifier) Send(ctx context.Context, _ string, dest string, m notify.Mes
 		Text:           e.text,
 		Group:          emailprefs.GroupAlerts,
 		UnsubscribeURL: unsubscribe,
+		Campaign:       digestCampaign,
 	})
 }
+
+// digestCampaign is the engagement-tracking name of the saved-search digest.
+const digestCampaign = "alerts-digest"
 
 // renderedEmail is a digest rendered into the three parts a Sender needs.
 type renderedEmail struct {

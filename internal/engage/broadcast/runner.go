@@ -11,7 +11,7 @@ import (
 // Store is the slice of the database a campaign needs.
 type Store interface {
 	ListBroadcastCandidates(ctx context.Context, arg db.ListBroadcastCandidatesParams) ([]db.ListBroadcastCandidatesRow, error)
-	CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error)
+	CountBroadcastCandidates(ctx context.Context, arg db.CountBroadcastCandidatesParams) (int64, error)
 	RecordBroadcastEmail(ctx context.Context, arg db.RecordBroadcastEmailParams) error
 }
 
@@ -35,6 +35,9 @@ func New(store Store, mailer *Mailer, maxPerRun int32) *Runner {
 	return &Runner{store: store, mailer: mailer, max: maxPerRun}
 }
 
+// ValidHalf reports whether s names a side of a split test, or none.
+func ValidHalf(s string) bool { return s == "" || s == "a" || s == "b" }
+
 // Stats is what one run did.
 type Stats struct {
 	Sent      int
@@ -45,7 +48,7 @@ type Stats struct {
 // Pending reports how many people the campaign would reach right now, without
 // sending anything.
 func (r *Runner) Pending(ctx context.Context, c Campaign) (int64, error) {
-	return r.store.CountBroadcastCandidates(ctx, c.Name)
+	return r.store.CountBroadcastCandidates(ctx, db.CountBroadcastCandidatesParams{Campaign: c.Name, Half: c.Half})
 }
 
 // Run sends the campaign to one capped batch and reports what is left.
@@ -57,6 +60,7 @@ func (r *Runner) Pending(ctx context.Context, c Campaign) (int64, error) {
 func (r *Runner) Run(ctx context.Context, c Campaign) (Stats, error) {
 	rows, err := r.store.ListBroadcastCandidates(ctx, db.ListBroadcastCandidatesParams{
 		Campaign: c.Name,
+		Half:     c.Half,
 		MaxRows:  r.max,
 	})
 	if err != nil {
@@ -87,7 +91,7 @@ func (r *Runner) Run(ctx context.Context, c Campaign) (Stats, error) {
 		}
 	}
 
-	stats.Remaining, err = r.store.CountBroadcastCandidates(ctx, c.Name)
+	stats.Remaining, err = r.Pending(ctx, c)
 	if err != nil {
 		// The batch went out; only the tally is missing. Report what is known.
 		log.Printf("broadcast: counting the remainder of %s failed: %v", c.Name, err)

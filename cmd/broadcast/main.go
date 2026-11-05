@@ -4,6 +4,7 @@
 //	./broadcast -campaign discord-invite -dry-run   # how many would receive it
 //	./broadcast -campaign discord-invite            # send one capped batch
 //	./broadcast -campaign discord-invite -to me@example.com   # send only to me
+//	./broadcast -campaign discord-invite -half a              # only side a of a split test
 //
 // It is not a timer worker in the usual sense. It is scheduled once, for the day of
 // the announcement, and then it is done — which is also why it refuses to guess:
@@ -31,6 +32,7 @@ var (
 	dryRun       = flag.Bool("dry-run", false, "report the audience size and send nothing")
 	only         = flag.String("to", "", "send only to this address, and do not touch the ledger")
 	onlyUser     = flag.Int64("to-user", 0, "the account id -to belongs to; required with -to, because the mail carries that account's unsubscribe link")
+	half         = flag.String("half", "", "send only this side of a split test: a or b")
 	maxPerRun    = flag.Int("max", broadcast.DefaultMaxPerRun, "cap on one run")
 )
 
@@ -52,7 +54,12 @@ func run() int {
 			strings.Join(broadcast.Names(), ", "))
 		return 1
 	}
+	if !broadcast.ValidHalf(*half) {
+		log.Printf("broadcast: -half must be a or b, got %q", *half)
+		return 2
+	}
 	campaign, ok := broadcast.Lookup(*campaignName)
+	campaign.Half = *half
 	if !ok {
 		log.Printf("broadcast: unknown campaign %q; known: %s",
 			*campaignName, strings.Join(broadcast.Names(), ", "))
@@ -69,11 +76,15 @@ func run() int {
 		log.Printf("broadcast: ses: %v", err)
 		return 1
 	}
-	mailer := broadcast.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
-	runner := broadcast.New(db.New(pool), mailer, int32(*maxPerRun))
+	links := emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin)
+	mailer := broadcast.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, links)
+	trackedSES := ses.WithEngagementTracking(cfg.SESEngagementConfigurationSet)
+	tracked := broadcast.NewMailer(trackedSES, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, links)
+	runner := broadcast.New(db.New(pool), tracked, int32(*maxPerRun))
 
 	// A single address, for looking at the letter in a real client. The ledger is
-	// left alone: inspecting a campaign must not consume anybody's one delivery.
+	// left alone: inspecting a campaign must not consume anybody's one delivery, and it
+	// goes out untracked, so it cannot count toward the campaign's rates.
 	if *only != "" {
 		// The mail carries a real unsubscribe link for a real account, so -to needs
 		// to say whose. Sending a campaign whose only working control belongs to
@@ -100,6 +111,12 @@ func run() int {
 		return 0
 	}
 
+	// Before anything goes out: a run records its failures, and a recorded recipient is never
+	// mailed again, so an unknown set would spend the whole audience on rejected sends.
+	if err := trackedSES.CheckEngagementTracking(ctx); err != nil {
+		log.Printf("broadcast: %v", err)
+		return 1
+	}
 	stats, err := runner.Run(ctx, campaign)
 	if err != nil {
 		log.Printf("broadcast: %v", err)

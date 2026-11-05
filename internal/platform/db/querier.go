@@ -1332,7 +1332,7 @@ type Querier interface {
 	CountBoardHealthRegions(ctx context.Context, arg CountBoardHealthRegionsParams) (int64, error)
 	// How many people a campaign would reach right now. Read before sending: a campaign
 	// is irreversible and goes to everyone, so the number is worth seeing first.
-	CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error)
+	CountBroadcastCandidates(ctx context.Context, arg CountBroadcastCandidatesParams) (int64, error)
 	// Exact open-job and company totals for the published catalogue-scale snapshot
 	// (internal/ingest/catalogstats). Deliberately the opposite trade to EstimateOpenJobs below:
 	// this is a full scan and belongs only in the scheduled rollup worker, never on a
@@ -1607,6 +1607,12 @@ type Querier interface {
 	// means it was already off, or is not this account's, and the caller treats both
 	// the same rather than revealing which.
 	DeactivateEmailSubscription(ctx context.Context, arg DeactivateEmailSubscriptionParams) (int64, error)
+	// Pause the given subscriptions. The matching worker calls it for a saved search
+	// whose query the search can no longer execute: such a subscription fails every
+	// pass and can never deliver, and the owner can fix the search and resume it.
+	// Only while the saved search still holds the query the worker judged: an owner who
+	// fixed it after the worker read it must not find the fixed alert paused.
+	DeactivateSubscriptions(ctx context.Context, arg DeactivateSubscriptionsParams) (int64, error)
 	// Whether the caller already spent points on this (feature, ref). True means the action
 	// is a recompute/resume and must not be charged again (idempotency by ref).
 	DebitExists(ctx context.Context, arg DebitExistsParams) (bool, error)
@@ -3085,6 +3091,10 @@ type Querier interface {
 	// timezone and its saved-search digest frequency settings, read via
 	// internal/application/deliverywindow before a digest is sent.
 	GetSubscriptionForDelivery(ctx context.Context, id int64) (GetSubscriptionForDeliveryRow, error)
+	// What an owner-scoped subscription delivers: its channel and its saved search's
+	// query. Resuming a paused subscription re-applies the gates a new one passes, and
+	// these are what they read. No matching owner-scoped row returns no row (404).
+	GetSubscriptionTarget(ctx context.Context, arg GetSubscriptionTargetParams) (GetSubscriptionTargetRow, error)
 	// The user's existing tailored copy for one vacancy, newest first. The tailoring bootstrap is
 	// reached by an address (/tailor/<slug>) that carries no CV reference, so a reload runs the
 	// same request again: without this read every refresh minted another copy and stranded the
@@ -3937,7 +3947,8 @@ type Querier interface {
 	// makes the WRITE idempotent, and both are needed because two runs can overlap.
 	ListBookingsDueForReminder(ctx context.Context, arg ListBookingsDueForReminderParams) ([]ListBookingsDueForReminderRow, error)
 	// Audience reader and ledger writer for one-off campaigns (internal/engage/broadcast).
-	// Everyone who can be mailed and has not received this campaign yet.
+	// Everyone who can be mailed and has not received this campaign yet. A non-empty half ('a' or
+	// 'b') narrows that to one side of a split test.
 	//
 	// No signup window, unlike the onboarding queries: a campaign is addressed to the
 	// whole audience by definition, and the launch it announces matters as much to
@@ -6226,6 +6237,10 @@ type Querier interface {
 	// a fact worth keeping, it simply has no application to be paired with and never enters
 	// the response ratio, which counts only replies that answer an `applied` event.
 	RecordEmailApplicationEvent(ctx context.Context, arg RecordEmailApplicationEventParams) error
+	// Queries behind the engagement ledger (internal/engage/emailevents, cmd/email-events).
+	// First sighting wins. SQS delivers at least once and a person can open a letter ten times;
+	// neither should change a rate.
+	RecordEmailEvent(ctx context.Context, arg RecordEmailEventParams) error
 	// Count a failed attempt: bump attempts, record the error, and decide whether to
 	// dead-letter (set failed_at). The lease (claimed_at) is intentionally left in place —
 	// its expiry gates the retry to a later run and doubles as the crash reaper, so a
@@ -6948,6 +6963,9 @@ type Querier interface {
 	// cannot type, and the surplus is bounded: a page holds few distinct companies, and a
 	// fingerprint belonging to another of them simply has no rows.
 	RoleClusterCountsFor(ctx context.Context, arg RoleClusterCountsForParams) ([]RoleClusterCountsForRow, error)
+	// One bounded batch of events past retention, moved into the daily counts in a single
+	// statement, so a crash can neither lose a count nor add it twice.
+	RollUpExpiredEmailEvents(ctx context.Context, arg RollUpExpiredEmailEventsParams) (int64, error)
 	SampleLivenessAuditJobs(ctx context.Context, arg SampleLivenessAuditJobsParams) ([]SampleLivenessAuditJobsRow, error)
 	SampleRemoteAuditJobs(ctx context.Context, arg SampleRemoteAuditJobsParams) ([]SampleRemoteAuditJobsRow, error)
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:
