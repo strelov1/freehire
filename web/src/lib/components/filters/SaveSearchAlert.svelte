@@ -8,6 +8,7 @@
   import { savedSearches } from '#lib/savedSearches.svelte.js';
   import { notifications } from '#lib/notifications.svelte.js';
   import { ensureSaved, matchedSavedSearch, setPendingAlert } from '#lib/saveSearchAlert.js';
+  import { queryNarrows } from '#lib/filters.js';
   import { Button } from '#lib/ui/index.js';
   import AlertChannels from './AlertChannels.svelte';
 
@@ -98,6 +99,8 @@
       <Bookmark class={saveBig ? 'size-[1.15rem]' : 'size-4'} aria-hidden="true" />
       {busy ? 'Saving…' : 'Save filter'}
     </Button>
+  {:else if !queryNarrows(query)}
+    <p class="text-sm text-muted-foreground">Add another filter to get alerts: a skill match alone covers every job.</p>
   {:else if alerts === 'manage'}
     <Button
       variant="secondary"

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -426,6 +427,75 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 			t.Errorf("matches after subscription delete = %d, want 0 (cascade)", n)
 		}
 	})
+}
+
+func TestUpdateSavedSearchDropsPendingMatchesOnlyWhenTheQueryChanges(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateSubs(t, pool)
+
+	uid := insertUser(t, pool, "edit@example.test")
+	ssID := insertSavedSearch(t, pool, uid, "s", "q=go")
+	sub, err := q.CreateSubscription(ctx, CreateSubscriptionParams{Channel: "telegram", SavedSearchID: ssID, UserID: uid})
+	if err != nil {
+		t.Fatalf("seed subscription: %v", err)
+	}
+	pending, sent, leased := insertJob(t, pool, "pending"), insertJob(t, pool, "sent"), insertJob(t, pool, "leased")
+	for _, job := range []int64{pending, sent, leased} {
+		if _, err := recordMatch(ctx, q, sub.ID, job); err != nil {
+			t.Fatalf("record match: %v", err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `UPDATE subscription_matches SET notified_at = now() WHERE job_id = $1`, sent); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE subscription_matches SET claimed_at = now() WHERE job_id = $1`, leased); err != nil {
+		t.Fatal(err)
+	}
+	remaining := func() int {
+		t.Helper()
+		var n int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM subscription_matches WHERE subscription_id = $1`, sub.ID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	text := func(v string) pgtype.Text { return pgtype.Text{String: v, Valid: true} }
+
+	// A rename and a re-save of the same query answer the same question.
+	if _, err := q.UpdateSavedSearch(ctx, UpdateSavedSearchParams{ID: ssID, UserID: uid, Name: text("renamed")}); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if _, err := q.UpdateSavedSearch(ctx, UpdateSavedSearchParams{ID: ssID, UserID: uid, Query: text("q=go")}); err != nil {
+		t.Fatalf("same query: %v", err)
+	}
+	if got := remaining(); got != 3 {
+		t.Fatalf("matches after a rename and an unchanged query = %d, want 3", got)
+	}
+
+	// Another account's id must not reach this subscription's ledger.
+	stranger := insertUser(t, pool, "stranger@example.test")
+	if _, err := q.UpdateSavedSearch(ctx, UpdateSavedSearchParams{ID: ssID, UserID: stranger, Query: text("q=rust")}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("stranger's update: err = %v, want no rows", err)
+	}
+	if got := remaining(); got != 3 {
+		t.Fatalf("matches after a stranger's update = %d, want 3", got)
+	}
+
+	if _, err := q.UpdateSavedSearch(ctx, UpdateSavedSearchParams{ID: ssID, UserID: uid, Query: text("q=go&min_skill_match=70")}); err != nil {
+		t.Fatalf("change query: %v", err)
+	}
+	if got := remaining(); got != 2 {
+		t.Fatalf("matches after a changed query = %d, want 2 (the sent one and the leased one)", got)
+	}
+	var left int64
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM subscription_matches WHERE job_id = $1`, pending).Scan(&left); err != nil {
+		t.Fatal(err)
+	}
+	if left != 0 {
+		t.Errorf("the pending match survived the query change")
+	}
 }
 
 func TestTelegramLink(t *testing.T) {

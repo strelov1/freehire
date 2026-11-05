@@ -9,7 +9,7 @@
 
 -- name: LatestJobViewDay :one
 -- The freshest COMPLETED day the view rollup has produced. The digest asks for this
--- rather than computing "yesterday" from the clock: cmd/rollup-views fires at 02:30 UTC
+-- rather than computing "yesterday" from the clock: cmd/rollup-views runs once a day
 -- and reads the rotated access log, so whether the freshest complete day is yesterday
 -- or the day before depends on when logrotate runs on the host. A digest that assumed
 -- the answer would fail by publishing a stale list silently, which is the worst way to
@@ -17,8 +17,8 @@
 --
 -- The day in progress is EXCLUDED, and that predicate is the point of this query
 -- rather than a refinement of it. A plain max(day) reads TODAY: that same run reaches
--- past midnight into the log it is rotating and lands a few dozen rows on the current
--- day, so by 13:00 UTC — when the digest runs — the freshest day is a stub whose best
+-- into the live log and lands a few dozen rows on the current day, so when the digest
+-- runs the freshest day is a stub whose best
 -- posting has one view. Nothing clears MinPageUniques, the run reports a quiet day and
 -- exits 0, and the completed day beside it is never published, because tomorrow's
 -- max(day) is fresher still. Measured on 2026-09-06: day 09-05 held 207020 rows and 38

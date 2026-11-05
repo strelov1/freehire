@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeFilterCount, canonicalQuery, emptyFilters, filtersFromParams, filtersToParams, savedSearchQuery } from './facetModel.js';
+import { activeFilterCount, canonicalQuery, emptyFilters, filtersFromParams, filtersToParams, queryNarrows, savedSearchQuery } from './facetModel.js';
 
 // "Minimum skill match" rides in the filters so a saved search restores it (freehire#4095).
 describe('min_skill_match', () => {
@@ -28,5 +28,16 @@ describe('min_skill_match', () => {
 
   it('counts as an active filter', () => {
     expect(activeFilterCount(filtersFromParams(new URLSearchParams('min_skill_match=70')))).toBe(1);
+  });
+
+  // The server refuses a subscription to a query that does not narrow (search.Narrows).
+  it.each([
+    ['min_skill_match=70', false],
+    ['', false],
+    ['hide_seen=true', false],
+    ['q=go', true],
+    ['seniority=senior&min_skill_match=70', true],
+  ])('queryNarrows(%j) is %j', (query, want) => {
+    expect(queryNarrows(query)).toBe(want);
   });
 });

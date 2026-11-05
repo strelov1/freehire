@@ -147,11 +147,24 @@ func (q *Queries) ListSavedSearches(ctx context.Context, userID int64) ([]SavedS
 }
 
 const updateSavedSearch = `-- name: UpdateSavedSearch :one
+WITH dropped AS (
+    DELETE FROM subscription_matches m
+    USING subscriptions s, saved_searches ss
+    WHERE m.subscription_id = s.id
+      AND s.saved_search_id = ss.id
+      AND ss.id = $3
+      AND ss.user_id = $4
+      AND ss.query <> $2
+      AND m.notified_at IS NULL
+      AND m.claimed_at IS NULL
+      AND m.failed_at IS NULL
+      AND m.expired_at IS NULL
+)
 UPDATE saved_searches
 SET name       = COALESCE($1, name),
     query      = COALESCE($2, query),
     updated_at = now()
-WHERE id = $3 AND user_id = $4
+WHERE saved_searches.id = $3 AND saved_searches.user_id = $4
 RETURNING id, user_id, name, query, created_at, updated_at, derived_from_profile
 `
 
@@ -167,6 +180,13 @@ type UpdateSavedSearchParams struct {
 // so the caller can rename, overwrite the filters, or both in one call. An empty
 // query string is a real value (not NULL), so "save the unfiltered view" is honored.
 // No matching owner-scoped row returns no row (the handler maps that to 404).
+//
+// A changed query drops its subscriptions' pending matches in the same statement: they
+// answered the OLD query, and without this the next digest delivers them, including jobs
+// below a minimum skill match the edit just added. DELETE rather than expired_at, because
+// the ledger's unique key would otherwise stop a job the new query also matches from being
+// recorded again. A leased row is left alone, since a send already holds it. last_searched_at
+// stays: clearing it would re-read a page of postings the subscriber was never owed.
 func (q *Queries) UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchParams) (SavedSearch, error) {
 	row := q.db.QueryRow(ctx, updateSavedSearch,
 		arg.Name,
