@@ -41,7 +41,7 @@ func (r *QueriesRepository) Get(ctx context.Context, userID int64) (Profile, err
 }
 
 // Upsert creates or replaces the user's profile.
-func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, locationPreferences json.RawMessage) (Profile, error) {
+func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error) {
 	row, err := r.q.UpsertUserProfile(ctx, db.UpsertUserProfileParams{
 		UserID:              userID,
 		Specializations:     specializations,
@@ -50,6 +50,7 @@ func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializa
 		ExcludedSkills:      excludedSkills,
 		ExcludedSources:     excludedSources,
 		ExcludedCompanies:   excludedCompanies,
+		JobLanguages:        jobLanguages,
 		LocationPreferences: locationPreferences,
 	})
 	if err != nil {
@@ -60,7 +61,7 @@ func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializa
 
 // UpsertIfUnchanged behaves like Upsert but only writes when the row's updated_at still
 // matches expectedUpdatedAt, mapping no matching row to ErrConflict.
-func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error) {
+func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error) {
 	row, err := r.q.UpsertUserProfileIfUnchanged(ctx, db.UpsertUserProfileIfUnchangedParams{
 		UserID:              userID,
 		Specializations:     specializations,
@@ -69,6 +70,7 @@ func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64,
 		ExcludedSkills:      excludedSkills,
 		ExcludedSources:     excludedSources,
 		ExcludedCompanies:   excludedCompanies,
+		JobLanguages:        jobLanguages,
 		LocationPreferences: locationPreferences,
 		UpdatedAt:           pgtype.Timestamptz{Time: expectedUpdatedAt, Valid: true},
 	})
@@ -92,6 +94,7 @@ func profileFromRow(row db.UserProfile) Profile {
 		ExcludedSkills:      row.ExcludedSkills,
 		ExcludedSources:     row.ExcludedSources,
 		ExcludedCompanies:   row.ExcludedCompanies,
+		JobLanguages:        row.JobLanguages,
 		LocationPreferences: row.LocationPreferences,
 		CreatedAt:           pgconv.TimePtr(row.CreatedAt),
 		UpdatedAt:           pgconv.TimePtr(row.UpdatedAt),

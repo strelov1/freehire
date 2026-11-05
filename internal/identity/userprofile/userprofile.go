@@ -100,6 +100,7 @@ type Profile struct {
 	Seniorities         []string
 	ExcludedSkills      []string
 	ExcludedSources     []string
+	JobLanguages        []string
 	ExcludedCompanies   []string
 	LocationPreferences json.RawMessage
 	CreatedAt           *time.Time
@@ -112,13 +113,13 @@ type Profile struct {
 // generated db row to Profile, so the use case never sees db.*.
 type Repository interface {
 	Get(ctx context.Context, userID int64) (Profile, error)
-	Upsert(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, locationPreferences json.RawMessage) (Profile, error)
+	Upsert(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error)
 	// UpsertIfUnchanged behaves like Upsert but writes only when the row's updated_at
 	// still equals expectedUpdatedAt — the guard MergeSkills needs because its merge is
 	// computed from a prior Get outside any transaction, so a Save() landing in that
 	// gap must not be silently overwritten by a write built from a now-stale snapshot.
 	// No matching row (updated_at moved, or the profile was deleted) maps to ErrConflict.
-	UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error)
+	UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error)
 	Delete(ctx context.Context, userID int64) error
 }
 
@@ -147,7 +148,7 @@ func (s *Service) Get(ctx context.Context, userID int64) (Profile, error) {
 // wanted/avoided exclusivity rule, since neither has a corresponding "have" list; the
 // optional location block is validated and normalized (or stored NULL when nil/empty).
 // It is a create-or-replace: the first save inserts, later saves overwrite.
-func (s *Service) Save(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, loc *LocationPreferences) (Profile, error) {
+func (s *Service) Save(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, loc *LocationPreferences, jobLanguages ...string) (Profile, error) {
 	specs, err := normalizeSpecializations(specializations)
 	if err != nil {
 		return Profile{}, err
@@ -173,11 +174,15 @@ func (s *Service) Save(ctx context.Context, userID int64, specializations, skill
 	if err != nil {
 		return Profile{}, err
 	}
+	languages, err := normalizeJobLanguages(jobLanguages)
+	if err != nil {
+		return Profile{}, err
+	}
 	locJSON, err := normalizeLocationPreferences(loc)
 	if err != nil {
 		return Profile{}, err
 	}
-	return s.repo.Upsert(ctx, userID, specs, normalized, levels, excluded, sources, companies, locJSON)
+	return s.repo.Upsert(ctx, userID, specs, normalized, levels, excluded, sources, companies, languages, locJSON)
 }
 
 // Delete removes the user's profile. It is idempotent — deleting when none exists is not
@@ -233,10 +238,10 @@ func (s *Service) mergeSkillsOnce(ctx context.Context, userID int64, skills []st
 		// this fix. A profile read from the real Repository always carries a non-nil
 		// UpdatedAt (updated_at is NOT NULL); this only happens against a Repository
 		// fake that leaves it unset.
-		_, err = s.repo.Upsert(ctx, userID, profile.Specializations, merged, profile.Seniorities, profile.ExcludedSkills, profile.ExcludedSources, profile.ExcludedCompanies, profile.LocationPreferences)
+		_, err = s.repo.Upsert(ctx, userID, profile.Specializations, merged, profile.Seniorities, profile.ExcludedSkills, profile.ExcludedSources, profile.ExcludedCompanies, profile.JobLanguages, profile.LocationPreferences)
 		return err
 	}
-	_, err = s.repo.UpsertIfUnchanged(ctx, userID, profile.Specializations, merged, profile.Seniorities, profile.ExcludedSkills, profile.ExcludedSources, profile.ExcludedCompanies, profile.LocationPreferences, *profile.UpdatedAt)
+	_, err = s.repo.UpsertIfUnchanged(ctx, userID, profile.Specializations, merged, profile.Seniorities, profile.ExcludedSkills, profile.ExcludedSources, profile.ExcludedCompanies, profile.JobLanguages, profile.LocationPreferences, *profile.UpdatedAt)
 	return err
 }
 

@@ -1661,6 +1661,8 @@ export interface DerivedLocation {
 }
 
 export interface UserProfile {
+  /** Preferred posting languages; empty means any language. */
+  job_languages?: string[];
   specializations: string[];
   skills: string[];
   /** Desired seniority levels (drawn from the seniority vocabulary). Empty when the user has stated none. */

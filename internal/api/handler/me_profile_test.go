@@ -28,6 +28,7 @@ type profileUpsert struct {
 	Seniorities         []string
 	ExcludedSkills      []string
 	ExcludedSources     []string
+	JobLanguages        []string
 	ExcludedCompanies   []string
 	LocationPreferences json.RawMessage
 }
@@ -43,15 +44,15 @@ type fakeProfileRepo struct {
 func (f *fakeProfileRepo) Get(context.Context, int64) (userprofile.Profile, error) {
 	return f.getRet, f.getErr
 }
-func (f *fakeProfileRepo) Upsert(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
-	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, LocationPreferences: locationPreferences}
+func (f *fakeProfileRepo) Upsert(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, JobLanguages: jobLanguages, LocationPreferences: locationPreferences}
 	return f.upsertRet, nil
 }
 
 // UpsertIfUnchanged is exercised by userprofile's own tests (MergeSkills' retry loop);
 // no handler here calls MergeSkills, so this fake just satisfies the interface.
-func (f *fakeProfileRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, locationPreferences json.RawMessage, _ time.Time) (userprofile.Profile, error) {
-	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, LocationPreferences: locationPreferences}
+func (f *fakeProfileRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage, _ time.Time) (userprofile.Profile, error) {
+	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, JobLanguages: jobLanguages, LocationPreferences: locationPreferences}
 	return f.upsertRet, nil
 }
 func (f *fakeProfileRepo) Delete(context.Context, int64) error { return f.delErr }
@@ -469,5 +470,39 @@ func TestPutProfile_AcceptsIncompleteProfile(t *testing.T) {
 				t.Fatal("incomplete profile was not persisted")
 			}
 		})
+	}
+}
+
+func TestPutProfile_JobLanguages(t *testing.T) {
+	repo := &fakeProfileRepo{upsertRet: userprofile.Profile{JobLanguages: []string{"en", "ru"}}}
+	app, token := profileApp(t, repo)
+	resp := doProfile(t, app, fiber.MethodPut, `{"specializations":[],"skills":[],"job_languages":[" EN ","ru","en"]}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if strings.Join(repo.upserted.JobLanguages, ",") != "en,ru" {
+		t.Fatalf("languages = %v", repo.upserted.JobLanguages)
+	}
+	var body struct {
+		Data struct {
+			JobLanguages []string `json:"job_languages"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(body.Data.JobLanguages, ",") != "en,ru" {
+		t.Fatalf("response languages = %v", body.Data.JobLanguages)
+	}
+}
+
+func TestPutProfile_RejectsMalformedJobLanguage(t *testing.T) {
+	repo := &fakeProfileRepo{}
+	app, token := profileApp(t, repo)
+	resp := doProfile(t, app, fiber.MethodPut, `{"specializations":[],"skills":[],"job_languages":["English"]}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusBadRequest || repo.upserted.UserID != 0 {
+		t.Fatalf("status = %d, persisted = %v", resp.StatusCode, repo.upserted)
 	}
 }

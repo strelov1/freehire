@@ -2076,6 +2076,7 @@ data: {"type":"result","stop_reason":"completed"}
         body: [
           { name: 'specializations', type: 'string[]', required: true, description: 'One or more job categories (max 5).', example: '["backend"]' },
           { name: 'skills', type: 'string[]', required: true, description: 'Canonical skill tokens (non-empty).', example: '["go","postgresql"]' },
+          { name: 'job_languages', type: 'string[]', description: 'Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any language.', example: '["en","ru"]' },
           { name: 'location_preferences', type: 'object', description: 'Optional location block (`work_modes`, `remote`, `base`, `relocation`); omit or null to clear.' },
         ],
         curl: `curl -X PUT "${BASE_URL}/me/profile" \\
