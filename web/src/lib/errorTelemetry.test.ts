@@ -215,6 +215,41 @@ it("records primitive rejections and opaque thrown objects without serializing p
   await telemetry?.shutdown();
 });
 
+it("reports SvelteKit HttpErrors by status and message, with the route that threw them", async () => {
+  const exporter = new InMemoryLogRecordExporter();
+  const telemetry = createErrorTelemetry({
+    endpoint: "http://localhost/v1/logs",
+    service: "freehire-web-ssr",
+    exporter,
+  });
+  // The shape SvelteKit passes to handleError for an app or framework error.
+  const unavailable = { status: 503, message: "Service unavailable" };
+  telemetry?.capture(unavailable, { route: "/jobs/[slug]", method: "GET", kitError: true });
+  // The same failure on another route is a separate event, not a duplicate.
+  telemetry?.capture(unavailable, { route: "/companies/[slug]", method: "GET", kitError: true });
+  telemetry?.capture({ status: 500 }, { kitError: true });
+  // A look-alike rejection reason the caller did not vouch for stays opaque.
+  telemetry?.capture({ status: 500, message: "Applicant private" });
+  await telemetry?.flush();
+  const records = exporter.getFinishedLogRecords();
+  expect(records.map((record) => record.attributes)).toEqual([
+    expect.objectContaining({
+      "exception.type": "HttpError",
+      "exception.message": "HTTP 503: Service unavailable",
+      "http.route": "/jobs/[slug]",
+      "http.request.method": "GET",
+    }),
+    expect.objectContaining({ "http.route": "/companies/[slug]" }),
+    expect.objectContaining({ "exception.message": "HTTP 500" }),
+    expect.objectContaining({
+      "exception.type": "object",
+      "exception.message": "Non-Error exception",
+    }),
+  ]);
+  expect(records[2]?.attributes).not.toHaveProperty("http.route");
+  await telemetry?.shutdown();
+});
+
 it("redacts prefixed, quoted and Basic credential values before export", async () => {
   const exporter = new InMemoryLogRecordExporter();
   const telemetry = createErrorTelemetry({

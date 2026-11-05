@@ -195,7 +195,14 @@ export const handle = sequence(
 // undefined, which is how every 404 came back into the journal.
 const reportError: HandleServerError = (input) => {
   if (input.kind !== 'unknown' && input.error.status >= 400 && input.error.status < 500) return;
-  if (otelEndpoint) { telemetry?.capture(input.error); return; }
+  if (otelEndpoint) {
+    telemetry?.capture(input.error, {
+      route: input.event.route.id,
+      method: input.event.request.method,
+      kitError: input.kind !== 'unknown',
+    });
+    return;
+  }
   console.error((input.error as Error | undefined)?.stack ?? input.error);
 };
 export const handleError: HandleServerError = reportError;
