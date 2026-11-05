@@ -155,12 +155,10 @@ func WithEmbedConcurrency(n int) Option {
 // via the WithEmbed* options (wired from the EMBED_* env in internal/platform/config, so this
 // package stays env-free).
 func NewClient(url, key string, opts ...Option) *Client {
-	// meilisearch-go v0.36.3 retries POSTs with an already-consumed body,
-	// masking transient 502/503/504 responses with 400 missing_payload, so its
-	// retry loop is off. Body-less GET/HEAD/DELETE requests are still safe to
-	// repeat and nothing above them retries (a rebuild's task polling and index
-	// drops), so they get idempotentRetryTransport instead. Failed POST batches are retried or requeued
-	// by the worker callers.
+	// The SDK's retry loop is off because v0.36.3 re-sends a consumed POST body, turning
+	// a transient 502/503/504 into 400 missing_payload. idempotentRetryTransport covers the
+	// body-less requests. A failed POST surfaces its real status: workers retry or requeue
+	// their batches, and a read on a request path (search, documents/fetch) fails once.
 	m := meilisearch.New(url, meilisearch.WithAPIKey(key), meilisearch.WithCustomClient(newEngineHTTPClient()), meilisearch.DisableRetries())
 	c := &Client{
 		manager:          m,

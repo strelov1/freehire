@@ -1,13 +1,18 @@
 package search
 
 import (
+	"io"
 	"net/http"
 	"time"
 )
 
-// retryAttempts bounds how often a body-less request is re-sent after a 502/503/504
-// (the SDK's own default was three retries).
-const retryAttempts = 3
+// maxRetries bounds how often a body-less request is re-sent after a 502/503/504
+// (the SDK's own default was three).
+const maxRetries = 3
+
+// errorBodyDrainLimit bounds how much of an error response is read before a retry, so
+// the connection returns to the pool instead of being closed.
+const errorBodyDrainLimit = 4 << 10
 
 // engineMaxIdleConnsPerHost matches the SDK's default transport; the engine is one host.
 const engineMaxIdleConnsPerHost = 100
@@ -41,16 +46,15 @@ func (t *idempotentRetryTransport) RoundTrip(req *http.Request) (*http.Response,
 	}
 	for attempt := 1; ; attempt++ {
 		resp, err := t.base.RoundTrip(req)
-		if err != nil || attempt > retryAttempts || !transientStatus(resp.StatusCode) {
+		if err != nil || attempt > maxRetries || !transientStatus(resp.StatusCode) {
 			return resp, err
 		}
+		_, _ = io.CopyN(io.Discard, resp.Body, errorBodyDrainLimit)
 		_ = resp.Body.Close()
-		timer := time.NewTimer(t.backoff(attempt))
 		select {
 		case <-req.Context().Done():
-			timer.Stop()
 			return nil, req.Context().Err()
-		case <-timer.C:
+		case <-time.After(t.backoff(attempt)):
 		}
 	}
 }

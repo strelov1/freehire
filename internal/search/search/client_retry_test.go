@@ -1,6 +1,7 @@
 package search
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -13,21 +14,13 @@ import (
 	"github.com/meilisearch/meilisearch-go"
 )
 
-// Regression test for the 2026-11-05 incident (fingerprint e6280e536eebc136):
-// meilisearch-go v0.36.3's built-in retry re-sends an ALREADY-CONSUMED request
-// body, so a POST that met a retryable 503 was retried with a zero-byte body and
-// Meilisearch answered 400 missing_payload — surfacing as a logged fault from
-// /api/v1/companies/sitemap (POST /indexes/companies/documents/fetch) instead of
-// the transient engine 503 that caused the retry. NewClient therefore disables
-// the SDK's retry loop; this test pins both halves of that decision.
-//
-// The stub engine answers a nonempty POST with 503 and an empty retry with
-// the incident's 400 missing_payload.
-
-// TestNewClientDisablesSDKRetry pins that NewClient's SDK has retries DISABLED:
-// a request meeting a retryable 503 must surface the 503 itself in ONE attempt,
-// not be re-sent (a re-send would go out with an empty body and produce the
-// incident's 400 missing_payload).
+// TestNewClientDisablesSDKRetry is the regression test for the 2026-11-05 incident
+// (fingerprint e6280e536eebc136): meilisearch-go v0.36.3's built-in retry re-sends an
+// ALREADY-CONSUMED request body, so a POST that met a retryable 503 was retried with a
+// zero-byte body and Meilisearch answered 400 missing_payload, surfacing as a fault from
+// /api/v1/companies/sitemap (POST /indexes/companies/documents/fetch) instead of the 503.
+// The stub answers a nonempty POST with 503 and an empty one with that 400; the 503 must
+// surface in ONE attempt.
 func TestNewClientDisablesSDKRetry(t *testing.T) {
 	var bodies []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -71,9 +64,8 @@ func TestNewClientDisablesSDKRetry(t *testing.T) {
 // TestSDKRetryResendsEmptyBody documents the upstream defect itself: with the
 // SDK's default retry ENABLED, a POST that meets a retryable 503 is re-sent with
 // a zero-byte body. This is the mechanism behind the incident's
-// "Code: missing_payload" 400. If a future SDK release fixes body rewinding and
-// this package re-enables retries, this test fails — which is the reminder to
-// re-read the DisableRetries comment in NewClient.
+// "Code: missing_payload" 400. If a future SDK release fixes body rewinding, this
+// test fails — which is the reminder to re-read the DisableRetries comment in NewClient.
 func TestSDKRetryResendsEmptyBody(t *testing.T) {
 	var bodies []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -105,37 +97,62 @@ func TestSDKRetryResendsEmptyBody(t *testing.T) {
 	}
 }
 
-// TestNewClientRetriesTransientGET pins the half of the decision that keeps working:
-// a body-less GET (the task-status poll a rebuild's Promote depends on) that meets one
-// 503 is re-sent and succeeds, while the SDK's own retry loop stays off.
-func TestNewClientRetriesTransientGET(t *testing.T) {
-	var gets atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("stub got %s, want GET", r.Method)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		if gets.Add(1) == 1 {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = io.WriteString(w, `{"message":"engine overloaded","code":"unavailable","type":"internal"}`)
-			return
-		}
-		_, _ = io.WriteString(w, `{"uid":7,"indexUid":"companies","status":"succeeded","type":"documentAdditionOrUpdate"}`)
-	}))
-	defer srv.Close()
-
-	c := NewClient(srv.URL, "test-key")
-	task, err := c.manager.GetTaskWithContext(t.Context(), 7)
-	if err != nil {
-		t.Fatalf("GET after one transient 503 failed: %v", err)
+// TestNewClientRetriesTransientBodylessRequests pins the requests that keep a retry: a
+// task-status poll or an index drop that meets one 503 is re-sent and succeeds, while the
+// SDK's own retry loop stays off. Each case waits out the production 1s backoff.
+func TestNewClientRetriesTransientBodylessRequests(t *testing.T) {
+	cases := []struct {
+		name, method, success string
+		successStatus         int
+		call                  func(*Client) error
+	}{
+		{
+			name: "task poll", method: http.MethodGet, successStatus: http.StatusOK,
+			success: `{"uid":7,"indexUid":"companies","status":"succeeded","type":"documentAdditionOrUpdate"}`,
+			call: func(c *Client) error {
+				_, err := c.manager.GetTaskWithContext(t.Context(), 7)
+				return err
+			},
+		},
+		{
+			name: "index drop", method: http.MethodDelete, successStatus: http.StatusAccepted,
+			success: `{"taskUid":9,"indexUid":"jobs_rebuild","status":"enqueued","type":"indexDeletion"}`,
+			call: func(c *Client) error {
+				_, err := c.manager.DeleteIndexWithContext(t.Context(), "jobs_rebuild")
+				return err
+			},
+		},
 	}
-	if task.UID != 7 || gets.Load() != 2 {
-		t.Errorf("task uid %d after %d GETs, want uid 7 after exactly 2", task.UID, gets.Load())
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var reqs atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != tc.method {
+					t.Errorf("stub got %s, want %s", r.Method, tc.method)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				if reqs.Add(1) == 1 {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					_, _ = io.WriteString(w, `{"message":"engine overloaded","code":"unavailable","type":"internal"}`)
+					return
+				}
+				w.WriteHeader(tc.successStatus)
+				_, _ = io.WriteString(w, tc.success)
+			}))
+			defer srv.Close()
+
+			if err := tc.call(NewClient(srv.URL, "test-key")); err != nil {
+				t.Fatalf("request after one transient 503 failed: %v", err)
+			}
+			if reqs.Load() != 2 {
+				t.Errorf("engine saw %d requests, want exactly 2", reqs.Load())
+			}
+		})
 	}
 }
 
 // TestRetryTransportBounds pins that a persistent 503 is retried a bounded number
-// of times and then surfaced as the 503 itself, and that a POST is never re-sent.
+// of times and then surfaced as the 503 itself.
 func TestRetryTransportBounds(t *testing.T) {
 	var reqs atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -151,19 +168,35 @@ func TestRetryTransportBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusServiceUnavailable || reqs.Load() != retryAttempts+1 {
-		t.Errorf("GET: status %d after %d requests, want 503 after %d", resp.StatusCode, reqs.Load(), retryAttempts+1)
+	if resp.StatusCode != http.StatusServiceUnavailable || reqs.Load() != maxRetries+1 {
+		t.Errorf("GET: status %d after %d requests, want 503 after %d", resp.StatusCode, reqs.Load(), maxRetries+1)
 	}
+}
 
-	reqs.Store(0)
-	req, _ = http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL, strings.NewReader("x"))
-	resp, err = rt.RoundTrip(req)
-	if err != nil {
-		t.Fatal(err)
+// TestRetryTransportStopsWhenContextEnds pins that a cancelled caller is not held through
+// the backoff: the wait ends with the context's own error and nothing is re-sent.
+func TestRetryTransportStopsWhenContextEnds(t *testing.T) {
+	var reqs atomic.Int32
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqs.Add(1)
+		cancel()
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	rt := &idempotentRetryTransport{base: http.DefaultTransport, backoff: func(int) time.Duration { return time.Hour }}
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
+	resp, err := rt.RoundTrip(req)
+	if resp != nil {
+		_ = resp.Body.Close()
 	}
-	_ = resp.Body.Close()
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v, want context.Canceled", err)
+	}
 	if reqs.Load() != 1 {
-		t.Errorf("POST was sent %d times, want 1", reqs.Load())
+		t.Errorf("engine saw %d requests, want 1", reqs.Load())
 	}
 }
 
@@ -180,35 +213,6 @@ func TestEngineHTTPClientKeepsIdlePool(t *testing.T) {
 	}
 	if base.MaxIdleConnsPerHost != engineMaxIdleConnsPerHost {
 		t.Errorf("MaxIdleConnsPerHost = %d, want %d", base.MaxIdleConnsPerHost, engineMaxIdleConnsPerHost)
-	}
-}
-
-// TestNewClientRetriesTransientIndexDelete pins the retry on the body-less DELETE behind
-// dropIndex: one 503 must not abort a rebuild's preparation or teardown.
-func TestNewClientRetriesTransientIndexDelete(t *testing.T) {
-	var deletes atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("stub got %s, want DELETE", r.Method)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		if deletes.Add(1) == 1 {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = io.WriteString(w, `{"message":"engine overloaded","code":"unavailable","type":"internal"}`)
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
-		_, _ = io.WriteString(w, `{"taskUid":9,"indexUid":"jobs_rebuild","status":"enqueued","type":"indexDeletion"}`)
-	}))
-	defer srv.Close()
-
-	c := NewClient(srv.URL, "test-key")
-	task, err := c.manager.DeleteIndexWithContext(t.Context(), "jobs_rebuild")
-	if err != nil {
-		t.Fatalf("DELETE after one transient 503 failed: %v", err)
-	}
-	if task.TaskUID != 9 || deletes.Load() != 2 {
-		t.Errorf("task uid %d after %d DELETEs, want uid 9 after exactly 2", task.TaskUID, deletes.Load())
 	}
 }
 
