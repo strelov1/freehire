@@ -35,7 +35,8 @@ export function scalarHtmlPlugin(): Plugin {
         const spec = JSON.parse(await readFile(file, 'utf8')) as Record<string, unknown>;
         const { renderApiReferenceToString } = await import('@scalar/server-side-rendering');
         const html = await renderApiReferenceToString(scalarConfigFromContent(spec));
-        return `export default ${JSON.stringify(html)};`;
+        // The id still ends in .json?…; without this the bundler could take the code for JSON.
+        return { code: `export default ${JSON.stringify(html)};`, moduleType: 'js' };
       },
     },
   };
