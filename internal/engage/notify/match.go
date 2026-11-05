@@ -137,27 +137,24 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 // and resume it. A failed pause is logged and retried next pass; the query is not
 // searched either way, since it would only fail.
 func (r *Runner) pauseUnrunnable(ctx context.Context, groups map[string][]db.ListActiveSubscriptionsRow, stats *Stats) {
-	var ids []int64
 	for query, gsubs := range groups {
 		vals, _ := url.ParseQuery(query)
 		if _, err := search.ParseQuery(vals.Get("q")); err == nil {
 			continue
 		}
-		log.Printf("notify: pausing %d subscription(s) on unrunnable query %q", len(gsubs), query)
-		for _, sub := range gsubs {
-			ids = append(ids, sub.ID)
-		}
 		delete(groups, query)
+		ids := make([]int64, len(gsubs))
+		for i, sub := range gsubs {
+			ids[i] = sub.ID
+		}
+		n, err := r.store.DeactivateSubscriptions(ctx, db.DeactivateSubscriptionsParams{Ids: ids, Query: query})
+		if err != nil {
+			log.Printf("notify: pause %d subscription(s) on unrunnable query %q: %v", len(ids), query, err)
+			continue
+		}
+		log.Printf("notify: paused %d subscription(s) on unrunnable query %q", n, query)
+		stats.Paused += int(n)
 	}
-	if len(ids) == 0 {
-		return
-	}
-	n, err := r.store.DeactivateSubscriptions(ctx, ids)
-	if err != nil {
-		log.Printf("notify: pause %d unrunnable subscription(s): %v", len(ids), err)
-		return
-	}
-	stats.Paused += int(n)
 }
 
 // person is who one delivery message goes to: a user on a channel, or a single

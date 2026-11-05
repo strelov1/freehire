@@ -48,11 +48,13 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
 - **A subscription must carry a query the search can RUN, and stays that way.** Create
   and resume (`subscription.Service.SetActive(true)`) share one gate (`admit`): the
   query parses (`search.ParseQuery` — e.g. at most 5 OR alternatives), narrows, and the
-  channel can reach the account. Saved searches validate the same way on create and
-  edit. What predates a rule — a query saved before it existed, or one a tightened rule
+  channel can reach the account. Saved searches check only that the query parses, on
+  create and edit — an unfiltered one is a legitimate "show all" view; narrowing and
+  the channel are a subscription's gates. What predates a rule — a query saved before it existed, or one a tightened rule
   later invalidates — is caught by `cmd/notify` itself: `pauseUnrunnable` pauses every
   subscription on a query it cannot parse and does not search it (`paused=` in the run
-  log). Measured 2026-11-05, one such subscription had failed every pass for a week
+  log), and only while the saved search still holds the query it judged, so an owner
+  who fixed it meanwhile keeps the alert on. Measured 2026-11-05, one such subscription had failed every pass for a week
   while its owner received nothing. Paused, not deleted, so the owner can fix the
   search and resume.
 

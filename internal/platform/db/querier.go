@@ -1610,7 +1610,9 @@ type Querier interface {
 	// Pause the given subscriptions. The matching worker calls it for a saved search
 	// whose query the search can no longer execute: such a subscription fails every
 	// pass and can never deliver, and the owner can fix the search and resume it.
-	DeactivateSubscriptions(ctx context.Context, ids []int64) (int64, error)
+	// Only while the saved search still holds the query the worker judged: an owner who
+	// fixed it after the worker read it must not find the fixed alert paused.
+	DeactivateSubscriptions(ctx context.Context, arg DeactivateSubscriptionsParams) (int64, error)
 	// Whether the caller already spent points on this (feature, ref). True means the action
 	// is a recompute/resume and must not be charged again (idempotency by ref).
 	DebitExists(ctx context.Context, arg DebitExistsParams) (bool, error)

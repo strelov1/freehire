@@ -255,15 +255,26 @@ func (q *Queries) DeactivateEmailSubscription(ctx context.Context, arg Deactivat
 }
 
 const deactivateSubscriptions = `-- name: DeactivateSubscriptions :execrows
-UPDATE subscriptions SET active = false
-WHERE id = ANY($1::bigint[]) AND active
+UPDATE subscriptions s SET active = false
+FROM saved_searches ss
+WHERE ss.id = s.saved_search_id
+  AND s.id = ANY($1::bigint[])
+  AND s.active
+  AND ss.query = $2
 `
+
+type DeactivateSubscriptionsParams struct {
+	Ids   []int64 `json:"ids"`
+	Query string  `json:"query"`
+}
 
 // Pause the given subscriptions. The matching worker calls it for a saved search
 // whose query the search can no longer execute: such a subscription fails every
 // pass and can never deliver, and the owner can fix the search and resume it.
-func (q *Queries) DeactivateSubscriptions(ctx context.Context, ids []int64) (int64, error) {
-	result, err := q.db.Exec(ctx, deactivateSubscriptions, ids)
+// Only while the saved search still holds the query the worker judged: an owner who
+// fixed it after the worker read it must not find the fixed alert paused.
+func (q *Queries) DeactivateSubscriptions(ctx context.Context, arg DeactivateSubscriptionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deactivateSubscriptions, arg.Ids, arg.Query)
 	if err != nil {
 		return 0, err
 	}

@@ -218,7 +218,7 @@ type Store interface {
 	MarkSubscriptionsSearched(ctx context.Context, arg db.MarkSubscriptionsSearchedParams) error
 	// DeactivateSubscriptions pauses the given subscriptions and returns how many it
 	// paused; see pauseUnrunnable.
-	DeactivateSubscriptions(ctx context.Context, ids []int64) (int64, error)
+	DeactivateSubscriptions(ctx context.Context, arg db.DeactivateSubscriptionsParams) (int64, error)
 	ClaimSubscriptionMatches(ctx context.Context, arg db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error)
 	// ExpireStaleSubscriptionMatches takes up to BatchSize stale matches (older
 	// than the freshness window, or for a closed job) out of the pending set and

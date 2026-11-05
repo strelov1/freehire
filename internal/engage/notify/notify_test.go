@@ -150,9 +150,9 @@ type fakeStore struct {
 	paused []int64
 }
 
-func (s *fakeStore) DeactivateSubscriptions(_ context.Context, ids []int64) (int64, error) {
-	s.paused = append(s.paused, ids...)
-	return int64(len(ids)), nil
+func (s *fakeStore) DeactivateSubscriptions(_ context.Context, a db.DeactivateSubscriptionsParams) (int64, error) {
+	s.paused = append(s.paused, a.Ids...)
+	return int64(len(a.Ids)), nil
 }
 
 func (s *fakeStore) MarkSubscriptionsSearched(_ context.Context, a db.MarkSubscriptionsSearchedParams) error {

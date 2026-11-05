@@ -40,8 +40,14 @@ WHERE s.id = sqlc.arg(id) AND s.user_id = sqlc.arg(user_id);
 -- Pause the given subscriptions. The matching worker calls it for a saved search
 -- whose query the search can no longer execute: such a subscription fails every
 -- pass and can never deliver, and the owner can fix the search and resume it.
-UPDATE subscriptions SET active = false
-WHERE id = ANY(sqlc.arg(ids)::bigint[]) AND active;
+-- Only while the saved search still holds the query the worker judged: an owner who
+-- fixed it after the worker read it must not find the fixed alert paused.
+UPDATE subscriptions s SET active = false
+FROM saved_searches ss
+WHERE ss.id = s.saved_search_id
+  AND s.id = ANY(sqlc.arg(ids)::bigint[])
+  AND s.active
+  AND ss.query = sqlc.arg(query);
 
 -- name: DeleteSubscription :execrows
 -- Unsubscribe, scoped to its owner. Returns the affected row count: 0 means it
