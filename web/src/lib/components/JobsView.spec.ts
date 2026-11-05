@@ -19,13 +19,12 @@ vi.mock('#lib/auth.svelte.js', () => ({
   currentUser: () => session.get('id') == null ? null : { id: session.get('id') },
 }));
 vi.mock('#lib/analytics.js', () => ({ track() {} }));
-vi.mock('#lib/profile.svelte.js', () => ({
-  profileStore: { profile: null, loaded: true, ensureLoaded() {} },
-}));
-const { searchJobs, saved } = vi.hoisted(() => ({
+const { searchJobs, saved, profileStore } = vi.hoisted(() => ({
+  profileStore: { profile: null as { skills: string[] } | null, loaded: true, ensureLoaded() {} },
   searchJobs: vi.fn(),
   saved: { items: [], ensureLoaded: vi.fn(), update: vi.fn() },
 }));
+vi.mock('#lib/profile.svelte.js', () => ({ profileStore }));
 vi.mock('#lib/savedSearches.svelte.js', () => ({ savedSearches: saved }));
 vi.mock('#lib/api.js', () => ({
   ApiError: class extends Error {},
@@ -45,6 +44,7 @@ vi.mock('./onboarding/OnboardingAlertBanner.svelte', () => ({ default() {} }));
 
 beforeEach(() => {
   session.set('id', null);
+  profileStore.profile = null;
   searchJobs.mockReset().mockResolvedValue({ items: [], total: 0, hasMore: false });
   saved.ensureLoaded.mockReset().mockResolvedValue(undefined);
   localStorage.clear();
@@ -55,6 +55,40 @@ function mountList(params: string, scope = {}) {
     initial: { items: [], total: 0, hasMore: false }, initialParams: params, currentPage: 1, scope,
   });
 }
+
+describe('minimum skill match from the URL or a saved search', () => {
+  const hint = 'Sort by best match';
+
+  it('offers the match sort, with a removable chip, for a reader with skills', () => {
+    session.set('id', 7);
+    profileStore.profile = { skills: ['go'] };
+    mountList('min_skill_match=70');
+    expect(screen.getByRole('button', { name: hint })).toBeTruthy();
+    expect(screen.getByText('70%+')).toBeTruthy();
+  });
+
+  it('stops offering it once the feed is sorted by match', () => {
+    session.set('id', 7);
+    profileStore.profile = { skills: ['go'] };
+    mountList('min_skill_match=70&sort=match');
+    expect(screen.queryByRole('button', { name: hint })).toBeNull();
+  });
+
+  it('is restored by applying a saved set, and reset by clearing', () => {
+    const store = new StagedFilters();
+    store.apply('seniority=senior&min_skill_match=70');
+    expect(store.value.minSkillMatch).toBe(70);
+    store.clear();
+    expect(store.value.minSkillMatch).toBeNull();
+  });
+
+  it('claims nothing for a reader with no skills to compare', () => {
+    session.set('id', 7);
+    mountList('min_skill_match=70');
+    expect(screen.queryByRole('button', { name: hint })).toBeNull();
+    expect(screen.queryByText('70%+')).toBeNull();
+  });
+});
 
 describe('personal job filters', () => {
   it('moves Hide viewed out of the toolbar, with no separate Hiring again button', () => {

@@ -14,7 +14,7 @@
   // save-then-alert control (Save filter → get it in Telegram) sits under the
   // All-filters button on the standalone list (`canSave`); the modal's "My filters"
   // tab drives the same control.
-  let { store, exclude = [], onOpen, canSave = false, description }: { store: FilterStore; exclude?: string[]; onOpen: () => void; canSave?: boolean; description?: string } = $props();
+  let { store, exclude = [], onOpen, canSave = false, description, matchAvailable = false }: { store: FilterStore; exclude?: string[]; onOpen: () => void; canSave?: boolean; description?: string; matchAvailable?: boolean } = $props();
 
   // The current filters as the saved-search / alert target. The ordering is view-only
   // and savedSearchQuery drops it, so reordering the feed never marks this dirty.
@@ -75,6 +75,12 @@
       workFormat.push({ key: 'work_mode_remote_anywhere', text: workModeRemoteLabel(f), exclude: false, remove: () => store.setWorkModeRemoteAnywhere(false) });
     push('Work format', workFormat);
     facetGroup('skills', 'Skills', true);
+    // Only where it applies: without skills on the profile the threshold narrows nothing,
+    // and a chip would claim it did.
+    if (f.minSkillMatch != null && matchAvailable)
+      push('Skill match', [
+        { key: 'min_skill_match', text: `${f.minSkillMatch}%+`, exclude: false, remove: () => store.setMinSkillMatch(null) },
+      ]);
     facetGroup('domains', 'Industry');
     facetGroup('company_type', 'Company type');
     facetGroup('employment_type', 'Employment');

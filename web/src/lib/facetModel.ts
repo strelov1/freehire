@@ -58,6 +58,11 @@ export interface JobFilters {
    *  read must test for null, never for falsiness. Serialized as `apply_questions_max`;
    *  a posting whose form we have not read never matches it. */
   applyQuestionsMax: number | null;
+  /** Minimum skill-match percent (null = any), serialized as `min_skill_match` so a saved
+   *  search and the URL carry it. The percent depends on the reader, so the search never
+   *  reads it (the API reports it in `meta.ignored_params`): the job list applies it to
+   *  the fetched page, and the digest matcher per subscriber. The slider's `0` is "off". */
+  minSkillMatch: number | null;
   salaryMin: number | null;
   /** Keep only jobs whose stated MAXIMUM salary is at most this (null = no ceiling).
    *  Serialized as `salary_max`, which bounds a different attribute than `salaryMin`
@@ -296,6 +301,7 @@ export function emptyFilters(): JobFilters {
     autoApplyAvailable: false,
     formerEmployers: false,
     applyQuestionsMax: null,
+    minSkillMatch: null,
     salaryMin: null,
     salaryMax: null,
     postedWithinDays: null,
@@ -333,6 +339,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.autoApplyAvailable) p.set('auto_apply_available', 'true');
   if (f.formerEmployers) p.set('former_employers', 'true');
   if (f.applyQuestionsMax != null) p.set('apply_questions_max', String(f.applyQuestionsMax));
+  if (f.minSkillMatch != null) p.set('min_skill_match', String(f.minSkillMatch));
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
   if (f.salaryMax != null) p.set('salary_max', String(f.salaryMax));
   if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
@@ -434,6 +441,8 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.autoApplyAvailable = p.get('auto_apply_available') === 'true';
   f.formerEmployers = p.get('former_employers') === 'true';
   f.applyQuestionsMax = nonNegativeInt(p.get('apply_questions_max'));
+  const minSkillMatch = nonNegativeInt(p.get('min_skill_match'));
+  f.minSkillMatch = minSkillMatch != null && minSkillMatch > 0 && minSkillMatch <= 100 ? minSkillMatch : null;
   readLegacyClearance(p, f.facets);
   f.salaryMin = salaryBound(p.get('salary_min'));
   f.salaryMax = salaryBound(p.get('salary_max'));
@@ -536,6 +545,7 @@ export function activeFilterCount(f: JobFilters): number {
   if (f.autoApplyAvailable) n += 1;
   if (f.formerEmployers) n += 1;
   if (f.applyQuestionsMax != null) n += 1;
+  if (f.minSkillMatch != null) n += 1;
   // One control and one summary chip, so one count whichever ends are set.
   if (f.salaryMin != null || f.salaryMax != null) n += 1;
   if (f.postedWithinDays != null) n += 1;

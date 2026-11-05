@@ -177,6 +177,13 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   subscriptions sharing a saved-search query so the search index is hit once regardless of
   how many people subscribed to it. A per-subscription loop would multiply index load by
   subscriber count.
+- **A saved search's minimum skill match is applied per subscriber, after the search.**
+  `min_skill_match` is a web filter the search never reads: the percent depends on the reader, so
+  `Runner.match` computes it per (hit, subscription) pair against the subscriber's live
+  `user_profiles.skills`, with the same formula as the job list (`computeClientMatch`). It can
+  only thin the `MatchLimit` window: on a broad query, jobs clearing the threshold but older than
+  that window are not reached. A query carrying only this param does not narrow the catalogue, so
+  a subscription to it is refused like any other unfiltered search (`search.Narrows`).
 - **Avoid-skills is enforced as a per-subscriber post-filter, not folded into the shared search.**
   `Runner.match` batch-fetches every active subscriber's live `user_profiles.excluded_skills` once
   per pass (`Store.ListUserProfilesExcludedSkills`) and `matchQuery` skips a `(hit, subscription)`

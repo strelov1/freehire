@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,9 +18,10 @@ import (
 // the matching jobs for every subscription on that query. Subscriptions are
 // grouped by their (already-canonical, SPA-serialized) query string, so a query
 // shared by many subscribers costs one search. A job is gated against each
-// subscription's start_at, and against the subscriber's live excluded_skills
-// (avoid-skills) preference, so a subscription never receives a job older than
-// it or carrying a skill its subscriber currently avoids.
+// subscription's start_at, against the subscriber's live excluded_skills (avoid-skills)
+// preference, and against the query's minimum skill match over their live skills, so a
+// subscription never receives a job older than it, carrying a skill its subscriber
+// currently avoids, or below the threshold they saved.
 //
 // One failing query is logged, COUNTED and skipped, not fatal — the same isolation as
 // the per-board ingest crawl, which also counts its failed boards rather than only
@@ -37,7 +40,7 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 		return err
 	}
 
-	excludedByUser, err := r.excludedSkillsByUser(ctx, subs)
+	skillsByUser, err := r.skillSetsByUser(ctx, subs)
 	if err != nil {
 		return err
 	}
@@ -50,7 +53,7 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 	stats.Queries = len(groups)
 	done := 0
 	for query, gsubs := range groups {
-		if err := r.matchQuery(ctx, query, gsubs, excludedByUser, stats); err != nil {
+		if err := r.matchQuery(ctx, query, gsubs, skillsByUser, stats); err != nil {
 			// `done`, not the failure count: what a cancellation has to report is how
 			// far the stage got, and this branch runs before the failure is counted.
 			//
@@ -72,11 +75,17 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 	return nil
 }
 
-// excludedSkillsByUser batch-fetches every distinct subscriber's avoid-skills preference in
-// one round trip, keyed by user id — cheaper than fetching per query group or per
-// subscription, since the same subscriber can appear in several groups. A user id with no
-// profile row is simply absent from the result; callers treat that as an empty exclude set.
-func (r *Runner) excludedSkillsByUser(ctx context.Context, subs []db.ListActiveSubscriptionsRow) (map[int64][]string, error) {
+// subscriberSkills is what one subscriber's live profile says about skills.
+type subscriberSkills struct {
+	held     []string
+	excluded []string
+}
+
+// skillSetsByUser batch-fetches every distinct subscriber's held and avoided skills in one
+// round trip, keyed by user id — cheaper than fetching per query group or per subscription,
+// since the same subscriber can appear in several groups. A user id with no profile row is
+// simply absent from the result; callers treat that as empty sets.
+func (r *Runner) skillSetsByUser(ctx context.Context, subs []db.ListActiveSubscriptionsRow) (map[int64]subscriberSkills, error) {
 	seen := make(map[int64]struct{}, len(subs))
 	userIDs := make([]int64, 0, len(subs))
 	for _, s := range subs {
@@ -89,21 +98,22 @@ func (r *Runner) excludedSkillsByUser(ctx context.Context, subs []db.ListActiveS
 	if len(userIDs) == 0 {
 		return nil, nil
 	}
-	rows, err := r.store.ListUserProfilesExcludedSkills(ctx, userIDs)
+	rows, err := r.store.ListUserProfileSkillSets(ctx, userIDs)
 	if err != nil {
 		return nil, err
 	}
-	excludedByUser := make(map[int64][]string, len(rows))
+	skillsByUser := make(map[int64]subscriberSkills, len(rows))
 	for _, row := range rows {
-		excludedByUser[row.UserID] = row.ExcludedSkills
+		skillsByUser[row.UserID] = subscriberSkills{held: row.Skills, excluded: row.ExcludedSkills}
 	}
-	return excludedByUser, nil
+	return skillsByUser, nil
 }
 
 // matchQuery runs one query and records its matches across the subscriptions that
 // share it.
-func (r *Runner) matchQuery(ctx context.Context, query string, subs []db.ListActiveSubscriptionsRow, excludedByUser map[int64][]string, stats *Stats) error {
+func (r *Runner) matchQuery(ctx context.Context, query string, subs []db.ListActiveSubscriptionsRow, skillsByUser map[int64]subscriberSkills, stats *Stats) error {
 	vals, _ := url.ParseQuery(query)
+	minMatch := minSkillMatch(vals)
 	res, err := r.searcher.Search(ctx, search.SearchParams{
 		Query:  vals.Get("q"),
 		Filter: search.FilterFromValues(vals),
@@ -139,7 +149,14 @@ func (r *Runner) matchQuery(ctx context.Context, query string, subs []db.ListAct
 			// evaluated per (hit, subscriber) pair against the live excluded_skills,
 			// not a value frozen into the saved search's own query string — no extra
 			// search call, since the shared search above already ran once per query.
-			if hasAvoidedSkill(hit.Skills, excludedByUser[s.UserID]) {
+			skills := skillsByUser[s.UserID]
+			if hasAvoidedSkill(hit.Skills, skills.excluded) {
+				continue
+			}
+			// The same per-pair evaluation: the percent depends on who is reading. It runs
+			// after the shared search, so it can only thin the MatchLimit window, not reach
+			// past it.
+			if !meetsSkillMatch(hit.Skills, skills.held, minMatch) {
 				continue
 			}
 			subIDs = append(subIDs, s.ID)
@@ -158,6 +175,44 @@ func (r *Runner) matchQuery(ctx context.Context, query string, subs []db.ListAct
 	}
 	stats.Matched += int(n) // n is the count of newly recorded pairs; already-known pairs are skipped
 	return nil
+}
+
+// minSkillMatchParam carries the job list's "Minimum skill match" threshold in a saved
+// query. It is no search filter — the percent depends on the reader, so the index cannot
+// answer it, and FilterFromValues does not read it.
+const minSkillMatchParam = "min_skill_match"
+
+// minSkillMatch reads the query's threshold; 0 means none. It accepts what the web filter
+// model accepts (1-100), so a value the job list ignores cannot empty a digest.
+func minSkillMatch(vals url.Values) int {
+	n, err := strconv.Atoi(vals.Get(minSkillMatchParam))
+	if err != nil || n < 1 || n > 100 {
+		return 0
+	}
+	return n
+}
+
+// meetsSkillMatch applies the threshold the way the job list does (computeClientMatch and
+// visibleJobs in web/): the rounded share of a job's skills the reader holds, compared
+// case-insensitively. With no threshold it passes, and it passes when either side has no
+// skills, because then there is no percent to test — the list keeps such a job and offers
+// no slider to a reader with no skills.
+func meetsSkillMatch(jobSkills, held []string, minPercent int) bool {
+	if minPercent == 0 || len(jobSkills) == 0 || len(held) == 0 {
+		return true
+	}
+	have := make(map[string]struct{}, len(held))
+	for _, skill := range held {
+		have[strings.ToLower(skill)] = struct{}{}
+	}
+	matched := 0
+	for _, skill := range jobSkills {
+		if _, ok := have[strings.ToLower(skill)]; ok {
+			matched++
+		}
+	}
+	percent := int(math.Round(float64(matched) / float64(len(jobSkills)) * 100))
+	return percent >= minPercent
 }
 
 // hasAvoidedSkill reports whether any of a job's skills is in the subscriber's

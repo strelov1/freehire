@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"reflect"
 	"testing"
 	"time"
@@ -95,6 +96,8 @@ type fakeStore struct {
 	// excludedSkills maps a user id to their avoid-skills preference; a user id absent from
 	// this map has no profile row, mirroring the real query.
 	excludedSkills map[int64][]string
+	// heldSkills maps a user id to their profile skills, under the same absence rule.
+	heldSkills map[int64][]string
 
 	notified   []db.MarkMatchesNotifiedParams
 	failures   []db.RecordMatchDeliveryFailureParams
@@ -144,14 +147,15 @@ func (s *fakeStore) ListActiveSubscriptions(context.Context) ([]db.ListActiveSub
 	return s.active, nil
 }
 
-func (s *fakeStore) ListUserProfilesExcludedSkills(_ context.Context, userIDs []int64) ([]db.ListUserProfilesExcludedSkillsRow, error) {
-	out := make([]db.ListUserProfilesExcludedSkillsRow, 0, len(userIDs))
+func (s *fakeStore) ListUserProfileSkillSets(_ context.Context, userIDs []int64) ([]db.ListUserProfileSkillSetsRow, error) {
+	out := make([]db.ListUserProfileSkillSetsRow, 0, len(userIDs))
 	for _, id := range userIDs {
-		skills, ok := s.excludedSkills[id]
-		if !ok {
+		excluded, hasExcluded := s.excludedSkills[id]
+		held, hasHeld := s.heldSkills[id]
+		if !hasExcluded && !hasHeld {
 			continue
 		}
-		out = append(out, db.ListUserProfilesExcludedSkillsRow{UserID: id, ExcludedSkills: skills})
+		out = append(out, db.ListUserProfileSkillSetsRow{UserID: id, Skills: held, ExcludedSkills: excluded})
 	}
 	return out, nil
 }
@@ -470,6 +474,67 @@ func TestMatch_ExcludedSkillIsNotRecorded(t *testing.T) {
 	}
 	if len(store.recorded) != 0 {
 		t.Errorf("recorded = %+v, want none (job carries the subscriber's avoided skill)", store.recorded)
+	}
+}
+
+func TestMatch_MinSkillMatchIsPerSubscriber(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := &fakeStore{
+		active: []db.ListActiveSubscriptionsRow{
+			{ID: 1, UserID: 1, Query: "seniority=senior&min_skill_match=70", StartAt: ts(base)},
+			{ID: 2, UserID: 2, Query: "seniority=senior&min_skill_match=70", StartAt: ts(base)},
+			{ID: 3, UserID: 3, Query: "seniority=senior&min_skill_match=70", StartAt: ts(base)}, // no profile
+		},
+		heldSkills: map[int64][]string{1: {"go"}, 2: {"go", "kafka", "aws"}},
+	}
+	searcher := &fakeSearcher{results: []search.SearchResult{
+		{Hits: []search.JobDocument{hitWithSkills(100, base.Add(time.Hour), "go", "kafka", "aws", "sql")}},
+	}}
+	r := New(store, searcher, &fakeNotifier{}, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := map[int64]bool{}
+	for _, rec := range store.recorded {
+		got[rec.sub] = true
+	}
+	// 1 holds 25% of the job, 2 holds 75%, and 3 has no skills to compute a percent from.
+	if got[1] || !got[2] || !got[3] || len(store.recorded) != 2 {
+		t.Errorf("recorded = %+v, want subscriptions 2 and 3", store.recorded)
+	}
+}
+
+// The expected values mirror the computeClientMatch cases in web/src/lib/jobMatch.test.ts:
+// the digest and the job list must agree on what clears a threshold.
+func TestMeetsSkillMatch(t *testing.T) {
+	cases := []struct {
+		name string
+		job  []string
+		held []string
+		min  int
+		want bool
+	}{
+		{"half clears 50", []string{"go", "kafka", "aws", "spark"}, []string{"go", "aws", "react"}, 50, true},
+		{"half misses 55", []string{"go", "kafka", "aws", "spark"}, []string{"go", "aws", "react"}, 55, false},
+		{"case-insensitive", []string{"Go", "Kafka"}, []string{"go"}, 50, true},
+		{"rounds up: 2 of 3 is 67", []string{"a", "b", "c"}, []string{"a", "b"}, 67, true},
+		{"no threshold", []string{"go"}, []string{"php"}, 0, true},
+		{"job without skills stays", nil, []string{"go"}, 90, true},
+		{"reader without skills stays", []string{"go"}, nil, 90, true},
+	}
+	for _, c := range cases {
+		if got := meetsSkillMatch(c.job, c.held, c.min); got != c.want {
+			t.Errorf("%s: meetsSkillMatch = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestMinSkillMatch(t *testing.T) {
+	for raw, want := range map[string]int{"70": 70, "100": 100, "1": 1, "0": 0, "101": 0, "-5": 0, "abc": 0, "": 0} {
+		if got := minSkillMatch(url.Values{"min_skill_match": {raw}}); got != want {
+			t.Errorf("minSkillMatch(%q) = %d, want %d", raw, got, want)
+		}
 	}
 }
 

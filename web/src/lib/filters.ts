@@ -140,6 +140,10 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, applyQuestionsMax: n });
   }
 
+  setMinSkillMatch(n: number | null) {
+    this.#url.setNow({ ...this.#url.value, minSkillMatch: n });
+  }
+
   setExperienceIncludeUnspecified(on: boolean) {
     this.#url.setNow({ ...this.#url.value, experienceIncludeUnspecified: on });
   }

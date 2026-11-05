@@ -108,6 +108,10 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, applyQuestionsMax: n };
   }
 
+  setMinSkillMatch(n: number | null): void {
+    this.#f = { ...this.#f, minSkillMatch: n };
+  }
+
   setPostedWithinDays(n: number | null): void {
     this.#f = { ...this.#f, postedWithinDays: n };
   }

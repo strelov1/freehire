@@ -37,7 +37,6 @@
     entryCount,
     seed,
     apply,
-    onClear,
     applyDisabled = false,
     applyLabel,
     previewCount,
@@ -64,9 +63,6 @@
     seed: () => void;
     /** Commit the staged copy (or a custom save). A thrown error keeps the modal open. */
     apply: () => void | Promise<void>;
-    /** Run after the footer's Clear all resets `staged` — for a draft the wrapper stages
-     *  outside it (the job modal's minimum skill match), so Clear all clears that too. */
-    onClear?: () => void;
     applyDisabled?: boolean;
     /** Custom footer label (e.g. "Save"); when absent the button shows the live preview. */
     applyLabel?: string;
@@ -269,7 +265,6 @@
 
   function clearAll() {
     staged.clear();
-    onClear?.();
   }
 
   function selectionOf(hit: FilterSearchHit) {

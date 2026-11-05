@@ -1,6 +1,6 @@
 //go:build integration
 
-// Integration test for ListUserProfilesExcludedSkills — the batch fetch behind
+// Integration test for ListUserProfileSkillSets — the batch fetch behind
 // internal/engage/notify's per-subscriber avoid-skills enforcement. Only a real Postgres can
 // verify the `= ANY($1::bigint[])` array-parameter behavior, including that a user id
 // with no profile row simply produces no result row. Run with:
@@ -33,7 +33,7 @@ func insertUserProfileForExcludedSkillsTest(t *testing.T, q *Queries, email stri
 	return userID
 }
 
-func TestListUserProfilesExcludedSkills(t *testing.T) {
+func TestListUserProfileSkillSets(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -47,9 +47,9 @@ func TestListUserProfilesExcludedSkills(t *testing.T) {
 		t.Fatalf("insert carol: %v", err)
 	}
 
-	rows, err := q.ListUserProfilesExcludedSkills(ctx, []int64{alice, bob, carol})
+	rows, err := q.ListUserProfileSkillSets(ctx, []int64{alice, bob, carol})
 	if err != nil {
-		t.Fatalf("ListUserProfilesExcludedSkills: %v", err)
+		t.Fatalf("ListUserProfileSkillSets: %v", err)
 	}
 
 	byUser := make(map[int64][]string, len(rows))

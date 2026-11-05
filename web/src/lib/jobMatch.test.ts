@@ -64,6 +64,11 @@ describe('computeClientMatch', () => {
     });
   });
 
+  // internal/engage/notify's TestMeetsSkillMatch holds the same cases for the digest.
+  it('rounds the percent to the nearest whole number', () => {
+    expect(computeClientMatch(['a', 'b', 'c'], ['a', 'b']).percent).toBe(67);
+  });
+
   it('matches regardless of case so canonical slugs never miss on casing', () => {
     expect(computeClientMatch(['Go', 'Kafka'], ['go'])).toEqual({ total: 2, matched: 1, percent: 50 });
   });
