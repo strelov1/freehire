@@ -254,6 +254,22 @@ func (q *Queries) DeactivateEmailSubscription(ctx context.Context, arg Deactivat
 	return result.RowsAffected(), nil
 }
 
+const deactivateSubscriptions = `-- name: DeactivateSubscriptions :execrows
+UPDATE subscriptions SET active = false
+WHERE id = ANY($1::bigint[]) AND active
+`
+
+// Pause the given subscriptions. The matching worker calls it for a saved search
+// whose query the search can no longer execute: such a subscription fails every
+// pass and can never deliver, and the owner can fix the search and resume it.
+func (q *Queries) DeactivateSubscriptions(ctx context.Context, ids []int64) (int64, error) {
+	result, err := q.db.Exec(ctx, deactivateSubscriptions, ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteSubscription = `-- name: DeleteSubscription :execrows
 DELETE FROM subscriptions
 WHERE id = $1 AND user_id = $2
@@ -499,6 +515,33 @@ func (q *Queries) GetSubscriptionForDelivery(ctx context.Context, id int64) (Get
 		&i.QuietHoursStart,
 		&i.QuietHoursEnd,
 	)
+	return i, err
+}
+
+const getSubscriptionTarget = `-- name: GetSubscriptionTarget :one
+SELECT s.channel, ss.query
+FROM subscriptions s
+JOIN saved_searches ss ON ss.id = s.saved_search_id
+WHERE s.id = $1 AND s.user_id = $2
+`
+
+type GetSubscriptionTargetParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type GetSubscriptionTargetRow struct {
+	Channel string `json:"channel"`
+	Query   string `json:"query"`
+}
+
+// What an owner-scoped subscription delivers: its channel and its saved search's
+// query. Resuming a paused subscription re-applies the gates a new one passes, and
+// these are what they read. No matching owner-scoped row returns no row (404).
+func (q *Queries) GetSubscriptionTarget(ctx context.Context, arg GetSubscriptionTargetParams) (GetSubscriptionTargetRow, error) {
+	row := q.db.QueryRow(ctx, getSubscriptionTarget, arg.ID, arg.UserID)
+	var i GetSubscriptionTargetRow
+	err := row.Scan(&i.Channel, &i.Query)
 	return i, err
 }
 

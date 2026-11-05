@@ -27,6 +27,22 @@ SET active = sqlc.arg(active)
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
 RETURNING *;
 
+-- name: GetSubscriptionTarget :one
+-- What an owner-scoped subscription delivers: its channel and its saved search's
+-- query. Resuming a paused subscription re-applies the gates a new one passes, and
+-- these are what they read. No matching owner-scoped row returns no row (404).
+SELECT s.channel, ss.query
+FROM subscriptions s
+JOIN saved_searches ss ON ss.id = s.saved_search_id
+WHERE s.id = sqlc.arg(id) AND s.user_id = sqlc.arg(user_id);
+
+-- name: DeactivateSubscriptions :execrows
+-- Pause the given subscriptions. The matching worker calls it for a saved search
+-- whose query the search can no longer execute: such a subscription fails every
+-- pass and can never deliver, and the owner can fix the search and resume it.
+UPDATE subscriptions SET active = false
+WHERE id = ANY(sqlc.arg(ids)::bigint[]) AND active;
+
 -- name: DeleteSubscription :execrows
 -- Unsubscribe, scoped to its owner. Returns the affected row count: 0 means it
 -- does not exist or is not the caller's (the handler maps that to 404). The match

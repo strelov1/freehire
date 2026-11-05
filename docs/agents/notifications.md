@@ -45,6 +45,17 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   `ErrUnfilteredSearch` (400). The guard is at subscribe time, not at save time, because
   that is where the meaning changes.
 
+- **A subscription must carry a query the search can RUN, and stays that way.** Create
+  and resume (`subscription.Service.SetActive(true)`) share one gate (`admit`): the
+  query parses (`search.ParseQuery` — e.g. at most 5 OR alternatives), narrows, and the
+  channel can reach the account. Saved searches validate the same way on create and
+  edit. What predates a rule — a query saved before it existed, or one a tightened rule
+  later invalidates — is caught by `cmd/notify` itself: `pauseUnrunnable` pauses every
+  subscription on a query it cannot parse and does not search it (`paused=` in the run
+  log). Measured 2026-11-05, one such subscription had failed every pass for a week
+  while its owner received nothing. Paused, not deleted, so the owner can fix the
+  search and resume.
+
 - **A non-positive per-subscription cap claims nothing and reports success.** It becomes
   `LIMIT 0` inside the `LATERAL`: no rows, no error, the worker quietly idle. It is
   floored at the call site for the same reason `SEARCH_DRAIN_BATCH_SIZE` is — a silent
