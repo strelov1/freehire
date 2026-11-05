@@ -166,8 +166,23 @@ func TestServiceBuild(t *testing.T) {
 		}
 	})
 
+	// The failure this guards: the digest ran before the rollup reached the day, read a
+	// stub and exited 0, and nothing reported the lost post.
+	for name, candidates := range map[string][]Posting{
+		"nothing above the floor": {posting(1, "alpha", MinPageUniques-1)},
+		"no rows at all":          nil,
+	} {
+		t.Run("a stub day is an error: "+name, func(t *testing.T) {
+			_, err := New(newFakeRepo(candidates...), fixedNow("2026-09-04")).Build(ctx, time.Time{})
+			if !errors.Is(err, ErrThinViewData) {
+				t.Errorf("got %v, want ErrThinViewData", err)
+			}
+		})
+	}
+
 	t.Run("a quiet day is an empty digest, not an error", func(t *testing.T) {
-		repo := newFakeRepo(posting(1, "alpha", MinPageUniques-1))
+		repo := newFakeRepo(posting(1, "alpha", MinPageUniques))
+		repo.quarantine = map[int64]bool{1: true}
 		got, err := New(repo, fixedNow("2026-09-04")).Build(ctx, time.Time{})
 		if err != nil {
 			t.Fatalf("a quiet day must not be an error: %v", err)
