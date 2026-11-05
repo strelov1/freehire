@@ -248,3 +248,15 @@ func run() int {
 ## Saying what a run did
 
 A worker's duration and exit status say that it ran, not whether it was worth running or where the time went. `worker.ReportWork(processed, changed)` and `worker.Stage(name)` publish that into the same per-run metrics file (`freehire_worker_last_run_items_{processed,changed}`, `freehire_worker_stage_seconds`). Both are optional: a worker that calls neither publishes none of these series. The freehire-ops **Freehire Scheduled Jobs** dashboard reads them, beside what each run cost the host. Use them in any long or heavy worker.
+
+## Analytics reader
+
+`AnalyticsPool` is the separate, read-only connection used by the statistics
+workers. With `ANALYTICS_DATABASE_URL` configured it requires a physical standby
+and waits up to one minute for a primary WAL fence before beginning work. An
+unavailable, paused or incorrectly configured replica fails the run; it never
+fails over to primary reads. Without this variable, local development opens a
+separate read-only primary session. The writer remains unchanged. Reader queries
+are bounded to thirty minutes, idle transactions to one minute, and two pool
+connections. Rollups compute their complete results before opening the primary
+publication transaction; failures preserve the previous published snapshot.

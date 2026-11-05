@@ -1,5 +1,5 @@
 // Command rollup-company is the standalone per-company hiring-signal rollup worker.
-// It fully recomputes insights_company_stats from the jobs table and swaps it in
+// It computes insights_company_stats on the analytics reader and publishes it
 // atomically.
 //
 // insights_company_stats holds one row per (company_slug, day) for each of a company's
@@ -14,7 +14,7 @@
 // company page's Hiring tab.
 //
 // It is a run-once-and-exit worker (cron-scheduled, ~daily given the company grain):
-// the clear and rebuild run inside one transaction, so a reader never sees a table
+// computation precedes one atomic primary publication transaction, so a reader never sees a table
 // mid-rebuild and orphaned rows (e.g. a reopened job) vanish in the same step. Kept
 // separate from rollup-stats so its heavier, company-grained recompute schedules
 // independently and its failure never blocks the public /insights rollups. Re-running
@@ -24,11 +24,7 @@ package main
 import (
 	"context"
 	"log"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
@@ -48,100 +44,15 @@ func run() int {
 	}
 	defer cleanup()
 
-	// The clear + rebuild run in one transaction so the swap is atomic: readers keep
-	// seeing the previous rollup until commit, and orphaned rows vanish in the same step.
-	tx, err := pool.Begin(ctx)
+	analytics, err := worker.AnalyticsPool(ctx, pool)
 	if err != nil {
-		log.Printf("begin: %v", err)
+		log.Printf("analytics database: %v", err)
 		return 1
 	}
-	defer tx.Rollback(ctx)
-
-	// The rebuild aggregates the whole jobs lifecycle with a window sum; at the
-	// OLTP-default work_mem its sort/hash spills to disk and drags. Raise work_mem for
-	// this batch transaction only (SET LOCAL — reset on commit) so it stays in memory.
-	if _, err := tx.Exec(ctx, "SET LOCAL work_mem = '256MB'"); err != nil {
-		log.Printf("set work_mem: %v", err)
+	defer analytics.Close()
+	if err := rebuildCompanyRollups(ctx, analytics, pool); err != nil {
+		log.Printf("company rollups: %v", err)
 		return 1
 	}
-
-	q := db.New(pool).WithTx(tx)
-
-	done := worker.Stage("company stats")
-	if err := q.DeleteAllInsightsCompanyStats(ctx); err != nil {
-		log.Printf("clear rollup: %v", err)
-		return 1
-	}
-	rows, err := q.RebuildInsightsCompanyStats(ctx)
-	if err != nil {
-		log.Printf("rebuild rollup: %v", err)
-		return 1
-	}
-
-	// The scalar growth table (backs the ranked leaderboard) is rebuilt in the SAME
-	// transaction so it never diverges from the per-day rollup.
-	done()
-	done = worker.Stage("company growth")
-	prevTs := pgtype.Timestamptz{Time: time.Now().UTC().AddDate(0, 0, -growthWindowDays), Valid: true}
-	if err := q.DeleteAllInsightsCompanyGrowth(ctx); err != nil {
-		log.Printf("clear growth: %v", err)
-		return 1
-	}
-	companies, err := q.RebuildInsightsCompanyGrowth(ctx, prevTs)
-	if err != nil {
-		log.Printf("rebuild growth: %v", err)
-		return 1
-	}
-
-	// The response-rate scalars ride the same transaction for the same reason: a
-	// reader must never see one table rebuilt and the other mid-flight.
-	done()
-	done = worker.Stage("company response")
-	if err := q.DeleteAllInsightsCompanyResponse(ctx); err != nil {
-		log.Printf("clear response: %v", err)
-		return 1
-	}
-	responders, err := q.RebuildInsightsCompanyResponse(ctx)
-	if err != nil {
-		log.Printf("rebuild response: %v", err)
-		return 1
-	}
-
-	done()
-	done = worker.Stage("company lifetime")
-	// Posting lifetime, same transaction again: the Hiring tab shows it beside the
-	// growth figure, and the two must describe the same rebuild.
-	if err := q.DeleteAllInsightsCompanyLifetime(ctx); err != nil {
-		log.Printf("clear lifetime: %v", err)
-		return 1
-	}
-	measured, err := q.RebuildInsightsCompanyLifetime(ctx)
-	if err != nil {
-		log.Printf("rebuild lifetime: %v", err)
-		return 1
-	}
-
-	done()
-	done = worker.Stage("company views")
-	// Posting views, likewise shown on the Hiring tab beside the figures above.
-	if err := q.DeleteAllInsightsCompanyViews(ctx); err != nil {
-		log.Printf("clear views: %v", err)
-		return 1
-	}
-	viewed, err := q.RebuildInsightsCompanyViews(ctx)
-	if err != nil {
-		log.Printf("rebuild views: %v", err)
-		return 1
-	}
-
-	done()
-	done = worker.Stage("commit")
-	if err := tx.Commit(ctx); err != nil {
-		log.Printf("commit: %v", err)
-		return 1
-	}
-	done()
-
-	log.Printf("rollup-company: rebuilt insights_company_stats (%d company-day rows) + insights_company_growth (%d companies) + insights_company_response (%d companies with an observable application) + insights_company_lifetime (%d companies with an employer-side closure) + insights_company_views (%d companies with a posting view in 60 days)", rows, companies, responders, measured, viewed)
 	return 0
 }

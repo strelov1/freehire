@@ -42,10 +42,10 @@ func TestInsightsRoleCountriesEndpoint(t *testing.T) {
 		t.Fatalf("delete: %v", err)
 	}
 	prev := pgtype.Timestamptz{Time: time.Now().UTC().AddDate(0, 0, -30), Valid: true}
-	if _, err := q.RebuildInsightsRoleCountryStatsGlobal(ctx, prev); err != nil {
+	if _, err := materializeInsightsRoleCountryStatsGlobal(q)(ctx, prev); err != nil {
 		t.Fatalf("rebuild global: %v", err)
 	}
-	if _, err := q.RebuildInsightsRoleCountryStatsByCountry(ctx, prev); err != nil {
+	if _, err := materializeInsightsRoleCountryStatsByCountry(q)(ctx, prev); err != nil {
 		t.Fatalf("rebuild by country: %v", err)
 	}
 

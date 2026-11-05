@@ -64,32 +64,32 @@ func rebuildInsightsForTest(t *testing.T, ctx context.Context, q *db.Queries) {
 		}
 	}
 	mustExec(q.DeleteAllInsightsRoleStats(ctx))
-	_, err := q.RebuildInsightsRoleStatsGlobal(ctx, prev)
+	_, err := materializeInsightsRoleStatsGlobal(q)(ctx, prev)
 	mustExec(err)
-	_, err = q.RebuildInsightsRoleStatsByCountry(ctx, prev)
+	_, err = materializeInsightsRoleStatsByCountry(q)(ctx, prev)
 	mustExec(err)
 	mustExec(q.DeleteAllInsightsSkillStats(ctx))
-	_, err = q.RebuildInsightsSkillStatsGlobal(ctx, prev)
+	_, err = materializeInsightsSkillStatsGlobal(q)(ctx, prev)
 	mustExec(err)
-	_, err = q.RebuildInsightsSkillStatsByCategory(ctx, prev)
+	_, err = materializeInsightsSkillStatsByCategory(q)(ctx, prev)
 	mustExec(err)
-	_, err = q.RebuildInsightsSkillStatsByCountry(ctx, prev)
+	_, err = materializeInsightsSkillStatsByCountry(q)(ctx, prev)
 	mustExec(err)
 	// Per-role skill demand at a floor of 2, and its denominator — which takes no floor,
 	// or a surviving share would have nothing to divide by.
 	mustExec(q.DeleteAllInsightsRoleSkillStats(ctx))
-	_, err = q.RebuildInsightsRoleSkillStats(ctx, 2)
+	_, err = materializeInsightsRoleSkillStats(q)(ctx, 2)
 	mustExec(err)
 	mustExec(q.DeleteAllInsightsRoleSkillSample(ctx))
-	_, err = q.RebuildInsightsRoleSkillSample(ctx)
+	_, err = materializeInsightsRoleSkillSample(q)(ctx)
 	mustExec(err)
 	mustExec(q.DeleteAllInsightsSalaryStats(ctx))
-	_, err = q.RebuildInsightsSalaryStatsGlobal(ctx, 1) // min sample 1 so a small band survives
+	_, err = materializeInsightsSalaryStatsGlobal(q)(ctx, 1) // min sample 1 so a small band survives
 	mustExec(err)
-	_, err = q.RebuildInsightsSalaryStatsByCountry(ctx, 1)
+	_, err = materializeInsightsSalaryStatsByCountry(q)(ctx, 1)
 	mustExec(err)
 	mustExec(q.DeleteAllInsightsVelocityDaily(ctx))
-	_, err = q.RebuildInsightsVelocityDaily(ctx)
+	_, err = materializeInsightsVelocityDaily(q)(ctx)
 	mustExec(err)
 }
 
