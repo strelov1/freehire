@@ -3723,6 +3723,11 @@ type Querier interface {
 	// account never opened the settings page, which is not the same as opting out. Same
 	// reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
 	// inner join — see migration 0153 for why one column could not answer both.
+	//
+	// It also carries the delivery-timing context (the same COALESCE defaults as
+	// GetSubscriptionForDelivery and ClaimSubscriptionMatches) and the two stamps the
+	// worker uses to skip a search whose result could not be sent this pass — see
+	// notify.searchDue.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
 	// The channels cmd/tg-ingest crawls and cmd/tg-extract reads a kind from. Ordered by
 	// name so a run's channel order is stable and its log diffable.
@@ -5705,6 +5710,10 @@ type Querier interface {
 	// each — the sibling half of RejectAndBlockHost. Scoped to status='pending' like the
 	// single-row Mark* queries, so a row already decided by the time this runs is left alone.
 	MarkSubmissionsRejectedByIDs(ctx context.Context, arg MarkSubmissionsRejectedByIDsParams) ([]JobSubmission, error)
+	// Stamp the subscriptions whose saved search the matching stage just ran and
+	// recorded. searched_at is the instant the pass STARTED, not now(): the next
+	// search pages back to it, so a posting indexed while this pass ran is covered.
+	MarkSubscriptionsSearched(ctx context.Context, arg MarkSubscriptionsSearchedParams) error
 	// Completion: the post was processed (jobs written, or no vacancy found). Run in
 	// the same transaction as the extracted jobs' UpsertJob calls.
 	MarkTelegramPostExtracted(ctx context.Context, arg MarkTelegramPostExtractedParams) error

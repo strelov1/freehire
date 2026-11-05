@@ -213,6 +213,9 @@ type Store interface {
 	// the result; the caller treats absence as an empty exclude set.
 	ListUserProfilesExcludedSkills(ctx context.Context, userIDs []int64) ([]db.ListUserProfilesExcludedSkillsRow, error)
 	RecordSubscriptionMatches(ctx context.Context, arg db.RecordSubscriptionMatchesParams) (int64, error)
+	// MarkSubscriptionsSearched stamps when the matching stage last searched these
+	// subscriptions; searchDue and matchQuery's paging read it back.
+	MarkSubscriptionsSearched(ctx context.Context, arg db.MarkSubscriptionsSearchedParams) error
 	ClaimSubscriptionMatches(ctx context.Context, arg db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error)
 	// ExpireStaleSubscriptionMatches takes up to BatchSize stale matches (older
 	// than the freshness window, or for a closed job) out of the pending set and
@@ -331,14 +334,16 @@ func DefaultConfig() Config {
 
 // Stats is the per-pass summary logged by the worker.
 type Stats struct {
-	Queries       int // distinct queries matched this pass
-	FailedQueries int // distinct queries whose search or record step errored and was skipped
-	Matched       int // newly recorded (subscription, job) matches
-	Delivered     int // messages sent (one per person and channel, carrying a digest per subscription)
-	SoftSkips     int // digests skipped (e.g. Telegram not linked)
-	Deferred      int // digests held back by quiet hours or a not-yet-due daily digest time
-	Expired       int // pending matches that went stale (too old, or the job closed) undelivered
-	Failed        int // digest deliveries that errored
+	Queries        int // distinct queries searched this pass
+	SkippedQueries int // distinct queries not searched: none of their subscriptions was due (searchDue)
+	Searches       int // index requests made, counting every page of a paged query
+	FailedQueries  int // distinct queries whose search or record step errored and was skipped
+	Matched        int // newly recorded (subscription, job) matches
+	Delivered      int // messages sent (one per person and channel, carrying a digest per subscription)
+	SoftSkips      int // digests skipped (e.g. Telegram not linked)
+	Deferred       int // digests held back by quiet hours or a not-yet-due daily digest time
+	Expired        int // pending matches that went stale (too old, or the job closed) undelivered
+	Failed         int // digest deliveries that errored
 }
 
 // MatchingCollapsed reports whether the MATCH stage produced nothing because every
@@ -378,8 +383,8 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	// stopped part-way is the pass whose figures somebody actually wants, and printing
 	// them last meant the run that ended early was also the run that said nothing.
 	defer func() {
-		log.Printf("notify: queries=%d failed_queries=%d matched=%d expired=%d delivered=%d soft_skips=%d deferred=%d failed=%d",
-			stats.Queries, stats.FailedQueries, stats.Matched, stats.Expired, stats.Delivered, stats.SoftSkips, stats.Deferred, stats.Failed)
+		log.Printf("notify: queries=%d skipped_queries=%d searches=%d failed_queries=%d matched=%d expired=%d delivered=%d soft_skips=%d deferred=%d failed=%d",
+			stats.Queries, stats.SkippedQueries, stats.Searches, stats.FailedQueries, stats.Matched, stats.Expired, stats.Delivered, stats.SoftSkips, stats.Deferred, stats.Failed)
 	}()
 	if err := r.match(ctx, &stats); err != nil {
 		return stats, fmt.Errorf("match: %w", err)

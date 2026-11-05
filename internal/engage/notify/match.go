@@ -5,12 +5,26 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/strelov1/freehire/internal/application/deliverywindow"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/search/search"
 )
+
+// matchLag is how far before a group's last search its next one keeps paging. A
+// posting reaches the index minutes after its created_at (the search drain runs
+// every minute or two), so a search that stopped exactly at the last one's instant
+// would miss what was created before it and indexed after.
+const matchLag = time.Hour
+
+// maxMatchPages bounds how far one query pages back in a pass. At MatchLimit 200 it
+// is 10,000 postings — measured 2026-11-05, the busiest daily subscription matched
+// ~4,000 in a day — so it only cuts a query that matches most of the catalogue.
+const maxMatchPages = 50
 
 // match re-runs each distinct saved-search query against the index and records
 // the matching jobs for every subscription on that query. Subscriptions are
@@ -31,11 +45,20 @@ import (
 // remaining queries would each fail instantly against the same dead context, so one
 // SIGTERM would otherwise read as "every saved search is broken". Same reasoning, and
 // the same shape, as forCompanyBatches in cmd/reindex.
+//
+// A query is searched only when one of its subscriptions is due (searchDue): a
+// search whose result cannot be sent this pass is load on the index for nothing.
+// Measured 2026-11-05, every five-minute pass ran ~2,100 searches while an
+// hourly digest can use one an hour, and Meilisearch was the busiest process on
+// the host. A query searched after a gap pages back to its previous search
+// (matchLag, maxMatchPages), so the gap loses nothing.
 func (r *Runner) match(ctx context.Context, stats *Stats) error {
+	now := r.now()
 	subs, err := r.store.ListActiveSubscriptions(ctx)
 	if err != nil {
 		return err
 	}
+	due := dueSubscriptions(now, subs)
 
 	excludedByUser, err := r.excludedSkillsByUser(ctx, subs)
 	if err != nil {
@@ -47,8 +70,32 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 		groups[s.Query] = append(groups[s.Query], s)
 	}
 
+	// Only the groups with a due subscription are searched; the rest wait for a
+	// pass whose result could be sent.
+	for query, gsubs := range groups {
+		if !slices.ContainsFunc(gsubs, func(s db.ListActiveSubscriptionsRow) bool { return due[s.ID] }) {
+			delete(groups, query)
+			stats.SkippedQueries++
+		}
+	}
+
 	stats.Queries = len(groups)
 	done := 0
+	var searched []int64
+	// Stamped on every exit, a cancelled one included: what was searched and
+	// recorded must not be searched again next pass. A failed stamp costs only
+	// repeat searches, so it is logged rather than failing the pass.
+	defer func() {
+		if len(searched) == 0 {
+			return
+		}
+		if err := r.store.MarkSubscriptionsSearched(context.WithoutCancel(ctx), db.MarkSubscriptionsSearchedParams{
+			SearchedAt: pgconv.Timestamptz(&now),
+			Ids:        searched,
+		}); err != nil {
+			log.Printf("notify: stamp %d searched subscriptions: %v", len(searched), err)
+		}
+	}()
 	for query, gsubs := range groups {
 		if err := r.matchQuery(ctx, query, gsubs, excludedByUser, stats); err != nil {
 			// `done`, not the failure count: what a cancellation has to report is how
@@ -68,8 +115,112 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 			continue
 		}
 		done++
+		for _, sub := range gsubs {
+			searched = append(searched, sub.ID)
+		}
 	}
 	return nil
+}
+
+// person is who one delivery message goes to: a user on a channel, or a single
+// webhook subscription (a webhook is sent one saved search at a time). It mirrors
+// the grouping ClaimSubscriptionMatches and deliver use.
+type person struct {
+	userID  int64
+	channel string
+	subID   int64
+}
+
+// dueSubscriptions returns the ids of the subscriptions whose search is due this
+// pass. A person's subscriptions are decided together, so they are always searched
+// in the same pass and one message carries everything each of them has found.
+func dueSubscriptions(now time.Time, subs []db.ListActiveSubscriptionsRow) map[int64]bool {
+	byPerson := make(map[person][]db.ListActiveSubscriptionsRow)
+	for _, s := range subs {
+		k := person{userID: s.UserID, channel: s.Channel}
+		if s.Channel == ChannelWebhook {
+			k.subID = s.ID
+		}
+		byPerson[k] = append(byPerson[k], s)
+	}
+	due := make(map[int64]bool, len(subs))
+	for _, ps := range byPerson {
+		if searchDue(now, ps) {
+			for _, s := range ps {
+				due[s.ID] = true
+			}
+		}
+	}
+	return due
+}
+
+// oldestSearch is the earliest last_searched_at among subs, or the zero time when
+// any of them has never been searched.
+func oldestSearch(subs []db.ListActiveSubscriptionsRow) time.Time {
+	var oldest time.Time
+	for _, s := range subs {
+		if !s.LastSearchedAt.Valid {
+			return time.Time{}
+		}
+		if oldest.IsZero() || s.LastSearchedAt.Time.Before(oldest) {
+			oldest = s.LastSearchedAt.Time
+		}
+	}
+	return oldest
+}
+
+// searchDue reports whether one person's subscriptions must be searched this pass.
+// The rule is "search when a message could go out, and at least once per
+// interval while it could": a posting is then found no later than one interval
+// after it appears and sent in the same pass, which is the latency the interval
+// already promises. Searching between sends only recorded matches earlier — the
+// paging in matchQuery records the same set when the search does run.
+//
+//   - instant: every pass.
+//   - interval: when the interval since the last message has elapsed (the
+//     ClaimSubscriptionMatches gate), outside quiet hours (the message would be
+//     deferred), and only once per interval while nothing is found.
+//   - daily: when the day's digest is due (deliverywindow.DigestDue, the delivery
+//     gate), at most hourly while it stays due because nothing was found.
+//
+// A subscription never searched is always due.
+func searchDue(now time.Time, subs []db.ListActiveSubscriptionsRow) bool {
+	lastSearched := oldestSearch(subs)
+	if lastSearched.IsZero() {
+		return true
+	}
+	var lastSent time.Time
+	for _, s := range subs {
+		if s.LastDigestSentAt.Valid && s.LastDigestSentAt.Time.After(lastSent) {
+			lastSent = s.LastDigestSentAt.Time
+		}
+	}
+	// The settings are the account's, so any subscription answers for the person.
+	s := subs[0]
+	tz := s.Timezone.String
+	switch s.DigestFrequency {
+	case FrequencyInstant:
+		return true
+	case FrequencyDaily:
+		var sent *time.Time
+		if !lastSent.IsZero() {
+			sent = &lastSent
+		}
+		return deliverywindow.DigestDue(now, tz, pgconv.DurationPtr(s.DigestTime), sent) &&
+			!now.Before(lastSearched.Add(time.Hour))
+	default:
+		if deliverywindow.InQuietHours(now, tz, pgconv.DurationPtr(s.QuietHoursStart), pgconv.DurationPtr(s.QuietHoursEnd)) {
+			return false
+		}
+		every := time.Duration(max(s.DigestIntervalHours, MinIntervalHours)) * time.Hour
+		dueAt := lastSent.Add(every)
+		if !lastSent.IsZero() && now.Before(dueAt) {
+			return false
+		}
+		// Not searched since the message became due, or a whole interval since the
+		// last search found nothing.
+		return lastSearched.Before(dueAt) || !now.Before(lastSearched.Add(every))
+	}
 }
 
 // excludedSkillsByUser batch-fetches every distinct subscriber's avoid-skills preference in
@@ -102,26 +253,52 @@ func (r *Runner) excludedSkillsByUser(ctx context.Context, subs []db.ListActiveS
 
 // matchQuery runs one query and records its matches across the subscriptions that
 // share it.
+//
+// It reads the newest MatchLimit hits, as it always did, and keeps paging while a
+// full page still reaches back past the group's previous search (less matchLag):
+// a group searched once an hour can match more than one page in that hour.
 func (r *Runner) matchQuery(ctx context.Context, query string, subs []db.ListActiveSubscriptionsRow, excludedByUser map[int64][]string, stats *Stats) error {
+	// A group with a never-searched subscription reads one page, as a first search
+	// always did.
+	since := oldestSearch(subs)
 	vals, _ := url.ParseQuery(query)
-	res, err := r.searcher.Search(ctx, search.SearchParams{
-		Query:  vals.Get("q"),
-		Filter: search.FilterFromValues(vals),
-		// Freshest first so the bounded window holds the newest matches; the
-		// ledger dedups, so re-scanning the same recent jobs each pass is free.
-		Sort:  []string{"created_at:desc"},
-		Limit: r.cfg.MatchLimit,
-	})
-	if err != nil {
-		return err
+	for page := 0; page < maxMatchPages; page++ {
+		res, err := r.searcher.Search(ctx, search.SearchParams{
+			Query:  vals.Get("q"),
+			Filter: search.FilterFromValues(vals),
+			// Freshest first so the bounded window holds the newest matches; the
+			// ledger dedups, so re-scanning the same recent jobs each pass is free.
+			Sort:   []string{"created_at:desc"},
+			Limit:  r.cfg.MatchLimit,
+			Offset: page * r.cfg.MatchLimit,
+		})
+		stats.Searches++
+		if err != nil {
+			return err
+		}
+		if err := r.recordHits(ctx, res.Hits, subs, excludedByUser, stats); err != nil {
+			return err
+		}
+		if since.IsZero() || len(res.Hits) < r.cfg.MatchLimit {
+			return nil
+		}
+		oldest, ok := hitCreatedAt(res.Hits[len(res.Hits)-1])
+		if !ok || oldest.Before(since.Add(-matchLag)) {
+			return nil
+		}
 	}
+	return nil
+}
+
+// recordHits records one page of a query's hits for every subscription that shares it.
+func (r *Runner) recordHits(ctx context.Context, hits []search.JobDocument, subs []db.ListActiveSubscriptionsRow, excludedByUser map[int64][]string, stats *Stats) error {
 
 	// Collect every (subscription, job) pair this query's hits produced across every
 	// subscription that shares it, then record the whole batch in one round trip —
 	// a popular query with many subscribers no longer costs one sequential INSERT per
 	// (hit, subscription) pair.
 	var subIDs, jobIDs []int64
-	for _, hit := range res.Hits {
+	for _, hit := range hits {
 		created, ok := hitCreatedAt(hit)
 		if !ok {
 			// Cannot gate against start_at without a date; skip rather than

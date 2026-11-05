@@ -1598,6 +1598,7 @@ type Subscription struct {
 	StartAt          pgtype.Timestamptz `json:"start_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	LastDigestSentAt pgtype.Timestamptz `json:"last_digest_sent_at"`
+	LastSearchedAt   pgtype.Timestamptz `json:"last_searched_at"`
 }
 
 type SubscriptionMatch struct {
