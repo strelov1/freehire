@@ -94,6 +94,13 @@ try {
     assert.equal(headers.cookie, 'session=dummy');
     assert.equal(headers.authorization, 'Bearer dummy');
   }
+  const canary = field => `dummy-log-canary-${field}`;
+  const privacyResponse = await get(`/api/privacy-log-canary?code=${canary('code')}&state=${canary('state')}&q=${canary('query')}`, {
+    Referer: `https://dummy.invalid/?credential=${canary('referrer')}`,
+    Cookie: `session=${canary('cookie')}`,
+    Authorization: `Bearer ${canary('authorization')}`,
+  });
+  assert.equal(privacyResponse.status, 200);
   console.log('PASS: non-root web startup, runtime paths, DNS, SSR, static/API routes and websocket allowlist');
 } finally {
   backend.closeAllConnections();

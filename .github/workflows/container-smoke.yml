@@ -63,6 +63,7 @@ jobs:
             --ulimit nofile=4096:4096 --ulimit fsize=134217728:134217728 \
             --tmpfs /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000,mode=1777 \
             -v "$PWD/.github/scripts/container-smoke/web.mjs:/smoke.mjs:ro" \
+            -v "$PWD/.github/scripts/container-smoke/access-log.mjs:/access-log.mjs:ro" \
             --entrypoint /usr/bin/env smoke-web -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
             HOME=/tmp/freehire-web/home PORT=3000 API_INTERNAL_URL=http://127.0.0.1:18080 \
             PROTOCOL_HEADER=x-forwarded-proto HOST_HEADER=x-forwarded-host \
@@ -77,6 +78,10 @@ jobs:
             sleep 1
           done
           timeout 90 docker exec smoke-web /usr/bin/env -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin node /smoke.mjs
+          # Inspect actual container output without exposing runner paths or credentials to it.
+          # The verifier runs inside the same isolated image and prints only a pass/fail result.
+          docker logs smoke-web 2>&1 | timeout 10 docker exec -i smoke-web /usr/bin/env -i \
+            PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin node /access-log.mjs
 
       - name: Test Scrapling runtime in isolation
         if: matrix.image == 'scrapling'
