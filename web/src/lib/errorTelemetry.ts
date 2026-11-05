@@ -122,7 +122,7 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         // Preserve a sanitized local copy before delivery bounds can drop an event.
         if (options.logToConsole) {
           try {
-            const where = route ? ` [${[method, route].filter(Boolean).join(" ")}]` : "";
+            const where = method || route ? ` [${[method, route].filter(Boolean).join(" ")}]` : "";
             console.error(`${stack || `${sanitize(type, 128)}: ${message}`}${where}`);
           } catch {
             /* Continue exporting if local logging fails. */
