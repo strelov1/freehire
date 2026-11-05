@@ -70,7 +70,7 @@ func (f *assistantFilterArgs) UnmarshalJSON(data []byte) error {
 			}
 			list = []string{one}
 		} else if err := json.Unmarshal(value, &list); err != nil {
-			return fmt.Errorf("filter %q: give a list of values from the facets tool", name)
+			return fmt.Errorf("filter %q: give a string or a list of strings from the facets tool, got %s", name, value)
 		}
 		out[name] = list
 	}

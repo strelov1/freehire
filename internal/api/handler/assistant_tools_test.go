@@ -165,13 +165,15 @@ func TestSearchJobsToolReadsABareStringFilterAsOneValue(t *testing.T) {
 		`{"filters":{"work_mode":"remote","seniority":["senior"],"regions":null}}`)); err != nil {
 		t.Fatalf("search_jobs: %v", err)
 	}
-	if s.got.Filter == nil || !strings.Contains(fmt.Sprint(s.got.Filter), "remote") {
-		t.Errorf("filter = %v, want work_mode remote applied", s.got.Filter)
+	if got := fmt.Sprint(s.got.Filter); !strings.Contains(got, "remote") || !strings.Contains(got, "senior") {
+		t.Errorf("filter = %v, want both work_mode remote and seniority senior applied", s.got.Filter)
 	}
 
-	_, err := tool.Run(context.Background(), 3, json.RawMessage(`{"filters":{"work_mode":42}}`))
-	if err == nil || !strings.Contains(err.Error(), "work_mode") {
-		t.Errorf("error = %v, want a non-string, non-list value refused by name", err)
+	for _, bad := range []string{`42`, `["remote",42]`} {
+		_, err := tool.Run(context.Background(), 3, json.RawMessage(`{"filters":{"work_mode":`+bad+`}}`))
+		if err == nil || !strings.Contains(err.Error(), "work_mode") || !strings.Contains(err.Error(), bad) {
+			t.Errorf("work_mode %s: error = %v, want it refused naming the filter and the value sent", bad, err)
+		}
 	}
 }
 
