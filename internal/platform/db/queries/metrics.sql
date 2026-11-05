@@ -370,6 +370,40 @@ WHERE s.active
 GROUP BY 1
 ORDER BY 1 DESC;
 
+-- name: NotifyDigestVolumeMetrics :one
+-- How many subscription digests reached people in the last 24 hours, and how hard the
+-- busiest recipients were hit. The backlog above says whether digests go OUT; this says
+-- whether too MANY do, which nothing measured until a user complained (2026-11-05): a
+-- server-side rewrite of 578 profile alerts widened them, and one person got 43 digests in
+-- a day. The 24 in users_over_daily_cap is the per-subscription ceiling of the hourly
+-- default; a user above it is getting more than one subscription's worth.
+--
+-- profile_alerts_rewritten_1h counts profile-derived saved searches UPDATED in the last
+-- hour that existed before it — a creation is not a rewrite, so onboarding does not
+-- read as one. updated_at also moves on a rename, which this cannot tell apart; a
+-- profile alert is named "My profile" and almost never renamed, so the count is the
+-- query rewrites in practice. A user edits one at a time; hundreds in an hour is a mass
+-- rewrite, the step that started the 2026-11-04 flood.
+--
+-- Per user, not per subscription or channel: the complaint is about one inbox. Measured on
+-- prod 2026-11-05 (16k digests, 1.5k recipients): 25ms warm, on
+-- user_notifications_user_id_created_at_idx.
+WITH per_user AS (
+    SELECT user_id, count(*) AS n
+    FROM user_notifications
+    WHERE kind = 'subscription_digest' AND created_at > now() - interval '24 hours'
+    GROUP BY user_id
+)
+SELECT
+    COALESCE(sum(n), 0)::bigint AS digests,
+    count(*)::bigint AS recipients,
+    COALESCE(max(n), 0)::bigint AS max_per_user,
+    (count(*) FILTER (WHERE n > 24))::bigint AS users_over_daily_cap,
+    (SELECT count(*) FROM saved_searches
+     WHERE derived_from_profile AND updated_at > now() - interval '1 hour'
+       AND created_at <= now() - interval '1 hour')::bigint AS profile_alerts_rewritten_1h
+FROM per_user;
+
 -- name: IngestDuplicationMetrics :many
 -- How many rows each source has just written, and how many DISTINCT postings those rows
 -- stand for. The gap between the two is the signal: one posting stored under many boards.

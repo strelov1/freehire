@@ -8,6 +8,8 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
+
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // fullSnapshot is a populated collection pass, deliberately using distinct numbers per
@@ -41,6 +43,9 @@ func fullSnapshot() snapshot {
 		// 72h freshness window, which is why the two are published apart.
 		notifyDeliverable:   notifyBacklog{pendingSubscriptions: 12, oldestAgeSeconds: 184.25},
 		notifyUndeliverable: notifyBacklog{pendingSubscriptions: 48, oldestAgeSeconds: 259053.5},
+		// The 2026-11-04 shape: a mass rewrite of profile alerts, then one inbox far over
+		// the hourly ceiling.
+		notifyVolume: db.NotifyDigestVolumeMetricsRow{Digests: 32025, Recipients: 1605, MaxPerUser: 140, UsersOverDailyCap: 15, ProfileAlertsRewritten1h: 578},
 	}
 }
 
@@ -79,6 +84,21 @@ freehire_notify_pending_subscriptions{deliverable="false"} 48
 # TYPE freehire_notify_oldest_pending_age_seconds gauge
 freehire_notify_oldest_pending_age_seconds{deliverable="true"} 184.250
 freehire_notify_oldest_pending_age_seconds{deliverable="false"} 259053.500
+# HELP freehire_notify_digests_24h Subscription digests delivered in the last 24 hours.
+# TYPE freehire_notify_digests_24h gauge
+freehire_notify_digests_24h 32025
+# HELP freehire_notify_digest_recipients_24h Users who received at least one subscription digest in the last 24 hours.
+# TYPE freehire_notify_digest_recipients_24h gauge
+freehire_notify_digest_recipients_24h 1605
+# HELP freehire_notify_digests_max_per_user_24h Most subscription digests one user received in the last 24 hours.
+# TYPE freehire_notify_digests_max_per_user_24h gauge
+freehire_notify_digests_max_per_user_24h 140
+# HELP freehire_notify_users_over_daily_cap_24h Users who received more than 24 subscription digests in the last 24 hours.
+# TYPE freehire_notify_users_over_daily_cap_24h gauge
+freehire_notify_users_over_daily_cap_24h 15
+# HELP freehire_notify_profile_alerts_rewritten_1h Profile-derived saved searches created earlier and updated in the last hour.
+# TYPE freehire_notify_profile_alerts_rewritten_1h gauge
+freehire_notify_profile_alerts_rewritten_1h 578
 # HELP freehire_boards_total Ingest boards by health state.
 # TYPE freehire_boards_total gauge
 freehire_boards_total{state="healthy"} 74894
@@ -207,6 +227,11 @@ func TestRenderIsValidPrometheusTextFormat(t *testing.T) {
 		"freehire_provider_boards":                         8,
 		"freehire_notify_pending_subscriptions":            2,
 		"freehire_notify_oldest_pending_age_seconds":       2,
+		"freehire_notify_digests_24h":                      1,
+		"freehire_notify_digest_recipients_24h":            1,
+		"freehire_notify_digests_max_per_user_24h":         1,
+		"freehire_notify_users_over_daily_cap_24h":         1,
+		"freehire_notify_profile_alerts_rewritten_1h":      1,
 		"freehire_employment_boilerplate":                  4,
 		"freehire_employment_boilerplate_sample_size":      1,
 		"freehire_employment_boilerplate_truncated":        1,

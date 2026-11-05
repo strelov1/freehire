@@ -30,6 +30,7 @@ type metricsQueries interface {
 	NewestOpenJobCreatedAt(context.Context) (pgtype.Timestamptz, error)
 	ProviderIngestHealth(context.Context) ([]db.ProviderIngestHealthRow, error)
 	NotifyBacklogMetrics(context.Context) ([]db.NotifyBacklogMetricsRow, error)
+	NotifyDigestVolumeMetrics(context.Context) (db.NotifyDigestVolumeMetricsRow, error)
 	IngestDuplicationMetrics(context.Context) ([]db.IngestDuplicationMetricsRow, error)
 	SourceQualityMetrics(context.Context) ([]db.SourceQualityMetricsRow, error)
 	EmploymentBoilerplateCandidates(context.Context) ([]db.EmploymentBoilerplateCandidatesRow, error)
@@ -108,6 +109,11 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		} else {
 			notifyUndeliverable = b
 		}
+	}
+
+	notifyVolume, err := q.NotifyDigestVolumeMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("notify digest volume metrics: %w", err)
 	}
 
 	health, err := q.ProviderIngestHealth(ctx)
@@ -203,6 +209,7 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		},
 		notifyDeliverable:   notifyDeliverable,
 		notifyUndeliverable: notifyUndeliverable,
+		notifyVolume:        notifyVolume,
 		newestJob:           newestJob,
 		providers:           providers,
 		ingest:              ingest,
