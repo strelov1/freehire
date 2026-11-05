@@ -68,8 +68,6 @@
     stagedCounts,
     extra,
     matchAvailable = false,
-    minMatch = null,
-    onMinMatchChange,
   }: {
     store?: FilterStore;
     seed?: JobFilters;
@@ -99,13 +97,10 @@
     // Extra content rendered above the pane, handed the staged store so it can edit it
     // (e.g. the profile editor's "import skills from CV").
     extra?: Snippet<[StagedFilters]>;
-    // The "Minimum skill match" slider atop the Skills pane: a client-only threshold
-    // over the viewer's own profile skills, not a JobFilters facet (the match percent
-    // depends on who's looking, so there's nothing to put in JobFilters/the URL — see
-    // JobsView's `minMatch`). Hidden unless the caller has a real percent to filter on.
+    // The "Minimum skill match" slider atop the Skills pane: a threshold over the
+    // viewer's own profile skills (`minSkillMatch` in JobFilters, applied in the browser by
+    // JobsView). Hidden unless the caller has a real percent to filter on.
     matchAvailable?: boolean;
-    minMatch?: number | null;
-    onMinMatchChange?: (value: number | null) => void;
   } = $props();
 
   const staged = new StagedFilters();
@@ -216,7 +211,7 @@
       );
     // The Minimum skill match threshold lives at the top of the Skills pane, so it
     // counts toward that tab's badge alongside the skills facet selections.
-    if (e.key === 'skills') return selCount(f, 'skills') + (matchAvailable && draftMinMatch != null ? 1 : 0);
+    if (e.key === 'skills') return selCount(f, 'skills') + (matchAvailable && f.minSkillMatch != null ? 1 : 0);
     if (e.key === 'company_slug') return selCount(f, 'company_slug') + (showFormerEmployers && f.formerEmployers ? 1 : 0);
     if (e.key === 'source') return selCount(f, 'source_type') + selCount(f, 'source');
     return selCount(f, e.facetParam ?? e.key);
@@ -231,19 +226,8 @@
     return d && plain ? { ...d, excludable: false, hasAndOr: false } : d;
   }
 
-  // The minimum skill match is staged like everything else in this modal: dragging the
-  // slider moves this draft, Apply hands it to the caller, closing without Apply drops
-  // it, and Clear all resets it. It lives here rather than in StagedFilters because it
-  // is not a JobFilters field (see the `minMatch` prop).
-  let draftMinMatch = $state<number | null>(null);
-
   function seedStaged() {
     staged.seed(seed ?? store?.value ?? emptyFilters());
-    draftMinMatch = minMatch;
-  }
-
-  function clearDrafts() {
-    draftMinMatch = null;
   }
 
   async function apply() {
@@ -252,7 +236,6 @@
     } else if (store) {
       staged.commit(store);
     }
-    if (matchAvailable && draftMinMatch !== minMatch) onMinMatchChange?.(draftMinMatch);
   }
 
   const applyDisabled = $derived(canApply ? !canApply(staged.value) : false);
@@ -469,7 +452,6 @@
   seed={seedStaged}
   initialKey={RAIL[0]?.key}
   {apply}
-  onClear={clearDrafts}
   {applyDisabled}
   {applyLabel}
   {previewCount}
@@ -621,22 +603,21 @@
       </div>
     {/if}
     {#if entry.key === 'skills' && matchAvailable}
-      <!-- Client-only post-filter (see `minMatch`/`onMinMatchChange` props), staged in
-           `draftMinMatch` until Apply like every other control here. It narrows the
-           fetched page in memory, so the footer's server-side count does not move with it. -->
+      <!-- Client-only post-filter (`minSkillMatch`): it narrows the fetched page in memory,
+           so the footer's server-side count does not move with it. -->
       <div class="mb-2 flex items-center justify-between">
         <h3 class="text-sm font-semibold tracking-tight">Minimum skill match</h3>
-        <span class="text-xs font-medium text-muted-foreground">{draftMinMatch != null ? `${draftMinMatch}%+` : 'Any'}</span>
+        <span class="text-xs font-medium text-muted-foreground">{staged.value.minSkillMatch != null ? `${staged.value.minSkillMatch}%+` : 'Any'}</span>
       </div>
       <input
         type="range"
         min="0"
         max="100"
         step="5"
-        value={draftMinMatch ?? 0}
-        oninput={(e) => (draftMinMatch = Number(e.currentTarget.value) || null)}
+        value={staged.value.minSkillMatch ?? 0}
+        oninput={(e) => staged.setMinSkillMatch(Number(e.currentTarget.value) || null)}
         aria-label="Minimum skill match"
-        aria-valuetext={draftMinMatch != null ? `${draftMinMatch}% or more` : 'Any'}
+        aria-valuetext={staged.value.minSkillMatch != null ? `${staged.value.minSkillMatch}% or more` : 'Any'}
         class="mb-6 h-6 w-full accent-primary"
       />
     {/if}

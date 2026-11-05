@@ -211,9 +211,16 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   measure it. **Carry-over sends are the one seam**: a message released earlier (a
   failed send, a relinked chat) can go out on a pass that did not search, and what was
   indexed since the last search then waits for the next due pass.
+- **A saved search's minimum skill match is applied per subscriber, after the search.**
+  `min_skill_match` is a web filter the search never reads: the percent depends on the reader, so
+  `Runner.match` computes it per (hit, subscription) pair against the subscriber's live
+  `user_profiles.skills`, with the same formula as the job list (`computeClientMatch`). It can
+  only thin the pages the search read: on a broad query, jobs clearing the threshold but beyond
+  those pages are not reached. A query carrying only this param does not narrow the catalogue, so
+  a subscription to it is refused like any other unfiltered search (`search.Narrows`).
 - **Avoid-skills is enforced as a per-subscriber post-filter, not folded into the shared search.**
   `Runner.match` batch-fetches every active subscriber's live `user_profiles.excluded_skills` once
-  per pass (`Store.ListUserProfilesExcludedSkills`) and `matchQuery` skips a `(hit, subscription)`
+  per pass (`Store.ListUserProfileSkillSets`) and `matchQuery` skips a `(hit, subscription)`
   pair whose job carries a skill that subscriber currently avoids — evaluated against the *live*
   preference, not whatever `skills_exclude` (if any) got frozen into the saved search's own query
   string at creation time. Do not move this into the Meilisearch `Filter`: that would make the

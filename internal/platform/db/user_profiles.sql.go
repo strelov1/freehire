@@ -53,29 +53,30 @@ func (q *Queries) GetUserProfile(ctx context.Context, userID int64) (UserProfile
 	return i, err
 }
 
-const listUserProfilesExcludedSkills = `-- name: ListUserProfilesExcludedSkills :many
-SELECT user_id, excluded_skills FROM user_profiles
+const listUserProfileSkillSets = `-- name: ListUserProfileSkillSets :many
+SELECT user_id, skills, excluded_skills FROM user_profiles
 WHERE user_id = ANY($1::bigint[])
 `
 
-type ListUserProfilesExcludedSkillsRow struct {
+type ListUserProfileSkillSetsRow struct {
 	UserID         int64    `json:"user_id"`
+	Skills         []string `json:"skills"`
 	ExcludedSkills []string `json:"excluded_skills"`
 }
 
-// excluded_skills for a batch of users, one round trip regardless of batch size. A user_id
-// with no profile row simply produces no row here; the caller treats absence as an empty
-// exclude set.
-func (q *Queries) ListUserProfilesExcludedSkills(ctx context.Context, userIds []int64) ([]ListUserProfilesExcludedSkillsRow, error) {
-	rows, err := q.db.Query(ctx, listUserProfilesExcludedSkills, userIds)
+// skills and excluded_skills for a batch of users, one round trip regardless of batch size.
+// A user_id with no profile row simply produces no row here; the caller treats absence as
+// empty sets.
+func (q *Queries) ListUserProfileSkillSets(ctx context.Context, userIds []int64) ([]ListUserProfileSkillSetsRow, error) {
+	rows, err := q.db.Query(ctx, listUserProfileSkillSets, userIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListUserProfilesExcludedSkillsRow{}
+	items := []ListUserProfileSkillSetsRow{}
 	for rows.Next() {
-		var i ListUserProfilesExcludedSkillsRow
-		if err := rows.Scan(&i.UserID, &i.ExcludedSkills); err != nil {
+		var i ListUserProfileSkillSetsRow
+		if err := rows.Scan(&i.UserID, &i.Skills, &i.ExcludedSkills); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -51,9 +51,9 @@ RETURNING *;
 DELETE FROM user_profiles
 WHERE user_id = $1;
 
--- name: ListUserProfilesExcludedSkills :many
--- excluded_skills for a batch of users, one round trip regardless of batch size. A user_id
--- with no profile row simply produces no row here; the caller treats absence as an empty
--- exclude set.
-SELECT user_id, excluded_skills FROM user_profiles
+-- name: ListUserProfileSkillSets :many
+-- skills and excluded_skills for a batch of users, one round trip regardless of batch size.
+-- A user_id with no profile row simply produces no row here; the caller treats absence as
+-- empty sets.
+SELECT user_id, skills, excluded_skills FROM user_profiles
 WHERE user_id = ANY(sqlc.arg(user_ids)::bigint[]);

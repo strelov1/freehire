@@ -198,12 +198,9 @@
   );
 
   // Minimum profile-match slider: a client-only post-filter over the already-fetched
-  // page, not a search facet — the match percent depends on the viewer's own profile
-  // skills, which the backend/index never sees, so there's nothing to send server-side
-  // (unlike salary/freshness, which narrow the actual query). Local and URL-free: a
-  // shared link's match filter would mean nothing to whoever opens it. `null` means
-  // "no threshold" (the slider's own default position doubles as "off").
-  let minMatch = $state<number | null>(null);
+  // page — the match percent depends on the viewer's own profile skills, which the
+  // backend/index never sees. The threshold itself is a JobFilters field so a saved
+  // search carries it; `minMatch` below is what it means for THIS viewer.
 
   // Only a signed-in user with skills on their profile has a real match percent per
   // card (see resolveMatchState's `ready` state in JobRow) — everyone else sees a
@@ -216,11 +213,10 @@
   // explain an empty list.
   const formerEmployersApplied = $derived(standalone && isAuthenticated() && filters.applied.formerEmployers);
   const matchFilterAvailable = $derived(isAuthenticated() && profileStore.loaded && profileSkills.length > 0);
-  // Drop a stale threshold the moment the slider would disappear (sign-out, profile
-  // cleared) so it can't silently keep hiding jobs with no control left to reset it.
-  $effect(() => {
-    if (!matchFilterAvailable) minMatch = null;
-  });
+  // Ignored the moment the slider would disappear (sign-out, profile cleared, or a
+  // shared link opened by someone without a profile) so it can't silently keep hiding
+  // jobs with no control left to reset it.
+  const minMatch = $derived(matchFilterAvailable ? filters.applied.minSkillMatch : null);
 
   // The orderings this caller can choose between, and which one the control shows —
   // both pure, both in facetModel so they can be tested (see sortOptionsFor).
@@ -246,6 +242,8 @@
   const matchNeedsSkills = $derived(
     skillsSettled && matchSortNeedsSkills(filters.value, matchFilterAvailable),
   );
+
+  const matchSortHint = $derived(minMatch != null && selectedSort !== 'match');
 
   // Which date the above-list select bounds. Not $derived: the flag is a runtime env
   // value read once at module load, and it cannot change while the page is mounted.
@@ -823,7 +821,7 @@
     <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-4 overflow-y-auto">
       {@render sidebarTop?.()}
       <div class="rounded-xl border border-border bg-card p-4">
-        <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} />
+        <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} matchAvailable={matchFilterAvailable} />
       </div>
     </div>
   </aside>
@@ -862,6 +860,14 @@
          to newest rather than refusing it, so there ARE jobs below — taking them away
          would punish someone for pressing a button we offered them. What was missing
          was only the explanation. -->
+    {#if matchSortHint}
+      <!-- The threshold trims each fetched page, so under any other ordering the jobs that
+           clear it are scattered across pages. Best match brings them to the front. -->
+      <div role="status" class="my-4 flex flex-col gap-3 rounded-xl border border-border bg-muted/40 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <p class="text-muted-foreground">Your {minMatch}%+ skill match filters one page at a time. Sort by best match to see those jobs first.</p>
+        <Button variant="secondary" size="sm" onclick={() => filters.setSort('match')} class="shrink-0">Sort by best match</Button>
+      </div>
+    {/if}
     {#if matchNeedsSkills}
       <!-- `role="status"` because this appears in response to changing the Sort control,
            and a screen-reader user who just did that gets no other signal that the
@@ -1019,6 +1025,4 @@
   onClose={() => (modalOpen = false)}
   {stagedCounts}
   matchAvailable={matchFilterAvailable}
-  {minMatch}
-  onMinMatchChange={(v) => (minMatch = v)}
 />

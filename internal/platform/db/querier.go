@@ -5406,10 +5406,10 @@ type Querier interface {
 	// The caller's own notifications, newest first, standard offset/limit paging
 	// (matching every other /me/* list endpoint in this codebase).
 	ListUserNotifications(ctx context.Context, arg ListUserNotificationsParams) ([]ListUserNotificationsRow, error)
-	// excluded_skills for a batch of users, one round trip regardless of batch size. A user_id
-	// with no profile row simply produces no row here; the caller treats absence as an empty
-	// exclude set.
-	ListUserProfilesExcludedSkills(ctx context.Context, userIds []int64) ([]ListUserProfilesExcludedSkillsRow, error)
+	// skills and excluded_skills for a batch of users, one round trip regardless of batch size.
+	// A user_id with no profile row simply produces no row here; the caller treats absence as
+	// empty sets.
+	ListUserProfileSkillSets(ctx context.Context, userIds []int64) ([]ListUserProfileSkillSetsRow, error)
 	// Every public_slug the user has interacted with (viewed_at is always set, so
 	// any interaction row counts as viewed). Used by the SPA to dim already-seen
 	// cards in the browse list without authenticating the public job-read path.

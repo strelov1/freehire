@@ -208,10 +208,10 @@ type Searcher interface {
 // Store is the persistence the engine needs. *db.Queries satisfies it directly.
 type Store interface {
 	ListActiveSubscriptions(ctx context.Context) ([]db.ListActiveSubscriptionsRow, error)
-	// ListUserProfilesExcludedSkills returns each given user's avoid-skills preference, one
-	// round trip regardless of batch size. A user id with no profile row simply has no row in
-	// the result; the caller treats absence as an empty exclude set.
-	ListUserProfilesExcludedSkills(ctx context.Context, userIDs []int64) ([]db.ListUserProfilesExcludedSkillsRow, error)
+	// ListUserProfileSkillSets returns each given user's held and avoided skills, one round
+	// trip regardless of batch size. A user id with no profile row simply has no row in the
+	// result; the caller treats absence as empty sets.
+	ListUserProfileSkillSets(ctx context.Context, userIDs []int64) ([]db.ListUserProfileSkillSetsRow, error)
 	RecordSubscriptionMatches(ctx context.Context, arg db.RecordSubscriptionMatchesParams) (int64, error)
 	// MarkSubscriptionsSearched stamps when the matching stage last searched these
 	// subscriptions; searchDue and matchQuery's paging read it back.
