@@ -229,12 +229,6 @@ type Settings struct {
 	// anonymous is worse than no count at all.
 	TracerLinkSalt string
 
-	// PostHog backs MCP analytics for the MCP servers (one $mcp_tool_call per tool call).
-	// Optional: an empty PostHogProjectToken disables it entirely. PostHogHost is the
-	// ingestion host of the project's region (https://eu.i.posthog.com for EU cloud).
-	PostHogProjectToken string
-	PostHogHost         string
-
 	// Telegram bot for outbound notifications (filter subscriptions). Optional:
 	// an empty TelegramBotToken disables the feature — the linking endpoints and
 	// webhook are inert and the notify worker has nothing to deliver through.
@@ -487,9 +481,6 @@ func Load() Settings {
 			MaxSignalQuoteRunes:   envInt("MATCH_ANALYSIS_MAX_SIGNAL_QUOTE_RUNES", 0),
 			MaxSignalInsightRunes: envInt("MATCH_ANALYSIS_MAX_SIGNAL_INSIGHT_RUNES", 0),
 		},
-
-		PostHogProjectToken: os.Getenv("POSTHOG_PROJECT_TOKEN"),
-		PostHogHost:         env("POSTHOG_HOST", "https://eu.i.posthog.com"),
 
 		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),

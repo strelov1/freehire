@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -77,6 +78,59 @@ func switchHeld(ctx context.Context, redisURL, job string) (bool, error) {
 
 	held, err := client.Exists(ctx, pauseAllKey, pauseKeyPrefix+job).Result()
 	return held > 0, err
+}
+
+// SearchDrainJob is the pause key's suffix for cmd/search-drain, named here because the
+// rebuild that holds it is a different binary.
+const SearchDrainJob = "search-drain"
+
+// HoldPause holds another worker back for as long as the caller needs, through the same
+// switch an operator uses, until the returned release is called. The key carries a TTL
+// that is refreshed while the caller runs, so a holder that dies cannot leave the worker
+// off: the drain was once forgotten that way for hours (2026-08-06, 2026-08-15). It only
+// stops new work; a worker in flight has to look for itself (see Paused).
+func HoldPause(ctx context.Context, redisURL, job string, ttl time.Duration) (release func(), err error) {
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return nil, err
+	}
+	client := redis.NewClient(opts)
+	key := pauseKeyPrefix + job
+	if err := client.Set(ctx, key, "held by "+workerJob(), ttl).Err(); err != nil {
+		_ = client.Close()
+		return nil, err
+	}
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(ttl / 3)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				if err := client.Expire(ctx, key, ttl).Err(); err != nil {
+					log.Printf("worker: refreshing the %s pause: %v", job, err)
+				}
+			}
+		}
+	}()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			close(done)
+			<-stopped
+			// A cancelled run still lifts the hold; it must not wait out the TTL.
+			cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			if err := client.Del(cctx, key).Err(); err != nil {
+				log.Printf("worker: lifting the %s pause, it expires on its own: %v", job, err)
+			}
+			_ = client.Close()
+		})
+	}, nil
 }
 
 // workerJob names the running binary, which is both the per-worker pause key's

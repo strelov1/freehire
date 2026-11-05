@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
+  import { MCP_PATH } from '#lib/appLinks.js';
   import { CLI_INSTALL, CLI_REPO, MCP_REPO } from '#lib/cliLinks.js';
   import { announce } from '#lib/announce.svelte.js';
   import { Button, SectionLabel, TabStrip, tabStripId } from '#lib/ui/index.js';
@@ -152,22 +153,8 @@
   }
 }`;
 
-  // The two hosted MCP servers, for hosts that take a URL instead of a command
-  // (Claude.ai and Claude Desktop connectors, ChatGPT). They are separate on purpose:
-  // a host only offers sign-in when the server answers 401, so the anonymous one can
-  // never lead to the account one.
-  const remoteServers = $derived([
-    {
-      url: `${page.url.origin}/api/v1/mcp/account`,
-      label: 'Your account',
-      desc: 'Sign in with freehire when the host asks. Search jobs, read your profile, check your skills against the market, and save, mark applied or move the jobs on your board.',
-    },
-    {
-      url: `${page.url.origin}/api/v1/mcp`,
-      label: 'Anonymous, read-only',
-      desc: 'No sign-in. Search jobs and employers, read postings, salary ranges and market breakdowns. Cannot save or change anything.',
-    },
-  ]);
+  const mcpUrl = $derived(`${page.url.origin}${MCP_PATH}`);
+
 </script>
 
 {#snippet copyButton(text: string, label: string)}
@@ -369,20 +356,21 @@
 
     <h3 class="mt-12 text-lg font-semibold tracking-tight">Or connect by URL — nothing to install</h3>
     <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      In Claude, add a custom connector; in ChatGPT, add an app. Paste one of these addresses.
+      In Claude, add a custom connector; in ChatGPT, add a custom MCP server. Use the same address for public search
+      and OAuth account access.
     </p>
-    <dl class="mt-6 grid gap-4 lg:grid-cols-2">
-      {#each remoteServers as server (server.url)}
-        <div class="rounded-xl border border-border bg-secondary/40 p-4">
-          <dt class="text-sm font-semibold text-foreground">{server.label}</dt>
-          <dd class="mt-3 flex items-center gap-3 rounded-lg border border-border bg-secondary/60 px-3 py-2">
-            <code class="min-w-0 flex-1 overflow-x-auto font-mono text-sm">{server.url}</code>
-            {@render copyButton(server.url, `${server.label} MCP URL`)}
-          </dd>
-          <dd class="mt-3 text-sm leading-relaxed text-muted-foreground">{server.desc}</dd>
-        </div>
-      {/each}
-    </dl>
+    <div class="mt-6 max-w-2xl rounded-xl border border-border bg-secondary/40 p-4">
+      <div class="flex items-center gap-3 rounded-lg border border-border bg-secondary/60 px-3 py-2">
+        <code class="min-w-0 flex-1 overflow-x-auto font-mono text-sm">{mcpUrl}</code>
+        {@render copyButton(mcpUrl, 'MCP URL')}
+      </div>
+      <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
+        Search jobs, employers and market data without an account. Sign in through your assistant to read your profile,
+        save jobs, update tracking and manage alerts. Hosted MCP uses OAuth, with no API key to paste.
+        The <a href={resolve('/mcp')} class="font-medium text-foreground underline-offset-4 hover:underline">MCP setup guide</a>
+        includes the sign-in steps for each assistant.
+      </p>
+    </div>
   </section>
 
   <!-- For AI agents — the task-shaped skills and their slash commands. -->

@@ -2141,6 +2141,7 @@ export function createApi(
     excludedSources: string[],
     excludedCompanies: string[],
     location: LocationPreferences | null,
+    jobLanguages: string[] = [],
   ): Promise<UserProfile> {
     return requestData<UserProfile>(
       '/api/v1/me/profile',
@@ -2152,6 +2153,7 @@ export function createApi(
         excluded_sources: excludedSources,
         excluded_companies: excludedCompanies,
         location_preferences: location,
+        job_languages: jobLanguages,
       }),
     );
   }

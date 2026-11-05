@@ -50,7 +50,8 @@ func newAuthIntrospection(store authIntrospectionStore, issuer *auth.Issuer, sec
 		if subtle.ConstantTimeCompare([]byte(c.Get(authIntrospectionSecretHeader)), []byte(secret)) != 1 {
 			return fiber.ErrForbidden
 		}
-		ctx, cancel := context.WithTimeout(c.Context(), 150*time.Millisecond)
+		// 400 ms: at 150 ms a loaded host failed ~2 real lookups a minute (503 at the gateway).
+		ctx, cancel := context.WithTimeout(c.Context(), 400*time.Millisecond)
 		defer cancel()
 		if token := c.Cookies(auth.CookieName); token != "" {
 			identity, err := introspectSession(ctx, store, issuer, token)

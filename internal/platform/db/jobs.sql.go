@@ -1292,23 +1292,26 @@ WITH RECURSIVE member AS (
     WHERE c.closed_at IS NULL AND m.depth < 8
 )
 SELECT
-    m.owner_id,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities,
-    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'm' AND t.val <> '')::text[] AS metros
-FROM member m
-JOIN jobs o ON o.id = m.member_id
-LEFT JOIN LATERAL (
-    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
-    UNION ALL
-    SELECT 'r', e FROM unnest(o.regions) AS e
-    UNION ALL
-    SELECT 'y', e FROM unnest(o.cities) AS e
-    UNION ALL
-    SELECT 'm', e FROM unnest(o.metros) AS e
-) t ON true
-GROUP BY m.owner_id
+    g.owner_id,
+    array_agg(g.val ORDER BY g.val) FILTER (WHERE g.kind = 'c' AND g.val <> '')::text[] AS countries,
+    array_agg(g.val ORDER BY g.val) FILTER (WHERE g.kind = 'r' AND g.val <> '')::text[] AS regions,
+    array_agg(g.val ORDER BY g.val) FILTER (WHERE g.kind = 'y' AND g.val <> '')::text[] AS cities,
+    array_agg(g.val ORDER BY g.val) FILTER (WHERE g.kind = 'm' AND g.val <> '')::text[] AS metros
+FROM (
+    SELECT DISTINCT m.owner_id, t.kind, t.val
+    FROM member m
+    JOIN jobs o ON o.id = m.member_id
+    LEFT JOIN LATERAL (
+        SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
+        UNION ALL
+        SELECT 'r', e FROM unnest(o.regions) AS e
+        UNION ALL
+        SELECT 'y', e FROM unnest(o.cities) AS e
+        UNION ALL
+        SELECT 'm', e FROM unnest(o.metros) AS e
+    ) t ON true
+) g
+GROUP BY g.owner_id
 `
 
 type DuplicateClosureGeoAllRow struct {
@@ -1356,6 +1359,11 @@ type DuplicateClosureGeoAllRow struct {
 // and leaving it out is what keeps the rebuild's lookup map to the rows that need it. The
 // LATERAL tags each member's countries/regions/cities into one unnested stream (no cartesian
 // across the three arrays, no repeat self-join), and blanks are dropped by the FILTER.
+//
+// The DISTINCT runs in a subquery, ahead of the aggregate, for what it costs: array_agg(DISTINCT)
+// sorts every unnested value, about 160M rows on prod against a few million distinct ones, and
+// that sort spilled to disk for over four hours of a rebuild (2026-11-05). A hash aggregate over
+// the distinct values does the same work in memory, and the answer is unchanged.
 func (q *Queries) DuplicateClosureGeoAll(ctx context.Context) ([]DuplicateClosureGeoAllRow, error) {
 	rows, err := q.db.Query(ctx, duplicateClosureGeoAll)
 	if err != nil {

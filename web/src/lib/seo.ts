@@ -751,7 +751,7 @@ export function cliApplicationJsonLd(
     '@type': 'SoftwareApplication',
     name: 'freehire CLI',
     description:
-      'A small Go CLI and an MCP server over the freehire job API, so an AI agent or a script can search, open and track jobs without a browser. One API key drives both.',
+      'A small Go CLI and an MCP server over the freehire job API, so an AI agent or a script can search, open and track jobs without a browser. The hosted MCP connection offers public search and OAuth account access.',
     url: `${origin}/cli`,
     applicationCategory: 'DeveloperApplication',
     operatingSystem: 'macOS, Linux',

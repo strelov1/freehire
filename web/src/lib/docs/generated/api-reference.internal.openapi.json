@@ -1160,6 +1160,14 @@
                     "description": "Canonical skill tokens (non-empty).",
                     "example": "[\"go\",\"postgresql\"]"
                   },
+                  "job_languages": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any language.",
+                    "example": "[\"en\",\"ru\"]"
+                  },
                   "location_preferences": {
                     "type": "object",
                     "description": "Optional location block (`work_modes`, `remote`, `base`, `relocation`); omit or null to clear."

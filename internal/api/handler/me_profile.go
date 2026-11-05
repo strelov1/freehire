@@ -76,6 +76,7 @@ type profileResponse struct {
 	Seniorities         []string                    `json:"seniorities"`
 	ExcludedSkills      []string                    `json:"excluded_skills"`
 	ExcludedSources     []string                    `json:"excluded_sources"`
+	JobLanguages        []string                    `json:"job_languages"`
 	ExcludedCompanies   []string                    `json:"excluded_companies"`
 	LocationPreferences json.RawMessage             `json:"location_preferences"`
 	DerivedLocation     *derivedLocation            `json:"derived_location"`
@@ -110,6 +111,7 @@ func toProfileResponse(p userprofile.Profile, cv *resumeextract.Professional, lo
 		ExcludedSkills:      p.ExcludedSkills,
 		ExcludedSources:     p.ExcludedSources,
 		ExcludedCompanies:   p.ExcludedCompanies,
+		JobLanguages:        p.JobLanguages,
 		LocationPreferences: p.LocationPreferences,
 		DerivedLocation:     loc,
 		CV:                  cv,
@@ -182,6 +184,8 @@ func profileError(err error) error {
 		return fiber.NewError(fiber.StatusBadRequest, "too many excluded sources (max 200)")
 	case errors.Is(err, userprofile.ErrTooManyCompanies):
 		return fiber.NewError(fiber.StatusBadRequest, "too many excluded companies (max 200)")
+	case errors.Is(err, userprofile.ErrInvalidJobLanguage):
+		return fiber.NewError(fiber.StatusBadRequest, "job languages must be two-letter language codes (max 200)")
 	case errors.Is(err, userprofile.ErrInvalidSeniority):
 		return fiber.NewError(fiber.StatusBadRequest, "seniority is not a known level")
 	case errors.Is(err, userprofile.ErrInvalidWorkMode):
@@ -210,6 +214,7 @@ type saveProfileRequest struct {
 	Seniorities         []string                         `json:"seniorities"`
 	ExcludedSkills      []string                         `json:"excluded_skills"`
 	ExcludedSources     []string                         `json:"excluded_sources"`
+	JobLanguages        []string                         `json:"job_languages"`
 	ExcludedCompanies   []string                         `json:"excluded_companies"`
 	LocationPreferences *userprofile.LocationPreferences `json:"location_preferences"`
 }
@@ -252,7 +257,7 @@ func (h *profileHandlers) PutProfile(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "specializations and skills must be arrays; use [] for an empty list")
 	}
 
-	profile, err := h.userProfile.Save(c.Context(), userID, in.Specializations, in.Skills, in.Seniorities, in.ExcludedSkills, in.ExcludedSources, in.ExcludedCompanies, in.LocationPreferences)
+	profile, err := h.userProfile.Save(c.Context(), userID, in.Specializations, in.Skills, in.Seniorities, in.ExcludedSkills, in.ExcludedSources, in.ExcludedCompanies, in.LocationPreferences, in.JobLanguages...)
 	if err != nil {
 		return profileError(err)
 	}

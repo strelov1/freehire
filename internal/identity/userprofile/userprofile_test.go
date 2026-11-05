@@ -21,6 +21,7 @@ type upsertArgs struct {
 	Seniorities         []string
 	ExcludedSkills      []string
 	ExcludedSources     []string
+	JobLanguages        []string
 	ExcludedCompanies   []string
 	LocationPreferences json.RawMessage
 }
@@ -64,15 +65,15 @@ func (f *fakeRepo) Get(_ context.Context, userID int64) (userprofile.Profile, er
 	return f.getRet, f.getErr
 }
 
-func (f *fakeRepo) Upsert(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
-	f.upserted = upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, LocationPreferences: locationPreferences}
+func (f *fakeRepo) Upsert(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	f.upserted = upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, JobLanguages: jobLanguages, LocationPreferences: locationPreferences}
 	f.upsertCalled = true
 	return f.upsertRet, f.upsertErr
 }
 
-func (f *fakeRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (userprofile.Profile, error) {
+func (f *fakeRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (userprofile.Profile, error) {
 	f.guardedUpserted = guardedUpsertArgs{
-		upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, LocationPreferences: locationPreferences},
+		upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, JobLanguages: jobLanguages, LocationPreferences: locationPreferences},
 		expectedUpdatedAt,
 	}
 	idx := f.guardedUpsertCalls

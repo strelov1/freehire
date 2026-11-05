@@ -762,6 +762,7 @@ The whole profile is replaced on each save. An unknown specialization (must be a
 | --- | --- | --- | --- |
 | `specializations` | string[] | yes | One or more job categories (max 5). (e.g. `["backend"]`) |
 | `skills` | string[] | yes | Canonical skill tokens (non-empty). (e.g. `["go","postgresql"]`) |
+| `job_languages` | string[] | no | Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any language. (e.g. `["en","ru"]`) |
 | `location_preferences` | object | no | Optional location block (`work_modes`, `remote`, `base`, `relocation`); omit or null to clear. |
 
 ```bash

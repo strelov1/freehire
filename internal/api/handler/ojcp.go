@@ -153,7 +153,11 @@ func (h *ojcpHandlers) OJCPSearchJobs(c *fiber.Ctx) error {
 		}
 		return err
 	}
-	return c.JSON(resp)
+	if err := c.JSON(resp); err != nil {
+		return err
+	}
+	observeOJCPRESTSearch(resp)
+	return nil
 }
 
 // SearchJobs answers `search_jobs` with no transport around it. Both transports call it, so

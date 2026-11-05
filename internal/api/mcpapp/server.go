@@ -108,17 +108,12 @@ func newCatalogueServer(r Reader, origin, instructions, surface string) *mcp.Ser
 				Resources: &mcp.ResourceCapabilities{},
 			},
 		})
-	if surface == "mixed" {
-		instrumentPrivate(server, "freehire")
-	} else {
-		Instrument(server, "freehire", Version)
-	}
-	server.AddReceivingMiddleware(countRejectedToolCalls(surface))
+	ObserveServer(server, surface)
 
 	addPrompts(server)
 	addWidget(server)
 
-	addLoggedToolForSurface(server, surface, &mcp.Tool{
+	AddObservedTool(server, surface, &mcp.Tool{
 		Name:  toolSearchJobs,
 		Title: "Search jobs",
 		Description: "Search freehire's catalogue of IT job postings. Use for any question " +
@@ -137,7 +132,7 @@ func newCatalogueServer(r Reader, origin, instructions, surface string) *mcp.Ser
 		return toolResult(r.SearchJobs(ctx, in))
 	})
 
-	addLoggedToolForSurface(server, surface, &mcp.Tool{
+	AddObservedTool(server, surface, &mcp.Tool{
 		Name:  toolGetJob,
 		Title: "Read one job posting",
 		Description: "Read one posting in full by the slug a search result carries: the whole " +
@@ -150,7 +145,7 @@ func newCatalogueServer(r Reader, origin, instructions, surface string) *mcp.Ser
 		return toolResult(r.JobDetail(ctx, in.Slug))
 	})
 
-	addLoggedToolForSurface(server, surface, &mcp.Tool{
+	AddObservedTool(server, surface, &mcp.Tool{
 		Name:  toolGetCompany,
 		Title: "Read one employer",
 		Description: "Read what freehire holds about one employer by the slug a result " +

@@ -42,8 +42,7 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string, reade
 				Tools:   &mcp.ToolCapabilities{},
 			},
 		})
-	instrumentAccount(server)
-	server.AddReceivingMiddleware(countRejectedToolCalls("account"))
+	ObserveServer(server, "account")
 
 	if reader != nil {
 		registerCatalogueTools(server, reader, "account")

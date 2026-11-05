@@ -29,7 +29,7 @@ func TestUpsertIfUnchanged_GuardsOnUpdatedAt(t *testing.T) {
 	}
 
 	repo := userprofile.NewQueriesRepository(db.New(pool))
-	created, err := repo.Upsert(ctx, userID, []string{"backend"}, []string{"go"}, []string{}, []string{}, []string{}, []string{}, nil)
+	created, err := repo.Upsert(ctx, userID, []string{"backend"}, []string{"go"}, []string{}, []string{}, []string{}, []string{}, []string{"en", "ru"}, nil)
 	if err != nil {
 		t.Fatalf("seed Upsert: %v", err)
 	}
@@ -38,9 +38,12 @@ func TestUpsertIfUnchanged_GuardsOnUpdatedAt(t *testing.T) {
 	}
 
 	// A guarded write against the just-read updated_at must land.
-	updated, err := repo.UpsertIfUnchanged(ctx, userID, []string{"backend"}, []string{"go", "docker"}, []string{}, []string{}, []string{}, []string{}, nil, *created.UpdatedAt)
+	updated, err := repo.UpsertIfUnchanged(ctx, userID, []string{"backend"}, []string{"go", "docker"}, []string{}, []string{}, []string{}, []string{}, []string{"en", "ru"}, nil, *created.UpdatedAt)
 	if err != nil {
 		t.Fatalf("UpsertIfUnchanged against a matching updated_at: %v", err)
+	}
+	if len(updated.JobLanguages) != 2 || updated.JobLanguages[0] != "en" || updated.JobLanguages[1] != "ru" {
+		t.Fatalf("languages did not round-trip: %v", updated.JobLanguages)
 	}
 	if len(updated.Skills) != 2 {
 		t.Errorf("Skills = %v, want [go docker]", updated.Skills)
@@ -48,7 +51,7 @@ func TestUpsertIfUnchanged_GuardsOnUpdatedAt(t *testing.T) {
 
 	// A second guarded write against the now-STALE updated_at (the row moved on the
 	// write above) must be rejected as a conflict, not silently applied.
-	_, err = repo.UpsertIfUnchanged(ctx, userID, []string{"backend"}, []string{"go", "docker", "kubernetes"}, []string{}, []string{}, []string{}, []string{}, nil, *created.UpdatedAt)
+	_, err = repo.UpsertIfUnchanged(ctx, userID, []string{"backend"}, []string{"go", "docker", "kubernetes"}, []string{}, []string{}, []string{}, []string{}, []string{"en", "ru"}, nil, *created.UpdatedAt)
 	if !errors.Is(err, userprofile.ErrConflict) {
 		t.Errorf("UpsertIfUnchanged against a stale updated_at: err=%v, want ErrConflict", err)
 	}
