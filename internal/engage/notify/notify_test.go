@@ -146,6 +146,13 @@ type fakeStore struct {
 	// searched records every MarkSubscriptionsSearched call; the stamp is also
 	// written onto the matching active rows, so a second pass reads it back.
 	searched []db.MarkSubscriptionsSearchedParams
+	// paused records every id DeactivateSubscriptions was handed.
+	paused []int64
+}
+
+func (s *fakeStore) DeactivateSubscriptions(_ context.Context, a db.DeactivateSubscriptionsParams) (int64, error) {
+	s.paused = append(s.paused, a.Ids...)
+	return int64(len(a.Ids)), nil
 }
 
 func (s *fakeStore) MarkSubscriptionsSearched(_ context.Context, a db.MarkSubscriptionsSearchedParams) error {

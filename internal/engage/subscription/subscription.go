@@ -94,6 +94,9 @@ type Repository interface {
 	// HasPushDevice reports whether the account has at least one registered push
 	// device, the precondition for subscribing on the push channel.
 	HasPushDevice(ctx context.Context, userID int64) (bool, error)
+	// Target returns an owner-scoped subscription's channel and saved-search query, so a
+	// resume can re-apply the gates. A missing or non-owned id surfaces as ErrNotFound.
+	Target(ctx context.Context, userID, id int64) (channel, query string, err error)
 	SetActive(ctx context.Context, userID, id int64, active bool) (Subscription, error)
 	Delete(ctx context.Context, userID, id int64) error
 }
@@ -135,6 +138,17 @@ func (s *Service) Create(ctx context.Context, userID, savedSearchID int64, chann
 	if err != nil {
 		return Subscription{}, err
 	}
+	if err := s.admit(ctx, userID, query, channel); err != nil {
+		return Subscription{}, err
+	}
+	return s.repo.Create(ctx, userID, savedSearchID, channel)
+}
+
+// admit applies the gates a subscription must pass to be active: a query the
+// matcher can run and that narrows the catalogue, and a channel that can reach the
+// account. Create and a resume share it, so a paused subscription that could never
+// deliver cannot be switched back on either.
+func (s *Service) admit(ctx context.Context, userID int64, query, channel string) error {
 	// The parse error is dropped exactly as the matcher drops it: url.ParseQuery still
 	// returns every pair it could read, and the question here is what the matcher would
 	// make of this query, not whether it is well-formed. A query nothing survives parses
@@ -143,25 +157,36 @@ func (s *Service) Create(ctx context.Context, userID, savedSearchID int64, chann
 	// A saved search may predate syntax validation. Refuse a new subscription when
 	// the matcher would reject its query rather than promising an alert it cannot send.
 	if _, err := search.ParseQuery(vals.Get("q")); err != nil {
-		return Subscription{}, err
+		return err
 	}
 	if !search.Narrows(vals) {
-		return Subscription{}, ErrUnfilteredSearch
+		return ErrUnfilteredSearch
 	}
 	if channel == notify.ChannelPush {
 		ok, err := s.repo.HasPushDevice(ctx, userID)
 		if err != nil {
-			return Subscription{}, err
+			return err
 		}
 		if !ok {
-			return Subscription{}, ErrNoPushDevice
+			return ErrNoPushDevice
 		}
 	}
-	return s.repo.Create(ctx, userID, savedSearchID, channel)
+	return nil
 }
 
-// SetActive pauses or resumes a subscription, scoped to its owner.
+// SetActive pauses or resumes a subscription, scoped to its owner. A resume passes
+// the same gates as a new subscription: the matching worker pauses one whose query
+// it cannot run, and switching it back on unchanged would only fail every pass again.
 func (s *Service) SetActive(ctx context.Context, userID, id int64, active bool) (Subscription, error) {
+	if active {
+		channel, query, err := s.repo.Target(ctx, userID, id)
+		if err != nil {
+			return Subscription{}, err
+		}
+		if err := s.admit(ctx, userID, query, channel); err != nil {
+			return Subscription{}, err
+		}
+	}
 	return s.repo.SetActive(ctx, userID, id, active)
 }
 

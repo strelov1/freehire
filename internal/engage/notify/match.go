@@ -73,6 +73,8 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 		groups[s.Query] = append(groups[s.Query], s)
 	}
 
+	r.pauseUnrunnable(ctx, groups, stats)
+
 	// Only the groups with a due subscription are searched; the rest wait for a
 	// pass whose result could be sent.
 	for query, gsubs := range groups {
@@ -123,6 +125,36 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 		}
 	}
 	return nil
+}
+
+// pauseUnrunnable pauses every subscription whose saved query the search can no
+// longer parse, and drops its group from this pass. Such a query fails on every pass
+// and never delivers: measured 2026-11-05, one subscription with ten OR alternatives
+// had failed every pass for a week while its owner received nothing. New and resumed
+// subscriptions are refused at the door (internal/engage/subscription), so this
+// catches what predates a rule — a query saved before it existed, or one a tightened
+// rule later invalidates. Paused rather than deleted: the owner can fix the search
+// and resume it. A failed pause is logged and retried next pass; the query is not
+// searched either way, since it would only fail.
+func (r *Runner) pauseUnrunnable(ctx context.Context, groups map[string][]db.ListActiveSubscriptionsRow, stats *Stats) {
+	for query, gsubs := range groups {
+		vals, _ := url.ParseQuery(query)
+		if _, err := search.ParseQuery(vals.Get("q")); err == nil {
+			continue
+		}
+		delete(groups, query)
+		ids := make([]int64, len(gsubs))
+		for i, sub := range gsubs {
+			ids[i] = sub.ID
+		}
+		n, err := r.store.DeactivateSubscriptions(ctx, db.DeactivateSubscriptionsParams{Ids: ids, Query: query})
+		if err != nil {
+			log.Printf("notify: pause %d subscription(s) on unrunnable query %q: %v", len(ids), query, err)
+			continue
+		}
+		log.Printf("notify: paused %d subscription(s) on unrunnable query %q", n, query)
+		stats.Paused += int(n)
+	}
 }
 
 // person is who one delivery message goes to: a user on a channel, or a single
