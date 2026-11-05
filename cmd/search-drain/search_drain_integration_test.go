@@ -599,3 +599,46 @@ func TestIntegration_DuplicateStatusRetainsContentAndRestoresCanonicalJob(t *tes
 		t.Fatal("private duplicate retained in public index")
 	}
 }
+
+// A posting that becomes withheld after it was indexed must leave the index on its next
+// drain, not at a full rebuild that no longer runs on a schedule.
+func TestIntegration_SearchDrainRemovesAJobThatBecameWithheld(t *testing.T) {
+	ctx := context.Background()
+	meiliURL, key := startMeili(t)
+	pool := testdb.Pool(t)
+
+	client := search.NewClient(meiliURL, key)
+	if err := client.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+	runner := searchdrain.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	opts := searchdrain.RunOptions{BatchSize: 500, LeaseSeconds: 180, MaxAttempts: 3}
+
+	shownID := seedJob(t, pool, "shown", "Backend Engineer", "acme", "fp-a", []string{"Berlin"}, nil)
+	goneID := seedJob(t, pool, "gone", "Backend Engineer", "acme", "fp-b", []string{"Paris"}, nil)
+	enqueue(t, pool, shownID)
+	enqueue(t, pool, goneID)
+	if _, err := runner.Run(ctx, opts); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	if found, _ := meiliDoc(t, meiliURL, key, goneID); !found {
+		t.Fatalf("job %d not indexed by the first drain", goneID)
+	}
+
+	// The body disappears: search.Withheld now says no.
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET description = '' WHERE id = $1", goneID); err != nil {
+		t.Fatal(err)
+	}
+	enqueue(t, pool, shownID)
+	enqueue(t, pool, goneID)
+	if stats, err := runner.Run(ctx, opts); err != nil || stats.Failed != 0 {
+		t.Fatalf("second Run: stats=%+v err=%v", stats, err)
+	}
+
+	if found, _ := meiliDoc(t, meiliURL, key, goneID); found {
+		t.Errorf("withheld job %d still indexed after its drain", goneID)
+	}
+	if found, _ := meiliDoc(t, meiliURL, key, shownID); !found {
+		t.Errorf("listable job %d removed along with the withheld one", shownID)
+	}
+}

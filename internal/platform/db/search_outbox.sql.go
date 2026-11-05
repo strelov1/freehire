@@ -198,6 +198,70 @@ func (q *Queries) EnqueueSearchOutbox(ctx context.Context, jobID int64) error {
 	return err
 }
 
+const enqueueSearchTimeCrossings = `-- name: EnqueueSearchTimeCrossings :execrows
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT j.id, COALESCE(j.posted_at, j.created_at)
+FROM jobs j
+CROSS JOIN LATERAL (
+    SELECT ($1::bigint[])[array_position($2::text[], j.source)] AS secs
+) w
+WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
+  AND (
+    EXISTS (
+        SELECT 1 FROM unnest($3::int[]) AS d(days)
+        WHERE j.created_at >  $4::timestamptz - make_interval(days => d.days)
+          AND j.created_at <= $5::timestamptz - make_interval(days => d.days)
+    )
+    OR EXISTS (
+        SELECT 1 FROM unnest($6::int[]) AS d(days)
+        WHERE j.posted_at >  $4::timestamptz - make_interval(days => d.days)
+          AND j.posted_at <= $5::timestamptz - make_interval(days => d.days)
+    )
+    OR (w.secs IS NOT NULL
+        AND j.last_seen_at >  $4::timestamptz - make_interval(secs => w.secs)
+        AND j.last_seen_at <= $5::timestamptz - make_interval(secs => w.secs))
+  )
+ON CONFLICT (job_id) DO UPDATE
+    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
+`
+
+type EnqueueSearchTimeCrossingsParams struct {
+	UnseenSeconds []int64            `json:"unseen_seconds"`
+	Sources       []string           `json:"sources"`
+	AgeDays       []int32            `json:"age_days"`
+	Since         pgtype.Timestamptz `json:"since"`
+	Until         pgtype.Timestamptz `json:"until"`
+	PostedAgeDays []int32            `json:"posted_age_days"`
+}
+
+// Queue the open canonical postings whose search document changed in the window
+// (since, until] through the passage of time alone, with no write to the row:
+//   - their age crossed one of age_days — the reality class turns at fixed ages
+//     (jobreality.AgeCrossingDays) — or their posted_at age crossed one of posted_age_days,
+//     where the fake-freshness flag turns (jobreality.PostedAgeCrossingDays);
+//   - their source's unseen window ran out (search.Withheld), so the drain must take the
+//     document out. sources/unseen_seconds is that per-source map; a source absent from it
+//     is never withheld on this ground.
+//
+// Nothing else would ever queue them, so without this pass they waited for a full rebuild.
+// A posting crosses at created_at + age (or last_seen_at + window), hence the bands below.
+// One sequential pass over the open rows: last_seen_at is deliberately in no index (the
+// liveness touch must stay heap-only), so the caller runs this a few times a day.
+func (q *Queries) EnqueueSearchTimeCrossings(ctx context.Context, arg EnqueueSearchTimeCrossingsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, enqueueSearchTimeCrossings,
+		arg.UnseenSeconds,
+		arg.Sources,
+		arg.AgeDays,
+		arg.Since,
+		arg.Until,
+		arg.PostedAgeDays,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const recordSearchOutboxFailure = `-- name: RecordSearchOutboxFailure :one
 UPDATE search_outbox
 SET attempts   = attempts + 1,

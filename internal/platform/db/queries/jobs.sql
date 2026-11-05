@@ -601,26 +601,47 @@ RETURNING sqlc.embed(jobs),
 -- (echojobs.FetchNew, workday.detail) — and that the body was identical to the stored one,
 -- which is precisely the case a staleness check over updated_at would misread as never-read.
 -- Like last_seen_at it is in no index, so the update stays heap-only.
+--
+-- One thing IS queued: a canonical posting re-seen after search had withheld it for going
+-- unseen (search.Withheld). Its content is unchanged, but its document was removed, so the
+-- drain must bring it back; prev carries the last_seen_at the update replaces. The cutoff is
+-- search.UnseenWindow, the shortest window — a source with a longer one gets a harmless
+-- extra push.
+WITH prev AS MATERIALIZED (
+    SELECT j.last_seen_at FROM jobs j
+    WHERE j.source = sqlc.arg(source) AND j.external_id = sqlc.arg(external_id)
+), refreshed AS (
 UPDATE jobs
 SET last_seen_at = now(),
     -- Not when the "identical" body is the stored one the pipeline substituted for a failed
     -- fetch (job.Draft.BodyFromCatalogue): that body was not read.
-    hydrated_at  = CASE WHEN sqlc.arg(body_from_catalogue)::boolean THEN hydrated_at ELSE now() END
-WHERE source = sqlc.arg(source)
-  AND external_id = sqlc.arg(external_id)
-  AND content_hash = sqlc.arg(content_hash)
-  AND cities = COALESCE(sqlc.arg(cities)::text[], '{}')
-  AND salary_min_source IS NOT DISTINCT FROM sqlc.arg(salary_min_source)
-  AND salary_max_source IS NOT DISTINCT FROM sqlc.arg(salary_max_source)
-  AND salary_currency_source = sqlc.arg(salary_currency_source)
-  AND salary_period_source = sqlc.arg(salary_period_source)
-  AND english_level = sqlc.arg(english_level)
-  AND is_tech IS NOT DISTINCT FROM sqlc.arg(is_tech)
-  AND engagement = COALESCE(sqlc.arg(engagement)::text[], '{}')
-  AND application_deadline IS NOT DISTINCT FROM COALESCE(sqlc.narg(application_deadline)::date, application_deadline)
-  AND (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
-  AND closed_at IS NULL
-RETURNING id, source, company_slug, duplicate_of;
+    hydrated_at  = CASE WHEN sqlc.arg(body_from_catalogue)::boolean THEN jobs.hydrated_at ELSE now() END
+WHERE jobs.source = sqlc.arg(source)
+  AND jobs.external_id = sqlc.arg(external_id)
+  AND jobs.content_hash = sqlc.arg(content_hash)
+  AND jobs.cities = COALESCE(sqlc.arg(cities)::text[], '{}')
+  AND jobs.salary_min_source IS NOT DISTINCT FROM sqlc.arg(salary_min_source)
+  AND jobs.salary_max_source IS NOT DISTINCT FROM sqlc.arg(salary_max_source)
+  AND jobs.salary_currency_source = sqlc.arg(salary_currency_source)
+  AND jobs.salary_period_source = sqlc.arg(salary_period_source)
+  AND jobs.english_level = sqlc.arg(english_level)
+  AND jobs.is_tech IS NOT DISTINCT FROM sqlc.arg(is_tech)
+  AND jobs.engagement = COALESCE(sqlc.arg(engagement)::text[], '{}')
+  AND jobs.application_deadline IS NOT DISTINCT FROM COALESCE(sqlc.narg(application_deadline)::date, jobs.application_deadline)
+  AND (jobs.application_deadline IS NULL OR jobs.application_deadline >= (now() AT TIME ZONE 'UTC')::date)
+  AND jobs.closed_at IS NULL
+RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_private,
+          (SELECT p.last_seen_at FROM prev p) AS prev_seen_at, COALESCE(jobs.posted_at, jobs.created_at) AS eff_posted_at
+), requeued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM refreshed
+    WHERE duplicate_of IS NULL AND NOT is_private
+      AND prev_seen_at < sqlc.arg(withheld_if_seen_before)::timestamptz
+    -- Re-stamped: a drain wave holding this entry may be removing the document right now.
+    ON CONFLICT (job_id) DO UPDATE
+        SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
+)
+SELECT id, source, company_slug, duplicate_of FROM refreshed;
 
 -- name: RoleClusterCount :one
 -- The job-reality repost/mass-posting counts for one role cluster: how many postings
@@ -2301,7 +2322,7 @@ WHERE source = sqlc.arg(source)
 -- Lock the prior state before updating: after waiting for a concurrent close,
 -- transition detection must observe the committed closed row, not an older snapshot.
 WITH existing AS MATERIALIZED (
-    SELECT id, closed_at, is_private,
+    SELECT id, closed_at, is_private, duplicate_of, last_seen_at,
            -- The touch would reopen this row: closed, and its deadline (if any) not passed.
            (closed_at IS NOT NULL AND (application_deadline IS NULL
                                        OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
@@ -2336,6 +2357,16 @@ WITH existing AS MATERIALIZED (
     FROM touched t JOIN existing e ON e.id = t.id
     WHERE t.closed_at IS NULL AND e.closed_at IS NOT NULL AND NOT e.is_private
     ON CONFLICT (job_id) DO NOTHING
+), returned_queued AS (
+    -- Re-seen after search withheld it for going unseen: see RefreshUnchangedJob.
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT t.id, t.job_posted_at
+    FROM touched t JOIN existing e ON e.id = t.id
+    WHERE t.closed_at IS NULL AND e.closed_at IS NULL AND NOT e.is_private
+      AND e.duplicate_of IS NULL
+      AND e.last_seen_at < sqlc.arg(withheld_if_seen_before)::timestamptz
+    ON CONFLICT (job_id) DO UPDATE
+        SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 )
 -- A touch writes no content, so a posting closed under an older dictionary would reopen
 -- carrying it. With allow_reopen false a touch that WOULD reopen writes nothing and reports

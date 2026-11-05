@@ -178,9 +178,10 @@ retired slug would resurrect the duplicate the day it reopens.
 
 **The worker does not touch the search index, deliberately.** A push to the facet index costs
 90-180s regardless of batch size, so feeding a wave through `search_outbox` would be tens of
-hours of pushes — the shape behind the 2026-08-05 outage. The scheduled `freehire-reindexw`
-picks the re-key up; until it does, a merged company under-counts its jobs for a few hours and
-nothing 404s. Do not run a manual reindex, and do not set `REINDEX_DEDUP`.
+hours of pushes — the shape behind the 2026-08-05 outage. **Follow a wave (or a day of waves)
+with one by-hand rebuild**, `systemctl start --no-block freehire-reindexw.service`: no timer
+runs it since 2026-11-05, so nothing else carries the re-key into search. Until it runs, a
+merged company under-counts its jobs and nothing 404s. Do not set `REINDEX_DEDUP`.
 
 `jobs.company` is left alone by a merge. The source keeps sending "DollarTree", so the next
 crawl would put it back, and the display name comes from `companies.name` regardless.

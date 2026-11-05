@@ -157,6 +157,7 @@ type Querier interface {
 	// and add the same delta to jobs.view_count. `uniques` is written as 0 on insert (it is
 	// NOT NULL with no default) and never touched on conflict, so the nginx figures and
 	// GET /api/v1/stats/catalog keep their meaning.
+	// Queued for the drain for the same reason as ApplyDailyView: view_count is sortable.
 	ApplyDailyAgentView(ctx context.Context, arg []ApplyDailyAgentViewParams) *ApplyDailyAgentViewBatchResults
 	// Apply one (day, job) unique count additively: upsert the daily rollup and add the
 	// total delta to jobs.view_count, in one statement. The data-modifying CTE runs even
@@ -171,6 +172,8 @@ type Querier interface {
 	// bot-filtered signal of the two.
 	// A visitor who did both is one visitor in each, so the two do not sum with an API
 	// count; the only relation between them is page_delta <= total_delta.
+	// view_count is a sortable attribute of the search document, so the moved figure is
+	// queued for the drain; without it the most-viewed sort waited for a full rebuild.
 	ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults
 	// Same shape and same reasoning as SearchOutboxMetrics. The depth here is the one that
 	// carries information rather than the dead letters: cmd/capture-apply-form takes
@@ -2261,6 +2264,19 @@ type Querier interface {
 	// claim (see that query's doc comment); the single-row subquery here costs nothing
 	// beyond the jobs PK lookup this call already implies.
 	EnqueueSearchOutbox(ctx context.Context, jobID int64) error
+	// Queue the open canonical postings whose search document changed in the window
+	// (since, until] through the passage of time alone, with no write to the row:
+	//   * their age crossed one of age_days — the reality class turns at fixed ages
+	//     (jobreality.AgeCrossingDays) — or their posted_at age crossed one of posted_age_days,
+	//     where the fake-freshness flag turns (jobreality.PostedAgeCrossingDays);
+	//   * their source's unseen window ran out (search.Withheld), so the drain must take the
+	//     document out. sources/unseen_seconds is that per-source map; a source absent from it
+	//     is never withheld on this ground.
+	// Nothing else would ever queue them, so without this pass they waited for a full rebuild.
+	// A posting crosses at created_at + age (or last_seen_at + window), hence the bands below.
+	// One sequential pass over the open rows: last_seen_at is deliberately in no index (the
+	// liveness touch must stay heap-only), so the caller runs this a few times a day.
+	EnqueueSearchTimeCrossings(ctx context.Context, arg EnqueueSearchTimeCrossingsParams) (int64, error)
 	// Same shape and same reasoning as SearchOutboxMetrics. The three outbox tables share a
 	// column layout, but the queries stay separate and literal: sqlc generates from static
 	// SQL, so a parameterized table name would cost both the codegen and the schema's
@@ -6596,6 +6612,12 @@ type Querier interface {
 	// (echojobs.FetchNew, workday.detail) — and that the body was identical to the stored one,
 	// which is precisely the case a staleness check over updated_at would misread as never-read.
 	// Like last_seen_at it is in no index, so the update stays heap-only.
+	//
+	// One thing IS queued: a canonical posting re-seen after search had withheld it for going
+	// unseen (search.Withheld). Its content is unchanged, but its document was removed, so the
+	// drain must bring it back; prev carries the last_seen_at the update replaces. The cutoff is
+	// search.UnseenWindow, the shortest window — a source with a longer one gets a harmless
+	// extra push.
 	RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJobParams) (RefreshUnchangedJobRow, error)
 	// Dynamic client registration (RFC 7591). client_id is server-generated, random,
 	// and not a secret — it identifies the client, it does not authenticate it (PKCE

@@ -119,3 +119,22 @@ func TestClassify_Deterministic(t *testing.T) {
 		t.Error("classification not deterministic for identical input")
 	}
 }
+
+func TestAgeCrossingDaysAreWhereClassifyChanges(t *testing.T) {
+	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	// An evergreen marker makes "old" the second signal, so the old-age crossing shows.
+	at := func(days int, evergreen bool) Result {
+		return Classify(Input{
+			Now: created.Add(time.Duration(days) * 24 * time.Hour), CreatedAt: created,
+			RepostCount: 1, MassPostingCount: 1, HasEvergreenText: evergreen,
+		})
+	}
+	got := AgeCrossingDays()
+	fresh, old := int(got[0]), int(got[1])
+	if at(fresh-1, false).Class != ClassFresh || at(fresh, false).Class != ClassStale {
+		t.Errorf("fresh crossing %d: class does not turn there", fresh)
+	}
+	if at(old-1, true).Class != ClassStale || at(old, true).Class != ClassLikelyEvergreen {
+		t.Errorf("old crossing %d: class does not turn there", old)
+	}
+}

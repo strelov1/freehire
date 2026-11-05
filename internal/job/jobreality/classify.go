@@ -96,3 +96,18 @@ func Classify(in Input) Result {
 		},
 	}
 }
+
+// AgeCrossingDays are the ages, in whole days since CreatedAt, at which Classify's answer
+// can change with nothing else moving: a job stops being fresh at freshWindowDays+1 and
+// gains the "old" signal at oldAgeDays. A search index that stores the class must refresh
+// a job at these ages, since no write to the job marks them.
+func AgeCrossingDays() []int32 {
+	return []int32{freshWindowDays + 1, oldAgeDays}
+}
+
+// PostedAgeCrossingDays are the ages, in whole days since PostedAt, at which Classify's
+// evidence changes with nothing else moving: IsFakeFreshness turns off once the posted date
+// is older than freshWindowDays.
+func PostedAgeCrossingDays() []int32 {
+	return []int32{freshWindowDays + 1}
+}

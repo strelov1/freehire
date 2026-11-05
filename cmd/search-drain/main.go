@@ -3,7 +3,8 @@
 // changed, since its last drain) is pushed into the live Meilisearch `jobs` index as
 // ONE batch, then the wave's outbox entries are deleted. Run it on a schedule (e.g.
 // cron); it drains what is queued and exits. It is the incremental sibling of
-// cmd/embed; the full `reindex` swap-rebuild stays the reconciler. It exits non-zero
+// cmd/embed, and the only routine path to the index: the full `reindex` swap-rebuild is a
+// by-hand step after a backfill (internal/search/searchdrain/AGENTS.md). It exits non-zero
 // when the run had any failures or dead-letters, so cron can alert.
 //
 // This replaces cmd/ingest's previous inline push (search.Client.SubmitJobs called

@@ -31,9 +31,19 @@ WITH ins AS (
     ON CONFLICT (day, job_id)
         DO UPDATE SET uniques      = job_daily_views.uniques + EXCLUDED.uniques,
                       page_uniques = job_daily_views.page_uniques + EXCLUDED.page_uniques
+),
+-- view_count is a sortable attribute of the search document, so the moved figure is
+-- queued for the drain; without it the most-viewed sort waited for a full rebuild.
+upd AS (
+    UPDATE jobs SET view_count = view_count + sqlc.arg('total_delta')
+    WHERE id = sqlc.arg('job_id')
+    RETURNING id, COALESCE(posted_at, created_at) AS eff_posted_at, closed_at, duplicate_of, is_private
 )
-UPDATE jobs SET view_count = view_count + sqlc.arg('total_delta')
-WHERE id = sqlc.arg('job_id');
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT id, eff_posted_at FROM upd
+WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
+ON CONFLICT (job_id) DO UPDATE
+    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL;
 
 -- name: IsViewLogFileProcessed :one
 -- Cursor read: has this rotated file (by content signature) been applied? The
@@ -61,9 +71,18 @@ WITH ins AS (
     VALUES (sqlc.arg('day'), sqlc.arg('job_id'), 0, sqlc.arg('delta'))
     ON CONFLICT (day, job_id)
         DO UPDATE SET agent_uniques = job_daily_views.agent_uniques + EXCLUDED.agent_uniques
+),
+-- Queued for the drain for the same reason as ApplyDailyView: view_count is sortable.
+upd AS (
+    UPDATE jobs SET view_count = view_count + sqlc.arg('delta')
+    WHERE id = sqlc.arg('job_id')
+    RETURNING id, COALESCE(posted_at, created_at) AS eff_posted_at, closed_at, duplicate_of, is_private
 )
-UPDATE jobs SET view_count = view_count + sqlc.arg('delta')
-WHERE id = sqlc.arg('job_id');
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT id, eff_posted_at FROM upd
+WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
+ON CONFLICT (job_id) DO UPDATE
+    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL;
 
 -- name: GetViewLogCursor :one
 -- The last (job_id, day) key applied from a part-applied file. No row: nothing applied.
