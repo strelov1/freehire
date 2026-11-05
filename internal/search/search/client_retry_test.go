@@ -5,7 +5,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/meilisearch/meilisearch-go"
 )
@@ -99,5 +102,67 @@ func TestSDKRetryResendsEmptyBody(t *testing.T) {
 	}
 	if bodies[1] != "" {
 		t.Fatalf("retried request carried body %q, want EMPTY — the SDK now rewinds the body and DisableRetries in NewClient can be revisited", bodies[1])
+	}
+}
+
+// TestNewClientRetriesTransientGET pins the half of the decision that keeps working:
+// a body-less GET (the task-status poll a rebuild's Promote depends on) that meets one
+// 503 is re-sent and succeeds, while the SDK's own retry loop stays off.
+func TestNewClientRetriesTransientGET(t *testing.T) {
+	var gets atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("stub got %s, want GET", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if gets.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, `{"message":"engine overloaded","code":"unavailable","type":"internal"}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"uid":7,"indexUid":"companies","status":"succeeded","type":"documentAdditionOrUpdate"}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "test-key")
+	task, err := c.manager.GetTaskWithContext(t.Context(), 7)
+	if err != nil {
+		t.Fatalf("GET after one transient 503 failed: %v", err)
+	}
+	if task.UID != 7 || gets.Load() != 2 {
+		t.Errorf("task uid %d after %d GETs, want uid 7 after exactly 2", task.UID, gets.Load())
+	}
+}
+
+// TestGetRetryTransportBounds pins that a persistent 503 is retried a bounded number
+// of times and then surfaced as the 503 itself, and that a POST is never re-sent.
+func TestGetRetryTransportBounds(t *testing.T) {
+	var reqs atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqs.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	rt := &getRetryTransport{base: http.DefaultTransport, backoff: func(int) time.Duration { return time.Millisecond }}
+
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL, nil)
+	resp, err := rt.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable || reqs.Load() != getRetryAttempts+1 {
+		t.Errorf("GET: status %d after %d requests, want 503 after %d", resp.StatusCode, reqs.Load(), getRetryAttempts+1)
+	}
+
+	reqs.Store(0)
+	req, _ = http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL, strings.NewReader("x"))
+	resp, err = rt.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if reqs.Load() != 1 {
+		t.Errorf("POST was sent %d times, want 1", reqs.Load())
 	}
 }
