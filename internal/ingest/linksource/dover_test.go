@@ -74,3 +74,54 @@ func TestDoverDeclinesNonJobShapes(t *testing.T) {
 		}
 	}
 }
+
+// statusErr mirrors sources.StatusError's shape (the adapter matches any error carrying a
+// status code, not the concrete type), so the 404-vs-transport branch is testable without a
+// real HTTP round trip.
+type statusErr struct{ code int }
+
+func (e *statusErr) Error() string   { return "status" }
+func (e *statusErr) StatusCode() int { return e.code }
+
+// TestDoverSkipsGoneAndInactivePostings pins the liveness gates: a 404 detail is the
+// platform's own answer that the posting is gone (a skip, ok=false, NOT an error the caller
+// would retry), an inactive/private posting is likewise a skip, and a transport failure is
+// still an error.
+func TestDoverSkipsGoneAndInactivePostings(t *testing.T) {
+	const link = "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d"
+	const api = "inbound/application-portal-job/a5546acf-45c3-44ff-bedd-a4314fd0f37d"
+
+	gone := &fakeClient{}
+	gone.routeErr(api, &statusErr{code: 404})
+	if _, ok, err := NewDover(gone).Resolve(context.Background(), link); err != nil || ok {
+		t.Errorf("404 detail: ok=%v err=%v, want ok=false, nil error", ok, err)
+	}
+
+	inactive := (&fakeClient{}).
+		route(api, strings.ReplaceAll(doverDetailJSON, `"active":true`, `"active":false`), "").
+		route("careers-page-slug/Deepspatial", `{"slug":"deepspatial"}`, "")
+	if _, ok, err := NewDover(inactive).Resolve(context.Background(), link); err != nil || ok {
+		t.Errorf("inactive detail: ok=%v err=%v, want ok=false, nil error", ok, err)
+	}
+
+	transport := &fakeClient{} // no routes: the fetch fails with a plain error
+	if _, ok, err := NewDover(transport).Resolve(context.Background(), link); err == nil || ok {
+		t.Errorf("transport failure: ok=%v err=%v, want ok=false, non-nil error", ok, err)
+	}
+}
+
+// TestDoverDeclinesMalformedUUID pins the uuid gate: a 36-character segment that is not the
+// canonical 8-4-4-4-12 hex spelling is not matched, same as the recognizer declines it.
+func TestDoverDeclinesMalformedUUID(t *testing.T) {
+	ls := NewDover(&fakeClient{})
+	for _, link := range []string{
+		"https://jobs.dover.com/Deepspatial/zzzzzzzz-45c3-44ff-bedd-a4314fd0f37d",
+		"https://jobs.dover.com/Deepspatial/a5546acf45c344ffbedda4314fd0f37d00000000",
+		"https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d-x/slug",
+	} {
+		u, _ := url.Parse(link)
+		if ls.Match(u) {
+			t.Errorf("Match accepted %s, want declined", link)
+		}
+	}
+}

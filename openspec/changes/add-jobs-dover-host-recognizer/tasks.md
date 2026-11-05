@@ -29,6 +29,19 @@
 - [x] 2.4 Tests: client-record naming + slug-namespaced id against live fixtures; Match
       declines the shell, `/startup-jobs`, and a non-UUID second segment.
 
+## 2.5 Review round 3 (CodeRabbit on 7c0ce2d1e)
+
+- [x] Recognizer: path anchored at both ends (at most one trailing slug); exact-host gate
+      (`exactHost` on pathPattern) — subdomains declined; regression tests for both.
+- [x] Link-source resolver: uuid gate tightened to the canonical 8-4-4-4-12 spelling (mirror
+      of the recognizer's); 404 detail is ok=false (skip), other failures propagate; inactive/
+      private postings skipped before conversion, matching the board adapter's detail stage.
+- [x] Identity alignment: external id namespaced by the canonical slug from the SAME lookup
+      the crawl path uses (careers-page-slug), so link-import and crawl dedup (asserted in
+      TestDoverResolvesCompanyFromClientRecord).
+- [x] Spec: link-contributions requirement anchored, extra-segment and subdomain decline
+      scenarios added.
+
 ## 3. Validation
 
 - [x] 3.1 `go test ./internal/ingest/atsboard/... ./internal/ingest/sources/...` green.

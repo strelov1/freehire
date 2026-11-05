@@ -614,6 +614,12 @@ type pathPattern struct {
 	path, reject, paramPattern  *regexp.Regexp
 	param, listing              string
 	hostBoard, tenantHost, fold bool
+	// exactHost pins the entry to the apex host itself: matchHost suffix-matches every
+	// subdomain of a dotted apex, and an entry whose pattern reads the WHOLE host as one
+	// company's board (jobs.dover.com) must not fire for a tenant-looking subdomain —
+	// foo.jobs.dover.com is not Dover's board host, and recognizing it would mint a board out
+	// of a hostname this platform never serves.
+	exactHost bool
 }
 
 // pathPatternBoards holds, per modePathPattern host entry, the path pattern whose one capture
@@ -633,6 +639,16 @@ type pathPattern struct {
 //     match, held to paramPattern after folding to lower case.
 //   - fold lower-cases the capture: the one exception to the verbatim rule, for a platform whose
 //     catalogue holds every board lower-case.
+//
+// doverBoardPath is jobs.dover.com's board shape: "/<Org slug>/<posting uuid>" with at most
+// one optional trailing slug segment. The slug gate is [A-Za-z0-9][A-Za-z0-9-]* (no empty
+// segment, no leading/trailing-hyphen fuzziness worth honoring), the uuid gate is the exact
+// canonical 8-4-4-4-12 hex spelling — the same shape atsboard's own guid-style gates use
+// elsewhere — and the pattern is anchored at BOTH ends: a deeper path (/…/<uuid>/a/b) is not
+// a board link the platform serves, so it is declined rather than captured with junk. The
+// capture is the SLUG alone (see the host row and the jobs.dover.com entry below).
+var doverBoardPath = regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9-]*)/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?:/[A-Za-z0-9][A-Za-z0-9-]*)?$`)
+
 var pathPatternBoards = map[string]pathPattern{
 	// Dover's public job-board host (see the host row above): the BOARD is the first segment
 	// alone — the company's Dover slug, the same spelling the app.dover.com apply and listing
@@ -648,8 +664,9 @@ var pathPatternBoards = map[string]pathPattern{
 	// canonical collapses to the /<Org> board address, so a posting link and its listing map to
 	// one board.
 	"jobs.dover.com": {
-		path:    regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9-]*)/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?:/|$)`),
-		listing: "/%s",
+		path:      doverBoardPath,
+		listing:   "/%s",
+		exactHost: true,
 	},
 	// ClearCompany, which has served HRM Direct's tenants since ~2026-10-21
 	// (internal/ingest/sources/hrmdirect.go): the career page is /<board>, a posting is that page
@@ -1272,6 +1289,9 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 	case modePathPattern:
 		p, configured := pathPatternBoards[apex]
 		if !configured || p.path == nil || p.listing == "" {
+			return "", "", "", false
+		}
+		if p.exactHost && host != apex {
 			return "", "", "", false
 		}
 		if m := p.path.FindStringSubmatch(u.Path); len(m) == 2 && m[1] != "" {

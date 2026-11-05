@@ -2,6 +2,7 @@ package linksource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -30,10 +31,17 @@ func NewDover(c Client) Source { return dover{http: c} }
 func (dover) Source() string { return "dover" }
 
 // doverJobPath captures the posting uuid from a jobs.dover.com link path
-// (/<Org>/<uuid>[/slug]). The Org slug names the board only via the contribution flow's own
-// recognition; this resolver files the posting under the client record the detail response
-// carries (see Resolve), so employer naming cannot drift from the link's spelling.
-var doverJobPath = regexp.MustCompile(`^/[^/]+/([0-9a-fA-F-]{36})(?:/|$)`)
+// (/<Org>/<uuid>[/slug]). The uuid gate is the exact canonical 8-4-4-4-12 hex spelling — the
+// same shape the atsboard recognizer requires of the second segment — and the slug gate is
+// its mirror. The Org slug names the board only via the contribution flow's own recognition;
+// this resolver files the posting under the client record the detail response carries (see
+// Resolve), so employer naming cannot drift from the link's spelling.
+var doverJobPath = regexp.MustCompile(`^/[^/]+/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:/[^/]+)?$`)
+
+// statusCoder is satisfied by sources.StatusError without this package importing its type:
+// the same local-interface shape sources itself uses for callers it imports (see
+// StatusError.StatusCode's doc comment).
+type statusCoder interface{ StatusCode() int }
 
 // Match handles jobs.dover.com/<Org>/<uuid> links only — the same shape the atsboard
 // recognizer accepts (its UUID gate is what keeps the marketing shell and the vendor's own
@@ -47,6 +55,12 @@ func (dover) Match(u *url.URL) bool {
 // from the posting's own client_name. The external id is namespaced by the company's Dover
 // slug — the board the contribution flow and the board adapter file this company under —
 // keeping link-imported and board-crawled rows of one posting deduped.
+//
+// A posting the platform says is GONE (a 404 detail) is a skip — ok=false, not an error, the
+// same "not on the board anymore" answer the ashby resolver yields; every other failure
+// (transport, 5xx, an undecodable body) is the ABSENCE of an answer and propagates so the
+// caller can retry. A detail answering inactive or private is likewise a skip: the posting is
+// not a live vacancy to import, exactly as the board adapter's detail stage drops it.
 func (d dover) Resolve(ctx context.Context, raw string) (sources.Job, bool, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -61,7 +75,14 @@ func (d dover) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 	var resp sources.DoverJobDetail
 	api := fmt.Sprintf("https://app.dover.com/api/v1/inbound/application-portal-job/%s", id)
 	if err := d.http.GetJSON(ctx, api, &resp); err != nil {
+		var se statusCoder
+		if errors.As(err, &se) && se.StatusCode() == 404 {
+			return sources.Job{}, false, nil // the platform's own answer: posting gone
+		}
 		return sources.Job{}, false, err
+	}
+	if !resp.Active || resp.IsPrivate {
+		return sources.Job{}, false, nil // not a live vacancy — skip, as the board crawl drops it
 	}
 
 	// The canonical board slug the contribution flow files this company under comes from the
@@ -75,10 +96,9 @@ func (d dover) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 	if err := d.http.GetJSON(ctx, "https://app.dover.com/api/v1/careers-page-slug/"+url.PathEscape(resp.ClientName), &slugResp); err != nil {
 		return sources.Job{}, false, err
 	}
-	resp.ClientSlug = slugResp.Slug
 
 	job := resp.ToJob()
-	job.ExternalID = externalid.Namespace(resp.ClientSlug, id)
+	job.ExternalID = externalid.Namespace(slugResp.Slug, id)
 	job.URL = raw
 	return job, true, nil
 }
