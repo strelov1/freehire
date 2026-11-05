@@ -125,15 +125,16 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	}
 
 	docs := make([]search.JobDocument, 0, len(jobs))
+	var withheld []int64
 	now := time.Now()
 	for _, job := range jobs {
 		// A job search withholds — no resolved category, no posting body, or a source that
 		// stopped showing it (search.Withheld) — never enters the index; cmd/reindex's
-		// splitJobs applies the same predicate to the full-rebuild path. This skips rather
-		// than deletes: an entry already in the index goes stale here the same way a closed
-		// job's does between drain waves (internal/search/searchdrain/AGENTS.md) — the next
-		// full reindex swap is the reconciler for both.
+		// splitJobs applies the same predicate to the full-rebuild path. One that is ALREADY
+		// indexed (it became withheld after its last push) is removed below, so leaving
+		// search does not wait for a full rebuild.
 		if search.Withheld(job, now, unseenWindows) {
+			withheld = append(withheld, job.ID)
 			continue
 		}
 		doc, err := search.FromJob(job, desc[job.ID], sourceTypeOf(job.Source))
@@ -154,7 +155,29 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 		}
 		docs = append(docs, doc)
 	}
-	return ix.client.IndexJobs(ctx, docs)
+	if err := ix.client.IndexJobs(ctx, docs); err != nil {
+		return err
+	}
+	return ix.removeWithheld(ctx, withheld)
+}
+
+// removeWithheld deletes the documents of the wave's withheld jobs that are still indexed.
+// It asks the index first because almost every withheld job never had a document, and a
+// deletion task costs minutes on this index whatever it is given. Not through
+// search_delete_outbox: that queue treats an open canonical job as reopened and puts it
+// straight back on this one.
+func (ix searchIndexer) removeWithheld(ctx context.Context, ids []int64) error {
+	indexed, err := ix.client.IndexedJobIDs(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("%w: withheld jobs still indexed: %v", searchdrain.ErrSkipWave, err)
+	}
+	if len(indexed) == 0 {
+		return nil
+	}
+	if err := ix.client.DeleteJobs(ctx, indexed); err != nil {
+		return fmt.Errorf("%w: remove withheld jobs: %v", searchdrain.ErrSkipWave, err)
+	}
+	return nil
 }
 
 // facetDeleter rechecks current state before changing index visibility. Missing

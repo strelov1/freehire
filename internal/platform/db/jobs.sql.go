@@ -4584,42 +4584,56 @@ func (q *Queries) RefreshCoveredJobs(ctx context.Context, arg RefreshCoveredJobs
 }
 
 const refreshUnchangedJob = `-- name: RefreshUnchangedJob :one
+WITH prev AS MATERIALIZED (
+    SELECT j.last_seen_at FROM jobs j
+    WHERE j.source = $1 AND j.external_id = $2
+), refreshed AS (
 UPDATE jobs
 SET last_seen_at = now(),
     -- Not when the "identical" body is the stored one the pipeline substituted for a failed
     -- fetch (job.Draft.BodyFromCatalogue): that body was not read.
-    hydrated_at  = CASE WHEN $1::boolean THEN hydrated_at ELSE now() END
-WHERE source = $2
-  AND external_id = $3
-  AND content_hash = $4
-  AND cities = COALESCE($5::text[], '{}')
-  AND salary_min_source IS NOT DISTINCT FROM $6
-  AND salary_max_source IS NOT DISTINCT FROM $7
-  AND salary_currency_source = $8
-  AND salary_period_source = $9
-  AND english_level = $10
-  AND is_tech IS NOT DISTINCT FROM $11
-  AND engagement = COALESCE($12::text[], '{}')
-  AND application_deadline IS NOT DISTINCT FROM COALESCE($13::date, application_deadline)
-  AND (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
-  AND closed_at IS NULL
-RETURNING id, source, company_slug, duplicate_of
+    hydrated_at  = CASE WHEN $3::boolean THEN jobs.hydrated_at ELSE now() END
+WHERE jobs.source = $1
+  AND jobs.external_id = $2
+  AND jobs.content_hash = $4
+  AND jobs.cities = COALESCE($5::text[], '{}')
+  AND jobs.salary_min_source IS NOT DISTINCT FROM $6
+  AND jobs.salary_max_source IS NOT DISTINCT FROM $7
+  AND jobs.salary_currency_source = $8
+  AND jobs.salary_period_source = $9
+  AND jobs.english_level = $10
+  AND jobs.is_tech IS NOT DISTINCT FROM $11
+  AND jobs.engagement = COALESCE($12::text[], '{}')
+  AND jobs.application_deadline IS NOT DISTINCT FROM COALESCE($13::date, jobs.application_deadline)
+  AND (jobs.application_deadline IS NULL OR jobs.application_deadline >= (now() AT TIME ZONE 'UTC')::date)
+  AND jobs.closed_at IS NULL
+RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_private,
+          (SELECT p.last_seen_at FROM prev p) AS prev_seen_at, COALESCE(jobs.posted_at, jobs.created_at) AS eff_posted_at
+), requeued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM refreshed
+    WHERE duplicate_of IS NULL AND NOT is_private
+      AND prev_seen_at < $14::timestamptz
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT id, source, company_slug, duplicate_of FROM refreshed
 `
 
 type RefreshUnchangedJobParams struct {
-	BodyFromCatalogue    bool        `json:"body_from_catalogue"`
-	Source               string      `json:"source"`
-	ExternalID           string      `json:"external_id"`
-	ContentHash          pgtype.Text `json:"content_hash"`
-	Cities               []string    `json:"cities"`
-	SalaryMinSource      pgtype.Int4 `json:"salary_min_source"`
-	SalaryMaxSource      pgtype.Int4 `json:"salary_max_source"`
-	SalaryCurrencySource string      `json:"salary_currency_source"`
-	SalaryPeriodSource   string      `json:"salary_period_source"`
-	EnglishLevel         string      `json:"english_level"`
-	IsTech               pgtype.Bool `json:"is_tech"`
-	Engagement           []string    `json:"engagement"`
-	ApplicationDeadline  pgtype.Date `json:"application_deadline"`
+	Source               string             `json:"source"`
+	ExternalID           string             `json:"external_id"`
+	BodyFromCatalogue    bool               `json:"body_from_catalogue"`
+	ContentHash          pgtype.Text        `json:"content_hash"`
+	Cities               []string           `json:"cities"`
+	SalaryMinSource      pgtype.Int4        `json:"salary_min_source"`
+	SalaryMaxSource      pgtype.Int4        `json:"salary_max_source"`
+	SalaryCurrencySource string             `json:"salary_currency_source"`
+	SalaryPeriodSource   string             `json:"salary_period_source"`
+	EnglishLevel         string             `json:"english_level"`
+	IsTech               pgtype.Bool        `json:"is_tech"`
+	Engagement           []string           `json:"engagement"`
+	ApplicationDeadline  pgtype.Date        `json:"application_deadline"`
+	WithheldIfSeenBefore pgtype.Timestamptz `json:"withheld_if_seen_before"`
 }
 
 type RefreshUnchangedJobRow struct {
@@ -4696,11 +4710,17 @@ type RefreshUnchangedJobRow struct {
 // (echojobs.FetchNew, workday.detail) — and that the body was identical to the stored one,
 // which is precisely the case a staleness check over updated_at would misread as never-read.
 // Like last_seen_at it is in no index, so the update stays heap-only.
+//
+// One thing IS queued: a canonical posting re-seen after search had withheld it for going
+// unseen (search.Withheld). Its content is unchanged, but its document was removed, so the
+// drain must bring it back; prev carries the last_seen_at the update replaces. The cutoff is
+// search.UnseenWindow, the shortest window — a source with a longer one gets a harmless
+// extra push.
 func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJobParams) (RefreshUnchangedJobRow, error) {
 	row := q.db.QueryRow(ctx, refreshUnchangedJob,
-		arg.BodyFromCatalogue,
 		arg.Source,
 		arg.ExternalID,
+		arg.BodyFromCatalogue,
 		arg.ContentHash,
 		arg.Cities,
 		arg.SalaryMinSource,
@@ -4711,6 +4731,7 @@ func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJ
 		arg.IsTech,
 		arg.Engagement,
 		arg.ApplicationDeadline,
+		arg.WithheldIfSeenBefore,
 	)
 	var i RefreshUnchangedJobRow
 	err := row.Scan(
@@ -5422,7 +5443,7 @@ func (q *Queries) SuppressAggregatorDuplicatesForCompanies(ctx context.Context, 
 
 const touchJob = `-- name: TouchJob :one
 WITH existing AS MATERIALIZED (
-    SELECT id, closed_at, is_private,
+    SELECT id, closed_at, is_private, duplicate_of, last_seen_at,
            -- The touch would reopen this row: closed, and its deadline (if any) not passed.
            (closed_at IS NOT NULL AND (application_deadline IS NULL
                                        OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
@@ -5457,6 +5478,15 @@ WITH existing AS MATERIALIZED (
     FROM touched t JOIN existing e ON e.id = t.id
     WHERE t.closed_at IS NULL AND e.closed_at IS NOT NULL AND NOT e.is_private
     ON CONFLICT (job_id) DO NOTHING
+), returned_queued AS (
+    -- Re-seen after search withheld it for going unseen: see RefreshUnchangedJob.
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT t.id, t.job_posted_at
+    FROM touched t JOIN existing e ON e.id = t.id
+    WHERE t.closed_at IS NULL AND e.closed_at IS NULL AND NOT e.is_private
+      AND e.duplicate_of IS NULL
+      AND e.last_seen_at < $4::timestamptz
+    ON CONFLICT (job_id) DO NOTHING
 )
 SELECT e.id, COALESCE(t.company_slug, '')::text AS company_slug,
        (t.id IS NULL)::boolean AS deferred,
@@ -5465,9 +5495,10 @@ FROM existing e LEFT JOIN touched t ON t.id = e.id
 `
 
 type TouchJobParams struct {
-	Source      string `json:"source"`
-	ExternalID  string `json:"external_id"`
-	AllowReopen bool   `json:"allow_reopen"`
+	Source               string             `json:"source"`
+	ExternalID           string             `json:"external_id"`
+	AllowReopen          bool               `json:"allow_reopen"`
+	WithheldIfSeenBefore pgtype.Timestamptz `json:"withheld_if_seen_before"`
 }
 
 type TouchJobRow struct {
@@ -5497,7 +5528,12 @@ type TouchJobRow struct {
 // the row (internal/ingest/rederive), so a failed re-derive leaves the row closed for the next
 // crawl to retry instead of open on stale facets. reopened is the transition this call made.
 func (q *Queries) TouchJob(ctx context.Context, arg TouchJobParams) (TouchJobRow, error) {
-	row := q.db.QueryRow(ctx, touchJob, arg.Source, arg.ExternalID, arg.AllowReopen)
+	row := q.db.QueryRow(ctx, touchJob,
+		arg.Source,
+		arg.ExternalID,
+		arg.AllowReopen,
+		arg.WithheldIfSeenBefore,
+	)
 	var i TouchJobRow
 	err := row.Scan(
 		&i.ID,

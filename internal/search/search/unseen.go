@@ -38,10 +38,10 @@ func (w UnseenWindows) Unseen(j db.Job, now time.Time) bool {
 // The unseen rule is applied here, when a document is written, rather than as a query-time
 // filter on an indexed last_seen_at, because the crawl's liveness refresh (RefreshUnchangedJob)
 // deliberately pushes nothing to search_outbox: an indexed last_seen_at would freeze at the
-// last content write and hide live, unchanged postings by the thousand. The full rebuild
-// reads Postgres and re-asks this for every row, so a posting that goes unseen leaves search
-// at the next rebuild after its window, and one its source lists again returns at the next
-// rebuild — or sooner, on its next content write. The job page reads Postgres and keeps
+// last content write and hide live, unchanged postings by the thousand. Instead a posting
+// whose window runs out is queued by cmd/reindex's time-crossings pass and removed by the
+// drain, and one its source lists again is queued by the liveness write that re-sees it
+// (RefreshUnchangedJob/TouchJob). The job page reads Postgres and keeps
 // serving a withheld posting, so a shared link still opens.
 func Withheld(j db.Job, now time.Time, unseen UnseenWindows) bool {
 	return WithheldBy(j, now, unseen) != ""

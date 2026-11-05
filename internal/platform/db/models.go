@@ -1139,7 +1139,7 @@ type Mailbox struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// Resume point of a per-company duplicate-marker pass: the last company a run finished. Machine-owned by cmd/reindex; empty after_company means start from the top.
+// Resume point of a cmd/reindex pass. Per-company duplicate-marker passes store the last company a run finished (empty means start from the top); the search-time-crossings pass stores the RFC 3339 instant its last run covered up to.
 type MarkerPassCursor struct {
 	Pass         string             `json:"pass"`
 	AfterCompany string             `json:"after_company"`

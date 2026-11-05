@@ -96,3 +96,11 @@ func Classify(in Input) Result {
 		},
 	}
 }
+
+// AgeCrossingDays are the ages, in whole days since CreatedAt, at which Classify's answer
+// can change with nothing else moving: a job stops being fresh at freshWindowDays+1 and
+// gains the "old" signal at oldAgeDays. A search index that stores the class must refresh
+// a job at these ages, since no write to the job marks them.
+func AgeCrossingDays() []int32 {
+	return []int32{freshWindowDays + 1, oldAgeDays}
+}

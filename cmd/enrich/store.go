@@ -89,6 +89,11 @@ func (s *dbStore) Complete(ctx context.Context, entry enrich.Claimed, payload js
 	}); err != nil {
 		return fmt.Errorf("set enrichment: %w", err)
 	}
+	// The enrichment.* facets (seniority, salary, category...) live in the search document,
+	// so the job goes back on the drain; without it they reached search only at a full rebuild.
+	if err := qtx.EnqueueSearchOutbox(ctx, entry.JobID); err != nil {
+		return fmt.Errorf("enqueue search outbox: %w", err)
+	}
 	if err := qtx.DeleteEnrichmentEntry(ctx, entry.OutboxID); err != nil {
 		return fmt.Errorf("delete outbox entry: %w", err)
 	}

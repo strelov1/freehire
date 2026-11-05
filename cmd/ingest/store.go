@@ -25,6 +25,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // dbStore adapts the generated queries + connection pool to pipeline.Store. Save runs
@@ -133,6 +134,12 @@ func cheapWrite(r db.RefreshUnchangedJobRow) written {
 // leaving updated_at alone; everything else — edited content, a closed row reappearing, a
 // posting the catalogue does not hold yet — takes the full upsert. Matching no row cannot
 // distinguish "changed" from "absent", and does not need to: both want the same statement.
+// withheldIfSeenBefore is the last_seen_at before which search had withheld a posting as
+// unseen (search.UnseenWindow); a liveness write that moves it past this requeues the posting.
+func withheldIfSeenBefore() pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: time.Now().Add(-search.UnseenWindow), Valid: true}
+}
+
 func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (written, error) {
 	cheap, err := qtx.RefreshUnchangedJob(ctx, db.RefreshUnchangedJobParams{
 		Source:               p.Source,
@@ -148,6 +155,7 @@ func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (writte
 		Engagement:           p.Engagement,
 		ApplicationDeadline:  p.ApplicationDeadline,
 		BodyFromCatalogue:    p.BodyFromCatalogue,
+		WithheldIfSeenBefore: withheldIfSeenBefore(),
 	})
 	if err == nil {
 		return cheapWrite(cheap), nil
@@ -482,8 +490,9 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 // and facets are preserved. Implements pipeline.toucher.
 func (s *dbStore) Touch(ctx context.Context, source, externalID string) (string, error) {
 	touched, err := s.q.TouchJob(ctx, db.TouchJobParams{
-		Source:     source,
-		ExternalID: externalID,
+		Source:               source,
+		ExternalID:           externalID,
+		WithheldIfSeenBefore: withheldIfSeenBefore(),
 	})
 	if err != nil {
 		return "", fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
@@ -524,7 +533,9 @@ func (s *dbStore) reopenAndRederive(ctx context.Context, source, externalID stri
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	qtx := s.q.WithTx(tx)
-	touched, err := qtx.TouchJob(ctx, db.TouchJobParams{Source: source, ExternalID: externalID, AllowReopen: true})
+	touched, err := qtx.TouchJob(ctx, db.TouchJobParams{
+		Source: source, ExternalID: externalID, AllowReopen: true, WithheldIfSeenBefore: withheldIfSeenBefore(),
+	})
 	if err != nil {
 		return "", err
 	}

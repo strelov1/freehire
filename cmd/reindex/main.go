@@ -232,7 +232,14 @@ func run() int {
 // return 0`) leaves every test in this package green, which is how it shipped that way
 // the first time.
 func dedupOnlyExit(ctx context.Context, q *db.Queries, fuzzyWorkers int) int {
-	return worker.ExitCode(refreshDuplicateMarkers(ctx, q, fuzzyWorkers), 0)
+	failed := refreshDuplicateMarkers(ctx, q, fuzzyWorkers)
+	// Riding the marker-only schedule, which runs several times a day: without it a posting
+	// that only aged would reach search at a full rebuild, and those no longer run on a timer.
+	if err := enqueueTimeCrossings(ctx, q, time.Now()); err != nil {
+		failed++
+		log.Printf("reindex: time crossings: %v", err)
+	}
+	return worker.ExitCode(failed, 0)
 }
 
 func refreshDuplicateMarkers(ctx context.Context, q *db.Queries, fuzzyWorkers int) int {

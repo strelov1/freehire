@@ -1,7 +1,19 @@
 # Facet-search drain conventions
 
 ## Scope
-Incremental facet-search indexing via the `search_outbox` queue, mirroring `internal/ai/embed`/`semantic_outbox`; the full `reindex` swap-rebuild remains the reconciler.
+Incremental facet-search indexing via the `search_outbox` queue, mirroring `internal/ai/embed`/`semantic_outbox`. Since 2026-11-05 this queue is the ONLY routine path to the live index: the full `reindex` swap-rebuild no longer runs on a timer and is run by hand after a backfill that writes around the queue.
+
+## Every document change must reach this queue
+A change that moves a search document without queuing its job waits for a rebuild that no longer comes. The writers that queue, and the trap each one closed:
+- ingest, tg-extract, hydrate-adzuna, employer/moderation writes — `EnqueueSearchOutbox` in the write's transaction;
+- enrichment (`cmd/enrich`'s `Complete`) — the `enrichment.*` facets;
+- description vectors — the `job_semantic_chunks` trigger (migration 0182);
+- view counts (`ApplyDailyView`/`ApplyDailyAgentView`) — `view_count` is sortable;
+- a DUPLICATE's change (joins/leaves a cluster, closes/reopens, geography moves) queues its canonical ROOT — the `jobs_enqueue_duplicate_owner` triggers (migration 0240), since the owner's document carries the closure geography and the cluster counts;
+- a posting re-seen after search withheld it as unseen — `RefreshUnchangedJob`/`TouchJob` (`withheld_if_seen_before`);
+- time alone (a job ages past `jobreality.AgeCrossingDays`, or its source's unseen window runs out) — `EnqueueSearchTimeCrossings`, run by `cmd/reindex`'s marker-only mode with its cursor in `marker_pass_cursors`.
+A job the drain finds withheld (`search.Withheld`) but still indexed is DELETED by the drain itself (`removeWithheld`), not routed through `search_delete_outbox` — that queue treats an open canonical job as reopened and requeues it here, a loop.
+What stays rebuild-only: a backfill that writes columns without queuing (the `backfill-*` notes in the root AGENTS.md say so each), and a settings change that needs re-indexed data.
 
 ## Always true
 - Work flows through `search_outbox` — a reference-only queue (`job_id` + lease/retry, not a copy of the job or a target-version/target-model column: the facet index has no staleness key beyond `content_hash`, which `cmd/ingest`'s cheap-write gate already checks before enqueuing).
