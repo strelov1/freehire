@@ -1,6 +1,5 @@
 <script lang="ts">
-  // The tour's MCP step: the /mcp setup, compact, opening on the account connector — the
-  // candidate is signed in, so that is the one that can save jobs to their board.
+  // The tour shares the canonical MCP setup and its optional OAuth sign-in instructions.
   import McpSetup from '#lib/components/McpSetup.svelte';
 </script>
 
@@ -11,7 +10,7 @@
 </p>
 
 <div class="mt-5">
-  <McpSetup compact initialMode="account" />
+  <McpSetup compact />
 </div>
 <p class="mt-6 text-sm text-muted-foreground">
   Then ask it, for example: “Find jobs that fit my profile and save the best three.”

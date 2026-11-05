@@ -12,11 +12,11 @@ export const AGENTS_FAQ: FaqItem[] = [
   },
   {
     question: 'How do I connect my account?',
-    answer: 'For MCP, choose With your account in the connection steps and approve the freehire connection in your browser. Codex uses codex mcp login freehire to start that sign-in. For the CLI, run freehire auth login. The built-in assistant uses your existing freehire sign-in.',
+    answer: 'For MCP, use the same server address for public search and personal tools. Approve OAuth in your browser when you connect your account. Codex uses codex mcp login freehire; Claude Code uses claude mcp login freehire or its /mcp authentication control. For the CLI, run freehire auth login. The built-in assistant uses your existing freehire sign-in.',
   },
   {
     question: 'Can my assistant submit applications for me?',
-    answer: 'You submit applications on the employer’s site. Saving a job or marking it applied in freehire updates your tracking board; it does not submit an application. The browser extension can fill an application form for you to review before you send it.',
+    answer: 'Saving a job or marking it applied updates your tracking board and does not submit anything to an employer. For automatic applications, connect with OAuth and enable “Let connected agents apply for me” under Account → Integrations → API keys. Then explicitly ask the assistant to prepare an application on a supported employer form. You review the prepared application before approving submission. Availability depends on your plan and allowance. The browser extension can also fill a form for you to review and send.',
   },
   {
     question: 'Does each option use the same tracking board?',

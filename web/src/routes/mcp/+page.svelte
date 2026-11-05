@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { MCP_CATALOG_PITCH } from '#lib/mcpCopy.js';
   import McpView from '#lib/components/McpView.svelte';
   import Seo from '#lib/components/Seo.svelte';
 
@@ -8,7 +9,7 @@
 
 <Seo
   title="freehire MCP — search IT jobs inside Claude, ChatGPT, Codex and Cursor"
-  description="Add freehire as a connector to your AI assistant and search the live IT job catalogue from a chat. Free, no account needed to search; sign in to save and track jobs."
+  description={`${MCP_CATALOG_PITCH} Find roles with AI, then connect your account to save jobs, track applications and manage alerts.`}
   {canonical}
 />
 
