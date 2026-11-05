@@ -59,3 +59,11 @@ func (h *authHandlers) OAuthProtectedResourceMetadata(c *fiber.Ctx) error {
 		AuthorizationServers: []string{origin},
 	})
 }
+
+// OAuthMixedResourceMetadata describes the canonical mixed-auth MCP endpoint.
+func (h *authHandlers) OAuthMixedResourceMetadata(c *fiber.Ctx) error {
+	return c.JSON(protectedResourceMetadata{
+		Resource:             h.frontendOrigin + "/api/v1/mcp",
+		AuthorizationServers: []string{h.frontendOrigin},
+	})
+}

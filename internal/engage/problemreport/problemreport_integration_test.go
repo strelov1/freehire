@@ -5,7 +5,6 @@ package problemreport
 import (
 	"bytes"
 	"context"
-	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -16,7 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
-func TestRecordAccountQueueQuotaAndSanitizedLogs(t *testing.T) {
+func TestRecordAccountQueueAndSanitizedLogs(t *testing.T) {
 	pool := testdb.Pool(t)
 	//nolint:staticcheck // Uses the same exported context key as RequestIDs middleware.
 	ctx := context.WithValue(t.Context(), observability.RequestIDKey, "server-request-id")
@@ -27,7 +26,7 @@ func TestRecordAccountQueueQuotaAndSanitizedLogs(t *testing.T) {
 	if err := pool.QueryRow(ctx, `INSERT INTO users(email) VALUES ('problem-two@example.test') RETURNING id`).Scan(&other); err != nil {
 		t.Fatal(err)
 	}
-	service := New(pool, db.New(pool))
+	service := New(db.New(pool))
 	var logs bytes.Buffer
 	previous := slog.Default()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
@@ -66,27 +65,17 @@ func TestRecordAccountQueueQuotaAndSanitizedLogs(t *testing.T) {
 	if err != nil || reopened.ID == first.ID || reopened.RequestCount != 1 {
 		t.Fatalf("reopened=%+v err=%v", reopened, err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE problem_report_daily SET writes=20 WHERE user_id=$1`, user); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.Record(ctx, user, in); !errors.Is(err, ErrDailyCap) {
-		t.Fatalf("cap=%v", err)
-	}
-	var count int32
-	if err := pool.QueryRow(ctx, `SELECT request_count FROM problem_reports WHERE id=$1`, reopened.ID).Scan(&count); err != nil || count != 1 {
-		t.Fatalf("capped write changed queue: %d %v", count, err)
-	}
 }
 
-func TestRecordConcurrentQuotaAndRollback(t *testing.T) {
+func TestRecordConcurrentDeduplicationAndStorageFailure(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := t.Context()
 	var user int64
 	if err := pool.QueryRow(ctx, `INSERT INTO users(email) VALUES ('problem-race@example.test') RETURNING id`).Scan(&user); err != nil {
 		t.Fatal(err)
 	}
-	service := New(pool, db.New(pool))
-	// A failed queue write after claiming quota must roll back that claim.
+	service := New(db.New(pool))
+	// A failed queue write must never return a successful receipt.
 	if _, err := pool.Exec(ctx, `ALTER TABLE problem_reports ADD CONSTRAINT test_failure CHECK (goal <> 'force storage failure')`); err != nil {
 		t.Fatal(err)
 	}
@@ -96,9 +85,6 @@ func TestRecordConcurrentQuotaAndRollback(t *testing.T) {
 		t.Fatalf("DB failure returned success: %+v %v", receipt, err)
 	}
 	var writes int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM problem_report_daily WHERE user_id=$1`, user).Scan(&writes); err != nil || writes != 0 {
-		t.Fatalf("failed report consumed quota: %d %v", writes, err)
-	}
 	var wg sync.WaitGroup
 	results := make(chan error, 25)
 	for range 25 {
@@ -106,21 +92,12 @@ func TestRecordConcurrentQuotaAndRollback(t *testing.T) {
 	}
 	wg.Wait()
 	close(results)
-	accepted, refused := 0, 0
 	for err := range results {
-		switch {
-		case err == nil:
-			accepted++
-		case errors.Is(err, ErrDailyCap):
-			refused++
-		default:
+		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	if accepted != 20 || refused != 5 {
-		t.Fatalf("accepted=%d refused=%d", accepted, refused)
-	}
-	if err := pool.QueryRow(ctx, `SELECT request_count FROM problem_reports WHERE user_id=$1`, user).Scan(&writes); err != nil || writes != 20 {
+	if err := pool.QueryRow(ctx, `SELECT request_count FROM problem_reports WHERE user_id=$1`, user).Scan(&writes); err != nil || writes != 25 {
 		t.Fatalf("queue count=%d err=%v", writes, err)
 	}
 }

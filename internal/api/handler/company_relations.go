@@ -6,28 +6,20 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/job/companyrelation"
 )
-
-// companyRelationsPerHour bounds how many relations one account may propose in an hour.
-// Each proposal is a row a moderator has to read, so the bound protects the queue more than
-// the database. Ten is far above what a person correcting the companies they know needs.
-const companyRelationsPerHour = 10
 
 // companyRelationHandlers serves the company corrections people propose (two slugs are one
 // employer, or one company is another's subsidiary) and the moderator queue that decides
 // them. The rules live in internal/job/companyrelation. This file only parses and renders.
 type companyRelationHandlers struct {
 	relations *companyrelation.Service
-	throttler ratelimit.Throttler
 }
 
 func (h *companyRelationHandlers) register(api fiber.Router, mw middleware) {
 	// Cookie-only: a proposal is a person's judgement about two employers, and a leaked API
 	// key must not be able to fill the moderators' queue.
-	limit := ratelimit.Middleware(h.throttler, ratelimit.KeyByUserOrIP("company-relation"), companyRelationsPerHour, time.Hour)
-	api.Post("/companies/:slug/relations", mw.cookie, limit, h.Propose)
+	api.Post("/companies/:slug/relations", mw.cookie, h.Propose)
 
 	// The moderator queue sits under its own prefix rather than /companies/..., where a
 	// literal segment would compete with the /companies/:slug read.

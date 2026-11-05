@@ -112,11 +112,4 @@ func TestDictionaryRecord(t *testing.T) {
 		t.Fatalf("recorded = %#v", data)
 	}
 
-	capped := dictionaryApp(t, func(context.Context, int64, string, string, string) (int32, string, error) {
-		return 0, "", errGapCap
-	})
-	code, _ = doDictionary(t, capped, http.MethodPost, "/api/v1/dictionary/gaps", `{"kind":"specialization","term":"underwater basket weaving"}`, cookie)
-	if code != http.StatusTooManyRequests {
-		t.Fatalf("cap = %d", code)
-	}
 }

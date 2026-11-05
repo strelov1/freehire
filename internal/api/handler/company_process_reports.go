@@ -51,7 +51,7 @@ type processReportResponse struct {
 
 // FileProcessReport records that the caller met this practice at this company.
 // 201 on success, 409 if they already reported it, 400 for an unknown kind,
-// 404 for an unknown company, 429 over the daily cap.
+// 404 for an unknown company.
 func (h *companyProcessReportHandlers) FileProcessReport(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -112,8 +112,6 @@ func companyProcessReportError(err error) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid kind")
 	case errors.Is(err, processreport.ErrAlreadyReported):
 		return fiber.NewError(fiber.StatusConflict, "you already reported this")
-	case errors.Is(err, processreport.ErrRateLimited):
-		return fiber.NewError(fiber.StatusTooManyRequests, "that's a lot of reports today — try again tomorrow")
 	default:
 		return err
 	}

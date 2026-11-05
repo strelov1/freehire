@@ -15,54 +15,12 @@ import (
 // It is PUBLIC and unauthenticated, because a pricing page that requires an account cannot
 // do the one job a pricing page has.
 type plansHandlers struct {
-	plans     plan.Config
-	billing   *billing.Service
-	apiLimits apiLimitsView
+	plans   plan.Config
+	billing *billing.Service
 }
 
-func newPlansHandlers(cfg plan.Config, svc *billing.Service, publicAnonStrict bool, tiers RateTiers) *plansHandlers {
-	return &plansHandlers{plans: cfg, billing: svc, apiLimits: apiLimitsFor(publicAnonStrict, tiers)}
-}
-
-// apiLimitsView is what each rate tier allows on the public read API, read from the SAME
-// ladder the public-read gate enforces (public_gate.go) for the reason tierView gives. The
-// anonymous figures are the ones in force: before PUBLIC_ANON_LIMITS=strict they are the read
-// route's old per-minute budget and no daily cap (AnonymousPerDay 0).
-//
-// Tiers is the whole ladder, lowest first. The four flat fields predate it and stay for the
-// clients that read them.
-type apiLimitsView struct {
-	AnonymousPerMinute int            `json:"anonymous_per_minute"`
-	AnonymousPerDay    int            `json:"anonymous_per_day"`
-	APIPerMinute       int            `json:"api_per_minute"`
-	DataPerMinute      int            `json:"data_per_minute"`
-	Tiers              []rateTierView `json:"tiers"`
-}
-
-// rateTierView is one rung of the ladder. PerDay 0 is no daily cap.
-type rateTierView struct {
-	Tier      rateTier `json:"tier"`
-	PerMinute int      `json:"per_minute"`
-	PerDay    int      `json:"per_day"`
-}
-
-func apiLimitsFor(strict bool, tiers RateTiers) apiLimitsView {
-	anon := rateLimit{PerMinute: publicReadsPerMinute}
-	if strict {
-		anon = tiers[rateAnonymous]
-	}
-	v := apiLimitsView{
-		AnonymousPerMinute: anon.PerMinute, AnonymousPerDay: anon.PerDay,
-		APIPerMinute: tiers[rateAPI].PerMinute, DataPerMinute: tiers[rateData].PerMinute,
-	}
-	for _, s := range rateTierSpecs {
-		l := tiers[s.tier]
-		if s.tier == rateAnonymous {
-			l = anon
-		}
-		v.Tiers = append(v.Tiers, rateTierView{Tier: s.tier, PerMinute: l.PerMinute, PerDay: l.PerDay})
-	}
-	return v
+func newPlansHandlers(cfg plan.Config, svc *billing.Service) *plansHandlers {
+	return &plansHandlers{plans: cfg, billing: svc}
 }
 
 func (h *plansHandlers) register(api fiber.Router) {
@@ -101,8 +59,6 @@ type plansResponse struct {
 	// is on this is empty, and a page that claimed otherwise would be selling a limit nobody
 	// meets.
 	Enforced []string `json:"enforced"`
-	// APILimits is what the API product's plans allow, beside their prices in Prices.
-	APILimits apiLimitsView `json:"api_limits"`
 }
 
 // GetPlans returns what each plan allows and what Pro costs.
@@ -113,9 +69,8 @@ type plansResponse struct {
 // promise on a pricing page is one a customer can hold us to.
 func (h *plansHandlers) GetPlans(c *fiber.Ctx) error {
 	out := plansResponse{
-		Features:  make([]planFeatureView, 0, len(plan.AllFeatures())),
-		Enforced:  []string{},
-		APILimits: h.apiLimits,
+		Features: make([]planFeatureView, 0, len(plan.AllFeatures())),
+		Enforced: []string{},
 	}
 	for _, f := range plan.AllFeatures() {
 		out.Features = append(out.Features, planFeatureView{

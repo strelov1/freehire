@@ -57,6 +57,18 @@ func NewIssuer(secret string, ttl time.Duration) *Issuer {
 // so the browser and the token expire together.
 func (i *Issuer) TTL() time.Duration { return i.ttl }
 
+// ExpiresAt verifies the session token and reports its signed expiry for introspection.
+func (i *Issuer) ExpiresAt(token string) (time.Time, error) {
+	claims, err := i.parseClaims(token)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if claims.ExpiresAt == nil {
+		return time.Time{}, nil
+	}
+	return claims.ExpiresAt.Time, nil
+}
+
 // Issue returns a signed token for userID stamped with the account's current
 // tokenVersion, expiring after the Issuer's TTL.
 func (i *Issuer) Issue(userID int64, tokenVersion int32) (string, error) {

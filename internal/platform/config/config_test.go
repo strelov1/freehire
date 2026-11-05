@@ -595,11 +595,11 @@ func TestSettings_Validate(t *testing.T) {
 	}
 }
 
-func TestSettingsValidatePublicAnonLimits(t *testing.T) {
-	for value, wantErr := range map[string]bool{"": false, "strict": false, "Strict": true, "on": true} {
-		s := Settings{JWTSecret: strings.Repeat("x", 32), PublicAnonLimits: value}
-		if err := s.Validate(); (err != nil) != wantErr {
-			t.Errorf("PUBLIC_ANON_LIMITS=%q: Validate()=%v, want error %v", value, err, wantErr)
+func TestAuthIntrospectionSecretValidation(t *testing.T) {
+	for _, secret := range []string{"", "short", strings.Repeat("x", 32)} {
+		settings := Settings{JWTSecret: strings.Repeat("j", 32), AuthIntrospectionSecret: secret}
+		if err := settings.Validate(); (err != nil) != (secret == "short") {
+			t.Fatalf("secret length%d: %v", len(secret), err)
 		}
 	}
 }

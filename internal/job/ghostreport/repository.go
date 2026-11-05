@@ -81,15 +81,6 @@ func (r *QueriesRepository) Retract(ctx context.Context, userID, jobID int64) er
 	return err
 }
 
-// CountFiledSince backs the daily cap.
-func (r *QueriesRepository) CountFiledSince(ctx context.Context, userID int64, since time.Time) (int, error) {
-	n, err := r.q.CountGhostReportsSince(ctx, db.CountGhostReportsSinceParams{
-		UserID: userID,
-		Since:  pgtype.Timestamptz{Time: since, Valid: true},
-	})
-	return int(n), err
-}
-
 func toReport(row db.GhostReport) Report {
 	created := row.CreatedAt.Time
 	return Report{

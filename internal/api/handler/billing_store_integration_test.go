@@ -18,7 +18,6 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,7 +26,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -39,31 +37,6 @@ const storeSecret = "whsec_store_integration"
 // counterpart above is: the name is a contract with RevenueCat, so a change to the constant
 // should fail a test rather than be followed silently.
 const revenuecatSignatureHeader = "X-RevenueCat-Webhook-Signature"
-
-// countingThrottler enforces whatever limit the middleware was built with, per key.
-//
-// A real one rather than a stub that always refuses, because what is under test is the WIRING
-// — that the route carries a limiter at all, keyed per caller, with the ceiling the handler
-// declares. A nil throttler fails open by design, so a test without one would pass against a
-// route that has no limiter.
-type countingThrottler struct {
-	mu   sync.Mutex
-	seen map[string]int
-}
-
-func newCountingThrottler() *countingThrottler {
-	return &countingThrottler{seen: make(map[string]int)}
-}
-
-func (c *countingThrottler) Allow(_ context.Context, key string, limit int, window time.Duration) (ratelimit.Decision, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.seen[key]++
-	if c.seen[key] > limit {
-		return ratelimit.Decision{Limit: limit, ResetAfter: window, RetryAfter: window}, nil
-	}
-	return ratelimit.Decision{Allowed: true, Limit: limit, Remaining: limit - c.seen[key], ResetAfter: window}, nil
-}
 
 func signStoreDelivery(body []byte, at time.Time) string {
 	ts := at.Unix()
@@ -84,8 +57,7 @@ func storeApp(t *testing.T, pool *pgxpool.Pool, providerURL string, iss *auth.Is
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{
-		cookie:    auth.RequireAuth(iss, testVersions),
-		throttler: newCountingThrottler(),
+		cookie: auth.RequireAuth(iss, testVersions),
 	})
 	return app
 }
@@ -172,21 +144,6 @@ func TestStoreSyncNamesOnlyItsCaller(t *testing.T) {
 		}
 	})
 
-	t.Run("repeated calls are bounded", func(t *testing.T) {
-		token, _ := iss.Issue(caller, testTokenVersion)
-		var limited bool
-		// One more than the allowance: the budget is per caller and this test has already
-		// spent one of it above, so the refusal must arrive inside this loop.
-		for i := 0; i <= storeSyncLimit; i++ {
-			if post(t, token, `{}`) == http.StatusTooManyRequests {
-				limited = true
-				break
-			}
-		}
-		if !limited {
-			t.Fatalf("more than %d syncs in a minute were allowed; this is the one route a caller can use to make us call a third party", storeSyncLimit)
-		}
-	})
 }
 
 // TestStoreRoutesAreAbsentWhenUnconfigured is the disabled behaviour: not a 404 from inside a

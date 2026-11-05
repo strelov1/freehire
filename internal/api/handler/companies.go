@@ -35,12 +35,11 @@ func newCompaniesHandlers(queries *db.Queries, companySearch companySearcher) *c
 }
 
 func (h *companiesHandlers) register(api fiber.Router, mw middleware) {
-	readLimit := publicReadLimiter(mw.public)
-	api.Get("/companies", readLimit, h.ListCompanies)
-	api.Get("/companies/subindustries", readLimit, h.CompanySubindustries)
-	api.Get("/companies/:slug", readLimit, mw.optional, h.GetCompany)
-	api.Get("/companies/:slug/hiring", readLimit, h.CompanyHiring)
-	api.Get("/companies/:slug/closed-jobs", readLimit, h.CompanyClosedJobs)
+	api.Get("/companies", h.ListCompanies)
+	api.Get("/companies/subindustries", h.CompanySubindustries)
+	api.Get("/companies/:slug", mw.optional, h.GetCompany)
+	api.Get("/companies/:slug/hiring", h.CompanyHiring)
+	api.Get("/companies/:slug/closed-jobs", h.CompanyClosedJobs)
 }
 
 // companySearcher is the company-search backend the list handler depends on.

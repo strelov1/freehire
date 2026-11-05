@@ -25,7 +25,6 @@
       stats.jobs && { value: compact(stats.jobs), label: 'open postings, de-duplicated' },
       stats.companies && { value: compact(stats.companies), label: 'companies with profiles' },
       stats.atsPlatforms && { value: String(stats.atsPlatforms), label: 'ATS platforms read directly' },
-      plans && { value: plans.api_limits.data_per_minute.toLocaleString('en-US'), label: 'requests a minute on Data' },
     ].filter((f) => !!f),
   );
 
@@ -172,7 +171,7 @@
       <div class="rounded-xl border-2 border-primary p-6">
         <h3 class="font-semibold">Flat on freehire</h3>
         <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-          One monthly price and a per-minute request rate with no daily cap. A page returns up
+          One monthly price. A page returns up
           to 100 full postings, so how much of the catalogue you read never changes the bill.
         </p>
       </div>
@@ -181,7 +180,7 @@
 
   <section id="plans" class="scroll-mt-20 border-t border-border py-14 sm:py-16">
     {#if plans}
-      <ApiPlans prices={plans.prices} limits={plans.api_limits} />
+      <ApiPlans prices={plans.prices} />
     {:else}
       <p class="text-center text-muted-foreground">
         Plans are on the <a href={resolve('/pricing')} class="font-medium text-foreground underline-offset-4 hover:underline">pricing page</a>.

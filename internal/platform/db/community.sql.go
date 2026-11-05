@@ -41,40 +41,6 @@ func (q *Queries) CountOpenThreadsBySubject(ctx context.Context, arg CountOpenTh
 	return count, err
 }
 
-const countRecentRepliesByUser = `-- name: CountRecentRepliesByUser :one
-SELECT count(*) FROM thread_replies WHERE author_user_id = $1 AND created_at > $2
-`
-
-type CountRecentRepliesByUserParams struct {
-	AuthorUserID pgtype.Int8        `json:"author_user_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-}
-
-func (q *Queries) CountRecentRepliesByUser(ctx context.Context, arg CountRecentRepliesByUserParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countRecentRepliesByUser, arg.AuthorUserID, arg.CreatedAt)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countRecentThreadsByUser = `-- name: CountRecentThreadsByUser :one
-SELECT count(*) FROM threads WHERE author_user_id = $1 AND created_at > $2
-`
-
-type CountRecentThreadsByUserParams struct {
-	AuthorUserID pgtype.Int8        `json:"author_user_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-}
-
-// Rate-limit count: threads a user opened since a cutoff. Served by
-// threads_author_created_idx.
-func (q *Queries) CountRecentThreadsByUser(ctx context.Context, arg CountRecentThreadsByUserParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countRecentThreadsByUser, arg.AuthorUserID, arg.CreatedAt)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const getCommunityPersona = `-- name: GetCommunityPersona :one
 
 SELECT user_id, handle, created_at FROM community_personas WHERE user_id = $1

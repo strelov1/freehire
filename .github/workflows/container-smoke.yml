@@ -1,0 +1,114 @@
+name: Container smoke
+
+on:
+  pull_request:
+    paths:
+      - web/**
+      - design-system/**
+      - services/scrapling-fetch/**
+      - docker-compose.yml
+      - .github/workflows/container-smoke.yml
+      - .github/scripts/container-smoke/**
+  push:
+    branches: [main]
+    paths:
+      - web/**
+      - design-system/**
+      - services/scrapling-fetch/**
+      - docker-compose.yml
+      - .github/workflows/container-smoke.yml
+      - .github/scripts/container-smoke/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [web, scrapling]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Builds run inside Docker on an ephemeral CI runner. No secrets/build credentials
+      # are provided. Runtime tests below have no external network or writable host mounts.
+      - name: Build web image
+        if: matrix.image == 'web'
+        run: docker build --build-arg ORIGIN=http://localhost:8080 -f web/Dockerfile -t smoke-web .
+
+      - name: Build Scrapling image
+        if: matrix.image == 'scrapling'
+        run: docker build -t smoke-scrapling services/scrapling-fetch
+
+      - name: Test web runtime in isolation
+        if: matrix.image == 'web'
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+          trap 'docker logs smoke-web; docker rm -f smoke-web' EXIT
+          docker run -d --name smoke-web --init --network none --read-only \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 256 --cpus 2 --memory 2g \
+            --ulimit nofile=4096:4096 --ulimit fsize=134217728:134217728 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m,uid=1000,gid=1000,mode=1777 \
+            -v "$PWD/.github/scripts/container-smoke/web.mjs:/smoke.mjs:ro" \
+            -v "$PWD/.github/scripts/container-smoke/access-log.mjs:/access-log.mjs:ro" \
+            --entrypoint /usr/bin/env smoke-web -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            HOME=/tmp/freehire-web/home PORT=3000 API_INTERNAL_URL=http://127.0.0.1:18080 \
+            PROTOCOL_HEADER=x-forwarded-proto HOST_HEADER=x-forwarded-host \
+            /usr/local/bin/entrypoint.sh
+          for attempt in $(seq 1 60); do
+            test "$(docker inspect --format '{{.State.Running}}' smoke-web)" = true
+            if docker exec smoke-web /usr/bin/env -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+              node -e 'fetch("http://127.0.0.1:8080/robots.txt").then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))'; then
+              break
+            fi
+            echo "Waiting for startup ($attempt/60)"
+            sleep 1
+          done
+          timeout 90 docker exec smoke-web /usr/bin/env -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin node /smoke.mjs
+          # Inspect actual container output without exposing runner paths or credentials to it.
+          # The verifier runs inside the same isolated image and prints only a pass/fail result.
+          docker logs smoke-web 2>&1 | timeout 10 docker exec -i smoke-web /usr/bin/env -i \
+            PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin node /access-log.mjs
+
+      - name: Test Scrapling runtime in isolation
+        if: matrix.image == 'scrapling'
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          trap 'docker logs smoke-scrapling; docker rm -f smoke-scrapling' EXIT
+          docker run -d --name smoke-scrapling --init --network none --read-only \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 512 --cpus 2 --memory 3g --shm-size 512m \
+            --ulimit nofile=4096:4096 --ulimit fsize=134217728:134217728 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=512m,uid=10001,gid=10001,mode=1777 \
+            -v "$PWD/.github/scripts/container-smoke/scrapling.py:/smoke.py:ro" \
+            --entrypoint /usr/bin/env smoke-scrapling -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            HOME=/tmp XDG_CACHE_HOME=/tmp/.cache PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+            PYTHONDONTWRITEBYTECODE=1 SCRAPLING_FETCH_TOKEN=dummy-smoke-token \
+            /app/.venv/bin/python /service/main.py
+          for attempt in $(seq 1 60); do
+            test "$(docker inspect --format '{{.State.Running}}' smoke-scrapling)" = true
+            if docker exec smoke-scrapling /usr/bin/env -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+              PYTHONDONTWRITEBYTECODE=1 /app/.venv/bin/python -c \
+              'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8098/health", timeout=2)'; then
+              break
+            fi
+            echo "Waiting for startup ($attempt/60)"
+            sleep 1
+          done
+          timeout 120 docker exec smoke-scrapling /usr/bin/env -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            HOME=/tmp XDG_CACHE_HOME=/tmp/.cache PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+            PYTHONDONTWRITEBYTECODE=1 /app/.venv/bin/python /smoke.py

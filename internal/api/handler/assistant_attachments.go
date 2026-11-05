@@ -13,11 +13,6 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
 
-// attachmentExtractionsPerHour bounds how many documents one caller may have read per
-// hour. Each one is a pdftotext subprocess, and nothing about a conversation needs more
-// than a handful; the bound is against a script, not a person.
-const attachmentExtractionsPerHour = 60
-
 // errAttachmentNoText mirrors the résumé upload's own message for the same cause: the file
 // parsed cleanly and carried no text layer.
 const errAttachmentNoText = "couldn't read any text from this PDF — it looks like a scan or image. Attach a text-based PDF, or paste the text instead."

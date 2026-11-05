@@ -16,9 +16,8 @@ import (
 // which RequestCtx.Value exposes as a context — the same context the MCP adaptor hands
 // the SDK — so Fiber handlers and MCP tools reach it alike. A nil sink records nothing.
 //
-// The viewer is the account when one is known — a signed-in caller, or on /mcp/account
-// the header mcpAccountAuthenticate has already overwritten with a verified id, or the owner
-// of a full-scope API key the public gate verified — and
+// The viewer is the verified MCP account, a signed-in caller, or the owner
+// of a credential the trusted authentication service verified — and
 // otherwise the client IP (c.IP(), already resolved from the trusted proxy's X-Real-IP)
 // with the User-Agent.
 func agentViews(sink agentview.Sink, surface string) fiber.Handler {
@@ -26,14 +25,17 @@ func agentViews(sink agentview.Sink, surface string) fiber.Handler {
 		if sink == nil {
 			return c.Next()
 		}
-		userID, _ := auth.UserID(c)
-		if userID == 0 {
-			userID, _ = c.Locals(localsGateKeyUser).(int64)
-		}
+		userID, _ := c.Locals(localsMCPUserID).(int64)
 		// The header is trusted only where mcpAccountAuthenticate has just rewritten it;
 		// on the public surfaces a client could send any value.
 		if userID == 0 && surface == agentview.SurfaceMCPAccount {
 			userID, _ = strconv.ParseInt(c.Get(mcpapp.AccountUserIDHeader), 10, 64)
+		}
+		if userID == 0 {
+			userID, _ = auth.UserID(c)
+		}
+		if userID == 0 {
+			userID, _ = c.Locals(localsExternalCallerID).(int64)
 		}
 		agentview.Attach(c.Context().SetUserValue, sink, surface,
 			agentview.ViewerKey(userID, c.IP(), c.Get(fiber.HeaderUserAgent)))

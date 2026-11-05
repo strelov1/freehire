@@ -30,23 +30,12 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/platform/db"
-)
-
-// DefaultReportWindow/DefaultReportCap bound how many reports one user can file per
-// window. Filing is cheap and honest reporting should never hit this — the cap exists
-// so one account cannot label the catalogue. It is deliberately looser than
-// companyfeedback's, because a report carries no text to moderate.
-const (
-	DefaultReportWindow = 24 * time.Hour
-	DefaultReportCap    = 30
 )
 
 // Sentinel errors, mapped to HTTP statuses by the handler.
@@ -60,41 +49,18 @@ var (
 	// ErrNotFound is a retraction of a report the user never filed, or already
 	// withdrew (404).
 	ErrNotFound = errors.New("processreport: not found")
-	// ErrRateLimited is a user over their window cap (429).
-	ErrRateLimited = errors.New("processreport: rate limit exceeded")
 )
-
-// Config bounds one user's filing rate. A zero value takes the defaults.
-type Config struct {
-	Window time.Duration
-	Cap    int
-}
-
-func (c Config) window() time.Duration {
-	if c.Window <= 0 {
-		return DefaultReportWindow
-	}
-	return c.Window
-}
-
-func (c Config) cap() int {
-	if c.Cap <= 0 {
-		return DefaultReportCap
-	}
-	return c.Cap
-}
 
 // Service files and withdraws process reports and keeps the company's counter in step.
 type Service struct {
 	q    *db.Queries
 	pool *pgxpool.Pool
-	cfg  Config
 }
 
 // New builds the service. The pool is needed as well as the queries because every
 // write runs in a transaction with its recompute.
-func New(q *db.Queries, pool *pgxpool.Pool, cfg Config) *Service {
-	return &Service{q: q, pool: pool, cfg: cfg}
+func New(q *db.Queries, pool *pgxpool.Pool) *Service {
+	return &Service{q: q, pool: pool}
 }
 
 // ValidKind reports whether kind is in the controlled vocabulary. Exported because the
@@ -116,9 +82,6 @@ func (s *Service) File(ctx context.Context, userID int64, slug, kind string) (in
 		return 0, ErrInvalidKind
 	}
 	if err := s.requireCompany(ctx, slug); err != nil {
-		return 0, err
-	}
-	if err := s.checkRate(ctx, userID); err != nil {
 		return 0, err
 	}
 
@@ -249,24 +212,6 @@ func (s *Service) requireCompany(ctx context.Context, slug string) error {
 	}
 	if !ok {
 		return ErrCompanyNotFound
-	}
-	return nil
-}
-
-// checkRate refuses a user who has filed more than the cap allows inside the window.
-// A revival takes the ON CONFLICT branch and leaves created_at untouched, so
-// retract-and-refile does not spend the allowance twice.
-func (s *Service) checkRate(ctx context.Context, userID int64) error {
-	since := time.Now().Add(-s.cfg.window())
-	n, err := s.q.CountRecentCompanyProcessReports(ctx, db.CountRecentCompanyProcessReportsParams{
-		UserID:    userID,
-		CreatedAt: pgtype.Timestamptz{Time: since, Valid: true},
-	})
-	if err != nil {
-		return err
-	}
-	if n >= int64(s.cfg.cap()) {
-		return ErrRateLimited
 	}
 	return nil
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/engage/ga4mp"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 	"github.com/strelov1/freehire/internal/identity/accounts"
@@ -45,9 +44,7 @@ type oauthRegistry interface {
 // host-only, for dev); the same set gates requestOrigin (see
 // auth.CookieDomainForHost).
 type authHandlers struct {
-	queries *db.Queries
-	// rateTiers is the public-read ladder, for the key-management page's own rate.
-	rateTiers     RateTiers
+	queries       *db.Queries
 	issuer        *auth.Issuer
 	cookieSecure  bool
 	cookieDomains []string
@@ -71,8 +68,8 @@ type authHandlers struct {
 	accounts    *accounts.Service
 	// invites attributes a new account to whoever's link brought it. Optional and nil-safe:
 	// attribution must never be able to fail a sign-up. See withInvites.
-	invites         *promo.Service
-	throttler       ratelimit.Throttler
+	invites *promo.Service
+
 	authV2Enabled   bool
 	mobileCallbacks map[string]string
 	mobileAuth      *mobileauth.Store
@@ -103,7 +100,7 @@ func (h *authHandlers) withAccountDeletion(eraser accountEraser, emails accountE
 	h.accountEmails = emails
 }
 
-func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, throttler ratelimit.Throttler, issuer *auth.Issuer, cookieSecure bool, cookieDomains []string, providers oauthRegistry, frontendOrigin string, extensionRedirectAllowlist []string, servedHosts []string) *authHandlers {
+func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, issuer *auth.Issuer, cookieSecure bool, cookieDomains []string, providers oauthRegistry, frontendOrigin string, extensionRedirectAllowlist []string, servedHosts []string) *authHandlers {
 	pushStore := pushnotify.NewQueriesStore(queries)
 	return &authHandlers{
 		queries:                    queries,
@@ -116,7 +113,6 @@ func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, throttler ratelimi
 		extensionRedirectAllowlist: extensionRedirectAllowlist,
 		servedHosts:                servedHostsOrDefault(servedHosts, frontendOrigin),
 		accounts:                   accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
-		throttler:                  throttler,
 		pushNotifier:               pushnotify.NewExpoNotifier(pushStore, pushStore, pushStore),
 		ga4:                        ga4Reporter(),
 		browserOrigins:             auth.BrowserOrigins(frontendOrigin, cookieDomains, servedHosts...),
@@ -159,10 +155,9 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// the account there. Cookie-only and recent-auth-gated on the request for the same
 	// reason as the password — the address is a sign-in credential. Confirm needs no
 	// fresh proof of its own: the code it spends could only be issued behind that gate.
-	// Same limits as verification: request sends mail, confirm is a code-guessing surface.
-	meGroup.Post("/email", ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("email-change-req"), 5, time.Minute),
+	meGroup.Post("/email",
 		mw.cookie, recent, h.RequestEmailChange)
-	meGroup.Post("/email/confirm", ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("email-change-conf"), 10, 15*time.Minute),
+	meGroup.Post("/email/confirm",
 		mw.cookie, h.ConfirmEmailChange)
 	meGroup.Post("/api-keys", mw.cookie, recent, h.CreateAPIKey)
 	meGroup.Get("/api-keys", mw.cookie, h.ListAPIKeys)
@@ -180,12 +175,11 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// Push-token registration is cookie-only for the same reason key management
 	// is: a leaked API key must not be able to redirect another device's push
 	// notifications to itself. The self-test send only ever targets the
-	// caller's own registered token(s) — see TestPushToken — and is rate-limited
-	// since it calls out to Expo's push API once per registered device.
+	// caller's own registered token(s) — see TestPushToken.
 	meGroup.Post("/push-tokens", mw.cookie, h.RegisterPushToken)
 	meGroup.Get("/push-tokens", mw.cookie, h.ListPushTokens)
 	meGroup.Delete("/push-tokens", mw.cookie, h.UnregisterPushToken)
-	meGroup.Post("/push-tokens/test", mw.cookie, testPushTokenLimiter(h.throttler), h.TestPushToken)
+	meGroup.Post("/push-tokens/test", mw.cookie, h.TestPushToken)
 
 	// The in-app notification center: a durable, channel-independent record of
 	// every delivered subscription digest/reminder/nudge. Cookie-only, same
@@ -210,13 +204,6 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// me is guarded and accepts a session cookie OR an API key, so a non-browser
 	// client (e.g. the CLI) can resolve its own identity with its key. It stays a
 	// read of the caller's own user — not key management, which is cookie-only.
-	// Throttle credential endpoints against online brute-force / credential stuffing.
-	loginLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("login"), 10, time.Minute)
-	registerLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("register"), 5, time.Minute)
-	verifyReqLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("verify-req"), 5, time.Minute)
-	verifyConfLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("verify-conf"), 10, 15*time.Minute)
-	forgotLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("forgot"), 3, 5*time.Minute)
-	resetLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("reset"), 10, 15*time.Minute)
 
 	authGroup := api.Group("/auth", noCache)
 	// sameOrigin binds session-issuing routes to the browser origins this deployment
@@ -230,18 +217,17 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// only on top-level navigations), so those routes need no origin gate; and
 	// API-key callers of /auth/me send no Origin at all.
 	sameOrigin := h.requireSameOrigin()
-	authGroup.Post("/register", sameOrigin, registerLimiter, h.Register)
-	authGroup.Post("/login", sameOrigin, loginLimiter, h.Login)
+	authGroup.Post("/register", sameOrigin, h.Register)
+	authGroup.Post("/login", sameOrigin, h.Login)
 	authGroup.Post("/logout", sameOrigin, h.Logout)
 	// Email verification. Cookie-only and identified by the session, never by a body
-	// field, so neither endpoint can be pointed at someone else's address. Both ride the
-	// credential limiter: confirm is a code-guessing surface, request is a mail-sending one.
-	authGroup.Post("/verify/request", verifyReqLimiter, mw.cookie, h.RequestEmailVerification)
-	authGroup.Post("/verify/confirm", verifyConfLimiter, mw.cookie, h.ConfirmEmailVerification)
+	// field, so neither endpoint can be pointed at someone else's address. Confirm is a code-guessing surface; request sends mail.
+	authGroup.Post("/verify/request", mw.cookie, h.RequestEmailVerification)
+	authGroup.Post("/verify/confirm", mw.cookie, h.ConfirmEmailVerification)
 	// Password recovery. Public — the mailed code is the credential. forgot always answers
 	// 202 (never an enumeration oracle); reset revokes every session on success.
-	authGroup.Post("/password/forgot", forgotLimiter, h.ForgotPassword)
-	authGroup.Post("/password/reset", resetLimiter, h.ResetPassword)
+	authGroup.Post("/password/forgot", h.ForgotPassword)
+	authGroup.Post("/password/reset", h.ResetPassword)
 	// Sign out everywhere. Cookie-only (like key management): revoking a human's sessions
 	// is not something a programmatic credential should be able to do, and sameOrigin
 	// keeps a cross-site form from revoking the browser's sessions either.
@@ -282,13 +268,14 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// surface (social sign-in) that happens to share the "oauth" word.
 	//
 	// Dynamic client registration (RFC 7591): public, no session involved yet.
-	api.Post("/oauth/register", noCache, oauthRegisterLimiter(h.throttler), h.RegisterOAuthClient)
+	api.Post("/oauth/register", noCache, h.RegisterOAuthClient)
 	// Metadata discovery (RFC 8414 / RFC 9728): public and cacheable (no
 	// noCache), proxied from /.well-known/* by the SvelteKit app — see
 	// oauth_metadata.go for why a direct Go route at the well-known path
 	// itself would never be reached.
 	api.Get("/oauth/metadata/authorization-server", h.OAuthAuthorizationServerMetadata)
 	api.Get("/oauth/metadata/protected-resource", h.OAuthProtectedResourceMetadata)
+	api.Get("/oauth/metadata/protected-resource/mcp", h.OAuthMixedResourceMetadata)
 	// Authorize step: GET shows consent (sessionless visitors are sent to sign
 	// in first), POST acts on the decision. optionalCookie on GET for the same
 	// reason the extension flow uses it on its own GET — see oauth_authorize.go.

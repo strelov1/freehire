@@ -86,6 +86,16 @@ func TestToolCallIsReportedToPostHog(t *testing.T) {
 // text never leaves, nor does the tool name of a call to a tool that does not exist,
 // and no $exception or $mcp_unknown_tool event is sent.
 func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
+	for _, mixed := range []bool{false, true} {
+		name := "account"
+		if mixed {
+			name = "mixed"
+		}
+		t.Run(name, func(t *testing.T) { testPrivateCallAnalytics(t, mixed) })
+	}
+}
+
+func testPrivateCallAnalytics(t *testing.T, mixed bool) {
 	sent := recordPostHog(t)
 	const email = "jane@example.com"
 
@@ -96,7 +106,13 @@ func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 			return nil, errors.New("applicant " + email + " answered 'visa: H1B'")
 		},
 	}
-	server := httptest.NewServer(AccountHandler([]assistant.Tool{tool}, "", nil))
+	handler := AccountHandler([]assistant.Tool{tool}, "", nil)
+	serverName := "freehire-account"
+	if mixed {
+		handler = MixedHandler([]assistant.Tool{tool}, "", readerThatFinds(t))
+		serverName = "freehire"
+	}
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
 	header := http.Header{}
@@ -124,7 +140,7 @@ func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 	_, _ = session.CallTool(context.Background(), &mcp.CallToolParams{Name: "visa_H1B", Arguments: map[string]any{}})
 
 	got := sent()
-	for _, want := range []string{`"$mcp_tool_call"`, `"$mcp_server_name":"freehire-account"`, `"$mcp_tool_name":"failing"`, `"$mcp_is_error":true`} {
+	for _, want := range []string{`"$mcp_tool_call"`, `"$mcp_server_name":"` + serverName + `"`, `"$mcp_tool_name":"failing"`, `"$mcp_is_error":true`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("PostHog payload lacks %s; got %s", want, got)
 		}

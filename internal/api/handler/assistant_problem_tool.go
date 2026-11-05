@@ -18,7 +18,7 @@ func (h *assistantHandlers) problemMCPTools() []assistant.Tool {
 			"Give concise summaries of the user's goal, expected result, and actual failure. Include a tool name and error code when known. " +
 			"Do not include conversations, CV contents, credentials, tokens, personal contact details, or URL query strings. " +
 			"A successful receipt means the report was recorded for review; it does not mean the issue is fixed or that a reply is guaranteed. " +
-			"Repeated matching open reports for this account increase request_count. Each submission shares a limit of 20 per account per UTC day. " +
+			"Repeated matching open reports for this account increase request_count. " +
 			"Use only for an observed problem, and never report a failure of report_problem itself recursively.",
 		Schema: map[string]any{
 			"type": "object",

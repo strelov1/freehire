@@ -16,10 +16,6 @@ import (
 // rendering of their photo. All three are unauthenticated by design — the catalogue is
 // the front door of the feature, and a signed-out visitor is exactly who it is for — so
 // none of the routes take any auth middleware.
-//
-// What they do take is a rate limiter. This is a small, complete, machine-readable set of
-// people, which is precisely the thing worth copying in one evening; the limiter is the
-// only thing standing between the catalogue and a copy of it.
 type talentCatalogHandlers struct {
 	catalogue *talentnetwork.Catalogue
 	photos    *headshot.Store
@@ -30,18 +26,12 @@ func newTalentCatalogHandlers(catalogue *talentnetwork.Catalogue, photos *headsh
 }
 
 func (h *talentCatalogHandlers) register(api fiber.Router, mw middleware) {
-	// The limiter is attached to these routes rather than to a group, so it cannot
-	// be lost by a later reshuffle that moves a route out of the group it was assumed to
-	// be in. It is the catalogue's OWN budget, not the shared public-read one — see
-	// talentCatalogPerMinute for why a read that returns people is bounded separately
-	// from one that returns postings.
-	limiter := talentCatalogLimiter(mw.throttler)
-	api.Get("/talent", limiter, h.List)
+	api.Get("/talent", h.List)
 	// Before the parametrised route, or `/talent/:handle` swallows it and every request
 	// for the facets is answered as a lookup of a member called "facets".
-	api.Get("/talent/facets", limiter, h.Facets)
-	api.Get("/talent/:handle", limiter, h.Get)
-	api.Get("/talent/:handle/photo", limiter, h.GetPhoto)
+	api.Get("/talent/facets", h.Facets)
+	api.Get("/talent/:handle", h.Get)
+	api.Get("/talent/:handle/photo", h.GetPhoto)
 }
 
 // Facets serves how many members stand behind each filter value, for the filter the
@@ -50,8 +40,7 @@ func (h *talentCatalogHandlers) register(api fiber.Router, mw middleware) {
 // It is what makes the open vocabularies usable: skills are thousands of canonicals, and
 // a control offering them without counts cannot tell a value nobody carries from one
 // whose members have all left. Same query vocabulary as the list, same unread-param
-// report, same rate-limit budget — a filtering visitor makes two requests where a reader
-// makes one, and what bounds scraping the catalogue should bound scraping its shape.
+// report.
 func (h *talentCatalogHandlers) Facets(c *fiber.Ctx) error {
 	vals := queryValues(c)
 	q, unreadable := talentnetwork.QueryFromValues(vals)

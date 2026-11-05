@@ -148,8 +148,3 @@ UPDATE referral_requests
 SET status = sqlc.arg(status), acted_by = sqlc.arg(acted_by), acted_at = now()
 WHERE id = sqlc.arg(id) AND status = 'sent'
 RETURNING *;
-
--- name: CountReferralRequestsSince :one
--- How many requests a seeker has created since a cutoff — the per-day cap check.
-SELECT count(*) FROM referral_requests
-WHERE seeker_user_id = sqlc.arg(seeker_user_id) AND created_at >= sqlc.arg(since);

@@ -80,14 +80,6 @@ WHERE c.id = sqlc.arg(id);
 -- name: ListConversationParticipants :many
 SELECT user_id, persona FROM conversation_participants WHERE conversation_id = $1 ORDER BY user_id;
 
--- name: CountConversationsStartedSince :one
--- How many conversations of the kind starter_id started after since, and when the oldest
--- of them was started (NULL when there are none): that instant plus the window is when a
--- slot frees up.
-SELECT count(*)::bigint AS started, min(created_at)::timestamptz AS oldest
-FROM conversations
-WHERE starter_id = sqlc.arg(starter_id) AND kind = sqlc.arg(kind) AND created_at > sqlc.arg(since);
-
 -- name: UsersBlocked :one
 -- A block between the two accounts in either direction.
 SELECT EXISTS (

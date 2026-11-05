@@ -21,7 +21,7 @@ func newGeoHandlers() *geoHandlers {
 }
 
 func (h *geoHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/geo/cities", publicReadLimiter(mw.public), h.SearchCities)
+	api.Get("/geo/cities", h.SearchCities)
 }
 
 // cityMatch is the wire shape of one city-search result. country is a raw ISO
