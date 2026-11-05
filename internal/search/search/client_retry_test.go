@@ -166,3 +166,19 @@ func TestGetRetryTransportBounds(t *testing.T) {
 		t.Errorf("POST was sent %d times, want 1", reqs.Load())
 	}
 }
+
+// TestEngineHTTPClientKeepsIdlePool pins the idle pool the SDK's own transport had:
+// the Go default of two per host would redial under concurrent search traffic.
+func TestEngineHTTPClientKeepsIdlePool(t *testing.T) {
+	rt, ok := newEngineHTTPClient().Transport.(*getRetryTransport)
+	if !ok {
+		t.Fatal("engine client does not use getRetryTransport")
+	}
+	base, ok := rt.base.(*http.Transport)
+	if !ok {
+		t.Fatalf("base transport is %T, want *http.Transport", rt.base)
+	}
+	if base.MaxIdleConnsPerHost != engineMaxIdleConnsPerHost {
+		t.Errorf("MaxIdleConnsPerHost = %d, want %d", base.MaxIdleConnsPerHost, engineMaxIdleConnsPerHost)
+	}
+}

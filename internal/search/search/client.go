@@ -161,11 +161,7 @@ func NewClient(url, key string, opts ...Option) *Client {
 	// and nothing above them retries (a rebuild's task polling), so they get
 	// getRetryTransport instead. Failed POST batches are retried or requeued
 	// by the worker callers.
-	httpClient := &http.Client{Transport: &getRetryTransport{
-		base:    http.DefaultTransport.(*http.Transport).Clone(),
-		backoff: func(attempt int) time.Duration { return time.Duration(attempt) * time.Second },
-	}}
-	m := meilisearch.New(url, meilisearch.WithAPIKey(key), meilisearch.WithCustomClient(httpClient), meilisearch.DisableRetries())
+	m := meilisearch.New(url, meilisearch.WithAPIKey(key), meilisearch.WithCustomClient(newEngineHTTPClient()), meilisearch.DisableRetries())
 	c := &Client{
 		manager:          m,
 		facet:            m.Index(facetIndexUID),

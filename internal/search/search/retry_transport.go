@@ -9,6 +9,9 @@ import (
 // (the SDK's own default was three retries).
 const getRetryAttempts = 3
 
+// engineMaxIdleConnsPerHost matches the SDK's default transport; the engine is one host.
+const engineMaxIdleConnsPerHost = 100
+
 // getRetryTransport re-sends GET and HEAD requests that met a transient 502/503/504.
 // It exists because the Meilisearch SDK's retry loop re-sends a request whose body
 // has already been consumed, so it cannot be left on for POSTs (see NewClient); a
@@ -17,6 +20,18 @@ const getRetryAttempts = 3
 type getRetryTransport struct {
 	base    http.RoundTripper
 	backoff func(attempt int) time.Duration
+}
+
+// newEngineHTTPClient is the HTTP client NewClient hands the SDK. Passing a client
+// replaces the SDK's own transport, so its idle pool is restated here: Go's default of
+// two idle connections per host would close and redial under concurrent search traffic.
+func newEngineHTTPClient() *http.Client {
+	base := http.DefaultTransport.(*http.Transport).Clone()
+	base.MaxIdleConnsPerHost = engineMaxIdleConnsPerHost
+	return &http.Client{Transport: &getRetryTransport{
+		base:    base,
+		backoff: func(attempt int) time.Duration { return time.Duration(attempt) * time.Second },
+	}}
 }
 
 func (t *getRetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
