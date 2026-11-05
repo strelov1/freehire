@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -17,6 +18,7 @@ func AnalyticsPool(ctx context.Context, primary *pgxpool.Pool) (*pgxpool.Pool, e
 	dsn := os.Getenv("ANALYTICS_DATABASE_URL")
 	configured := dsn != ""
 	if !configured {
+		log.Print("analytics: ANALYTICS_DATABASE_URL is unset; reading statistics from the primary")
 		dsn = primary.Config().ConnConfig.ConnString()
 	}
 	reader, err := database.Connect(ctx, dsn, func(c *pgxpool.Config) {

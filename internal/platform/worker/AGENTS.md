@@ -260,3 +260,18 @@ separate read-only primary session. The writer remains unchanged. Reader queries
 are bounded to thirty minutes, idle transactions to one minute, and two pool
 connections. Rollups compute their complete results before opening the primary
 publication transaction; failures preserve the previous published snapshot.
+
+The analytics standby needs `hot_standby_feedback=on` to protect active
+aggregates from primary vacuum cleanup. Statements retain tuples only for their
+own bounded read transaction; do not hold one snapshot across the entire run.
+Keep replay delay bounded and monitor replica lag and snapshot freshness:
+repeated recovery conflicts must fail the worker and alert on stale results.
+Production service units must require the analytics environment file. An unset
+URL logs a warning and uses the development reader on the primary.
+
+Company/day aggregates are materialized before primary publication so slow
+analytics reads cannot pin the primary publication transaction. Size worker
+memory for the retained history and enforce a service memory limit; an exhausted
+reader leaves the previous snapshot intact. If this dataset exceeds that budget,
+spool the computed snapshot before publication rather than streaming a long
+standby query inside the primary transaction.
