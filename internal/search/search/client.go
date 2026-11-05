@@ -155,7 +155,20 @@ func WithEmbedConcurrency(n int) Option {
 // via the WithEmbed* options (wired from the EMBED_* env in internal/platform/config, so this
 // package stays env-free).
 func NewClient(url, key string, opts ...Option) *Client {
-	m := meilisearch.New(url, meilisearch.WithAPIKey(key))
+	// The SDK's built-in retry (on 502/503/504, 3 attempts) is disabled because
+	// meilisearch-go v0.36.3 re-sends an ALREADY-CONSUMED request body on every
+	// retry: sendRequest builds the body once into a pooled *bytes.Buffer, and the
+	// retry loop re-uses the drained reader, so attempt 2 goes out with a zero-byte
+	// body. Meilisearch answers that POST with 400 missing_payload, which then
+	// surfaces as the logged fault instead of the transient 503 that caused the
+	// retry — measured in production 2026-11-05 (POST /indexes/companies/documents/
+	// fetch, freehire#e6280e53). Retrying a GET is pointless (it carries no body),
+	// and a failed POST is re-driven by its caller (the reindex batch loop, the
+	// search-drain requeue) far better than an in-client blind re-send could. The
+	// upstream fix (rewinding via http.Request.GetBody on retry) is in meilisearch-go
+	// main but in no released version; drop this option on the first release that
+	// carries it.
+	m := meilisearch.New(url, meilisearch.WithAPIKey(key), meilisearch.DisableRetries())
 	c := &Client{
 		manager:          m,
 		facet:            m.Index(facetIndexUID),
