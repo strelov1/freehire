@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -47,6 +48,13 @@ const reindexBatchSize = 2000
 // logs only on completion, so the heartbeat distinguishes a slow run from a stalled
 // one (the totals stop advancing).
 const progressInterval = 60 * time.Second
+
+// drainHoldTTL is how long the drain stays paused if this process dies without lifting it.
+const drainHoldTTL = 30 * time.Minute
+
+// lookupWorkMem is the sort and hash budget for the whole-catalogue lookups, as in the rollups:
+// at the default both spill to disk for hours.
+const lookupWorkMem = "256MB"
 
 func main() {
 	worker.Main(run)
@@ -145,14 +153,22 @@ func run() int {
 	// and reading them was most of the rebuild's cost (see ListIndexableJobsByIDAfter).
 	reader := worker.NewIndexableScanReader(q)
 	done := worker.Stage("reality lookup")
-	lookup, err := buildRealityLookup(ctx, q)
+	var lookup realityLookup
+	err = withLookupMemory(ctx, pool, func(q *db.Queries) (err error) {
+		lookup, err = buildRealityLookup(ctx, q)
+		return err
+	})
 	if err != nil {
 		log.Printf("reindex: build reality lookup: %v", err)
 		return 1
 	}
 	done()
 	done = worker.Stage("closure geo lookup")
-	geo, err := buildClosureGeoLookup(ctx, q)
+	var geo closureGeoLookup
+	err = withLookupMemory(ctx, pool, func(q *db.Queries) (err error) {
+		geo, err = buildClosureGeoLookup(ctx, q)
+		return err
+	})
 	if err != nil {
 		log.Printf("reindex: build closure geo lookup: %v", err)
 		return 1
@@ -161,6 +177,15 @@ func run() int {
 
 	// Builds a fresh index and atomically swaps it in — transiently a second full copy
 	// of the index (disk already guarded up front, before the recompute).
+	// Only from here does the rebuild write to Meilisearch, so only from here does it compete
+	// with the drain, whose pushes re-merge the whole index. Everything above reads Postgres:
+	// pausing the drain from the start kept new jobs and alerts waiting about 6 hours for nothing.
+	releaseDrain, err := worker.HoldPause(ctx, cfg.RedisURL, worker.SearchDrainJob, drainHoldTTL)
+	if err != nil {
+		log.Printf("reindex: could not pause the drain, the load will compete with it: %v", err)
+	} else {
+		defer releaseDrain()
+	}
 	log.Print("reindex: target=facet scope=full mode=swap")
 	done = worker.Stage("index and swap")
 	indexed, skipped, err := reindexFull(ctx, reader, client.NewFacetRebuild(), lookup, geo, q, q, time.Now())
@@ -601,6 +626,21 @@ func forEachCompany(ctx context.Context, companies []string, workers int, fn fun
 
 // buildRealityLookup precomputes the whole-catalogue role-cluster counts once, so the
 // per-job classification during the rebuild is a map read, not N queries.
+func withLookupMemory(ctx context.Context, pool *pgxpool.Pool, read func(*db.Queries) error) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, "SET LOCAL work_mem = '"+lookupWorkMem+"'"); err != nil {
+		return err
+	}
+	if err := read(db.New(pool).WithTx(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func buildRealityLookup(ctx context.Context, q *db.Queries) (realityLookup, error) {
 	rows, err := q.RoleClusterCountsAll(ctx)
 	if err != nil {
