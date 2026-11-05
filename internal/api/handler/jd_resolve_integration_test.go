@@ -93,7 +93,7 @@ func TestJDResolveEndpoint(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	cookieAuth := auth.RequireAuth(iss, testVersions)
-	app.Post("/api/v1/me/jd/resolve", cookieAuth, jdURLLimiter(newTestThrottler(t)), h.Resolve)
+	app.Post("/api/v1/me/jd/resolve", cookieAuth, h.Resolve)
 
 	post := func(t *testing.T, body map[string]string, withCookie bool) (*http.Response, map[string]any) {
 		t.Helper()
@@ -223,29 +223,4 @@ func TestJDResolveEndpoint(t *testing.T) {
 		}
 	})
 
-	t.Run("job_slug and text requests never spend the url rate limit", func(t *testing.T) {
-		// jdURLLimiterPerHour (== contributionsPerHour, 20) would reject request #21 if
-		// job_slug/text shared the url branch's budget. None of these touch the network, so
-		// none should ever be limited.
-		for i := 0; i < jdURLLimiterPerHour+5; i++ {
-			resp, _ := post(t, map[string]string{"job_slug": seededSlug}, true)
-			if resp.StatusCode == fiber.StatusTooManyRequests {
-				t.Fatalf("request %d: got 429, want job_slug requests to never be url-rate-limited", i+1)
-			}
-		}
-	})
-
-	t.Run("url requests are still rate limited on their own budget", func(t *testing.T) {
-		var limited bool
-		for i := 0; i < jdURLLimiterPerHour+1; i++ {
-			resp, _ := post(t, map[string]string{"url": "https://careers.mindera.test/many"}, true)
-			if resp.StatusCode == fiber.StatusTooManyRequests {
-				limited = true
-				break
-			}
-		}
-		if !limited {
-			t.Errorf("%d url requests never hit 429, want the url branch's own budget enforced", jdURLLimiterPerHour+1)
-		}
-	})
 }

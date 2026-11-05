@@ -54,24 +54,6 @@ func (q *Queries) CompanyHasApprovedReferrer(ctx context.Context, companySlug st
 	return exists, err
 }
 
-const countReferralRequestsSince = `-- name: CountReferralRequestsSince :one
-SELECT count(*) FROM referral_requests
-WHERE seeker_user_id = $1 AND created_at >= $2
-`
-
-type CountReferralRequestsSinceParams struct {
-	SeekerUserID int64              `json:"seeker_user_id"`
-	Since        pgtype.Timestamptz `json:"since"`
-}
-
-// How many requests a seeker has created since a cutoff — the per-day cap check.
-func (q *Queries) CountReferralRequestsSince(ctx context.Context, arg CountReferralRequestsSinceParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countReferralRequestsSince, arg.SeekerUserID, arg.Since)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createReferralOffer = `-- name: CreateReferralOffer :one
 INSERT INTO referral_offers (user_id, company_slug, proof_object_key, linkedin_url)
 VALUES ($1, $2, $3, $4)

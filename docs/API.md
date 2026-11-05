@@ -10,7 +10,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Response envelope](#response-envelope)
 - [Pagination](#pagination)
 - [Errors](#errors)
-- [Rate limits and API plans](#rate-limits-and-api-plans)
+- [API plans](#api-plans)
 - [Authentication model](#authentication-model)
 - [External vs internal endpoints](#external-vs-internal-endpoints)
 - [What is not here](#what-is-not-here)
@@ -66,28 +66,15 @@ Pagination is bounded on **every** list endpoint: `offset + limit` may not excee
 
 The bound is a refusal rather than a clamp, deliberately: a clamped page would answer 200 carrying rows you did not ask for, and a client walking pages would loop over the same page forever without being able to tell. A 400 means "there is no such page", which is the truth.
 
-It applies whichever store answers the endpoint, and it is not the same thing as the rate limit. A rate limit bounds requests per minute; on an endpoint whose `offset` you choose, the work per request is also yours to choose — so a client inside its request budget can still be asking for far more work than the budget implies. Both bounds exist and neither substitutes for the other.
-
 ## Errors
 
 Errors use standard HTTP status codes: 400 (bad request / invalid value), 401 (missing or invalid credentials), 403 (authenticated but not allowed, e.g. a non-moderator), 404 (no such job, company, or owned resource), and 503 (search temporarily unavailable). The body is always `{ "error": ... }`.
 
-## Rate limits and API plans
+## API plans
 
-The public read endpoints answer without a key, limited per address — for personal and non-commercial use. Showing the postings in a product you offer to others needs an API plan. `GET /plans` reports the figures in force as `api_limits`; every response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`, and a refusal is `429` with `Retry-After`.
+The public read endpoints answer without a key for personal and non-commercial use. Showing the postings in a product you offer to others needs an [API plan](https://freehire.me/jobs-api), under the [data licence](https://freehire.me/terms#data-licence).
 
-With a full-access key the budget is per account instead, shared by all of its full-access keys and by the access tokens of its signed-in MCP and CLI connections, and its size is the account's tier: Pro and Ultra raise it, and the [API and Data plans](https://freehire.me/jobs-api) raise it further. By default the API and Data plans have no daily cap, and Data has the highest per-minute limit. An embed key is budgeted like no key. Send the key as `Authorization: Bearer <token>`. An API plan also licenses the data for use in your own product, under the [data licence](https://freehire.me/terms#data-licence).
-
-The budgets in force on freehire.me. Every public REST read draws on the same one (the ChatGPT app keeps its own); `api_limits.tiers` in `GET /plans` lists the figures in force.
-
-| Tier | Per minute | Per day |
-|---|---|---|
-| No key (per address) | 120 | 2,000 |
-| Free account | 600 | 10,000 |
-| Pro | 800 | 30,000 |
-| Ultra | 1,000 | 100,000 |
-| [API](https://freehire.me/jobs-api) | 1,200 | no cap |
-| [Data](https://freehire.me/jobs-api) | 6,000 | no cap |
+Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.
 
 ## Authentication model
 
@@ -982,7 +969,7 @@ curl "https://freehire.me/api/v1/companies/acme/feedback"
 
 ## Authentication
 
-Register/login set the session cookie and return the user. Logout clears it. `me` resolves the caller (cookie or API key). OAuth sign-in is a redirect flow. Credential endpoints are rate-limited.
+Register/login set the session cookie and return the user. Logout clears it. `me` resolves the caller (cookie or API key). OAuth sign-in is a redirect flow.
 
 ### `POST /auth/register`
 
@@ -1983,7 +1970,7 @@ curl -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/extend" -H "Aut
 
 Mint a short-lived credential for a hands-free voice call.
 
-Only on an `interview` session; `409` otherwise. Rate-limited to 20 calls started per hour per caller. The audio itself never reaches this server: take the returned `value` to `calls_url` (this deployment’s own realtime gateway, not api.openai.com directly) to negotiate the WebRTC call. `501` when voice mode is not configured.
+Only on an `interview` session; `409` otherwise. The audio itself never reaches this server: take the returned `value` to `calls_url` (this deployment’s own realtime gateway, not api.openai.com directly) to negotiate the WebRTC call. `501` when voice mode is not configured.
 
 **Path parameters**
 
@@ -2068,7 +2055,7 @@ curl -X POST "https://freehire.me/api/v1/submissions" \
 
 Parse a job URL into a draft submission for review before posting.
 
-Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no submission, no allowance spent. An unrecognized URL returns an empty object rather than an error. A URL the catalogue already carries returns only `existing_job_slug`, and `POST /submissions` would refuse it. Rate-limited (shares the outbound-fetch budget).
+Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no submission, no allowance spent. An unrecognized URL returns an empty object rather than an error. A URL the catalogue already carries returns only `existing_job_slug`, and `POST /submissions` would refuse it.
 
 **Body**
 
@@ -2145,7 +2132,7 @@ One person states they applied to a posting and were never answered, feeding the
 
 File a claim that you applied and got no response.
 
-An unproven (unverified) address is a `403`; a closed job or a claim you already have on this job is a `409`; past the daily cap is a `429`.
+An unproven (unverified) address is a `403`; a closed job or a claim you already have on this job is a `409`.
 
 **Path parameters**
 
@@ -2437,7 +2424,7 @@ curl "https://freehire.me/api/v1/jobs/find?url=https%3A%2F%2Fboards.greenhouse.i
 
 Hand freehire a link: import the posting, and the board behind it.
 
-Five outcomes in one shape, distinguished by status: **200 found** — the catalogue already carries the vacancy. Either the URL itself is stored (nothing is fetched or written), or the page turned out to be a second copy of a posting we already carry under another source, in which case the answer names the one we had; **201 tracked** — we crawl that board already and the posting just had not landed, so it was imported now; **201 imported** — imported, and its board queued for onboarding; **201 review** — imported, but its careers site names no board we can crawl, so the link went to manual triage; **202 queued** — nothing could read the page, so the link went to manual triage. `company_slug` is returned whenever the catalogue already carries the employer, through any source — independent of what became of the board. Rate-limited, because it makes the server fetch a URL you chose. A URL that is not http(s) is a 422.
+Five outcomes in one shape, distinguished by status: **200 found** — the catalogue already carries the vacancy. Either the URL itself is stored (nothing is fetched or written), or the page turned out to be a second copy of a posting we already carry under another source, in which case the answer names the one we had; **201 tracked** — we crawl that board already and the posting just had not landed, so it was imported now; **201 imported** — imported, and its board queued for onboarding; **201 review** — imported, but its careers site names no board we can crawl, so the link went to manual triage; **202 queued** — nothing could read the page, so the link went to manual triage. `company_slug` is returned whenever the catalogue already carries the employer, through any source — independent of what became of the board. A URL that is not http(s) is a 422.
 
 **Body**
 
@@ -2686,7 +2673,7 @@ curl "https://freehire.me/api/v1/stats/embeddings"
 
 The same document as server-sent events, one per sample.
 
-A `progress` event carrying the full document on connect and after every 15-second sample, with a `ping` event between to keep idle connections alive. Connections are rate-limited per IP.
+A `progress` event carrying the full document on connect and after every 15-second sample, with a `ping` event between to keep idle connections alive.
 
 ```bash
 curl -N "https://freehire.me/api/v1/stats/embeddings/stream"
@@ -3089,7 +3076,7 @@ curl "https://freehire.me/api/v1/me/talent-network" -H "Authorization: Bearer $F
 
 The public catalogue of members, filtered and paged.
 
-Every filter takes values from a closed vocabulary or a number; there is no free-text search, because a card carries no free text to search. Values within one filter are OR, different filters narrow together, and an absent filter is identical to an empty one. A parameter this endpoint does not read — including one it recognises but cannot parse, like `min_years=lots` — is named in `meta.ignored_params` rather than silently widening the answer. Rate-limited by IP on its own budget.
+Every filter takes values from a closed vocabulary or a number; there is no free-text search, because a card carries no free text to search. Values within one filter are OR, different filters narrow together, and an absent filter is identical to an empty one. A parameter this endpoint does not read — including one it recognises but cannot parse, like `min_years=lots` — is named in `meta.ignored_params` rather than silently widening the answer.
 
 **Query parameters**
 
@@ -3466,7 +3453,7 @@ curl -X POST "https://freehire.me/api/v1/me/tracking/<slug>/followup" -H "Author
 
 Sweep your connected mailbox for mail belonging to this application.
 
-For an application whose mail arrived before you connected an inbox, or that a sync missed. Runs an LLM pass over your mailbox and returns matches as suggestions — it never links or writes the ledger itself; confirm a pick with `POST /me/tracking/{slug}/mail-recall/link`. Rate-limited. A `503` when no mail gateway is configured, a `502` when the model call fails.
+For an application whose mail arrived before you connected an inbox, or that a sync missed. Runs an LLM pass over your mailbox and returns matches as suggestions — it never links or writes the ledger itself; confirm a pick with `POST /me/tracking/{slug}/mail-recall/link`. A `503` when no mail gateway is configured, a `502` when the model call fails.
 
 **Path parameters**
 
@@ -3941,7 +3928,7 @@ Turns one recording into text for the assistant composer’s dictation control. 
 
 Transcribe one short audio recording to text.
 
-Multipart upload of the `file` part — webm, mp4, m4a, ogg, wav, or mp3, capped at ~8 minutes of audio (2 MB) and rate-limited to 60 recordings/hour per caller. `501` when no speech gateway is configured, `502` if the gateway call itself fails, `400` for an empty recording.
+Multipart upload of the `file` part — webm, mp4, m4a, ogg, wav, or mp3, capped at ~8 minutes of audio (2 MB). `501` when no speech gateway is configured, `502` if the gateway call itself fails, `400` for an empty recording.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/speech/transcriptions" \

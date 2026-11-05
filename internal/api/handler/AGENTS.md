@@ -33,29 +33,7 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   otherwise it marks `c.UserContext()`). The binding (`user_llm.go`) refuses a model client
   for an unmarked context, so handlers pass `c.UserContext()` (or a context detached from
   it, as the assistant turn and the fit stream do) to `bind`/`caller`. Tests that are not
-  about the gate mount `markPaidAI` in its place. It also carries the two rate-limit pieces: `outboundFetch`
-  (throttles endpoints that fetch a caller-supplied URL) and `throttler` (backs the
-  per-route limiters features build in their own `register`).
-- **A limiter is mounted AFTER the authentication gate, or it is keyed by IP — never
-  documented as one and mounted as the other.** `ratelimit.KeyByUserOrIP` reads the user id
-  a gate left in locals, and Fiber runs a route's handlers in registration order, so
-  `api.Get(path, limiter, mw.optional, h)` computes the key before anything has resolved a
-  caller: the `:user:` branch is unreachable and every signed-in caller shares their IP's
-  bucket. The three public read limiters shipped like that and nothing noticed, because
-  their tests mounted the key function on a bare `fiber.App` — where the order under test
-  is the test's, not the route's. So a limiter's test drives the route as `register`
-  actually mounts it (`public_read_limit_test.go`), and the choice of key follows the
-  mount: `publicread`/`agentsearch`/`suggest` are `KeyByIP` because their routes are
-  public reads and putting `OptionalAuth` in front of them would place an API-key database
-  lookup — which answers 503 on failure — ahead of the throttle on the hottest endpoints
-  in the product. Every `KeyByUserOrIP` limiter that remains (photo, promo, jd-resolve,
-  match analysis, mail recall, …) mounts its gate first.
-- **A route open to guests AND members budgets them separately** (`guest.go`'s
-  `memberOrGuestLimiter`, mounted after `mw.optional`): a per-user limiter for the signed-in,
-  a `KeyByIP` limiter under its own prefix for the signed-out. `KeyByUserOrIP` is the wrong
-  tool there — one limiter, one number, so a guest-sized budget would cap members too.
-  `POST /search/interpret` (40/h per user, 10/h per guest address) and
-  `POST /me/resume/extract` (unbudgeted members, 20/h per guest address) are the two.
+  about the gate mount `markPaidAI` in its place..
 - **A guest model call spends the service client directly, never through the binding.**
   `llmBinding.bind`/`caller` with user id 0 would ask `llmkey.Resolver.For` about account 0,
   which reads and then MINTS a gateway credential for it. The guest interpretation takes
@@ -65,24 +43,6 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   Fiber decompresses an encoded body with no ceiling; behind an account that is tolerable,
   without one a single request is enough. Signed-in callers of the same route are not
   refused, so a client that gzips today keeps working.
-- **A public read tells callers apart by the credential they present, and `public_gate.go`
-  does it itself.** `publicReadLimiter`/`agentSearchLimiter`/`chatAgentLimiter` all go through
-  one gate: trusted peer or the Cloudflare verified-bot secret passes; a full-scope API key
-  (`fhk_`) or a signed-in MCP/CLI access token (`fhm_`) is budgeted per ACCOUNT at its rate
-  tier — free, Pro, Ultra, API or Data (`rate_tiers.go`, each figure movable with
-  `API_RATE_<TIER>_PER_MINUTE`/`_PER_DAY`, read at boot, a bad value fails the boot); everyone
-  else is anonymous (per-route budgets, or the anonymous tier's shared budget under
-  `PUBLIC_ANON_LIMITS=strict`). Keyed tiers apply whether or not strict is on, which is why no
-  keyed minute may sit below the keyless per-route budget, and why the daily caps below the
-  API product wait for strict like the anonymous one (`RateTiers.inForce`, applied once in
-  `Register` so the gate, `/plans` and the API-keys page read one ladder) — tests hold both,
-  because a key worse than none is a key people delete. A refusal names the next rung up. The credential is
-  looked up only when one is presented, only when it has a minted token's shape, through a
-  cache fake tokens cannot evict, under a per-IP lookup budget and a timeout — and any failure
-  serves the request as anonymous rather than 503. An embed key never gets a keyed rate: it is
-  published inside other sites by design. The ChatGPT MCP surfaces (`chatAgentLimiter`) keep
-  the agent-search budget for ANONYMOUS callers under strict, because OpenAI's shared egress
-  addresses would turn a per-IP daily cap into a cap on the channel.
 - Services shared across features (résumé store, profile, plan, CV store/renderer,
   conversation store, match analyzer, contribution, moderation, the LLM spend resolver)
   are built once in `Register` and passed to each constructor; single-feature services are
@@ -120,8 +80,11 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
 
 ## Auth Handlers (`auth.go`)
 
+Trusted infrastructure can resolve credentials through the optional internal
+[authentication endpoint](../../../docs/agents/auth-infrastructure.md). Its caller
+metadata is attribution only; it never grants application permissions.
+
 - `register`/`login` set JWT cookie + return `{"data": user}`. `logout` clears it. `me` is guarded by `RequireAuthOrScopedKey` (cookie or API key — the narrow `cv` key included, so an agent can resolve which account its key belongs to).
-- Credential endpoints are rate-limited per route, keyed on client IP: register 5/min, login 10/min, verify-request 5/min, verify-confirm 10/15min, password/forgot 3/5min, password/reset 10/15min.
 
 ## Every `/api/v1/me/*` route refuses an anonymous caller (`signed_in_door.go`)
 
@@ -156,7 +119,8 @@ It is the **harness** surface, not "the agent surface": there are two agents on 
 
 The OAuth account MCP also exposes `suggest_dictionary_term`. It reuses
 `dictionaryHandlers.recordTerm`, including dictionary alias checks and the website's
-transactional per-user UTC-day budget. It only records a request for review, never
+atomic queue upsert. Request admission belongs to the operations gateway. It only
+records a request for review, never
 installs a filter. Agents submit a term the user wanted but the dictionary cannot
 resolve, without a separate suggestion request; zero search results alone do not
 prove a dictionary gap. Like the cookie-only dictionary endpoint, it is unavailable to
@@ -180,12 +144,12 @@ its own two bounds:
 | `GET /assistant/sessions/:id` | one conversation with its stored transcript, for replay |
 | `DELETE /assistant/sessions/:id` | remove a conversation and its transcript |
 | `POST /assistant/sessions/:id/messages` | run one turn, streamed as named SSE events; the body may carry up to three `attachments` (`{name, text}`) beside `text` |
-| `POST /assistant/attachments` | read one PDF (multipart `file`) and return its text for the next message — stores nothing, makes no model call, per-caller limited |
+| `POST /assistant/attachments` | read one PDF (multipart `file`) and return its text for the next message — stores nothing and makes no model call |
 | `POST /assistant/sessions/:id/retry` | resume after a failed turn without appending another user message (same SSE stream) |
 | `POST /assistant/sessions/:id/cancel` | stop a running turn (owner-scoped — see below) |
 | `POST /assistant/sessions/:id/extend` | buy a tailoring session another ceiling's worth of turns, out of the day's tailoring allowance; 409 on any other preset |
 | `POST /assistant/sessions/:id/opening` | the assistant speaks first in a rehearsal or debrief, under a server-side brief; an already-answered opening is a 409 |
-| `POST /assistant/sessions/:id/voice-token` | mint one voice call's credential (per-caller limited) |
+| `POST /assistant/sessions/:id/voice-token` | mint one voice call's credential |
 | `POST /assistant/sessions/:id/voice-turns` | append a completed spoken turn to the transcript |
 | `POST /assistant/sessions/:id/autopilot` | run the tailoring pass unattended — same stream, server-owned brief and ceiling (**cookie-only**) |
 
@@ -300,9 +264,6 @@ empty profile the model would read as "no preferences".
   measures against `talentnetwork.KnownParams()` — **not** `search.UnknownParams`, whose
   vocabulary is the job filter's. Passing these facets to that function as `alsoKnown`
   would additionally accept every job-search facet on an endpoint that reads none.
-- Both routes carry `talentCatalogLimiter`, their own budget rather than the shared
-  public-read one (see `public_read_limit.go` for why a read that returns people is
-  bounded separately from one that returns postings).
 
 ## The caller's own membership (`me_talent_network.go`)
 
@@ -324,9 +285,7 @@ empty profile the model would read as "no preferences".
   `/me/resume/extract`, which stores for a signed-in caller because their later steps
   need the file) and never calls the LLM analyzer, so
   `internal/candidate/pii` is not on its path: that layer protects a CV from a model, and
-  no model runs. Its limiter is built inline from `mw.throttler` rather than in
-  `public_read_limit.go` — that file holds the public READ budgets, and this is a POST
-  that forks `pdftotext`.
+  no model runs. This endpoint forks `pdftotext`.
 - **`RoastCV` refuses any `Content-Encoding` header outright, before `readResumeUpload`
   runs.** Fiber's `Ctx.Body()` — which `BodyParser` and `c.FormFile` both read through —
   decompresses `Content-Encoding` transparently, chaining up to three layers, with no
@@ -334,8 +293,7 @@ empty profile the model would read as "no preferences".
   the app's other unauthenticated POST). The server's 8MB `BodyLimit` bounds only the wire
   body; a few compressed megabytes can expand to gigabytes in memory. That was tolerable
   while this reader sat behind `mw.cookie` — an attacker needed an account — but this
-  route has none, and one request is enough, so the 10/hour IP limiter does not cover it
-  either. The check is a bare "is this header non-empty", not an allow-list or a parse of
+  route has none, and one request is enough. The check is a bare "is this header non-empty", not an allow-list or a parse of
   its value: this route has exactly one job and nobody legitimately gzips a CV upload, so
   a second place to get that logic wrong is not worth having. `readResumeUpload` itself is
   deliberately untouched — `/me/resume/extract` applies the same refusal to its guests
@@ -377,16 +335,9 @@ empty profile the model would read as "no preferences".
   each route with zero-valued handlers: a 400 proves nothing was queried, and its sibling
   control proves a shallow request really does reach the handler.
 
-**The rule worth carrying to the next endpoint: a caller-controlled offset is a
-caller-controlled COST, and a rate limiter cannot bound it.** `public_read_limit.go` splits its
-budgets "by cost, not by path" — which silently assumes a path HAS a fixed cost. On 2026-09-14
-a crawler walked `/api/v1/jobs?offset=` to ~180,000 at eight requests in flight. It collected
-2,406 × 429 from the limiter, obeying its 600/min budget in full, and still took the site down:
-each request walked ~180,000 heap tuples and held one of the pool's ten connections for over two
-minutes. Everything else queued — `/api/v1/threads`, whose own query is keyset-paginated and
-index-served, was answered in 15m41s, all of it spent waiting for a connection. nginx returned
-504 to 14,007 requests. When adding an endpoint, ask what the most expensive request a caller
-can *phrase* costs, not how many they may send.
+**A caller-controlled offset is a caller-controlled cost.** Keep query bounds
+at the API boundary: walking deep offsets can occupy the database pool even when
+individual requests are valid.
 
 ## Error Convention
 

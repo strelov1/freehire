@@ -12,7 +12,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/resume"
@@ -103,7 +102,7 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
 	// model call, and the one every account gets (plan.WithFreeAI): without it the
 	// experience bank stays empty, and somebody who uploads before paying finds every paid
 	// feature with nothing to read.
-	api.Post("/me/resume/extract", mw.optional, resumeExtractGuestLimiter(mw.throttler), h.ExtractResumeProfile)
+	api.Post("/me/resume/extract", mw.optional, h.ExtractResumeProfile)
 
 	// Résumé storage (cookie-only): store the résumé once so the verdict's coherence can
 	// reuse it without a second upload. PUT stores/replaces, GET reports status (enabled +
@@ -127,19 +126,7 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
 	// to gain nothing — the same reason /jobs/find is public and first. Stores nothing
 	// and calls no model; the model review and tailoring are what the account is for.
 	// IP-limited, since there is no caller to key by.
-	api.Post("/cv/roast", cvRoastLimiter(mw.throttler), h.RoastCV)
-}
-
-// guestResumeExtractsPerHour bounds how many CVs one signed-out address may have parsed
-// per hour. The call is no model, only a pdftotext fork, so the budget is looser than the
-// AI search's own guest interpretations it serves beside. A first guess.
-const guestResumeExtractsPerHour = 20
-
-// resumeExtractGuestLimiter budgets signed-out extraction per address and leaves a
-// signed-in caller unbudgeted, as they always were. Mounted after mw.optional.
-func resumeExtractGuestLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return memberOrGuestLimiter(nil,
-		ratelimit.Middleware(throttler, ratelimit.KeyByIP("resumeextract-guest"), guestResumeExtractsPerHour, time.Hour))
+	api.Post("/cv/roast", h.RoastCV)
 }
 
 // resumeTextRequest is the JSON body for the pasted-text path.

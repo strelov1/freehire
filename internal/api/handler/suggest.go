@@ -27,10 +27,7 @@ const (
 type suggestHandlers struct{ suggest suggester }
 
 func (h *suggestHandlers) register(api fiber.Router, mw middleware) {
-	// Its own budget: this is called once per settled keystroke, so sharing the
-	// public-read allowance would mean typing a query throttles the page that answers
-	// it. See suggestLimiter.
-	api.Get("/suggest", suggestLimiter(mw.throttler), h.Suggest)
+	api.Get("/suggest", h.Suggest)
 }
 
 // Suggest completes what the visitor is typing.

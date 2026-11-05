@@ -42,7 +42,7 @@ func mountMCPAccount(
 	// Fiber middleware, ahead of the adapted raw http.Handler, so an
 	// unexpected failure authenticating the token (not merely an unknown one)
 	// is reported the normal way — see mcpAccountAuthenticate.
-	api.All("/mcp/account", chatAgentLimiter(mw.public), mcpAccountAuthenticate(assistants, catalogue.origin),
+	api.All("/mcp/account", mcpAccountAuthenticate(assistants, catalogue.origin),
 		agentViews(catalogue.agentViews, agentview.SurfaceMCPAccount),
 		func(c *fiber.Ctx) error {
 			if viaKey, _ := c.Locals(localsMCPAccountViaKey).(bool); viaKey {

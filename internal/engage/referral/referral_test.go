@@ -6,7 +6,6 @@ import (
 	"io"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -23,7 +22,6 @@ type fakeRepo struct {
 	fitting      []CVOption
 	askedJobID   *int64
 	hasResume    bool
-	countSince   int64
 	recipients   []Recipient
 	getRequest   Request
 	getRequestOK bool
@@ -120,10 +118,6 @@ func (f *fakeRepo) CreateRequest(_ context.Context, in RequestInput) (Request, e
 	return Request{ID: testRequestID, SeekerUserID: in.SeekerUserID, CompanySlug: in.CompanySlug, Status: RequestSent}, nil
 }
 
-func (f *fakeRepo) CountRequestsSince(_ context.Context, _ int64, _ time.Time) (int64, error) {
-	return f.countSince, nil
-}
-
 func (f *fakeRepo) GetRequest(context.Context, uuid.UUID) (Request, bool, error) {
 	return f.getRequest, f.getRequestOK, nil
 }
@@ -172,7 +166,7 @@ func newService(repo *fakeRepo, pinger *fakePinger) *Service {
 }
 
 func newServiceWithBlobs(repo *fakeRepo, pinger *fakePinger, blobs blobstore.Store) *Service {
-	return New(repo, pinger, blobs, Config{DailyRequestCap: 3, CabinetURL: "https://freehire.me/my/referrals"})
+	return New(repo, pinger, blobs, Config{CabinetURL: "https://freehire.me/my/referrals"})
 }
 
 // ownedOffer is a stored offer belonging to userID, carrying a proof object.
@@ -362,7 +356,7 @@ func TestCreateRequestValidation(t *testing.T) {
 	}
 }
 
-func TestCreateRequestEligibilityAndCap(t *testing.T) {
+func TestCreateRequestEligibilityAndDelivery(t *testing.T) {
 	valid := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVOriginal, ContactEmail: "s@x.test", LinkedInURL: linkedInURL}
 
 	t.Run("company not eligible", func(t *testing.T) {
@@ -373,19 +367,8 @@ func TestCreateRequestEligibilityAndCap(t *testing.T) {
 		}
 	})
 
-	t.Run("daily cap reached", func(t *testing.T) {
-		repo := &fakeRepo{eligible: true, hasResume: true, countSince: 3} // cap is 3
-		s := newService(repo, &fakePinger{})
-		if _, err := s.CreateRequest(context.Background(), valid); !errors.Is(err, ErrDailyCapReached) {
-			t.Fatalf("err = %v, want ErrDailyCapReached", err)
-		}
-		if repo.createdReq != nil {
-			t.Error("request should not be written once the cap is hit")
-		}
-	})
-
-	t.Run("under cap writes and pings all referrers", func(t *testing.T) {
-		repo := &fakeRepo{eligible: true, hasResume: true, countSince: 2, recipients: []Recipient{{UserID: 10}, {UserID: 11}}}
+	t.Run("writes and pings all referrers", func(t *testing.T) {
+		repo := &fakeRepo{eligible: true, hasResume: true, recipients: []Recipient{{UserID: 10}, {UserID: 11}}}
 		pinger := &fakePinger{}
 		s := newService(repo, pinger)
 		req, err := s.CreateRequest(context.Background(), valid)

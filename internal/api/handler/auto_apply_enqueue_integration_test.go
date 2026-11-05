@@ -36,7 +36,7 @@ import (
 // defines.
 func newAutoApplyEnqueueApp(pool *pgxpool.Pool, iss *auth.Issuer, events autoApplyEventPublisher) (*fiber.App, *assistantHandlers) {
 	queries := db.New(pool)
-	_, h, _ := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "", nil)
+	_, h, _ := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "")
 	h.events = events
 	// Production always wires the résumé store (newCVHandlers); without it the résumé-only
 	// path below would be untestable. Storage disabled: the seed reads Postgres alone.

@@ -8,7 +8,7 @@
 // close: it needs to accumulate, to be counted beside other people's, and to be
 // retracted. Nothing here reaches a moderator, and nothing here closes anything.
 //
-// The service owns validation, the daily cap and retraction; the Repository owns
+// The service owns validation and retraction; the Repository owns
 // persistence, including the two refusals that are structural rather than checks
 // — an unverified address and a closed job insert no row at all.
 package ghostreport
@@ -30,20 +30,12 @@ var (
 	ErrDuplicate = errors.New("ghostreport: already reported")
 	// ErrNotFound is a retraction of a claim that is not there (404).
 	ErrNotFound = errors.New("ghostreport: not found")
-	// ErrRateLimited is a filing past the daily cap (429).
-	ErrRateLimited = errors.New("ghostreport: too many reports today")
 	// ErrJobClosed is a claim about a posting already taken down (409) — there is
 	// nothing left to warn anyone about.
 	ErrJobClosed = errors.New("ghostreport: job is closed")
 	// ErrUnverified is a claim from an account whose address was never proven (403).
 	ErrUnverified = errors.New("ghostreport: email not verified")
 )
-
-// DailyCap bounds how many claims one account may file per day. A real job
-// seeker does not have more than a handful of silent applications to report in a
-// day, so the cap costs them nothing while bounding what one account can do to
-// the catalogue. It bounds volume; it judges no single claim.
-const DailyCap = 20
 
 // Report is a stored claim. AppliedOn is the date the reporter states they
 // applied — their word, not an observation, which is why it never reaches the
@@ -60,7 +52,6 @@ type Report struct {
 type Repository interface {
 	Create(ctx context.Context, userID, jobID int64, appliedOn time.Time) (Report, error)
 	Retract(ctx context.Context, userID, jobID int64) error
-	CountFiledSince(ctx context.Context, userID int64, since time.Time) (int, error)
 }
 
 // Service implements the claim use cases.
@@ -79,13 +70,6 @@ func New(repo Repository) *Service { return &Service{repo: repo} }
 func (s *Service) File(ctx context.Context, userID, jobID int64, appliedOn, now time.Time) (Report, error) {
 	if err := validateAppliedOn(appliedOn, now); err != nil {
 		return Report{}, err
-	}
-	filed, err := s.repo.CountFiledSince(ctx, userID, now.AddDate(0, 0, -1))
-	if err != nil {
-		return Report{}, err
-	}
-	if filed >= DailyCap {
-		return Report{}, ErrRateLimited
 	}
 	return s.repo.Create(ctx, userID, jobID, appliedOn)
 }

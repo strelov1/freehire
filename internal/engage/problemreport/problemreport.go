@@ -15,18 +15,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
-var (
-	ErrInvalid  = errors.New("problem report: invalid input")
-	ErrDailyCap = errors.New("problem report: daily limit of 20 reached")
-)
+var ErrInvalid = errors.New("problem report: invalid input")
 
 type Input struct {
 	Category  string `json:"category"`
@@ -46,15 +39,14 @@ type Receipt struct {
 }
 
 type Service struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func New(pool *pgxpool.Pool, queries *db.Queries) *Service {
-	return &Service{pool: pool, queries: queries}
+func New(queries *db.Queries) *Service {
+	return &Service{queries: queries}
 }
 
-// Record commits quota and queue changes together. Repeats consume quota too.
+// Record atomically creates an open report or increments its repeat count.
 func (s *Service) Record(ctx context.Context, userID int64, input Input) (Receipt, error) {
 	if userID <= 0 {
 		return Receipt{}, fmt.Errorf("%w: signed-in account required", ErrInvalid)
@@ -63,27 +55,13 @@ func (s *Service) Record(ctx context.Context, userID int64, input Input) (Receip
 	if err != nil {
 		return Receipt{}, err
 	}
-	if s == nil || s.pool == nil || s.queries == nil {
+	if s == nil || s.queries == nil {
 		return Receipt{}, errors.New("problem reporting is unavailable")
-	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return Receipt{}, fmt.Errorf("begin problem report: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	q := s.queries.WithTx(tx)
-	now := time.Now().UTC()
-	day := pgtype.Date{Time: now.Truncate(24 * time.Hour), Valid: true}
-	if _, err := q.ClaimProblemReportWrite(ctx, db.ClaimProblemReportWriteParams{UserID: userID, Day: day}); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Receipt{}, ErrDailyCap
-		}
-		return Receipt{}, fmt.Errorf("claim problem report quota: %w", err)
 	}
 	// RequestIDs middleware generates this context value with uuid.NewString();
 	// it never trusts the caller's X-Request-ID header.
 	requestID := observability.RequestID(ctx)
-	row, err := q.RecordProblemReport(ctx, db.RecordProblemReportParams{
+	row, err := s.queries.RecordProblemReport(ctx, db.RecordProblemReportParams{
 		UserID:      userID,
 		Category:    in.Category,
 		Goal:        in.Goal,
@@ -96,9 +74,6 @@ func (s *Service) Record(ctx context.Context, userID int64, input Input) (Receip
 	})
 	if err != nil {
 		return Receipt{}, fmt.Errorf("record problem report: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return Receipt{}, fmt.Errorf("commit problem report: %w", err)
 	}
 	slog.InfoContext(
 		ctx,

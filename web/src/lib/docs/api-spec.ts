@@ -108,11 +108,6 @@ export const OVERVIEW: Overview[] = [
         'answer 200 carrying rows you did not ask for, and a client walking pages would ' +
         'loop over the same page forever without being able to tell. A 400 means ' +
         '"there is no such page", which is the truth.',
-      'It applies whichever store answers the endpoint, and it is not the same thing ' +
-        'as the rate limit. A rate limit bounds requests per minute; on an endpoint ' +
-        'whose `offset` you choose, the work per request is also yours to choose — so a ' +
-        'client inside its request budget can still be asking for far more work than ' +
-        'the budget implies. Both bounds exist and neither substitutes for the other.',
     ],
   },
   {
@@ -125,32 +120,14 @@ export const OVERVIEW: Overview[] = [
     ],
   },
   {
-    title: 'Rate limits and API plans',
+    title: 'API plans',
     paragraphs: [
-      'The public read endpoints answer without a key, limited per address — for ' +
-        'personal and non-commercial use. Showing the postings in a product you offer ' +
-        'to others needs an API plan. `GET ' +
-        '/plans` reports the figures in force as `api_limits`; every response carries ' +
-        '`X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`, and a ' +
-        'refusal is `429` with `Retry-After`.',
-      'With a full-access key the budget is per account instead, shared by all of its ' +
-        'full-access keys and by the access tokens of its signed-in MCP and CLI ' +
-        "connections, and its size is the account's tier: Pro and Ultra raise it, and the " +
-        '[API and Data plans](https://freehire.me/jobs-api) raise it further. By default ' +
-        'the API and Data plans have no daily cap, and Data has the highest per-minute limit. ' +
-        'An embed key is budgeted like no key. Send the key as ' +
-        '`Authorization: Bearer <token>`. An API plan also licenses the data for use in ' +
-        'your own product, under the [data licence](https://freehire.me/terms#data-licence).',
-      'The budgets in force on freehire.me. Every public REST read draws on the same one ' +
-        '(the ChatGPT app keeps its own); `api_limits.tiers` in `GET /plans` lists the figures in force.',
-      '| Tier | Per minute | Per day |\n' +
-        '|---|---|---|\n' +
-        '| No key (per address) | 120 | 2,000 |\n' +
-        '| Free account | 600 | 10,000 |\n' +
-        '| Pro | 800 | 30,000 |\n' +
-        '| Ultra | 1,000 | 100,000 |\n' +
-        '| [API](https://freehire.me/jobs-api) | 1,200 | no cap |\n' +
-        '| [Data](https://freehire.me/jobs-api) | 6,000 | no cap |',
+      'The public read endpoints answer without a key for personal and non-commercial use. ' +
+        'Showing the postings in a product you offer to others needs an ' +
+        '[API plan](https://freehire.me/jobs-api), under the ' +
+        '[data licence](https://freehire.me/terms#data-licence).',
+      'Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access ' +
+        'token of a signed-in MCP or CLI connection.',
     ],
   },
   {
@@ -881,8 +858,7 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
           '`feedback_type` overwrites your existing review rather than adding a ' +
           "second one. The response's nested `company` field is the freshly " +
           'recomputed rating count/average, so you can update your own view of ' +
-          'the company without a second fetch. `422` on an empty body, `429` past ' +
-          'the daily review cap.',
+          'the company without a second fetch. `422` on an empty body.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' }],
         body: [
           { name: 'rating', type: 'integer', required: true, description: '1–5 stars.', example: '4' },
@@ -971,7 +947,7 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
     intro:
       'Register/login set the session cookie and return the user. Logout clears ' +
       'it. `me` resolves the caller (cookie or API key). OAuth sign-in is a ' +
-      'redirect flow. Credential endpoints are rate-limited.',
+      'redirect flow.',
     endpoints: [
       {
         method: 'POST',
@@ -1419,7 +1395,7 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           'reaches us, and if that delivery is lost the provider stops retrying after 80 ' +
           'minutes — so without this route a paid subscriber can be left looking at a ' +
           'paywall. It names nobody: the account is the session’s, and a user id in the ' +
-          'request is ignored. Rate-limited per caller, and absent entirely where the store ' +
+          'request is ignored. Absent entirely where the store ' +
           'provider is unconfigured. `status` is `synced` when the plan was written, or ' +
           '`no_subscription` when RevenueCat holds nothing for this account; a 503 means ' +
           'the provider could not be reached and the hourly reconciler will finish the job.',
@@ -1772,8 +1748,8 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'cookie-or-key',
         summary: 'Mint a short-lived credential for a hands-free voice call.',
         description:
-          'Only on an `interview` session; `409` otherwise. Rate-limited to 20 calls started ' +
-          'per hour per caller. The audio itself never reaches this server: take the returned ' +
+          'Only on an `interview` session; `409` otherwise. The audio itself never reaches ' +
+          'this server: take the returned ' +
           '`value` to `calls_url` (this deployment’s own realtime gateway, not api.openai.com ' +
           'directly) to negotiate the WebRTC call. `501` when voice mode is not configured.',
         pathParams: [{ name: 'id', type: 'string (UUID)', required: true, description: 'The session id.' }],
@@ -1855,8 +1831,7 @@ data: {"type":"result","stop_reason":"completed"}
           'writes nothing — no job, no submission, no allowance spent. An unrecognized ' +
           'URL returns an empty object rather than an error. A URL the catalogue already ' +
           'carries returns only `existing_job_slug`, and `POST /submissions` would refuse ' +
-          'it. Rate-limited ' +
-          '(shares the outbound-fetch budget).',
+          'it.',
         body: [{ name: 'url', type: 'string', required: true, description: 'The job posting URL to parse.' }],
         curl: `curl -X POST "${BASE_URL}/submissions/prefill" \\
   -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \\
@@ -2001,7 +1976,7 @@ data: {"type":"result","stop_reason":"completed"}
         summary: 'File a claim that you applied and got no response.',
         description:
           'An unproven (unverified) address is a `403`; a closed job or a claim ' +
-          'you already have on this job is a `409`; past the daily cap is a `429`.',
+          'you already have on this job is a `409`.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         body: [
           { name: 'applied_on', type: 'string', required: true, description: 'The day you applied (`YYYY-MM-DD`).', example: '2026-07-29' },
@@ -2694,7 +2669,7 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/push-tokens/test',
         auth: 'cookie',
         summary: 'Send a test push to all of your own registered devices.',
-        description: 'Never targets another user or a caller-supplied destination — only your own registered tokens. Rate-limited to 20/hour, since each call fans out one outbound send per device.',
+        description: 'Never targets another user or a caller-supplied destination — only your own registered tokens. Each call fans out one outbound send per device.',
         curl: `curl -X POST "${BASE_URL}/me/push-tokens/test" -b cookies.txt`,
         responseExample: `{ "data": { "devices": 2, "sent": 1, "pruned": 1, "failed": 0 } }`,
       },
@@ -2938,8 +2913,7 @@ data: {"type":"result","stop_reason":"completed"}
           'we can crawl, so the link went to manual triage; **202 queued** — nothing ' +
           'could read the page, so the link went to manual triage. `company_slug` is ' +
           'returned whenever the catalogue already carries the employer, through any ' +
-          'source — independent of what became of the board. Rate-limited, because it ' +
-          'makes the server fetch a URL you chose. A URL that is not http(s) is a 422.',
+          'source — independent of what became of the board. A URL that is not http(s) is a 422.',
         body: [
           { name: 'url', type: 'string', required: true, description: 'The job page to resolve.' },
           { name: 'surface', type: 'string', description: 'Where the link came from (website, extension, cli, bot) — recorded, not validated against a whitelist.' },
@@ -2965,7 +2939,7 @@ data: {"type":"result","stop_reason":"completed"}
         description:
           'Exactly one of `job_slug`, `url`, or `text` is required. A recognized ' +
           'URL resolves through the same ATS-aware registry `/jobs/resolve` uses ' +
-          '(a network fetch — only the `url` form is rate-limited); an ' +
+          '(a network fetch); an ' +
           'unrecognized URL falls back to a generic scrape; pasted text is ' +
           'stored as a private, unlisted job. Returns the slug the tailor ' +
           'workspace should open — an existing job, or a freshly created ' +
@@ -3193,7 +3167,7 @@ data: {"type":"result","stop_reason":"completed"}
         description:
           'A `progress` event carrying the full document on connect and after ' +
           'every 15-second sample, with a `ping` event between to keep idle ' +
-          'connections alive. Connections are rate-limited per IP.',
+          'connections alive.',
         curl: `curl -N "${BASE_URL}/stats/embeddings/stream"`,
         responseExample: `event: progress
 data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":6094,"rate_per_minute":570.4,"eta_seconds":641,"snapshot_at":"2026-10-19T09:22:03Z","measured_at":"2026-10-19T12:04:15Z"}`,
@@ -3542,8 +3516,7 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'and an absent filter is identical to an empty one. A parameter this ' +
           'endpoint does not read — including one it recognises but cannot ' +
           'parse, like `min_years=lots` — is named in `meta.ignored_params` ' +
-          'rather than silently widening the answer. Rate-limited by IP on its ' +
-          'own budget.',
+          'rather than silently widening the answer.',
         query: [
           { name: 'categories', type: 'string', description: 'Comma-separated role categories.', example: 'backend,devops' },
           { name: 'seniorities', type: 'string', description: 'Comma-separated seniority levels.', example: 'senior' },
@@ -4100,7 +4073,7 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         summary: 'Upload (or replace) your headshot.',
         description:
           'Multipart upload of the `file` part — JPEG, PNG, or WebP, capped at 8 MB ' +
-          'and rate-limited to 12 uploads/hour. Replaces any existing headshot. ' +
+          'and replaces any existing headshot. ' +
           '`501` when object storage is not configured, `400` for an undecodable, ' +
           'unsupported, or oversized image.',
         curl: `curl -X PUT "${BASE_URL}/me/photo" -b cookies.txt -F "file=@headshot.jpg"`,
@@ -4308,7 +4281,7 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'that a sync missed. Runs an LLM pass over your mailbox and returns ' +
           'matches as suggestions — it never links or writes the ledger itself; ' +
           'confirm a pick with `POST /me/tracking/{slug}/mail-recall/link`. ' +
-          'Rate-limited. A `503` when no mail gateway is configured, a `502` when ' +
+          'A `503` when no mail gateway is configured, a `502` when ' +
           'the model call fails.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         curl: `curl -X POST "${BASE_URL}/me/tracking/<slug>/mail-recall" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
@@ -4628,8 +4601,7 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         summary: 'Transcribe one short audio recording to text.',
         description:
           'Multipart upload of the `file` part — webm, mp4, m4a, ogg, wav, or mp3, ' +
-          'capped at ~8 minutes of audio (2 MB) and rate-limited to 60 ' +
-          'recordings/hour per caller. `501` when no speech gateway is configured, ' +
+          'capped at ~8 minutes of audio (2 MB). `501` when no speech gateway is configured, ' +
           '`502` if the gateway call itself fails, `400` for an empty recording.',
         curl: `curl -X POST "${BASE_URL}/speech/transcriptions" \\
   -H "Authorization: Bearer $FREEHIRE_API_KEY" \\

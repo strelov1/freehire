@@ -140,7 +140,7 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 		}
 	})
 
-	t.Run("ResolveOAuthGrantTier reads the owner's plans, never touches last_used_at, and obeys the same liveness rule", func(t *testing.T) {
+	t.Run("ResolveOAuthGrantIdentity reads the owner's plans, never touches last_used_at, and obeys the same liveness rule", func(t *testing.T) {
 		carol := seedAPIKeyUser(t, pool, "oauth-carol@example.test")
 		proUntil := time.Now().Add(72 * time.Hour).UTC().Truncate(time.Second)
 		if _, err := pool.Exec(ctx, `UPDATE users SET pro_until_granted = $2 WHERE id = $1`, carol, proUntil); err != nil {
@@ -163,9 +163,9 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 			}
 		}
 
-		row, err := q.ResolveOAuthGrantTier(ctx, "token-hash-carol")
+		row, err := q.ResolveOAuthGrantIdentity(ctx, "token-hash-carol")
 		if err != nil {
-			t.Fatalf("ResolveOAuthGrantTier: %v", err)
+			t.Fatalf("ResolveOAuthGrantIdentity: %v", err)
 		}
 		if row.UserID != carol || !row.ProUntil.Time.Equal(proUntil) || row.UltraUntil.Valid || row.ApiUntilStripe.Valid {
 			t.Errorf("row = %+v, want carol with pro until %v and nothing else", row, proUntil)
@@ -178,13 +178,13 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 			t.Errorf("last_used_at = %v, want untouched: the rate limiter reads this on the hottest routes", lastUsed.Time)
 		}
 
-		if _, err := q.ResolveOAuthGrantTier(ctx, "token-hash-carol-expired"); !errors.Is(err, pgx.ErrNoRows) {
+		if _, err := q.ResolveOAuthGrantIdentity(ctx, "token-hash-carol-expired"); !errors.Is(err, pgx.ErrNoRows) {
 			t.Errorf("expired grant err = %v, want pgx.ErrNoRows", err)
 		}
 		if _, err := q.BumpUserTokenVersion(ctx, carol); err != nil {
 			t.Fatalf("BumpUserTokenVersion: %v", err)
 		}
-		if _, err := q.ResolveOAuthGrantTier(ctx, "token-hash-carol"); !errors.Is(err, pgx.ErrNoRows) {
+		if _, err := q.ResolveOAuthGrantIdentity(ctx, "token-hash-carol"); !errors.Is(err, pgx.ErrNoRows) {
 			t.Errorf("after bump, err = %v, want pgx.ErrNoRows", err)
 		}
 	})

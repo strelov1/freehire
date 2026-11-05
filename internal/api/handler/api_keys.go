@@ -188,18 +188,10 @@ func (h *authHandlers) RevokeAPIKey(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// apiPlanResponse is the account's API standing as its key-management page shows it: which API
-// product tier it holds and until when, and the rate tier its full-scope keys and access
-// tokens get on public reads. An account without the API product has an empty tier and still a
-// rate — free, Pro or Ultra.
+// apiPlanResponse is the account's API product entitlement.
 type apiPlanResponse struct {
 	Tier  billing.APITier `json:"tier"`
 	Until *time.Time      `json:"until,omitempty"`
-	// RateTier is the rung of the public-read ladder the account's keys stand on.
-	RateTier rateTier `json:"rate_tier"`
-	// PerMinute and PerDay are that rung's budget; PerDay 0 is no daily cap.
-	PerMinute int `json:"per_minute"`
-	PerDay    int `json:"per_day"`
 }
 
 // GetAPIPlan reports the caller's API standing. Cookie-only, like the rest of key management.
@@ -212,14 +204,12 @@ func (h *authHandlers) GetAPIPlan(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": apiPlanFrom(row, h.rateTiers, time.Now())})
+	return c.JSON(fiber.Map{"data": apiPlanFrom(row, time.Now())})
 }
 
-func apiPlanFrom(row db.GetUserAPIEntitlementRow, tiers RateTiers, now time.Time) apiPlanResponse {
+func apiPlanFrom(row db.GetUserAPIEntitlementRow, now time.Time) apiPlanResponse {
 	apiUntil, dataUntil := row.ApiUntilStripe.Time, row.ApiDataUntilStripe.Time
-	rt := accountRateTier(apiUntil, dataUntil, row.ProUntil.Time, row.UltraUntil.Time, now)
-	out := apiPlanResponse{Tier: billing.APITierOf(apiUntil, dataUntil, now), RateTier: rt,
-		PerMinute: tiers[rt].PerMinute, PerDay: tiers[rt].PerDay}
+	out := apiPlanResponse{Tier: billing.APITierOf(apiUntil, dataUntil, now)}
 	switch out.Tier {
 	case billing.APITierData:
 		out.Until = &dataUntil

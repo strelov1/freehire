@@ -3,7 +3,6 @@ package community
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -233,18 +232,6 @@ func (r *QueriesRepository) ListReplies(ctx context.Context, threadID int64, cur
 		}
 	}
 	return out, nil
-}
-
-func (r *QueriesRepository) CountRecentThreads(ctx context.Context, userID int64, since time.Time) (int64, error) {
-	return r.q.CountRecentThreadsByUser(ctx, db.CountRecentThreadsByUserParams{
-		AuthorUserID: pgtype.Int8{Int64: userID, Valid: true}, CreatedAt: pgconv.Timestamptz(&since),
-	})
-}
-
-func (r *QueriesRepository) CountRecentReplies(ctx context.Context, userID int64, since time.Time) (int64, error) {
-	return r.q.CountRecentRepliesByUser(ctx, db.CountRecentRepliesByUserParams{
-		AuthorUserID: pgtype.Int8{Int64: userID, Valid: true}, CreatedAt: pgconv.Timestamptz(&since),
-	})
 }
 
 // SubjectExists reports whether slug names an existing company or job.

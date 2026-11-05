@@ -2,7 +2,7 @@
 
 // Integration tests for the community discussion-thread HTTP flow against a real
 // Postgres: creating a thread on a company and on a job, the rejection paths
-// (unknown subject, bad type, unauthenticated, over the rate limit), the reply flow
+// (unknown subject, bad type, unauthenticated), the reply flow
 // (count increments; closed/missing rejected), and persona stability. A recurring
 // assertion across all of them: no author user id ever appears in a response body.
 // Run with: go test -tags=integration ./internal/api/handler/
@@ -208,28 +208,4 @@ func TestCommunityThreadsEndToEnd(t *testing.T) {
 			t.Fatalf("different users share a handle: %v", a["author"])
 		}
 	})
-}
-
-func TestCommunityThreadRateLimit(t *testing.T) {
-	pool := startPostgres(t)
-	ctx := context.Background()
-	var userID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('rl@example.test') RETURNING id`).Scan(&userID); err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	if _, err := pool.Exec(ctx, `INSERT INTO companies (slug, name, job_count) VALUES ('acme', 'Acme', 1)`); err != nil {
-		t.Fatalf("seed company: %v", err)
-	}
-	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID, testTokenVersion)
-	app := newCommunityApp(db.New(pool), iss, community.Config{ThreadCap: 2})
-
-	for i := 0; i < 2; i++ {
-		if resp := postThread(t, app, cookie, community.SubjectCompany, "acme"); resp.StatusCode != fiber.StatusCreated {
-			t.Fatalf("post %d: status %d, want 201", i, resp.StatusCode)
-		}
-	}
-	if resp := postThread(t, app, cookie, community.SubjectCompany, "acme"); resp.StatusCode != fiber.StatusTooManyRequests {
-		t.Fatalf("over-limit status %d, want 429", resp.StatusCode)
-	}
 }

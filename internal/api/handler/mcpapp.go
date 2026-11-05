@@ -87,7 +87,7 @@ func (h *mcpappHandlers) register(api fiber.Router, mw middleware) {
 	// Public and unauthenticated like the other job reads, under the same agent-search rate
 	// limit the OJCP endpoints use. A separate figure here would be a second answer to "how
 	// hard may a machine ask", with nothing deciding which one is right.
-	api.All("/mcp", chatAgentLimiter(mw.public), agentViews(h.agentViews, agentview.SurfaceMCP), adaptor.HTTPHandler(mcpapp.Handler(h, h.origin)))
+	api.All("/mcp", agentViews(h.agentViews, agentview.SurfaceMCP), adaptor.HTTPHandler(mcpapp.Handler(h, h.origin)))
 }
 
 // SearchJobs answers `search_jobs`.

@@ -5,12 +5,10 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -46,25 +44,13 @@ const (
 	maxRedirectURIs     = 20
 )
 
-// oauthRegistrationsPerHour bounds client registration per IP. It cannot be
-// tight: a hosted client (claude.ai, chatgpt.com) registers once per connecting
-// USER from its own shared egress, so one IP legitimately stands for many people.
-// The figure stops a script filling oauth_clients, not a busy platform.
-const oauthRegistrationsPerHour = 300
-
-// oauthRegisterLimiter throttles client registration per IP — the only key there
-// is, since registration precedes any freehire account.
-func oauthRegisterLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return ratelimit.Middleware(throttler, ratelimit.KeyByIP("oauthregister"), oauthRegistrationsPerHour, time.Hour)
-}
-
 // RegisterOAuthClient implements RFC 7591 dynamic client registration. Public and
 // unauthenticated by design: an MCP client (Claude, Cursor, ChatGPT) self-registers
 // before it has ever talked to a freehire account, so there is no caller to gate
 // on yet. The security boundary is the consent screen a human approves later, not
 // who may mint a client_id here — which is why that screen names the redirect
 // host rather than trusting client_name, and why this handler only bounds the
-// SHAPE of what it stores (ValidateRedirectURI, the size limits, the IP limiter).
+// SHAPE of what it stores (ValidateRedirectURI and the size limits).
 func (h *authHandlers) RegisterOAuthClient(c *fiber.Ctx) error {
 	var in registerClientRequest
 	if err := c.BodyParser(&in); err != nil {

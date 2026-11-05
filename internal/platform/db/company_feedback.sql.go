@@ -35,27 +35,6 @@ func (q *Queries) CountCompanyFeedback(ctx context.Context, companySlug string) 
 	return count, err
 }
 
-const countRecentCompanyFeedback = `-- name: CountRecentCompanyFeedback :one
-SELECT count(*) FROM company_feedback WHERE user_id = $1 AND created_at >= $2
-`
-
-type CountRecentCompanyFeedbackParams struct {
-	UserID    pgtype.Int8        `json:"user_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-// How many new reviews (new company, or a new category on an already-reviewed
-// company) this user has left since `since` — the rate-limit check backing
-// companyfeedback.Service.checkRate (mirrors community.CountRecentThreads). An
-// edit-by-resubmit never inserts a new row (the ON CONFLICT DO UPDATE branch
-// leaves created_at untouched), so this only grows on genuinely new rows.
-func (q *Queries) CountRecentCompanyFeedback(ctx context.Context, arg CountRecentCompanyFeedbackParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countRecentCompanyFeedback, arg.UserID, arg.CreatedAt)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const deleteCompanyFeedback = `-- name: DeleteCompanyFeedback :exec
 DELETE FROM company_feedback WHERE user_id = $1 AND company_slug = $2 AND feedback_type = $3
 `

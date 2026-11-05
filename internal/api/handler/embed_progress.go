@@ -7,15 +7,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/search/embedprogress"
 )
-
-// embedProgressConnectsPerMinute bounds how often one IP may OPEN the progress stream,
-// the same bound and the same reasoning as recentFeedConnectsPerMinute: the route is
-// public and unauthenticated, and EventSource reconnects on its own, so a client stuck
-// in a reconnect loop is the case to bound, not a reader holding one connection open.
-const embedProgressConnectsPerMinute = 20
 
 // embedProgressSource is what the routes read. *embedprogress.Sampler satisfies it.
 type embedProgressSource interface {
@@ -30,17 +23,15 @@ type embedProgressSource interface {
 type embedProgressHandlers struct {
 	source       embedProgressSource
 	pingInterval time.Duration
-	throttler    ratelimit.Throttler
 }
 
-func newEmbedProgressHandlers(source embedProgressSource, throttler ratelimit.Throttler) *embedProgressHandlers {
-	return &embedProgressHandlers{source: source, pingInterval: sseKeepalive, throttler: throttler}
+func newEmbedProgressHandlers(source embedProgressSource) *embedProgressHandlers {
+	return &embedProgressHandlers{source: source, pingInterval: sseKeepalive}
 }
 
 func (h *embedProgressHandlers) register(api fiber.Router) {
 	api.Get("/stats/embeddings", h.Progress)
 	api.Get("/stats/embeddings/stream",
-		ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("embed-progress"), embedProgressConnectsPerMinute, time.Minute),
 		h.Stream)
 }
 

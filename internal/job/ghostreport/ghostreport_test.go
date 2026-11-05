@@ -16,8 +16,6 @@ type fakeRepo struct {
 	createdOn   time.Time
 	createErr   error
 	retractErr  error
-	filedToday  int
-	countErr    error
 	retractions int
 }
 
@@ -36,10 +34,6 @@ func (f *fakeRepo) Retract(_ context.Context, _, _ int64) error {
 	}
 	f.retractions++
 	return nil
-}
-
-func (f *fakeRepo) CountFiledSince(_ context.Context, _ int64, _ time.Time) (int, error) {
-	return f.filedToday, f.countErr
 }
 
 func file(t *testing.T, repo *fakeRepo, appliedOn time.Time) error {
@@ -107,28 +101,6 @@ func TestFile_PassesThroughADuplicate(t *testing.T) {
 
 	if err := file(t, repo, now.AddDate(0, 0, -30)); !errors.Is(err, ghostreport.ErrDuplicate) {
 		t.Errorf("err = %v, want ErrDuplicate", err)
-	}
-}
-
-// A real job seeker does not have more than a handful of silent applications to
-// report in one day; the cap bounds what one account can do to the catalogue.
-func TestFile_RefusesPastTheDailyCap(t *testing.T) {
-	repo := &fakeRepo{filedToday: ghostreport.DailyCap}
-
-	err := file(t, repo, now.AddDate(0, 0, -30))
-	if !errors.Is(err, ghostreport.ErrRateLimited) {
-		t.Errorf("err = %v, want ErrRateLimited", err)
-	}
-	if repo.created != 0 {
-		t.Error("the capped request still reached the repository")
-	}
-}
-
-func TestFile_AllowsTheLastFilingUnderTheCap(t *testing.T) {
-	repo := &fakeRepo{filedToday: ghostreport.DailyCap - 1}
-
-	if err := file(t, repo, now.AddDate(0, 0, -30)); err != nil {
-		t.Errorf("File at cap-1: %v, want it allowed", err)
 	}
 }
 

@@ -40,7 +40,7 @@ WHERE id = 123 AND status = 'open';
 
 Use `dismissed` for an issue that will not be acted on. Reports with matching normalized
 sanitized contents from the same account share one open row and increment its count.
-A report after resolution/dismissal starts a new open row. Every valid submission,
-including repeats, spends one of 20 requests per account per UTC day; invalid input and
-failed database writes spend none. Quota and queue updates commit together. Account
-deletion removes both reports and daily quota rows.
+A report after resolution/dismissal starts a new open row. Each write atomically
+creates the report or increments its repeat count. Request frequency policy is
+managed by the external gateway in freehire-ops. Account deletion removes reports
+and any historical daily quota rows.

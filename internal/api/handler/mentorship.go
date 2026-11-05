@@ -8,7 +8,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
 	"github.com/strelov1/freehire/internal/engage/slots"
@@ -27,16 +26,6 @@ type mentorshipHandlers struct {
 func newMentorshipHandlers(svc *mentorship.Service, photos *headshot.Store) *mentorshipHandlers {
 	return &mentorshipHandlers{mentorship: svc, photos: photos}
 }
-
-// slotReadsPerMinute is this endpoint's own budget, separate from the shared public-read
-// one.
-//
-// Slots are COMPUTED per request, on a host where most traffic is crawlers — so this is
-// the one public endpoint here that costs real work per hit, and it must not be able to
-// exhaust the allowance the rest of the site reads on. The figure is deliberately below
-// publicReadsPerMinute: a human comparing a mentor's September and October needs a handful
-// of requests a minute, and anything past that is a robot walking the calendar.
-const slotReadsPerMinute = 20
 
 func (h *mentorshipHandlers) register(api fiber.Router, mw middleware) {
 	h.registerPublic(api, mw)
@@ -68,26 +57,13 @@ func (h *mentorshipHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/mentorship/profiles/:id/decide", mw.key, mw.moderator, h.DecideMentorProfile)
 }
 
-// registerPublic mounts the anonymous surface, separately from the rest.
-//
-// Split out rather than mixed in, because the public-read-limiter guard drives every GET a
-// register mounts and requires the limiter to be the FIRST handler on each chain. That is
-// the right rule and this feature's cabinet routes cannot satisfy it — they sit behind
-// auth, which must run first. Keeping the two in one register would have meant either
-// weakening the guard or throttling the cabinet by IP, and both are worse than a second
-// method.
-//
-// Anyone may browse mentors and see when they are free. Booking is not public, and that
-// split is the product: a directory behind a login sells nothing.
+// registerPublic mounts the anonymous mentor catalogue.
 func (h *mentorshipHandlers) registerPublic(api fiber.Router, mw middleware) {
-	readLimit := publicReadLimiter(mw.public)
-	slotLimit := ratelimit.Middleware(mw.throttler,
-		ratelimit.KeyByIP("mentorslots"), slotReadsPerMinute, time.Minute)
 
-	api.Get("/mentors", readLimit, h.ListMentors)
-	api.Get("/mentors/:slug", readLimit, h.GetMentor)
-	api.Get("/mentors/:slug/slots", slotLimit, h.GetMentorSlots)
-	api.Get("/mentors/:slug/photo", readLimit, h.GetMentorPhoto)
+	api.Get("/mentors", h.ListMentors)
+	api.Get("/mentors/:slug", h.GetMentor)
+	api.Get("/mentors/:slug/slots", h.GetMentorSlots)
+	api.Get("/mentors/:slug/photo", h.GetMentorPhoto)
 }
 
 // mentorResponse is the public shape of a mentor. user_id is not in it: it is ownership,

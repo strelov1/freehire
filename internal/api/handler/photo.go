@@ -9,7 +9,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 )
@@ -26,26 +25,12 @@ func newPhotoHandlers(photos *headshot.Store) *photoHandlers {
 	return &photoHandlers{photos: photos}
 }
 
-// photoUploadsPerHour bounds how many headshots one member may upload per hour. Every
-// upload decodes and resamples an untrusted image, which is the most CPU and memory a
-// single authenticated request can ask of this process — so unlike the other reads here it
-// needs a ceiling. Twelve is far past a person adjusting their photo and far below anything
-// worth doing with it.
-const photoUploadsPerHour = 12
-
-// photoUploadLimiter throttles uploads per authenticated user, keyed like the contribution
-// limiter (an IP key is lifted by any rotating proxy pool). Mounted AFTER the auth gate so
-// the user id is resolved.
-func photoUploadLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("photo"), photoUploadsPerHour, time.Hour)
-}
-
 func (h *photoHandlers) register(api fiber.Router, mw middleware) {
 	// GET /me/photo reports presence; the image itself hangs off it as a sub-resource.
 	// The split mirrors /me/resume, whose read is metadata too: a client needs to know
 	// whether there is a headshot (to choose a control, or to prompt for one in the
 	// template gallery) far more often than it needs the bytes.
-	api.Put("/me/photo", mw.cookie, photoUploadLimiter(mw.throttler), h.PutPhoto)
+	api.Put("/me/photo", mw.cookie, h.PutPhoto)
 	api.Get("/me/photo", mw.cookie, h.GetPhoto)
 	api.Get("/me/photo/image", mw.cookie, h.GetPhotoImage)
 	api.Delete("/me/photo", mw.cookie, h.DeletePhoto)

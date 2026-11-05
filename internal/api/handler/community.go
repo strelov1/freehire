@@ -327,8 +327,6 @@ func communityError(err error) error {
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "title is required")
 	case errors.Is(err, community.ErrEmptyBody):
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "body is required")
-	case errors.Is(err, community.ErrRateLimited):
-		return fiber.NewError(fiber.StatusTooManyRequests, "rate limit exceeded")
 	default:
 		return err
 	}
