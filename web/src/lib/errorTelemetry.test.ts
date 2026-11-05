@@ -222,7 +222,8 @@ it("reports SvelteKit HttpErrors by status and message, with the route that thre
     service: "freehire-web-ssr",
     exporter,
   });
-  const unavailable = { status: 503, body: { message: "Service unavailable" } };
+  // The shape SvelteKit passes to handleError for an app or framework error.
+  const unavailable = { status: 503, message: "Service unavailable" };
   telemetry?.capture(unavailable, { route: "/jobs/[slug]", method: "GET" });
   // The same failure on another route is a separate event, not a duplicate.
   telemetry?.capture(unavailable, { route: "/companies/[slug]", method: "GET" });

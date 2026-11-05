@@ -101,9 +101,9 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         )
           rawMessage = String(error);
         else if (isHttpError(error)) {
-          // SvelteKit's error(status, message) is a plain object; its message is the
-          // literal a load passed, so status and message are safe to report.
-          const detail = error.body?.message;
+          // SvelteKit hands handleError an App.Error ({ status, message }), not an Error;
+          // its message is the literal a load passed to error(), so it is safe to report.
+          const detail = error.message;
           rawMessage = `HTTP ${error.status}${typeof detail === "string" ? `: ${detail}` : ""}`;
           type = "HttpError";
         }
@@ -167,7 +167,7 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
 
 function isHttpError(
   error: unknown,
-): error is { status: number; body?: { message?: unknown } } {
+): error is { status: number; message?: unknown } {
   return (
     typeof error === "object" &&
     error !== null &&
