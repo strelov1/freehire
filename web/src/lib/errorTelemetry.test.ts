@@ -215,6 +215,34 @@ it("records primitive rejections and opaque thrown objects without serializing p
   await telemetry?.shutdown();
 });
 
+it("reports SvelteKit HttpErrors by status and message, with the route that threw them", async () => {
+  const exporter = new InMemoryLogRecordExporter();
+  const telemetry = createErrorTelemetry({
+    endpoint: "http://localhost/v1/logs",
+    service: "freehire-web-ssr",
+    exporter,
+  });
+  const unavailable = { status: 503, body: { message: "Service unavailable" } };
+  telemetry?.capture(unavailable, { route: "/jobs/[slug]", method: "GET" });
+  // The same failure on another route is a separate event, not a duplicate.
+  telemetry?.capture(unavailable, { route: "/companies/[slug]", method: "GET" });
+  telemetry?.capture({ status: 500 });
+  await telemetry?.flush();
+  const records = exporter.getFinishedLogRecords();
+  expect(records.map((record) => record.attributes)).toEqual([
+    expect.objectContaining({
+      "exception.type": "HttpError",
+      "exception.message": "HTTP 503: Service unavailable",
+      "http.route": "/jobs/[slug]",
+      "http.request.method": "GET",
+    }),
+    expect.objectContaining({ "http.route": "/companies/[slug]" }),
+    expect.objectContaining({ "exception.message": "HTTP 500" }),
+  ]);
+  expect(records[2]?.attributes).not.toHaveProperty("http.route");
+  await telemetry?.shutdown();
+});
+
 it("redacts prefixed, quoted and Basic credential values before export", async () => {
   const exporter = new InMemoryLogRecordExporter();
   const telemetry = createErrorTelemetry({
