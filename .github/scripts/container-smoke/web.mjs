@@ -33,7 +33,7 @@ await new Promise(resolve => backend.listen(18080, '127.0.0.1', resolve));
 // Only the rendered scratch copy changes: the real entrypoint/config were already tested.
 // Numeric loopback keeps the dummy upstream inside this network-disabled container.
 await writeFile(configPath, config.replaceAll('http://app:8080', 'http://127.0.0.1:18080'));
-execFileSync('nginx', ['-s', 'reload']);
+execFileSync('nginx', ['-e', 'stderr', '-s', 'reload']);
 
 function get(path, headers = {}, body) {
   return new Promise((resolve, reject) => {

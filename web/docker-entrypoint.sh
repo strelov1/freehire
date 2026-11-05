@@ -17,4 +17,4 @@ sed "s/resolver 127\\.0\\.0\\.11 /resolver ${RESOLVER} /" /etc/nginx/http.d/defa
 
 node build &
 
-exec nginx -g 'daemon off;'
+exec nginx -e stderr -g 'daemon off;'

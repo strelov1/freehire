@@ -44,8 +44,11 @@ FROM node:24-alpine
 # includes /etc/nginx/modules/*.conf, so installing the package is all the wiring
 # the load_module lines need. Without it, `brotli`/`brotli_static` in nginx.conf
 # are unknown directives and nginx refuses to start.
+# Alpine puts its module symlink beneath this otherwise root-only directory. Allow
+# traversal, not writes; runtime data is kept under /tmp by nginx-main.conf.
 # hadolint ignore=DL3018
-RUN apk add --no-cache nginx nginx-mod-http-brotli
+RUN apk add --no-cache nginx nginx-mod-http-brotli \
+    && chmod 0755 /var/lib/nginx
 WORKDIR /app
 COPY --from=build /src/build ./build
 COPY --from=build /src/node_modules ./node_modules
