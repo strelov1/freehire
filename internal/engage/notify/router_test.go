@@ -13,9 +13,9 @@ type recordingNotifier struct {
 	sent          []Digest
 }
 
-func (n *recordingNotifier) Send(_ context.Context, channel, dest string, d Digest) error {
+func (n *recordingNotifier) Send(_ context.Context, channel, dest string, m Message) error {
 	n.channel, n.dest = channel, dest
-	n.sent = append(n.sent, d)
+	n.sent = append(n.sent, m.Digests...)
 	return nil
 }
 
@@ -24,7 +24,7 @@ func TestRouter_DispatchesByChannel(t *testing.T) {
 	em := &recordingNotifier{}
 	r := Router{ChannelTelegram: tg, ChannelEmail: em}
 
-	if err := r.Send(context.Background(), ChannelEmail, "a@b.com", Digest{}); err != nil {
+	if err := r.Send(context.Background(), ChannelEmail, "a@b.com", msgOf(Digest{})); err != nil {
 		t.Fatal(err)
 	}
 	if len(em.sent) != 1 || em.dest != "a@b.com" {
@@ -38,7 +38,7 @@ func TestRouter_DispatchesByChannel(t *testing.T) {
 func TestRouter_UnregisteredChannelReturnsSentinel(t *testing.T) {
 	r := Router{ChannelTelegram: &recordingNotifier{}}
 
-	err := r.Send(context.Background(), ChannelEmail, "x", Digest{})
+	err := r.Send(context.Background(), ChannelEmail, "x", msgOf(Digest{}))
 	if !errors.Is(err, ErrChannelNotConfigured) {
 		t.Errorf("err = %v, want ErrChannelNotConfigured for an unregistered channel", err)
 	}

@@ -75,8 +75,8 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   split: `GetNudgeForDelivery` reads `notification_settings.channels` live, which IS an
   account property.
 - **A saved-search digest has three frequencies, and the default is an hourly batch.**
-  `notification_settings.digest_frequency` is `interval` (at most one digest per
-  subscription every `digest_interval_hours`, 1-23), `instant` (every pass that finds
+  `notification_settings.digest_frequency` is `interval` (at most one message per
+  person and channel every `digest_interval_hours`, 1-23), `instant` (every pass that finds
   something) or `daily` (once a local day at `digest_time`). `interval` at one hour is the
   column default, what an account with NO settings row reads as, and since migration 0233
   what every stored `instant` was moved to — measured 2026-11-04, `instant` meant a p90 of
@@ -91,6 +91,21 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   `interval` and `daily` stamp `subscriptions.last_digest_sent_at` after a send. The
   interval is measured from that stamp, so on a five-minute timer an hourly digest lands
   every 60-65 minutes rather than on the hour.
+- **One message per person and channel, carrying a digest per due subscription.**
+  `deliver` groups the claim by `(user_id, channel)` (`ClaimSubscriptionMatches` returns
+  both) and sends one `notify.Message`: one mail with a section per alert, one Telegram
+  message, one push counting the alerts. A message of one digest renders exactly as a
+  digest always did. Before this the cadence was per SUBSCRIPTION, so a person with seven
+  alerts got seven mails an hour — measured 2026-11-05, 15 users over 24 a day, the top
+  one at 59 — and a bulk rewrite of 578 profile alerts on 2026-11-03 put 580 people over
+  24 in one day. The interval gate therefore reads the person's NEWEST
+  `last_digest_sent_at` on the channel, and a sent message stamps every subscription it
+  carried; a new subscription waits for the person's next message instead of firing on
+  its own. **A webhook is the exception**: its receiver is a program reading one saved
+  search per payload, so it stays one subscription per message and keeps its own stamp.
+  The notification centre still records one row per saved search, so each section's
+  "View all" opens its own page. `freehire_notify_users_over_daily_cap_24h` (cmd/queue-metrics)
+  is the gauge that says whether this holds.
 - **A reminder's `fire_at` is rounded forward to the account's notification hour**
   (`notification_settings.digest_time` in the account's timezone; 09:00 and UTC when
   unset). Grouping alone would have bought the reminder engine almost nothing: `fire_at`

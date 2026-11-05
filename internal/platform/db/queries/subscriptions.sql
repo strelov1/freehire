@@ -118,7 +118,7 @@ ON CONFLICT (subscription_id, job_id) DO NOTHING;
 -- pass and takes them out of the pending set, so the predicate stays the plain pending one
 -- the partial index subscription_matches_pending_matched_idx is built on.
 WITH claimable AS (
-    SELECT m.subscription_id, m.job_id
+    SELECT m.subscription_id, m.job_id, s.user_id, s.channel
     FROM subscriptions s
     -- Joined BEFORE the lateral so the interval gate below references only relations
     -- that exist under it: the planner then applies the gate at this join, and the
@@ -141,16 +141,28 @@ WITH claimable AS (
     WHERE s.active
       -- An 'interval' subscription (the default: no settings row reads as one, at one
       -- hour) is claimed only once its interval has elapsed since the last digest. The
-      -- gate lives HERE rather than beside the quiet-hours check in deliverOne because a
+      -- gate lives HERE rather than beside the quiet-hours check in deliverMessage because a
       -- subscription that is not due would otherwise be claimed and released on every
       -- five-minute pass: measured on prod 2026-11-04 at ~23k matches an hour, that is
       -- ~12 lease-and-release writes per pending match for nothing. This predicate is the
       -- only definition of "interval elapsed" — the Go side does not repeat it. The
       -- defaults must agree with GetSubscriptionForDelivery's COALESCE and the column
       -- defaults (migration 0233).
+      --
+      -- The interval is the PERSON's, per channel, not each subscription's: the caller
+      -- sends one message per (user, channel) carrying every due subscription, and
+      -- stamps all of them, so the newest stamp among a person's subscriptions on the
+      -- channel is when they were last written to. Gating each subscription on its own
+      -- stamp let a user with seven alerts receive seven mails an hour (2026-11-05:
+      -- 15 users over 24 a day, one at 59). Measuring the group also keeps a NEW
+      -- subscription (no stamp yet) from firing on its own between the hourly mails.
+      -- A webhook is sent one subscription at a time (its receiver is a program reading
+      -- one saved search), so it keeps its own stamp.
       AND (COALESCE(ns.digest_frequency, 'interval') <> 'interval'
-           OR s.last_digest_sent_at IS NULL
-           OR s.last_digest_sent_at
+           OR COALESCE((SELECT max(o.last_digest_sent_at)
+                        FROM subscriptions o
+                        WHERE o.user_id = s.user_id AND o.channel = s.channel AND o.active
+                          AND (s.channel <> 'webhook' OR o.id = s.id)), '-infinity')
               <= now() - make_interval(hours => COALESCE(ns.digest_interval_hours, 1)::int))
     -- A backstop, not the working bound: per_subscription x active subscriptions is what
     -- a pass normally claims. This only caps a pathological subscription count.
@@ -160,7 +172,7 @@ UPDATE subscription_matches m
 SET claimed_at = now()
 FROM claimable c
 WHERE m.subscription_id = c.subscription_id AND m.job_id = c.job_id
-RETURNING m.subscription_id, m.job_id, m.matched_at;
+RETURNING m.subscription_id, m.job_id, m.matched_at, c.user_id, c.channel;
 
 -- name: ExpireStaleSubscriptionMatches :execrows
 -- Take up to batch_size STALE matches out of the pending set by stamping expired_at: a

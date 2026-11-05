@@ -95,3 +95,70 @@ func TestClaimSubscriptionMatches_IntervalGate(t *testing.T) {
 		}
 	})
 }
+
+// The interval is the person's on a channel, not each subscription's: the notifier
+// sends one message per (user, channel) and stamps every subscription it carried, so
+// a person's newest stamp on the channel decides. A brand-new subscription (no stamp)
+// therefore waits for the person's next hourly mail instead of firing on its own, a
+// second channel keeps its own clock, and a webhook keeps one per subscription.
+func TestClaimSubscriptionMatches_IntervalGateIsPerPersonAndChannel(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateSubs(t, pool)
+	job := insertJob(t, pool, "per-person-job")
+
+	sub := func(uid int64, channel, lastSent string) int64 {
+		ssID := insertSavedSearch(t, pool, uid, channel+lastSent, "q=go")
+		s, err := q.CreateSubscription(ctx, CreateSubscriptionParams{Channel: channel, SavedSearchID: ssID, UserID: uid})
+		if err != nil {
+			t.Fatalf("seed subscription: %v", err)
+		}
+		if lastSent != "" {
+			if _, err := pool.Exec(ctx, `UPDATE subscriptions SET last_digest_sent_at = now() - $2::interval WHERE id = $1`, s.ID, lastSent); err != nil {
+				t.Fatalf("seed last sent: %v", err)
+			}
+		}
+		if _, err := recordMatch(ctx, q, s.ID, job); err != nil {
+			t.Fatalf("seed match: %v", err)
+		}
+		return s.ID
+	}
+
+	recent := insertUser(t, pool, "recent@example.test")
+	elapsed := insertUser(t, pool, "elapsed@example.test")
+	notDue := []int64{
+		sub(recent, "email", "10 minutes"),
+		sub(recent, "email", ""),            // new: waits for the person's next mail
+		sub(recent, "email", "5 hours"),     // stale own stamp, but the person was mailed 10 minutes ago
+		sub(recent, "webhook", "5 minutes"), // a webhook keeps its own clock
+	}
+	due := []int64{
+		sub(recent, "telegram", ""),         // another channel: its own clock
+		sub(recent, "webhook", "2 hours"),   // its own stamp has elapsed
+		sub(elapsed, "email", "61 minutes"), // the person's newest stamp has elapsed
+		sub(elapsed, "email", ""),           // and joins that mail
+	}
+
+	claimed, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[int64]ClaimSubscriptionMatchesRow{}
+	for _, c := range claimed {
+		got[c.SubscriptionID] = c
+	}
+	for _, id := range due {
+		if _, ok := got[id]; !ok {
+			t.Errorf("subscription %d not claimed, want claimed", id)
+		}
+	}
+	for _, id := range notDue {
+		if _, ok := got[id]; ok {
+			t.Errorf("subscription %d claimed, want held for the person's interval", id)
+		}
+	}
+	if c := got[due[2]]; c.UserID != elapsed || c.Channel != "email" {
+		t.Errorf("claim row = user %d channel %q, want user %d email (the notifier groups on them)", c.UserID, c.Channel, elapsed)
+	}
+}

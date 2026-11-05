@@ -111,10 +111,6 @@ func Listed[T any](items []T) (shown []T, more int) {
 // len(Jobs) when more were pending than one digest carries (see Overflowed), so
 // a renderer can show an "and N more" tail under either bound.
 type Digest struct {
-	// UserID is whose digest this is. Only the email channel reads it, to sign that
-	// recipient's unsubscribe link — a chat or webhook destination the user
-	// connected themselves is turned off where they connected it.
-	UserID          int64
 	SavedSearchName string
 	// SearchQuery is the saved search's stored query string — where an
 	// overflowed digest's tail sends the reader, since the recorded snapshot
@@ -158,6 +154,29 @@ func (d Digest) SearchPath(utmSource string) string {
 	return b.String()
 }
 
+// Message is what one send delivers: every digest one person is due on one
+// channel, newest subscription first. A person with seven alerts gets one message
+// carrying seven digests, not seven messages — the per-subscription cadence let a
+// user with several alerts receive 25-59 mails a day (measured 2026-11-05). A
+// webhook is the exception: its receiver is a program reading one saved search's
+// payload, so it is always sent one digest per message.
+type Message struct {
+	// UserID is whose message this is. Only the email channel reads it, to sign that
+	// recipient's unsubscribe link — a chat or webhook destination the user
+	// connected themselves is turned off where they connected it.
+	UserID  int64
+	Digests []Digest
+}
+
+// Total is how many matches the message announces across its digests.
+func (m Message) Total() int {
+	n := 0
+	for _, d := range m.Digests {
+		n += d.Total
+	}
+	return n
+}
+
 // DigestJob is the display shape of one matched job (no internal id). The salary
 // fields are projected from the job's enrichment; a zero SalaryMin/SalaryMax (or
 // empty Currency) means the compensation is unknown and the renderer omits it.
@@ -172,11 +191,11 @@ type DigestJob struct {
 	SalaryPeriod   string
 }
 
-// Notifier delivers a digest over a channel to a destination. The matching engine
+// Notifier delivers a message over a channel to a destination. The matching engine
 // depends only on this, so a new channel is a new implementation, not a change
 // here. (Telegram resolves dest as a chat_id string; webhook/email as a URL/address.)
 type Notifier interface {
-	Send(ctx context.Context, channel, dest string, d Digest) error
+	Send(ctx context.Context, channel, dest string, m Message) error
 }
 
 // Searcher is the search backend the matcher runs filters against. *search.Client
@@ -314,7 +333,7 @@ type Stats struct {
 	Queries       int // distinct queries matched this pass
 	FailedQueries int // distinct queries whose search or record step errored and was skipped
 	Matched       int // newly recorded (subscription, job) matches
-	Delivered     int // digests sent
+	Delivered     int // messages sent (one per person and channel, carrying a digest per subscription)
 	SoftSkips     int // digests skipped (e.g. Telegram not linked)
 	Deferred      int // digests held back by quiet hours or a not-yet-due daily digest time
 	Expired       int // pending matches that went stale (too old, or the job closed) undelivered
