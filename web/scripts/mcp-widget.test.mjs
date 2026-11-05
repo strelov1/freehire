@@ -109,6 +109,33 @@ describe('MCP job-card actions over the host bridge', () => {
     await ui.tick(); expect(ui.button('Saved')).toBeUndefined();
   });
 
+  it('unlocks an unknown write only after no-change confirmation and ignores the old response', async () => {
+    const ui = mount(); await ui.tick();
+    expect(ui.window.document.querySelector('.action-recovery')?.hidden).toBe(true);
+    ui.button('Save job').click();
+    const first = ui.calls()[0];
+    ui.timers.find((timer) => timer.delay === 30000).callback(); await ui.tick();
+    ui.receive({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: { jobs: [job], total: 1 } } });
+    await ui.tick();
+    const reset = ui.button('I checked, allow retry');
+    expect(reset).toBeDefined(); expect(reset.disabled).toBe(true);
+    expect(ui.window.document.querySelector('.action-recovery').hidden).toBe(false);
+    reset.click(); expect(ui.button('Save job').disabled).toBe(true);
+    const confirmation = ui.window.document.querySelector('input[type="checkbox"]');
+    expect(confirmation.closest('label').textContent).toContain('this change was not applied');
+    confirmation.checked = true; confirmation.dispatchEvent(new ui.window.Event('change'));
+    expect(reset.disabled).toBe(false);
+    reset.click(); expect(ui.calls()).toHaveLength(1);
+    expect(ui.button('Save job').disabled).toBe(false);
+    expect(ui.window.document.querySelector('.action-recovery').hidden).toBe(true);
+    ui.button('Save job').click(); expect(ui.calls()).toHaveLength(2);
+    const second = ui.calls()[1]; expect(second.id).not.toBe(first.id);
+    ui.answer(first, { content: [], structuredContent: { job_id: 42, saved_at: '2026-11-05T03:00:00Z' } });
+    await ui.tick(); expect(ui.button('Saved')).toBeUndefined(); expect(ui.status()).toContain('Saving');
+    ui.answer(second, { content: [], structuredContent: { job_id: 42, saved_at: '2026-11-05T03:01:00Z' } });
+    await ui.tick(); expect(ui.button('Saved')?.disabled).toBe(true);
+  });
+
   it('stays readable when a host cannot proxy account actions', async () => {
     const ui = mount({ capabilities: {} }); await ui.tick();
     expect(ui.window.document.body.textContent).toContain(job.title);

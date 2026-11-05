@@ -49,6 +49,8 @@
   .stage-select { min-width: 0; max-width: 100%; padding: 6px 8px; border: 1px solid var(--fh-border); border-radius: 6px; background: var(--fh-bg); color: var(--fh-fg); font: inherit; }
   .action-status { margin: 8px 0 0; font-size: 12px; color: var(--fh-muted-fg); overflow-wrap: anywhere; }
   .action-status:empty { display: none; }
+  .action-recovery { margin-top: 8px; font-size: 12px; }
+  .action-recovery label { display: block; margin-bottom: 8px; }
   .account-actions[data-state="confirmed"] .action-status { color: var(--fh-good); }
   .account-actions[data-state="failed"] .action-status, .account-actions[data-state="unknown"] .action-status { color: var(--fh-bad); }
   .source { margin-left: auto; color: var(--fh-muted-fg); font-size: 12px; }
@@ -348,7 +350,7 @@
   function accountActions(job) {
     let state = actionStates.get(job.slug);
     if (!state) {
-      state = { phase: "idle", saved: false, selectedStage: "", message: "", views: [] };
+      state = { phase: "idle", saved: false, selectedStage: "", message: "", checkedNoChange: false, views: [] };
       actionStates.set(job.slug, state);
     }
     const panel = el("section", "account-actions");
@@ -375,7 +377,15 @@
     const status = el("p", "action-status");
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
-    panel.append(controls, status);
+    const recovery = el("div", "action-recovery");
+    const confirmationLabel = el("label");
+    const confirmation = el("input");
+    confirmation.type = "checkbox";
+    confirmationLabel.append(confirmation, document.createTextNode(" I checked my freehire board; this change was not applied."));
+    const allowRetry = el("button", "btn", "I checked, allow retry");
+    allowRetry.type = "button";
+    recovery.append(confirmationLabel, allowRetry);
+    panel.append(controls, status, recovery);
 
     function renderState() {
       const busy = state.phase === "saving" || state.phase === "updating";
@@ -388,6 +398,9 @@
       update.disabled = locked || !state.selectedStage;
       update.textContent = state.phase === "updating" ? "Updating..." : "Update stage";
       status.textContent = state.message;
+      recovery.hidden = state.phase !== "unknown";
+      confirmation.checked = state.checkedNoChange;
+      allowRetry.disabled = !state.checkedNoChange;
     }
 
     function refresh() {
@@ -396,6 +409,7 @@
 
     function unknown() {
       state.phase = "unknown";
+      state.checkedNoChange = false;
       state.message = "We could not confirm this change. Check your freehire board before trying again.";
       refresh();
     }
@@ -441,6 +455,17 @@
     }
 
     state.views.push(renderState);
+    confirmation.addEventListener("change", function () {
+      state.checkedNoChange = confirmation.checked;
+      refresh();
+    });
+    allowRetry.addEventListener("click", function () {
+      if (state.phase !== "unknown" || !state.checkedNoChange) return;
+      state.phase = "idle";
+      state.checkedNoChange = false;
+      state.message = "You confirmed no change on your board. Choose Save job or Update stage to try again.";
+      refresh();
+    });
     save.addEventListener("click", function () { run("save_job", { slug: job.slug }); });
     stage.addEventListener("change", function () {
       state.selectedStage = STAGES.includes(stage.value) ? stage.value : "";

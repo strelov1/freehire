@@ -205,8 +205,11 @@ that ignores `_meta.ui` sees exactly what it saw before.
   back to the assistant's sign-in controls.
 - **Success needs a server confirmation.** The returned tracking record must have
   a valid job id and saved timestamp or the exact requested stage. An unknown
-  result or timeout disables retry until the person checks their tracking board;
-  a confirmed refusal permits an explicit retry. Pending calls stay locked across
+  result or timeout locks writes until the person explicitly confirms their tracking
+  board shows no change and chooses `I checked, allow retry`. Unlocking never sends
+  a request: Save or Update still needs its own click. Timed-out request ids are
+  removed, so late replies cannot confirm a new operation. A confirmed refusal
+  permits an explicit retry. Pending calls stay locked across
   result re-renders. `web/scripts/mcp-widget.test.mjs` drives the real embedded
   page's DOM and host protocol, including failure and source-spoofing cases.
 - **Only a tool whose result the page can draw may name it** — a host draws the widget for
