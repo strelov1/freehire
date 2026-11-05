@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -190,10 +191,9 @@ func TestGetRetriesRateLimit(t *testing.T) {
 	defer func(w time.Duration) { rateLimitWait = w }(rateLimitWait)
 	rateLimitWait = time.Millisecond
 
-	calls := 0
+	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
-		if calls < 3 {
+		if calls.Add(1) < 3 {
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
@@ -202,8 +202,8 @@ func TestGetRetriesRateLimit(t *testing.T) {
 	defer srv.Close()
 
 	body, err := get(context.Background(), srv.Client(), srv.URL)
-	if err != nil || string(body) != "ok" || calls != 3 {
-		t.Fatalf("get = %q, %v after %d calls; want ok after 3", body, err, calls)
+	if err != nil || string(body) != "ok" || calls.Load() != 3 {
+		t.Fatalf("get = %q, %v after %d calls; want ok after 3", body, err, calls.Load())
 	}
 }
 
@@ -211,27 +211,27 @@ func TestGetGivesUpOnPersistentRateLimit(t *testing.T) {
 	defer func(w time.Duration) { rateLimitWait = w }(rateLimitWait)
 	rateLimitWait = time.Millisecond
 
-	calls := 0
+	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
+		calls.Add(1)
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
 	defer srv.Close()
 
-	if _, err := get(context.Background(), srv.Client(), srv.URL); err == nil || calls != rateLimitAttempts {
-		t.Fatalf("err = %v after %d calls; want an error after %d", err, calls, rateLimitAttempts)
+	if _, err := get(context.Background(), srv.Client(), srv.URL); err == nil || calls.Load() != rateLimitAttempts {
+		t.Fatalf("err = %v after %d calls; want an error after %d", err, calls.Load(), rateLimitAttempts)
 	}
 }
 
 func TestGetDoesNotRetryOtherErrors(t *testing.T) {
-	calls := 0
+	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
+		calls.Add(1)
 		w.WriteHeader(http.StatusForbidden)
 	}))
 	defer srv.Close()
 
-	if _, err := get(context.Background(), srv.Client(), srv.URL); err == nil || calls != 1 {
-		t.Fatalf("err = %v after %d calls; want one call and an error", err, calls)
+	if _, err := get(context.Background(), srv.Client(), srv.URL); err == nil || calls.Load() != 1 {
+		t.Fatalf("err = %v after %d calls; want one call and an error", err, calls.Load())
 	}
 }
