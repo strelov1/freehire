@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -118,14 +119,11 @@ func (h *assistantHandlers) facetsTool() assistant.Tool {
 	return h.facets(true)
 }
 
-// mcpFacetHead is how many of each filter's most common values the MCP facets lists.
-const mcpFacetHead = 25
-
 // facets builds the facets tool. full lists every value for the in-app assistant, whose turn
 // caps a tool result. An MCP client caps nothing and keeps every answer in its context,
 // where the whole vocabulary ran to ~125 KB (2026-11-05) — metros, cities, skills and
-// sources hold up to 1,200 values each — so MCP lists each filter's head with a count of
-// the rest, and one filter whole when the caller names it.
+// sources hold up to 1,200 values each — so MCP answers with the filter names and how many
+// values each has, and lists one filter's values when the caller names it.
 func (h *assistantHandlers) facets(full bool) assistant.Tool {
 	description := "List the live filter vocabulary: every filter's valid values with a vacancy count each, " +
 		"plus numeric ranges. Call this BEFORE filtering a search, and take skill slugs from its `skills` " +
@@ -134,10 +132,11 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 		"filters": assistantFilterSchema("Narrow the vocabulary to a slice of the market (e.g. one category)."),
 	}
 	if !full {
-		description = fmt.Sprintf("List the live filter vocabulary: each filter's %d most common values with a vacancy "+
-			"count each, how many further values each filter has (`more`), and numeric ranges. Name one filter in "+
-			"`facet` to get all of its values. Filter values are the market's own; an invented one matches nothing.", mcpFacetHead)
-		properties["facet"] = map[string]any{"type": "string", "description": "Return only this filter, with all of its values (e.g. skills, cities, metros)."}
+		description = "List the live filter vocabulary. Without `facet`: every filter's name with how many values it " +
+			"has, plus numeric ranges. With `facet`: that filter's values with a vacancy count each, optionally only " +
+			"those containing `contains`. Filter values are the market's own; an invented one matches nothing."
+		properties["facet"] = map[string]any{"type": "string", "description": "A filter name to list the values of, e.g. skills, cities, metros."}
+		properties["contains"] = map[string]any{"type": "string", "description": "With facet: keep only values containing this text, e.g. berlin; for skills a known alias also finds its value, e.g. golang finds go."}
 	}
 	return assistant.Tool{
 		Name:        "facets",
@@ -147,8 +146,9 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 		Schema:      map[string]any{"type": "object", "properties": properties},
 		Run: func(ctx context.Context, _ int64, raw json.RawMessage) (any, error) {
 			var in struct {
-				Filters assistantFilterArgs `json:"filters"`
-				Facet   string              `json:"facet"`
+				Filters  assistantFilterArgs `json:"filters"`
+				Facet    string              `json:"facet"`
+				Contains string              `json:"contains"`
 			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
@@ -171,51 +171,38 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 			if full {
 				return view, nil
 			}
-			return facetHead(view, strings.TrimSpace(in.Facet))
+			return facetIndex(view, strings.TrimSpace(in.Facet), in.Contains)
 		},
 	}
 }
 
-// facetHead trims a facet view for an MCP client: only the named facet, whole, or else
-// every facet's mcpFacetHead most common values with the rest counted in More.
-func facetHead(view facetPayload, only string) (facetPayload, error) {
-	if only != "" {
-		dist, ok := view.Facets[only]
-		if !ok {
-			names := make([]string, 0, len(view.Facets))
-			for name := range view.Facets {
-				names = append(names, name)
-			}
-			sort.Strings(names)
-			return facetPayload{}, fmt.Errorf("unknown facet %q; valid facets are: %s", only, strings.Join(names, ", "))
+// facetIndex is the MCP facets answer: the filter names with how many values each has, or
+// the named filter's values matching contains.
+func facetIndex(view facetPayload, facet, contains string) (map[string]any, error) {
+	if facet == "" {
+		sizes := make(map[string]int, len(view.Facets))
+		for name, dist := range view.Facets {
+			sizes[name] = len(dist)
 		}
-		return facetPayload{Total: view.Total, Facets: map[string]map[string]int64{only: dist}}, nil
+		return map[string]any{"total": view.Total, "filters": sizes, "stats": view.Stats}, nil
 	}
-	for name, dist := range view.Facets {
-		if len(dist) <= mcpFacetHead {
-			continue
+	dist, ok := view.Facets[facet]
+	if !ok {
+		names := make([]string, 0, len(view.Facets))
+		for name := range view.Facets {
+			names = append(names, name)
 		}
-		values := make([]string, 0, len(dist))
-		for value := range dist {
-			values = append(values, value)
-		}
-		sort.Slice(values, func(i, j int) bool {
-			if dist[values[i]] != dist[values[j]] {
-				return dist[values[i]] > dist[values[j]]
-			}
-			return values[i] < values[j]
-		})
-		head := make(map[string]int64, mcpFacetHead)
-		for _, value := range values[:mcpFacetHead] {
-			head[value] = dist[value]
-		}
-		view.Facets[name] = head
-		if view.More == nil {
-			view.More = map[string]int{}
-		}
-		view.More[name] = len(dist) - mcpFacetHead
+		sort.Strings(names)
+		return nil, fmt.Errorf("unknown facet %q; valid facets are: %s", facet, strings.Join(names, ", "))
 	}
-	return view, nil
+	match := mcpapp.ContainsMatcher(facet, contains)
+	values := make(map[string]int64, len(dist))
+	for value, count := range dist {
+		if match(value) {
+			values[value] = count
+		}
+	}
+	return map[string]any{"total": view.Total, "facet": facet, "values": values}, nil
 }
 
 // searchJobsTool searches the catalogue with a keyword and facet filters, hitting

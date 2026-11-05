@@ -258,42 +258,42 @@ func TestFacetsToolReturnsTheVocabulary(t *testing.T) {
 }
 
 // An MCP client keeps every answer in its context, and the whole vocabulary ran to ~125 KB
-// (2026-11-05): four long tails of up to 1,200 values each. The MCP facets lists each
-// filter's head with a count of the rest, and returns one filter whole on request.
-func TestMCPFacetsListsTheHeadAndOneFilterWholeOnRequest(t *testing.T) {
-	skills := map[string]int64{}
-	for i := range 40 {
-		skills[fmt.Sprintf("skill-%02d", i)] = int64(100 - i)
-	}
+// (2026-11-05): four long tails of up to 1,200 values each. The MCP facets names the
+// filters with their sizes, and lists one filter's values on request.
+func TestMCPFacetsNamesTheFiltersAndListsOneOnRequest(t *testing.T) {
 	fc := &stubFacets{res: search.FacetResult{
-		Total:  120,
-		Facets: map[string]map[string]int64{"skills": skills, "enrichment.seniority": {"senior": 60}},
+		Total: 120,
+		Facets: map[string]map[string]int64{
+			"skills":               {"go": 40, "golang-migrate": 3, "python": 30},
+			"enrichment.seniority": {"senior": 60},
+		},
 	}}
 	a := assistantWith(&searchHandlers{facets: fc}, nil)
 	tool := toolByName(t, mcpKeyTools(a, testMCPOrigin), "facets")
-
-	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
-	if err != nil {
-		t.Fatalf("facets: %v", err)
-	}
-	head := out.(facetPayload)
-	if got := len(head.Facets["skills"]); got != mcpFacetHead {
-		t.Errorf("skills lists %d values, want the %d most common", got, mcpFacetHead)
-	}
-	if _, ok := head.Facets["skills"]["skill-00"]; !ok {
-		t.Errorf("skills = %v, want the most common value kept", head.Facets["skills"])
-	}
-	if head.More["skills"] != 40-mcpFacetHead || head.More["seniority"] != 0 {
-		t.Errorf("more = %v, want skills' hidden count and nothing for a short filter", head.More)
+	run := func(args string) map[string]any {
+		t.Helper()
+		out, err := tool.Run(context.Background(), 3, json.RawMessage(args))
+		if err != nil {
+			t.Fatalf("facets %s: %v", args, err)
+		}
+		return out.(map[string]any)
 	}
 
-	out, err = tool.Run(context.Background(), 3, json.RawMessage(`{"facet":"skills"}`))
-	if err != nil {
-		t.Fatalf("facets skills: %v", err)
+	index := run(`{}`)
+	if sizes := index["filters"].(map[string]int); sizes["skills"] != 3 || sizes["seniority"] != 1 {
+		t.Errorf("filters = %v, want each public filter name with its number of values", sizes)
 	}
-	whole := out.(facetPayload)
-	if len(whole.Facets) != 1 || len(whole.Facets["skills"]) != 40 || len(whole.More) != 0 {
-		t.Errorf("facet=skills returned %v (more %v), want only skills with all 40 values", whole.Facets, whole.More)
+	if payload, _ := json.Marshal(index); strings.Contains(string(payload), "python") {
+		t.Errorf("index = %s, want no values without a facet", payload)
+	}
+
+	if got := run(`{"facet":"skills"}`)["values"].(map[string]int64); len(got) != 3 {
+		t.Errorf("facet=skills values = %v, want all three", got)
+	}
+	// "golang" is an alias of "go": the alias finds the value the search filters by.
+	got := run(`{"facet":"skills","contains":"golang"}`)["values"].(map[string]int64)
+	if _, ok := got["go"]; !ok || len(got) != 2 {
+		t.Errorf("contains=golang values = %v, want go (by alias) and golang-migrate (by text)", got)
 	}
 
 	if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{"facet":"vibe"}`)); err == nil ||
@@ -301,10 +301,10 @@ func TestMCPFacetsListsTheHeadAndOneFilterWholeOnRequest(t *testing.T) {
 		t.Errorf("error = %v, want an unknown facet refused, naming it and the valid ones", err)
 	}
 
-	// The in-app assistant's own copy still lists everything.
+	// The in-app assistant's own copy still lists every value.
 	full, _ := toolByName(t, a.assistantDiscoveryTools(), "facets").Run(context.Background(), 3, json.RawMessage(`{}`))
-	if got := len(full.(facetPayload).Facets["skills"]); got != 40 {
-		t.Errorf("in-app facets lists %d skills, want all 40", got)
+	if got := len(full.(facetPayload).Facets["skills"]); got != 3 {
+		t.Errorf("in-app facets lists %d skills, want all 3", got)
 	}
 }
 
