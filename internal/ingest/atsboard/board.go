@@ -1291,14 +1291,18 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		if !configured || p.path == nil || p.listing == "" {
 			return "", "", "", false
 		}
-		if p.exactHost && u.Hostname() != apex {
-			// u.Hostname(), not the www.-trimmed host: the gate pins the entry to the exact host
-			// the platform serves, and www.jobs.dover.com is NOT that host — Dover does not
+		if p.exactHost && !strings.EqualFold(u.Hostname(), apex) {
+			// u.Hostname(), not the www.-trimmed host (case-folded, as hostnames are
+			// case-insensitive): the gate pins the entry to the exact host the platform
+			// serves, and www.jobs.dover.com is NOT that host — Dover does not
 			// serve boards there, so recognizing it would mint boards off a hostname the shell
 			// cannot back. (The trim is fine for every other mode, whose apexes are the SURFACE
 			// family — www.<board>.teamtailor.com is a real tenant host — but an exact-host entry
 			// names one literal host.)
 			return "", "", "", false
+		}
+		if p.exactHost {
+			u.Host = apex // one board, one canonical: the link's host spelling is not identity
 		}
 		if m := p.path.FindStringSubmatch(u.Path); len(m) == 2 && m[1] != "" {
 			board = m[1]

@@ -27,8 +27,8 @@ const doverDetailJSON = `{
 // TestDoverResolvesCompanyFromClientRecord pins the acceptance case behind the review
 // findings: the submitted jobs.dover.com link resolves under the company's own identity —
 // employer name from the posting's client record (NOT a humanized link segment), external id
-// namespaced by the canonical slug the careers API reports — so a link-imported row and a
-// crawl of the board the contribution flow files this link under dedup to one posting.
+// namespaced by the link's Org spelling — so a link-imported row and a crawl of the board the
+// contribution flow files this link under dedup to one posting.
 func TestDoverResolvesCompanyFromClientRecord(t *testing.T) {
 	const link = "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d?utm_source=telegram"
 	c := (&fakeClient{}).
@@ -69,12 +69,17 @@ func TestDoverDeclinesNonJobShapes(t *testing.T) {
 		"https://jobs.dover.com/Deepspatial",
 		"https://jobs.dover.com/Deepspatial/not-a-uuid",
 		"https://jobs.dover.com/startup-jobs",
+		"https://www.jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d",
 	}
 	for _, link := range declined {
 		u, _ := url.Parse(link)
 		if ls.Match(u) {
 			t.Errorf("Match accepted %s, want declined", link)
 		}
+	}
+	mixedCase, _ := url.Parse("https://JOBS.Dover.COM/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d")
+	if !ls.Match(mixedCase) {
+		t.Errorf("Match declined %s: hostnames are case-insensitive", mixedCase)
 	}
 }
 
@@ -156,5 +161,34 @@ func TestDoverRejectsEmptyClientIdentityAndUnknownSlug(t *testing.T) {
 	unknownSlug.route(api, doverDetailJSON, "")
 	if _, ok, err := NewDover(unknownSlug).Resolve(context.Background(), link); err != nil || ok {
 		t.Errorf("unknown slug: ok=%v err=%v, want ok=false, nil error", ok, err)
+	}
+}
+
+// TestDoverDeclinesOrgOwnedByAnotherClient pins the ownership gate: an Org that names a real
+// company other than the posting's client is a skip. Accepting it would store the posting under
+// a board whose crawl never writes it, forking the dedup key.
+func TestDoverDeclinesOrgOwnedByAnotherClient(t *testing.T) {
+	const link = "https://jobs.dover.com/Acme/a5546acf-45c3-44ff-bedd-a4314fd0f37d"
+	c := (&fakeClient{}).
+		route("inbound/application-portal-job/a5546acf-45c3-44ff-bedd-a4314fd0f37d", doverDetailJSON, "").
+		route("careers-page-slug/Acme", `{"id":"99999999-0000-4000-8000-000000000000","slug":"acme","name":"Acme"}`, "")
+	if _, ok, err := NewDover(c).Resolve(context.Background(), link); err != nil || ok {
+		t.Errorf("Org of another client: ok=%v err=%v, want ok=false, nil error", ok, err)
+	}
+}
+
+// TestDoverNamespacesTheAPIPostingID pins the id's source: the API answers any case of the uuid
+// with its lower-case id, which is what the crawl stores, so an upper-case link dedups with it.
+func TestDoverNamespacesTheAPIPostingID(t *testing.T) {
+	const link = "https://jobs.dover.com/Deepspatial/A5546ACF-45C3-44FF-BEDD-A4314FD0F37D"
+	c := (&fakeClient{}).
+		route("inbound/application-portal-job/A5546ACF-45C3-44FF-BEDD-A4314FD0F37D", doverDetailJSON, "").
+		route("careers-page-slug/Deepspatial", `{"id":"1aeeba55-65e0-4803-b70f-fac7ca8a20c7","slug":"deepspatial","name":"Deepspatial"}`, "")
+	job, ok, err := NewDover(c).Resolve(context.Background(), link)
+	if err != nil || !ok {
+		t.Fatalf("Resolve: ok=%v err=%v", ok, err)
+	}
+	if job.ExternalID != "Deepspatial:a5546acf-45c3-44ff-bedd-a4314fd0f37d" {
+		t.Errorf("ExternalID = %q, want the API's lower-case posting id", job.ExternalID)
 	}
 }

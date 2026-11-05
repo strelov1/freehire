@@ -601,6 +601,7 @@ func TestRecognize(t *testing.T) {
 		// canonical collapses to the /<Org> board address, which is the same board an
 		// app.dover.com link spells as /jobs/<Org>.
 		{"dover job board link", "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", "dover", "Deepspatial", "https://jobs.dover.com/Deepspatial", true},
+		{"dover job board mixed-case host", "https://JOBS.Dover.COM/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", "dover", "Deepspatial", "https://jobs.dover.com/Deepspatial", true},
 		{"dover job board with posting path", "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d/some-posting-slug", "dover", "Deepspatial", "https://jobs.dover.com/Deepspatial", true},
 		{"dover job board bare org is a marketing shell", "https://jobs.dover.com/Deepspatial", "", "", "", false},
 		{"dover job board vendor listing carries no tenant", "https://jobs.dover.com/startup-jobs", "", "", "", false},

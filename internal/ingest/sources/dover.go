@@ -226,17 +226,12 @@ type doverDetailResponse struct {
 	IsPrivate               bool              `json:"is_private"`
 
 	// Client identity fields, populated on the same endpoint (verified live 2026-11-05: the
-	// submitted jobs.dover.com link's detail carries client_id/client_name/client_domain; the
-	// canonical slug comes from careers-page-slug/<client_name>, which answers either case of
-	// the name with the lower-case slug). DoverJobDetail reuses this struct for the link-source
-	// resolver, which needs the company's own naming and slug off the posting rather than a
-	// humanized link segment.
+	// submitted jobs.dover.com link's detail carries client_id/client_name/client_domain).
+	// DoverJobDetail reuses this struct for the link-source resolver, which needs the company's
+	// own naming and client id off the posting rather than a humanized link segment.
 	ClientID     string `json:"client_id"`
 	ClientName   string `json:"client_name"`
 	ClientDomain string `json:"client_domain"`
-	// ClientSlug is NOT in the detail response; the link-source resolver fills it from
-	// careers-page-slug/<client_name> (lower-case canonical slug, e.g. "deepspatial").
-	ClientSlug string `json:"-"`
 }
 
 // DoverJobDetail is the exported view of a posting detail for the link-source resolver
