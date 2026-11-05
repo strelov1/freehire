@@ -206,6 +206,9 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 		if err := q.DeleteSearchOutboxEntries(ctx, []int64{held}); err != nil {
 			t.Fatal(err)
 		}
+		if got := searchOutboxCount(t, pool, id); got != 0 {
+			t.Fatalf("entries left once the wave completed = %d, want 0: the first run must not have re-stamped the held entry", got)
+		}
 		run(-time.Minute-time.Hour, 0) // the next run: its cursor minus the overlap
 		if got := searchOutboxCount(t, pool, id); got != 1 {
 			t.Errorf("crossing queued %d times after the overlapping run, want 1", got)
