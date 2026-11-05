@@ -55,7 +55,8 @@ func (s *Service) Build(ctx context.Context, requestedDay time.Time) (Digest, er
 		return Digest{}, fmt.Errorf("quarantine set: %w", err)
 	}
 
-	return Digest{Day: day, Items: Select(candidates, quarantined)}, nil
+	theme, items := SelectThemed(ThemeFor(day), candidates, quarantined)
+	return Digest{Day: day, Items: items, Theme: theme}, nil
 }
 
 // Dispatch publishes a digest to every publisher that has not already had this day,

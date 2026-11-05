@@ -90,7 +90,7 @@ func (p *DiscordPublisher) payload(d Digest) discordPayload {
 		b.WriteString("\n\n")
 	}
 	return discordPayload{Embeds: []discordEmbed{{
-		Title:       "Most viewed on freehire — " + d.Day.Format("2 January 2006"),
+		Title:       d.Title(),
 		Description: truncateRunes(strings.TrimRight(b.String(), "\n"), discordDescriptionLimit),
 		Color:       discordEmbedColor,
 	}}}

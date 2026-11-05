@@ -68,6 +68,8 @@ func postingFromRow(row db.TopPageViewedJobsForDayRow) Posting {
 		CompanySlug: row.CompanySlug,
 		Location:    html.UnescapeString(row.Location),
 		Remote:      row.Remote,
+		Seniority:   row.Seniority,
+		Category:    row.Category,
 		PageUniques: int(row.PageUniques),
 	}
 }
