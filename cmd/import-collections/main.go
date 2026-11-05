@@ -42,6 +42,7 @@ import (
 	"github.com/strelov1/freehire/internal/job/collections"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/safehttp"
+	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
@@ -276,18 +277,18 @@ func withoutFailed(scope []collections.Collection, failed []resolveFailure) []co
 	return out
 }
 
-// proxiedCollectionSlugs are collections whose register blocks the prod datacenter
-// IP outright, confirmed for us-h1b-sponsor on 2026-08-05: uscis.gov 403s a direct
-// request even with a browser User-Agent, so it is IP reputation rather than a bot-
-// detection header — the same class of problem internal/ingest/sources/proxy.go already
-// solves for several board providers via the same SOURCES_PROXY_URL. Membership is
-// opt-in; every other collection stays on the direct client.
+// proxiedCollectionSlugs are collections whose register refuses a plain client, confirmed
+// for us-h1b-sponsor: uscis.gov's Akamai answers 403 to a direct request, to one through
+// SOURCES_PROXY_URL, to the rotating pool, and even from a residential IP (2026-11-05). Only
+// a Chrome TLS fingerprint from a proxy exit IP passes, which is the Scrapling tier's http
+// mode with its proxy. Membership is opt-in; every other collection stays on the direct
+// client.
 var proxiedCollectionSlugs = map[string]struct{}{
 	"us-h1b-sponsor": {},
 }
 
-// clientFor picks direct or proxied for a collection. A nil proxied — meaning
-// SOURCES_PROXY_URL is unset — always falls back to direct, so every collection is
+// clientFor picks direct or proxied for a collection. A nil proxied — meaning no
+// egress is configured — always falls back to direct, so every collection is
 // reachable without a proxy configured.
 func clientFor(slug string, direct, proxied *http.Client) *http.Client {
 	if proxied == nil {
@@ -299,11 +300,23 @@ func clientFor(slug string, direct, proxied *http.Client) *http.Client {
 	return direct
 }
 
-// proxiedClient builds an http.Client egressing through SOURCES_PROXY_URL, or
-// returns nil when the variable is unset. An unparseable value is a fail-fast
-// error rather than a silent fallback to the direct (blocked) IP — the same
-// discipline as internal/ingest/sources/proxy.go's ApplyProxyEgress.
+// proxiedClient builds the client for proxiedCollectionSlugs, or returns nil when no
+// egress is configured. The Scrapling tier (SCRAPLING_FETCH_URL, http mode through its
+// proxy) wins over the plain SOURCES_PROXY_URL, which uscis.gov no longer accepts. Both
+// live on the crawl host, so the unit must run there. A malformed value is a fail-fast
+// error rather than a silent fallback to the direct (blocked) IP — the same discipline as
+// internal/ingest/sources/proxy.go's ApplyProxyEgress.
 func proxiedClient(timeout time.Duration) (*http.Client, error) {
+	if raw := strings.TrimSpace(os.Getenv("SCRAPLING_FETCH_URL")); raw != "" {
+		tr, err := scraplingfetch.New(scraplingfetch.Config{
+			URL:   raw,
+			Token: strings.TrimSpace(os.Getenv("SCRAPLING_FETCH_TOKEN")),
+		}, scraplingfetch.ModeHTTP, true, timeout)
+		if err != nil {
+			return nil, fmt.Errorf("import-collections: %w", err)
+		}
+		return &http.Client{Transport: tr, Timeout: timeout}, nil
+	}
 	raw := strings.TrimSpace(os.Getenv("SOURCES_PROXY_URL"))
 	if raw == "" {
 		return nil, nil

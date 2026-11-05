@@ -14,6 +14,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/job/collections"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 )
 
 // plan matches each collection's candidates against existing companies and emits a
@@ -417,6 +418,7 @@ func TestClientFor_UsesDirectForANonAllowlistedSlug(t *testing.T) {
 }
 
 func TestProxiedClient_ReturnsNilWhenSOURCES_PROXY_URLIsUnset(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "")
 	t.Setenv("SOURCES_PROXY_URL", "")
 	got, err := proxiedClient(fetchTimeout)
 	if err != nil {
@@ -428,6 +430,7 @@ func TestProxiedClient_ReturnsNilWhenSOURCES_PROXY_URLIsUnset(t *testing.T) {
 }
 
 func TestProxiedClient_BuildsAClientWhenSOURCES_PROXY_URLIsSet(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "")
 	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
 	got, err := proxiedClient(fetchTimeout)
 	if err != nil {
@@ -439,6 +442,7 @@ func TestProxiedClient_BuildsAClientWhenSOURCES_PROXY_URLIsSet(t *testing.T) {
 }
 
 func TestProxiedClient_ErrorsOnAnUnparseableSOURCES_PROXY_URL(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "")
 	t.Setenv("SOURCES_PROXY_URL", "not a url")
 	if _, err := proxiedClient(fetchTimeout); err == nil {
 		t.Error("proxiedClient accepted an invalid SOURCES_PROXY_URL")
@@ -540,5 +544,26 @@ func TestWithoutFailed_LeavesAFailedCollectionsTagsAlone(t *testing.T) {
 	p := planScoped(rows, map[string][]collections.Record{"uk": {{Name: "Monzo"}}}, narrowed)
 	if len(p.writes) != 0 {
 		t.Errorf("writes = %+v, want none — adyen's nl tag must survive the outage", p.writes)
+	}
+}
+
+func TestProxiedClient_PrefersTheScraplingTier(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "http://127.0.0.1:8098")
+	t.Setenv("SCRAPLING_FETCH_TOKEN", "token")
+	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
+	got, err := proxiedClient(fetchTimeout)
+	if err != nil {
+		t.Fatalf("proxiedClient: %v", err)
+	}
+	if _, ok := got.Transport.(*scraplingfetch.Transport); !ok {
+		t.Errorf("proxiedClient transport = %T, want the Scrapling tier", got.Transport)
+	}
+}
+
+func TestProxiedClient_ErrorsOnScraplingWithoutAToken(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "http://127.0.0.1:8098")
+	t.Setenv("SCRAPLING_FETCH_TOKEN", "")
+	if _, err := proxiedClient(fetchTimeout); err == nil {
+		t.Error("proxiedClient accepted SCRAPLING_FETCH_URL without a token")
 	}
 }
