@@ -1,0 +1,98 @@
+name: Dependabot stuck PRs
+
+# Hands a Dependabot pull request that has not merged itself to SuperPlane, as an
+# issue labelled `superplane`, which SuperPlane's GitHub-issues intake turns into a
+# work order.
+#
+# "Stuck" is one rule on purpose: open longer than 24 hours. dependabot-automerge.yml
+# merges a minor or patch bump within an hour or two of CI going green, so anything
+# still open a day later is one of the cases it cannot handle — a major update (it
+# never enables auto-merge for those), a red check, a conflict, or a bump to one of
+# the three manifests that `pnpm check:deps` holds in step. Telling those apart is the
+# agent's job, not this file's.
+#
+# One issue per pull request, ever: the title carries the PR number and an existing
+# issue with that title, open or closed, is a no-op. Closing the issue therefore
+# settles the PR for good, even if Dependabot leaves it open.
+#
+# The issue is public. It carries only what the pull request already shows publicly:
+# its title, link, merge state and the names of failing checks.
+#
+# Never checks out or runs PR code; it reads metadata through the API only.
+
+on:
+  schedule:
+    - cron: '37 7 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: dependabot-stuck
+  cancel-in-progress: false
+
+jobs:
+  hand-off:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: read
+      checks: read
+      statuses: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Open a SuperPlane issue for each stuck Dependabot PR
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+
+          gh pr list --author app/dependabot --state open --limit 100 \
+            --json number,title,url,createdAt,mergeStateStatus,statusCheckRollup \
+            --jq ".[] | select(.createdAt < \"$cutoff\")" > stuck.jsonl
+
+          # Every issue this workflow ever opened, open or closed, for the dedupe.
+          gh issue list --label superplane --state all --limit 1000 \
+            --json title --jq '.[].title' > existing.txt
+
+          # One failed create must not cost the PRs after it; the run still fails at the end.
+          failed=0
+          while IFS= read -r pr; do
+            number=$(jq -r .number <<<"$pr")
+            title="Dependabot PR #$number is stuck: $(jq -r .title <<<"$pr")"
+            if grep -qF "Dependabot PR #$number is stuck:" existing.txt; then
+              echo "#$number already handed off"
+              continue
+            fi
+
+            failing=$(jq -r '[.statusCheckRollup[]
+              | select((.conclusion // .state) as $s
+                       | ["FAILURE","ERROR","CANCELLED","TIMED_OUT","ACTION_REQUIRED"] | index($s))
+              | (.name // .context)] | unique | join(", ")' <<<"$pr")
+
+            {
+              echo "Dependabot opened $(jq -r .url <<<"$pr") on $(jq -r .createdAt <<<"$pr") and it has not merged itself."
+              echo
+              echo "- Merge state: \`$(jq -r .mergeStateStatus <<<"$pr")\`"
+              echo "- Failing checks: ${failing:-none}"
+              echo
+              echo "dependabot-automerge.yml only merges minor and patch bumps with green CI, so this one needs a person or an agent."
+              echo
+              echo "## What to do"
+              echo
+              echo "1. Find out why it cannot merge: a major update with breaking changes, a red check, a conflict, or \`pnpm check:deps\` wanting the same version in web/, extension/ and design-system/."
+              echo "2. Open your OWN pull request from a fresh branch off main that makes the bump land with CI green. Do not push to the Dependabot branch: Dependabot stops maintaining a branch someone else pushed to."
+              echo "3. Write \`Supersedes #$number\` in your PR body, then close #$number with a comment linking your PR."
+              echo "4. Do not merge. A person merges."
+              echo
+              echo "If the bump is not worth taking (a major with no gain and real migration cost), say so here, close #$number with that reason, and stop."
+            } > body.md
+
+            if ! gh issue create --title "$title" --label superplane --body-file body.md; then
+              echo "::warning::hand-off of #$number failed"
+              failed=1
+            fi
+          done < stuck.jsonl
+          exit "$failed"
