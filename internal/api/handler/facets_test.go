@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -613,5 +616,57 @@ func TestJobFacets_CompanyCountIsCached(t *testing.T) {
 	}
 	if fake.calls != 1 || len(fake.gotDistinct) != 1 {
 		t.Errorf("FacetCounts %d / DistinctCount %d calls, want 1 each", fake.calls, len(fake.gotDistinct))
+	}
+}
+
+// blockingFacetCounter holds every count until release closes, so concurrent callers
+// are all in flight together.
+type blockingFacetCounter struct {
+	fakeFacetCounter
+	counts  atomic.Int32
+	release chan struct{}
+}
+
+func (b *blockingFacetCounter) FacetCounts(context.Context, search.FacetParams) (search.FacetResult, error) {
+	b.counts.Add(1)
+	<-b.release
+	return search.FacetResult{Total: 42}, nil
+}
+
+func TestCachedFacetCounts_ConcurrentMissesShareOneCount(t *testing.T) {
+	fake := &blockingFacetCounter{release: make(chan struct{})}
+	c := cache.NewMemory()
+	p := search.FacetParams{Query: "go", Facets: []string{"seniority"}}
+
+	const callers = 20
+	var started, done sync.WaitGroup
+	errs := make(chan error, callers)
+	for range callers {
+		started.Add(1)
+		done.Add(1)
+		go func() {
+			defer done.Done()
+			started.Done()
+			res, err := cachedFacetCounts(context.Background(), fake, c, p)
+			if err == nil && res.Total != 42 {
+				err = fmt.Errorf("total = %d, want 42", res.Total)
+			}
+			errs <- err
+		}()
+	}
+	started.Wait()
+	// Let the callers reach the flight before the first count returns.
+	time.Sleep(50 * time.Millisecond)
+	close(fake.release)
+	done.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := fake.counts.Load(); n != 1 {
+		t.Errorf("FacetCounts calls = %d, want 1", n)
 	}
 }
