@@ -20,7 +20,5 @@
 </script>
 
 <AssistantPanel {open} title={s.title} {onClose}>
-  {#snippet children()}
-    <AssistantChat preset="support" showSessionRail={false} openingActions={starters} />
-  {/snippet}
+  <AssistantChat preset="support" showSessionRail={false} openingActions={starters} />
 </AssistantPanel>

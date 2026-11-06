@@ -12,5 +12,5 @@ it('starts a support conversation on the support routes, with no preset query', 
   const fetchMock = vi.fn().mockResolvedValue(Response.json({ data: { id: 's1' } }));
   vi.stubGlobal('fetch', fetchMock);
   await createSession('support');
-  expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/support/sessions');
+  expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/support/sessions');
 });

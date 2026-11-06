@@ -13,7 +13,7 @@
   import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import AccountNavDrawer from '#lib/components/AccountNavDrawer.svelte';
   import AccountNavGroups from '#lib/components/AccountNavGroups.svelte';
-  import { messages as supportMessages } from '#lib/components/SupportPanel.messages';
+  import { messages as supportMessages } from '#lib/components/SupportPanel.messages.js';
   import SupportPanel from '#lib/components/SupportPanel.svelte';
   import { dockOffset } from '#lib/assistantDock.svelte.js';
 
