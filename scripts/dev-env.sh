@@ -31,12 +31,13 @@ if [ -z "${DB_HOST_PORT:-}" ] && [ -f "$root/.env" ]; then
   DB_HOST_PORT=$(sed -n 's/^DB_HOST_PORT=//p' "$root/.env" | tail -n 1)
 fi
 
+export DB_HOST_PORT="${DB_HOST_PORT:-5432}"
 export COMPOSE_PROJECT_NAME=hire
 export HIRE_DB_NAME="$db"
 export PORT="$port"
-export DATABASE_URL="postgres://hire:hire@localhost:${DB_HOST_PORT:-5432}/$db?sslmode=disable"
+export DATABASE_URL="postgres://hire:hire@localhost:$DB_HOST_PORT/$db?sslmode=disable"
 # The web dev server proxies /api to this checkout's server (web/vite.config.ts).
 export VITE_API_URL="http://localhost:$port"
 # Integration tests migrate their template on this server instead of starting a container
 # per test binary (internal/platform/testdb); `mise run db:up` must have started it.
-export TESTDB_ADMIN_URL="postgres://hire:hire@localhost:${DB_HOST_PORT:-5432}/postgres?sslmode=disable"
+export TESTDB_ADMIN_URL="postgres://hire:hire@localhost:$DB_HOST_PORT/postgres?sslmode=disable"
