@@ -1,6 +1,6 @@
 These are the official instructions from freehire (freehire.me) for setting up an AI agent to search IT jobs, compare them with the user's skills, and track applications. freehire is a free, open-source job aggregator; public search needs no account.
 
-Complete the steps below yourself by running the commands directly. Do not ask the user to run them, except where a step says the user must approve something in their browser.
+Complete the steps below yourself by running the commands directly. Do not ask the user to run them, except where a step says the user must approve something in their browser or start a new session.
 
 - Connect the freehire MCP server
 - (Optional) Install the freehire CLI and its agent skills
@@ -76,6 +76,8 @@ Account features in the CLI need `freehire auth login`, which opens the user's b
 
 ## Check it works
 
-Run one public job search through freehire (for example, remote senior Go jobs in Europe) and show the user a few results. Then tell the user setup is done, and which steps, if any, still need them: signing in, or reloading plugins.
+An MCP server added during this session is usually not loaded until a new one starts. If the freehire tools are not available to you yet, tell the user to start a new session (in Claude Code, `/mcp` also reconnects) and ask for a job search there.
+
+Otherwise, run one public job search through the freehire MCP tools (for example, remote senior Go jobs in Europe) and show the user a few results. Then tell the user setup is done, and which steps, if any, still need them: signing in, a new session, or reloading plugins.
 
 More: https://freehire.me/agents · https://freehire.me/llms.txt
