@@ -670,3 +670,15 @@ func TestCachedFacetCounts_ConcurrentMissesShareOneCount(t *testing.T) {
 		t.Errorf("FacetCounts calls = %d, want 1", n)
 	}
 }
+
+func TestCachedFacetCounts_CanceledCallerStopsWaiting(t *testing.T) {
+	fake := &blockingFacetCounter{release: make(chan struct{})}
+	defer close(fake.release)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := cachedFacetCounts(ctx, fake, nil, search.FacetParams{Query: "canceled"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}

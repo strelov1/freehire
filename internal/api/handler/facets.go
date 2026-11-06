@@ -49,15 +49,19 @@ func (h *searchHandlers) cachedFacetCounts(ctx context.Context, p search.FacetPa
 // the same distributions twice. A nil cache reads straight through.
 func cachedFacetCounts(ctx context.Context, f facetCounter, c cache.Cache, p search.FacetParams) (search.FacetResult, error) {
 	key := facetCacheKey(p)
-	if c != nil {
-		if cached, found, err := cache.GetJSON[search.FacetResult](ctx, c, key); err == nil && found {
-			return cached, nil
-		}
+	if res, ok := cachedFacets(ctx, c, key); ok {
+		return res, nil
 	}
 
-	v, err, _ := facetFlight.Do(key, func() (any, error) {
-		// The count is shared, so one caller going away must not fail the others with it.
-		ctx := context.WithoutCancel(ctx)
+	ch := facetFlight.DoChan(key, func() (any, error) {
+		// A flight that finished between our miss and this call has already stored it.
+		if res, ok := cachedFacets(ctx, c, key); ok {
+			return res, nil
+		}
+		// The count is shared, so one caller going away must not cancel it for the others;
+		// the engine client sets no timeout of its own, so the count gets one here.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), facetCountTimeout)
+		defer cancel()
 		res, err := countFacets(ctx, f, p)
 		if err != nil {
 			return nil, err
@@ -68,16 +72,34 @@ func cachedFacetCounts(ctx context.Context, f facetCounter, c cache.Cache, p sea
 		}
 		return res, nil
 	})
-	if err != nil {
-		return search.FacetResult{}, err
+	select {
+	case r := <-ch:
+		if r.Err != nil {
+			return search.FacetResult{}, r.Err
+		}
+		return r.Val.(search.FacetResult), nil
+	case <-ctx.Done():
+		return search.FacetResult{}, ctx.Err()
 	}
-	return v.(search.FacetResult), nil
+}
+
+// cachedFacets reads one facet result from the cache. A nil cache, a miss and a cache
+// error all report not found.
+func cachedFacets(ctx context.Context, c cache.Cache, key string) (search.FacetResult, bool) {
+	if c == nil {
+		return search.FacetResult{}, false
+	}
+	res, found, err := cache.GetJSON[search.FacetResult](ctx, c, key)
+	return res, err == nil && found
 }
 
 // facetFlight collapses concurrent misses on one cache key into a single count. On
 // 2026-11-05 a burst on an expired key sent every request to Meilisearch at once and
 // filled its search queue. Callers share the result and only read it.
 var facetFlight singleflight.Group
+
+// facetCountTimeout bounds a shared count, which no single caller's deadline does.
+const facetCountTimeout = 30 * time.Second
 
 // companyAttr is the index attribute behind the company_slug facet.
 var companyAttr = search.StringFacets[companyFacetParam]
