@@ -21,8 +21,10 @@
 
   // The chat has no session rail here, so a conversation that reached its turn limit had no
   // way out but a reload. Remounting starts a fresh support session; closing the panel does
-  // not remount, so a turn still streaming is never cut off.
+  // not remount, so a turn still streaming is never cut off — and neither does this button,
+  // which waits for the reply to finish.
   let chatKey = $state(0);
+  let replying = $state(false);
 </script>
 
 <AssistantPanel {open} title={s.title} {onClose}>
@@ -31,13 +33,19 @@
       <button
         type="button"
         onclick={() => chatKey++}
-        class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        disabled={replying}
+        class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
       >
         <Plus class="size-3.5" />{s.newChat}
       </button>
     </div>
     {#key chatKey}
-      <AssistantChat preset="support" showSessionRail={false} openingActions={starters} />
+      <AssistantChat
+        preset="support"
+        showSessionRail={false}
+        openingActions={starters}
+        onTurnStateChange={(active) => (replying = active)}
+      />
     {/key}
   </div>
 </AssistantPanel>

@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -184,6 +185,19 @@ func TestSupportSessionIsUnreachableThroughEveryGenericRoute(t *testing.T) {
 			t.Errorf("%s of a support session through the generic route = %d, want 404", method, resp.StatusCode)
 		}
 	}
+	// Nor is it listed among the caller's chats, where opening it would only 404.
+	listReq := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/assistant/sessions", nil)
+	listReq.AddCookie(&http.Cookie{Name: auth.CookieName, Value: pro})
+	listResp, err := app.Test(listReq)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	listed, _ := io.ReadAll(listResp.Body)
+	listResp.Body.Close()
+	if listResp.StatusCode != fiber.StatusOK || strings.Contains(string(listed), sessionID) {
+		t.Errorf("GET /assistant/sessions = %d and lists the support session: %s", listResp.StatusCode, listed)
+	}
+
 	if n := model.calls.Load(); n != 0 {
 		t.Errorf("the model was called %d times through generic routes", n)
 	}
