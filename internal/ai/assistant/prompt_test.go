@@ -388,3 +388,9 @@ func TestLanguageNameFallsBackToEnglish(t *testing.T) {
 		t.Errorf(`LanguageName("ru") = %q, want "Russian"`, got)
 	}
 }
+
+func TestSupportPromptAnswersSupportMessageQuestionsFromItsOwnField(t *testing.T) {
+	if !strings.Contains(SystemPrompt(PresetSupport, "en"), "support_messages_today") {
+		t.Error("the support preset must send support-message questions to my_account's support_messages_today")
+	}
+}

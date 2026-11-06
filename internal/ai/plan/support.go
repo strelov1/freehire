@@ -2,7 +2,10 @@ package plan
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -43,6 +46,33 @@ func decideSupport(limit int) func(Tier, Feature, int, bool, time.Time) Decision
 // for Pro to remove.
 func (s *Store) ConsumeSupport(ctx context.Context, userID int64, ref string) (Decision, error) {
 	return s.consume(ctx, userID, FeatureSupport, ref, decideSupport(s.cfg.SupportMessagesPerDay))
+}
+
+// SupportStanding is where one account stands on today's support messages, read from the
+// ledger ConsumeSupport charges. The limit is flat for every tier, so it never asks for one.
+type SupportStanding struct {
+	Used      int
+	Limit     int
+	Remaining int
+	ResetsAt  time.Time
+}
+
+// SupportStanding reads the caller's support usage today without charging anything.
+func (s *Store) SupportStanding(ctx context.Context, userID int64) (SupportStanding, error) {
+	now := s.now()
+	used, err := s.q.GetUsageDay(ctx, db.GetUsageDayParams{
+		UserID: userID, Feature: string(FeatureSupport), Day: pgDay(Day(now)),
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return SupportStanding{}, err
+	}
+	limit := s.cfg.SupportMessagesPerDay
+	return SupportStanding{
+		Used:      int(used),
+		Limit:     limit,
+		Remaining: max(limit-int(used), 0),
+		ResetsAt:  ResetsAt(now),
+	}, nil
 }
 
 // SupportTurnsPerSession is how many messages one support conversation may hold.

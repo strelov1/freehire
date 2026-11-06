@@ -685,3 +685,48 @@ func TestARacingSupportCreateReusesTheSessionBeingMade(t *testing.T) {
 		t.Fatalf("two racing creates left %d support sessions, want 1", n)
 	}
 }
+
+func TestMyAccountReportsTheSupportAllowanceFromTheLedger(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	cfg := plan.DefaultConfig().Enforcing()
+	cfg.SupportMessagesPerDay = 7
+	_, h := supportApp(t, pool, iss, &gateCountingModel{}, cfg, nil)
+	aID, _ := assistantUser(t, pool, iss, "support-left-a@example.test", false)
+	bID, _ := assistantUser(t, pool, iss, "support-left-b@example.test", false)
+
+	read := func(user int64) supportAllowance {
+		t.Helper()
+		got, err := h.myAccountTool().Run(ctx, user, nil)
+		if err != nil {
+			t.Fatalf("my_account: %v", err)
+		}
+		return got.(accountSummary).SupportToday
+	}
+	if got := read(aID); got.Limit != 7 || got.Used != 0 || got.Remaining != 7 {
+		t.Fatalf("fresh account = %+v, want limit 7, used 0, remaining 7", got)
+	}
+	for _, ref := range []string{"r1", "r2", "r3"} {
+		if _, err := h.plans.ConsumeSupport(ctx, aID, ref); err != nil {
+			t.Fatalf("ConsumeSupport: %v", err)
+		}
+	}
+	if _, err := h.plans.ConsumeSupport(ctx, bID, "other"); err != nil {
+		t.Fatal(err)
+	}
+	got := read(aID)
+	if got.Used != 3 || got.Remaining != 4 {
+		t.Errorf("after 3 messages = %+v, want used 3, remaining 4", got)
+	}
+	next := time.Now().UTC().Truncate(24 * time.Hour).Add(24 * time.Hour).Format(time.RFC3339)
+	if got.ResetsAt != next {
+		t.Errorf("resets_at = %q, want %q", got.ResetsAt, next)
+	}
+	if err := h.plans.Release(ctx, aID, plan.FeatureSupport, "r1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(aID); got.Used != 2 || got.Remaining != 5 {
+		t.Errorf("after release = %+v, want used 2, remaining 5", got)
+	}
+}
