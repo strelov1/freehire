@@ -3,7 +3,6 @@ import { ApiError } from '#lib/api.js';
 
 const api = {
   getJob: vi.fn(),
-  getSimilarJobs: vi.fn(),
   getJobCopies: vi.fn(),
   getApplyForm: vi.fn(),
   facetCounts: vi.fn(),
@@ -25,7 +24,6 @@ function run(slug: string) {
 describe('job page load: application form', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    api.getSimilarJobs.mockResolvedValue([]);
     api.getJobCopies.mockResolvedValue({ copies: [], total: 0 });
     api.facetCounts.mockResolvedValue(null);
   });
