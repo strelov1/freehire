@@ -78,3 +78,24 @@ func defaultSeenPolicy() seenPolicy {
 		bodies:          sweeppolicy.BodyRefresh{Slices: 1, Slot: sweeppolicy.BodyRefreshDisabledSlot},
 	}
 }
+
+// A red ingest unit must mean the run is broken. A provider of thousands of boards always has
+// a few failing ones, and those belong to board_health, not to the exit code.
+func TestCrawlReachedNothing(t *testing.T) {
+	cases := []struct {
+		name  string
+		total pipeline.Stats
+		want  bool
+	}{
+		{"a few dead boards beside a working crawl", pipeline.Stats{Ingested: 26362, Failed: 5}, false},
+		{"every posting covered, so only refreshed", pipeline.Stats{Refreshed: 40, Failed: 1}, false},
+		{"every board failed", pipeline.Stats{Failed: 12}, true},
+		{"every save failed", pipeline.Stats{Skipped: 4149}, true},
+		{"nothing to do: every board quiet", pipeline.Stats{Quiet: 300}, false},
+	}
+	for _, tc := range cases {
+		if got := crawlReachedNothing(tc.total); got != tc.want {
+			t.Errorf("%s: crawlReachedNothing(%+v) = %t, want %t", tc.name, tc.total, got, tc.want)
+		}
+	}
+}

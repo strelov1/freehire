@@ -247,9 +247,11 @@ func run() int {
 		log.Printf("ingest writes: provider=%s %s", provider, s)
 	}
 
-	// A failed board is counted in total.Failed; surface it (and any sweep failure
-	// below) through the exit code so cron alerts on a degraded run.
-	failed := total.Failed
+	// The exit code says whether the RUN is broken, not whether a board is: see crawlReachedNothing.
+	var failed int
+	if crawlReachedNothing(total) {
+		failed++
+	}
 	// A truncated run did not crawl what it was asked to, which is a degraded run however
 	// cleanly it stopped; the exit code says so, as it did when the unit's timeout killed it.
 	if truncated {
@@ -291,6 +293,17 @@ func run() int {
 	logChronicBoards(sweepCtx, queries)
 
 	return worker.ExitCode(failed, 0)
+}
+
+// crawlReachedNothing reports a run that tried and wrote nothing: boards failed or saves failed,
+// and not one posting was saved or refreshed — the host blocked, the database unreachable, a
+// schema drift. One failing board among thousands is not that. A provider of thousands of boards
+// always has a few that 404 or 401 this hour, and counting each one made a clean crawl exit 1:
+// on 2026-11-05, 17 static ingest units were red for exactly that (ashby failed=5 beside 26k
+// postings written), so a red unit meant nothing. A failing board is board_health's to report —
+// the run's unhealthy/chronic summary and close-chronic-boards — not the exit code's.
+func crawlReachedNothing(total pipeline.Stats) bool {
+	return total.Ingested == 0 && total.Refreshed == 0 && (total.Failed > 0 || total.Skipped > 0)
 }
 
 // sweep runs the post-crawl stale-job closes for every provider in runStats and returns how many
