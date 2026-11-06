@@ -27,19 +27,23 @@ const USER = {
   onboarding_completed_at: '2026-01-01T00:00:00Z',
 };
 
+// Serial keeps every test of this file in ONE worker, so the stand-in below has one owner:
+// it is bound before the first test and closed after the last, and no other worker can
+// close it under a page that is still loading.
+test.describe.configure({ mode: 'serial' });
+
 let ssrApi: Server;
 test.beforeAll(async () => {
   ssrApi = createServer((req, res) => {
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify(req.url?.includes('/auth/me') ? { data: USER } : { data: null }));
   });
-  // Workers share the one port: whichever binds first answers for all of them.
-  await new Promise<void>((done) => {
-    ssrApi.once('error', () => done());
-    ssrApi.listen(SSR_API_PORT, '127.0.0.1', () => done());
+  await new Promise<void>((done, fail) => {
+    ssrApi.once('error', fail);
+    ssrApi.listen(SSR_API_PORT, '127.0.0.1', done);
   });
 });
-test.afterAll(() => ssrApi.close());
+test.afterAll(() => new Promise<void>((done) => ssrApi.close(() => done())));
 
 function transcript(count: number) {
   return Array.from({ length: count }, (_, i) => ({
@@ -49,8 +53,9 @@ function transcript(count: number) {
   }));
 }
 
-async function mockAssistant(page: Page) {
-  await page.context().addCookies([{ name: 'hire_token', value: 'e2e', domain: 'localhost', path: '/' }]);
+async function mockAssistant(page: Page, baseURL: string | undefined) {
+  if (!baseURL) throw new Error('baseURL is not configured');
+  await page.context().addCookies([{ name: 'hire_token', value: 'e2e', url: baseURL }]);
   // Anything the page asks beyond what this spec is about: answered with no data, so no request
   // waits on a backend that is not there. Registered first, so the routes below win.
   await page.route('**/api/v1/**', (route) => route.fulfill({ json: { data: null } }));
@@ -94,8 +99,8 @@ async function makePageScrollable(page: Page) {
   });
 }
 
-async function open(page: Page, url: string) {
-  await mockAssistant(page);
+async function open(page: Page, baseURL: string | undefined, url: string) {
+  await mockAssistant(page, baseURL);
   await page.goto(url);
   await makePageScrollable(page);
   await expect(list(page)).toContainText('Message 60.', { timeout: 20_000 });
@@ -105,12 +110,32 @@ async function wheelOverList(page: Page, deltaY: number) {
   const box = await scrollerBox(page);
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, deltaY);
-  await page.waitForTimeout(150);
+  await settled(page);
+}
+
+// The wheel is handled asynchronously: wait until neither the list nor the page has moved
+// for several frames, so an assertion reads the outcome and not a position mid-scroll.
+async function settled(page: Page) {
+  await scroller(page).evaluate(
+    (el) =>
+      new Promise<void>((done) => {
+        let last = '';
+        let still = 0;
+        const tick = () => {
+          const now = `${el.scrollTop}/${window.scrollY}`;
+          still = now === last ? still + 1 : 0;
+          last = now;
+          if (still >= 8) done();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
 }
 
 test.describe('full-page assistant', () => {
-  test('wheel scrolls the list, not the page, and stops at the edge', async ({ page }) => {
-    await open(page, '/my/assistant/s1');
+  test('wheel scrolls the list, not the page, and stops at the edge', async ({ page, baseURL }) => {
+    await open(page, baseURL, '/my/assistant/s1');
     const before = await state(page);
     expect(before.max, 'transcript must overflow the list').toBeGreaterThan(500);
     expect(before.docOverflow, 'the page must have room to scroll').toBeGreaterThan(100);
@@ -133,8 +158,8 @@ test.describe('full-page assistant', () => {
     expect(edge.pageY).toBe(before.pageY);
   });
 
-  test('jump-to-latest pins the list back to the newest message', async ({ page }) => {
-    await open(page, '/my/assistant/s1');
+  test('jump-to-latest pins the list back to the newest message', async ({ page, baseURL }) => {
+    await open(page, baseURL, '/my/assistant/s1');
     await wheelOverList(page, -100000);
     expect((await state(page)).top).toBe(0);
     await page.getByRole('button', { name: /latest/i }).click();
@@ -148,8 +173,8 @@ test.describe('full-page assistant', () => {
 test.describe('full-page assistant on a phone', () => {
   test.use({ viewport: { width: 390, height: 780 }, hasTouch: true, isMobile: true });
 
-  test('touch drag scrolls the list, not the page', async ({ page }) => {
-    await open(page, '/my/assistant/s1');
+  test('touch drag scrolls the list, not the page', async ({ page, baseURL }) => {
+    await open(page, baseURL, '/my/assistant/s1');
     const before = await state(page);
     const box = await scrollerBox(page);
     const x = box.x + box.width / 2;
@@ -168,6 +193,7 @@ test.describe('full-page assistant on a phone', () => {
       await page.waitForTimeout(16);
     }
     await touch('touchEnd');
+    await settled(page);
     expect((await state(page)).pageY).toBe(0);
 
     await touch('touchStart', y0);
@@ -176,7 +202,7 @@ test.describe('full-page assistant on a phone', () => {
       await page.waitForTimeout(16);
     }
     await touch('touchEnd');
-    await page.waitForTimeout(200);
+    await settled(page);
     const after = await state(page);
     expect(after.top).toBeLessThan(before.top);
     expect(after.pageY).toBe(before.pageY);
@@ -186,8 +212,8 @@ test.describe('full-page assistant on a phone', () => {
 // The docked panel (and, on a narrow screen, the covering overlay) hosts the same chat
 // inside a fixed, overflow-hidden box, so the list only scrolls if every ancestor passes
 // its bound down.
-async function openPanel(page: Page) {
-  await mockAssistant(page);
+async function openPanel(page: Page, baseURL: string | undefined) {
+  await mockAssistant(page, baseURL);
   await page.goto('/my/profile/experience');
   await page.getByRole('button', { name: 'Tailor your experience' }).first().click();
   await expect(list(page)).toContainText('Message 60.', { timeout: 20_000 });
@@ -211,8 +237,8 @@ async function expectListScrolls(page: Page) {
 }
 
 test.describe('docked assistant panel', () => {
-  test('wheel scrolls the list, not the page', async ({ page }) => {
-    await openPanel(page);
+  test('wheel scrolls the list, not the page', async ({ page, baseURL }) => {
+    await openPanel(page, baseURL);
     await expectListScrolls(page);
   });
 });
@@ -220,8 +246,8 @@ test.describe('docked assistant panel', () => {
 test.describe('covering assistant panel on a phone', () => {
   test.use({ viewport: { width: 390, height: 780 }, hasTouch: true, isMobile: true });
 
-  test('wheel scrolls the list, not the page', async ({ page }) => {
-    await openPanel(page);
+  test('wheel scrolls the list, not the page', async ({ page, baseURL }) => {
+    await openPanel(page, baseURL);
     await expectListScrolls(page);
   });
 });
