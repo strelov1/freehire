@@ -27,7 +27,7 @@ For personal tools, run `claude mcp login freehire` or tell the user to open `/m
 codex mcp add freehire --url https://freehire.me/api/v1/mcp
 ```
 
-For personal tools, run `codex mcp login freehire` and let the user approve it in their browser. Skip it if they only want to search.
+Codex may open a browser sign-in right after this command, because the server offers OAuth. Tell the user it is only needed for personal tools; search works without it. To sign in later, run `codex mcp login freehire`.
 
 ### Gemini CLI
 

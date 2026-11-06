@@ -42,6 +42,10 @@
   <span class="text-sm text-muted-foreground">Copies a setup prompt for Claude Code, Codex, Cursor or Gemini CLI.</span>
 </div>
 {#if failed}
-  <p class="mt-3 text-sm text-muted-foreground">Could not copy. Select the prompt and copy it yourself:</p>
-  <code class="mt-2 block select-all break-words rounded-md border border-border bg-secondary/40 p-3 font-mono text-sm">{prompt}</code>
+  <label class="mt-3 block text-sm text-muted-foreground">
+    Could not copy. Select the prompt and copy it yourself:
+    <textarea readonly rows="2" value={prompt} onfocus={(e) => e.currentTarget.select()}
+      class="mt-2 block w-full max-w-2xl resize-none rounded-md border border-border bg-secondary/40 p-3 font-mono text-sm text-foreground"
+    ></textarea>
+  </label>
 {/if}
