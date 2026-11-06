@@ -160,17 +160,22 @@ func TestNoTxIgnoresAnInvalidIndexItDoesNotName(t *testing.T) {
 
 // initdb gives each file a session of its own, and the runner must too: 0001 is a schema
 // dump that empties search_path for the rest of its session, so on a fresh database every
-// file after it failed with "no schema has been selected to create in".
+// file after it failed with "no schema has been selected to create in". A temporary table
+// one file leaves behind must not reach the next one either.
 func TestEachMigrationStartsWithAFreshSession(t *testing.T) {
 	pool := bootstrapped(t)
 	migs := []migrate.Migration{
 		{Version: "9998_empty_search_path.sql", SQL: "SELECT pg_catalog.set_config('search_path', '', false);"},
-		{Version: "9999_unqualified_create.sql", SQL: "CREATE TABLE session_probe (id int);"},
+		{Version: "9999_unqualified_create.sql", SQL: "CREATE TABLE session_probe (id int); CREATE TEMP TABLE scratch (id int);"},
+		{Version: "99991_same_temp_table.sql", SQL: "CREATE TEMP TABLE scratch (id int);"},
 	}
 	if _, _, err := migrate.NewRunner(pool).Run(context.Background(), migs, false); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if !recorded(t, pool, "9999_unqualified_create.sql") {
 		t.Fatal("the file after the one that emptied search_path was not recorded")
+	}
+	if !recorded(t, pool, "99991_same_temp_table.sql") {
+		t.Fatal("a temporary table one file left behind reached the next file")
 	}
 }

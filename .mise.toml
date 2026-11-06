@@ -35,7 +35,9 @@ postinstall = "lefthook install"
 [tasks."db:up"]
 description = "Start the shared Postgres, then create and migrate this checkout's database"
 run = [
-  "docker compose up -d --wait db",
+  # --no-recreate: every checkout mounts its own ./migrations, and a differing mount would
+  # otherwise recreate the one container every other checkout is using.
+  "docker compose up -d --wait --no-recreate db",
   "docker compose exec -T db psql -U hire -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname = '$HIRE_DB_NAME'\" | grep -q 1 || docker compose exec -T db createdb -U hire \"$HIRE_DB_NAME\"",
   "go run ./cmd/migrate",
 ]

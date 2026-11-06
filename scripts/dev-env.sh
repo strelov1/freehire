@@ -26,6 +26,11 @@ else
   port=$((18000 + n % 1000))
 fi
 
+# docker compose reads DB_HOST_PORT from .env too, so the URLs below must.
+if [ -z "${DB_HOST_PORT:-}" ] && [ -f "$root/.env" ]; then
+  DB_HOST_PORT=$(sed -n 's/^DB_HOST_PORT=//p' "$root/.env" | tail -n 1)
+fi
+
 export COMPOSE_PROJECT_NAME=hire
 export HIRE_DB_NAME="$db"
 export PORT="$port"
