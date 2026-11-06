@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
@@ -29,6 +30,9 @@ type supportDeps struct {
 	llm    *llm.Client
 	runner *assistant.Runner
 	mail   supportMail
+
+	// pool opens the transaction that makes a blank session's get-or-create atomic.
+	pool *pgxpool.Pool
 }
 
 // registerSupport mounts the support agent. It is open to every signed-in account, paid or
@@ -48,14 +52,29 @@ func (h *assistantHandlers) CreateSupportSession(c *fiber.Ctx) error {
 	}
 	// An owner cannot delete a support session, and this route is not metered, so it hands
 	// back the blank session it already made rather than adding one per call. That bounds
-	// the rows by the messages actually sent, which the daily allowance already bounds.
-	if sess, ok, err := h.store.EmptySession(c.Context(), userID, assistant.PresetSupport); err != nil {
+	// the rows by the messages actually sent, which the daily allowance already bounds. The
+	// read and the insert share one transaction under a per-user lock: two parallel calls
+	// would otherwise both find none and both insert.
+	tx, err := h.support.pool.Begin(c.Context())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(c.Context()) }()
+	q := h.queries.WithTx(tx)
+	if err := q.LockAssistantSessionCreation(c.Context(), userID); err != nil {
+		return err
+	}
+	store := assistant.NewStore(q)
+	if sess, ok, err := store.EmptySession(c.Context(), userID, assistant.PresetSupport); err != nil {
 		return err
 	} else if ok {
 		return c.JSON(fiber.Map{"data": sessionView(sess)})
 	}
-	sess, err := h.store.CreateSession(c.Context(), userID, assistant.PresetSupport, nil, nil)
+	sess, err := store.CreateSession(c.Context(), userID, assistant.PresetSupport, nil, nil)
 	if err != nil {
+		return err
+	}
+	if err := tx.Commit(c.Context()); err != nil {
 		return err
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": sessionView(sess)})

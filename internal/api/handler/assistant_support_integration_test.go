@@ -60,6 +60,7 @@ func supportApp(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, model assist
 	_, h := newAssistantApp(pool, iss, model)
 	plans := plan.NewStore(queries, pool, cfg)
 	h.plans = plans
+	h.support.pool = pool
 	h.support.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: supportMaxSteps})
 	if sender != nil {
 		h.support.mail = supportMail{sender: sender, from: "freehire <noreply@example.test>", to: "support@example.test"}
@@ -539,6 +540,33 @@ func TestSupportCreateHandsBackTheBlankSessionUntilAMessageIsSent(t *testing.T) 
 	}
 	if next := newSupportSession(t, app, token); next == first {
 		t.Error("a session that already holds a message was handed back as blank")
+	}
+}
+
+func TestSupportParallelCreatesLeaveOneBlankSession(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := supportApp(t, pool, iss, &gateCountingModel{}, plan.DefaultConfig().Enforcing(), nil)
+	userID, token := assistantUser(t, pool, iss, "support-create-parallel@example.test", false)
+
+	const parallel = 8
+	var wg sync.WaitGroup
+	for range parallel {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			supportPost(t, app, "/api/v1/support/sessions", token, `{}`)
+		}()
+	}
+	wg.Wait()
+
+	var n int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM assistant_sessions WHERE user_id = $1 AND preset = 'support'`, userID).Scan(&n); err != nil {
+		t.Fatalf("count support sessions: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("%d parallel creates left %d support sessions, want 1", parallel, n)
 	}
 }
 

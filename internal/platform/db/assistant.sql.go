@@ -555,6 +555,16 @@ func (q *Queries) ListRecentAssistantMessages(ctx context.Context, arg ListRecen
 	return items, nil
 }
 
+const lockAssistantSessionCreation = `-- name: LockAssistantSessionCreation :exec
+SELECT pg_advisory_xact_lock(hashtextextended('assistant_session_create:' || $1::bigint::text, 0))
+`
+
+// Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
+func (q *Queries) LockAssistantSessionCreation(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, lockAssistantSessionCreation, userID)
+	return err
+}
+
 const releaseSupportEscalation = `-- name: ReleaseSupportEscalation :exec
 UPDATE assistant_sessions
 SET escalated_at = NULL

@@ -857,6 +857,7 @@ func Register(app *fiber.App, cfg Config) {
 		assistantH.events = p
 	}
 	assistantH.answerBank = answerBank
+	assistantH.support.pool = cfg.Pool
 	if cfg.SupportLLM != nil {
 		supportLLM := cfg.SupportLLM.WithTimeout(assistantLLMTimeout)
 		assistantH.support.llm = supportLLM

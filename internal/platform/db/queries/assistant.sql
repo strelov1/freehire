@@ -60,6 +60,10 @@ WHERE s.user_id = $1 AND s.preset = $2
 ORDER BY s.created_at DESC
 LIMIT 1;
 
+-- name: LockAssistantSessionCreation :exec
+-- Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
+SELECT pg_advisory_xact_lock(hashtextextended('assistant_session_create:' || sqlc.arg(user_id)::bigint::text, 0));
+
 -- name: DeleteAssistantSession :execrows
 -- Remove an owned session; its transcript goes with it (ON DELETE CASCADE). Returns 0
 -- affected rows for a foreign or missing id.

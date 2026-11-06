@@ -5480,6 +5480,8 @@ type Querier interface {
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
+	// Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
+	LockAssistantSessionCreation(ctx context.Context, userID int64) error
 	// The leave's half of the buddy_members lock protocol (see LockBuddyMembersForMock): lock
 	// the member's own row FOR UPDATE, in a statement of its own, before LeaveBuddyMember. A
 	// booking holding its share lock makes this wait until the mock is committed, and
