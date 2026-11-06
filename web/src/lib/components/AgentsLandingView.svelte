@@ -6,6 +6,7 @@
   import { AGENTS_FAQ } from '#lib/agentsFaq.js';
   import { CLI_INSTALL, CLI_REPO, MCP_REPO } from '#lib/cliLinks.js';
   import { Button, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import AgentSetupButton from './AgentSetupButton.svelte';
   import McpSetup from './McpSetup.svelte';
 
   const tabs = [
@@ -55,6 +56,7 @@
     Use the freehire assistant or connect the tools you already work with.
     Find jobs, compare employers and keep your applications moving.
   </p>
+  <AgentSetupButton />
 </section>
 
 <TabStrip tabs={tabs} {active} onSelect={(id) => (active = id)} label="Choose how to use freehire" {panelId} />

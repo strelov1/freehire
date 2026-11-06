@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import { MCP_CATALOG_PITCH } from '#lib/mcpCopy.js';
   import { SectionLabel } from '#lib/ui/index.js';
+  import AgentSetupButton from './AgentSetupButton.svelte';
   import AssistantSetup from './AssistantSetup.svelte';
 
   // Things to ask, grouped by what the visitor is after. Each one is answerable by
@@ -40,6 +41,7 @@
       {MCP_CATALOG_PITCH} Find your next role inside Claude, ChatGPT or your coding assistant.
       Start without an account, then connect with OAuth to save your shortlist, track applications and manage alerts.
     </p>
+    <AgentSetupButton />
   </div>
 </section>
 
