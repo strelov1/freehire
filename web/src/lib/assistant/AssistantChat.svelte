@@ -975,7 +975,7 @@
 
 <!-- Single flex-1 root so a host can compose the chat beside another pane (e.g. the tailor
      artifact panel); the host supplies the outer height + flex row. -->
-<div class="flex min-w-0 flex-1 flex-col">
+<div class="flex min-h-0 min-w-0 flex-1 flex-col">
 {#if error}
   <div
     class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong"
@@ -1063,7 +1063,7 @@
     {/if}
 
     <!-- Chat pane -->
-    <div class="flex min-w-0 flex-1 flex-col">
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
       <!-- Desktop: collapse/expand the session list (only when a rail exists). -->
       {#if showSessionRail}
         <div class="hidden items-center gap-1 border-b border-border px-2 py-1.5 md:flex">
@@ -1137,7 +1137,7 @@
       {/if}
 
       <!-- Message list -->
-      <div bind:this={scroller} onscroll={onPaneScroll} class="flex-1 overflow-y-auto p-4">
+      <div bind:this={scroller} onscroll={onPaneScroll} class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
         <!-- The transcript is a log, so a screen reader hears what arrives without moving
              to it. Busy while a turn streams (and while a conversation loads): the reply is
              re-rendered token by token, and announcing each re-render would read the same
