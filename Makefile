@@ -32,8 +32,11 @@ build: ## Build the binary
 tidy: ## Tidy up dependencies
 	go mod tidy
 
-sqlc: ## Generate code from SQL (via Docker/Podman, no local sqlc needed)
-	$(DOCKER) run --rm -v "$(PWD):/src" -w /src docker.io/sqlc/sqlc:$(SQLC_VERSION) generate
+# A local sqlc is used only when it is exactly SQLC_VERSION, so this stays the one pin. The
+# coding agents' runner has sqlc and no Docker.
+sqlc: ## Generate code from SQL (a local sqlc of exactly SQLC_VERSION, else via Docker/Podman)
+	@if [ "$$(sqlc version 2>/dev/null)" = "v$(SQLC_VERSION)" ]; then sqlc generate; \
+	else $(DOCKER) run --rm -v "$(PWD):/src" -w /src docker.io/sqlc/sqlc:$(SQLC_VERSION) generate; fi
 
 mail-preview: ## Render every outgoing email and open the contact sheet in a browser
 	@go run ./cmd/mail-preview
