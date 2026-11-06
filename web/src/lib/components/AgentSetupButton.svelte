@@ -20,6 +20,7 @@
     try {
       await navigator.clipboard.writeText(prompt);
       copied = true;
+      failed = false;
       announce('Copied. Paste it into your AI coding agent.');
       clearTimeout(timer);
       timer = setTimeout(() => (copied = false), 1800);
