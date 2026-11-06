@@ -122,11 +122,12 @@ export const load: PageServerLoad = async ({ params, fetch, url }) => {
     job.apply_questions != null ? api.getApplyForm(params.slug).catch(() => null) : null,
   );
 
-  // Similar jobs are a non-essential discovery aid: a failure (search disabled,
-  // no neighbours yet) must not break the page, so it degrades to an empty list.
-  const [job, similar, copiesResult, applyForm, seeAlso] = await Promise.all([
+  // Similar jobs are NOT fetched here: the page is loaded in the browser (+page.svelte).
+  // Measured 2026-11-06, nearly every server render of this page is a crawler walking
+  // the long tail (99.4% distinct slugs, so no cache helps), and the similar lookup was
+  // ~92% of all Meilisearch searches. A reader who runs scripts still gets the list.
+  const [job, copiesResult, applyForm, seeAlso] = await Promise.all([
     jobPromise,
-    api.getSimilarJobs(params.slug).catch(() => []),
     // A small preview of the other-locations tab (the full list is /jobs/:slug/copies).
     // Non-essential and only meaningful for a mass-posted role, so it degrades to empty.
     api.getJobCopies(params.slug, 10).catch(() => ({ copies: [], total: 0 })),
@@ -143,7 +144,6 @@ export const load: PageServerLoad = async ({ params, fetch, url }) => {
 
   return {
     job,
-    similar,
     copies: copiesResult.copies,
     copiesTotal: copiesResult.total,
     applyForm,

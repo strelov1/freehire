@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { api } from '#lib/api.js';
   import { page } from '$app/state';
   import JobRelated from '#lib/components/JobRelated.svelte';
   import JobSeeAlso from '#lib/components/JobSeeAlso.svelte';
@@ -15,10 +16,29 @@
     jsonLdScript,
     metaDescription,
   } from '#lib/seo.js';
+  import type { Job } from '#lib/types.js';
   import { Breadcrumbs } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
+
+  // Loaded in the browser, not in +page.server.ts: see the note there. A failure (search
+  // disabled, no neighbours yet) leaves the list empty rather than breaking the page.
+  let similar = $state<Job[]>([]);
+  $effect(() => {
+    const slug = data.job.public_slug;
+    let current = true;
+    api
+      .getSimilarJobs(slug)
+      .then((jobs) => {
+        if (current) similar = jobs;
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+      similar = [];
+    };
+  });
 
   const marketLink = $derived(categoryLandingLink(data.job.enrichment.category));
   const origin = $derived(page.url.origin);
@@ -90,14 +110,14 @@
      raw text with no card wrapper, so 16px reads tight against the edge; sm+ falls
      back to the shared px-4 rhythm. -->
 <div class="mx-auto w-full max-w-6xl px-5 py-6 sm:px-4">
-  <JobView job={data.job} applyForm={data.applyForm} hasSimilar={data.similar.length > 0} />
+  <JobView job={data.job} applyForm={data.applyForm} hasSimilar={similar.length > 0} />
 
   <!-- `#similar-jobs` is where a closed posting's notice points its reader. JobRelated opens
        on the Similar tab whenever there are similar postings, which is the only case in
        which JobView offers the link. -->
   <div id="similar-jobs">
     <JobRelated
-      similar={data.similar}
+      {similar}
       copies={data.copies}
       copiesTotal={data.copiesTotal}
       slug={data.job.public_slug}
