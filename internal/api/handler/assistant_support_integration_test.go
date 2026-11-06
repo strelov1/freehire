@@ -598,3 +598,34 @@ func TestSupportConcurrentMessagesEachTakeAnAllowance(t *testing.T) {
 		t.Errorf("support used today = %d, want 2", got)
 	}
 }
+
+// A conversation that cannot take another message is refused as busy before the allowance is
+// read, so a person whose allowance happens to be spent is not told that when the real
+// reason is the queue.
+func TestSupportMessageForAFullSessionIsRefusedBusyBeforeItIsMetered(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	cfg := plan.DefaultConfig().Enforcing()
+	cfg.SupportMessagesPerDay = 1
+	app, h := supportApp(t, pool, iss, &gateCountingModel{}, cfg, nil)
+	userID, token := assistantUser(t, pool, iss, "support-full-session@example.test", false)
+	id := newSupportSession(t, app, token)
+	sessionID := uuid.MustParse(id)
+
+	if _, err := h.plans.ConsumeSupport(context.Background(), userID, "spent-elsewhere"); err != nil {
+		t.Fatalf("spend the day's allowance: %v", err)
+	}
+	if _, _, err := h.turns.claim(sessionID, func() {}); err != nil {
+		t.Fatalf("hold the running turn: %v", err)
+	}
+	if _, w, err := h.turns.claim(sessionID, func() {}); err != nil || w == nil {
+		t.Fatalf("hold the queued turn: %v, %v", w, err)
+	}
+
+	if status, body := sendSupport(t, app, id, token); status != fiber.StatusConflict {
+		t.Fatalf("message to a full session = %d (%s), want 409", status, body)
+	}
+	if got := usedToday(t, pool, userID, plan.FeatureSupport); got != 1 {
+		t.Errorf("support used today = %d, want 1", got)
+	}
+}

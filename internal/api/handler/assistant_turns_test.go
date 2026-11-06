@@ -309,3 +309,23 @@ func TestReserveTurnRefStopsOnARefusal(t *testing.T) {
 		t.Errorf("err %v after %d calls, want ErrRefused after one", err, calls)
 	}
 }
+
+func TestTurnRegistryFullIsAReadThatClaimStillBacks(t *testing.T) {
+	var reg turnRegistry
+	session := uuid.New()
+
+	if reg.full(session) {
+		t.Fatal("an idle session reported full")
+	}
+	slot, _, _ := reg.claim(session, func() {})
+	if reg.full(session) {
+		t.Fatal("a session with only a running turn reported full; one waiter is still admitted")
+	}
+	if _, waiter, err := reg.claim(session, func() {}); err != nil || waiter == nil || !reg.full(session) {
+		t.Fatal("a session with a turn running and one waiting did not report full")
+	}
+	if _, _, err := reg.claim(session, func() {}); !errors.Is(err, errTurnQueueFull) {
+		t.Fatalf("claim must still refuse a full session, got %v", err)
+	}
+	reg.release(session, slot)
+}

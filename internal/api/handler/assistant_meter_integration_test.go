@@ -232,9 +232,8 @@ func TestATurnRefusedTheSessionSlotGivesItsAllowanceBack(t *testing.T) {
 	}
 
 	// The release runs on a detached context, so it lands shortly after the 409.
-	// Nothing moves: the refused turn took no allowance of its own (Consume found the
-	// reference already paid for by the turn queued ahead of it), so it has none to give
-	// back — and it must not give back that one's.
+	// Nothing moves: the refused message was turned away before it was metered, so it took
+	// no allowance and has none to give back — and it must not give back the queued one's.
 	time.Sleep(2 * time.Second)
 	if got := usedToday(t, pool, userID, plan.FeatureAssistant); got != charged {
 		t.Errorf("the 409 moved the counter from %d to %d; it neither pays for a turn the server declined to run nor refunds the turn still waiting to", charged, got)

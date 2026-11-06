@@ -787,6 +787,13 @@ func (h *assistantHandlers) streamSSE(
 	// Charged against turnSess, not sess, for the same reason the spend tag is: a browse
 	// turn demoted to chat IS a chat turn, and it must draw on the allowance it actually
 	// spends against.
+	//
+	// A session that cannot take another message is refused before it is metered. claim below
+	// remains the guard; this read only keeps a busy conversation from being reported as an
+	// exhausted allowance.
+	if h.turns.full(sess.ID) {
+		return fiber.NewError(fiber.StatusConflict, errTurnQueueFull.Error())
+	}
 	charge, refused, err := meter(c, turnSess)
 	if refused {
 		return err
