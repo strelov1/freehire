@@ -15,7 +15,7 @@
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
 
-if [ "$(git rev-parse --git-dir)" = "$(git rev-parse --git-common-dir)" ]; then
+if [ "$(git rev-parse --path-format=absolute --git-dir)" = "$(git rev-parse --path-format=absolute --git-common-dir)" ]; then
   db=hire_dev
   port=8080
 else
