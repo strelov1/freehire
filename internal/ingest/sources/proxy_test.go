@@ -148,3 +148,22 @@ func TestClientForSendsAWorkableRetryThroughTheRotatingGateway(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyProxyEgressSendsRotatingProvidersThroughTheGateway(t *testing.T) {
+	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@203.0.113.7:5987")
+	t.Setenv("SOURCES_ROTATING_PROXY_URL", "http://user-rotate:pass@p.example:80")
+	registry := All(NewClient())
+	if err := ApplyProxyEgress(registry); err != nil {
+		t.Fatal(err)
+	}
+	req, _ := http.NewRequest(http.MethodGet, "https://api.cake.me/x", nil)
+	check := func(name string, hc *http.Client) {
+		tr := hc.Transport.(*http.Transport)
+		p, _ := tr.Proxy(req)
+		if p == nil || p.Host != "p.example:80" || !tr.DisableKeepAlives {
+			t.Errorf("%s lane proxy=%v keepalivesOff=%v, want p.example:80 and true", name, p, tr.DisableKeepAlives)
+		}
+	}
+	check("cake", registry["cake"].(cake).http.(*Client).httpClient)
+	check("workable retry", registry["workable"].(workable).http.(rateLimitedJSONGetter).inner.(*Client).refusalClient)
+}
