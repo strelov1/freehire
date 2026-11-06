@@ -131,7 +131,7 @@ func (s *Store) consume(
 			// operators' business. A guard nobody sees fire is a guard that gets blamed
 			// for an outage it did not cause.
 			log.Printf("plan: fair-use guard refused user %d on %s at %d/day", userID, feature, d.Used)
-		} else {
+		} else if feature != FeatureSupport {
 			// A real plan-ceiling refusal, as opposed to the fair-use guard above: the
 			// one signal cmd/limit-nudge-mail's candidate query reads to find accounts
 			// worth telling that Pro removes it. Best-effort and outside the transaction

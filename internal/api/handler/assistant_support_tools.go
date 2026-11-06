@@ -213,7 +213,8 @@ func (h *assistantHandlers) escalate(ctx context.Context, userID int64, sessionI
 		release()
 		return escalateResult{}, err
 	}
-	tier := "free"
+	// A failed read must not label a paying account "free" in a mail that is often about billing.
+	tier := "unknown (plan read failed)"
 	if p, err := loadPlan(ctx, h.plans, h.queries, userID); err == nil {
 		tier = p.Plan
 	}

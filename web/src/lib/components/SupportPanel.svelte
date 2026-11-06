@@ -4,6 +4,7 @@
    * on its own routes and is free for every account, so unlike the other assistant surfaces
    * it never meets an upgrade prompt.
    */
+  import { Plus } from '@lucide/svelte';
   import AssistantChat from '#lib/assistant/AssistantChat.svelte';
   import type { OpeningAction } from '#lib/assistant/presets.js';
   import AssistantPanel from '#lib/components/AssistantPanel.svelte';
@@ -17,8 +18,26 @@
   const starters = $derived<OpeningAction[]>(
     [s.askPlan, s.askLimits, s.askProblem].map((text) => ({ label: text, kind: 'message', text })),
   );
+
+  // The chat has no session rail here, so a conversation that reached its turn limit had no
+  // way out but a reload. Remounting starts a fresh support session; closing the panel does
+  // not remount, so a turn still streaming is never cut off.
+  let chatKey = $state(0);
 </script>
 
 <AssistantPanel {open} title={s.title} {onClose}>
-  <AssistantChat preset="support" showSessionRail={false} openingActions={starters} />
+  <div class="flex min-h-0 flex-1 flex-col">
+    <div class="flex shrink-0 justify-end border-b border-border px-3 py-1.5">
+      <button
+        type="button"
+        onclick={() => chatKey++}
+        class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <Plus class="size-3.5" />{s.newChat}
+      </button>
+    </div>
+    {#key chatKey}
+      <AssistantChat preset="support" showSessionRail={false} openingActions={starters} />
+    {/key}
+  </div>
 </AssistantPanel>

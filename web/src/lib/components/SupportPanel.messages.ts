@@ -6,6 +6,7 @@ export const messages = defineMessages(
     askPlan: 'What does my plan include?',
     askLimits: 'How much of today’s allowance is left?',
     askProblem: 'Something is not working',
+    newChat: 'New conversation',
   },
   {
     ru: {
@@ -13,6 +14,7 @@ export const messages = defineMessages(
       askPlan: 'Что входит в мой тариф?',
       askLimits: 'Сколько осталось от дневного лимита?',
       askProblem: 'Что-то не работает',
+      newChat: 'Новый разговор',
     },
   },
 );
