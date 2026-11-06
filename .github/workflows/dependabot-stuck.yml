@@ -57,6 +57,8 @@ jobs:
           gh issue list --label superplane --state all --limit 1000 \
             --json title --jq '.[].title' > existing.txt
 
+          # One failed create must not cost the PRs after it; the run still fails at the end.
+          failed=0
           while IFS= read -r pr; do
             number=$(jq -r .number <<<"$pr")
             title="Dependabot PR #$number is stuck: $(jq -r .title <<<"$pr")"
@@ -88,5 +90,9 @@ jobs:
               echo "If the bump is not worth taking (a major with no gain and real migration cost), say so here, close #$number with that reason, and stop."
             } > body.md
 
-            gh issue create --title "$title" --label superplane --body-file body.md
+            if ! gh issue create --title "$title" --label superplane --body-file body.md; then
+              echo "::warning::hand-off of #$number failed"
+              failed=1
+            fi
           done < stuck.jsonl
+          exit "$failed"
