@@ -62,6 +62,10 @@ const noTxMarker = "migrate: no-transaction"
 //	                                   company-relation approval at a time, so two decisions
 //	                                   checked against the same registry cannot both pass and
 //	                                   together make the chain neither would alone
+//	hashtextextended('assistant_session_create:<user id>')
+//	            internal/api/handler — a blocking pg_advisory_xact_lock per account; one
+//	                                   support-session create at a time, so reusing the
+//	                                   empty session is not a check-then-insert race
 //
 // The comment here used to say "the project has none", which stopped being true when those two
 // arrived and left the only place anyone would look asserting there was nothing to collide with.

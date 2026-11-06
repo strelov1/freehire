@@ -543,35 +543,6 @@ func TestSupportCreateHandsBackTheBlankSessionUntilAMessageIsSent(t *testing.T) 
 	}
 }
 
-func TestSupportParallelCreatesLeaveOneBlankSession(t *testing.T) {
-	pool := startPostgres(t)
-	iss := auth.NewIssuer("test-secret", time.Hour)
-	app, _ := supportApp(t, pool, iss, &gateCountingModel{}, plan.DefaultConfig().Enforcing(), nil)
-	userID, token := assistantUser(t, pool, iss, "support-create-parallel@example.test", false)
-
-	const parallel = 8
-	var wg sync.WaitGroup
-	for range parallel {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			supportPost(t, app, "/api/v1/support/sessions", token, `{}`)
-		}()
-	}
-	wg.Wait()
-
-	var n int
-	if err := pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM assistant_sessions WHERE user_id = $1 AND preset = 'support'`, userID).Scan(&n); err != nil {
-		t.Fatalf("count support sessions: %v", err)
-	}
-	if n != 1 {
-		t.Errorf("%d parallel creates left %d support sessions, want 1", parallel, n)
-	}
-}
-
-// A turn that is running or queued holds its reference but has not appended its message, so
-// the next message computes the same one. It must take an allowance of its own.
 func TestSupportMessageTakesItsOwnAllowanceWhenAnotherTurnHoldsItsReference(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
@@ -655,5 +626,62 @@ func TestSupportMessageForAFullSessionIsRefusedBusyBeforeItIsMetered(t *testing.
 	}
 	if got := usedToday(t, pool, userID, plan.FeatureSupport); got != 1 {
 		t.Errorf("support used today = %d, want 1", got)
+	}
+}
+
+// A create racing another must not insert a second empty support session. The test plays
+// the first create by hand: it holds the account's lock and has not inserted yet. A second
+// create must wait for it, then hand back the row it inserted. Checked and inserted apart,
+// the second would find nothing and add its own undeletable row.
+func TestARacingSupportCreateReusesTheSessionBeingMade(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := supportApp(t, pool, iss, &gateCountingModel{}, plan.DefaultConfig().Enforcing(), nil)
+	userID, token := assistantUser(t, pool, iss, "support-race@example.test", false)
+	ctx := context.Background()
+
+	first, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = first.Rollback(ctx) }()
+	if err := db.New(first).LockAssistantSessionCreation(ctx, userID); err != nil {
+		t.Fatalf("lock: %v", err)
+	}
+
+	type result struct {
+		status int
+		body   string
+	}
+	second := make(chan result, 1)
+	go func() {
+		status, body := supportPost(t, app, "/api/v1/support/sessions", token, `{}`)
+		second <- result{status, body}
+	}()
+	select {
+	case r := <-second:
+		t.Fatalf("the second create finished (%d) while the first still held the lock", r.status)
+	case <-time.After(500 * time.Millisecond):
+	}
+
+	made, err := assistant.NewStore(db.New(first)).CreateSession(ctx, userID, assistant.PresetSupport, nil, nil)
+	if err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+	if err := first.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	r := <-second
+	if r.status != fiber.StatusOK || !strings.Contains(r.body, made.ID.String()) {
+		t.Fatalf("second create = %d (%s), want 200 with the first one's session %s", r.status, r.body, made.ID)
+	}
+	var n int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM assistant_sessions WHERE user_id = $1 AND preset = 'support'`, userID).Scan(&n); err != nil {
+		t.Fatalf("count sessions: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("two racing creates left %d support sessions, want 1", n)
 	}
 }
