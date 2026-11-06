@@ -28,7 +28,8 @@ fi
 
 # docker compose reads DB_HOST_PORT from .env too, so the URLs below must.
 if [ -z "${DB_HOST_PORT:-}" ] && [ -f "$root/.env" ]; then
-  DB_HOST_PORT=$(sed -n 's/^DB_HOST_PORT=//p' "$root/.env" | tail -n 1)
+  # The digits only: compose strips quotes and a trailing comment from the value.
+  DB_HOST_PORT=$(sed -n 's/^DB_HOST_PORT=["'"'"']\{0,1\}\([0-9]*\).*/\1/p' "$root/.env" | tail -n 1)
 fi
 
 export DB_HOST_PORT="${DB_HOST_PORT:-5432}"
