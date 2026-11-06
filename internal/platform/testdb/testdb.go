@@ -190,13 +190,27 @@ func bootExternal(ctx context.Context, adminURL string, scripts []string) (*cont
 		admin.Close()
 		return nil, fmt.Errorf("create %s: %w", c.template, err)
 	}
-	args := []string{"-X", "-q", "-v", "ON_ERROR_STOP=1", "-d", c.dsn(c.template)}
+	// The password travels in PGPASSWORD, not in psql's argv, which any process list shows.
+	target := c.base
+	target.Path = "/" + c.template
+	target.User = nil
+	if name := c.base.User.Username(); name != "" {
+		target.User = url.User(name)
+	}
+	args := []string{"-X", "-q", "-v", "ON_ERROR_STOP=1", "-d", target.String()}
 	// RESET ALL between files: initdb gives each script a fresh session, and 0001 (a schema
 	// dump) empties search_path for the rest of its session.
 	for _, s := range scripts {
 		args = append(args, "-c", "RESET ALL", "-f", s)
 	}
-	if out, err := exec.CommandContext(ctx, "psql", args...).CombinedOutput(); err != nil {
+	cmd := exec.CommandContext(ctx, "psql", args...)
+	cmd.Env = os.Environ()
+	if pw, ok := c.base.User.Password(); ok {
+		cmd.Env = append(cmd.Env, "PGPASSWORD="+pw)
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		// Nothing else would ever drop it: the next binary gets a different pid.
+		_, _ = admin.Exec(context.Background(), `DROP DATABASE IF EXISTS "`+c.template+`" WITH (FORCE)`)
 		admin.Close()
 		return nil, fmt.Errorf("migrate %s: %w\n%s", c.template, err, out)
 	}
