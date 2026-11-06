@@ -32,6 +32,11 @@ RETURNING *;
 -- the ledger's unique key would otherwise stop a job the new query also matches from being
 -- recorded again. A leased row is left alone, since a send already holds it. last_searched_at
 -- stays: clearing it would re-read a page of postings the subscriber was never owed.
+--
+-- The DELETE only covers rows that exist now. query_revision (raised here, by one, only when
+-- the query text differs) is what covers the rest: each match records the revision it
+-- answered, so a leased row that is released or whose lease lapses, and a match recorded by
+-- a pass that read the old query, are ignored by claiming and refused by recording.
 WITH dropped AS (
     DELETE FROM subscription_matches m
     USING subscriptions s, saved_searches ss
@@ -48,6 +53,8 @@ WITH dropped AS (
 UPDATE saved_searches
 SET name       = COALESCE(sqlc.narg('name'), name),
     query      = COALESCE(sqlc.narg('query'), query),
+    query_revision = query_revision
+        + CASE WHEN sqlc.narg('query')::text IS NOT NULL AND sqlc.narg('query')::text <> query THEN 1 ELSE 0 END,
     updated_at = now()
 WHERE saved_searches.id = sqlc.arg('id') AND saved_searches.user_id = sqlc.arg('user_id')
 RETURNING *;

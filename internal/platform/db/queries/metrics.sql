@@ -348,7 +348,10 @@ ORDER BY b.provider;
 WITH pending AS (
     SELECT m.subscription_id, min(m.matched_at) AS oldest_matched_at
     FROM subscription_matches m
+    JOIN subscriptions ps ON ps.id = m.subscription_id
+    JOIN saved_searches pss ON pss.id = ps.saved_search_id
     WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL
+      AND m.query_revision = pss.query_revision
     GROUP BY m.subscription_id
 )
 SELECT

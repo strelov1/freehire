@@ -87,12 +87,13 @@ type fakeStore struct {
 	deliveryErr   error
 	digestJobsErr error
 
-	active      []db.ListActiveSubscriptionsRow
-	recorded    []recordedMatch
-	recordCalls int // how many times RecordSubscriptionMatches was called, not how many pairs
-	claimed     []db.ClaimSubscriptionMatchesRow
-	delivery    map[int64]db.GetSubscriptionForDeliveryRow
-	digestJobs  map[int64]db.GetJobsForDigestRow
+	active            []db.ListActiveSubscriptionsRow
+	recorded          []recordedMatch
+	recordedRevisions map[int64]int32 // revision forwarded per subscription
+	recordCalls       int             // how many times RecordSubscriptionMatches was called, not how many pairs
+	claimed           []db.ClaimSubscriptionMatchesRow
+	delivery          map[int64]db.GetSubscriptionForDeliveryRow
+	digestJobs        map[int64]db.GetJobsForDigestRow
 
 	// excludedSkills maps a user id to their avoid-skills preference; a user id absent from
 	// this map has no profile row, mirroring the real query.
@@ -187,6 +188,10 @@ func (s *fakeStore) RecordSubscriptionMatches(_ context.Context, a db.RecordSubs
 	var n int64
 	for i, subID := range a.SubscriptionIds {
 		jobID := a.JobIds[i]
+		if s.recordedRevisions == nil {
+			s.recordedRevisions = map[int64]int32{}
+		}
+		s.recordedRevisions[subID] = a.QueryRevisions[i]
 		known := false
 		for _, m := range s.recorded {
 			if m.sub == subID && m.job == jobID {
@@ -452,6 +457,26 @@ func TestMatch_SharedQueryHitsIndexOnce(t *testing.T) {
 // One query, many subscribers, many hits: the review finding was that matchQuery issued
 // one sequential RecordSubscriptionMatch round trip per (hit, subscription) pair. It must
 // now record the whole batch in a single call, regardless of how many pairs that is.
+func TestMatch_ForwardsEachSubscriptionsQueryRevision(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := &fakeStore{
+		active: []db.ListActiveSubscriptionsRow{
+			{ID: 1, Query: "seniority=senior", QueryRevision: 3, StartAt: ts(base)},
+			{ID: 2, Query: "seniority=senior", QueryRevision: 5, StartAt: ts(base)},
+		},
+	}
+	searcher := &fakeSearcher{results: []search.SearchResult{
+		{Hits: []search.JobDocument{hit(100, base.Add(time.Hour))}},
+	}}
+	r := New(store, searcher, &fakeNotifier{}, DefaultConfig())
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recordedRevisions) != 2 || store.recordedRevisions[1] != 3 || store.recordedRevisions[2] != 5 {
+		t.Errorf("revisions forwarded per subscription = %v, want {1:3, 2:5}", store.recordedRevisions)
+	}
+}
+
 func TestMatch_BatchesMatchesIntoOneCallPerQuery(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	store := &fakeStore{

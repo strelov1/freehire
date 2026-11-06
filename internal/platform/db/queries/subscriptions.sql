@@ -79,7 +79,7 @@ WHERE id = $1 AND user_id = $2;
 -- GetSubscriptionForDelivery and ClaimSubscriptionMatches) and the two stamps the
 -- worker uses to skip a search whose result could not be sent this pass — see
 -- notify.searchDue.
-SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query,
+SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query, ss.query_revision,
        s.last_digest_sent_at, s.last_searched_at,
        u.timezone AS timezone,
        COALESCE(ns.digest_frequency, 'interval')::text AS digest_frequency,
@@ -119,15 +119,35 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 -- Join their current rows so one unsubscribe cannot fail the entire query group's
 -- batch. Lock those parents through the insert: an existence check alone still races
 -- with a DELETE that commits after this statement takes its snapshot.
-INSERT INTO subscription_matches (subscription_id, job_id)
-SELECT s.id, pairs.job_id
+--
+-- Each pair carries the query revision its search ran under (a third aligned array), and a
+-- pair is recorded only while the saved search is still at that revision: an edit that
+-- commits between the pass reading the query and recording its hits must not let the old
+-- query's results in after the edit cleared the pending set. The saved search row is locked
+-- through the insert for the same reason as the subscription. On conflict, a still-pending
+-- row of an OLDER revision is reset to the new one, or a job the new query also matches
+-- would stay blocked behind the leftover row claiming ignores.
+INSERT INTO subscription_matches (subscription_id, job_id, query_revision)
+SELECT s.id, pairs.job_id, pairs.query_revision
 FROM (
     SELECT unnest(sqlc.arg(subscription_ids)::bigint[]) AS subscription_id,
-           unnest(sqlc.arg(job_ids)::bigint[]) AS job_id
+           unnest(sqlc.arg(job_ids)::bigint[]) AS job_id,
+           unnest(sqlc.arg(query_revisions)::int[]) AS query_revision
 ) pairs
 JOIN subscriptions s ON s.id = pairs.subscription_id
+JOIN saved_searches ss ON ss.id = s.saved_search_id AND ss.query_revision = pairs.query_revision
 FOR KEY SHARE OF s
-ON CONFLICT (subscription_id, job_id) DO NOTHING;
+FOR SHARE OF ss
+ON CONFLICT (subscription_id, job_id) DO UPDATE
+SET query_revision = EXCLUDED.query_revision,
+    matched_at     = now(),
+    claimed_at     = NULL,
+    attempts       = 0,
+    last_error     = NULL,
+    failed_at      = NULL,
+    expired_at     = NULL
+WHERE subscription_matches.query_revision < EXCLUDED.query_revision
+  AND subscription_matches.notified_at IS NULL;
 
 -- name: ClaimSubscriptionMatches :many
 -- Lease pending, live matches for active subscriptions by stamping claimed_at,
@@ -162,6 +182,7 @@ ON CONFLICT (subscription_id, job_id) DO NOTHING;
 WITH claimable AS (
     SELECT m.subscription_id, m.job_id, s.user_id, s.channel, pl.last_sent AS person_last_sent_at
     FROM subscriptions s
+    JOIN saved_searches ss ON ss.id = s.saved_search_id
     -- Joined BEFORE the lateral so the interval gate below references only relations
     -- that exist under it: the planner then applies the gate at this join, and the
     -- lateral's FOR UPDATE never locks a non-due subscription's rows only for them to
@@ -185,6 +206,7 @@ WITH claimable AS (
           AND mm.notified_at IS NULL
           AND mm.failed_at IS NULL
           AND mm.expired_at IS NULL
+          AND mm.query_revision = ss.query_revision
           AND (mm.claimed_at IS NULL
                OR mm.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
         ORDER BY mm.matched_at DESC, mm.job_id DESC
@@ -243,13 +265,16 @@ WITH stale AS (
     SELECT m.subscription_id, m.job_id
     FROM subscription_matches m
     JOIN jobs j ON j.id = m.job_id
+    JOIN subscriptions s ON s.id = m.subscription_id
+    JOIN saved_searches ss ON ss.id = s.saved_search_id
     WHERE m.notified_at IS NULL
       AND m.failed_at IS NULL
       AND m.expired_at IS NULL
       AND (m.claimed_at IS NULL
            OR m.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
       AND (m.matched_at < now() - make_interval(secs => sqlc.arg(freshness_seconds)::int)
-           OR j.closed_at IS NOT NULL)
+           OR j.closed_at IS NOT NULL
+           OR m.query_revision <> ss.query_revision)
     LIMIT sqlc.arg(batch_size)
     FOR UPDATE OF m SKIP LOCKED
 )
@@ -275,12 +300,15 @@ WHERE m.subscription_id = s.subscription_id AND m.job_id = s.job_id;
 -- another (overlapping, hand-run) pass happens to hold is counted here and delivered
 -- there, which is a repeat, not a lie.
 SELECT count(*)
-FROM subscription_matches
-WHERE subscription_id = sqlc.arg(subscription_id)
-  AND notified_at IS NULL
-  AND failed_at IS NULL
-  AND expired_at IS NULL
-  AND (matched_at, job_id) < (sqlc.arg(before_matched_at)::timestamptz, sqlc.arg(before_job_id)::bigint);
+FROM subscription_matches m
+JOIN subscriptions s ON s.id = m.subscription_id
+JOIN saved_searches ss ON ss.id = s.saved_search_id
+WHERE m.subscription_id = sqlc.arg(subscription_id)
+  AND m.notified_at IS NULL
+  AND m.failed_at IS NULL
+  AND m.expired_at IS NULL
+  AND m.query_revision = ss.query_revision
+  AND (m.matched_at, m.job_id) < (sqlc.arg(before_matched_at)::timestamptz, sqlc.arg(before_job_id)::bigint);
 
 -- name: MarkCoveredMatchesNotified :execrows
 -- Stamp notified_at on the matches a delivered digest counted without carrying — the set
@@ -288,13 +316,17 @@ WHERE subscription_id = sqlc.arg(subscription_id)
 -- honest here: the digest the person received announced these postings in its count and
 -- linked to the saved search that lists them. Re-queuing them instead is what kept a
 -- busy `daily` subscription mailing the same backlog, oldest first, day after day.
-UPDATE subscription_matches
+UPDATE subscription_matches m
 SET notified_at = now()
-WHERE subscription_id = sqlc.arg(subscription_id)
-  AND notified_at IS NULL
-  AND failed_at IS NULL
-  AND expired_at IS NULL
-  AND (matched_at, job_id) < (sqlc.arg(before_matched_at)::timestamptz, sqlc.arg(before_job_id)::bigint);
+FROM subscriptions s, saved_searches ss
+WHERE s.id = m.subscription_id
+  AND ss.id = s.saved_search_id
+  AND m.subscription_id = sqlc.arg(subscription_id)
+  AND m.notified_at IS NULL
+  AND m.failed_at IS NULL
+  AND m.expired_at IS NULL
+  AND m.query_revision = ss.query_revision
+  AND (m.matched_at, m.job_id) < (sqlc.arg(before_matched_at)::timestamptz, sqlc.arg(before_job_id)::bigint);
 
 -- name: GetSubscriptionForDelivery :one
 -- The delivery context for one subscription: channel + destination, the saved
@@ -430,10 +462,12 @@ WHERE u.id = $1;
 -- expired), so the figure is what the next digest will draw from. A subscription with no
 -- match yet has no row; the caller reads that as zero and never.
 SELECT m.subscription_id,
-       count(*) FILTER (WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL) AS pending,
+       count(*) FILTER (WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL
+                        AND m.query_revision = ss.query_revision) AS pending,
        max(m.notified_at)::timestamptz AS last_delivered_at
 FROM subscription_matches m
 JOIN subscriptions s ON s.id = m.subscription_id
+JOIN saved_searches ss ON ss.id = s.saved_search_id
 WHERE s.user_id = $1
 GROUP BY m.subscription_id;
 
