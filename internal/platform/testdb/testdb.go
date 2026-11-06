@@ -13,11 +13,22 @@
 // The container is reaped by the testcontainers ryuk sidecar when the test
 // binary exits (nothing outlives the run unless TESTCONTAINERS_RYUK_DISABLED
 // is set).
+//
+// TESTDB_ADMIN_URL points the harness at a Postgres that is already running
+// instead (pgvector installed, a role that may CREATE DATABASE, and `psql` on
+// PATH). It exists for the coding agents' runner, which has no Docker and must
+// not get the host's: a Docker socket there would be root on the host for any
+// code a task brings. Each test binary migrates its own template on that
+// server, named after its pid, because `go test ./...` runs binaries in
+// parallel and a template being cloned must have no other connection.
 package testdb
 
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -50,8 +61,12 @@ const (
 
 type container struct {
 	admin *pgxpool.Pool
-	host  string
-	port  string
+	// base is the server's address and credentials; dsn swaps in the database.
+	base url.URL
+	// template is the migrated database each test clones.
+	template string
+	// prefix keeps this binary's databases apart from another's on a shared server.
+	prefix string
 }
 
 var (
@@ -68,9 +83,9 @@ func Pool(t *testing.T) *pgxpool.Pool {
 	ctx := context.Background()
 	c := start(t)
 
-	name := fmt.Sprintf("hire_test_%d", dbCounter.Add(1))
-	if _, err := c.admin.Exec(ctx, `CREATE DATABASE "`+name+`" TEMPLATE `+templateDB); err != nil {
-		t.Fatalf("clone %s: %v", templateDB, err)
+	name := fmt.Sprintf("%s_%d", c.prefix, dbCounter.Add(1))
+	if _, err := c.admin.Exec(ctx, `CREATE DATABASE "`+name+`" TEMPLATE "`+c.template+`"`); err != nil {
+		t.Fatalf("clone %s: %v", c.template, err)
 	}
 
 	// Cleanups are LIFO, so this drop runs after the pool below is closed. FORCE
@@ -104,6 +119,9 @@ func boot() (*container, error) {
 	if err != nil {
 		return nil, err
 	}
+	if admin := os.Getenv("TESTDB_ADMIN_URL"); admin != "" {
+		return bootExternal(ctx, admin, scripts)
+	}
 
 	ctr, err := postgres.Run(ctx, image,
 		postgres.WithDatabase(templateDB),
@@ -128,7 +146,14 @@ func boot() (*container, error) {
 		return nil, fmt.Errorf("container port: %w", err)
 	}
 
-	c := &container{host: host, port: port.Port()}
+	c := &container{
+		base: url.URL{
+			Scheme: "postgres", User: url.UserPassword(user, password),
+			Host: host + ":" + port.Port(), RawQuery: "sslmode=disable",
+		},
+		template: templateDB,
+		prefix:   "hire_test",
+	}
 	admin, err := pgxpool.New(ctx, c.dsn(adminDB))
 	if err != nil {
 		return nil, fmt.Errorf("connect %s: %w", adminDB, err)
@@ -137,9 +162,66 @@ func boot() (*container, error) {
 	return c, nil
 }
 
+// bootExternal migrates this binary's own template on a server that is already
+// running. The scripts go through one psql session, file by file, as the image's
+// initdb applies them: a migration marked no-transaction (CREATE INDEX
+// CONCURRENTLY) cannot run as one multi-statement Exec, which Postgres wraps in
+// an implicit transaction.
+func bootExternal(ctx context.Context, adminURL string, scripts []string) (*container, error) {
+	base, err := url.Parse(adminURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse TESTDB_ADMIN_URL: %w", err)
+	}
+	c := &container{
+		base:     *base,
+		template: fmt.Sprintf("hire_template_%d", os.Getpid()),
+		prefix:   fmt.Sprintf("hire_test_%d", os.Getpid()),
+	}
+	admin, err := pgxpool.New(ctx, adminURL)
+	if err != nil {
+		return nil, fmt.Errorf("connect TESTDB_ADMIN_URL: %w", err)
+	}
+	// A pid recycled from an earlier run on the same server may have left one behind.
+	if _, err := admin.Exec(ctx, `DROP DATABASE IF EXISTS "`+c.template+`" WITH (FORCE)`); err != nil {
+		admin.Close()
+		return nil, fmt.Errorf("drop stale %s: %w", c.template, err)
+	}
+	if _, err := admin.Exec(ctx, `CREATE DATABASE "`+c.template+`"`); err != nil {
+		admin.Close()
+		return nil, fmt.Errorf("create %s: %w", c.template, err)
+	}
+	// The password travels in PGPASSWORD, not in psql's argv, which any process list shows.
+	target := c.base
+	target.Path = "/" + c.template
+	target.User = nil
+	if name := c.base.User.Username(); name != "" {
+		target.User = url.User(name)
+	}
+	args := []string{"-X", "-q", "-v", "ON_ERROR_STOP=1", "-d", target.String()}
+	// RESET ALL between files: initdb gives each script a fresh session, and 0001 (a schema
+	// dump) empties search_path for the rest of its session.
+	for _, s := range scripts {
+		args = append(args, "-c", "RESET ALL", "-f", s)
+	}
+	cmd := exec.CommandContext(ctx, "psql", args...)
+	cmd.Env = os.Environ()
+	if pw, ok := c.base.User.Password(); ok {
+		cmd.Env = append(cmd.Env, "PGPASSWORD="+pw)
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		// Nothing else would ever drop it: the next binary gets a different pid.
+		_, _ = admin.Exec(context.Background(), `DROP DATABASE IF EXISTS "`+c.template+`" WITH (FORCE)`)
+		admin.Close()
+		return nil, fmt.Errorf("migrate %s: %w\n%s", c.template, err, out)
+	}
+	c.admin = admin
+	return c, nil
+}
+
 func (c *container) dsn(database string) string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		user, password, c.host, c.port, database)
+	u := c.base
+	u.Path = "/" + database
+	return u.String()
 }
 
 // migrationScripts lists migrations/*.sql in name order — the order Postgres
