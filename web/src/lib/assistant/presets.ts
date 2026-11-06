@@ -7,9 +7,11 @@
  * backend, a kickoff only decides whether a turn runs before the caller types.
  */
 
-/** The conversations a URL may mint. `tailor` binds to a CV and a vacancy, so it is
- *  created by the tailoring page with those ids and can never be asked for by address. */
-export type ChatPreset = 'chat' | 'profile';
+/** The conversations a surface may mint. `tailor` binds to a CV and a vacancy, so it is
+ *  created by the tailoring page with those ids and can never be asked for by address;
+ *  `support` is the help panel's agent, on its own routes, and is never asked for by address
+ *  either — `entryFromQuery` only ever yields `chat` or `profile`. */
+export type ChatPreset = 'chat' | 'profile' | 'support';
 
 /**
  * One way to open a conversation that has not started yet: send a message we wrote, or start

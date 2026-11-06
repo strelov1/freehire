@@ -44,8 +44,14 @@ transaction. `store.go` is the transaction around it and nothing else.
   opposite of the meters' fail-open rule below, because what it protects is model spend.
   `WithPaidAI`/`PaidAI` mark a context as having passed it; `internal/api/handler`'s
   binding refuses to hand out a model client without that mark — or without
-  `WithFreeAI`, the named exception for the calls every account gets: the stored-CV parse
-  and the search interpretation ("Describe with AI"). Tests that need an
+  `WithFreeAI`, the named exception for the calls every account gets: the stored-CV parse,
+  the search interpretation ("Describe with AI") and the support agent. Support is
+  `FeatureSupport`, deliberately NOT in `AllFeatures()` — it is not part of a plan, so
+  no tier table, plans page or upgrade nudge touches it. `ConsumeSupport` draws on ONE flat
+  daily figure for every account (`SUPPORT_DAILY_MESSAGES`, default 20); a conversation holds
+  `SUPPORT_TURNS_PER_SESSION` messages (default 12) and the day's total across all accounts is
+  bounded by `SUPPORT_DAILY_MESSAGES_GLOBAL` (default 2000, a soft pre-check). Its refusals
+  never carry an upgrade link and never feed `recordLimitHit`. Tests that need an
   allowance to consume partway into pin a real PRO ceiling with `WithProCeiling`.
 
 - **Every metered feature enforces on arrival.** auto-apply was the first to ship this

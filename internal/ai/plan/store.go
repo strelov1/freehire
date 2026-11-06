@@ -62,6 +62,15 @@ func (s *Store) Tier(ctx context.Context, userID int64) (Tier, error) {
 // receive work nobody was charged for, and charging without a way back would bill them
 // for an answer that never arrived.
 func (s *Store) Consume(ctx context.Context, userID int64, feature Feature, ref string) (Decision, error) {
+	return s.consume(ctx, userID, feature, ref, s.cfg.decide)
+}
+
+// consume is the transaction around one decision. The rule is a parameter because the paid
+// features and the free support allowance answer different questions over the same ledger.
+func (s *Store) consume(
+	ctx context.Context, userID int64, feature Feature, ref string,
+	decide func(tier Tier, f Feature, used int, alreadyCharged bool, now time.Time) Decision,
+) (Decision, error) {
 	now := s.now()
 	day := Day(now)
 
@@ -98,7 +107,7 @@ func (s *Store) Consume(ctx context.Context, userID int64, feature Feature, ref 
 		return Decision{}, err
 	}
 
-	d := s.cfg.decide(tier, feature, int(used), already, now)
+	d := decide(tier, feature, int(used), already, now)
 	if d.Charge > 0 {
 		if err := q.InsertConsumption(ctx, db.InsertConsumptionParams{
 			UserID: userID, Feature: string(feature), Day: pgDay(day),

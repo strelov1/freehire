@@ -263,6 +263,14 @@ func runServer(cfg config.Settings) error {
 	}
 	defer resumeExtractFlush()
 
+	// The support agent is open to every account, so like the CV parse it runs on its own
+	// cheap model. Unset falls back to LLM_MODEL.
+	supportLLM, supportFlush, err := llm.NewClient(cfg.Settings(cmp.Or(cfg.SupportModel, cfg.Model)), "support")
+	if err != nil {
+		return fmt.Errorf("llm (support): %w", err)
+	}
+	defer supportFlush()
+
 	// Dictation runs on the same gateway and the same key as the two clients above —
 	// an OpenAI-compatible endpoint serves /chat/completions and /audio/transcriptions
 	// alike — so there is nothing extra to configure and nothing extra to fail. Nil
@@ -395,6 +403,8 @@ func runServer(cfg config.Settings) error {
 		AssistantLLM:                assistantLLM,
 		SearchIntentLLM:             intentLLM,
 		ResumeExtractLLM:            resumeExtractLLM,
+		SupportLLM:                  supportLLM,
+		SupportReplyTo:              cfg.OnboardingReplyTo,
 		TypesafeAPIKey:              cfg.TypesafeAPIKey,
 		AssistantMaxSteps:           cfg.AssistantMaxSteps,
 		AssistantMaxPrompt:          cfg.AssistantMaxPrompt,

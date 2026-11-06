@@ -11,6 +11,7 @@
 // without throwing the work away.
 
 import { trackPlanRefusal } from '#lib/api.js';
+import { SUPPORT_BASE } from './api';
 import { readFrames } from './sse';
 import type { TurnEvent } from './wire';
 
@@ -40,9 +41,9 @@ export class StreamInterrupted extends Error {
 
 /** Ask the server to stop a session's running turn. Safe to call when nothing is
  *  running: the caller cannot know whether the turn it stopped watching has ended. */
-async function cancelTurn(sessionId: string): Promise<void> {
+async function cancelTurn(sessionId: string, base: string): Promise<void> {
   try {
-    await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+    await fetch(`${base}/sessions/${encodeURIComponent(sessionId)}/cancel`, {
       method: 'POST',
       credentials: 'include',
     });
@@ -64,15 +65,17 @@ export function sendTurn(
   text: string,
   onEvent: (e: TurnEvent) => void,
   attachments: Attachment[] = [],
+  base: string = BASE,
 ): Turn {
   return streamTurn(
     sessionId,
-    `${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`,
+    `${base}/sessions/${encodeURIComponent(sessionId)}/messages`,
     attachments.length > 0
       ? { text, attachments: attachments.map(({ name, text: body }) => ({ name, text: body })) }
       : { text },
     'could not send the message',
     onEvent,
+    base,
   );
 }
 
@@ -204,7 +207,8 @@ export class TurnRefused extends Error {
  *
  *  Reading the body cannot be allowed to replace one failure with another: a refusal whose
  *  body is unreadable still has to surface as the refusal it is. */
-async function turnFailure(res: Response, sessionId: string, failure: string): Promise<Error> {
+async function turnFailure(res: Response, sessionId: string, failure: string, base: string): Promise<Error> {
+  if (base === SUPPORT_BASE) return supportFailure(res, failure);
   if (res.status !== 402) {
     return new Error(`${failure} (${res.status})`);
   }
@@ -227,6 +231,18 @@ async function turnFailure(res: Response, sessionId: string, failure: string): P
   }
 }
 
+/** A support refusal (the day's messages, the conversation's length, a busy day) already names
+ *  the address to write to, and never points at a plan: support is free, so an upgrade prompt
+ *  or a plan-refusal record would be wrong. */
+async function supportFailure(res: Response, failure: string): Promise<Error> {
+  const body: unknown = await res.json().catch(() => null);
+  const message =
+    typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
+      ? body.error
+      : undefined;
+  return new Error(message ?? `${failure} (${res.status})`);
+}
+
 /** Buy this tailoring session another ceiling's worth of turns, out of the day's tailoring
  *  allowance. Rejects with a TurnRefused when there is none left to spend. */
 export async function extendSession(sessionId: string): Promise<void> {
@@ -235,7 +251,7 @@ export async function extendSession(sessionId: string): Promise<void> {
     credentials: 'include',
   });
   if (!res.ok) {
-    throw await turnFailure(res, sessionId, 'could not continue this session');
+    throw await turnFailure(res, sessionId, 'could not continue this session', BASE);
   }
 }
 
@@ -247,6 +263,7 @@ function streamTurn(
   body: unknown,
   failure: string,
   onEvent: (e: TurnEvent) => void,
+  base: string = BASE,
 ): Turn {
   const controller = new AbortController();
 
@@ -259,7 +276,7 @@ function streamTurn(
       signal: controller.signal,
     });
     if (!res.ok) {
-      throw await turnFailure(res, sessionId, failure);
+      throw await turnFailure(res, sessionId, failure, base);
     }
     // No content: the server had nothing to run (a sync with nothing new to narrate).
     if (res.status === 204) return;
@@ -288,7 +305,7 @@ function streamTurn(
       // Both halves: tell the server to stop the work, and stop reading it here. The
       // server no longer infers the first from the second. cancelTurn swallows its own
       // failures, so this cannot reject.
-      void cancelTurn(sessionId);
+      void cancelTurn(sessionId, base);
       controller.abort();
     },
   };

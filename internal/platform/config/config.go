@@ -160,6 +160,10 @@ type Settings struct {
 	// cheap model rather than on whatever the paid features chose. Empty falls back to
 	// LLMModel.
 	ResumeExtractModel string
+	// SupportModel is the model the support agent runs on. Support is open to every
+	// account, paid or not, so it gets its own cheap model rather than the paid
+	// assistant's. Empty falls back to LLMModel.
+	SupportModel string
 	// AssistantMaxPrompt is the max rune length of one user message to the
 	// assistant. Default 8000; override with ASSISTANT_MAX_PROMPT. Values below 1
 	// fall back to the default so a typo cannot erase the ceiling.
@@ -452,6 +456,7 @@ func Load() Settings {
 		AssistantModel:     os.Getenv("ASSISTANT_MODEL"),
 		SearchIntentModel:  os.Getenv("SEARCH_INTENT_MODEL"),
 		ResumeExtractModel: os.Getenv("RESUME_EXTRACT_MODEL"),
+		SupportModel:       os.Getenv("SUPPORT_MODEL"),
 		AssistantMaxSteps:  envInt("ASSISTANT_MAX_STEPS", 0),
 		AssistantMaxPrompt: envInt("ASSISTANT_MAX_PROMPT", defaultAssistantMaxPrompt),
 

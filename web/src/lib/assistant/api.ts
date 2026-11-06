@@ -8,6 +8,9 @@ import type { ChatPreset } from './presets';
 
 const BASE = '/api/v1/assistant';
 
+/** The support agent's own routes: create, messages and cancel, and nothing else. */
+export const SUPPORT_BASE = '/api/v1/support';
+
 /** One conversation plus its stored transcript. */
 export interface SessionTranscript {
   session: SessionSummary;
@@ -25,8 +28,8 @@ export class SessionNotFound extends Error {
   }
 }
 
-async function request<T = void>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+async function request<T = void>(path: string, init?: RequestInit, base: string = BASE): Promise<T> {
+  const res = await fetch(`${base}${path}`, {
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
     ...init,
@@ -47,6 +50,9 @@ async function request<T = void>(path: string, init?: RequestInit): Promise<T> {
  *  Tailoring conversations are created by the tailoring bootstrap instead, which knows
  *  the CV and vacancy to bind them to — a preset that binds cannot be minted here. */
 export function createSession(preset: ChatPreset = 'chat'): Promise<SessionSummary> {
+  if (preset === 'support') {
+    return request<SessionSummary>('/sessions', { method: 'POST', body: '{}' }, SUPPORT_BASE);
+  }
   const query = preset === 'chat' ? '' : `?preset=${preset}`;
   return request<SessionSummary>(`/sessions${query}`, { method: 'POST', body: '{}' });
 }

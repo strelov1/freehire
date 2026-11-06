@@ -8,6 +8,7 @@
     getSession,
     deleteSession,
     SessionNotFound,
+    SUPPORT_BASE,
   } from '#lib/assistant/api.js';
   import VoiceCall from '#lib/assistant/VoiceCall.svelte';
   import { canUseVoiceCall } from '#lib/assistant/voiceCall.js';
@@ -114,7 +115,9 @@
      *  is the caller's choice rather than ours. */
     openingActions?: OpeningAction[];
     /** Which unbound conversation a NEW session starts as. An existing session keeps
-     *  whatever preset it was created with. */
+     *  whatever preset it was created with. `support` is the help agent: it runs on its own
+     *  routes, which only create, send and cancel, so it never lists, reopens or deletes a
+     *  conversation and offers no attachments, dictation or retry. */
     preset?: ChatPreset;
     /** Start an unattended run the moment the session is ready, instead of waiting for the
      *  candidate to pick an opening action. The tailoring host sets this on a cold-start
@@ -244,6 +247,7 @@
    * same words in the caller's mouth again.
    */
   const arrival: { preset: ChatPreset; kickoff?: string } = { preset, kickoff };
+  const isSupport = untrack(() => preset) === 'support';
 
   // Whether the turn in flight is an unattended run rather than a reply to something typed.
   let runActive = $state(false);
@@ -328,6 +332,17 @@
     phase = 'loading';
     error = null;
     try {
+      if (isSupport) {
+        await createAndOpen();
+        if (disposed) return;
+        phase = 'ready';
+        if (arrival.kickoff) {
+          const opening = arrival.kickoff;
+          arrival.kickoff = undefined;
+          void dispatch({ kind: 'message', text: opening });
+        }
+        return;
+      }
       let summaries: Awaited<ReturnType<typeof listSessions>> = [];
       try {
         summaries = await listSessions();
@@ -406,6 +421,7 @@
 
   /** Reconcile the pane with the address the host is showing. */
   function followAddress(requested: string | undefined) {
+    if (isSupport) return;
     // A switch WE started asked the host to navigate, and that navigation is async: for
     // the moment between setting activeId and the URL catching up, `session` disagrees
     // with activeId and following it would go straight back to the chat just left. That
@@ -553,6 +569,12 @@
 
   async function createAndOpen() {
     const created = await createSession(arrival.preset);
+    if (isSupport) {
+      // The support routes cannot replay a transcript, so the new session is opened as is.
+      activeId = created.id;
+      activePreset = 'support';
+      return;
+    }
     // Spent: the next chat minted here — "New chat", or a later boot() — is a plain one.
     arrival.preset = 'chat';
     sessions = upsertSession(sessions, fromSummary(created, NEW_CHAT_LABEL));
@@ -758,7 +780,7 @@
       // tailor workspace, refreshing after a failed run is enough via onTurnComplete.
       started = retryTurn(id, watch);
     } else {
-      started = sendTurn(id, start.text, watch, start.attachments);
+      started = sendTurn(id, start.text, watch, start.attachments, isSupport ? SUPPORT_BASE : undefined);
     }
     turn = started;
     void scrollToBottom(true);
@@ -896,7 +918,7 @@
   }
 
   async function reloadTranscript(id: string) {
-    if (id !== activeId) return;
+    if (isSupport || id !== activeId) return;
     try {
       const { messages: transcriptMessages } = await getSession(id);
       let next = initChat();
@@ -1229,7 +1251,7 @@
               {#if message.errored}
                 <div class="self-start flex flex-wrap items-center gap-2 text-xs">
                   <p class="text-destructive">{s.turnErrored}</p>
-                  {#if i === chat.messages.length - 1 && !turnActive && !switching}
+                  {#if !isSupport && i === chat.messages.length - 1 && !turnActive && !switching}
                     <button
                       type="button"
                       class="rounded-md border border-border bg-background px-2 py-0.5 font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
@@ -1293,6 +1315,8 @@
           bind:attachments
           {queue}
           {turnActive}
+          attachable={!isSupport}
+          dictatable={!isSupport}
           disabled={phase !== 'ready' || switching}
           onSubmit={submitText}
           onRemoveQueued={removeQueued}

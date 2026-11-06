@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { browser } from '$app/env';
   import { page } from '$app/state';
-  import { PanelLeftClose, PanelLeft, ChevronDown } from '@lucide/svelte';
+  import { PanelLeftClose, PanelLeft, ChevronDown, LifeBuoy } from '@lucide/svelte';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { messages, navLabel } from '#lib/i18n/shell.js';
   import { t } from '#lib/i18n/t.js';
@@ -13,6 +13,8 @@
   import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import AccountNavDrawer from '#lib/components/AccountNavDrawer.svelte';
   import AccountNavGroups from '#lib/components/AccountNavGroups.svelte';
+  import { messages as supportMessages } from '#lib/components/SupportPanel.messages';
+  import SupportPanel from '#lib/components/SupportPanel.svelte';
   import { dockOffset } from '#lib/assistantDock.svelte.js';
 
   // The account shell: one source of truth for the `my/*` chrome — the width
@@ -61,6 +63,9 @@
   // so the page keeps saying where you are without a strip that scrolls off-screen.
   let drawerOpen = $state(false);
   const activeItem = $derived(activeSection(path, accountNav));
+
+  let helpOpen = $state(false);
+  const helpLabel = $derived(t(supportMessages, locale()).title);
 </script>
 
 <svelte:head>
@@ -89,24 +94,37 @@
          It is also the section's visible title below lg: each section's own heading and
          description carry `max-lg:sr-only`, since repeating the name this button already
          shows only pushed the content down on a phone. -->
-    <button
-      type="button"
-      onclick={() => (drawerOpen = true)}
-      aria-haspopup="dialog"
-      aria-expanded={drawerOpen}
-      class="-mr-3 mb-3 ml-auto flex min-h-8 w-fit items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
-    >
-      <span class="sr-only">{s.shell.accountSections}:</span>
-      {#if activeItem}
-        {@const Icon = accountNavIcons[activeItem.href]}
-        <Icon class="size-4 shrink-0" aria-hidden="true" />
-        {navLabel(s, activeItem.href, activeItem.label)}
-      {:else}
-        {s.rail.menu}
-      {/if}
-      <ChevronDown class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-    </button>
+    <div class="-mr-3 mb-3 flex items-center justify-end gap-1">
+      <button
+        type="button"
+        onclick={() => (helpOpen = !helpOpen)}
+        aria-haspopup="dialog"
+        aria-expanded={helpOpen}
+        class="flex min-h-8 w-fit items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
+        {helpLabel}
+      </button>
+      <button
+        type="button"
+        onclick={() => (drawerOpen = true)}
+        aria-haspopup="dialog"
+        aria-expanded={drawerOpen}
+        class="flex min-h-8 w-fit items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
+      >
+        <span class="sr-only">{s.shell.accountSections}:</span>
+        {#if activeItem}
+          {@const Icon = accountNavIcons[activeItem.href]}
+          <Icon class="size-4 shrink-0" aria-hidden="true" />
+          {navLabel(s, activeItem.href, activeItem.label)}
+        {:else}
+          {s.rail.menu}
+        {/if}
+        <ChevronDown class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </button>
+    </div>
     <AccountNavDrawer bind:open={drawerOpen} />
+    <SupportPanel open={helpOpen} onClose={() => (helpOpen = false)} />
 
     <div class="lg:flex lg:gap-8">
       <!-- lg and up: a collapsible vertical sidebar beside the content. A plain box, not

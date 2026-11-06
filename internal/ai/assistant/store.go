@@ -15,7 +15,7 @@ import (
 
 // Presets a session can run under. The preset selects the system prompt and the
 // registered tools, and nothing else — one chat surface serves all of them. The
-// vocabulary is also a CHECK on the column (0044, widened by 0048, 0049, 0062, 0069, 0199 and 0232), so
+// vocabulary is also a CHECK on the column (0044, widened by 0048, 0049, 0062, 0069, 0199, 0232 and 0243), so
 // a new preset is a migration and not only a constant.
 const (
 	PresetChat   = "chat"
@@ -49,6 +49,11 @@ const (
 	// than aiming it at an employer. It registers none of the vacancy tools — no fit analysis,
 	// job match, cover letter or run report — because there is no vacancy to read them against.
 	PresetBase = "base"
+	// PresetSupport is first-line support: a conversation with no CV and no vacancy that answers
+	// from a fixed FAQ, reads the caller's own plan through `my_account` and hands a question to
+	// a human through `escalate_to_human`. It is reached only through the dedicated /support
+	// routes, never created or continued through the generic session ones.
+	PresetSupport = "support"
 )
 
 // ErrNotFound is returned for a session the caller does not own and for one that

@@ -90,6 +90,7 @@ func TestPromptOnlyNamesToolsThePresetHas(t *testing.T) {
 		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
 		{UserID: 3, Preset: assistant.PresetBase, CVID: &cvID},
 		{UserID: 3, Preset: assistant.PresetInterview, JobID: &jobID},
+		{UserID: 3, Preset: assistant.PresetSupport},
 	} {
 		registered := presetAPI().registry(sess, uuid.New()).Names()
 		// Only names that are tools SOMEWHERE can be judged; a backticked word that
@@ -120,6 +121,7 @@ func allRegisteredToolNames(t *testing.T) []string {
 		// cannot see that tool at all: a name no session offers is not in `everywhere`,
 		// so a prompt naming it passes unchallenged.
 		{UserID: 3, Preset: assistant.PresetInterview, JobID: &jobID},
+		{UserID: 3, Preset: assistant.PresetSupport},
 	} {
 		all = append(all, presetAPI().registry(sess, uuid.New()).Names()...)
 	}

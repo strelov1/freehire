@@ -61,11 +61,14 @@ type freeAIKey struct{}
 //
 // It is the one named exception to RequirePaid, and it is a mark rather than a missing check
 // so the user-call binding still fails closed for everything else: a call reaches a model
-// client only through WithPaidAI or here. Today two calls take it. Parsing a stored CV,
+// client only through WithPaidAI or here. Today three calls take it. Parsing a stored CV,
 // without which the experience bank stays empty and every paid feature that reads it has
 // nothing to work with, including for somebody who uploaded before they paid. And turning a
 // written search description into filters ("Describe with AI"): one short call on a cheap
-// model, throttled per user, and the way a visitor first finds the catalogue.
+// model, throttled per user, and the way a visitor first finds the catalogue. And the support
+// agent (FeatureSupport): a person who cannot reach support about a payment is the one who
+// most needs it, so it is bounded by its own flat allowance, a per-session ceiling and a
+// global daily budget instead of by a plan.
 func WithFreeAI(ctx context.Context) context.Context {
 	return context.WithValue(ctx, freeAIKey{}, true)
 }

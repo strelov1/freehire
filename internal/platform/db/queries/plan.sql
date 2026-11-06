@@ -280,3 +280,11 @@ UPDATE users
 SET pro_welcome_sent_at = now()
 WHERE id = sqlc.arg(id)
   AND pro_welcome_sent_at IS NULL;
+
+-- name: SumUsageDayForFeature :one
+-- Everything every account used of one feature on one day, for a global ceiling on a feature
+-- whose cost is not borne by a subscription.
+SELECT coalesce(sum(used), 0)::bigint
+FROM usage_daily
+WHERE feature = sqlc.arg(feature)::text
+  AND day = sqlc.arg(day);
