@@ -389,6 +389,13 @@ func (r *Runner) Run(ctx context.Context, migs []Migration, forceBaseline bool) 
 		}
 		applied = append(applied, m.Version)
 		log.Printf("migrate: applied %s", m.Version)
+		// initdb runs each file in a session of its own, and the files rely on it: 0001 is a
+		// schema dump that empties search_path for the rest of its session, so a fresh
+		// database failed on the next file. DISCARD TEMP drops what a file left in pg_temp
+		// (DISCARD ALL would also release the advisory lock). RESET ALL drops lock_timeout too.
+		if _, err := conn.Exec(ctx, "DISCARD TEMP; RESET ALL; SET lock_timeout = '"+lockTimeout+"'"); err != nil {
+			return baselined, applied, fmt.Errorf("reset session after %s: %w", m.Version, err)
+		}
 	}
 	return baselined, applied, nil
 }

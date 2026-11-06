@@ -1,0 +1,53 @@
+# The development toolchain and the per-checkout environment.
+#
+# `mise install` puts every tool below on PATH at the version CI uses; the versions here
+# mirror the pins in .github/workflows (and Makefile's SQLC_VERSION), so bump them together.
+# `mise run db:up` starts the shared Postgres and creates and migrates this checkout's own
+# database: see scripts/dev-env.sh for why each worktree gets its own database and port.
+
+[tools]
+go = "1.27.3"
+node = "24"
+pnpm = "11.7.0"
+golangci-lint = "2.15.0"
+sqlc = "1.31.1"
+typst = "0.15.0"
+lefthook = "latest"
+gitleaks = "8.30.1"
+actionlint = "1.7.12"
+zizmor = "1.31.1"
+hadolint = "2.15.1"
+shellcheck = "latest"
+"github:oasdiff/oasdiff" = "1.34.1"
+"github:agent-sh/agnix" = "0.59.3"
+"go:golang.org/x/tools/cmd/deadcode" = "0.52.0"
+# psql only: the integration tests' harness migrates through it (internal/platform/testdb).
+# The server itself is docker-compose's pgvector image.
+postgres = "18"
+
+[env]
+_.source = "{{config_root}}/scripts/dev-env.sh"
+
+[hooks]
+# The pre-commit hooks (lefthook.yml), installed once the toolchain is in place.
+postinstall = "lefthook install"
+
+[tasks."db:up"]
+description = "Start the shared Postgres, then create and migrate this checkout's database"
+run = [
+  # --no-recreate: every checkout mounts its own ./migrations, and a differing mount would
+  # otherwise recreate the one container every other checkout is using.
+  "docker compose up -d --wait --no-recreate db",
+  # A container another checkout started may publish another port than this one's URLs name.
+  "port=$(docker compose port db 5432 | sed 's/.*://'); [ \"$port\" = \"$DB_HOST_PORT\" ] || { echo \"the shared db publishes :$port, this checkout expects :$DB_HOST_PORT (DB_HOST_PORT)\" >&2; exit 1; }",
+  "docker compose exec -T db psql -U hire -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname = '$HIRE_DB_NAME'\" | grep -q 1 || docker compose exec -T db createdb -U hire \"$HIRE_DB_NAME\"",
+  "go run ./cmd/migrate",
+]
+
+[tasks."db:drop"]
+description = "Drop this checkout's database (the shared Postgres keeps running)"
+run = "docker compose exec -T db dropdb -U hire --if-exists --force \"$HIRE_DB_NAME\""
+
+[tasks."db:psql"]
+description = "Open psql in this checkout's database"
+run = "docker compose exec db psql -U hire -d \"$HIRE_DB_NAME\""

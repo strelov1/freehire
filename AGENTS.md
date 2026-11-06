@@ -113,6 +113,17 @@ go test -tags=integration ./internal/platform/db/  # queue integration tests (ne
 golangci-lint run                         # .golangci.yml; CI only fails on issues new-from-main (ratchet)
 ```
 
+**Toolchain and worktrees: [mise](https://mise.jdx.dev).** `mise install` puts every tool
+at the version CI pins (`.mise.toml`; bump both together) and installs the lefthook hooks.
+Each checkout gets its own database and API port on one shared Postgres
+(`scripts/dev-env.sh`: `hire_dev` and `:8080` in the primary checkout, `hire_wt_<n>` and
+`:18xxx` in a worktree), so two agents in two worktrees never migrate or serve over each
+other. `mise run db:up` starts that Postgres and creates and migrates this checkout's
+database; `db:drop` and `db:psql` do what they say. The same environment sets
+`TESTDB_ADMIN_URL`, so integration tests migrate a template there instead of starting a
+container per test binary — run `db:up` before them, and run them where mise's environment
+reaches: a shell with `eval "$(mise activate zsh)"`, or `mise exec -- go test -tags=integration ./...`.
+
 **Before committing** any `*.go` file: `gofmt -w` those paths (`gofmt -l .` must print
 nothing), then `go vet ./...` and `go test ./...`. Do not commit if they fail. Skip this
 suite when the commit has no Go. Integration-tagged tests stay push-time (`go vet
