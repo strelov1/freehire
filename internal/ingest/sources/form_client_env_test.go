@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"context"
 	"net/http"
 	"testing"
 )
@@ -51,7 +52,7 @@ func TestNewFormClientFromEnv_EitherProxyCarriesEveryRequest(t *testing.T) {
 			if tr.Proxy == nil {
 				t.Fatal("transport has no proxy")
 			}
-			req, err := http.NewRequest(http.MethodGet, "https://apply.workable.com/", nil)
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://apply.workable.com/", nil)
 			if err != nil {
 				t.Fatal(err)
 			}

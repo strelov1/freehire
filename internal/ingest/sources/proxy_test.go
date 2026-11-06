@@ -156,7 +156,7 @@ func TestApplyProxyEgressSendsRotatingProvidersThroughTheGateway(t *testing.T) {
 	if err := ApplyProxyEgress(registry); err != nil {
 		t.Fatal(err)
 	}
-	req, _ := http.NewRequest(http.MethodGet, "https://api.cake.me/x", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.cake.me/x", nil)
 	check := func(name string, hc *http.Client) {
 		tr := hc.Transport.(*http.Transport)
 		p, _ := tr.Proxy(req)
