@@ -543,6 +543,11 @@ func (h *assistantHandlers) registry(sess assistant.Session, batchID uuid.UUID) 
 	// chat prompt here while matching no branch below — instructions for tools the
 	// session was never given.
 	preset := assistant.NormalizePreset(sess.Preset)
+	if preset == assistant.PresetSupport {
+		reg := assistant.NewRegistry(h.supportTools(sess.ID)...)
+		reg.MaxResultBytes = assistantResultCap
+		return reg
+	}
 	if preset == assistant.PresetChat && sess.SearchContext != nil {
 		reg := assistant.NewRegistry(h.shortlistDiscoveryTools(sess, 0)...)
 		reg.MaxResultBytes = assistantResultCap

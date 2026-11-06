@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -89,18 +90,28 @@ func planSourceOf(derived, stripe, revenuecat, granted pgtype.Timestamptz) strin
 
 // GetMyPlan returns the caller's plan and today's usage across every metered feature,
 // without consuming anything. Cookie or API key; never calls the LLM.
-//
-// Every feature is listed, including ones the caller has not touched — the surface shows
-// what the plan IS, and a feature missing from the list because no row exists yet would
-// read as a feature they do not have.
 func (h *planHandlers) GetMyPlan(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	tier, usage, resets, err := h.plans.Usage(c.Context(), userID)
+	out, err := loadPlan(c.Context(), h.plans, h.queries, userID)
 	if err != nil {
 		return err
+	}
+	return c.JSON(fiber.Map{"data": out})
+}
+
+// loadPlan reads the plan surface for one user: the answer GetMyPlan serves and the support
+// agent's `my_account` tool reads, so the two cannot disagree about what a caller is on.
+//
+// Every feature is listed, including ones the caller has not touched — the surface shows
+// what the plan IS, and a feature missing from the list because no row exists yet would
+// read as a feature they do not have.
+func loadPlan(ctx context.Context, plans *plan.Store, queries *db.Queries, userID int64) (planResponse, error) {
+	tier, usage, resets, err := plans.Usage(ctx, userID)
+	if err != nil {
+		return planResponse{}, err
 	}
 	out := planResponse{Plan: string(tier), ResetsAt: resets, Allowances: make([]allowanceView, 0, len(usage))}
 	// One extra row read, not a call to the provider. A lapsed or absent value simply leaves
@@ -115,9 +126,9 @@ func (h *planHandlers) GetMyPlan(c *fiber.Ctx) error {
 	//
 	// A partial answer nobody can tell is partial is worse than no answer: a 500 is retried,
 	// a wrong 200 is believed.
-	sources, err := h.queries.GetProUntilSources(c.Context(), userID)
+	sources, err := queries.GetProUntilSources(ctx, userID)
 	if err != nil {
-		return err
+		return planResponse{}, err
 	}
 	// The columns of the tier the caller is ACTUALLY on. Reading the pro ones unconditionally
 	// answered "ultra" with no until and no source — and pro_source is behavioural, so a
@@ -138,5 +149,5 @@ func (h *planHandlers) GetMyPlan(c *fiber.Ctx) error {
 	for _, u := range usage {
 		out.Allowances = append(out.Allowances, view(u.Feature, u.Used, u.Limit, u.Unlimited, u.Enforced, resets))
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return out, nil
 }

@@ -88,6 +88,20 @@ func (r *turnRegistry) claim(session uuid.UUID, cancel context.CancelFunc) (*tur
 	return nil, &turnWaiter{registry: r, session: session}, nil
 }
 
+// full reports whether the session has a turn running and another waiting behind it, so the
+// next message would be refused by claim. It is a read, not a reservation: the answer can be
+// stale by the time claim runs, and claim stays the guard. It exists so that a message the
+// session cannot take is refused BEFORE it is metered, rather than being told its allowance
+// is gone when the real reason is that the conversation is busy.
+func (r *turnRegistry) full(session uuid.UUID) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	_, running := r.turns[session]
+	_, queued := r.waiting[session]
+	return running && queued
+}
+
 // tryClaim asks for the session's slot on behalf of a turn that will NOT wait for it: it
 // hands back the slot of an idle session, and simply reports a busy one as busy.
 //

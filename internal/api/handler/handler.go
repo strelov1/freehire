@@ -409,6 +409,12 @@ type Config struct {
 	// account, so on its own cheap model (config.ResumeExtractModel). Nil falls back to
 	// LLM.
 	ResumeExtractLLM *llm.Client
+	// SupportLLM backs the support agent — open to every account, so on its own cheap
+	// model (config.SupportModel). Nil leaves support unavailable.
+	SupportLLM *llm.Client
+	// SupportReplyTo is the one inbox a support handover is emailed to
+	// (ONBOARDING_REPLY_TO). Empty makes the handover tool report itself unavailable.
+	SupportReplyTo string
 	// TypesafeAPIKey backs the Jev provider for the autofill agent's Choose call
 	// (autofillagent.JevPlanner). Empty disables it: Choose answers through LLM alone.
 	TypesafeAPIKey string
@@ -851,6 +857,12 @@ func Register(app *fiber.App, cfg Config) {
 		assistantH.events = p
 	}
 	assistantH.answerBank = answerBank
+	assistantH.support.pool = cfg.Pool
+	if cfg.SupportLLM != nil {
+		supportLLM := cfg.SupportLLM.WithTimeout(assistantLLMTimeout)
+		assistantH.support.llm = supportLLM
+		assistantH.support.runner = assistant.NewRunner(supportLLM, assistantStore, assistant.RunnerConfig{MaxSteps: supportMaxSteps})
+	}
 	assistantH.reports = reportsH
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
@@ -914,6 +926,9 @@ func Register(app *fiber.App, cfg Config) {
 	// wrapping a nil pointer — assigning the *emailnotify.AuthMailer var directly here
 	// would be the typed-nil footgun ClaimMailer's own doc comment warns about, since
 	// Service.Claim's "is a mailer configured" check tests the interface, not the pointer.
+	if mailClient != nil && cfg.SupportReplyTo != "" {
+		assistantH.support.mail = supportMail{sender: mailClient, from: emailnotify.From("freehire", cfg.NotifyEmailFrom), to: cfg.SupportReplyTo}
+	}
 	var employerMailer employer.ClaimMailer
 	if employerClaimMailer != nil {
 		employerMailer = employerClaimMailer

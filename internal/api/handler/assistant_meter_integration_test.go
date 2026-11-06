@@ -232,9 +232,8 @@ func TestATurnRefusedTheSessionSlotGivesItsAllowanceBack(t *testing.T) {
 	}
 
 	// The release runs on a detached context, so it lands shortly after the 409.
-	// Nothing moves: the refused turn took no allowance of its own (Consume found the
-	// reference already paid for by the turn queued ahead of it), so it has none to give
-	// back — and it must not give back that one's.
+	// Nothing moves: the refused message was turned away before it was metered, so it took
+	// no allowance and has none to give back — and it must not give back the queued one's.
 	time.Sleep(2 * time.Second)
 	if got := usedToday(t, pool, userID, plan.FeatureAssistant); got != charged {
 		t.Errorf("the 409 moved the counter from %d to %d; it neither pays for a turn the server declined to run nor refunds the turn still waiting to", charged, got)
@@ -318,4 +317,28 @@ func assistantSubscriber(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, ema
 	id, token := assistantUser(t, pool, iss, email, beta)
 	makePro(t, pool, id)
 	return id, token
+}
+
+// A running or queued turn holds the reference its message will be counted under before it
+// has appended that message, so the next message computes the same one. It must take an
+// allowance of its own instead of running on the other turn's charge.
+func TestAChatTurnTakesItsOwnAllowanceWhenAnotherTurnHoldsItsReference(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	cfg := plan.DefaultConfig().Enforcing().WithProCeiling(plan.FeatureAssistant, 5)
+	app, h := newAssistantApp(pool, iss, &turnModel{replies: []*llms.ContentChoice{{Content: "hello"}}})
+	h.plans = plan.NewStore(db.New(pool), pool, cfg)
+
+	userID, token := assistantSubscriber(t, pool, iss, "turn-shared-ref@example.test", false)
+	sessionID := createAssistantSession(t, app, token, assistant.PresetChat)
+
+	if _, err := h.plans.Consume(context.Background(), userID, plan.FeatureAssistant, sessionID+"#turn-1"); err != nil {
+		t.Fatalf("seed the in-flight turn's charge: %v", err)
+	}
+	if status, _ := postTurn(t, app, sessionID, token, "hi"); status != fiber.StatusOK {
+		t.Fatalf("turn status = %d, want 200", status)
+	}
+	if got := usedToday(t, pool, userID, plan.FeatureAssistant); got != 2 {
+		t.Errorf("assistant allowance used = %d, want 2 — the queued turn ran on the other's charge", got)
+	}
 }

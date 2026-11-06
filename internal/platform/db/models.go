@@ -172,6 +172,7 @@ type AssistantSession struct {
 	NarratedEventID pgtype.Int8        `json:"narrated_event_id"`
 	SearchQuery     pgtype.Text        `json:"search_query"`
 	SelectionBrief  string             `json:"selection_brief"`
+	EscalatedAt     pgtype.Timestamptz `json:"escalated_at"`
 }
 
 type AutoApplyEvent struct {

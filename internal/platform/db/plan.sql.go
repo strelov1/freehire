@@ -704,3 +704,24 @@ func (q *Queries) SetUsageDay(ctx context.Context, arg SetUsageDayParams) error 
 	)
 	return err
 }
+
+const sumUsageDayForFeature = `-- name: SumUsageDayForFeature :one
+SELECT coalesce(sum(used), 0)::bigint
+FROM usage_daily
+WHERE feature = $1::text
+  AND day = $2
+`
+
+type SumUsageDayForFeatureParams struct {
+	Feature string      `json:"feature"`
+	Day     pgtype.Date `json:"day"`
+}
+
+// Everything every account used of one feature on one day, for a global ceiling on a feature
+// whose cost is not borne by a subscription.
+func (q *Queries) SumUsageDayForFeature(ctx context.Context, arg SumUsageDayForFeatureParams) (int64, error) {
+	row := q.db.QueryRow(ctx, sumUsageDayForFeature, arg.Feature, arg.Day)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}

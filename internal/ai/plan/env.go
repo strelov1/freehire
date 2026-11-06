@@ -54,6 +54,15 @@ func ConfigFromEnv() Config {
 	if n, ok := envPositive("PLAN_TAILOR_TURNS_PER_SESSION"); ok {
 		cfg.TailorTurnsPerSession = n
 	}
+	if n, ok := envPositive("SUPPORT_DAILY_MESSAGES"); ok {
+		cfg.SupportMessagesPerDay = n
+	}
+	if n, ok := envPositive("SUPPORT_TURNS_PER_SESSION"); ok {
+		cfg.SupportTurnsPerSession = n
+	}
+	if n, ok := envPositive("SUPPORT_DAILY_MESSAGES_GLOBAL"); ok {
+		cfg.SupportMessagesGlobalPerDay = n
+	}
 	return cfg
 }
 

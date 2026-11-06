@@ -618,6 +618,10 @@ type Querier interface {
 	// pass and takes them out of the pending set, so the predicate stays the plain pending one
 	// the partial index subscription_matches_pending_matched_idx is built on.
 	ClaimSubscriptionMatches(ctx context.Context, arg ClaimSubscriptionMatchesParams) ([]ClaimSubscriptionMatchesRow, error)
+	// The claim for the one handover email a support session may send: stamps escalated_at only
+	// while it is unset, for the owner's own support session. 0 rows means somebody else already
+	// holds the claim (or the session is not the caller's).
+	ClaimSupportEscalation(ctx context.Context, arg ClaimSupportEscalationParams) (int64, error)
 	// Claim a batch of pending posts by stamping claimed_at. SKIP LOCKED lets
 	// concurrent workers take disjoint rows; the lease predicate reclaims posts whose
 	// worker died (stale claimed_at), so no separate reaper process is needed.
@@ -1449,6 +1453,8 @@ type Querier interface {
 	// How many saved searches a user has — the per-user cap is enforced against this in
 	// the service before a create.
 	CountSavedSearches(ctx context.Context, userID int64) (int64, error)
+	// How many handovers this account has made since the given instant, for the daily cap.
+	CountSupportEscalationsSince(ctx context.Context, arg CountSupportEscalationsSinceParams) (int64, error)
 	// Per-filter row counts for the my-jobs tabs, in one aggregate pass. "all" is
 	// every interaction row; "viewed" is the view-only subset (neither saved nor
 	// applied), matching the ListUserJobs filter. "board" counts jobs on the Kanban
@@ -2781,6 +2787,10 @@ type Querier interface {
 	// The nudge queries coalesce the other way, and that is not a contradiction: their
 	// MATCH step already inner-joins an enabled row, so a nudge cannot exist without one.
 	GetEmailPrefs(ctx context.Context, id int64) (GetEmailPrefsRow, error)
+	// The caller's newest session of one preset that has not received a message yet. The support
+	// panel reuses it instead of minting another, which bounds the sessions an account can create
+	// by the messages it actually sent. Owner-scoped like every other read in this file.
+	GetEmptyAssistantSession(ctx context.Context, arg GetEmptyAssistantSessionParams) (GetEmptyAssistantSessionRow, error)
 	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 	// every column is a scalar total, so no user identifier or row-level field is
 	// selected. saved / applied are user_jobs interaction-row totals across all users.
@@ -5470,6 +5480,8 @@ type Querier interface {
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
+	// Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
+	LockAssistantSessionCreation(ctx context.Context, userID int64) error
 	// The leave's half of the buddy_members lock protocol (see LockBuddyMembersForMock): lock
 	// the member's own row FOR UPDATE, in a statement of its own, before LeaveBuddyMember. A
 	// booking holding its share lock makes this wait until the mock is committed, and
@@ -6688,6 +6700,8 @@ type Querier interface {
 	// usable destination on any configured channel) is retried promptly on a later pass
 	// instead of waiting out the lease.
 	ReleaseReminderClaim(ctx context.Context, id int64) error
+	// Gives the claim back when the email could not be sent, so a retry can take it.
+	ReleaseSupportEscalation(ctx context.Context, arg ReleaseSupportEscalationParams) error
 	// Give a claim back after every channel failed, so the next run retries. Guarded on the
 	// stamp being the claim's own: a participant re-notified since keeps its newer one.
 	ReleaseUnread(ctx context.Context, arg ReleaseUnreadParams) error
@@ -7579,6 +7593,9 @@ type Querier interface {
 	// titles that landed in an employer column — out of a dictionary meant to name real
 	// employers.
 	SuggestibleCompanies(ctx context.Context, minJobs int32) ([]SuggestibleCompaniesRow, error)
+	// Everything every account used of one feature on one day, for a global ceiling on a feature
+	// whose cost is not borne by a subscription.
+	SumUsageDayForFeature(ctx context.Context, arg SumUsageDayForFeatureParams) (int64, error)
 	// The batched slice of the cross-source aggregator suppression, driven over a CHUNK of
 	// companies (cmd/reindex's forCompanyBatches) rather than one call per company — see
 	// RecomputeRoleDuplicatesForCompanies' doc comment for the prod measurement that

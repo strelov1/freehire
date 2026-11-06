@@ -18,6 +18,7 @@
     draft = $bindable(''),
     attachments = $bindable([]),
     attachable = true,
+    dictatable = true,
     queue,
     turnActive,
     disabled,
@@ -31,6 +32,9 @@
     /** Whether to offer the attach control at all. Off for a host that reads only the
      *  text, so a chosen file is never silently dropped. */
     attachable?: boolean;
+    /** Whether to offer the microphone. Off for a host whose callers may not have the
+     *  paid dictation feature, so the control never answers with an upgrade wall. */
+    dictatable?: boolean;
     queue: { id: string; text: string; attachments: Attachment[] }[];
     turnActive: boolean;
     disabled: boolean;
@@ -223,7 +227,7 @@
         }}
         class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1.5 text-base leading-6 text-foreground placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
       ></textarea>
-      {#if DICTATION_ENABLED && !dictationOff}
+      {#if dictatable && DICTATION_ENABLED && !dictationOff}
         <VoiceInput
           {disabled}
           onTranscript={acceptTranscript}

@@ -76,6 +76,47 @@ func (q *Queries) AppendAssistantMessage(ctx context.Context, arg AppendAssistan
 	return i, err
 }
 
+const claimSupportEscalation = `-- name: ClaimSupportEscalation :execrows
+UPDATE assistant_sessions
+SET escalated_at = now()
+WHERE id = $1 AND user_id = $2 AND preset = 'support' AND escalated_at IS NULL
+`
+
+type ClaimSupportEscalationParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
+}
+
+// The claim for the one handover email a support session may send: stamps escalated_at only
+// while it is unset, for the owner's own support session. 0 rows means somebody else already
+// holds the claim (or the session is not the caller's).
+func (q *Queries) ClaimSupportEscalation(ctx context.Context, arg ClaimSupportEscalationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, claimSupportEscalation, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const countSupportEscalationsSince = `-- name: CountSupportEscalationsSince :one
+SELECT count(*)
+FROM assistant_sessions
+WHERE user_id = $1 AND escalated_at >= $2
+`
+
+type CountSupportEscalationsSinceParams struct {
+	UserID      int64              `json:"user_id"`
+	EscalatedAt pgtype.Timestamptz `json:"escalated_at"`
+}
+
+// How many handovers this account has made since the given instant, for the daily cap.
+func (q *Queries) CountSupportEscalationsSince(ctx context.Context, arg CountSupportEscalationsSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSupportEscalationsSince, arg.UserID, arg.EscalatedAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAssistantSearchSession = `-- name: CreateAssistantSearchSession :one
 INSERT INTO assistant_sessions (id, user_id, preset, search_query)
 VALUES ($1, $2, 'chat', $3)
@@ -306,6 +347,54 @@ func (q *Queries) GetAssistantSessionForJob(ctx context.Context, arg GetAssistan
 	return i, err
 }
 
+const getEmptyAssistantSession = `-- name: GetEmptyAssistantSession :one
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
+FROM assistant_sessions s
+WHERE s.user_id = $1 AND s.preset = $2
+  AND NOT EXISTS (SELECT 1 FROM assistant_messages m WHERE m.session_id = s.id AND m.role = 'user')
+ORDER BY s.created_at DESC
+LIMIT 1
+`
+
+type GetEmptyAssistantSessionParams struct {
+	UserID int64  `json:"user_id"`
+	Preset string `json:"preset"`
+}
+
+type GetEmptyAssistantSessionRow struct {
+	ID             uuid.UUID          `json:"id"`
+	UserID         int64              `json:"user_id"`
+	Preset         string             `json:"preset"`
+	Label          pgtype.Text        `json:"label"`
+	CvID           *uuid.UUID         `json:"cv_id"`
+	JobID          *int64             `json:"job_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	SearchQuery    pgtype.Text        `json:"search_query"`
+	SelectionBrief string             `json:"selection_brief"`
+}
+
+// The caller's newest session of one preset that has not received a message yet. The support
+// panel reuses it instead of minting another, which bounds the sessions an account can create
+// by the messages it actually sent. Owner-scoped like every other read in this file.
+func (q *Queries) GetEmptyAssistantSession(ctx context.Context, arg GetEmptyAssistantSessionParams) (GetEmptyAssistantSessionRow, error) {
+	row := q.db.QueryRow(ctx, getEmptyAssistantSession, arg.UserID, arg.Preset)
+	var i GetEmptyAssistantSessionRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Preset,
+		&i.Label,
+		&i.CvID,
+		&i.JobID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SearchQuery,
+		&i.SelectionBrief,
+	)
+	return i, err
+}
+
 const listAssistantChatSessions = `-- name: ListAssistantChatSessions :many
 SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
 FROM assistant_sessions
@@ -464,6 +553,33 @@ func (q *Queries) ListRecentAssistantMessages(ctx context.Context, arg ListRecen
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockAssistantSessionCreation = `-- name: LockAssistantSessionCreation :exec
+SELECT pg_advisory_xact_lock(hashtextextended('assistant_session_create:' || $1::bigint::text, 0))
+`
+
+// Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
+func (q *Queries) LockAssistantSessionCreation(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, lockAssistantSessionCreation, userID)
+	return err
+}
+
+const releaseSupportEscalation = `-- name: ReleaseSupportEscalation :exec
+UPDATE assistant_sessions
+SET escalated_at = NULL
+WHERE id = $1 AND user_id = $2 AND preset = 'support'
+`
+
+type ReleaseSupportEscalationParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
+}
+
+// Gives the claim back when the email could not be sent, so a retry can take it.
+func (q *Queries) ReleaseSupportEscalation(ctx context.Context, arg ReleaseSupportEscalationParams) error {
+	_, err := q.db.Exec(ctx, releaseSupportEscalation, arg.ID, arg.UserID)
+	return err
 }
 
 const setAssistantSessionLabel = `-- name: SetAssistantSessionLabel :exec

@@ -106,7 +106,7 @@ refuses a bullet with no `evidence_id`. The run accounts for itself through
 `tailor_report`, which replaces the whole report on the CV and returns a receipt
 rather than an echo (a tool result is replayed into context on every later turn).
 
-**Presets.** A session records `chat`, `tailor`, `base`, `profile`, `browse`, `interview`, `debrief` or `apply`. The vocabulary
+**Presets.** A session records `chat`, `tailor`, `base`, `profile`, `browse`, `interview`, `debrief`, `apply` or `support`. The vocabulary
 is pinned by a CHECK constraint on `assistant_sessions.preset`, so adding one is a
 schema change and not just a Go constant. The preset selects the system prompt and the
 registered tools and nothing else, which is why one chat component serves
@@ -130,6 +130,19 @@ a chat, and its messages pass `mw.paidAI(FeatureAssistant)`. Opening the convers
 free account still opens the workspace and edits by hand. Agent edits on a base set
 `cvs.hand_edited` (see `internal/candidate/cv/AGENTS.md`). `turnBounds` gives it the tailoring step
 ceiling.
+
+`support` is first-line support, open to every signed-in account, free or paid. It carries the FAQ
+inline in `supportPrompt` and exactly three tools: `my_account` (an allowlisted read of the
+caller's own plan, expiry, payment source, today's allowances and last five plan events),
+`escalate_to_human` (one email to the support inbox per session, at most three a day per
+account, claimed in `assistant_sessions.escalated_at` BEFORE the send and released when the
+send fails; the summary is flattened to one inert line and Reply-To is the account address
+only when it is verified) and `report_problem`. A turn is capped at 3 tool steps. It is
+reachable only through `/support/sessions...` (free admission, own meter); every generic
+`/assistant/sessions/:id/...` route answers a support session 404, so it cannot be driven
+through, or deleted out of, its bounds. Its model is `SUPPORT_MODEL` (falling back to
+`LLM_MODEL`) and its tag `support`. `go test -tags=llmlive ./internal/api/handler/ -run
+LiveSupport` benches fixed dialogs and counts plan answers given without `my_account`.
 
 The preset is answered TWICE — once for the prompt, once for the tool set — and both
 switches read `NormalizePreset`, never the constants directly. They used to disagree on

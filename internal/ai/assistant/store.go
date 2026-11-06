@@ -15,7 +15,7 @@ import (
 
 // Presets a session can run under. The preset selects the system prompt and the
 // registered tools, and nothing else — one chat surface serves all of them. The
-// vocabulary is also a CHECK on the column (0044, widened by 0048, 0049, 0062, 0069, 0199 and 0232), so
+// vocabulary is also a CHECK on the column (0044, widened by 0048, 0049, 0062, 0069, 0199, 0232 and 0243), so
 // a new preset is a migration and not only a constant.
 const (
 	PresetChat   = "chat"
@@ -49,6 +49,11 @@ const (
 	// than aiming it at an employer. It registers none of the vacancy tools — no fit analysis,
 	// job match, cover letter or run report — because there is no vacancy to read them against.
 	PresetBase = "base"
+	// PresetSupport is first-line support: a conversation with no CV and no vacancy that answers
+	// from a fixed FAQ, reads the caller's own plan through `my_account` and hands a question to
+	// a human through `escalate_to_human`. It is reached only through the dedicated /support
+	// routes, never created or continued through the generic session ones.
+	PresetSupport = "support"
 )
 
 // ErrNotFound is returned for a session the caller does not own and for one that
@@ -84,6 +89,7 @@ type Queries interface {
 	ListAssistantChatSessions(ctx context.Context, userID int64) ([]db.ListAssistantChatSessionsRow, error)
 	GetAssistantSession(ctx context.Context, arg db.GetAssistantSessionParams) (db.GetAssistantSessionRow, error)
 	GetAssistantSessionForJob(ctx context.Context, arg db.GetAssistantSessionForJobParams) (db.GetAssistantSessionForJobRow, error)
+	GetEmptyAssistantSession(ctx context.Context, arg db.GetEmptyAssistantSessionParams) (db.GetEmptyAssistantSessionRow, error)
 	DeleteAssistantSession(ctx context.Context, arg db.DeleteAssistantSessionParams) (int64, error)
 	TouchAssistantSession(ctx context.Context, arg db.TouchAssistantSessionParams) error
 	SetAssistantSessionLabel(ctx context.Context, arg db.SetAssistantSessionLabelParams) error
@@ -151,6 +157,20 @@ func (s *Store) SessionForJob(ctx context.Context, userID int64, preset string, 
 	}
 	if err != nil {
 		return Session{}, false, fmt.Errorf("assistant: get session for job: %w", err)
+	}
+	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID, row.SearchQuery, row.SelectionBrief), true, nil
+}
+
+// EmptySession returns the caller's newest session of preset that has received no user
+// message, and false when there is none, so a surface that offers "new conversation" can
+// hand back the blank one it already made instead of adding another.
+func (s *Store) EmptySession(ctx context.Context, userID int64, preset string) (Session, bool, error) {
+	row, err := s.q.GetEmptyAssistantSession(ctx, db.GetEmptyAssistantSessionParams{UserID: userID, Preset: preset})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Session{}, false, nil
+	}
+	if err != nil {
+		return Session{}, false, fmt.Errorf("assistant: get empty session: %w", err)
 	}
 	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID, row.SearchQuery, row.SelectionBrief), true, nil
 }

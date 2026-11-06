@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
@@ -76,7 +77,7 @@ func (h *assistantHandlers) meterTurn(c *fiber.Ctx, sess assistant.Session) (tur
 	}
 	// The turn about to be recorded is the next one. Charging it under that number is what
 	// lets the retry below land on the same reference and consume nothing further.
-	return h.chargeTurn(c, sess, turns+1)
+	return h.chargeTurn(c, sess, turns+1, true)
 }
 
 // meterRetry is meterTurn for a resumed turn: the user message already exists, so the turn
@@ -93,7 +94,7 @@ func (h *assistantHandlers) meterRetry(c *fiber.Ctx, sess assistant.Session) (tu
 		// ceiling admitted.
 		return turnCharge{}, false, nil
 	}
-	return h.chargeTurn(c, sess, turns)
+	return h.chargeTurn(c, sess, turns, false)
 }
 
 // sessionTurns is how many turns the session has run, and whether metering can proceed at
@@ -115,15 +116,35 @@ func (h *assistantHandlers) sessionTurns(c *fiber.Ctx, sess assistant.Session) (
 // is what makes a retry idempotent: a resumed turn appends no second user message, so it
 // charges under the reference the original charge was filed with and takes nothing more.
 //
+// fresh says this request brings a NEW message, as opposed to resuming one. The number n is
+// read from the persisted count, and a turn that is running or queued has not appended its
+// message yet — so a second new message computes the very reference the first one holds,
+// finds it already paid for, and would run free (and, were the first refunded, stay free).
+// A fresh charge therefore moves to the next number while its reference is taken
+// (reserveTurnRef). A resume must not: landing on the existing reference is its whole point.
+//
 // A charge handle comes back ONLY when this request really took an allowance. Consume also
 // answers yes for a reference already paid for, and handing back a handle then would arm a
-// release over somebody else's charge — a turn refused the session's slot computes the
-// reference of the turn QUEUED ahead of it, because that one has not appended its message
-// yet, and would refund a turn that is still going to run.
-func (h *assistantHandlers) chargeTurn(c *fiber.Ctx, sess assistant.Session, n int) (turnCharge, bool, error) {
-	ref := sess.ID.String() + "#turn-" + strconv.Itoa(n)
-	d, err := h.plans.Consume(c.Context(), sess.UserID, plan.FeatureAssistant, ref)
+// release over somebody else's charge — a resume refused the session's slot computes the
+// reference of the turn QUEUED ahead of it and would refund a turn that is still going to run.
+func (h *assistantHandlers) chargeTurn(c *fiber.Ctx, sess assistant.Session, n int, fresh bool) (turnCharge, bool, error) {
+	consume := func(ref string) (plan.Decision, error) {
+		return h.plans.Consume(c.Context(), sess.UserID, plan.FeatureAssistant, ref)
+	}
+	var (
+		ref string
+		d   plan.Decision
+		err error
+	)
+	if fresh {
+		ref, d, err = reserveTurnRef(sess.ID, n, consume)
+	} else {
+		ref = turnRef(sess.ID, n)
+		d, err = consume(ref)
+	}
 	switch {
+	case err == nil && d.Charge == 0 && fresh:
+		return turnCharge{}, true, fiber.NewError(fiber.StatusConflict, errTurnQueueFull.Error())
 	case err == nil && d.Charge == 0:
 		return turnCharge{}, false, nil // already paid for — this request owes nothing back
 	case err == nil:
@@ -134,6 +155,37 @@ func (h *assistantHandlers) chargeTurn(c *fiber.Ctx, sess assistant.Session, n i
 		log.Printf("plan: charging an assistant turn for user %d: %v", sess.UserID, err)
 		return turnCharge{}, false, nil
 	}
+}
+
+func turnRef(session uuid.UUID, n int) string {
+	return session.String() + "#turn-" + strconv.Itoa(n)
+}
+
+// turnRefAttempts is how many consecutive turn numbers a new message may try. A session runs
+// one turn and queues one more (turnRegistry.claim), so at most two reservations can be
+// ahead of a third request, which the registry then refuses anyway.
+const turnRefAttempts = 3
+
+// reserveTurnRef consumes the first reference from turn number first onward that no other
+// reservation holds. The ledger's own uniqueness decides, under the usage row's lock, so two
+// requests that compute the same number cannot both take it: one moves on.
+//
+// A decision that charged nothing after every attempt means each of them was already paid
+// for; the caller refuses rather than letting the turn run free.
+func reserveTurnRef(session uuid.UUID, first int, consume func(ref string) (plan.Decision, error)) (string, plan.Decision, error) {
+	var (
+		ref string
+		d   plan.Decision
+		err error
+	)
+	for i := 0; i < turnRefAttempts; i++ {
+		ref = turnRef(session, first+i)
+		d, err = consume(ref)
+		if err != nil || d.Charge > 0 {
+			return ref, d, err
+		}
+	}
+	return ref, d, nil
 }
 
 // turnReleaseTimeout bounds the detached cleanup. Generous for two small statements, and

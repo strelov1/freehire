@@ -167,6 +167,12 @@ type Config struct {
 	// different things: measured on production the median session ran 2.7 turns and one
 	// ran 54, so a session count alone leaves that session unbounded.
 	TailorTurnsPerSession int
+
+	// SupportMessagesPerDay, SupportTurnsPerSession and SupportMessagesGlobalPerDay bound the
+	// support agent, which every account may talk to. See support.go.
+	SupportMessagesPerDay       int
+	SupportTurnsPerSession      int
+	SupportMessagesGlobalPerDay int
 }
 
 // DefaultConfig is the configuration the change ships with.
@@ -226,6 +232,10 @@ func DefaultConfig() Config {
 			},
 		},
 		TailorTurnsPerSession: 15,
+
+		SupportMessagesPerDay:       20,
+		SupportTurnsPerSession:      12,
+		SupportMessagesGlobalPerDay: 2000,
 	}
 }
 
@@ -236,6 +246,10 @@ func (c Config) with(edit func(Feature, *featureConfig)) Config {
 	out := Config{
 		features:              make(map[Feature]featureConfig, len(c.features)),
 		TailorTurnsPerSession: c.TailorTurnsPerSession,
+
+		SupportMessagesPerDay:       c.SupportMessagesPerDay,
+		SupportTurnsPerSession:      c.SupportTurnsPerSession,
+		SupportMessagesGlobalPerDay: c.SupportMessagesGlobalPerDay,
 	}
 	for f, fc := range c.features {
 		edit(f, &fc)

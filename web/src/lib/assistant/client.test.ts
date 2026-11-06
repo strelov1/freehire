@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
-import { sendTurn, StreamInterrupted, syncApplication } from './client';
+import { sendTurn, StreamInterrupted, syncApplication, TurnRefused } from './client';
 
 /** A response whose body streams the given chunks and then does whatever `end` says. */
 function streamingResponse(chunks: string[], end: 'close' | 'fail' = 'close'): Response {
@@ -85,5 +85,42 @@ describe('syncApplication', () => {
     await syncApplication('session-1', (e) => events.push(e)).done;
 
     expect(events.map((e) => e.type)).toContain('assistant_text');
+  });
+});
+
+describe('support turns', () => {
+  const SUPPORT = '/api/v1/support';
+
+  it('sends and cancels on the support routes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(streamingResponse([frame({ type: 'result' })]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const turn = sendTurn('s1', 'hello', () => {}, [], SUPPORT);
+    turn.cancel();
+
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls).toContain(`${SUPPORT}/sessions/s1/messages`);
+    expect(urls).toContain(`${SUPPORT}/sessions/s1/cancel`);
+  });
+
+  it.each([402, 429])('surfaces a %i refusal as a plain error with the server sentence', async (status) => {
+    // Support is free: a refusal must not become a plan-limit TurnRefused, which the chat
+    // renders with a link to the plans page.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        Response.json({ error: 'Please email help@example.com', support_email: 'help@example.com' }, { status }),
+      ),
+    );
+
+    const turn = sendTurn('s1', 'hello', () => {}, [], SUPPORT);
+
+    const err = await turn.done.then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(TurnRefused);
+    expect((err as Error).message).toBe('Please email help@example.com');
   });
 });

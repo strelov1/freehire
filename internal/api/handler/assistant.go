@@ -111,6 +111,10 @@ type assistantHandlers struct {
 	// wires one.
 	plans *plan.Store
 
+	// support is the support agent's own wiring: its model, its runner and the mail a
+	// handover goes out on. The zero value is the unconfigured deployment.
+	support supportDeps
+
 	// realtime mints voice-mode's short-lived OpenAI Realtime API credentials. Nil in
 	// a deployment with no Realtime gateway configured, following internal/ai/speech's
 	// convention: the mint endpoint answers 501 and the interview session view offers
@@ -242,6 +246,7 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
 	// the candidate can watch it happen and undo it.
 	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, mw.paidAI(plan.FeatureTailor), h.PostAssistantAutopilot)
+	h.registerSupport(api, mw)
 
 	// The external auto-apply pipeline's own two endpoints (openspec/changes/
 	// auto-apply-tailored-resume) — API key or cookie, never a session id from the caller.
@@ -549,6 +554,15 @@ func (h *assistantHandlers) DeleteAssistantSession(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	sess, err := h.store.Session(c.Context(), id, userID)
+	if err != nil {
+		return mapAssistantError(err)
+	}
+	// A support session is never deleted by its owner: its handover stamp is what bounds
+	// how many times an account may email the team.
+	if sess.Preset == assistant.PresetSupport {
+		return errSessionNotFound
+	}
 	if err := h.store.DeleteSession(c.Context(), id, userID); err != nil {
 		return mapAssistantError(err)
 	}
@@ -574,8 +588,12 @@ func (h *assistantHandlers) CancelAssistantTurn(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if _, err := h.store.Session(c.Context(), id, userID); err != nil {
+	sess, err := h.store.Session(c.Context(), id, userID)
+	if err != nil {
 		return mapAssistantError(err)
+	}
+	if sess.Preset == assistant.PresetSupport {
+		return errSessionNotFound
 	}
 	h.turns.cancel(id)
 	return c.SendStatus(fiber.StatusNoContent)
@@ -769,6 +787,13 @@ func (h *assistantHandlers) streamSSE(
 	// Charged against turnSess, not sess, for the same reason the spend tag is: a browse
 	// turn demoted to chat IS a chat turn, and it must draw on the allowance it actually
 	// spends against.
+	//
+	// A session that cannot take another message is refused before it is metered. claim below
+	// remains the guard; this read only keeps a busy conversation from being reported as an
+	// exhausted allowance.
+	if h.turns.full(sess.ID) {
+		return fiber.NewError(fiber.StatusConflict, errTurnQueueFull.Error())
+	}
 	charge, refused, err := meter(c, turnSess)
 	if refused {
 		return err
@@ -927,6 +952,9 @@ func (h *assistantHandlers) streamSSE(
 // It goes through the user-call binding like every other model call, so it fails closed on
 // a context the paid-AI gate did not mark — and the error comes back before any stream opens.
 func (h *assistantHandlers) boundRunner(ctx context.Context, sess assistant.Session) (*assistant.Runner, error) {
+	if sess.Preset == assistant.PresetSupport {
+		return h.boundSupportRunner(ctx, sess)
+	}
 	bound, err := h.binding().bind(ctx, sess.UserID, llm.Feature(tagAssistant), llm.Dimension{Name: "preset", Value: sess.Preset})
 	if err != nil {
 		return nil, err
@@ -1025,6 +1053,9 @@ const tailorMaxSteps = 16
 // runner default; interactive tailor and base-CV editing (the same evidence-then-edit rounds)
 // and a resumed autopilot raise theirs server-side so a client cannot.
 func turnBounds(sess assistant.Session, lastUser string) assistant.TurnConfig {
+	if sess.Preset == assistant.PresetSupport {
+		return assistant.TurnConfig{MaxSteps: supportMaxSteps}
+	}
 	if sess.Preset != assistant.PresetTailor && sess.Preset != assistant.PresetBase {
 		return assistant.TurnConfig{}
 	}
@@ -1207,6 +1238,9 @@ func (h *assistantHandlers) ownedSession(c *fiber.Ctx) (assistant.Session, error
 	if err != nil {
 		return assistant.Session{}, mapAssistantError(err)
 	}
+	if sess.Preset == assistant.PresetSupport {
+		return assistant.Session{}, errSessionNotFound
+	}
 	return sess, nil
 }
 
@@ -1215,7 +1249,9 @@ func (h *assistantHandlers) ownedSession(c *fiber.Ctx) (assistant.Session, error
 // indistinguishable or the ids become probeable.
 func mapAssistantError(err error) error {
 	if errors.Is(err, assistant.ErrNotFound) {
-		return fiber.NewError(fiber.StatusNotFound, "session not found")
+		return errSessionNotFound
 	}
 	return err
 }
+
+var errSessionNotFound = fiber.NewError(fiber.StatusNotFound, "session not found")

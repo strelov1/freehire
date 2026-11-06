@@ -31,6 +31,9 @@ func (h *assistantHandlers) PostAssistantExtend(c *fiber.Ctx) error {
 	if err != nil {
 		return mapAssistantError(err)
 	}
+	if sess.Preset == assistant.PresetSupport {
+		return errSessionNotFound
+	}
 	// Only a tailoring session has a ceiling to extend. Every other preset is bounded by
 	// the daily assistant allowance, which nothing can top up — a day is a day.
 	if sess.Preset != assistant.PresetTailor {

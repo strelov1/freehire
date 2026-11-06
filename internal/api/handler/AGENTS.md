@@ -149,6 +149,9 @@ its own two bounds:
 | `POST /assistant/sessions/:id/cancel` | stop a running turn (owner-scoped — see below) |
 | `POST /assistant/sessions/:id/extend` | buy a tailoring session another ceiling's worth of turns, out of the day's tailoring allowance; 409 on any other preset |
 | `POST /assistant/sessions/:id/opening` | the assistant speaks first in a rehearsal or debrief, under a server-side brief; an already-answered opening is a 409 |
+| `POST /support/sessions` | start a support conversation (**cookie-only**, every signed-in account, no paid gate) |
+| `POST /support/sessions/:id/messages` | one support turn, SSE. Free admission, own meter: a flat daily allowance (402), a per-session ceiling (429) and a global daily budget (429); refusals carry `support_email` and never an `upgrade_url`. 404 for any non-support session |
+| `POST /support/sessions/:id/cancel` | stop a running support turn |
 | `POST /assistant/sessions/:id/voice-token` | mint one voice call's credential |
 | `POST /assistant/sessions/:id/voice-turns` | append a completed spoken turn to the transcript |
 | `POST /assistant/sessions/:id/autopilot` | run the tailoring pass unattended — same stream, server-owned brief and ceiling (**cookie-only**) |

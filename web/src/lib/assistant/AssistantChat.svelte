@@ -8,6 +8,7 @@
     getSession,
     deleteSession,
     SessionNotFound,
+    SUPPORT_BASE,
   } from '#lib/assistant/api.js';
   import VoiceCall from '#lib/assistant/VoiceCall.svelte';
   import { canUseVoiceCall } from '#lib/assistant/voiceCall.js';
@@ -114,7 +115,9 @@
      *  is the caller's choice rather than ours. */
     openingActions?: OpeningAction[];
     /** Which unbound conversation a NEW session starts as. An existing session keeps
-     *  whatever preset it was created with. */
+     *  whatever preset it was created with. `support` is the help agent: it runs on its own
+     *  routes, which only create, send and cancel, so it never lists, reopens or deletes a
+     *  conversation and offers no attachments, dictation or retry. */
     preset?: ChatPreset;
     /** Start an unattended run the moment the session is ready, instead of waiting for the
      *  candidate to pick an opening action. The tailoring host sets this on a cold-start
@@ -155,11 +158,18 @@
   // plan) from every other failure this component reports through the same banner — one
   // object so the two facts can never fall out of step with each other the way two
   // separately-reset variables did (a stale flag surviving past the error it described).
-  let error = $state<{ message: string; planLimitReached: boolean } | null>(null);
+  let error = $state<{ message: string; planLimitReached: boolean; cutOff?: boolean } | null>(null);
   /** Every ordinary failure goes through here; `planLimitReached` starts false and only the
    *  plan-refusal branch in dispatch()'s catch sets it directly. */
   function setError(message: string) {
     error = { message, planLimitReached: false };
+  }
+  // A support answer cut short by a dropped stream. Unlike other errors it is not cleared
+  // when the next turn starts: a message queued behind the dropped turn starts that turn the
+  // moment this one ends, before the visitor could read it. Only the visitor's own next
+  // action (sending, or starting or switching conversations) removes it.
+  function setCutOff() {
+    error = { message: s.supportInterrupted, planLimitReached: false, cutOff: true };
   }
   // A ceiling refusal is not a dead end: the session can be continued by spending another
   // of the day's tailoring sessions. Held apart from `error` because it needs an action
@@ -244,6 +254,7 @@
    * same words in the caller's mouth again.
    */
   const arrival: { preset: ChatPreset; kickoff?: string } = { preset, kickoff };
+  const isSupport = untrack(() => preset) === 'support';
 
   // Whether the turn in flight is an unattended run rather than a reply to something typed.
   let runActive = $state(false);
@@ -328,6 +339,17 @@
     phase = 'loading';
     error = null;
     try {
+      if (isSupport) {
+        await createAndOpen();
+        if (disposed) return;
+        phase = 'ready';
+        if (arrival.kickoff) {
+          const opening = arrival.kickoff;
+          arrival.kickoff = undefined;
+          void dispatch({ kind: 'message', text: opening });
+        }
+        return;
+      }
       let summaries: Awaited<ReturnType<typeof listSessions>> = [];
       try {
         summaries = await listSessions();
@@ -406,6 +428,7 @@
 
   /** Reconcile the pane with the address the host is showing. */
   function followAddress(requested: string | undefined) {
+    if (isSupport) return;
     // A switch WE started asked the host to navigate, and that navigation is async: for
     // the moment between setting activeId and the URL catching up, `session` disagrees
     // with activeId and following it would go straight back to the chat just left. That
@@ -553,6 +576,12 @@
 
   async function createAndOpen() {
     const created = await createSession(arrival.preset);
+    if (isSupport) {
+      // The support routes cannot replay a transcript, so the new session is opened as is.
+      activeId = created.id;
+      activePreset = 'support';
+      return;
+    }
     // Spent: the next chat minted here — "New chat", or a later boot() — is a plain one.
     arrival.preset = 'chat';
     sessions = upsertSession(sessions, fromSummary(created, NEW_CHAT_LABEL));
@@ -692,6 +721,7 @@
   function submitText(raw: string, docs: Attachment[] = []) {
     const text = raw.trim();
     if ((!text && docs.length === 0) || phase !== 'ready' || switching || !activeId) return;
+    if (error?.cutOff) error = null;
     // Counted once per message the user sends, queued or dispatched — never the text
     // itself. This measures usage only; what a turn costs is recorded server-side.
     track('assistant_message');
@@ -717,7 +747,7 @@
   async function dispatch(start: TurnStart) {
     const id = activeId;
     if (!id || disposed) return;
-    error = null;
+    if (!error?.cutOff) error = null;
     turnActive = true;
     onTurnStateChange?.(true);
     // Before anything reaches the server: the host may be holding an edit on a timer, and
@@ -758,7 +788,7 @@
       // tailor workspace, refreshing after a failed run is enough via onTurnComplete.
       started = retryTurn(id, watch);
     } else {
-      started = sendTurn(id, start.text, watch, start.attachments);
+      started = sendTurn(id, start.text, watch, start.attachments, isSupport ? SUPPORT_BASE : undefined);
     }
     turn = started;
     void scrollToBottom(true);
@@ -775,8 +805,14 @@
         // The stream broke, not the turn: it runs on the server under its own bounds and
         // stores everything it does. Marking the message as failed would tell the user
         // their CV edits were lost when they were not — so we re-read the session and show
-        // whatever the agent has managed so far.
-        await reloadTranscript(id);
+        // whatever the agent has managed so far. A support session cannot be re-read that
+        // way, so the rest of its answer is lost: say so rather than leave a silent cut. The
+        // open answer is closed as an ordinary one (not errored — the server turn did not
+        // fail), so it stops showing as streaming.
+        if (isSupport && id === activeId) {
+          chat = reduceTurnEvent(chat, { type: 'result', stop_reason: 'end_turn' });
+          setCutOff();
+        } else await reloadTranscript(id);
         endTurn();
         return;
       }
@@ -896,7 +932,7 @@
   }
 
   async function reloadTranscript(id: string) {
-    if (id !== activeId) return;
+    if (isSupport || id !== activeId) return;
     try {
       const { messages: transcriptMessages } = await getSession(id);
       let next = initChat();
@@ -1229,7 +1265,7 @@
               {#if message.errored}
                 <div class="self-start flex flex-wrap items-center gap-2 text-xs">
                   <p class="text-destructive">{s.turnErrored}</p>
-                  {#if i === chat.messages.length - 1 && !turnActive && !switching}
+                  {#if !isSupport && i === chat.messages.length - 1 && !turnActive && !switching}
                     <button
                       type="button"
                       class="rounded-md border border-border bg-background px-2 py-0.5 font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
@@ -1293,6 +1329,8 @@
           bind:attachments
           {queue}
           {turnActive}
+          attachable={!isSupport}
+          dictatable={!isSupport}
           disabled={phase !== 'ready' || switching}
           onSubmit={submitText}
           onRemoveQueued={removeQueued}
