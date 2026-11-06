@@ -319,3 +319,27 @@ func assistantSubscriber(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, ema
 	makePro(t, pool, id)
 	return id, token
 }
+
+// A running or queued turn holds the reference its message will be counted under before it
+// has appended that message, so the next message computes the same one. It must take an
+// allowance of its own instead of running on the other turn's charge.
+func TestAChatTurnTakesItsOwnAllowanceWhenAnotherTurnHoldsItsReference(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	cfg := plan.DefaultConfig().Enforcing().WithProCeiling(plan.FeatureAssistant, 5)
+	app, h := newAssistantApp(pool, iss, &turnModel{replies: []*llms.ContentChoice{{Content: "hello"}}})
+	h.plans = plan.NewStore(db.New(pool), pool, cfg)
+
+	userID, token := assistantSubscriber(t, pool, iss, "turn-shared-ref@example.test", false)
+	sessionID := createAssistantSession(t, app, token, assistant.PresetChat)
+
+	if _, err := h.plans.Consume(context.Background(), userID, plan.FeatureAssistant, sessionID+"#turn-1"); err != nil {
+		t.Fatalf("seed the in-flight turn's charge: %v", err)
+	}
+	if status, _ := postTurn(t, app, sessionID, token, "hi"); status != fiber.StatusOK {
+		t.Fatalf("turn status = %d, want 200", status)
+	}
+	if got := usedToday(t, pool, userID, plan.FeatureAssistant); got != 2 {
+		t.Errorf("assistant allowance used = %d, want 2 — the queued turn ran on the other's charge", got)
+	}
+}

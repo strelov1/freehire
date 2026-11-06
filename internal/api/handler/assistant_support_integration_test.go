@@ -517,3 +517,84 @@ func TestEscalateSummaryIsInertAndReplyToNeedsAVerifiedAddress(t *testing.T) {
 		t.Errorf("Reply-To for a verified account = %q", msgs[1].ReplyTo)
 	}
 }
+
+func TestSupportCreateHandsBackTheBlankSessionUntilAMessageIsSent(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := supportApp(t, pool, iss, &gateCountingModel{}, plan.DefaultConfig().Enforcing(), nil)
+	_, token := assistantUser(t, pool, iss, "support-create-reuse@example.test", false)
+	_, other := assistantUser(t, pool, iss, "support-create-reuse-other@example.test", false)
+
+	first := newSupportSession(t, app, token)
+	status, body := supportPost(t, app, "/api/v1/support/sessions", token, `{}`)
+	if status != fiber.StatusOK || !strings.Contains(body, first) {
+		t.Fatalf("second create = %d (%s), want 200 handing back %s", status, body, first)
+	}
+	if got := newSupportSession(t, app, other); got == first {
+		t.Error("another account was handed this account's blank session")
+	}
+
+	if status, body := sendSupport(t, app, first, token); status != fiber.StatusOK {
+		t.Fatalf("message = %d (%s), want 200", status, body)
+	}
+	if next := newSupportSession(t, app, token); next == first {
+		t.Error("a session that already holds a message was handed back as blank")
+	}
+}
+
+// A turn that is running or queued holds its reference but has not appended its message, so
+// the next message computes the same one. It must take an allowance of its own.
+func TestSupportMessageTakesItsOwnAllowanceWhenAnotherTurnHoldsItsReference(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, h := supportApp(t, pool, iss, &gateCountingModel{}, plan.DefaultConfig().Enforcing(), nil)
+	userID, token := assistantUser(t, pool, iss, "support-shared-ref@example.test", false)
+	id := newSupportSession(t, app, token)
+
+	if _, err := h.plans.ConsumeSupport(context.Background(), userID, id+"#turn-1"); err != nil {
+		t.Fatalf("seed the in-flight turn's charge: %v", err)
+	}
+	if status, body := sendSupport(t, app, id, token); status != fiber.StatusOK {
+		t.Fatalf("message = %d (%s), want 200", status, body)
+	}
+	if got := usedToday(t, pool, userID, plan.FeatureSupport); got != 2 {
+		t.Errorf("support used today = %d, want 2 — the queued message ran on the other turn's charge", got)
+	}
+}
+
+func TestSupportConcurrentMessagesEachTakeAnAllowance(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	_, h := supportApp(t, pool, iss, &gateCountingModel{}, plan.DefaultConfig().Enforcing(), nil)
+	userID, _ := assistantUser(t, pool, iss, "support-concurrent-charge@example.test", false)
+	sessionID := seedSupportSession(t, h, userID)
+
+	refs := make(chan string, 2)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ref, d, err := reserveTurnRef(sessionID, 1, func(ref string) (plan.Decision, error) {
+				return h.plans.ConsumeSupport(context.Background(), userID, ref)
+			})
+			if err != nil || d.Charge != 1 {
+				t.Errorf("reserve: charge %d, err %v; want a charge of 1", d.Charge, err)
+			}
+			refs <- ref
+		}()
+	}
+	wg.Wait()
+	close(refs)
+
+	seen := map[string]bool{}
+	for ref := range refs {
+		seen[ref] = true
+	}
+	if len(seen) != 2 {
+		t.Errorf("the two messages shared a charge reference: %v", seen)
+	}
+	if got := usedToday(t, pool, userID, plan.FeatureSupport); got != 2 {
+		t.Errorf("support used today = %d, want 2", got)
+	}
+}

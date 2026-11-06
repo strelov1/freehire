@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/strelov1/freehire/internal/ai/plan"
 )
 
 func TestTurnRegistryAdmitsOneTurnPerSession(t *testing.T) {
@@ -271,5 +273,39 @@ func TestTurnRegistryTryClaimTakesTheSlotOfAnIdleSession(t *testing.T) {
 	reg.release(session, slot)
 	if n := reg.len(); n != 0 {
 		t.Fatalf("registry holds %d entries after the turn ended, want 0", n)
+	}
+}
+
+func TestReserveTurnRefMovesPastReferencesAlreadyHeld(t *testing.T) {
+	session := uuid.New()
+	held := map[string]bool{turnRef(session, 1): true, turnRef(session, 2): true}
+	consume := func(ref string) (plan.Decision, error) {
+		if held[ref] {
+			return plan.Decision{Allowed: true}, nil
+		}
+		held[ref] = true
+		return plan.Decision{Allowed: true, Charge: 1}, nil
+	}
+
+	ref, d, err := reserveTurnRef(session, 1, consume)
+	if err != nil || d.Charge != 1 || ref != turnRef(session, 3) {
+		t.Fatalf("reserve = %q charge %d err %v, want turn 3 charged", ref, d.Charge, err)
+	}
+
+	// Every number it may try is taken: nothing is charged, and the caller must refuse.
+	_, d, err = reserveTurnRef(session, 1, consume)
+	if err != nil || d.Charge != 0 {
+		t.Errorf("exhausted reserve = charge %d err %v, want no charge and no error", d.Charge, err)
+	}
+}
+
+func TestReserveTurnRefStopsOnARefusal(t *testing.T) {
+	calls := 0
+	_, _, err := reserveTurnRef(uuid.New(), 1, func(string) (plan.Decision, error) {
+		calls++
+		return plan.Decision{}, plan.ErrRefused
+	})
+	if !errors.Is(err, plan.ErrRefused) || calls != 1 {
+		t.Errorf("err %v after %d calls, want ErrRefused after one", err, calls)
 	}
 }

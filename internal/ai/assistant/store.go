@@ -89,6 +89,7 @@ type Queries interface {
 	ListAssistantChatSessions(ctx context.Context, userID int64) ([]db.ListAssistantChatSessionsRow, error)
 	GetAssistantSession(ctx context.Context, arg db.GetAssistantSessionParams) (db.GetAssistantSessionRow, error)
 	GetAssistantSessionForJob(ctx context.Context, arg db.GetAssistantSessionForJobParams) (db.GetAssistantSessionForJobRow, error)
+	GetEmptyAssistantSession(ctx context.Context, arg db.GetEmptyAssistantSessionParams) (db.GetEmptyAssistantSessionRow, error)
 	DeleteAssistantSession(ctx context.Context, arg db.DeleteAssistantSessionParams) (int64, error)
 	TouchAssistantSession(ctx context.Context, arg db.TouchAssistantSessionParams) error
 	SetAssistantSessionLabel(ctx context.Context, arg db.SetAssistantSessionLabelParams) error
@@ -156,6 +157,20 @@ func (s *Store) SessionForJob(ctx context.Context, userID int64, preset string, 
 	}
 	if err != nil {
 		return Session{}, false, fmt.Errorf("assistant: get session for job: %w", err)
+	}
+	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID, row.SearchQuery, row.SelectionBrief), true, nil
+}
+
+// EmptySession returns the caller's newest session of preset that has received no user
+// message, and false when there is none, so a surface that offers "new conversation" can
+// hand back the blank one it already made instead of adding another.
+func (s *Store) EmptySession(ctx context.Context, userID int64, preset string) (Session, bool, error) {
+	row, err := s.q.GetEmptyAssistantSession(ctx, db.GetEmptyAssistantSessionParams{UserID: userID, Preset: preset})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Session{}, false, nil
+	}
+	if err != nil {
+		return Session{}, false, fmt.Errorf("assistant: get empty session: %w", err)
 	}
 	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID, row.SearchQuery, row.SelectionBrief), true, nil
 }

@@ -347,6 +347,54 @@ func (q *Queries) GetAssistantSessionForJob(ctx context.Context, arg GetAssistan
 	return i, err
 }
 
+const getEmptyAssistantSession = `-- name: GetEmptyAssistantSession :one
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
+FROM assistant_sessions s
+WHERE s.user_id = $1 AND s.preset = $2
+  AND NOT EXISTS (SELECT 1 FROM assistant_messages m WHERE m.session_id = s.id AND m.role = 'user')
+ORDER BY s.created_at DESC
+LIMIT 1
+`
+
+type GetEmptyAssistantSessionParams struct {
+	UserID int64  `json:"user_id"`
+	Preset string `json:"preset"`
+}
+
+type GetEmptyAssistantSessionRow struct {
+	ID             uuid.UUID          `json:"id"`
+	UserID         int64              `json:"user_id"`
+	Preset         string             `json:"preset"`
+	Label          pgtype.Text        `json:"label"`
+	CvID           *uuid.UUID         `json:"cv_id"`
+	JobID          *int64             `json:"job_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	SearchQuery    pgtype.Text        `json:"search_query"`
+	SelectionBrief string             `json:"selection_brief"`
+}
+
+// The caller's newest session of one preset that has not received a message yet. The support
+// panel reuses it instead of minting another, which bounds the sessions an account can create
+// by the messages it actually sent. Owner-scoped like every other read in this file.
+func (q *Queries) GetEmptyAssistantSession(ctx context.Context, arg GetEmptyAssistantSessionParams) (GetEmptyAssistantSessionRow, error) {
+	row := q.db.QueryRow(ctx, getEmptyAssistantSession, arg.UserID, arg.Preset)
+	var i GetEmptyAssistantSessionRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Preset,
+		&i.Label,
+		&i.CvID,
+		&i.JobID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SearchQuery,
+		&i.SelectionBrief,
+	)
+	return i, err
+}
+
 const listAssistantChatSessions = `-- name: ListAssistantChatSessions :many
 SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
 FROM assistant_sessions

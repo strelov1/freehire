@@ -49,6 +49,17 @@ WHERE user_id = $1 AND preset = $2 AND job_id = $3
 ORDER BY created_at DESC
 LIMIT 1;
 
+-- name: GetEmptyAssistantSession :one
+-- The caller's newest session of one preset that has not received a message yet. The support
+-- panel reuses it instead of minting another, which bounds the sessions an account can create
+-- by the messages it actually sent. Owner-scoped like every other read in this file.
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at, search_query, selection_brief
+FROM assistant_sessions s
+WHERE s.user_id = $1 AND s.preset = $2
+  AND NOT EXISTS (SELECT 1 FROM assistant_messages m WHERE m.session_id = s.id AND m.role = 'user')
+ORDER BY s.created_at DESC
+LIMIT 1;
+
 -- name: DeleteAssistantSession :execrows
 -- Remove an owned session; its transcript goes with it (ON DELETE CASCADE). Returns 0
 -- affected rows for a foreign or missing id.

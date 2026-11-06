@@ -158,11 +158,18 @@
   // plan) from every other failure this component reports through the same banner — one
   // object so the two facts can never fall out of step with each other the way two
   // separately-reset variables did (a stale flag surviving past the error it described).
-  let error = $state<{ message: string; planLimitReached: boolean } | null>(null);
+  let error = $state<{ message: string; planLimitReached: boolean; cutOff?: boolean } | null>(null);
   /** Every ordinary failure goes through here; `planLimitReached` starts false and only the
    *  plan-refusal branch in dispatch()'s catch sets it directly. */
   function setError(message: string) {
     error = { message, planLimitReached: false };
+  }
+  // A support answer cut short by a dropped stream. Unlike other errors it is not cleared
+  // when the next turn starts: a message queued behind the dropped turn starts that turn the
+  // moment this one ends, before the visitor could read it. Only the visitor's own next
+  // action (sending, or starting or switching conversations) removes it.
+  function setCutOff() {
+    error = { message: s.supportInterrupted, planLimitReached: false, cutOff: true };
   }
   // A ceiling refusal is not a dead end: the session can be continued by spending another
   // of the day's tailoring sessions. Held apart from `error` because it needs an action
@@ -714,6 +721,7 @@
   function submitText(raw: string, docs: Attachment[] = []) {
     const text = raw.trim();
     if ((!text && docs.length === 0) || phase !== 'ready' || switching || !activeId) return;
+    if (error?.cutOff) error = null;
     // Counted once per message the user sends, queued or dispatched — never the text
     // itself. This measures usage only; what a turn costs is recorded server-side.
     track('assistant_message');
@@ -739,7 +747,7 @@
   async function dispatch(start: TurnStart) {
     const id = activeId;
     if (!id || disposed) return;
-    error = null;
+    if (!error?.cutOff) error = null;
     turnActive = true;
     onTurnStateChange?.(true);
     // Before anything reaches the server: the host may be holding an edit on a timer, and
@@ -798,9 +806,13 @@
         // stores everything it does. Marking the message as failed would tell the user
         // their CV edits were lost when they were not — so we re-read the session and show
         // whatever the agent has managed so far. A support session cannot be re-read that
-        // way, so the rest of its answer is lost: say so rather than leave a silent cut.
-        if (isSupport && id === activeId) setError(s.supportInterrupted);
-        else await reloadTranscript(id);
+        // way, so the rest of its answer is lost: say so rather than leave a silent cut. The
+        // open answer is closed as an ordinary one (not errored — the server turn did not
+        // fail), so it stops showing as streaming.
+        if (isSupport && id === activeId) {
+          chat = reduceTurnEvent(chat, { type: 'result', stop_reason: 'end_turn' });
+          setCutOff();
+        } else await reloadTranscript(id);
         endTurn();
         return;
       }

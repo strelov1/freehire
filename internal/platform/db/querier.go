@@ -2787,6 +2787,10 @@ type Querier interface {
 	// The nudge queries coalesce the other way, and that is not a contradiction: their
 	// MATCH step already inner-joins an enabled row, so a nudge cannot exist without one.
 	GetEmailPrefs(ctx context.Context, id int64) (GetEmailPrefsRow, error)
+	// The caller's newest session of one preset that has not received a message yet. The support
+	// panel reuses it instead of minting another, which bounds the sessions an account can create
+	// by the messages it actually sent. Owner-scoped like every other read in this file.
+	GetEmptyAssistantSession(ctx context.Context, arg GetEmptyAssistantSessionParams) (GetEmptyAssistantSessionRow, error)
 	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 	// every column is a scalar total, so no user identifier or row-level field is
 	// selected. saved / applied are user_jobs interaction-row totals across all users.

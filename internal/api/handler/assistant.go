@@ -243,9 +243,9 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	// as it finishes. The audio itself never transits here — see PostAssistantVoiceToken.
 	api.Post("/assistant/sessions/:id/voice-token", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantVoiceToken)
 	api.Post("/assistant/sessions/:id/voice-turns", mw.key, h.PostAssistantVoiceTurn)
+	h.registerSupport(api, mw)
 	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
 	// the candidate can watch it happen and undo it.
-	h.registerSupport(api, mw)
 	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, mw.paidAI(plan.FeatureTailor), h.PostAssistantAutopilot)
 
 	// The external auto-apply pipeline's own two endpoints (openspec/changes/

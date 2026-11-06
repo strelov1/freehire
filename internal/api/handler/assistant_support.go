@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -46,6 +45,14 @@ func (h *assistantHandlers) CreateSupportSession(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
+	}
+	// An owner cannot delete a support session, and this route is not metered, so it hands
+	// back the blank session it already made rather than adding one per call. That bounds
+	// the rows by the messages actually sent, which the daily allowance already bounds.
+	if sess, ok, err := h.store.EmptySession(c.Context(), userID, assistant.PresetSupport); err != nil {
+		return err
+	} else if ok {
+		return c.JSON(fiber.Map{"data": sessionView(sess)})
 	}
 	sess, err := h.store.CreateSession(c.Context(), userID, assistant.PresetSupport, nil, nil)
 	if err != nil {
@@ -148,11 +155,15 @@ func (h *assistantHandlers) meterSupport(c *fiber.Ctx, sess assistant.Session) (
 		return turnCharge{}, true, refuseSupport(c, fiber.StatusTooManyRequests,
 			"The support assistant is very busy today. Please email "+supportEmail+" and a person will reply.")
 	}
-	ref := sess.ID.String() + "#turn-" + strconv.Itoa(int(turns)+1)
-	d, err := h.plans.ConsumeSupport(c.Context(), sess.UserID, ref)
+	// Every message is a new one here (there is no retry route), so it always takes a
+	// reference no other reservation holds; see chargeTurn for why the persisted count alone
+	// is not enough while a turn is running or queued.
+	ref, d, err := reserveTurnRef(sess.ID, int(turns)+1, func(ref string) (plan.Decision, error) {
+		return h.plans.ConsumeSupport(c.Context(), sess.UserID, ref)
+	})
 	switch {
 	case err == nil && d.Charge == 0:
-		return turnCharge{}, false, nil
+		return turnCharge{}, true, fiber.NewError(fiber.StatusConflict, errTurnQueueFull.Error())
 	case err == nil:
 		return turnCharge{feature: plan.FeatureSupport, ref: ref}, false, nil
 	case errors.Is(err, plan.ErrRefused):

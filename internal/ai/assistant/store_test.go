@@ -76,6 +76,10 @@ func (f *fakeQueries) GetAssistantSessionForJob(_ context.Context, arg db.GetAss
 	}, nil
 }
 
+func (f *fakeQueries) GetEmptyAssistantSession(_ context.Context, _ db.GetEmptyAssistantSessionParams) (db.GetEmptyAssistantSessionRow, error) {
+	return db.GetEmptyAssistantSessionRow{}, pgx.ErrNoRows
+}
+
 func (f *fakeQueries) DeleteAssistantSession(_ context.Context, _ db.DeleteAssistantSessionParams) (int64, error) {
 	return f.deleted, nil
 }
