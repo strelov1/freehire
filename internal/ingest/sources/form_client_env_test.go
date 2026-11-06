@@ -44,8 +44,23 @@ func TestNewFormClientFromEnv_EitherProxyCarriesEveryRequest(t *testing.T) {
 			}
 			// The gateway hands out a new exit per connection, so only a client that closes
 			// each one gets a fresh exit per request.
-			if got := c.httpClient.Transport.(*http.Transport).DisableKeepAlives; got != tc.freshExit {
-				t.Errorf("DisableKeepAlives = %v, want %v", got, tc.freshExit)
+			tr := c.httpClient.Transport.(*http.Transport)
+			if tr.DisableKeepAlives != tc.freshExit {
+				t.Errorf("DisableKeepAlives = %v, want %v", tr.DisableKeepAlives, tc.freshExit)
+			}
+			if tr.Proxy == nil {
+				t.Fatal("transport has no proxy")
+			}
+			req, err := http.NewRequest(http.MethodGet, "https://apply.workable.com/", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := tr.Proxy(req)
+			if err != nil || got == nil {
+				t.Fatalf("proxy = %v, error = %v", got, err)
+			}
+			if got.String() != tc.wantProxy {
+				t.Errorf("proxy = %s, want %s", got, tc.wantProxy)
 			}
 		})
 	}
