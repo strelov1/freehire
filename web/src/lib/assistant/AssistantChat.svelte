@@ -797,8 +797,10 @@
         // The stream broke, not the turn: it runs on the server under its own bounds and
         // stores everything it does. Marking the message as failed would tell the user
         // their CV edits were lost when they were not — so we re-read the session and show
-        // whatever the agent has managed so far.
-        await reloadTranscript(id);
+        // whatever the agent has managed so far. A support session cannot be re-read that
+        // way, so the rest of its answer is lost: say so rather than leave a silent cut.
+        if (isSupport && id === activeId) setError(s.supportInterrupted);
+        else await reloadTranscript(id);
         endTurn();
         return;
       }

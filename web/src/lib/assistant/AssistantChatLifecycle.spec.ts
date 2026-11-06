@@ -38,3 +38,27 @@ it('does not start an opening after its host replaced a still-loading conversati
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/messages'))).toBe(false);
 });
+
+it('warns that a support answer may be cut off when its stream drops', async () => {
+  // A support session cannot be re-read through the generic transcript route, so a dropped
+  // stream loses the rest of the answer; the chat must say so rather than stop silently.
+  const dropped = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.error(new Error('network went away'));
+    },
+  });
+  const fetcher = vi.fn((url: string) => {
+    if (String(url).endsWith('/support/sessions')) {
+      return Promise.resolve(Response.json({ data: { id: 'support-1', preset: 'support', label: '' } }));
+    }
+    if (String(url).endsWith('/support/sessions/support-1/messages')) {
+      return Promise.resolve(new Response(dropped, { status: 200, headers: { 'content-type': 'text/event-stream' } }));
+    }
+    return Promise.resolve(Response.json({ data: [] }));
+  });
+  vi.stubGlobal('fetch', fetcher);
+  const { findByText } = render(AssistantChat, {
+    preset: 'support', kickoff: 'Where is my refund?', showSessionRail: false,
+  });
+  expect(await findByText(/this answer may be cut off/)).toBeTruthy();
+});
