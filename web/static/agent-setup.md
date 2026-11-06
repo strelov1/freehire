@@ -1,6 +1,6 @@
 These are the official instructions from freehire (freehire.me) for setting up an AI agent to search IT jobs, compare them with the user's skills, and track applications. freehire is a free, open-source job aggregator; public search needs no account.
 
-Complete the steps below yourself by running the commands directly. Do not ask the user to run them, except where a step says the user must approve something in their browser or start a new session.
+Complete the steps below yourself by running the commands directly. Do not ask the user to run them, except where a step says the user must do something: approve a sign-in in their browser, start a new session, or run `/reload-plugins`.
 
 - Connect the freehire MCP server
 - (Optional) Install the freehire CLI and its agent skills
