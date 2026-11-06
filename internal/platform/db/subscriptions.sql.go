@@ -15,6 +15,7 @@ const claimSubscriptionMatches = `-- name: ClaimSubscriptionMatches :many
 WITH claimable AS (
     SELECT m.subscription_id, m.job_id, s.user_id, s.channel, pl.last_sent AS person_last_sent_at
     FROM subscriptions s
+    JOIN saved_searches ss ON ss.id = s.saved_search_id
     -- Joined BEFORE the lateral so the interval gate below references only relations
     -- that exist under it: the planner then applies the gate at this join, and the
     -- lateral's FOR UPDATE never locks a non-due subscription's rows only for them to
@@ -38,6 +39,7 @@ WITH claimable AS (
           AND mm.notified_at IS NULL
           AND mm.failed_at IS NULL
           AND mm.expired_at IS NULL
+          AND mm.query_revision = ss.query_revision
           AND (mm.claimed_at IS NULL
                OR mm.claimed_at < now() - make_interval(secs => $1::int))
         ORDER BY mm.matched_at DESC, mm.job_id DESC
@@ -151,12 +153,15 @@ func (q *Queries) ClaimSubscriptionMatches(ctx context.Context, arg ClaimSubscri
 
 const countCoveredMatches = `-- name: CountCoveredMatches :one
 SELECT count(*)
-FROM subscription_matches
-WHERE subscription_id = $1
-  AND notified_at IS NULL
-  AND failed_at IS NULL
-  AND expired_at IS NULL
-  AND (matched_at, job_id) < ($2::timestamptz, $3::bigint)
+FROM subscription_matches m
+JOIN subscriptions s ON s.id = m.subscription_id
+JOIN saved_searches ss ON ss.id = s.saved_search_id
+WHERE m.subscription_id = $1
+  AND m.notified_at IS NULL
+  AND m.failed_at IS NULL
+  AND m.expired_at IS NULL
+  AND m.query_revision = ss.query_revision
+  AND (m.matched_at, m.job_id) < ($2::timestamptz, $3::bigint)
 `
 
 type CountCoveredMatchesParams struct {
@@ -307,13 +312,16 @@ WITH stale AS (
     SELECT m.subscription_id, m.job_id
     FROM subscription_matches m
     JOIN jobs j ON j.id = m.job_id
+    JOIN subscriptions s ON s.id = m.subscription_id
+    JOIN saved_searches ss ON ss.id = s.saved_search_id
     WHERE m.notified_at IS NULL
       AND m.failed_at IS NULL
       AND m.expired_at IS NULL
       AND (m.claimed_at IS NULL
            OR m.claimed_at < now() - make_interval(secs => $1::int))
       AND (m.matched_at < now() - make_interval(secs => $2::int)
-           OR j.closed_at IS NOT NULL)
+           OR j.closed_at IS NOT NULL
+           OR m.query_revision <> ss.query_revision)
     LIMIT $3
     FOR UPDATE OF m SKIP LOCKED
 )
@@ -557,7 +565,7 @@ func (q *Queries) GetSubscriptionTarget(ctx context.Context, arg GetSubscription
 }
 
 const listActiveSubscriptions = `-- name: ListActiveSubscriptions :many
-SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query,
+SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query, ss.query_revision,
        s.last_digest_sent_at, s.last_searched_at,
        u.timezone AS timezone,
        COALESCE(ns.digest_frequency, 'interval')::text AS digest_frequency,
@@ -580,6 +588,7 @@ type ListActiveSubscriptionsRow struct {
 	Destination         pgtype.Text        `json:"destination"`
 	StartAt             pgtype.Timestamptz `json:"start_at"`
 	Query               string             `json:"query"`
+	QueryRevision       int32              `json:"query_revision"`
 	LastDigestSentAt    pgtype.Timestamptz `json:"last_digest_sent_at"`
 	LastSearchedAt      pgtype.Timestamptz `json:"last_searched_at"`
 	Timezone            pgtype.Text        `json:"timezone"`
@@ -628,6 +637,7 @@ func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubs
 			&i.Destination,
 			&i.StartAt,
 			&i.Query,
+			&i.QueryRevision,
 			&i.LastDigestSentAt,
 			&i.LastSearchedAt,
 			&i.Timezone,
@@ -649,10 +659,12 @@ func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubs
 
 const listSubscriptionDeliveryStats = `-- name: ListSubscriptionDeliveryStats :many
 SELECT m.subscription_id,
-       count(*) FILTER (WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL) AS pending,
+       count(*) FILTER (WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL
+                        AND m.query_revision = ss.query_revision) AS pending,
        max(m.notified_at)::timestamptz AS last_delivered_at
 FROM subscription_matches m
 JOIN subscriptions s ON s.id = m.subscription_id
+JOIN saved_searches ss ON ss.id = s.saved_search_id
 WHERE s.user_id = $1
 GROUP BY m.subscription_id
 `
@@ -863,13 +875,17 @@ func (q *Queries) ListUserEmailSubscriptions(ctx context.Context, userID int64) 
 }
 
 const markCoveredMatchesNotified = `-- name: MarkCoveredMatchesNotified :execrows
-UPDATE subscription_matches
+UPDATE subscription_matches m
 SET notified_at = now()
-WHERE subscription_id = $1
-  AND notified_at IS NULL
-  AND failed_at IS NULL
-  AND expired_at IS NULL
-  AND (matched_at, job_id) < ($2::timestamptz, $3::bigint)
+FROM subscriptions s, saved_searches ss
+WHERE s.id = m.subscription_id
+  AND ss.id = s.saved_search_id
+  AND m.subscription_id = $1
+  AND m.notified_at IS NULL
+  AND m.failed_at IS NULL
+  AND m.expired_at IS NULL
+  AND m.query_revision = ss.query_revision
+  AND (m.matched_at, m.job_id) < ($2::timestamptz, $3::bigint)
 `
 
 type MarkCoveredMatchesNotifiedParams struct {
@@ -981,20 +997,33 @@ func (q *Queries) RecordMatchDeliveryFailure(ctx context.Context, arg RecordMatc
 }
 
 const recordSubscriptionMatches = `-- name: RecordSubscriptionMatches :execrows
-INSERT INTO subscription_matches (subscription_id, job_id)
-SELECT s.id, pairs.job_id
+INSERT INTO subscription_matches (subscription_id, job_id, query_revision)
+SELECT s.id, pairs.job_id, pairs.query_revision
 FROM (
     SELECT unnest($1::bigint[]) AS subscription_id,
-           unnest($2::bigint[]) AS job_id
+           unnest($2::bigint[]) AS job_id,
+           unnest($3::int[]) AS query_revision
 ) pairs
 JOIN subscriptions s ON s.id = pairs.subscription_id
+JOIN saved_searches ss ON ss.id = s.saved_search_id AND ss.query_revision = pairs.query_revision
 FOR KEY SHARE OF s
-ON CONFLICT (subscription_id, job_id) DO NOTHING
+FOR SHARE OF ss
+ON CONFLICT (subscription_id, job_id) DO UPDATE
+SET query_revision = EXCLUDED.query_revision,
+    matched_at     = now(),
+    claimed_at     = NULL,
+    attempts       = 0,
+    last_error     = NULL,
+    failed_at      = NULL,
+    expired_at     = NULL
+WHERE subscription_matches.query_revision < EXCLUDED.query_revision
+  AND subscription_matches.notified_at IS NULL
 `
 
 type RecordSubscriptionMatchesParams struct {
 	SubscriptionIds []int64 `json:"subscription_ids"`
 	JobIds          []int64 `json:"job_ids"`
+	QueryRevisions  []int32 `json:"query_revisions"`
 }
 
 // Record that a batch of (subscription, job) pairs matched, one round trip for
@@ -1014,8 +1043,16 @@ type RecordSubscriptionMatchesParams struct {
 // Join their current rows so one unsubscribe cannot fail the entire query group's
 // batch. Lock those parents through the insert: an existence check alone still races
 // with a DELETE that commits after this statement takes its snapshot.
+//
+// Each pair carries the query revision its search ran under (a third aligned array), and a
+// pair is recorded only while the saved search is still at that revision: an edit that
+// commits between the pass reading the query and recording its hits must not let the old
+// query's results in after the edit cleared the pending set. The saved search row is locked
+// through the insert for the same reason as the subscription. On conflict, a still-pending
+// row of an OLDER revision is reset to the new one, or a job the new query also matches
+// would stay blocked behind the leftover row claiming ignores.
 func (q *Queries) RecordSubscriptionMatches(ctx context.Context, arg RecordSubscriptionMatchesParams) (int64, error) {
-	result, err := q.db.Exec(ctx, recordSubscriptionMatches, arg.SubscriptionIds, arg.JobIds)
+	result, err := q.db.Exec(ctx, recordSubscriptionMatches, arg.SubscriptionIds, arg.JobIds, arg.QueryRevisions)
 	if err != nil {
 		return 0, err
 	}

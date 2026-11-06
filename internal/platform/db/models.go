@@ -1487,6 +1487,7 @@ type SavedSearch struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	DerivedFromProfile bool               `json:"derived_from_profile"`
+	QueryRevision      int32              `json:"query_revision"`
 }
 
 type ScreeningAnswer struct {
@@ -1627,6 +1628,7 @@ type SubscriptionMatch struct {
 	FailedAt       pgtype.Timestamptz `json:"failed_at"`
 	LastError      string             `json:"last_error"`
 	ExpiredAt      pgtype.Timestamptz `json:"expired_at"`
+	QueryRevision  int32              `json:"query_revision"`
 }
 
 type TelegramChannel struct {

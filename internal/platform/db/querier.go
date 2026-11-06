@@ -6396,6 +6396,14 @@ type Querier interface {
 	// Join their current rows so one unsubscribe cannot fail the entire query group's
 	// batch. Lock those parents through the insert: an existence check alone still races
 	// with a DELETE that commits after this statement takes its snapshot.
+	//
+	// Each pair carries the query revision its search ran under (a third aligned array), and a
+	// pair is recorded only while the saved search is still at that revision: an edit that
+	// commits between the pass reading the query and recording its hits must not let the old
+	// query's results in after the edit cleared the pending set. The saved search row is locked
+	// through the insert for the same reason as the subscription. On conflict, a still-pending
+	// row of an OLDER revision is reset to the new one, or a job the new query also matches
+	// would stay blocked behind the leftover row claiming ignores.
 	RecordSubscriptionMatches(ctx context.Context, arg RecordSubscriptionMatchesParams) (int64, error)
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
@@ -7915,6 +7923,11 @@ type Querier interface {
 	// the ledger's unique key would otherwise stop a job the new query also matches from being
 	// recorded again. A leased row is left alone, since a send already holds it. last_searched_at
 	// stays: clearing it would re-read a page of postings the subscriber was never owed.
+	//
+	// The DELETE only covers rows that exist now. query_revision (raised here, by one, only when
+	// the query text differs) is what covers the rest: each match records the revision it
+	// answered, so a leased row that is released or whose lease lapses, and a match recorded by
+	// a pass that read the old query, are ignored by claiming and refused by recording.
 	UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchParams) (SavedSearch, error)
 	// Set the account's preferred interface language. The handler validates the code
 	// against the curated set before this runs (also enforced by the DB CHECK
