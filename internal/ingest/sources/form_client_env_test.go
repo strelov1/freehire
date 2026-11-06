@@ -24,12 +24,12 @@ func TestNewFormClientFromEnv_NoProxyIsReported(t *testing.T) {
 // fresh exit per request is what keeps any one address from being banned.
 func TestNewFormClientFromEnv_EitherProxyCarriesEveryRequest(t *testing.T) {
 	for name, tc := range map[string]struct {
-		rotating, fixed string
-		freshExit       bool
+		rotating, fixed, wantProxy string
+		freshExit                  bool
 	}{
-		"rotating": {"http://u:p@rotating.example:8000", "", true},
-		"fixed":    {"", "http://u:p@fixed.example:8000", false},
-		"both":     {"http://u:p@rotating.example:8000", "http://u:p@fixed.example:8000", true},
+		"rotating": {"http://u:p@rotating.example:8000", "", "http://u:p@rotating.example:8000", true},
+		"fixed":    {"", "http://u:p@fixed.example:8000", "http://u:p@fixed.example:8000", false},
+		"both":     {"http://u:p@rotating.example:8000", "http://u:p@fixed.example:8000", "http://u:p@rotating.example:8000", true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("SOURCES_ROTATING_PROXY_URL", tc.rotating)
