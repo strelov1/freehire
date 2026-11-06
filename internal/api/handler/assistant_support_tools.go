@@ -54,6 +54,15 @@ type accountAllowance struct {
 	Unlimited bool   `json:"unlimited"`
 }
 
+// supportAllowance is today's support-message allowance: separate from the plan features and
+// flat for every tier, so it never appears among the allowances.
+type supportAllowance struct {
+	Limit     int    `json:"limit"`
+	Used      int    `json:"used"`
+	Remaining int    `json:"remaining"`
+	ResetsAt  string `json:"resets_at"`
+}
+
 type accountHistoryEntry struct {
 	Label string `json:"label"`
 	Date  string `json:"date"`
@@ -66,6 +75,7 @@ type accountSummary struct {
 	ValidUntil    string                `json:"valid_until,omitempty"`
 	PaymentSource string                `json:"payment_source,omitempty"`
 	Allowances    []accountAllowance    `json:"allowances_today"`
+	SupportToday  supportAllowance      `json:"support_messages_today"`
 	Recent        []accountHistoryEntry `json:"recent_activity"`
 }
 
@@ -88,7 +98,7 @@ func (h *assistantHandlers) myAccountTool() assistant.Tool {
 		Title:  "Read my plan and usage",
 		Effect: assistant.EffectReads,
 		Description: "Read the signed-in user's own plan: the tier, when it is valid until, how it was paid " +
-			"(card, app store or granted), what is left of today's allowances and their latest plan activity. " +
+			"(card, app store or granted), what is left of today's allowances, how many support messages are left today and their latest plan activity. " +
 			"Call it before saying anything about their plan, payment or limits. Takes no arguments.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
@@ -103,7 +113,15 @@ func (h *assistantHandlers) myAccountTool() assistant.Tool {
 			if err != nil {
 				return nil, err
 			}
+			support, err := h.plans.SupportStanding(ctx, userID)
+			if err != nil {
+				return nil, err
+			}
 			out := accountSummary{
+				SupportToday: supportAllowance{
+					Limit: support.Limit, Used: support.Used, Remaining: support.Remaining,
+					ResetsAt: support.ResetsAt.UTC().Format(time.RFC3339),
+				},
 				Plan:          p.Plan,
 				PaymentSource: paymentSourceLabel(p.ProSource),
 				Allowances:    make([]accountAllowance, 0, len(p.Allowances)),
