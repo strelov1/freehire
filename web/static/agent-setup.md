@@ -25,8 +25,9 @@ For personal tools, run `claude mcp login freehire` or tell the user to open `/m
 
 ```
 codex mcp add freehire --url https://freehire.me/api/v1/mcp
-codex mcp login freehire
 ```
+
+For personal tools, run `codex mcp login freehire` and let the user approve it in their browser. Skip it if they only want to search.
 
 ### Gemini CLI
 
@@ -58,9 +59,7 @@ Do this only if you run in a terminal on the user's machine (Claude Code, Codex,
 curl -fsSL https://freehire.me/install.sh | sh
 ```
 
-Then install the skills (job search, market fit, CV tailoring, application tracking, inbox triage).
-
-### Claude Code
+In Claude Code, also install the plugin with the skills (job search, market fit, CV tailoring, application tracking, inbox triage):
 
 ```
 claude plugin marketplace add strelov1/freehire-cli
@@ -69,11 +68,7 @@ claude plugin install freehire@freehire-cli
 
 Then tell the user to run `/reload-plugins` inside Claude Code to activate them.
 
-### Other agents
-
-```
-npx -y skills add strelov1/freehire-cli --skill '*' --yes --global
-```
+Other agents use the CLI directly; `freehire --help` lists every command.
 
 Account features in the CLI need `freehire auth login`, which opens the user's browser. Run it only if the user wants to save or track jobs.
 

@@ -11,6 +11,8 @@
     `Fetch and execute the appropriate instructions to set me up for freehire from ${page.url.origin}/agent-setup.md`
   );
   let copied = $state(false);
+  // Clipboard can be denied; then the prompt is shown so it can be selected by hand.
+  let failed = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
   onDestroy(() => clearTimeout(timer));
 
@@ -22,7 +24,8 @@
       clearTimeout(timer);
       timer = setTimeout(() => (copied = false), 1800);
     } catch {
-      announce('Could not copy. Select the text and copy it manually.');
+      failed = true;
+      announce('Could not copy. Select the prompt below and copy it manually.');
     }
   }
 </script>
@@ -38,3 +41,7 @@
   </button>
   <span class="text-sm text-muted-foreground">Copies a setup prompt for Claude Code, Codex, Cursor or Gemini CLI.</span>
 </div>
+{#if failed}
+  <p class="mt-3 text-sm text-muted-foreground">Could not copy. Select the prompt and copy it yourself:</p>
+  <code class="mt-2 block select-all break-words rounded-md border border-border bg-secondary/40 p-3 font-mono text-sm">{prompt}</code>
+{/if}
