@@ -205,7 +205,7 @@ func (rn *run) unreachableFallback(context.Context, Claimed) outbox.Outcome {
 
 // processBatch indexes a whole wave in one batch and completes it in one call. Any
 // batch-level failure (a corrupted-row load, a batch index error, a partial load)
-// falls back to per-item processing so one bad entry can't sink the wave.
+// splits the wave (see split) so one bad entry can't sink the wave.
 func (rn *run) processBatch(ctx context.Context, entries []Claimed) {
 	if len(entries) == 0 {
 		return
@@ -219,11 +219,11 @@ func (rn *run) processBatch(ctx context.Context, entries []Claimed) {
 		if rn.skipOnContextEnd(callCtx, entries, "load jobs") {
 			return
 		}
-		rn.fallback(ctx, entries)
+		rn.split(ctx, entries, fmt.Errorf("load jobs: %w", err))
 		return
 	}
 	if len(jobs) != len(entries) {
-		rn.fallback(ctx, entries)
+		rn.split(ctx, entries, fmt.Errorf("loaded %d of %d jobs", len(jobs), len(entries)))
 		return
 	}
 	if err := rn.indexer.IndexBatch(callCtx, jobs); err != nil {
@@ -235,7 +235,7 @@ func (rn *run) processBatch(ctx context.Context, entries []Claimed) {
 				"lease-expiry retry: %v", len(entries), err)
 			return
 		}
-		rn.fallback(ctx, entries)
+		rn.split(ctx, entries, fmt.Errorf("index: %w", err))
 		return
 	}
 	if err := rn.store.Complete(callCtx, entries); err != nil {
@@ -283,9 +283,29 @@ func (rn *run) skipOnContextEnd(callCtx context.Context, entries []Claimed, stag
 	return true
 }
 
-func (rn *run) fallback(ctx context.Context, entries []Claimed) {
-	for _, e := range entries {
-		rn.processOne(ctx, e)
+// split retries a failed batch as two halves, each going through processBatch again,
+// down to single entries, which processOne isolates and charges.
+//
+// It halves rather than falling straight back to per-item because a push to this index
+// costs about the same whatever its size (see skipOnContextEnd). A wave the index
+// rejects as a whole — a payload over Meilisearch's HTTP size limit (413) is one — needs
+// a split or two, and one poison row among N entries costs ~2*log2(N) pushes. Per-item
+// costs N: on 2026-11-06 a 15000-entry wave over the 100 MB limit went one document at a
+// time at ~22s each, holding the run (and with it the timer) for what would have been
+// ~90 hours while the queue grew past 1.7M.
+func (rn *run) split(ctx context.Context, entries []Claimed, cause error) {
+	if len(entries) == 1 {
+		rn.processOne(ctx, entries[0])
+		return
+	}
+	log.Printf("search-drain: batch of %d failed, retrying as two halves: %v", len(entries), cause)
+	mid := len(entries) / 2
+	for _, half := range [][]Claimed{entries[:mid], entries[mid:]} {
+		if len(half) == 1 {
+			rn.processOne(ctx, half[0])
+			continue
+		}
+		rn.processBatch(ctx, half)
 	}
 }
 
