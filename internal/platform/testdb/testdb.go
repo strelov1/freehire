@@ -32,6 +32,7 @@ package testdb
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -40,6 +41,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -199,7 +201,9 @@ func bootExternal(ctx context.Context, adminURL string, scripts []string) (*cont
 	c := &container{
 		base:     *base,
 		template: name,
-		prefix:   fmt.Sprintf("hire_test_%d", os.Getpid()),
+		// The random part: a killed run leaves its databases behind on a server that
+		// outlives it, and a later binary reusing the pid would collide with them.
+		prefix: fmt.Sprintf("hire_test_%d_%s", os.Getpid(), strings.ToLower(rand.Text()[:6])),
 	}
 	admin, err := pgxpool.New(ctx, adminURL)
 	if err != nil {
@@ -254,7 +258,9 @@ func (c *container) ensureTemplate(ctx context.Context, admin *pgxpool.Pool, scr
 		return fmt.Errorf("look up %s: %w", c.template, err)
 	}
 	if exists {
-		return nil
+		// Using it counts as building it, for dropStaleTemplates: another branch's build
+		// takes this same lock, so a template in use is never a week old when it looks.
+		return c.stamp(ctx, conn)
 	}
 
 	building := c.template + "_building"
@@ -271,11 +277,19 @@ func (c *container) ensureTemplate(ctx context.Context, admin *pgxpool.Pool, scr
 	if _, err := conn.Exec(ctx, `ALTER DATABASE "`+building+`" RENAME TO "`+c.template+`"`); err != nil {
 		return fmt.Errorf("finish %s: %w", c.template, err)
 	}
-	// The build time, for dropStaleTemplates: pg_database records none.
+	if err := c.stamp(ctx, conn); err != nil {
+		return err
+	}
+	dropStaleTemplates(ctx, conn, c.template)
+	return nil
+}
+
+// stamp records when the template was last built or used, for dropStaleTemplates:
+// pg_database keeps no such time, so it goes in the database's comment.
+func (c *container) stamp(ctx context.Context, conn *pgxpool.Conn) error {
 	if _, err := conn.Exec(ctx, `COMMENT ON DATABASE "`+c.template+`" IS '`+time.Now().UTC().Format(time.RFC3339)+`'`); err != nil {
 		return fmt.Errorf("stamp %s: %w", c.template, err)
 	}
-	dropStaleTemplates(ctx, conn, c.template)
 	return nil
 }
 
@@ -308,8 +322,8 @@ func (c *container) migrate(ctx context.Context, database string, scripts []stri
 	return nil
 }
 
-// dropStaleTemplates drops templates of other migrations built over staleTemplateAge
-// ago. Best effort and never forced: a template another run is cloning right now is
+// dropStaleTemplates drops templates of other migrations last built or used over
+// staleTemplateAge ago. Best effort and never forced: a template another run is cloning right now is
 // left for a later build to retry.
 func dropStaleTemplates(ctx context.Context, conn *pgxpool.Conn, current string) {
 	rows, err := conn.Query(ctx, `SELECT d.datname, coalesce(shobj_description(d.oid, 'pg_database'), '')
