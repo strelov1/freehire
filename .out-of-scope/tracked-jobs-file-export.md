@@ -3,7 +3,7 @@
 This project serves the tracker as JSON and offers no separate download. `GET /api/v1/me/tracking`
 (cookie or a full-scope API key) returns every tracked posting with its stage, notes and the dates
 it was viewed, saved and applied to, paged; the account MCP server's `my_jobs` tool returns the
-same rows to an agent.
+same rows to an agent, up to 20 a call, paged with `offset` against its `total`.
 
 ## Why this is out of scope
 
