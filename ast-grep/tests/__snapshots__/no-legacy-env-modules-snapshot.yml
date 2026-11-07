@@ -1,0 +1,22 @@
+id: no-legacy-env-modules
+snapshots:
+  "import { API_INTERNAL_URL } from \"$env/static/private\";":
+    labels:
+    - source: import { API_INTERNAL_URL } from "$env/static/private";
+      style: primary
+      start: 0
+      end: 55
+    - source: "\"$env/static/private\""
+      style: secondary
+      start: 33
+      end: 54
+  "import { env } from '$env/dynamic/public';":
+    labels:
+    - source: import { env } from '$env/dynamic/public';
+      style: primary
+      start: 0
+      end: 42
+    - source: "'$env/dynamic/public'"
+      style: secondary
+      start: 20
+      end: 41

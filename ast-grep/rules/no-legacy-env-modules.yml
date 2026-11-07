@@ -1,0 +1,13 @@
+id: no-legacy-env-modules
+language: TypeScript
+severity: error
+message: "the legacy $env/* modules; fix: import from $app/env/public or $app/env/private, and declare the variable in web/src/env.ts"
+note: >-
+  SvelteKit 3 exposes only the variables web/src/env.ts declares, whichever module reads
+  them, so an undeclared one is undefined at runtime and nothing reports it. $env/* is the
+  SvelteKit 2 spelling agents reach for by habit; the repository reads $app/env.
+rule:
+  kind: import_statement
+  has:
+    field: source
+    regex: ^['"]\$env/

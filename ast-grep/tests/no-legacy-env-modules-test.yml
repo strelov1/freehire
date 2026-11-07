@@ -1,0 +1,7 @@
+id: no-legacy-env-modules
+valid:
+  - import { env } from '$app/env/public';
+  - import { browser } from '$app/env';
+invalid:
+  - import { env } from '$env/dynamic/public';
+  - import { API_INTERNAL_URL } from "$env/static/private";

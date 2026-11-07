@@ -112,6 +112,19 @@ pre-commit:
     #
     # Unlike govulncheck above, a missing binary FAILS. A scanner that quietly
     # skips is worse than no scanner: it makes the commit look examined.
+    # The rules in ast-grep/rules over the staged files. Unlike gitleaks it steps aside when
+    # the binary is missing (`mise install` brings it): the ast-grep CI job is the gate.
+    ast-grep:
+      glob:
+        - "**/*.go"
+        - "**/*.ts"
+        - "**/*.svelte"
+      run: |
+        if ! command -v ast-grep >/dev/null 2>&1; then
+          echo 'ast-grep is not installed (mise install); the ast-grep CI job will check.'
+          exit 0
+        fi
+        ast-grep scan --error {staged_files}
     gitleaks:
       run: |
         if ! command -v gitleaks >/dev/null 2>&1; then

@@ -1,0 +1,16 @@
+id: no-sparkles-icon
+language: TypeScript
+severity: error
+message: "the Sparkles icon marks AI here; fix: say it in words (a label, or a `beta` badge) instead of the icon"
+note: The owner asked for it gone. It reads as decoration and promises magic the feature does not do.
+rule:
+  kind: import_specifier
+  has:
+    field: name
+    regex: ^Sparkles?(Icon)?$
+  inside:
+    kind: import_statement
+    stopBy: end
+    has:
+      kind: string
+      regex: lucide

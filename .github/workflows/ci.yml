@@ -408,6 +408,37 @@ jobs:
       - name: Audit the workflows for security
         run: pipx run zizmor==1.31.1 --offline .github/workflows
 
+  # The repository's own syntax rules (sgconfig.yml, ast-grep/rules). `ast-grep test` proves
+  # each rule still flags what its test file says it flags, so a rule that silently stopped
+  # matching fails here rather than passing everything; `scan --error` holds the code to them.
+  # A rule is turned on with its violations fixed, never with a baseline of known ones.
+  ast-grep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Checked before it is unpacked, like gitleaks: the digest is the release's own and
+      # moves with AST_GREP_VERSION, which .mise.toml pins too (bump both together).
+      - name: Install ast-grep
+        env:
+          AST_GREP_VERSION: 0.51.1
+          AST_GREP_SHA256: 42514f77ae0c8a25d7d32154d31d3e7e16f3ab894f8ce76ce417de234ee49157
+        run: |
+          curl -fsSL "https://github.com/ast-grep/ast-grep/releases/download/${AST_GREP_VERSION}/app-x86_64-unknown-linux-gnu.zip" -o /tmp/ast-grep.zip
+          echo "${AST_GREP_SHA256}  /tmp/ast-grep.zip" | sha256sum --check --strict -
+          unzip -q /tmp/ast-grep.zip ast-grep -d /tmp/ast-grep
+          sudo install -m 0755 /tmp/ast-grep/ast-grep /usr/local/bin/ast-grep
+          ast-grep --version
+
+      - name: Test the rules
+        run: ast-grep test
+
+      - name: Scan the code
+        run: ast-grep scan --error
+
   # Dead files, unused dependencies and unresolved binaries across the three JS packages.
   # Read knip.config.js for where the gate's line is drawn and why exports sit outside it.
   #
