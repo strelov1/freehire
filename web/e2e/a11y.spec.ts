@@ -1,8 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { COMPANY_SLUG, JOB_SLUG } from './a11y/fixtures.ts';
+import { STUB_PORT } from './a11y/ports.ts';
 
-const STUB = `http://127.0.0.1:18091`;
+const STUB = `http://127.0.0.1:${STUB_PORT}`;
 
 // What a page must show to count as rendered. An error page or a 404 is a perfectly
 // accessible page, so without this a missing fixture would pass the scan silently.
