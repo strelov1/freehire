@@ -1,0 +1,23 @@
+# A region facet at state or province level (GeoNames admin levels)
+
+This project does not offer a filter by state, Land or province. Places resolve offline to a city
+(`cities`) and a metro area (`metros`); countries and regions sit above them.
+
+## Why this is out of scope
+
+- Local spellings already resolve: the location dictionary is built from GeoNames `cities1000` with
+  every alternate name, so "München", "Muenchen" and "Monaco di Baviera" are one place at ingest,
+  and the `cities` filter resolves them too (#3651). "Near a place" is the `metros` facet.
+- The missing piece is the admin level, and demand for it was measured: searches naming a state or
+  Land were about 0.13% of all searches (2026-10-27), almost none for German Länder. That does not
+  pay for a new facet plus a backfill of the catalogue. Which level would even serve is different
+  per country (ADM1 for Albania, ADM2 for Belgium, neither for Slovenia).
+- A live GeoNames API is out either way: the dictionaries are offline by design, and the free
+  quota is far below ingest volume.
+
+Revisit if searches naming a state or province grow well past that share, or a market we serve
+needs sub-country filtering that `metros` cannot give.
+
+## Prior requests
+
+- #3653: "City names and geographical regions"

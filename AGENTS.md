@@ -8,6 +8,7 @@ Guidance for AI agents working in this repository.
 - **MVP stage — keep the architecture fluid.** The current structure is not load-bearing legacy. When a new feature doesn't fit cleanly, prefer reshaping the affected part over bolting on an awkward special case.
 - **Surgical changes.** Clean up what your change orphaned; leave pre-existing dead code alone. Prefer a library's intended API over a clever shim.
 - **English only.** All code, comments, identifiers, docs, and commits.
+- **Read [.out-of-scope/](.out-of-scope/README.md) before proposing or starting something new.** It holds the ideas this project already declined, each with what was checked and what would reopen it. A request that matches an entry is answered with its link, not investigated again; a decision that is reversed is deleted there.
 
 ## What this is
 
