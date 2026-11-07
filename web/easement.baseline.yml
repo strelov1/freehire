@@ -11,33 +11,8 @@ violations:
   target: src/lib/components/JobRow.svelte
   from: assistant
   to: components
-- rule: dependency
-  file: src/lib/components/JobDrawer.svelte
-  target: src/lib/tailor/tailorHref.ts
-  from: components
-  to: tailor
-- rule: dependency
-  file: src/lib/components/JobView.svelte
-  target: src/lib/tailor/tailorHref.ts
-  from: components
-  to: tailor
-- rule: dependency
-  file: src/lib/components/cv/JdIntakeDialog.svelte
-  target: src/lib/tailor/tailorHref.ts
-  from: components
-  to: tailor
-- rule: dependency
-  file: src/lib/components/cv/MarginSettings.svelte
-  target: src/lib/tailor/geometry.ts
-  from: components
-  to: tailor
-- rule: dependency
-  file: src/lib/components/cv/StyleSettings.svelte
-  target: src/lib/tailor/geometry.ts
-  from: components
-  to: tailor
 - rule: cycle
   file: ''
   target: ''
-  from: assistant,components,tailor
+  from: assistant,components
   to: ''

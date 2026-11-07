@@ -16,7 +16,7 @@
   // they read identically. Splitter width is clamped by the vitest-covered clampWidth.
   import { resolve } from '$app/paths';
   import { ExternalLink, PanelRightClose, PanelRightOpen } from '@lucide/svelte';
-  import { clampWidth, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from './geometry';
+  import { clampWidth, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from '#lib/cvGeometry.js';
   import { tablist } from '#lib/actions/tablist.js';
   import JobDescription from '#lib/components/JobDescription.svelte';
   import MatchAnalysisFull from '#lib/components/MatchAnalysisFull.svelte';

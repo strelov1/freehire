@@ -21,7 +21,7 @@
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
   import { askConfirmTailor } from '#lib/confirmTailorDialog.svelte.js';
-  import { tailorHref } from '#lib/tailor/tailorHref.js';
+  import { tailorHref } from '#lib/tailorHref.js';
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { formatSalary, summaryFacets } from '#lib/enrichment.js';

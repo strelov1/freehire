@@ -1,5 +1,5 @@
 import type { Margins } from '#lib/generated/contracts.js';
-import { must } from '../utils';
+import { must } from './utils';
 
 /** Clamp a pixel width to [min, max], rounded to whole pixels. Used by the artifact-panel
  *  splitter so a drag can't collapse or overflow the panel. */
