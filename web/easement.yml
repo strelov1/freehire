@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/mokevnin/easement/main/easement.schema.json
+# The boundaries of the SvelteKit app, checked by easement: `easement check` in this
+# directory, a step of the `web-work` CI job. A dependency between two components that is
+# not listed here fails; add it here, with its reason, when it is meant. The Go backend
+# keeps its own guard (internal/platform/arch/layering), so this file covers web/ only.
+# The violations that predate it are recorded in easement.baseline.yml, which only shrinks.
+# A cycle is recorded there as a whole group, so each one also has a forbidden direction
+# below: its existing imports are baselined one by one, and a new one fails.
+version: 1
+tests: auto
+
+components:
+  routes: { in: src/routes }
+  hooks: { in: "src/*.ts" }
+  server:
+    in: src/lib/server
+    allow_importers: [routes, hooks, tests]
+  generated: { in: src/lib/generated }
+  components: { in: src/lib/components }
+  assistant: { in: src/lib/assistant }
+  tailor: { in: src/lib/tailor }
+  actions: { in: src/lib/actions }
+  i18n: { in: src/lib/i18n }
+  ui: { in: src/lib/ui }
+  data: { in: src/lib/data }
+  docs: { in: src/lib/docs }
+  fixtures: { in: src/lib/fixtures }
+  lib: { in: src/lib }
+
+rules:
+  routes:
+    may_depend_on: [hooks, server, generated, components, assistant, tailor, actions, i18n, ui, docs, lib]
+  hooks: { may_depend_on: [lib] }
+  server:
+    may_depend_on: [lib, generated]
+    because: lib/server runs only on the server, so only routes and hooks import it; code a component needs too belongs in src/lib
+  tailor: { may_depend_on: [assistant, components, actions, generated, i18n, ui, lib] }
+  assistant:
+    may_depend_on: [generated, i18n, ui, lib]
+    because: components embed the assistant, not the other way; what both need belongs in src/lib
+  components:
+    may_depend_on: [assistant, actions, generated, i18n, ui, lib]
+    because: a component never reaches into a route, lib/server or the tailor workspace that is built from components; a page passes it what it needs
+  docs: { may_depend_on: [lib] }
+  i18n:
+    may_depend_on: []
+    because: translations sit under src/lib and every component, so they import none of them
+  lib:
+    may_depend_on: [generated, i18n]
+    because: src/lib is shared by every page and component; code that needs a component belongs in src/lib/components
+  generated:
+    may_depend_on: []
+    because: generated from the API contract, so it stays a leaf; regenerate it rather than edit it
+
+no_cycles: true
+
+uncovered_ok:
+  - name: ["scripts/**", "e2e/**", "vitest-stubs/**", "static/sw.js", "*.config.ts", "*.config.js", "vitest.setup.ts", "svelte.options.ts", "cluster.js"]
+    because: build scripts, end-to-end tests, test stubs and tool configs sit outside the app's tsconfig and outside its architecture

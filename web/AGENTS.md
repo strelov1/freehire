@@ -80,6 +80,14 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   a precache whose every URL 404ed. `web/static/sw.js` is a kill switch for browsers that still
   have the old worker registered — it clears their caches and unregisters itself; nothing
   registers it otherwise. Do not bring a service worker back without a reason it serves.
+- The boundaries between the app's parts are checked by easement against
+  [easement.yml](easement.yml): a component never imports a route or `lib/server`,
+  `src/lib` never imports a component, and only routes, hooks and tests reach `lib/server`.
+  Any dependency between two parts that the file does not list fails, so a new one is
+  written there with its reason, not worked around. Run `easement check` in `web/` after
+  changing imports (`mise install` provides it and its indexer); `easement why <a> <b>`
+  shows the imports behind an edge. Never edit `easement.baseline.yml` by hand or
+  regenerate it to get a change through: it only shrinks.
 
 ## Worth knowing
 
