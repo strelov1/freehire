@@ -1,0 +1,42 @@
+id: no-legacy-env-modules
+snapshots:
+  const m = await import('$env/dynamic/public');:
+    labels:
+    - source: import('$env/dynamic/public')
+      style: primary
+      start: 16
+      end: 45
+    - source: import
+      style: secondary
+      start: 16
+      end: 22
+  "export { env } from '$env/dynamic/private';":
+    labels:
+    - source: export { env } from '$env/dynamic/private';
+      style: primary
+      start: 0
+      end: 43
+    - source: "'$env/dynamic/private'"
+      style: secondary
+      start: 20
+      end: 42
+  "import { API_INTERNAL_URL } from \"$env/static/private\";":
+    labels:
+    - source: import { API_INTERNAL_URL } from "$env/static/private";
+      style: primary
+      start: 0
+      end: 55
+    - source: "\"$env/static/private\""
+      style: secondary
+      start: 33
+      end: 54
+  "import { env } from '$env/dynamic/public';":
+    labels:
+    - source: import { env } from '$env/dynamic/public';
+      style: primary
+      start: 0
+      end: 42
+    - source: "'$env/dynamic/public'"
+      style: secondary
+      start: 20
+      end: 41

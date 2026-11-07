@@ -24,6 +24,7 @@ shellcheck = "latest"
 # psql only: the integration tests' harness migrates through it (internal/platform/testdb).
 # The server itself is docker-compose's pgvector image.
 postgres = "18"
+ast-grep = "0.51.1"
 
 [env]
 _.source = "{{config_root}}/scripts/dev-env.sh"
@@ -51,3 +52,7 @@ run = "docker compose exec -T db dropdb -U hire --if-exists --force \"$HIRE_DB_N
 [tasks."db:psql"]
 description = "Open psql in this checkout's database"
 run = "docker compose exec db psql -U hire -d \"$HIRE_DB_NAME\""
+
+[tasks."check:ast-grep"]
+description = "Test the ast-grep rules, then scan the code with them"
+run = ["ast-grep test", "ast-grep scan --error"]
