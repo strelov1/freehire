@@ -164,6 +164,7 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 - **The `TopBar` is `sticky top-0 z-40` and `h-14`.** Anything else that pins to the top of
   the page needs `top-14` and a z-index below 40, or it pins *behind* the header and is
   invisible exactly when it is needed.
+- **Bundle budgets**: `pnpm run size` (the `Bundle size budgets` step of the `web` CI job, after `Build`) holds the brotli size of the client entry and eight heavy routes to the limits in `web/.size-limit.mjs`. To raise one on purpose, edit its limit in that file in the same PR and state why in the PR body.
 
 ## Limitations
 
