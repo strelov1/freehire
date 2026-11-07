@@ -3,7 +3,6 @@ import {
   FILTER_COLLECTIONS,
   collectionBySlug,
   toQuery,
-  type SeeAlsoMark,
 } from '#lib/collections.js';
 import { backerBadges } from '#lib/backers.js';
 import {
