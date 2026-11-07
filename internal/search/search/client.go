@@ -411,7 +411,7 @@ func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, do
 // maxPushBytes keeps one documents request under Meilisearch's http_payload_size_limit
 // (100 MB by default). Each description vector is ~9.5 KB of JSON, so a wave of older,
 // embedded jobs reached ~240 MB on 2026-11-06 and was rejected whole.
-const maxPushBytes = 64 << 20
+var maxPushBytes = 64 << 20 // a var only so a test can force a split
 
 // ndjsonParts encodes docs as NDJSON bodies of at most limit bytes each. A document
 // larger than limit on its own still gets a body of its own.

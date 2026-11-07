@@ -3,7 +3,12 @@ package search
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -58,5 +63,53 @@ func TestNDJSONPartsOfNothingIsNoRequest(t *testing.T) {
 	parts, err := ndjsonParts(nil, 100)
 	if err != nil || len(parts) != 0 {
 		t.Fatalf("got %d parts, err %v; want none", len(parts), err)
+	}
+}
+
+// A part that fails to submit must not leave earlier, accepted parts pending: the drain
+// retries the wave one entry at a time next, and a part landing after that retry would
+// re-add a job the retry had just removed.
+func TestIndexJobsAwaitsAcceptedPartsWhenALaterPartFails(t *testing.T) {
+	old := maxPushBytes
+	maxPushBytes = 1 // one document per part
+	t.Cleanup(func() { maxPushBytes = old })
+
+	var mu sync.Mutex
+	posts, polls := 0, map[int]int{}
+	settled := map[int]bool{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost {
+			posts++
+			if posts == 3 {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = io.WriteString(w, `{"message":"boom","code":"internal","type":"internal"}`)
+				return
+			}
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = fmt.Fprintf(w, `{"taskUid":%d,"status":"enqueued","type":"documentAdditionOrUpdate"}`, posts)
+			return
+		}
+		var uid int
+		_, _ = fmt.Sscanf(r.URL.Path, "/tasks/%d", &uid)
+		polls[uid]++
+		status := "processing"
+		if polls[uid] > 2 {
+			status, settled[uid] = "succeeded", true
+		}
+		_, _ = fmt.Fprintf(w, `{"uid":%d,"status":%q,"type":"documentAdditionOrUpdate"}`, uid, status)
+	}))
+	defer srv.Close()
+
+	err := NewClient(srv.URL, "test-key").IndexJobs(t.Context(), []JobDocument{{ID: 1}, {ID: 2}, {ID: 3}})
+	if err == nil {
+		t.Fatal("a failed submission surfaced no error")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if !settled[1] || !settled[2] {
+		t.Fatalf("returned before the accepted parts settled: settled=%v", settled)
 	}
 }
