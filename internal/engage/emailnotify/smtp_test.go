@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -113,5 +114,25 @@ func TestClient_SendGoesThroughTheSMTPRelay(t *testing.T) {
 	}
 	if err := c.WithEngagementTracking("set").CheckEngagementTracking(context.Background()); err != nil {
 		t.Errorf("tracking check with a relay: %v", err)
+	}
+}
+
+func TestClient_AnUnreachableRelayTripsTheBreaker(t *testing.T) {
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	_ = ln.Close() // nothing listens: every dial is refused
+	relay, err := parseSMTPURL("smtps://user:pass@127.0.0.1:" + port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := (&Client{ses: &fakeSES{}, relay: relay}).WithSendingBreaker()
+	m := Message{From: "n@mail.freehire.me", To: "a@example.com", Subject: "s", HTML: "h", Text: "t", Group: emailprefs.GroupEssential}
+	for i := 0; i < 2; i++ {
+		if err := c.Send(context.Background(), m); !errors.Is(err, ErrSendingPaused) {
+			t.Fatalf("send %d: got %v, want ErrSendingPaused", i, err)
+		}
 	}
 }

@@ -3,6 +3,7 @@ package emailnotify
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/mail"
@@ -20,6 +21,10 @@ type smtpRelay struct {
 	auth       smtp.Auth
 	tls        *tls.Config
 }
+
+// errRelayDown marks a failure before any recipient was named — the relay
+// refused us, not this message — so the breaker treats it like a paused account.
+var errRelayDown = errors.New("emailnotify: smtp relay unavailable")
 
 // smtpSendTimeout bounds one delivery, connect to QUIT.
 const smtpSendTimeout = 30 * time.Second
@@ -54,7 +59,7 @@ func (r *smtpRelay) send(ctx context.Context, from, to string, raw []byte) error
 	d := tls.Dialer{Config: r.tls}
 	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(r.host, r.port))
 	if err != nil {
-		return fmt.Errorf("emailnotify: smtp dial: %w", err)
+		return fmt.Errorf("%w: dial: %w", errRelayDown, err)
 	}
 	if dl, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(dl)
@@ -62,14 +67,14 @@ func (r *smtpRelay) send(ctx context.Context, from, to string, raw []byte) error
 	c, err := smtp.NewClient(conn, r.host)
 	if err != nil {
 		_ = conn.Close()
-		return fmt.Errorf("emailnotify: smtp hello: %w", err)
+		return fmt.Errorf("%w: hello: %w", errRelayDown, err)
 	}
 	defer func() { _ = c.Close() }()
 	if err := c.Auth(r.auth); err != nil {
-		return fmt.Errorf("emailnotify: smtp auth: %w", err)
+		return fmt.Errorf("%w: auth: %w", errRelayDown, err)
 	}
 	if err := c.Mail(envFrom.Address); err != nil {
-		return fmt.Errorf("emailnotify: smtp MAIL FROM: %w", err)
+		return fmt.Errorf("%w: MAIL FROM: %w", errRelayDown, err)
 	}
 	if err := c.Rcpt(to); err != nil {
 		return fmt.Errorf("emailnotify: smtp RCPT TO %s: %w", to, err)

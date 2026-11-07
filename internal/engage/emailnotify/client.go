@@ -183,21 +183,26 @@ func (c *Client) Send(ctx context.Context, m Message) error {
 	if err := m.validate(); err != nil {
 		return err
 	}
+	if c.breaker != nil && c.breaker.tripped.Load() {
+		return ErrSendingPaused
+	}
 	if c.relay != nil {
 		raw, err := buildRawMessage(m)
 		if err != nil {
 			return err
 		}
-		return c.relay.send(ctx, m.From, m.To, raw)
+		err = c.relay.send(ctx, m.From, m.To, raw)
+		if c.breaker != nil && errors.Is(err, errRelayDown) {
+			c.breaker.tripped.Store(true)
+			return fmt.Errorf("%w: %w", ErrSendingPaused, err)
+		}
+		return err
 	}
 	in, err := c.input(m)
 	if err != nil {
 		return err
 	}
 	c.track(in, m)
-	if c.breaker != nil && c.breaker.tripped.Load() {
-		return ErrSendingPaused
-	}
 	if _, err := c.ses.SendEmail(ctx, in); err != nil {
 		if c.breaker != nil && accountRefused(err) {
 			c.breaker.tripped.Store(true)
