@@ -13,7 +13,7 @@ const job = {
   source: 'Acme careers',
 };
 
-function mount({ capabilities = { serverTools: {} }, posting = job } = {}) {
+function mount({ capabilities = { serverTools: {} }, posting = job, meta } = {}) {
   const sent = [];
   const timers = [];
   const dom = new JSDOM(page, {
@@ -33,7 +33,7 @@ function mount({ capabilities = { serverTools: {} }, posting = job } = {}) {
   const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
   const init = sent.find((message) => message.method === 'ui/initialize');
   answer(init, { hostCapabilities: capabilities, hostContext: { theme: 'light' } });
-  receive({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: { jobs: [posting], total: 1 } } });
+  receive({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { structuredContent: { jobs: [posting], total: 1 }, _meta: meta } });
   return {
     window, receive, answer, tick, sent, timers,
     button: (text) => Array.from(window.document.querySelectorAll('button')).find((element) => element.textContent === text),
@@ -72,14 +72,43 @@ describe('MCP job-card actions over the host bridge', () => {
     await ui.tick(); expect(ui.status()).toBe('Stage updated to Interview.');
   });
 
-  it('reports OAuth step-up without displaying a save as successful', async () => {
+  it('swaps every card buttons for one Connect panel on an OAuth step-up', async () => {
     const ui = mount(); await ui.tick(); ui.button('Save job').click();
     ui.answer(ui.calls()[0], { isError: true, content: [{ type: 'text', text: 'Sign in.' }], _meta: { 'mcp/www_authenticate': ['Bearer resource_metadata="https://freehire.me/.well-known/oauth-protected-resource/api/v1/mcp"'] } });
     await ui.tick();
-    expect(ui.status()).toContain('Sign in to freehire');
     expect(ui.button('Saved')).toBeUndefined();
-    expect(ui.button('Save job').disabled).toBe(false);
+    expect(ui.button('Save job')).toBeUndefined();
+    expect(ui.button('Connect')).toBeDefined();
     expect(ui.window.document.querySelector('input[type="password"]')).toBeNull();
+  });
+
+  it('offers Connect instead of account buttons when the server says signed out', async () => {
+    const ui = mount({ meta: { 'freehire.me/account': { signed_in: false } } }); await ui.tick();
+    expect(ui.button('Save job')).toBeUndefined();
+    expect(ui.window.document.querySelectorAll('.connect')).toHaveLength(1);
+    expect(ui.window.document.body.textContent).toContain('Not connected yet');
+    ui.button('Connect').click(); ui.button('Connecting...').click();
+    expect(ui.calls()).toHaveLength(1);
+    expect(ui.calls()[0].params).toEqual({ name: 'get_profile', arguments: {} });
+    ui.answer(ui.calls()[0], { content: [{ type: 'text', text: '{}' }] });
+    await ui.tick();
+    expect(ui.button('Connect')).toBeUndefined();
+    expect(ui.button('Save job')).toBeDefined();
+  });
+
+  it('keeps Connect available when sign-in did not finish', async () => {
+    const ui = mount({ meta: { 'freehire.me/account': { signed_in: false } } }); await ui.tick();
+    ui.button('Connect').click();
+    ui.answer(ui.calls()[0], { isError: true, content: [], _meta: { 'mcp/www_authenticate': ['Bearer x'] } });
+    await ui.tick();
+    expect(ui.button('Try again')?.disabled).toBe(false);
+    expect(ui.window.document.body.textContent).toContain('connector settings');
+  });
+
+  it('shows the account buttons when the server says signed in', async () => {
+    const ui = mount({ meta: { 'freehire.me/account': { signed_in: true } } }); await ui.tick();
+    expect(ui.button('Save job')).toBeDefined();
+    expect(ui.button('Connect')).toBeUndefined();
   });
 
   it('shows a failed tool response as a failure and allows a deliberate retry', async () => {
