@@ -219,11 +219,11 @@ func (rn *run) processBatch(ctx context.Context, entries []Claimed) {
 		if rn.skipOnContextEnd(callCtx, entries, "load jobs") {
 			return
 		}
-		rn.fallback(ctx, entries)
+		rn.fallback(ctx, entries, err)
 		return
 	}
 	if len(jobs) != len(entries) {
-		rn.fallback(ctx, entries)
+		rn.fallback(ctx, entries, fmt.Errorf("loaded %d jobs for %d entries", len(jobs), len(entries)))
 		return
 	}
 	if err := rn.indexer.IndexBatch(callCtx, jobs); err != nil {
@@ -235,7 +235,7 @@ func (rn *run) processBatch(ctx context.Context, entries []Claimed) {
 				"lease-expiry retry: %v", len(entries), err)
 			return
 		}
-		rn.fallback(ctx, entries)
+		rn.fallback(ctx, entries, err)
 		return
 	}
 	if err := rn.store.Complete(callCtx, entries); err != nil {
@@ -283,7 +283,10 @@ func (rn *run) skipOnContextEnd(callCtx context.Context, entries []Claimed, stag
 	return true
 }
 
-func (rn *run) fallback(ctx context.Context, entries []Claimed) {
+func (rn *run) fallback(ctx context.Context, entries []Claimed, cause error) {
+	// Logged because the per-item path costs a whole index pass per entry: a wave that
+	// falls back silently looks like a hung drain (2026-11-06: 27h on one wave).
+	log.Printf("search-drain: batch of %d failed, retrying one entry at a time: %v", len(entries), cause)
 	for _, e := range entries {
 		rn.processOne(ctx, e)
 	}
