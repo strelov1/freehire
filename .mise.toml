@@ -26,6 +26,10 @@ shellcheck = "latest"
 # The server itself is docker-compose's pgvector image.
 postgres = "18"
 ast-grep = "0.51.1"
+# The web/ architecture check (web/easement.yml) and the indexer it runs; CI's web-work job
+# pins the same two. Built from a commit until mokevnin/easement#130 is released.
+"cargo:https://github.com/strelov1/easement" = "rev:191f55c0661aeaec7ecf1d17713b7d683333daa9"
+"npm:@sourcegraph/scip-typescript" = "0.6.1"
 
 [env]
 _.source = "{{config_root}}/scripts/dev-env.sh"
