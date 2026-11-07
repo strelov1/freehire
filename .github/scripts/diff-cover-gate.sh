@@ -33,9 +33,11 @@ fi
 case "$kind" in
   go)
     shopt -s nullglob
-    profiles=("$input"/*.out)
+    # Absolute, because the script changes to the repository root below.
+    dir=$(cd "$input" && pwd)
+    profiles=("$dir"/*.out)
     if [ "${#profiles[@]}" -eq 0 ]; then
-      echo "No Go coverage profiles in $input" >&2
+      echo "No Go coverage profiles in $dir" >&2
       exit 1
     fi
     reports=()
