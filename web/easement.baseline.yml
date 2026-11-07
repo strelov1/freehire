@@ -36,18 +36,8 @@ violations:
   target: src/lib/tailor/geometry.ts
   from: components
   to: tailor
-- rule: dependency
-  file: src/lib/i18n/t.ts
-  target: src/lib/locale.ts
-  from: i18n
-  to: lib
 - rule: cycle
   file: ''
   target: ''
   from: assistant,components,tailor
-  to: ''
-- rule: cycle
-  file: ''
-  target: ''
-  from: i18n,lib
   to: ''

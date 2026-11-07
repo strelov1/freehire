@@ -30,7 +30,7 @@ components:
 rules:
   routes:
     may_depend_on: [hooks, server, generated, components, assistant, tailor, actions, i18n, ui, docs, lib]
-  hooks: { may_depend_on: [lib] }
+  hooks: { may_depend_on: [i18n, lib] }
   server:
     may_depend_on: [lib, generated]
     because: lib/server runs only on the server, so only routes and hooks import it; code a component needs too belongs in src/lib
