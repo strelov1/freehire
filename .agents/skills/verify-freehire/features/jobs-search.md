@@ -23,10 +23,11 @@ Preconditions: baseline; the seed indexed postings (`doctor`: `search has seeded
 - **Search.** Fill `getByRole('combobox', { name: 'Search jobs' })` with `engineer`, press Enter.
   URL matches `?q=engineer`, cards are visible and no more than before. The query reached
   search: `GET /api/v1/jobs/search?q=engineer` has a `meta.total` above 0 and below the
-  unfiltered total, and `/jobs?q=zzqxv` shows no cards.
+  unfiltered total, every card on screen after Enter is in that query's API results
+  (`?q=engineer&limit=100`), and `/jobs?q=zzqxv` shows no cards.
 - **Open.** Click `a[href^="/jobs/"]` in the first card. Wait for a new page only when the
   link has `target="_blank"` (the feed normally opens in the same tab). The posting page has
-  URL `/jobs/<slug>` and a level-1 heading with the title.
+  URL `/jobs/<slug>` and a level-1 heading containing the title `GET /api/v1/jobs/<slug>` serves.
 - **Proof.** From the repository root run
   `.agents/skills/verify-freehire/run-journey.sh .agents/skills/verify-freehire/journeys/jobs-search.spec.ts`; evidence
   `jobs-search-1-feed.png`, `-2-search.png`, `-3-job-page.png`.

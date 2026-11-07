@@ -24,14 +24,17 @@ test('register, save a job from the feed, see it on the board', async ({ page })
   // A new account may get the onboarding tour as a modal over the feed, at any moment after
   // load; Playwright skips it whenever it shows up before an action.
   const tour = page.getByRole('dialog', { name: 'Get to know freehire' });
-  await page.addLocatorHandler(tour, () => tour.getByRole('button', { name: 'Skip', exact: true }).click());
+  // Close dismisses the whole tour; Skip may only move it one step on.
+  await page.addLocatorHandler(tour, () => tour.getByRole('button', { name: 'Close', exact: true }).click());
   await page.goto('/jobs');
   await page.waitForLoadState('networkidle');
   const card = page.getByTestId('job-card').first();
   const href = await card.locator('a[href^="/jobs/"]').first().getAttribute('href');
   // A full card says "Save to board" in its footer; a compact one has a glyph named "Save to your board".
   await card.getByRole('button', { name: /^Save to (your )?board$/ }).click();
-  await expect(card.getByRole('button', { name: /^Remove from (your board|saved)$/ })).toBeVisible();
+  // The button flips at once and stays disabled until the save request finishes (and flips
+  // back if it fails): wait for enabled, or leaving the page can cancel the save.
+  await expect(card.getByRole('button', { name: /^Remove from (your board|saved)$/ })).toBeEnabled();
   await page.screenshot({ path: shot('2-saved'), fullPage: false });
 
   await page.goto('/my/tracking');

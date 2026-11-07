@@ -24,8 +24,8 @@ Preconditions: baseline; a fresh email.
   The URL leaves `/signin`.
 - **Save.** `goto('/jobs')`, wait for `networkidle`. The onboarding tour (dialog
   `Get to know freehire`) can cover the page at any moment: register
-  `page.addLocatorHandler` on it that clicks `Skip`, rather than checking once. In the first card click button
-  `/^Save to (your )?board$/`. It becomes `/^Remove from (your board|saved)$/`.
+  `page.addLocatorHandler` on it that clicks `Close` (`Skip` may only advance one step), rather than checking once. In the first card click button
+  `/^Save to (your )?board$/`. It becomes `/^Remove from (your board|saved)$/` and ENABLED (disabled means the save request is still in flight).
 - **Board.** `goto('/my/tracking')`. A button `Open <title> at <company>` is visible
   (title from `GET /api/v1/jobs/<slug>`).
 - **Second read.** `psql "$DATABASE_URL" -c "select u.email, j.public_slug, uj.saved_at from user_jobs uj join users u on u.id=uj.user_id join jobs j on j.id=uj.job_id where uj.saved_at is not null order by uj.saved_at desc limit 3"`
@@ -37,7 +37,7 @@ Preconditions: baseline; a fresh email.
 ## Gotchas
 
 - A fresh account may get the onboarding tour as a modal over `/jobs`; whether it shows
-  depends on where registration landed (it marks itself seen when shown). Skip it when present.
+  depends on where registration landed (it marks itself seen when shown). Close it when present.
 
 - Submitting before hydration sends a native GET (`/signin?#register`) and registers nothing.
 - No mail transport: the account stays unverified. Anything gated on a verified email

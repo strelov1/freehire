@@ -33,6 +33,12 @@ test('feed lists postings, keyword search narrows it, a card opens the job page'
   const [all, matched] = [await total(''), await total('engineer')];
   expect(matched).toBeGreaterThan(0);
   expect(matched).toBeLessThan(all);
+  // And the cards on screen are that search's results, not the old feed left in place.
+  const api = await (await page.request.get('/api/v1/jobs/search?q=engineer&limit=100')).json();
+  const expected = new Set((api.data as { public_slug: string }[]).map((j) => `/jobs/${j.public_slug}`));
+  const shown = await cards.locator('a[href^="/jobs/"]').evaluateAll((as) => [...new Set(as.map((a) => a.getAttribute('href')))]);
+  expect(shown.length).toBeGreaterThan(0);
+  for (const href of shown) expect(expected.has(href as string), `${href} is not a result for "engineer"`).toBe(true);
   await page.screenshot({ path: shot('2-search'), fullPage: false });
 
   await page.goto('/jobs?q=zzqxv');
@@ -49,6 +55,7 @@ test('feed lists postings, keyword search narrows it, a card opens the job page'
     link.click(),
   ]);
   await expect(jobPage).toHaveURL(new RegExp(`${href}$`));
-  await expect(jobPage.getByRole('heading', { level: 1 })).toBeVisible();
+  const job = await (await page.request.get(`/api/v1${href}`)).json();
+  await expect(jobPage.getByRole('heading', { level: 1 })).toContainText(job.data.title.trim());
   await jobPage.screenshot({ path: shot('3-job-page'), fullPage: false });
 });
