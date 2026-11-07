@@ -217,6 +217,36 @@ jobs:
           RESULT: ${{ needs.backend-jobs.result }}
         run: test "$CHANGES" = success && test "$RESULT" = success
 
+      # Changed-line coverage, gated on pull requests only. It runs here and not in a backend-jobs
+      # shard because this is the one place where every shard's profile is visible, and after the
+      # assertion above so a red backend task is never hidden behind a coverage message.
+      - name: Checkout
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # diff-cover diffs against origin/main, which needs the history to reach it.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Go
+        if: github.event_name == 'pull_request'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Download Go coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: go-coverage-*
+          path: coverage
+          merge-multiple: true
+
+      - name: Changed-line Go coverage
+        if: github.event_name == 'pull_request'
+        run: bash .github/scripts/diff-cover-gate.sh go coverage
+
   # The three artefacts this repository hands to someone else, none of which any other job
   # reads: a shell script the site serves to be piped into sh, the images that get deployed,
   # and the API description integrations are built against. A mistake in any of them is
@@ -808,6 +838,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # diff-cover diffs against origin/main, which needs the history to reach it.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup pnpm
@@ -901,6 +933,10 @@ jobs:
 
       - name: Unit tests with coverage
         run: pnpm run test:coverage
+
+      - name: Changed-line web coverage
+        if: github.event_name == 'pull_request'
+        run: bash ../.github/scripts/diff-cover-gate.sh web coverage/lcov.info
 
       - name: Upload web coverage
         if: always()
