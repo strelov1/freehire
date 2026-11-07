@@ -62,6 +62,9 @@ const noTxMarker = "migrate: no-transaction"
 //	                                   company-relation approval at a time, so two decisions
 //	                                   checked against the same registry cannot both pass and
 //	                                   together make the chain neither would alone
+//	0x66687470  internal/platform/testdb — "fhtp", a blocking pg_advisory_lock on the TEST
+//	                                   server only; one integration-test binary builds the
+//	                                   shared template while the others wait for it
 //	hashtextextended('assistant_session_create:<user id>')
 //	            internal/api/handler — a blocking pg_advisory_xact_lock per account; one
 //	                                   support-session create at a time, so reusing the
