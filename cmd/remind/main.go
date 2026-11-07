@@ -50,13 +50,18 @@ func run() int {
 	if cfg.TelegramBotToken != "" {
 		router[notify.ChannelTelegram] = reminder.NewTelegramNotifier(telegramnotify.NewClient(cfg.TelegramBotToken), cfg.FrontendOrigin)
 	}
-	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
+	if emailnotify.EmailHeld(ctx, cfg.RedisURL, "remind") {
+		// A class hold withholds email only: the channel soft-skips, its items stay
+		// pending with no attempt counted, and the other channels still deliver.
+		log.Printf("remind: email channel held by a mail pause key, skipping it this run")
+	} else if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
 		// A failure to build the SES client disables only the email channel — email
 		// reminders soft-skip and retry next pass while any other configured channel
 		// still delivers this run (channels are independent).
 		if ses, err := emailnotify.NewClient(ctx, cfg.AWSRegion); err != nil {
 			log.Printf("remind: email channel disabled: %v", err)
 		} else {
+			ses = ses.WithSendingBreaker()
 			router[notify.ChannelEmail] = reminder.NewEmailNotifier(ses, cfg.NotifyEmailFrom, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
 		}
 	}

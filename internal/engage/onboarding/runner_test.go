@@ -3,6 +3,7 @@ package onboarding_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -156,6 +157,27 @@ func TestRun_RecordsTheLedgerEvenWhenTheSendFails(t *testing.T) {
 	}
 	if !strings.Contains(store.recorded[0].Error, "ses is down") {
 		t.Errorf("ledger error = %q, want the transport failure kept for diagnosis", store.recorded[0].Error)
+	}
+}
+
+// SES refusing the whole account says nothing about any address, so the pass stops
+// after one attempt and burns no slot: the next pass finds the same people again.
+func TestRun_AccountLevelRefusalEndsThePassAndWritesNoLedgerRow(t *testing.T) {
+	store := &fakeStore{welcome: []int64{1, 2, 3}, advancedSearch: []int64{4}}
+	sender := &fakeSender{err: fmt.Errorf("send: %w", emailnotify.ErrSendingPaused)}
+
+	stats, err := newRunner(store, sender).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(sender.sent) != 1 {
+		t.Errorf("attempted %d sends, want the pass to end after the first", len(sender.sent))
+	}
+	if len(store.recorded) != 0 {
+		t.Errorf("recorded %d ledger rows, want none: a paused account must not burn slots", len(store.recorded))
+	}
+	if stats.Failed[onboarding.StepWelcome] != 1 {
+		t.Errorf("stats.Failed = %+v, want the one refused attempt counted so the run reports it", stats.Failed)
 	}
 }
 

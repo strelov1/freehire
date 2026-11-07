@@ -264,3 +264,15 @@ func TestRender_BundleSubjectCountsAlertsAndSectionsNameThem(t *testing.T) {
 		t.Errorf("html and text must both carry section %q", want)
 	}
 }
+
+// A paused SES account must soft-skip the digest, not count an attempt toward
+// dead-lettering it.
+func TestNotifier_SendSoftSkipsWhenSendingIsPaused(t *testing.T) {
+	fs := &fakeSender{err: ErrSendingPaused}
+	n := NewNotifier(fs, "notifications@freehire.me", "https://freehire.me", testLinks())
+
+	err := n.Send(context.Background(), notify.ChannelEmail, "user@acme.com", msgOf(digest()))
+	if !errors.Is(err, notify.ErrChannelNotConfigured) {
+		t.Errorf("Send = %v, want notify.ErrChannelNotConfigured", err)
+	}
+}
