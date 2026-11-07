@@ -336,6 +336,20 @@ jobs:
           tar -xzf /tmp/agnix.tar.gz -C /tmp agnix
           /tmp/agnix --strict .
 
+      # Spelling over code, docs and web strings; _typos.toml argues what is excluded and
+      # allowed. Same digest rule as agnix: a bump changes TYPOS_VERSION and TYPOS_SHA256
+      # together, and .mise.toml moves with them.
+      - name: Check spelling
+        env:
+          TYPOS_VERSION: v1.52.0
+          TYPOS_SHA256: 6155d4114f9a0f5b8f6d4fda96266c9d5f6add71df80da7f684ee5e72eb14588
+        run: |
+          curl -fsSL -o /tmp/typos.tar.gz \
+            "https://github.com/crate-ci/typos/releases/download/${TYPOS_VERSION}/typos-${TYPOS_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          echo "${TYPOS_SHA256}  /tmp/typos.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/typos.tar.gz -C /tmp ./typos
+          /tmp/typos
+
   # The version of every package whose TYPES cross the design system's `link:` boundary.
   # design-system is symlinked into web and extension rather than copied, so each of the
   # three installs its own node_modules and a shared package lands on disk more than once —
