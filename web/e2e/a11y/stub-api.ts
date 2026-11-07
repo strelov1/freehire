@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { catalogScale, company, COMPANY_SLUG, facetCounts, job, JOB_SLUG, plans } from './fixtures.ts';
+import { STUB_PORT } from './ports.ts';
 
 // A loopback stand-in for the Go API, just wide enough for the pages the a11y spec
 // opens. The built SvelteKit server calls it from Node (API_INTERNAL_URL), which
@@ -8,7 +9,7 @@ import { catalogScale, company, COMPANY_SLUG, facetCounts, job, JOB_SLUG, plans 
 // An unhandled path answers 404 and is logged, so a page that needs a fixture it does
 // not have fails loudly instead of rendering something emptier than production.
 
-const port = Number(process.env.A11Y_STUB_PORT ?? 18091);
+const port = Number(process.env.A11Y_STUB_PORT ?? STUB_PORT);
 
 const list = (data: unknown[]) => ({ data, meta: { total: data.length, limit: 20, offset: 0 } });
 

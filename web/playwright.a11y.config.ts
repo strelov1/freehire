@@ -1,9 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
+import { STUB_PORT } from './e2e/a11y/ports.ts';
 
 // The accessibility check runs against the BUILT app (`pnpm build` first) and a loopback
 // stub API, so it needs no backend, no secrets and no network. `playwright.config.ts`
 // keeps meaning "against the real stack on :8090" and ignores this spec.
-const STUB_PORT = 18091;
 const APP_PORT = 18090;
 
 export default defineConfig({
