@@ -963,7 +963,7 @@
              `holdover`): the rows are real but about to be replaced. -->
         <div class="flex flex-col gap-3" aria-busy={holdingOver}>
           {#each visibleJobs as job (job.public_slug)}
-            <JobRow {job} {onHide} />
+            <JobRow {job} {onHide} hideCompany={!!scope.company_slug} />
           {/each}
         </div>
       {/if}

@@ -5,7 +5,7 @@
   import { githubStars, formatStars, GITHUB_URL } from '#lib/github.svelte.js';
   import { bannerVisible } from '#lib/consent.svelte.js';
   import { currentUser } from '#lib/auth.svelte.js';
-  import { cliBannerShown } from '#lib/cliBanner.svelte.js';
+  import { cliBannerPending } from '#lib/cliBanner.svelte.js';
   import { messagingDock } from '#lib/messagingDock.svelte.js';
   import { dockToastOffsetClass } from '#lib/messagingDock.js';
   import { cn, ProviderIcon } from '#lib/ui/index.js';
@@ -45,8 +45,8 @@
     mounted &&
       !answered &&
       !bannerVisible() &&
-      // One promo at a time: the MCP strip under the header asks first.
-      !cliBannerShown(page.url.pathname, currentUser()?.agent_connected ?? false) &&
+      // One ask at a time: the MCP strip on the home page asks first.
+      !cliBannerPending(currentUser()?.agent_connected ?? false) &&
       !suppressesToast(page.url.pathname) &&
       dockCorner !== 'open',
   );

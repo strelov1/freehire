@@ -73,6 +73,7 @@
     dimViewed = true,
     newTab = false,
     compact = false,
+    hideCompany = false,
     footer,
     onHide,
     unsave = api.unsaveJob,
@@ -85,6 +86,8 @@
     dimViewed?: boolean;
     newTab?: boolean;
     compact?: boolean;
+    // On the employer's own page every card would repeat its logo, name and backers.
+    hideCompany?: boolean;
     footer?: Snippet;
     onHide?: (slug: string) => void;
     /** Allows a saved list to serialize removal with pagination. */
@@ -369,8 +372,11 @@
   <!-- Reserves the top-right corner for the Save overlay outside this link, so the
        timestamp never slides under it. Only a compact card keeps Save up here; a normal
        card has moved it into the action row at its foot, leaving the corner free. -->
-  <div class={['flex items-center justify-between gap-3', compact && 'pr-11']}>
+  <!-- Without the company there is nothing to the date's left, so it floats beside the
+       title instead of holding a row of its own. -->
+  <div class={['flex items-center justify-between gap-3', compact && 'pr-11', hideCompany && 'float-right ml-3 mt-1.5']}>
     <div class="flex min-w-0 items-center gap-2">
+      {#if !hideCompany}
       <EntityLogo
         name={job.company || 'Unknown company'}
         src={companyLogoUrl(job.company) ?? undefined}
@@ -385,6 +391,7 @@
            below, which carries role-level facts and already wraps on a phone. The
            whole card is a link, so the mark is display-only here. -->
       <BackerBadge collections={job.collections} class="shrink-0" />
+      {/if}
     </div>
     <div class="flex shrink-0 items-center gap-1.5 text-muted-foreground">
       {#if isViewed}
@@ -427,7 +434,8 @@
     lang={foreignContentLang(job)}
     class={[
       'font-semibold leading-snug tracking-tight',
-      compact ? 'mt-2 line-clamp-1 text-base' : 'mt-2.5 line-clamp-2 text-lg sm:text-[1.35rem]',
+      compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-lg sm:text-[1.35rem]',
+      !compact && !hideCompany && 'mt-2.5',
     ]}
   >
     {job.title}
