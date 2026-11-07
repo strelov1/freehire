@@ -19,7 +19,7 @@ kind=${1:?usage: diff-cover-gate.sh go|web <input>}
 input=${2:?usage: diff-cover-gate.sh go|web <input>}
 
 root=$(git rev-parse --show-toplevel)
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+here=$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
