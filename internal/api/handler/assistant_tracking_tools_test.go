@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -247,5 +248,20 @@ func TestMyJobsToolPagesWithOffset(t *testing.T) {
 	}
 	if repo.listedOffset != 20 {
 		t.Errorf("listed offset = %d, want 20", repo.listedOffset)
+	}
+}
+
+// An offset past int32 must clamp, not wrap to zero (the first page again) or go negative
+// (a failed SQL OFFSET).
+func TestMyJobsToolClampsAHugeOffset(t *testing.T) {
+	for _, offset := range []string{"2147483648", "4294967296"} {
+		repo := &trackingRepo{slug: "go-dev-acme", jobID: 11}
+		tool := toolByName(t, trackingAPI(repo).assistantTrackingTools(), "my_jobs")
+		if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{"offset":`+offset+`}`)); err != nil {
+			t.Fatalf("my_jobs offset %s: %v", offset, err)
+		}
+		if repo.listedOffset != math.MaxInt32 {
+			t.Errorf("offset %s listed as %d, want %d", offset, repo.listedOffset, math.MaxInt32)
+		}
 	}
 }

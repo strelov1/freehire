@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -172,7 +173,7 @@ func (h *assistantHandlers) myJobsTool() assistant.Tool {
 			}
 			limit = min(limit, assistantMaxSearchLimit)
 
-			listing, err := h.tracking.tracking.ListTracked(ctx, userID, in.Filter, jobtracking.CardFull, int32(limit), int32(max(in.Offset, 0)))
+			listing, err := h.tracking.tracking.ListTracked(ctx, userID, in.Filter, jobtracking.CardFull, int32(limit), int32(min(max(in.Offset, 0), math.MaxInt32)))
 			if errors.Is(err, jobtracking.ErrInvalidFilter) {
 				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("unknown filter %q — use all, viewed, saved, applied, board or dismissed", in.Filter))
 			}
