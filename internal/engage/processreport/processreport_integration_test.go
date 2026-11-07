@@ -98,7 +98,7 @@ func jobCount(t *testing.T, pool *pgxpool.Pool, externalID string) int32 {
 // The whole reason the counter is denormalized onto the posting: a card must not
 // disagree with the company page about a fact filed a second ago. A scheduled sync
 // would leave exactly that gap, so the write does it.
-func TestFileSyncsTheCountOntoTheCompanysJobs(t *testing.T) {
+func TestFileSyncsTheCountOntoTheCompanyJobs(t *testing.T) {
 	svc, pool := newTestService(t)
 	insertCompany(t, pool, "synced-co")
 	seedJob(t, pool, "synced-co", "job-one")

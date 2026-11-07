@@ -544,7 +544,7 @@
     >
       <!-- A long dictionary slug ("event-driven-architecture") would wrap inside its
            own chip and stretch the row to two lines, breaking the card's rhythm on a
-           phone. Each chip stays one line and ellipsises past max-w; the full skill is
+           phone. Each chip stays one line and truncates with an ellipsis past max-w; the full skill is
            in `title` for anyone who needs it. -->
       <!-- The label, not the slug: a card read "ci-cd" where the filter panel beside it
            read "CI/CD". No definition here, unlike the chips on the posting itself —

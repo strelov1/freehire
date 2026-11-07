@@ -35,6 +35,16 @@ pre-commit:
           exit 0
         fi
         govulncheck ./... || echo "govulncheck reported findings above (non-blocking for now, see lefthook.yml)"
+    # Spelling over every staged file; _typos.toml decides what is checked, and
+    # --force-exclude makes it honour that for files named explicitly. Steps aside when the
+    # binary is missing: the docs CI job is the gate.
+    typos:
+      run: |
+        if ! command -v typos >/dev/null 2>&1; then
+          echo "typos not installed (mise install) - skipping"
+          exit 0
+        fi
+        typos --force-exclude {staged_files}
     # internal/platform/db is generated and committed, so a query edited without
     # regenerating ships the OLD Go with every check green — nothing else here reads
     # both halves. Same shape of check as design-system's check:dist, except that an

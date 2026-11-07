@@ -1,0 +1,185 @@
+# typos (https://github.com/crate-ci/typos), run by the `docs` CI job and by lefthook.
+# The catalogue is multilingual, so vocabulary sources are excluded rather than allow-listed
+# word by word; what remains below is the residue in code, docs and web strings.
+# CI and lefthook pin the version together with its digest (see ci.yml).
+
+[files]
+extend-exclude = [
+  # Facet dictionaries: city, place and title vocabularies in a dozen languages.
+  "internal/dict/**",
+  "*.tsv",
+  # Captured provider responses, verbatim and in the provider's language.
+  "internal/ingest/**/testdata/**",
+  "extension/lib/fixtures/**",
+  # Machine output: fixed by editing the dictionary or the generator, never by hand.
+  "web/src/lib/generated/**",
+  "web/static/geo-cities.json",
+  "*.svg",
+  "pnpm-lock.yaml",
+  # Archived change proposals are a historical record, frozen as written.
+  "openspec/changes/archive/**",
+]
+
+[default.extend-words]
+# Provider and product names, and places.
+emply = "emply"
+canva = "canva"
+mena = "mena"
+synopsys = "synopsys"
+parana = "parana"
+defensie = "defensie"
+ather = "ather"
+tre = "tre"
+# Words of other languages that collide with English typos (the board adapters
+# read German, French, Spanish, Portuguese, Polish and Dutch sources).
+waas = "waas"
+partiel = "partiel"
+sur = "sur"
+adresse = "adresse"
+titel = "titel"
+ist = "ist"
+sie = "sie"
+ein = "ein"
+oder = "oder"
+unser = "unser"
+deine = "deine"
+lokal = "lokal"
+funktion = "funktion"
+produktion = "produktion"
+technik = "technik"
+hace = "hace"
+varios = "varios"
+vas = "vas"
+importante = "importante"
+comercial = "comercial"
+confidencial = "confidencial"
+informacion = "informacion"
+descripcion = "descripcion"
+denominacion = "denominacion"
+administrativo = "administrativo"
+accesible = "accesible"
+individuales = "individuales"
+internacional = "internacional"
+profesional = "profesional"
+profissional = "profissional"
+educacional = "educacional"
+independente = "independente"
+independant = "independant"
+analise = "analise"
+atual = "atual"
+itens = "itens"
+programa = "programa"
+programm = "programm"
+termo = "termo"
+anual = "anual"
+austrija = "austrija"
+cliente = "cliente"
+clientes = "clientes"
+responsable = "responsable"
+auxiliar = "auxiliar"
+requisits = "requisits"
+departement = "departement"
+groupe = "groupe"
+grup = "grup"
+technicien = "technicien"
+employeur = "employeur"
+entreprise = "entreprise"
+moteur = "moteur"
+projets = "projets"
+apprentie = "apprentie"
+annonces = "annonces"
+candidat = "candidat"
+futur = "futur"
+informe = "informe"
+economisch = "economisch"
+doen = "doen"
+tage = "tage"
+# Short tokens that are code, not prose: a Go receiver (`nd`, `ue`), a URL parameter
+# (`pracuj` `pn`), a host label (`tbe.taleo.net`), a country or degree abbreviation.
+mis = "mis"
+pn = "pn"
+ba = "ba"
+nd = "nd"
+ot = "ot"
+tbe = "tbe"
+ded = "ded"
+ue = "ue"
+ues = "ues"
+iz = "iz"
+fo = "fo"
+abd = "abd"
+aas = "aas"
+dne = "dne"
+caf = "caf"
+lso = "lso"
+nam = "nam"
+som = "som"
+tha = "tha"
+tto = "tto"
+jod = "jod"
+flor = "flor"
+stran = "stran"
+tru = "tru"
+ned = "ned"
+toom = "toom"
+onn = "onn"
+kno = "kno"
+cna = "cna"       # Certified Nursing Assistant
+iit = "iit"       # Indian Institutes of Technology
+lsip = "lsip"     # Local Skills Improvement Plan (UK)
+beng = "beng"     # Bachelor of Engineering
+opps = "opps"     # the UKG adapter's name for opportunities
+quess = "quess"   # Quess Corp
+stati = "stati"   # regex stem: "stati\w*"
+hel = "hel"       # Hetzner's Helsinki location code, `hel1`
+# Word stems and words cut short in comments, regexes and matchers.
+complet = "complet"
+nationalit = "nationalit"
+assistent = "assistent"
+# SQL keywords cut at a column boundary in quoted migration text.
+chec = "chec"
+delet = "delet"
+inser = "inser"
+selec = "selec"
+updat = "updat"
+validat = "validat"
+coalesc = "coalesc"
+wrk = "wrk"       # PeopleSoft's WRK_ field prefix
+# Wire values and identifiers that cannot be renamed without a breaking change.
+untils = "untils"           # sqlc-generated `GetPlanUntils`, named after the columns
+datas = "datas"             # Alibaba's response field
+compsite = "compsite"       # Paradox's query parameter
+decription = "decription"   # a customer's own CSS class (`job-decription`)
+unparseable = "unparseable" # a reason code and error text used across Go and web
+unprobable = "unprobable"   # cmd/liveness `unprobableSources`
+requeueing = "requeueing"
+empted = "empted"           # "pre-empted", correct English
+exclud = "exclud"           # a word stem in a test assertion
+repositor = "repositor"     # a stem in the ghost crosscheck's multilingual matcher
+repor = "repor"
+messag = "messag"
+convers = "convers"
+bever = "bever"
+accepte = "accepte"
+agregation = "agregation"
+funcions = "funcions"
+# Deliberate misspellings: fuzzy-match and unknown-value tests feed these in on purpose.
+backedn = "backedn"
+pyhton = "pyhton"
+javasript = "javasript"
+sceintist = "sceintist"
+enginer = "enginer"
+sofware = "sofware"
+remtoe = "remtoe"
+flase = "flase"
+catgory = "catgory"
+requred = "requred"
+desinger = "desinger"
+optin = "optin"
+cpy = "cpy"
+fallbck = "fallbck"
+coner = "coner"
+comute = "comute"
+als = "als"
+alls = "alls"
+adn = "adn"
