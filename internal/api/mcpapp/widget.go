@@ -61,6 +61,14 @@ func rendersInWidget() mcp.Meta {
 }
 
 func addWidget(server *mcp.Server) {
+	read := func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{
+			URI:      req.Params.URI,
+			MIMEType: widgetMIMEType,
+			Text:     string(widgetPage),
+			Meta:     widgetMeta(),
+		}}}, nil
+	}
 	server.AddResource(&mcp.Resource{
 		URI:         widgetResourceURI,
 		Name:        "jobs",
@@ -68,12 +76,15 @@ func addWidget(server *mcp.Server) {
 		Description: "Draws job search results and one posting as cards.",
 		MIMEType:    widgetMIMEType,
 		Meta:        widgetMeta(),
-	}, func(context.Context, *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{
-			URI:      widgetResourceURI,
-			MIMEType: widgetMIMEType,
-			Text:     string(widgetPage),
-			Meta:     widgetMeta(),
-		}}}, nil
-	})
+	}, read)
+	// A host keeps the tool list it read at connect time, so after a deploy it still asks for
+	// the previous page's URI; answering "not found" there left an empty frame. Any earlier
+	// jobs page gets the current one.
+	server.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: "ui://freehire/jobs-{version}.html",
+		Name:        "jobs-previous",
+		Title:       "freehire job cards",
+		MIMEType:    widgetMIMEType,
+		Meta:        widgetMeta(),
+	}, read)
 }
