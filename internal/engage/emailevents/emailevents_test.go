@@ -12,7 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-const openEvent = `{"eventType":"Open","mail":{"messageId":"m-1","timestamp":"2026-11-10T14:00:00Z","destination":["person@example.test"],"tags":{"campaign":["launch"],"variant":["a"],"ses:from-domain":["freehire.me"]}},"open":{"timestamp":"2026-11-10T15:30:00Z","ipAddress":"203.0.113.9"}}`
+const clickEvent = `{"eventType":"Click","mail":{"messageId":"m-1","timestamp":"2026-11-10T14:00:00Z","destination":["person@example.test"],"tags":{"campaign":["launch"],"variant":["a"],"ses:from-domain":["freehire.me"]}},"click":{"timestamp":"2026-11-10T15:30:00Z","ipAddress":"203.0.113.9","link":"https://freehire.me/jobs/x"}}`
 
 func snsWrapped(t *testing.T, event string) string {
 	t.Helper()
@@ -25,10 +25,10 @@ func snsWrapped(t *testing.T, event string) string {
 
 func TestDecode_ReadsAnEventBothWrappedAndRaw(t *testing.T) {
 	want := db.RecordEmailEventParams{
-		MessageID: "m-1", Type: "open", Campaign: "launch", Variant: "a",
+		MessageID: "m-1", Type: "click", Campaign: "launch", Variant: "a",
 		OccurredAt: pgtype.Timestamptz{Time: time.Date(2026, 11, 10, 15, 30, 0, 0, time.UTC), Valid: true},
 	}
-	for name, body := range map[string]string{"sns": snsWrapped(t, openEvent), "raw": openEvent} {
+	for name, body := range map[string]string{"sns": snsWrapped(t, clickEvent), "raw": clickEvent} {
 		got, _, err := decode(body)
 		if err != nil {
 			t.Fatalf("%s: decode: %v", name, err)
@@ -55,7 +55,8 @@ func TestDecode_SendFallsOnTheMailTimestamp(t *testing.T) {
 
 func TestDecode_IgnoresWhatTheLedgerDoesNotTrack(t *testing.T) {
 	for name, body := range map[string]string{
-		"no campaign tag": `{"eventType":"Open","mail":{"messageId":"m","tags":{}}}`,
+		"no campaign tag": `{"eventType":"Click","mail":{"messageId":"m","tags":{}}}`,
+		"open":            `{"eventType":"Open","mail":{"messageId":"m","tags":{"campaign":["c"]}},"open":{"timestamp":"2026-11-10T15:30:00Z"}}`,
 		"untracked type":  `{"eventType":"Rendering Failure","mail":{"messageId":"m","tags":{"campaign":["c"]}}}`,
 	} {
 		if _, _, err := decode(body); !errors.Is(err, errIgnored) {
@@ -105,11 +106,11 @@ func (f *fakeStore) RollUpExpiredEmailEvents(_ context.Context, arg db.RollUpExp
 	return n, nil
 }
 
-// drainTime is shortly after openEvent's mail went out.
+// drainTime is shortly after clickEvent's mail went out.
 var drainTime = time.Date(2026, 11, 11, 0, 0, 0, 0, time.UTC)
 
 func TestDrain_DropsEventsForMailPastRetention(t *testing.T) {
-	src := &fakeSource{batches: [][]Received{{{Body: openEvent, AckHandle: "late"}}}}
+	src := &fakeSource{batches: [][]Received{{{Body: clickEvent, AckHandle: "late"}}}}
 	store := &fakeStore{}
 
 	stats, err := Drain(context.Background(), src, store, drainTime.Add(Retention))
@@ -123,9 +124,9 @@ func TestDrain_DropsEventsForMailPastRetention(t *testing.T) {
 
 func TestDrain_RecordsAndAcksEverythingItCannotUseEither(t *testing.T) {
 	src := &fakeSource{batches: [][]Received{{
-		{Body: openEvent, AckHandle: "good"},
+		{Body: clickEvent, AckHandle: "good"},
 		{Body: "not json", AckHandle: "broken"},
-		{Body: `{"eventType":"Open","mail":{"messageId":"m","tags":{}}}`, AckHandle: "untagged"},
+		{Body: `{"eventType":"Click","mail":{"messageId":"m","tags":{}}}`, AckHandle: "untagged"},
 	}}}
 	store := &fakeStore{}
 
@@ -142,7 +143,7 @@ func TestDrain_RecordsAndAcksEverythingItCannotUseEither(t *testing.T) {
 }
 
 func TestDrain_LeavesAFailedWriteOnTheQueue(t *testing.T) {
-	src := &fakeSource{batches: [][]Received{{{Body: openEvent, AckHandle: "good"}}}}
+	src := &fakeSource{batches: [][]Received{{{Body: clickEvent, AckHandle: "good"}}}}
 	if _, err := Drain(context.Background(), src, &fakeStore{err: errors.New("db down")}, drainTime); err == nil {
 		t.Fatal("Drain: want an error")
 	}

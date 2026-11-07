@@ -308,10 +308,10 @@
     <section class="flex flex-col gap-3">
       <h2 class="text-xl font-semibold tracking-tight">Email engagement</h2>
       <p class="text-sm leading-relaxed text-muted-foreground">
-        Our announcements and saved-search digests can contain a small tracking image, and their
-        links can pass through a redirect, so we can tell whether a letter was delivered, opened or
-        clicked. We use this to judge which letters are useful and when to send them. Account,
-        security and application mail is not tracked this way.
+        Links in our announcements and saved-search digests can pass through a redirect, so we can
+        tell whether a letter was delivered and whether a link in it was clicked. We use this to
+        judge which letters are useful and when to send them. We do not use tracking images to see
+        whether a letter was opened. Account, security and application mail is not tracked this way.
       </p>
       <p class="text-sm leading-relaxed text-muted-foreground">
         Each event records the campaign, the type of event and its time against a message
