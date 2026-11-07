@@ -4,8 +4,7 @@
   import { page } from '$app/state';
   import { ArrowRight, X } from '@lucide/svelte';
   import { currentUser } from '#lib/auth.svelte.js';
-  import { dismissCliBanner, loadCliBannerDismissed, cliBannerDismissed } from '#lib/cliBanner.svelte.js';
-  import { isAccountArea } from '#lib/shellLayout.js';
+  import { dismissCliBanner, loadCliBannerDismissed, cliBannerShown } from '#lib/cliBanner.svelte.js';
   import { buttonVariants, cn } from '#lib/ui/index.js';
 
   // A strip under the header pointing at /mcp (it pointed at /cli until the hosted MCP
@@ -33,18 +32,14 @@
   // lines on a phone. One file rather than four proxied logos: the marks are fixed brand
   // art, and the lift animation runs inside the SVG with no script.
 
-  // Not inside the account area. Someone in /my/** has an account and came to work in it;
-  // an MCP pitch there is one more band between the header and their page, and on a phone
-  // that chrome had pushed the content halfway down the screen. Decided by the URL, which
-  // the server knows too, so the server-rendered markup and the hydrated one agree.
-  const inAccountArea = $derived(isAccountArea(page.url.pathname));
-
-  // Gone for good once the account holds an API key or MCP grant. The user is resolved
-  // in the root layout's server load, so the server leaves the strip out of the markup.
-  const agentConnected = $derived(currentUser()?.agent_connected ?? false);
+  // Not inside the account area: someone in /my/** came to work there, and on a phone
+  // one more band pushed their page halfway down. Gone for good once the account holds an
+  // API key or MCP grant (resolved in the root layout's server load, so the server leaves
+  // the strip out too). The rule lives in cliBannerShown, which the star toast also reads.
+  const shown = $derived(cliBannerShown(page.url.pathname, currentUser()?.agent_connected ?? false));
 </script>
 
-{#if !inAccountArea && !agentConnected && !cliBannerDismissed()}
+{#if shown}
   <div data-cli-banner class="border-b border-border bg-brand/5">
     <div class="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2 text-sm">
       <!-- Wraps to a second line on a phone rather than truncating the one sentence that

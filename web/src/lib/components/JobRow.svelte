@@ -539,7 +539,7 @@
     <div
       class={[
         'flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:flex-1',
-        teaser && 'pointer-events-none select-none opacity-90 blur-[1.5px]',
+        teaser && 'pointer-events-none select-none opacity-50 grayscale blur-[1.5px]',
       ]}
     >
       <!-- A long dictionary slug ("event-driven-architecture") would wrap inside its
@@ -653,7 +653,7 @@
        covered by it, and it keeps its hover-reveal (a destructive-feeling gesture that
        should not compete with Save for attention). `pointer-coarse` keeps it visible on
        touch, which has no hover to reveal anything. -->
-  <div class="flex items-center gap-2 border-t border-border px-4 py-2.5">
+  <div class="-mt-1 flex items-center gap-2 px-4 pb-3">
     <!-- No `aria-pressed`, unlike the compact glyph: this button's visible name already
          changes with the state, so the toggle role would announce the same fact twice in
          two vocabularies. The glyph needs it precisely because its name cannot.
@@ -667,10 +667,10 @@
       disabled={saving}
       aria-label={saved ? 'Remove from saved' : undefined}
       class={[
-        'flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
+        '-ml-2 flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
         saved
           ? 'bg-brand/10 text-brand hover:bg-brand/15'
-          : 'border border-border text-foreground hover:bg-accent',
+          : 'text-muted-foreground hover:bg-background hover:text-foreground',
       ]}
     >
       <Bookmark class="size-4 {saved ? 'fill-current' : ''}" aria-hidden="true" />
@@ -705,7 +705,7 @@
             variant="outline"
             href={resolve('/jobs/[slug]', { slug: job.public_slug })}
             aria-label="Apply to {job.title}"
-            class="h-9 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+            class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
           >
             Apply
           </Button>
@@ -720,7 +720,7 @@
             aria-label={isAuthenticated()
               ? `Apply to ${job.title} on the employer's site (opens in a new tab)`
               : `Choose how to apply to ${job.title}`}
-            class="h-9 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+            class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
           >
             <ExternalLink class="size-4" aria-hidden="true" />
             Apply

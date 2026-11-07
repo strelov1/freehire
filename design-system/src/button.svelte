@@ -7,10 +7,8 @@
       variant: {
         primary: 'bg-brand text-brand-foreground hover:opacity-90',
         // The page's one call to action (create the account, show the results, pay,
-        // tailor the CV on a job page): the brand fill framed by a soft ring of itself
-        // with a gap of page between. Focus keeps its own state by thickening the ring to
-        // the solid focus colour. One per view; the ring is decoration, not the indicator.
-        cta: 'bg-brand text-brand-foreground ring-2 ring-brand/30 ring-offset-2 ring-offset-background hover:opacity-90 focus-visible:ring-4 focus-visible:ring-ring',
+        // apply on a job page): the brand fill, lifted by a soft shadow. One per view.
+        cta: 'bg-brand text-brand-foreground shadow-sm hover:opacity-90',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-accent',
         outline: 'border border-border bg-background hover:bg-accent hover:text-accent-foreground',
         ghost: 'hover:bg-accent hover:text-accent-foreground',

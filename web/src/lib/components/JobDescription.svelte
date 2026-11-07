@@ -59,6 +59,16 @@
     vertical-align: top;
   }
 
+  /* Many sources space their paragraphs with a <br> (or a stray </br>) between the blocks,
+     on top of the blocks' own margins, which read as a blank line after every paragraph.
+     A break right after a block, and an empty paragraph, carry no text of their own. */
+  .job-description :global(:is(p, ul, ol, li, div, table, pre, h3, h4, h5, h6) + br),
+  .job-description :global(:is(p, ul, ol, li, div, table, pre, h3, h4, h5, h6) + br + br),
+  .job-description :global(:is(ul, ol) > br),
+  .job-description :global(p:empty) {
+    display: none;
+  }
+
   .job-description :global(p) {
     margin: 0.5rem 0;
   }

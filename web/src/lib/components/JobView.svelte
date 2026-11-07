@@ -877,7 +877,7 @@
          400 chars server-side — the headline above the full description. -->
     <section class="flex flex-col gap-2">
       <h2 class="text-base font-semibold">Summary</h2>
-      <p class="text-sm leading-relaxed text-muted-foreground">{e.summary}</p>
+      <p class="text-sm leading-relaxed">{e.summary}</p>
     </section>
   {:else}
     <!-- The description's own headings are demoted to h3 (descriptionHeadings.ts) to sit

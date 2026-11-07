@@ -311,7 +311,7 @@
          skills + a footer CTA. A single-skill job has no teaser (nothing to contrast),
          and then the call-to-action stands alone under the heading. -->
     {#if teaser}
-      <div class="pointer-events-none select-none space-y-3 opacity-90 blur-[1.5px]" aria-hidden="true">
+      <div class="pointer-events-none select-none space-y-3 opacity-50 grayscale blur-[1.5px]" aria-hidden="true">
         <div class="flex items-baseline justify-between gap-2">
           <span class="text-2xl font-bold tabular-nums leading-none">{teaser.percent}%</span>
           <span class="shrink-0 text-xs text-muted-foreground">

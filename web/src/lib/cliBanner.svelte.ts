@@ -1,4 +1,5 @@
 import { readDismissed, writeDismissed } from './cliPromo';
+import { isAccountArea } from './shellLayout';
 
 // Whether the CLI strip has stopped asking, as a reactive fact rather than a storage
 // read taken once.
@@ -24,4 +25,12 @@ export function loadCliBannerDismissed(): void {
 export function dismissCliBanner(): void {
   dismissed = true;
   writeDismissed();
+}
+
+/**
+ * Reactive: whether the strip is on screen for this path and account. The strip renders
+ * on it, and the floating star toast waits on it, so a visitor is shown one promo at a time.
+ */
+export function cliBannerShown(pathname: string, agentConnected: boolean): boolean {
+  return !isAccountArea(pathname) && !agentConnected && !dismissed;
 }
