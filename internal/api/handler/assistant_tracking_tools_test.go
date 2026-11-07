@@ -26,6 +26,7 @@ type trackingRepo struct {
 	gotStage      *string
 	gotNotes      *string
 	listedFor     jobtracking.Filter
+	listedOffset  int32
 }
 
 func (r *trackingRepo) JobIDBySlug(_ context.Context, slug string) (int64, error) {
@@ -104,8 +105,9 @@ func (r *trackingRepo) UntrackApplication(context.Context, int64, int64) (jobtra
 	return jobtracking.Interaction{}, nil
 }
 
-func (r *trackingRepo) ListInteractions(_ context.Context, _ int64, filter jobtracking.Filter, _ jobtracking.CardDetail, _, _ int32) ([]jobtracking.TrackedJob, error) {
+func (r *trackingRepo) ListInteractions(_ context.Context, _ int64, filter jobtracking.Filter, _ jobtracking.CardDetail, _, offset int32) ([]jobtracking.TrackedJob, error) {
 	r.listedFor = filter
+	r.listedOffset = offset
 	return nil, nil
 }
 
@@ -233,5 +235,17 @@ func TestMyJobsToolPassesTheFilter(t *testing.T) {
 	}
 	if repo.listedFor != jobtracking.FilterApplied {
 		t.Errorf("listed filter = %q, want applied", repo.listedFor)
+	}
+}
+
+// A board longer than one page must be reachable: my_jobs had a limit and no offset.
+func TestMyJobsToolPagesWithOffset(t *testing.T) {
+	repo := &trackingRepo{slug: "go-dev-acme", jobID: 11}
+	tool := toolByName(t, trackingAPI(repo).assistantTrackingTools(), "my_jobs")
+	if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{"offset":20}`)); err != nil {
+		t.Fatalf("my_jobs: %v", err)
+	}
+	if repo.listedOffset != 20 {
+		t.Errorf("listed offset = %d, want 20", repo.listedOffset)
 	}
 }
