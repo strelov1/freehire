@@ -19,7 +19,7 @@ kind=${1:?usage: diff-cover-gate.sh go|web <input>}
 input=${2:?usage: diff-cover-gate.sh go|web <input>}
 
 root=$(git rev-parse --show-toplevel)
-here=$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+here=$(CDPATH='' cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -34,7 +34,7 @@ case "$kind" in
   go)
     shopt -s nullglob
     # Absolute, because the script changes to the repository root below.
-    dir=$(CDPATH= cd -- "$input" && pwd)
+    dir=$(CDPATH='' cd -- "$input" && pwd)
     profiles=("$dir"/*.out)
     if [ "${#profiles[@]}" -eq 0 ]; then
       echo "No Go coverage profiles in $dir" >&2
