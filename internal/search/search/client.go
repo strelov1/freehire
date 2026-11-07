@@ -381,15 +381,54 @@ func (c *Client) IndexJobs(ctx context.Context, docs []JobDocument) error {
 }
 
 func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, docs []JobDocument) error {
-	if len(docs) == 0 {
-		return nil
+	parts, err := ndjsonParts(docs, maxPushBytes)
+	if err != nil {
+		return err
 	}
 	pk := primaryKey
-	task, err := idx.AddDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
-	if err != nil {
-		return fmt.Errorf("search: index documents: %w", err)
+	// Submit every part before awaiting any: consecutive additions to one index are
+	// auto-batched into one indexing pass, so the split costs no extra pass.
+	uids := make([]int64, 0, len(parts))
+	for _, part := range parts {
+		task, err := idx.AddDocumentsNdjsonWithContext(ctx, part, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+		if err != nil {
+			return fmt.Errorf("search: index documents: %w", err)
+		}
+		uids = append(uids, task.TaskUID)
 	}
-	return c.awaitTask(ctx, idx, task.TaskUID)
+	for _, uid := range uids {
+		if err := c.awaitTask(ctx, idx, uid); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// maxPushBytes keeps one documents request under Meilisearch's http_payload_size_limit
+// (100 MB by default). Each description vector is ~9.5 KB of JSON, so a wave of older,
+// embedded jobs reached ~240 MB on 2026-11-06 and was rejected whole.
+const maxPushBytes = 64 << 20
+
+// ndjsonParts encodes docs as NDJSON bodies of at most limit bytes each. A document
+// larger than limit on its own still gets a body of its own.
+func ndjsonParts(docs []JobDocument, limit int) ([][]byte, error) {
+	var parts [][]byte
+	var cur []byte
+	for _, d := range docs {
+		line, err := json.Marshal(d)
+		if err != nil {
+			return nil, fmt.Errorf("search: encode document %d: %w", d.ID, err)
+		}
+		if len(cur) > 0 && len(cur)+len(line)+1 > limit {
+			parts = append(parts, cur)
+			cur = nil
+		}
+		cur = append(append(cur, line...), '\n')
+	}
+	if len(cur) > 0 {
+		parts = append(parts, cur)
+	}
+	return parts, nil
 }
 
 // SubmitJobs replaces complete documents in the live facet index WITHOUT awaiting the
