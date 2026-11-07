@@ -1,4 +1,4 @@
-import type { Locale } from '#lib/locale.js';
+import type { Locale } from '#lib/i18n/locale.js';
 
 /** The plural forms of one noun, keyed by CLDR category. `other` is required
  *  because it is the only category every language has.
