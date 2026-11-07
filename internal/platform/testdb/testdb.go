@@ -82,6 +82,10 @@ const (
 	// staleTemplateAge is how long a template of OTHER migrations is kept: another
 	// branch on the same server may still be using it, and rebuilding costs seconds.
 	staleTemplateAge = 7 * 24 * time.Hour
+
+	// externalBootTimeout bounds reaching a shared template: waiting for the build
+	// lock plus building it. A build is ~2.4s on a laptop.
+	externalBootTimeout = 5 * time.Minute
 )
 
 type container struct {
@@ -145,6 +149,11 @@ func boot() (*container, error) {
 		return nil, err
 	}
 	if admin := os.Getenv("TESTDB_ADMIN_URL"); admin != "" {
+		// Bounds the wait for another binary's build as well as this one's: a build
+		// takes seconds, and a stuck one should fail every waiter with its own error
+		// rather than at go test's timeout, as a stack dump of a lock wait.
+		ctx, cancel := context.WithTimeout(ctx, externalBootTimeout)
+		defer cancel()
 		return bootExternal(ctx, admin, scripts)
 	}
 
