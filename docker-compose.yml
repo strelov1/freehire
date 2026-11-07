@@ -6,6 +6,9 @@ services:
     # (18) as the stock image it replaces, so the version-subdirectory volume
     # behaviour noted below is unaffected.
     image: pgvector/pgvector:pg18
+    # Every integration-test binary of every checkout meets on this one server
+    # (TESTDB_ADMIN_URL, internal/platform/testdb), so it needs more than the default 100.
+    command: ["postgres", "-c", "max_connections=500"]
     environment:
       POSTGRES_USER: hire
       POSTGRES_PASSWORD: hire

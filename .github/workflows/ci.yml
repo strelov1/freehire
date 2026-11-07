@@ -162,10 +162,32 @@ jobs:
           SHARD: ${{ matrix.task }}
         run: bash .github/scripts/integration-packages.sh "$SHARD" > "$RUNNER_TEMP/integration-packages.txt"
 
+      # One Postgres for the whole shard. Its test binaries share one migrated template on
+      # it (internal/platform/testdb) instead of each booting a container and migrating
+      # its own. Tuned like the harness's container, since the data is thrown away;
+      # max_connections is raised because every binary's tests now meet on one server.
+      # Readiness is asked over TCP: the image's init server answers on the socket only,
+      # so a socket check can pass before the real server is up.
+      - name: Start Postgres
+        if: startsWith(matrix.task, 'integration-')
+        run: |
+          docker run -d --name testdb -p 5432:5432 \
+            -e POSTGRES_USER=hire -e POSTGRES_PASSWORD=hire -e POSTGRES_DB=postgres \
+            pgvector/pgvector:pg18 \
+            -c fsync=off -c full_page_writes=off -c synchronous_commit=off -c max_connections=500
+          psql --version
+          for _ in $(seq 1 60); do
+            pg_isready -h 127.0.0.1 -p 5432 -q && exit 0
+            sleep 1
+          done
+          docker logs testdb
+          exit 1
+
       - name: Integration tests
         if: startsWith(matrix.task, 'integration-')
         env:
           SHARD: ${{ matrix.task }}
+          TESTDB_ADMIN_URL: postgres://hire:hire@127.0.0.1:5432/postgres?sslmode=disable
         run: |
           mapfile -t packages < "$RUNNER_TEMP/integration-packages.txt"
           if [ "${#packages[@]}" -eq 0 ]; then

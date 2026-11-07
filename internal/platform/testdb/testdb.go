@@ -18,13 +18,22 @@
 // instead (pgvector installed, a role that may CREATE DATABASE, and `psql` on
 // PATH). It exists for the coding agents' runner, which has no Docker and must
 // not get the host's: a Docker socket there would be root on the host for any
-// code a task brings. Each test binary migrates its own template on that
-// server, named after its pid, because `go test ./...` runs binaries in
-// parallel and a template being cloned must have no other connection.
+// code a task brings. mise sets it for a laptop (scripts/dev-env.sh), and CI sets it
+// for the integration shards, each of which starts one Postgres for all its binaries.
+//
+// On that server every test binary shares ONE template, named after a hash of the
+// migrations, built by whichever binary gets there first and reused by the rest and
+// by later runs. Migrating a template per binary cost ~2.4s each, 56 times a run,
+// and left every one of them behind: nothing dropped a binary's own template when it
+// exited. Postgres clones one template into many databases at once without
+// complaint (checked with 12 concurrent CREATE DATABASE ... TEMPLATE), so the share
+// needs a lock only around the build.
 package testdb
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"os"
@@ -34,6 +43,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/strelov1/freehire/internal/platform/modroot"
@@ -57,6 +67,19 @@ const (
 
 	user     = "hire"
 	password = "hire"
+
+	// sharedTemplatePrefix names the templates on an external server; the rest of the
+	// name is the migrations' hash (templateName).
+	sharedTemplatePrefix = "hire_tpl_"
+
+	// templateLockKey serializes building a shared template, so concurrent test
+	// binaries build it once. Listed with the project's other advisory-lock keys in
+	// internal/platform/migrate.
+	templateLockKey int64 = 0x66687470 // "fhtp"
+
+	// staleTemplateAge is how long a template of OTHER migrations is kept: another
+	// branch on the same server may still be using it, and rebuilding costs seconds.
+	staleTemplateAge = 7 * 24 * time.Hour
 )
 
 type container struct {
@@ -162,37 +185,108 @@ func boot() (*container, error) {
 	return c, nil
 }
 
-// bootExternal migrates this binary's own template on a server that is already
-// running. The scripts go through one psql session, file by file, as the image's
-// initdb applies them: a migration marked no-transaction (CREATE INDEX
-// CONCURRENTLY) cannot run as one multi-statement Exec, which Postgres wraps in
-// an implicit transaction.
+// bootExternal points this binary at the shared template on a server that is already
+// running, building it first when no binary has yet.
 func bootExternal(ctx context.Context, adminURL string, scripts []string) (*container, error) {
 	base, err := url.Parse(adminURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse TESTDB_ADMIN_URL: %w", err)
 	}
+	name, err := templateName(scripts)
+	if err != nil {
+		return nil, err
+	}
 	c := &container{
 		base:     *base,
-		template: fmt.Sprintf("hire_template_%d", os.Getpid()),
+		template: name,
 		prefix:   fmt.Sprintf("hire_test_%d", os.Getpid()),
 	}
 	admin, err := pgxpool.New(ctx, adminURL)
 	if err != nil {
 		return nil, fmt.Errorf("connect TESTDB_ADMIN_URL: %w", err)
 	}
-	// A pid recycled from an earlier run on the same server may have left one behind.
-	if _, err := admin.Exec(ctx, `DROP DATABASE IF EXISTS "`+c.template+`" WITH (FORCE)`); err != nil {
+	if err := c.ensureTemplate(ctx, admin, scripts); err != nil {
 		admin.Close()
-		return nil, fmt.Errorf("drop stale %s: %w", c.template, err)
+		return nil, err
 	}
-	if _, err := admin.Exec(ctx, `CREATE DATABASE "`+c.template+`"`); err != nil {
-		admin.Close()
-		return nil, fmt.Errorf("create %s: %w", c.template, err)
+	c.admin = admin
+	return c, nil
+}
+
+// templateName is the shared template's name: a hash over every migration's file name
+// and content, so a branch with other migrations gets a template of its own and an
+// edited migration is never served from a template built before the edit.
+func templateName(scripts []string) (string, error) {
+	h := sha256.New()
+	for _, s := range scripts {
+		b, err := os.ReadFile(s)
+		if err != nil {
+			return "", fmt.Errorf("read migration: %w", err)
+		}
+		_, _ = fmt.Fprintf(h, "%s\x00%d\x00", filepath.Base(s), len(b)) // a hash never fails a write
+		h.Write(b)
 	}
+	return sharedTemplatePrefix + hex.EncodeToString(h.Sum(nil))[:16], nil
+}
+
+// ensureTemplate builds the template unless it exists. The lock is a session lock on
+// one connection held across the build, which runs in a psql process of its own; a
+// binary that waited on it finds the template built and returns.
+//
+// The template is migrated under a temporary name and renamed into place, so the
+// final name existing is what says the build finished: a run killed mid-build leaves
+// only the temporary one, which the next builder drops.
+func (c *container) ensureTemplate(ctx context.Context, admin *pgxpool.Pool, scripts []string) error {
+	conn, err := admin.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire admin connection: %w", err)
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", templateLockKey); err != nil {
+		return fmt.Errorf("lock template build: %w", err)
+	}
+	defer func() {
+		_, _ = conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", templateLockKey)
+	}()
+
+	var exists bool
+	if err := conn.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)", c.template).Scan(&exists); err != nil {
+		return fmt.Errorf("look up %s: %w", c.template, err)
+	}
+	if exists {
+		return nil
+	}
+
+	building := c.template + "_building"
+	if _, err := conn.Exec(ctx, `DROP DATABASE IF EXISTS "`+building+`" WITH (FORCE)`); err != nil {
+		return fmt.Errorf("drop unfinished %s: %w", building, err)
+	}
+	if _, err := conn.Exec(ctx, `CREATE DATABASE "`+building+`"`); err != nil {
+		return fmt.Errorf("create %s: %w", building, err)
+	}
+	if err := c.migrate(ctx, building, scripts); err != nil {
+		_, _ = conn.Exec(context.Background(), `DROP DATABASE IF EXISTS "`+building+`" WITH (FORCE)`)
+		return err
+	}
+	if _, err := conn.Exec(ctx, `ALTER DATABASE "`+building+`" RENAME TO "`+c.template+`"`); err != nil {
+		return fmt.Errorf("finish %s: %w", c.template, err)
+	}
+	// The build time, for dropStaleTemplates: pg_database records none.
+	if _, err := conn.Exec(ctx, `COMMENT ON DATABASE "`+c.template+`" IS '`+time.Now().UTC().Format(time.RFC3339)+`'`); err != nil {
+		return fmt.Errorf("stamp %s: %w", c.template, err)
+	}
+	dropStaleTemplates(ctx, conn, c.template)
+	return nil
+}
+
+// migrate applies the scripts through one psql session, file by file, as the image's
+// initdb applies them: a migration marked no-transaction (CREATE INDEX CONCURRENTLY)
+// cannot run as one multi-statement Exec, which Postgres wraps in an implicit
+// transaction.
+func (c *container) migrate(ctx context.Context, database string, scripts []string) error {
 	// The password travels in PGPASSWORD, not in psql's argv, which any process list shows.
 	target := c.base
-	target.Path = "/" + c.template
+	target.Path = "/" + database
 	target.User = nil
 	if name := c.base.User.Username(); name != "" {
 		target.User = url.User(name)
@@ -209,13 +303,34 @@ func bootExternal(ctx context.Context, adminURL string, scripts []string) (*cont
 		cmd.Env = append(cmd.Env, "PGPASSWORD="+pw)
 	}
 	if out, err := cmd.CombinedOutput(); err != nil {
-		// Nothing else would ever drop it: the next binary gets a different pid.
-		_, _ = admin.Exec(context.Background(), `DROP DATABASE IF EXISTS "`+c.template+`" WITH (FORCE)`)
-		admin.Close()
-		return nil, fmt.Errorf("migrate %s: %w\n%s", c.template, err, out)
+		return fmt.Errorf("migrate %s: %w\n%s", database, err, out)
 	}
-	c.admin = admin
-	return c, nil
+	return nil
+}
+
+// dropStaleTemplates drops templates of other migrations built over staleTemplateAge
+// ago. Best effort and never forced: a template another run is cloning right now is
+// left for a later build to retry.
+func dropStaleTemplates(ctx context.Context, conn *pgxpool.Conn, current string) {
+	rows, err := conn.Query(ctx, `SELECT d.datname, coalesce(shobj_description(d.oid, 'pg_database'), '')
+		FROM pg_database d WHERE d.datname LIKE $1 AND d.datname <> $2`, sharedTemplatePrefix+"%", current)
+	if err != nil {
+		return
+	}
+	var stale []string
+	for rows.Next() {
+		var name, built string
+		if rows.Scan(&name, &built) != nil {
+			continue
+		}
+		if t, err := time.Parse(time.RFC3339, built); err == nil && time.Since(t) > staleTemplateAge {
+			stale = append(stale, name)
+		}
+	}
+	rows.Close()
+	for _, name := range stale {
+		_, _ = conn.Exec(ctx, `DROP DATABASE IF EXISTS "`+name+`"`)
+	}
 }
 
 func (c *container) dsn(database string) string {
