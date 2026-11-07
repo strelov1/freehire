@@ -154,6 +154,25 @@ it('shows exact source salary bounds in the job detail summary', () => {
   expect(screen.getByText('2,501 – 3,000 € / mo')).not.toBeNull();
 });
 
+it('offers a LinkedIn people search when no in-product referrer is available', () => {
+  render(JobView, { job });
+  expect(screen.queryByRole('button', { name: 'Ask for a referral' })).toBeNull();
+  const people = screen.getByRole('link', { name: /^Find people at .+ on LinkedIn$/ });
+  expect(people.getAttribute('target')).toBe('_blank');
+});
+
+it('omits the LinkedIn action when the employer name is blank', () => {
+  render(JobView, { job: { ...job, company: '  ' } });
+  expect(screen.queryByRole('link', { name: /^Find people at .+ on LinkedIn$/ })).toBeNull();
+});
+
+it('shows an approved in-product referrer before the LinkedIn option', () => {
+  render(JobView, { job: { ...job, referral_available: true } });
+  const referral = screen.getByRole('button', { name: 'Ask for a referral' });
+  const people = screen.getByRole('link', { name: /^Find people at .+ on LinkedIn$/ });
+  expect(referral.compareDocumentPosition(people) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+});
+
 it.each([JobView, JobRow])('shows the equity and application-form chips when the posting carries them', (component) => {
   render(component, { job: { ...job, equity: 'salary_and_equity', apply_questions: 0 } });
   expect(screen.getByText('Salary + equity')).not.toBeNull();

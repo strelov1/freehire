@@ -1152,6 +1152,21 @@
       />
     {/if}
 
+    {#if job.company?.trim()}
+      <!-- A muted text link, not a button: it shows on every posting, and this page's CTA
+           hierarchy is the subject of its own open change. The company page is resolved
+           only on click, keeping crawler visits cheap. -->
+      <a
+        href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        class="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline"
+      >
+        Find people at {job.company.trim()} on LinkedIn
+        <ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />
+      </a>
+    {/if}
+
     <!-- Beside the referral block rather than a fourth button of its own: the two are the
          same insider seen from different ends, and this page's CTA hierarchy is the
          subject of its own open change. -->
