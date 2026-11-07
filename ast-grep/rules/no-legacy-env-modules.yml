@@ -8,8 +8,15 @@ note: >-
   SvelteKit 2 spelling agents reach for by habit; the repository reads $app/env.
 rule:
   any:
-    - kind: import_statement
-    - kind: export_statement
-  has:
-    field: source
-    regex: ^['"]\$env/
+    - any:
+        - kind: import_statement
+        - kind: export_statement
+      has:
+        field: source
+        regex: ^['"]\$env/
+    # await import('$env/dynamic/public')
+    - kind: call_expression
+      has:
+        field: function
+        kind: import
+      regex: ^import\(\s*['"]\$env/

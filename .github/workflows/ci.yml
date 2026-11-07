@@ -439,6 +439,19 @@ jobs:
       - name: Scan the code
         run: ast-grep scan --error
 
+      # `ast-grep test` feeds a rule snippets in its own language, so nothing above proves
+      # the rules reach a .svelte file — least of all a bare <script>, which only the
+      # languageInjections entry in sgconfig.yml reads as TypeScript. This does, on a
+      # throwaway component holding one violation of each web rule.
+      - name: Prove the rules reach a bare Svelte script
+        run: |
+          probe=web/src/lib/AstGrepProbe.svelte
+          printf '%s\n' '<script>' "  import { Sparkles } from '@lucide/svelte';" "  import { env } from '\$env/dynamic/public';" '</script>' > "$probe"
+          # The scan exits non-zero on the findings it is here to make; the list is the verdict.
+          found=$( (ast-grep scan --json=compact "$probe" || true) | jq -r '[.[].ruleId] | sort | join(",")')
+          rm "$probe"
+          [ "$found" = "no-legacy-env-modules,no-sparkles-icon" ] || { echo "expected both web rules on a bare <script>, got: '$found'" >&2; exit 1; }
+
   # Dead files, unused dependencies and unresolved binaries across the three JS packages.
   # Read knip.config.js for where the gate's line is drawn and why exports sit outside it.
   #

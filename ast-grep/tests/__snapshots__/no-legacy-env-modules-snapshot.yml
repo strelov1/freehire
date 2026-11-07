@@ -1,5 +1,15 @@
 id: no-legacy-env-modules
 snapshots:
+  const m = await import('$env/dynamic/public');:
+    labels:
+    - source: import('$env/dynamic/public')
+      style: primary
+      start: 16
+      end: 45
+    - source: import
+      style: secondary
+      start: 16
+      end: 22
   "export { env } from '$env/dynamic/private';":
     labels:
     - source: export { env } from '$env/dynamic/private';
