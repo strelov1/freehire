@@ -1,9 +1,9 @@
 # Full descriptions from `/api/v1/jobs/search`
 
 This project keeps the `description` in `/api/v1/jobs/search` results a preview. Full descriptions
-come from `GET /api/v1/agent/jobs/search` (the same query and catalogue filters, without the two
-personal ones, `hide_seen` and `hide_applied_companies`; plus `description_format`), or from
-`GET /api/v1/jobs/{slug}` for one posting.
+come from `GET /api/v1/agent/jobs/search`, a search endpoint that returns each description whole
+(`description_format`), or from `GET /api/v1/jobs/{slug}` for one posting. What each endpoint
+accepts is in [docs/API.md](../docs/API.md).
 
 ## Why this is out of scope
 
