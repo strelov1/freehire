@@ -295,7 +295,7 @@ func (h *assistantHandlers) autoApplyView(ctx context.Context, userID int64, slu
 	case len(view.History) > 0 && slices.Contains([]string{autoApplyStatusSubmitted, autoApplyStatusCancelled}, view.History[len(view.History)-1].Event):
 		view.Status = view.History[len(view.History)-1].Event
 	default:
-		return nil, errors.New(autoApplyNoAttemptMessage)
+		return nil, fiber.NewError(fiber.StatusNotFound, autoApplyNoAttemptMessage)
 	}
 	view.NextStep = autoApplyNextStep(view.Status, view.MayHaveReachedEmployer)
 	return view, nil
