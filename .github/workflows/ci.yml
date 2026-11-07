@@ -891,6 +891,12 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      # Brotli budgets for the client entry and the heaviest routes, read off the build the
+      # previous step just made (web/.size-limit.mjs). It lives in this job, not its own, so
+      # it reuses that build and the required check list stays as it is.
+      - name: Bundle size budgets
+        run: pnpm run size
+
   # Always report the required check, including an intentional skip of web work.
   web:
     needs: [changes, web-work]
