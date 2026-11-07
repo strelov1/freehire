@@ -181,7 +181,7 @@ func (r *autoApplyAllowanceRefusal) Error() string {
 //
 // An unknown slug comes back as pgx.ErrNoRows, which the HTTP path renders as 404.
 func (h *assistantHandlers) startAutoApply(ctx context.Context, userID int64, slug string) error {
-	job, err := h.queries.GetJobBySlug(ctx, slug)
+	job, err := jobBySlugOrCode(ctx, h.queries, slug)
 	if err != nil {
 		return err
 	}

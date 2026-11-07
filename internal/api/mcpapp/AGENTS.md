@@ -146,7 +146,13 @@ OJCP surface uses). A search result carries only `first_seen_at`.
 - **`check_jobs_open`** answers open / closed / not_found for up to `maxOpenChecks` (50)
   slugs in one Postgres read (`ListJobLivenessBySlugs`). It reports a CLOSED posting as closed
   — that is the point of the tool — so it does not reuse `publishedToAgents`, which refuses
-  closed postings; private and duplicate postings still answer not_found, as on `get_job`.
+  closed postings; private and duplicate postings still answer not_found.
+- **`get_job`** (here and on the account server) loads through `agentJobBySlug`, NOT
+  `publishedToAgents`: search reads an index that trails the database, so it hands out slugs
+  that closed or became duplicates since the push, and a not_found for a slug the previous
+  turn returned is what four agent reports in one day were about (2026-11-07). A closed
+  posting is served with `closed_at`, a duplicate as its canonical posting (or as itself when
+  that one is not public); only a private posting is a miss.
   Slugs past the cap are named back in `unchecked`, never dropped. A failed lookup is an error,
   never a page of not_found.
 - **`search` / `fetch`** exist for ChatGPT's deep-research and company-knowledge connectors,
