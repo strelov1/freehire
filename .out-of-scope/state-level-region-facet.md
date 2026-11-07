@@ -10,13 +10,13 @@ This project does not offer a filter by state, Land or province. Places resolve 
   and the `cities` filter resolves them too (#3651). "Near a place" is the `metros` facet.
 - The missing piece is the admin level, and demand for it was measured: searches naming a state or
   Land were about 0.13% of all searches (2026-10-27), almost none for German Länder. That does not
-  pay for a new facet plus a backfill of the catalogue. Which level would even serve is different
-  per country (ADM1 for Albania, ADM2 for Belgium, neither for Slovenia).
+  pay for a new facet plus a backfill of the catalogue. Which level would serve also differs by
+  country, as the reporter's GeoNames tally in #3653 showed (ADM1 for Albania, ADM2 for Belgium,
+  a special case for Slovenia).
 - A live GeoNames API is out either way: the dictionaries are offline by design, and the free
   quota is far below ingest volume.
 
-Revisit if searches naming a state or province grow well past that share, or a market we serve
-needs sub-country filtering that `metros` cannot give.
+Revisit if searches naming a state or province grow well past that share.
 
 ## Prior requests
 
