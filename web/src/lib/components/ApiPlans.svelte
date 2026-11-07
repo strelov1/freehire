@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { buttonVariants, cn } from '#lib/ui/index.js';
+  import { buttonVariants, cn, type ButtonVariant } from '#lib/ui/index.js';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -7,7 +7,9 @@
   import { promptSignIn } from '#lib/signin.js';
   import type { PublicPrice } from '#lib/types.js';
 
-  const { prices }: { prices: PublicPrice[] } = $props();
+  // `buttonVariant`: the API's own page sells the API, so its buttons are the page's CTA;
+  // under the Pro plan on /pricing they step down to outline so Pro keeps the one fill.
+  const { prices, buttonVariant = 'cta' }: { prices: PublicPrice[]; buttonVariant?: ButtonVariant } = $props();
 
   // One card per tier, and only for a tier that is actually sold: the monthly price when there
   // is one, otherwise whatever interval the deployment offers.
@@ -93,7 +95,7 @@
           {#if isAuthenticated()}
             <button
               type="button"
-              class={cn(buttonVariants({ variant: 'cta', size: 'lg' }), 'mt-auto disabled:opacity-60')}
+              class={cn(buttonVariants({ variant: buttonVariant, size: 'lg' }), 'mt-auto disabled:opacity-60')}
               disabled={busyId !== null}
               onclick={() => buy(card.price)}
             >
@@ -102,7 +104,7 @@
           {:else}
             <button
               type="button"
-              class={cn(buttonVariants({ variant: 'cta', size: 'lg' }), 'mt-auto')}
+              class={cn(buttonVariants({ variant: buttonVariant, size: 'lg' }), 'mt-auto')}
               onclick={promptSignIn}>Sign in to subscribe</button
             >
           {/if}

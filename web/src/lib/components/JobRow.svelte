@@ -14,7 +14,7 @@
   import { promptSignIn } from '#lib/signin.js';
   import { track } from '#lib/analytics.js';
   import { cardTags, cardTagsFromCard, formatSalary } from '#lib/enrichment.js';
-  import { computeClientMatch, matchTeaser, resolveMatchState } from '#lib/jobMatch.js';
+  import { computeClientMatch, resolveMatchState } from '#lib/jobMatch.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { foreignContentLang, metaDescription } from '#lib/seo.js';
   import type { Job, JobCard } from '#lib/types.js';
@@ -189,29 +189,24 @@
   );
   const match = $derived(matchState === 'ready' ? computeClientMatch(skills, profileSkills) : null);
 
-  // A viewer with no match to show — signed out, or signed in with no skills — gets the
-  // job's deterministic teaser instead of an empty card corner: the same chips and strip,
-  // blurred, as an invitation to sign in. Seeded from the slug, so the figures survive
-  // hydration and agree with the sidebar block on the job's own page.
-  const teaser = $derived(
-    matchState === 'guest' || matchState === 'no-profile'
-      ? matchTeaser(job.public_slug, skills)
-      : null,
-  );
+  // A viewer with no match to show — signed out, or signed in with no skills. It used to
+  // drive a blurred strip and tinted chips on every card; a feed of blurred grey read as a
+  // page that failed to load, so the card now shows neutral chips and one quiet invitation
+  // in its action row. The blurred figures stay on the job's own page.
+  const teaser = $derived((matchState === 'guest' || matchState === 'no-profile') && skills.length > 0);
 
-  // One copy of the invitation, shared by the sighted line under the blurred strip and
-  // the sr-only span that stands in for it — so the two can't drift into different
-  // wording for the same call to action.
+  // One copy of the invitation, shared by the compact card's line and the normal card's
+  // action-row button — so the two can't drift into different wording.
   const matchInvite = $derived(
     matchState === 'guest' ? 'Sign in to see your match' : 'Upload your CV to see your match',
   );
 
-  // A chip is red when the viewer's own profile lacks the skill, or — under the teaser —
-  // when the teaser marked it missing. Both tints come from the same source as the strip
-  // below, so the chips and the percentage can never tell different stories.
-  function chipVariant(skill: string): 'brand' | 'missing' {
+  // A chip is red when the viewer's own profile lacks the skill — the same source as the
+  // strip below, so the chips and the percentage can never tell different stories. With
+  // no profile to compare against there is nothing to tint: the chips are plain facts.
+  function chipVariant(skill: string): 'brand' | 'missing' | 'outline' {
     if (haveSet) return haveSet.has(skill.toLowerCase()) ? 'brand' : 'missing';
-    if (teaser) return teaser.missing.has(skill) ? 'missing' : 'brand';
+    if (teaser) return 'outline';
     return 'brand';
   }
 
@@ -531,17 +526,7 @@
          doesn't need. With basis:auto the row's width is derived from its max-content
          width, so shorter chips would ironically shrink the row and cause *more*
          wrapping. -->
-    <!-- Under the teaser the chips are blurred with the strip below, because their
-         green/red tint is part of the same not-yet-computed signal. The blur stops at
-         this container so the salary beside it — real information — stays crisp. The
-         skill names themselves are left announced to assistive technology: they're the
-         job's own facet, and colour was never conveyed there in the first place. -->
-    <div
-      class={[
-        'flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:flex-1',
-        teaser && 'pointer-events-none select-none opacity-50 grayscale blur-[1.5px]',
-      ]}
-    >
+    <div class="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:flex-1">
       <!-- A long dictionary slug ("event-driven-architecture") would wrap inside its
            own chip and stretch the row to two lines, breaking the card's rhythm on a
            phone. Each chip stays one line and truncates with an ellipsis past max-w; the full skill is
@@ -568,23 +553,14 @@
     {/if}
   </div>
 
-  <!-- Card-level profile match: the real client-computed coverage bar for a signed-in
-       viewer with a skills profile, the blurred teaser for one without. `blurred` is
-       gated on there being no real match too, so the two props cannot contradict each
-       other and render a genuine score under a blur. No `gutterRight`: the hide control
-       it used to keep clear of now lives in the action row below, not over this corner. -->
-  <JobMatchBar match={match ?? teaser} blurred={!match && !!teaser} />
-  {#if teaser}
-    <!-- The sighted invitation, under the blurred strip rather than over it — the same
-         icon + line the job page's own match block uses below its teaser. `aria-hidden`
-         because the accessible equivalent is the sr-only span below, outside the <a> —
-         this text sits inside the card-wide link and must not join its accessible name.
-         No button here (unlike the job page's): a second activation target inside this
-         <a> would be invalid markup, and the card itself is already the link. -->
-    <div
-      class="mt-1.5 flex items-center justify-center gap-1.5 text-xs text-muted-foreground"
-      aria-hidden="true"
-    >
+  <!-- Card-level profile match: the real client-computed coverage bar, only for a
+       signed-in viewer with a skills profile. -->
+  <JobMatchBar {match} />
+  {#if teaser && compact}
+    <!-- The compact card has no action row, so its invitation stays a caption inside the
+         link. `aria-hidden`: the sr-only span below, outside the <a>, says it instead,
+         so it does not join the link's accessible name. -->
+    <div class="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground" aria-hidden="true">
       {#if matchState === 'guest'}
         <Lock class="size-3.5 shrink-0" />
       {:else}
@@ -602,12 +578,9 @@
   <span id={summaryId} hidden>{summary}</span>
 {/if}
 
-{#if teaser}
-  <!-- The blurred strip is hidden from assistive technology, so this is what stands in
-       for it — the invitation that would actually get this viewer a real match. It sits
-       outside the card link deliberately: `sr-only` is clip-based, not display:none, so
-       inside the <a> it would join the link's accessible name and every card in the feed
-       would announce a sign-in instruction that the link doesn't carry out. -->
+{#if teaser && compact}
+  <!-- Stands in for the compact card's aria-hidden caption. Outside the card link on
+       purpose: `sr-only` is clip-based, so inside the <a> it would join the link's name. -->
   <span class="sr-only">{matchInvite}</span>
 {/if}
 
@@ -680,6 +653,29 @@
     <!-- The caller's own controls share this row rather than getting a second bordered
          one under it — two stacked rules under one card read as a layout mistake. -->
     {@render footer?.()}
+
+    <!-- The invitation that gets this viewer a real match, once per card and quiet:
+         a guest signs in, a signed-in viewer without skills goes to their profile. -->
+    {#if teaser}
+      {#if matchState === 'guest'}
+        <button
+          type="button"
+          onclick={promptSignIn}
+          class="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground transition hover:bg-background hover:text-foreground"
+        >
+          <Lock class="size-3.5 shrink-0" aria-hidden="true" />
+          {matchInvite}
+        </button>
+      {:else}
+        <a
+          href={resolve('/my/profile')}
+          class="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground transition hover:bg-background hover:text-foreground"
+        >
+          <FileText class="size-3.5 shrink-0" aria-hidden="true" />
+          {matchInvite}
+        </a>
+      {/if}
+    {/if}
 
     <!-- Apply and Hide share the row's far end, one `ml-auto` wrapper (not one each —
          two auto margins on adjacent items split the leftover space and pull them

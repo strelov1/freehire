@@ -40,7 +40,7 @@
 </script>
 
 {#if shown}
-  <div data-cli-banner class="border-b border-border bg-brand/5">
+  <div data-cli-banner class="border-b border-border bg-secondary/40">
     <div class="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2 text-sm">
       <!-- Wraps to a second line on a phone rather than truncating the one sentence that
            says what the strip is for. The agents' marks follow the sentence that names
@@ -61,7 +61,7 @@
 
       <a
         href={resolve('/mcp')}
-        class={cn(buttonVariants({ variant: 'cta', size: 'sm' }), 'h-7 shrink-0 gap-1 rounded-full px-3 text-xs')}
+        class={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 shrink-0 gap-1 rounded-full px-3 text-xs')}
       >
         Connect
         <ArrowRight class="size-3.5" aria-hidden="true" />

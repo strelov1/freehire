@@ -487,7 +487,7 @@
   </div>
 
   {#if plans}
-    <ApiPlans prices={plans.prices} />
+    <ApiPlans prices={plans.prices} buttonVariant="outline" />
   {/if}
 
   <!-- Said plainly rather than buried: what a subscription does and does not commit anyone
