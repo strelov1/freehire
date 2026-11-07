@@ -216,7 +216,8 @@ jobs:
               severity: "warning", status: "firing", services: "freehire-web", alert_sources: "github-actions",
               alerts_count: 1, start_time: $now, url: $url, source: "perf-watchdog", context: $k6}' > incident.json
           code=000
-          if [ -n "$INCIDENT_URL" ] && [ -n "$INCIDENT_TOKEN" ]; then
+          # No k6.log means the smoke never ran (setup failed): nothing for the agent to investigate.
+          if [ -s k6.log ] && [ -n "$INCIDENT_URL" ] && [ -n "$INCIDENT_TOKEN" ]; then
             code=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' -X POST "$INCIDENT_URL" \
               -H "Authorization: Bearer $INCIDENT_TOKEN" -H 'Content-Type: application/json' --data @incident.json) || code=000
           fi
