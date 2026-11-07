@@ -410,3 +410,17 @@ func TestAgentJobBySlug_ServesWhatSearchCanReturn(t *testing.T) {
 		t.Errorf("private: err = %v, want pgx.ErrNoRows", err)
 	}
 }
+
+func TestSlugFromLink(t *testing.T) {
+	for in, want := range map[string]string{
+		"a-job-t35nijto": "a-job-t35nijto",
+		"https://freehire.me/jobs/a-job-abcdefgh":                "a-job-abcdefgh",
+		"https://freehire.me/jobs/a-job-abcdefgh/":               "a-job-abcdefgh",
+		"https://freehire.me/jobs/a-job-abcdefgh?ref=b-t35nijto": "a-job-abcdefgh",
+		" https://freehire.me/jobs/a-job-abcdefgh#apply ":        "a-job-abcdefgh",
+	} {
+		if got := slugFromLink(in); got != want {
+			t.Errorf("slugFromLink(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

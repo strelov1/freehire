@@ -208,6 +208,9 @@ func (h *assistantHandlers) autoApplyReviewTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
+			if in.JobSlug == "" {
+				return nil, fiber.NewError(fiber.StatusBadRequest, "job_slug is required")
+			}
 			if err := h.requireAgentsMayApply(ctx, userID); err != nil {
 				return nil, err
 			}
@@ -267,7 +270,7 @@ func (h *assistantHandlers) autoApplyView(ctx context.Context, userID int64, slu
 	if err != nil {
 		return nil, err
 	}
-	view := autoApplyAttemptView{JobSlug: slug, History: make([]autoApplyEventView, 0, len(events))}
+	view := autoApplyAttemptView{JobSlug: job.PublicSlug, History: make([]autoApplyEventView, 0, len(events))}
 	for _, e := range slices.Backward(events) {
 		ev := autoApplyEventView{At: e.CreatedAt.Time.UTC(), Event: e.Kind}
 		if string(e.Detail) != "{}" {
