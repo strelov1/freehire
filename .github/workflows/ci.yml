@@ -877,6 +877,18 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      # axe-core over the built app, serving five public pages from a loopback stub API
+      # (web/e2e/a11y/stub-api.ts): serious or critical WCAG 2.1 A/AA violations fail it.
+      # A step here and not a job of its own: it needs this job's install and build, and the
+      # required check list names jobs. It runs wherever web-work does, which the `web` job
+      # below reports on every PR. Needs no backend, no secrets and no network beyond the
+      # Chromium download.
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Accessibility check (axe-core)
+        run: pnpm run test:a11y
+
   # Always report the required check, including an intentional skip of web work.
   web:
     needs: [changes, web-work]
