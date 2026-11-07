@@ -12,7 +12,7 @@
   import type { Document, ExperienceItem, Project } from '#lib/generated/contracts.js';
   import { experienceHeader, educationLine, languageLabel, certificationLine, type CvFont } from '#lib/cv.js';
   import HeadshotSilhouette from '#lib/components/HeadshotSilhouette.svelte';
-  import { A4_WIDTH_PX, paginateBlocks, previewTypography, printedPageCount } from './geometry';
+  import { A4_WIDTH_PX, paginateBlocks, previewTypography, printedPageCount } from '#lib/cvGeometry.js';
   import { must } from '#lib/utils.js';
   import { keepIndex, makeHighlighter, makeContainerHighlighter } from './revisions';
 
