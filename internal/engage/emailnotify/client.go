@@ -117,13 +117,17 @@ type Client struct {
 	// trackingSet is the SES configuration set that publishes engagement events. Empty
 	// tracks nothing, whatever a message's Campaign says.
 	trackingSet string
+	// breaker is nil unless WithSendingBreaker was called.
+	breaker *breaker
 }
 
 // WithEngagementTracking returns the Client with the SES configuration set that
 // publishes opens, clicks, deliveries, bounces and complaints. Only the workers sending
 // campaigns and digests call it; every other worker's client cannot track by construction.
 func (c *Client) WithEngagementTracking(configurationSet string) *Client {
-	return &Client{ses: c.ses, trackingSet: configurationSet}
+	out := *c
+	out.trackingSet = configurationSet
+	return &out
 }
 
 // trackingCheckTimeout bounds CheckEngagementTracking: the workers calling it have no deadline
@@ -172,7 +176,14 @@ func (c *Client) Send(ctx context.Context, m Message) error {
 		return err
 	}
 	c.track(in, m)
+	if c.breaker != nil && c.breaker.tripped.Load() {
+		return ErrSendingPaused
+	}
 	if _, err := c.ses.SendEmail(ctx, in); err != nil {
+		if c.breaker != nil && accountRefused(err) {
+			c.breaker.tripped.Store(true)
+			return fmt.Errorf("emailnotify: ses send: %w: %w", ErrSendingPaused, err)
+		}
 		return fmt.Errorf("emailnotify: ses send to %s: %w", m.To, err)
 	}
 	return nil

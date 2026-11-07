@@ -48,7 +48,7 @@ import (
 // and the offsets are hours wide.
 const maxPerRunDefault = 500
 
-func main() { worker.Main(run) }
+func main() { worker.Main(run, emailnotify.HoldKeys("mentorship-remind")...) }
 
 func run() int {
 	// Gate before Bootstrap, not after. With no mail transport there is nothing to send,
@@ -72,6 +72,7 @@ func run() int {
 		log.Printf("mentorship-remind: mail transport: %v", err)
 		return 1
 	}
+	sender = sender.WithSendingBreaker()
 
 	q := db.New(pool)
 	svc := mentorship.New(

@@ -358,6 +358,16 @@ Bot API — check which one you're in.
   were never marked notified — and only while they are fresh: an outage longer than the
   freshness window loses what it held back, by design.
 
+## Pausing outbound mail
+
+Outbound mail workers can be held by class (transactional, engagement, lifecycle) or all at
+once with one Redis key, and a worker stops sending for the rest of its run once SES refuses the
+whole account. The keys, the class table, the fail-open note, the resume order
+(transactional, then engagement, then lifecycle) and the breaker are in
+[internal/platform/worker/AGENTS.md](../../internal/platform/worker/AGENTS.md#holding-outbound-mail-by-class).
+A hold sends nothing and never bypasses unsubscribe or consent rules; the API server's own
+mail is never held.
+
 ## Engagement tracking
 
 Campaigns (`cmd/broadcast`) and the saved-search digest (`cmd/notify`) can be measured; nothing

@@ -34,7 +34,7 @@ func TestRunOrPauseSkipsTheRunWhenHeld(t *testing.T) {
 	code := runOrPause(func() int {
 		called = true
 		return 3
-	})
+	}, nil)
 
 	if called {
 		t.Error("the run function was called while the switch was held")
@@ -61,7 +61,7 @@ func TestRunOrPauseRunsAndReportsWhenClear(t *testing.T) {
 	defer func() { os.Args = origArgs }()
 	os.Args = []string{"/opt/freehire/src/hire-current/embed"}
 
-	code := runOrPause(func() int { return 3 })
+	code := runOrPause(func() int { return 3 }, nil)
 
 	if code != 3 {
 		t.Errorf("exit code = %d, want 3 — the run's own status must survive", code)
@@ -126,7 +126,7 @@ func TestRunReportedFlushesFinalFault(t *testing.T) {
 						panic("late worker failure")
 					}
 					return 3
-				})
+				}, nil)
 				if code != 3 {
 					t.Errorf("code=%d, want 3", code)
 				}
