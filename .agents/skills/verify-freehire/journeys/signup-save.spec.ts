@@ -21,6 +21,10 @@ test('register, save a job from the feed, see it on the board', async ({ page })
   await expect(page).not.toHaveURL(/\/signin/);
   await page.screenshot({ path: shot('1-registered'), fullPage: false });
 
+  // A new account may get the onboarding tour as a modal over the feed, at any moment after
+  // load; Playwright skips it whenever it shows up before an action.
+  const tour = page.getByRole('dialog', { name: 'Get to know freehire' });
+  await page.addLocatorHandler(tour, () => tour.getByRole('button', { name: 'Skip', exact: true }).click());
   await page.goto('/jobs');
   await page.waitForLoadState('networkidle');
   const card = page.getByTestId('job-card').first();
@@ -31,6 +35,7 @@ test('register, save a job from the feed, see it on the board', async ({ page })
   await page.screenshot({ path: shot('2-saved'), fullPage: false });
 
   await page.goto('/my/tracking');
+  await page.waitForLoadState('networkidle');
   // The board names each card "Open <title> at <company>"; read the title the API serves.
   const job = await (await page.request.get(`/api/v1${href}`)).json();
   await expect(page.getByRole('button', { name: `Open ${job.data.title.trim()} at`, exact: false })).toBeVisible();

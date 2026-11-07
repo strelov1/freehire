@@ -90,7 +90,7 @@ Rules that came from failed runs:
 - **Stable handles**: `getByTestId('job-card')`, roles with names (`combobox 'Search jobs'`,
   `button 'Create your account'`), `getByLabel('Email')`. When a locator misses, read the
   page snapshot in the failure's `error-context.md`; it lists every role and name.
-- The feed may open a posting in a new tab (`target=_blank`): follow `context.waitForEvent('page')`.
+- Some lists open a posting in a new tab: wait for `context.waitForEvent('page')` only when the link has `target="_blank"` (the feed does not).
 - API checks go through the web origin (`page.request.get('/api/v1/...')`) or straight to
   `$VERIFY_API_URL` with curl.
 - Database side effects: `psql "$DATABASE_URL"` after `eval "$(stack.sh env)"`.

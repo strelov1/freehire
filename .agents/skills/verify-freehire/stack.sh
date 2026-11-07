@@ -30,7 +30,9 @@ STATE=${VERIFY_STATE:-/tmp/verify-freehire-$API_PORT}
 EVIDENCE=${VERIFY_EVIDENCE:-/tmp/verify-freehire-evidence}
 ADMIN_URL=${TESTDB_ADMIN_URL:?TESTDB_ADMIN_URL is unset: run inside the repo with mise, or in the coder runner}
 DB_NAME=verify_$API_PORT
-DATABASE_URL="${ADMIN_URL%%/postgres*}/$DB_NAME${ADMIN_URL#*/postgres}"
+# Swap only the path's database name; the user, host and query string stay as they are.
+ADMIN_BASE=${ADMIN_URL%%\?*}
+DATABASE_URL="${ADMIN_BASE%/*}/$DB_NAME${ADMIN_URL#"$ADMIN_BASE"}"
 # Made per instance by `up` (a literal key here trips gitleaks), read back by the other verbs.
 MEILI_KEY=$(cat "$STATE/meili-key" 2>/dev/null || true)
 MEILI_CONTAINER=verify-freehire-meili-$API_PORT
@@ -57,14 +59,13 @@ wait_for() { # url, seconds, expected body substring (optional)
 }
 
 print_env() {
-  cat <<EOF
-export VERIFY_API_URL=http://localhost:$API_PORT
-export VERIFY_WEB_URL=http://localhost:$WEB_PORT
-export PLAYWRIGHT_BASE_URL=http://localhost:$WEB_PORT
-export VERIFY_EVIDENCE=$EVIDENCE
-export VERIFY_STATE=$STATE
-export DATABASE_URL='$DATABASE_URL'
-EOF
+  # %q: the output is eval'd, so a path or URL with spaces or quotes must stay one value.
+  printf 'export VERIFY_API_URL=%q\n' "http://localhost:$API_PORT"
+  printf 'export VERIFY_WEB_URL=%q\n' "http://localhost:$WEB_PORT"
+  printf 'export PLAYWRIGHT_BASE_URL=%q\n' "http://localhost:$WEB_PORT"
+  printf 'export VERIFY_EVIDENCE=%q\n' "$EVIDENCE"
+  printf 'export VERIFY_STATE=%q\n' "$STATE"
+  printf 'export DATABASE_URL=%q\n' "$DATABASE_URL"
 }
 
 start_db() {
@@ -141,7 +142,7 @@ start_web() {
     if [ "$code" = 200 ]; then
       # Vite compiles each route on its first request (5-15s). Warm the job page too, so a
       # journey's first click on a posting does not time out on the compile.
-      slug=$(curl -fsS "http://localhost:$API_PORT/api/v1/jobs/search?limit=1" 2>/dev/null | sed -n 's/.*"public_slug":"\([^"]*\)".*/\1/p' | head -1)
+      slug=$(curl -fsS "http://localhost:$API_PORT/api/v1/jobs/search?limit=1" 2>/dev/null | sed -n 's/.*"public_slug":"\([^"]*\)".*/\1/p' | head -1 || true)
       [ -z "$slug" ] || curl -s -o /dev/null --max-time 120 "http://localhost:$WEB_PORT/jobs/$slug" || true
       return 0
     fi
@@ -159,8 +160,12 @@ doctor() {
   check "api process is ours and alive" 'alive server'
   check "api /health says database up" 'curl -fsS http://localhost:$API_PORT/health | grep -q "\"database\":\"up\""'
   check "meilisearch healthy" 'curl -fsS $MEILI_URL/health | grep -q available'
-  n=$(curl -fsS "http://localhost:$API_PORT/api/v1/jobs/search?limit=1" 2>/dev/null | sed -n 's/.*"total":\([0-9]*\).*/\1/p')
-  check "search has seeded postings (total=${n:-none})" '[ "${n:-0}" -gt 0 ]'
+  n=$(curl -fsS "http://localhost:$API_PORT/api/v1/jobs/search?limit=1" 2>/dev/null | sed -n 's/.*"total":\([0-9]*\).*/\1/p' || true)
+  if [ -n "$SEED_BOARD" ]; then
+    check "search has seeded postings (total=${n:-none})" '[ "${n:-0}" -gt 0 ]'
+  else
+    printf 'skip  search postings: seeding disabled (total=%s)\n' "${n:-none}"
+  fi
   check "web process is ours and alive" 'alive web'
   check "web /jobs answers 200" '[ "$(curl -s -o /dev/null -w %{http_code} http://localhost:$WEB_PORT/jobs)" = 200 ]'
   return $ok

@@ -20,7 +20,8 @@ search postings, read one posting by its slug, and get told which filters were n
 
 The API needs no browser: curl it. Preconditions: baseline.
 
-- **Search.** `curl -s "$VERIFY_API_URL/api/v1/jobs/search?q=engineer&limit=2"`: `meta.total` > 0, titles match.
+- **Search.** `curl -s "$VERIFY_API_URL/api/v1/jobs/search?q=engineer&limit=2"`: `meta.total` > 0 and below the total without `q`.
+  `q` searches title, company, description and location; add `q_fields=title` to check titles only.
 - **Job.** Take a `public_slug` from that answer; `curl -s "$VERIFY_API_URL/api/v1/jobs/<slug>"`
   returns `data.title`. `curl -s -o /dev/null -w '%{http_code}' "$VERIFY_API_URL/api/v1/jobs/no-such-job-xxxxxxxx"` is `404`.
 - **Ignored.** `...search?q=engineer&colour=red` has `meta.ignored_params: [{"param":"colour"}]`;
