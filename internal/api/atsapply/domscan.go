@@ -187,7 +187,7 @@ func scanSimple(n *html.Node, kind string, by addressing, order *[]string, group
 // remains able to declare such a control required is the platform's own schema, and an
 // attempt for it parks, which is honest.
 //
-// The returned identifier is what DOMField.ID carries, for BOTH addressings: everything
+// The returned identifier is what DOMField.ID carries, for BOTH ways of addressing a field: everything
 // downstream — Reconcile, Resolve, the plan, the answer bank's topics — works on one
 // identifier, and which attribute it came from is this function's business alone. Lever's
 // résumé upload and location autocomplete both carry an id that differs from the name the

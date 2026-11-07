@@ -75,7 +75,7 @@ func TestGhostCrosscheck_AggregatorOnlyCompanyHasNoBoardTitles(t *testing.T) {
 	}
 }
 
-func TestGhostCrosscheck_BoardTitlesComeFromTheCompanysOwnSources(t *testing.T) {
+func TestGhostCrosscheck_BoardTitlesComeFromTheCompanyOwnSources(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()

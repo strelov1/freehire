@@ -87,7 +87,7 @@ func TestConfigShard_PartitionsCompletelyNoOverlap(t *testing.T) {
 // All boards of one company MUST land in the same shard: the stale-job sweep scopes
 // closes by company_slug, so splitting a company across shards would let one shard
 // close the still-live boards another shard owns.
-func TestConfigShard_KeepsACompanysBoardsTogether(t *testing.T) {
+func TestConfigShard_KeepsACompanyBoardsTogether(t *testing.T) {
 	// x and y each own two boards, interleaved so a naive index split would scatter them.
 	cfg := Config{Provider: "workday", Sources: []CompanyEntry{
 		{Company: "x", Provider: "workday", Board: "x1"},

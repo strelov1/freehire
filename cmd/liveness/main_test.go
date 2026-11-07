@@ -32,7 +32,7 @@ var probedButWithheld = map[string]string{
 // ones. The adapter's livenessProbed marker is what tells search that; a member added here
 // without it would have its live postings hidden after two weeks, unless probedButWithheld
 // says why that is right for it.
-func TestProbedSourcesAreSparedSearchsUnseenRule(t *testing.T) {
+func TestProbedSourcesAreSparedSearchUnseenRule(t *testing.T) {
 	windows := sources.UnseenWindows(sources.Taxonomy(), time.Hour)
 	for _, p := range probeDespiteRegistered {
 		_, withheld := windows[p]

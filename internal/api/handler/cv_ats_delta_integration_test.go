@@ -201,7 +201,7 @@ func TestATSDelta_ComparesTheTailoredCopyAgainstTheBase(t *testing.T) {
 	}
 }
 
-func TestATSDelta_RendersBothSidesWithTheTailoredCopysTemplateMarginsAndTypography(t *testing.T) {
+func TestATSDelta_RendersBothSidesWithTheTailoredCopyTemplateMarginsAndTypography(t *testing.T) {
 	f := newATSDeltaFixture(t, startPostgres(t))
 
 	if _, status := f.get(t, f.tailored.ID.String()); status != fiber.StatusOK {
