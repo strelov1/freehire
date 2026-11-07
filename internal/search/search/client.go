@@ -388,20 +388,24 @@ func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, do
 	pk := primaryKey
 	// Submit every part before awaiting any: consecutive additions to one index are
 	// auto-batched into one indexing pass, so the split costs no extra pass.
+	var firstErr error
 	uids := make([]int64, 0, len(parts))
 	for _, part := range parts {
 		task, err := idx.AddDocumentsNdjsonWithContext(ctx, part, &meilisearch.DocumentOptions{PrimaryKey: &pk})
 		if err != nil {
-			return fmt.Errorf("search: index documents: %w", err)
+			firstErr = fmt.Errorf("search: index documents: %w", err)
+			break
 		}
 		uids = append(uids, task.TaskUID)
 	}
+	// Await every accepted part even after a failure, so a caller's per-item retry
+	// cannot race a part that is still pending and would land after it.
 	for _, uid := range uids {
-		if err := c.awaitTask(ctx, idx, uid); err != nil {
-			return err
+		if err := c.awaitTask(ctx, idx, uid); err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
-	return nil
+	return firstErr
 }
 
 // maxPushBytes keeps one documents request under Meilisearch's http_payload_size_limit
