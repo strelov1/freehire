@@ -1,9 +1,11 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/mokevnin/easement/main/easement.schema.json
 # The boundaries of the SvelteKit app, checked by easement: `easement check` in this
-# directory, the `web-architecture` CI job. A dependency between two components that is
+# directory, a step of the `web-work` CI job. A dependency between two components that is
 # not listed here fails; add it here, with its reason, when it is meant. The Go backend
 # keeps its own guard (internal/platform/arch/layering), so this file covers web/ only.
 # The violations that predate it are recorded in easement.baseline.yml, which only shrinks.
+# A cycle is recorded there as a whole group, so each one also has a forbidden direction
+# below: its existing imports are baselined one by one, and a new one fails.
 version: 1
 tests: auto
 
@@ -33,14 +35,16 @@ rules:
     may_depend_on: [lib, generated]
     because: lib/server runs only on the server, so only routes and hooks import it; code a component needs too belongs in src/lib
   tailor: { may_depend_on: [assistant, components, actions, generated, i18n, ui, lib] }
-  assistant: { may_depend_on: [components, generated, i18n, ui, lib] }
+  assistant:
+    may_depend_on: [generated, i18n, ui, lib]
+    because: components embed the assistant, not the other way; what both need belongs in src/lib
   components:
-    may_depend_on: [assistant, tailor, actions, generated, i18n, ui, lib]
-    because: a component never reaches into a route or into lib/server; a page passes it what it needs
+    may_depend_on: [assistant, actions, generated, i18n, ui, lib]
+    because: a component never reaches into a route, lib/server or the tailor workspace that is built from components; a page passes it what it needs
   docs: { may_depend_on: [lib] }
   i18n:
-    may_depend_on: [lib]
-    because: translations sit under every component, so they import none
+    may_depend_on: []
+    because: translations sit under src/lib and every component, so they import none of them
   lib:
     may_depend_on: [generated, i18n]
     because: src/lib is shared by every page and component; code that needs a component belongs in src/lib/components
