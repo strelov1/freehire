@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CollectionRow } from '#lib/server/collectionSections.js';
+  import type { CollectionRow } from '#lib/collectionSections.js';
   import CollectionMark from './CollectionMark.svelte';
   import CompanyLogoStack from './CompanyLogoStack.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
