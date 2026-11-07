@@ -104,6 +104,7 @@ func (p Projector) JobDetail(j jobview.Job, form *applyform.Form) JobResult {
 		out.ApplyRequires = applyRequires(*form)
 	}
 	out.LastSeenAt = deref(j.LastSeenAt)
+	out.ClosedAt = deref(j.ClosedAt)
 	if j.Reality != nil {
 		out.Reality = j.Reality.Class
 		fake := j.Reality.IsFakeFreshness

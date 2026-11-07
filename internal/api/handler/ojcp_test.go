@@ -369,7 +369,7 @@ func TestOJCPSearchReportsSearchBeingUnavailable(t *testing.T) {
 	}
 }
 
-// The loader get_job (assistant), OJCP and the ChatGPT app share must refuse what the
+// The loader OJCP and similar_jobs share must refuse what the
 // anonymous surfaces refuse, as an ordinary miss.
 func TestPublishedJobBySlug_RefusesUnpublished(t *testing.T) {
 	closed := pgtype.Timestamptz{Time: time.Now(), Valid: true}
@@ -384,5 +384,29 @@ func TestPublishedJobBySlug_RefusesUnpublished(t *testing.T) {
 	}
 	if got, err := publishedJobBySlug(context.Background(), fakeOJCPStore{job: db.Job{ID: 4}}, "s"); err != nil || got.ID != 4 {
 		t.Errorf("open job: %+v, %v", got, err)
+	}
+}
+
+// get_job must answer for every slug search_jobs can hand out: the index trails the database,
+// so a hit may have closed or been folded into a duplicate since it was pushed.
+func TestAgentJobBySlug_ServesWhatSearchCanReturn(t *testing.T) {
+	closed := pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	dupOf := pgtype.Int8{Int64: 9, Valid: true}
+	for name, tc := range map[string]struct {
+		store  fakeOJCPStore
+		wantID int64
+	}{
+		"closed is served":                {fakeOJCPStore{job: db.Job{ID: 2, ClosedAt: closed}}, 2},
+		"duplicate becomes canonical":     {fakeOJCPStore{job: db.Job{ID: 3, DuplicateOf: dupOf}, jobsByID: []db.Job{{ID: 9}}}, 9},
+		"private canonical is not leaked": {fakeOJCPStore{job: db.Job{ID: 3, DuplicateOf: dupOf}, jobsByID: []db.Job{{ID: 9, IsPrivate: true}}}, 3},
+		"missing canonical serves itself": {fakeOJCPStore{job: db.Job{ID: 3, DuplicateOf: dupOf}}, 3},
+	} {
+		got, err := agentJobBySlug(context.Background(), tc.store, "s")
+		if err != nil || got.ID != tc.wantID {
+			t.Errorf("%s: got id %d, err %v; want id %d", name, got.ID, err, tc.wantID)
+		}
+	}
+	if _, err := agentJobBySlug(context.Background(), fakeOJCPStore{job: db.Job{ID: 1, IsPrivate: true}}, "s"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Errorf("private: err = %v, want pgx.ErrNoRows", err)
 	}
 }

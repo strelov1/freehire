@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
@@ -88,8 +89,8 @@ func (f assistantFilterArgs) values() (url.Values, error) {
 	vals := url.Values{}
 	for name, list := range f {
 		if _, ok := search.StringFacets[name]; !ok {
-			return nil, fmt.Errorf("unknown filter %q — call the facets tool for the valid filter names and values; valid names are: %s",
-				name, strings.Join(assistantFacetNames(), ", "))
+			return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("unknown filter %q — call the facets tool for the valid filter names and values; valid names are: %s",
+				name, strings.Join(assistantFacetNames(), ", ")))
 		}
 		for _, v := range list {
 			if v = strings.TrimSpace(v); v != "" {
@@ -280,14 +281,26 @@ func (h *assistantHandlers) searchJobs(full bool) assistant.Tool {
 				"filters": assistantFilterSchema("Facet filters; values must come from the facets tool."),
 				"limit":   map[string]any{"type": "integer", "description": fmt.Sprintf("How many vacancies to return (default %d, max %d).", assistantDefaultSearchLimit, assistantMaxSearchLimit)},
 				"offset":  map[string]any{"type": "integer", "description": "Skip this many results (paging)."},
+				// The non-facet filters the public search_jobs already takes. Agents sent them
+				// here too and got "unknown filter" (~145 calls a week, 2026-11).
+				"salary_min":         map[string]any{"type": "integer", "description": "Minimum salary, in the currency named by filters.salary_currency."},
+				"posted_within_days": map[string]any{"type": "integer", "description": "Only postings published within this many days."},
+				"visa_sponsorship":   map[string]any{"type": "boolean", "description": "true: only postings that offer visa sponsorship."},
+				"exclude_skills":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Skills the posting must not ask for."},
+				"require_all_skills": map[string]any{"type": "boolean", "description": "true: every skill in filters.skills must be present, not just one."},
 			},
 		},
 		Run: func(ctx context.Context, _ int64, raw json.RawMessage) (any, error) {
 			var in struct {
-				Query   string              `json:"query"`
-				Filters assistantFilterArgs `json:"filters"`
-				Limit   int                 `json:"limit"`
-				Offset  int                 `json:"offset"`
+				Query            string              `json:"query"`
+				Filters          assistantFilterArgs `json:"filters"`
+				Limit            int                 `json:"limit"`
+				Offset           int                 `json:"offset"`
+				SalaryMin        int                 `json:"salary_min"`
+				PostedWithinDays int                 `json:"posted_within_days"`
+				VisaSponsorship  *bool               `json:"visa_sponsorship"`
+				ExcludeSkills    []string            `json:"exclude_skills"`
+				RequireAllSkills bool                `json:"require_all_skills"`
 			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
@@ -298,6 +311,23 @@ func (h *assistantHandlers) searchJobs(full bool) assistant.Tool {
 			vals, err := in.Filters.values()
 			if err != nil {
 				return nil, err
+			}
+			if in.SalaryMin > 0 {
+				vals.Set("salary_min", strconv.Itoa(in.SalaryMin))
+			}
+			if in.PostedWithinDays > 0 {
+				vals.Set("posted_within_days", strconv.Itoa(in.PostedWithinDays))
+			}
+			if in.VisaSponsorship != nil {
+				vals.Set("visa_sponsorship", strconv.FormatBool(*in.VisaSponsorship))
+			}
+			for _, s := range in.ExcludeSkills {
+				if s = strings.TrimSpace(s); s != "" {
+					vals.Add("skills_exclude", s)
+				}
+			}
+			if in.RequireAllSkills && vals.Has("skills") {
+				vals.Set("skills_mode", "and")
 			}
 
 			limit := in.Limit
@@ -373,9 +403,9 @@ func (h *assistantHandlers) getJobTool() assistant.Tool {
 				return nil, err
 			}
 			if in.Slug == "" {
-				return nil, errors.New("slug is required")
+				return nil, fiber.NewError(fiber.StatusBadRequest, "slug is required")
 			}
-			job, err := publishedJobBySlug(ctx, h.queries, in.Slug)
+			job, err := agentJobBySlug(ctx, h.queries, in.Slug)
 			if err != nil {
 				return nil, lookupMiss(err, fmt.Sprintf("no vacancy with slug %q", in.Slug))
 			}
@@ -393,10 +423,11 @@ func (h *assistantHandlers) getJobTool() assistant.Tool {
 // getCompanyTool reads one company and a page of its open vacancies.
 func (h *assistantHandlers) getCompanyTool() assistant.Tool {
 	return assistant.Tool{
-		Name:        "get_company",
-		Title:       "Read one employer",
-		Effect:      assistant.EffectReads,
-		Description: "Read one company and a page of its open vacancies, by company slug.",
+		Name:   "get_company",
+		Title:  "Read one employer",
+		Effect: assistant.EffectReads,
+		Description: "Read one company and a page of its open vacancies, by company slug. Each vacancy " +
+			"carries the first 400 characters of its description.",
 		Schema: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"slug": map[string]any{"type": "string", "description": "The company slug (as carried by a vacancy)."}},
@@ -410,7 +441,7 @@ func (h *assistantHandlers) getCompanyTool() assistant.Tool {
 				return nil, err
 			}
 			if in.Slug == "" {
-				return nil, errors.New("slug is required")
+				return nil, fiber.NewError(fiber.StatusBadRequest, "slug is required")
 			}
 			company, canonical, err := companyBySlugOrAlias(ctx, h.queries, in.Slug)
 			if canonical != "" {
@@ -430,6 +461,10 @@ func (h *assistantHandlers) getCompanyTool() assistant.Tool {
 			views, err := jobview.FromRows(jobs)
 			if err != nil {
 				return nil, err
+			}
+			// Ten full bodies ran to ~160 KB per call (2026-11); the page is for picking a vacancy.
+			for i := range views {
+				views[i].Description = llm.ClipRunesEllipsis(formatDescription(views[i].Description, "markdown"), mcpSearchExcerptRunes)
 			}
 			return map[string]any{"company": companyViewFrom(company), "jobs": views}, nil
 		},

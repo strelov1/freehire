@@ -304,7 +304,7 @@ func publishedToAgents(row db.Job) bool {
 	return !row.IsPrivate && !row.ClosedAt.Valid && !row.DuplicateOf.Valid
 }
 
-// publishedJobBySlug is the one loader the agent surfaces and the assistant's get_job share:
+// publishedJobBySlug is the loader OJCP and similar_jobs use (get_job uses agentJobBySlug):
 // slug-or-shortcode resolution, then publishedToAgents. A refused posting answers
 // pgx.ErrNoRows, indistinguishable from an unknown slug.
 func publishedJobBySlug(ctx context.Context, q jobSlugReader, slug string) (db.Job, error) {
@@ -314,6 +314,39 @@ func publishedJobBySlug(ctx context.Context, q jobSlugReader, slug string) (db.J
 	}
 	if !publishedToAgents(row) {
 		return db.Job{}, pgx.ErrNoRows
+	}
+	return row, nil
+}
+
+// agentJobReader is what agentJobBySlug needs: the slug lookup plus a read by id to follow a
+// duplicate to its canonical posting. *db.Queries and mcpappStore satisfy it.
+type agentJobReader interface {
+	jobSlugReader
+	GetJobsByIDs(ctx context.Context, ids []int64) ([]db.Job, error)
+}
+
+// agentJobBySlug is get_job's loader on the MCP surfaces. Unlike publishedJobBySlug it answers
+// for every slug search_jobs can hand out: the index trails the database, so a posting closed
+// or folded into a duplicate since the last push is still a search hit (four agent reports,
+// 2026-11-07, all "get_job cannot find the slug search_jobs returned"). A closed posting is
+// served with its closed_at, as the job page serves it; a duplicate is served as its canonical
+// posting, or as itself when that one is not public. Private stays a miss.
+func agentJobBySlug(ctx context.Context, q agentJobReader, slug string) (db.Job, error) {
+	row, err := jobBySlugOrCode(ctx, q, slug)
+	if err != nil {
+		return db.Job{}, err
+	}
+	if row.IsPrivate {
+		return db.Job{}, pgx.ErrNoRows
+	}
+	if row.DuplicateOf.Valid {
+		owners, err := q.GetJobsByIDs(ctx, []int64{row.DuplicateOf.Int64})
+		if err != nil {
+			return db.Job{}, err
+		}
+		if len(owners) == 1 && !owners[0].IsPrivate {
+			return owners[0], nil
+		}
 	}
 	return row, nil
 }

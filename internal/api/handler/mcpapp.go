@@ -124,8 +124,8 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 
 // JobDetail answers `get_job`.
 func (h *mcpappHandlers) JobDetail(ctx context.Context, slug string) (mcpapp.JobResult, error) {
-	// A refused posting answers NOT FOUND rather than forbidden (see publishedToAgents).
-	row, err := publishedJobBySlug(ctx, h.store, slug)
+	// A private posting answers NOT FOUND rather than forbidden (see agentJobBySlug).
+	row, err := agentJobBySlug(ctx, h.store, slug)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return mcpapp.JobResult{}, mcpapp.NotFoundError{What: "posting"}

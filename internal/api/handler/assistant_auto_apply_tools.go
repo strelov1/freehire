@@ -113,7 +113,7 @@ func (h *assistantHandlers) slugTool(name, title, description string, effect ass
 				return nil, err
 			}
 			if in.JobSlug == "" {
-				return nil, errors.New("job_slug is required")
+				return nil, fiber.NewError(fiber.StatusBadRequest, "job_slug is required")
 			}
 			if gated {
 				if err := h.requireAgentsMayApply(ctx, userID); err != nil {
@@ -134,7 +134,8 @@ func (h *assistantHandlers) autoApplyStartTool() assistant.Tool {
 		"Start applying to a vacancy automatically on the person's behalf. freehire tailors their CV "+
 			"to the vacancy, checks the employer's application form against their saved answers, and "+
 			"waits for a review (auto_apply_review) before submitting. Spends one of today's auto-apply "+
-			"allowance. Only vacancies on supported applicant-tracking systems can be started. Follow "+
+			"allowance, so it needs a paid plan, and the account's switch letting agents apply. Only "+
+			"vacancies on supported applicant-tracking systems can be started. Follow "+
 			"progress with auto_apply_get.",
 		assistant.EffectAdds, true,
 		func(ctx context.Context, userID int64, slug string) (any, error) {
@@ -258,7 +259,7 @@ type autoApplyEventView struct {
 // autoApplyView assembles the caller's attempt on the job behind slug: the live attempt if
 // there is one, otherwise the history of a submitted one.
 func (h *assistantHandlers) autoApplyView(ctx context.Context, userID int64, slug string) (any, error) {
-	job, err := h.queries.GetJobBySlug(ctx, slug)
+	job, err := jobBySlugOrCode(ctx, h.queries, slug)
 	if err != nil {
 		return nil, err
 	}

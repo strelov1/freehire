@@ -111,6 +111,7 @@ type JobResult struct {
 	// They are flat like the rest of this shape, and the ghost criteria travel with the
 	// level, because internal/job/ghost states facts about a posting, never an accusation
 	// about an employer — a level without its criteria would be exactly that.
+	ClosedAt   string `json:"closed_at,omitempty" jsonschema:"RFC3339 UTC; set when the posting no longer accepts applications"`
 	LastSeenAt string `json:"last_seen_at,omitempty" jsonschema:"RFC3339 UTC; when a re-crawl last confirmed the posting live on its source"`
 	Reality    string `json:"reality,omitempty" jsonschema:"fresh, stale or likely-evergreen: whether the posting looks like a live opening, judged from its age and repost history"`
 	// FakeFreshness is a pointer for the reason the salary fields are: once reality was
