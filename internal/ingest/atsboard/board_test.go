@@ -321,6 +321,12 @@ func TestRecognize(t *testing.T) {
 		{"easycruit vacancy", "https://lentis.easycruit.com/vacancy/3034563/140565", "easycruit", "lentis", "https://lentis.easycruit.com", true},
 		{"easycruit export", "https://kongsberg.easycruit.com/export/xml/vacancy/list.xml", "easycruit", "kongsberg", "https://kongsberg.easycruit.com", true},
 		{"easycruit product site is not a tenant", "https://www.easycruit.com/", "", "", "", false},
+		// Firefish: the board is the tenant's whole subdomain, whatever page on it a link names.
+		{"firefish tenant career site", "https://arnoldclark.firefishsoftware.com/", "firefish", "arnoldclark.firefishsoftware.com", "https://arnoldclark.firefishsoftware.com", true},
+		{"firefish tenant rss feed", "https://arnoldclark.firefishsoftware.com/rss/adverts/latest.aspx", "firefish", "arnoldclark.firefishsoftware.com", "https://arnoldclark.firefishsoftware.com", true},
+		{"firefish tenant vacancy page", "https://arnoldclark.firefishsoftware.com/job/mechanic-92656.aspx", "firefish", "arnoldclark.firefishsoftware.com", "https://arnoldclark.firefishsoftware.com", true},
+		{"firefish vendor marketing site is not a tenant", "https://www.firefishsoftware.com/", "", "", "", false},
+		{"firefish vendor careers site is not a tenant", "https://jobs.firefishsoftware.com/about-us/careers.aspx", "", "", "", false},
 		{"bizneo posting", "https://somos-grupo-mas.careers.ats.bizneo.cloud/jobs/auxiliar-de-compras-561c3b68-504a-4a97-b220-020be92f6059", "bizneo", "somos-grupo-mas.careers.ats.bizneo.cloud", "https://somos-grupo-mas.careers.ats.bizneo.cloud", true},
 		{"bizneo vanity label", "https://jobs.abeienergy.bizneo.cloud/jobs", "bizneo", "jobs.abeienergy.bizneo.cloud", "https://jobs.abeienergy.bizneo.cloud", true},
 		{"bizneo marketing host is not a career site", "https://www.bizneo.com/ats/", "", "", "", false},
