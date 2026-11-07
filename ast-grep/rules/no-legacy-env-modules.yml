@@ -7,7 +7,9 @@ note: >-
   them, so an undeclared one is undefined at runtime and nothing reports it. $env/* is the
   SvelteKit 2 spelling agents reach for by habit; the repository reads $app/env.
 rule:
-  kind: import_statement
+  any:
+    - kind: import_statement
+    - kind: export_statement
   has:
     field: source
     regex: ^['"]\$env/

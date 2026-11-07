@@ -1,5 +1,33 @@
 id: no-sparkles-icon
 snapshots:
+  "export { Sparkles } from '@lucide/svelte';":
+    labels:
+    - source: Sparkles
+      style: primary
+      start: 9
+      end: 17
+    - source: "'@lucide/svelte'"
+      style: secondary
+      start: 25
+      end: 41
+    - source: export { Sparkles } from '@lucide/svelte';
+      style: secondary
+      start: 0
+      end: 42
+    - source: Sparkles
+      style: secondary
+      start: 9
+      end: 17
+  import Sparkles from '@lucide/svelte/icons/sparkles';:
+    labels:
+    - source: import Sparkles from '@lucide/svelte/icons/sparkles';
+      style: primary
+      start: 0
+      end: 53
+    - source: "'@lucide/svelte/icons/sparkles'"
+      style: secondary
+      start: 21
+      end: 52
   "import { Check, SparklesIcon } from 'lucide-svelte';":
     labels:
     - source: SparklesIcon

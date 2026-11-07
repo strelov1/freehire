@@ -9,3 +9,17 @@ testConfigs:
 # TypeScript rules reach the components too.
 languageGlobs:
   html: ["*.svelte"]
+# A Svelte <script> with no lang="ts" is plain JavaScript, which ast-grep would read as
+# JavaScript and the TypeScript rules would skip (33 such blocks today). TypeScript parses
+# JavaScript as well, so those are read as TypeScript too (a lang="ts" one already is).
+languageInjections:
+  - hostLanguage: html
+    rule:
+      pattern: <script $$$A>$CONTENT</script>
+      not:
+        has:
+          kind: start_tag
+          has:
+            kind: attribute
+            regex: ^lang=["']ts["']$
+    injected: typescript
