@@ -6,6 +6,7 @@
   import { companyLogoUrl } from '#lib/logo.js';
   import { Badge, EntityLogo } from '#lib/ui/index.js';
   import { humanizeStage } from '#lib/stages.js';
+  import { columnOf } from '#lib/board.js';
   import { chasedLabel, cvOpenedLabel } from '#lib/followup.js';
   import { autoApplyNeedsReviewBadge } from '#lib/autoApplyReview.js';
   import type { MyJob } from '#lib/types.js';
@@ -33,6 +34,10 @@
   const statusId = `${indicatorsId}-status`;
   const hasStatus = $derived(Boolean(item.job?.closed_at || item.job?.application_deadline));
   const s = $derived(t(messages, locale()));
+  // A stage that only repeats the column the card sits in ("Preparing" under Preparing)
+  // is said to assistive technology alone; a finer one ("Phone screen" under Interview)
+  // still shows.
+  const stageRepeatsColumn = $derived(item.stage === columnOf(item));
 
   const hasNotes = $derived(!!item.notes && item.notes.trim().length > 0);
   // pending_review (a decision to make) or blocked (a submission attempt stopped) —
@@ -106,11 +111,12 @@
   aria-describedby="{location ? `${locationId} ` : ''}{hasStatus ? `${statusId} ` : ''}{indicatorsId} {hintId}"
   class="relative flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 >
-  <span class="flex min-h-8 items-center gap-1.5 pr-11 text-sm font-semibold sm:min-h-0 sm:pr-7">
+  <!-- The company is the quiet eyebrow and the role the strong line, as on every job card. -->
+  <span class="flex min-h-8 items-center gap-1.5 pr-11 text-xs font-medium text-muted-foreground sm:min-h-0 sm:pr-7">
     <EntityLogo name={company} src={companyLogoUrl(company) ?? undefined} shape="square" size="xs" />
     <span class="min-w-0 truncate">{company || 'Unknown company'}</span>
   </span>
-  <span class="line-clamp-2 text-sm">{title}</span>
+  <span class="line-clamp-2 text-sm font-semibold">{title}</span>
   {#if location}
     <span id={locationId} title={location} class="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
       <MapPin class="size-3 shrink-0" aria-hidden="true" />
@@ -123,7 +129,7 @@
   <BoardPostingStatus job={item.job} id={statusId} />
   <span id={indicatorsId} class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
     {#if item.stage}
-      <Badge variant="secondary">{humanizeStage(item.stage, locale())}</Badge>
+      <Badge variant="secondary" class={stageRepeatsColumn ? 'sr-only' : undefined}>{humanizeStage(item.stage, locale())}</Badge>
     {/if}
     {#if needsAutoApplyReview}
       <span

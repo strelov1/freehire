@@ -10,11 +10,6 @@ import { readDismissed, writeDismissed } from './cliPromo';
 
 let dismissed = $state(false);
 
-/** Reactive: whether the visitor has closed the strip. */
-export function cliBannerDismissed(): boolean {
-  return dismissed;
-}
-
 /** Seed the flag from storage. Called from the strip's `onMount`; safe to call again. */
 export function loadCliBannerDismissed(): void {
   dismissed = readDismissed();
@@ -24,4 +19,21 @@ export function loadCliBannerDismissed(): void {
 export function dismissCliBanner(): void {
   dismissed = true;
   writeDismissed();
+}
+
+/**
+ * Reactive: whether the strip is on screen for this path and account — the home page only,
+ * where it is the site's one promo; on every other page it was chrome between the header
+ * and the work.
+ */
+export function cliBannerShown(pathname: string, agentConnected: boolean): boolean {
+  return pathname === '/' && cliBannerPending(agentConnected);
+}
+
+/**
+ * Reactive: whether the strip's question is still open (not closed, no agent connected).
+ * The floating star toast waits on it, so a visitor is asked one thing at a time.
+ */
+export function cliBannerPending(agentConnected: boolean): boolean {
+  return !agentConnected && !dismissed;
 }

@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/strelov1/freehire/internal/engage/maildaily"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // Store is the slice of the database a campaign needs.
 type Store interface {
+	maildaily.Store
 	ListBroadcastCandidates(ctx context.Context, arg db.ListBroadcastCandidatesParams) ([]db.ListBroadcastCandidatesRow, error)
 	CountBroadcastCandidates(ctx context.Context, arg db.CountBroadcastCandidatesParams) (int64, error)
 	RecordBroadcastEmail(ctx context.Context, arg db.RecordBroadcastEmailParams) error
@@ -24,6 +26,7 @@ const DefaultMaxPerRun = 500
 type Runner struct {
 	store  Store
 	mailer *Mailer
+	claims *maildaily.Claimer
 	max    int32
 }
 
@@ -32,7 +35,7 @@ func New(store Store, mailer *Mailer, maxPerRun int32) *Runner {
 	if maxPerRun <= 0 {
 		maxPerRun = DefaultMaxPerRun
 	}
-	return &Runner{store: store, mailer: mailer, max: maxPerRun}
+	return &Runner{store: store, mailer: mailer, claims: maildaily.New(store, maildaily.SourceBroadcast), max: maxPerRun}
 }
 
 // ValidHalf reports whether s names a side of a split test, or none.
@@ -40,8 +43,11 @@ func ValidHalf(s string) bool { return s == "" || s == "a" || s == "b" }
 
 // Stats is what one run did.
 type Stats struct {
-	Sent      int
-	Failed    int
+	Sent   int
+	Failed int
+	// Deferred counts the people left for a later run because another sender already
+	// took their mail for the day. They stay candidates and are part of Remaining.
+	Deferred  int
 	Remaining int64
 }
 
@@ -57,6 +63,10 @@ func (r *Runner) Pending(ctx context.Context, c Campaign) (int64, error) {
 // sequence: one address that SES rejects must not strand the rest of the list, and
 // retrying it on the next run would spend the domain's reputation on an address
 // that has already refused once.
+//
+// Each send takes the person's daily claim first (maildaily). One already held leaves them
+// a candidate with no ledger row; a failed send gives the claim back, since the ledger row
+// that burns the campaign for them is already what records the failure.
 func (r *Runner) Run(ctx context.Context, c Campaign) (Stats, error) {
 	rows, err := r.store.ListBroadcastCandidates(ctx, db.ListBroadcastCandidatesParams{
 		Campaign: c.Name,
@@ -69,6 +79,17 @@ func (r *Runner) Run(ctx context.Context, c Campaign) (Stats, error) {
 
 	var stats Stats
 	for _, row := range rows {
+		claim, ok, err := r.claims.Take(ctx, row.ID)
+		if err != nil {
+			stats.Failed++
+			log.Printf("broadcast: %s to user %d: %v", c.Name, row.ID, err)
+			continue
+		}
+		if !ok {
+			stats.Deferred++
+			continue
+		}
+
 		sendErr := r.mailer.Send(ctx, c, row.ID, row.Email)
 
 		var errText string
@@ -76,6 +97,9 @@ func (r *Runner) Run(ctx context.Context, c Campaign) (Stats, error) {
 			errText = sendErr.Error()
 			stats.Failed++
 			log.Printf("broadcast: %s to user %d failed: %v", c.Name, row.ID, sendErr)
+			if err := r.claims.Release(ctx, claim); err != nil {
+				log.Printf("broadcast: %v", err)
+			}
 		} else {
 			stats.Sent++
 		}

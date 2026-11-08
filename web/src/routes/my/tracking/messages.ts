@@ -10,7 +10,7 @@ export const messages = defineMessages(
       list: 'List',
       pipeline: 'Pipeline',
       calendar: 'Calendar',
-      activity: 'Activity',
+      activity: 'Streak',
     },
   },
   {
@@ -23,7 +23,7 @@ export const messages = defineMessages(
         list: 'Список',
         pipeline: 'Воронка',
         calendar: 'Календарь',
-        activity: 'Активность',
+        activity: 'Серия',
       },
     },
   },

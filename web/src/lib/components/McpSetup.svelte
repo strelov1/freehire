@@ -46,7 +46,7 @@
       steps: [
         'Open Settings, then Connectors.',
         'Choose Add custom connector.',
-        'Name it freehire, paste the address, and choose Add.',
+        'Name it freehire, paste the address, and choose Add, then sign in to freehire when asked.',
         'Start a new chat, turn the freehire connector on, and ask a job question.',
       ],
     },
@@ -78,7 +78,7 @@
       steps: [
         'Open Connect apps in the sidebar.',
         'Add a custom app, name it freehire, and paste the address.',
-        'If Grok Bot asks you to authorize, finish the sign-in in your browser.',
+        'Grok Bot asks you to sign in to freehire; finish it in your browser.',
         'In a chat, type @ and pick freehire, then ask a job question.',
       ],
     },
@@ -162,8 +162,9 @@
 {/snippet}
 
 {#if iconsOnly}
-  <!-- Just the marks, each a way into the full setup on /mcp. -->
-  <nav class="flex gap-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Assistants">
+  <!-- Just the marks, each a way into the full setup on /mcp. They wrap rather than scroll:
+       a hidden-scrollbar row cut its last mark mid-word at the card edge ("Cc…"). -->
+  <nav class="flex flex-wrap gap-x-5 gap-y-2" aria-label="Assistants">
     {#each hosts as h (h.id)}
       <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() path plus the host query -->
       <a

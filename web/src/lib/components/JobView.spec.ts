@@ -154,6 +154,25 @@ it('shows exact source salary bounds in the job detail summary', () => {
   expect(screen.getByText('2,501 – 3,000 € / mo')).not.toBeNull();
 });
 
+it('offers a LinkedIn people search when no in-product referrer is available', () => {
+  render(JobView, { job });
+  expect(screen.queryByRole('button', { name: 'Ask for a referral' })).toBeNull();
+  const people = screen.getByRole('link', { name: /^Find people at .+ on LinkedIn$/ });
+  expect(people.getAttribute('target')).toBe('_blank');
+});
+
+it('omits the LinkedIn action when the employer name is blank', () => {
+  render(JobView, { job: { ...job, company: '  ' } });
+  expect(screen.queryByRole('link', { name: /^Find people at\b.*\bon LinkedIn$/ })).toBeNull();
+});
+
+it('shows an approved in-product referrer before the LinkedIn option', () => {
+  render(JobView, { job: { ...job, referral_available: true } });
+  const referral = screen.getByRole('button', { name: 'Ask for a referral' });
+  const people = screen.getByRole('link', { name: /^Find people at .+ on LinkedIn$/ });
+  expect(referral.compareDocumentPosition(people) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+});
+
 it.each([JobView, JobRow])('shows the equity and application-form chips when the posting carries them', (component) => {
   render(component, { job: { ...job, equity: 'salary_and_equity', apply_questions: 0 } });
   expect(screen.getByText('Salary + equity')).not.toBeNull();
@@ -196,4 +215,20 @@ it('waits for saved state before toggling a card while its initial load is pendi
 
   saved.resolve([job.public_slug]);
   await waitFor(() => expect(unsave).toHaveBeenCalledWith(job.public_slug));
+});
+
+it("keeps a card's deadline visible on the employer's own page", () => {
+  const view = render(JobRow, { job: { ...job, application_deadline: '2026-11-11' }, hideCompany: true });
+  const visible = [...view.container.querySelectorAll('span')].filter(
+    (s) => s.children.length === 0 && s.textContent?.trim() === 'Apply by 2026-11-11' && !s.id && !s.closest('.hidden, .sr-only'),
+  );
+  expect(visible).toHaveLength(1);
+});
+
+it('moves the date from the rail to the meta line on touch when the card carries Apply', () => {
+  const posted_at = new Date(Date.now() - 5 * 60_000).toISOString();
+  const view = render(JobRow, { job: { ...job, url: 'https://example.com/apply', closed_at: undefined, posted_at } });
+  const dates = [...view.container.querySelectorAll('span')].filter((s) => /min/.test(s.textContent ?? '') && s.children.length === 0);
+  expect(dates.map((d) => d.className.includes('pointer-coarse:hidden'))).toContain(true);
+  expect(dates.map((d) => d.className.includes('pointer-coarse:inline'))).toContain(true);
 });

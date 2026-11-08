@@ -216,3 +216,33 @@ func TestNewAccountServer_AnnotatesReadsAndWrites(t *testing.T) {
 		}
 	}
 }
+
+// A call the model got wrong is the caller's mistake, not a server fault: the metric that
+// counts internal_error must not fill up with bad arguments.
+func TestNewAccountServer_InvalidArgumentsAreInvalidRequest(t *testing.T) {
+	tool := assistant.Tool{
+		Name:   "strict",
+		Schema: map[string]any{"type": "object"},
+		Run: func(_ context.Context, _ int64, raw json.RawMessage) (any, error) {
+			var in struct{}
+			return nil, assistant.DecodeArgs(raw, &in)
+		},
+	}
+	server := mcpapp.NewAccountServer([]assistant.Tool{tool}, 1, "", nil)
+	clientT, serverT := mcp.NewInMemoryTransports()
+	go func() { _ = server.Run(context.Background(), serverT) }()
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(context.Background(), clientT, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = session.Close() }()
+
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "strict", Arguments: map[string]any{"bogus": 1}})
+	if err != nil {
+		t.Fatalf("CallTool transport error: %v", err)
+	}
+	diag, _ := res.Meta["freehire.me/diagnostics"].(map[string]any)
+	if !res.IsError || diag["error_code"] != "invalid_request" {
+		t.Errorf("IsError=%v diagnostics=%v, want an invalid_request error", res.IsError, res.Meta)
+	}
+}

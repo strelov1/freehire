@@ -192,14 +192,41 @@ jobs:
           SLO_COMPANIES: '3000'
           SLO_COMPANY_CARD: '3500'
           AUTH_COOKIE: ${{ secrets.PROD_AUTH_COOKIE }}
-        run: k6 run --quiet perf/k6/pages.js
+        # An unset shell is `bash -e` without pipefail; without it tee would hide k6's failure.
+        run: |
+          set -o pipefail
+          k6 run --quiet perf/k6/pages.js 2>&1 | tee k6.log
 
-      - name: Open an issue on regression
+      # A breach goes to the SuperPlane incident agent, the same one Grafana alerts reach:
+      # it reads its incident journal, looks for the cause (deploys, metrics, logs) and
+      # files an issue itself when it finds a defect. Without the two secrets, or when
+      # the hand-off fails, the breach still opens a plain issue so it is never lost.
+      - name: Hand the regression to the incident agent
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          INCIDENT_URL: ${{ secrets.SUPERPLANE_INCIDENT_URL }}
+          INCIDENT_TOKEN: ${{ secrets.SUPERPLANE_INCIDENT_TOKEN }}
         run: |
+          jq -n --arg id "perf-watchdog-$GITHUB_RUN_ID" --arg url "$RUN_URL" --arg sha "$GITHUB_SHA" \
+            --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --rawfile k6 <(tail -c 20000 k6.log 2>/dev/null || true) '{
+              incident_id: $id, name: "Perf watchdog: prod page latency regression",
+              summary: ("The production k6 smoke (perf/k6/pages.js, .github/workflows/perf.yml job prod-watchdog) breached its latency/error thresholds. There is no Keep incident behind this id: the payload is all there is. Find whether this is a regression (recent deploys and commits on main up to " + $sha + ", slow queries, Meilisearch, CPU) or noise, re-measure the slow pages, and file an issue per the RUNBOOK if it is ours. Run: " + $url),
+              severity: "warning", status: "firing", services: "freehire-web", alert_sources: "github-actions",
+              alerts_count: 1, start_time: $now, url: $url, source: "perf-watchdog", context: $k6}' > incident.json
+          code=000
+          # No k6.log means the smoke never ran (setup failed): nothing for the agent to investigate.
+          if [ -s k6.log ] && [ -n "$INCIDENT_URL" ] && [ -n "$INCIDENT_TOKEN" ]; then
+            code=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' -X POST "$INCIDENT_URL" \
+              -H "Authorization: Bearer $INCIDENT_TOKEN" -H 'Content-Type: application/json' --data @incident.json) || code=000
+          fi
+          # Only a 2xx counts: a redirect is not followed, so it delivered nothing.
+          if [[ "$code" == 2?? ]]; then
+            echo "Handed to the incident agent."
+            exit 0
+          fi
+          echo "::warning::incident agent hand-off unavailable; opening a plain issue"
           gh issue create \
             --title "Perf watchdog: prod page latency regression ($(date -u +%Y-%m-%d))" \
             --label performance \

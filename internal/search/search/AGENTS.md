@@ -14,10 +14,9 @@ Country, city (when known) and specialization are mandatory constraints; when on
 country is known it remains the location constraint, and region is used only without
 country/city. Unknown location or specialization yields no related postings. Results
 are re-read from Postgres to exclude currently closed, private, duplicate and unseen jobs.
-There is no precomputed similarity list or similarity backfill worker. The contraction
-SQL is staged in
-`migrations/pending-similarity-cleanup/` for sqlc only; promote it to the top-level
-migrations in a second release after all old binaries and the old timer are retired.
+There is no precomputed similarity list or similarity backfill worker; its columns and
+HNSW index were dropped by `0228_drop_precomputed_similar_jobs.sql` and
+`0229_drop_similarity_hnsw_index.sql` (#4088).
 
 ## Always true
 
@@ -31,7 +30,6 @@ migrations in a second release after all old binaries and the old timer are reti
   creating skeletons. Private/missing rows still require physical removal; a full rebuild
   omits closed/duplicate rows to reclaim retained storage. Before rolling back readers,
   physically remove marked documents and await completion or the old filter exposes them.
-
 - **A job whose category is unresolved by both the title dictionary and the LLM never
   enters the index.** `search.CategoryUnresolved` (`document.go`) reports true when
   `jobs.category` is empty (`internal/dict/classify` found nothing in the title) AND the raw

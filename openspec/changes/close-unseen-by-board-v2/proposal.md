@@ -6,8 +6,7 @@ so nothing ever closes its row (freehire#2328). Measured on prod: 91% of stale o
 rows sit on boards the fleet still crawls successfully — the board listed its content and simply
 did not list that company's posting again.
 
-A first attempt at the board-scoped fix (`openspec/changes/close-unseen-by-board/`, shipped as
-#2337) closed this leak directly, but closed 110 live `solidjobs` postings within 18 minutes and
+A first attempt at the board-scoped fix (`openspec/changes/close-unseen-by-board/`, shipped as #2337) closed this leak directly, but closed 110 live `solidjobs` postings within 18 minutes and
 was reverted (#2350). The adapter reaches only the first 500 of a board's ~1,400 postings and
 reports that as an unqualified success — every qualification condition in that design was
 satisfied honestly, and the board still had not been listed in full. That design's own postmortem

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
-  import { MessageSquare, Plug, Terminal } from '@lucide/svelte';
+  import { Braces, MessageSquare, Plug, Terminal } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { AGENTS_FAQ } from '#lib/agentsFaq.js';
   import { CLI_INSTALL, CLI_REPO, MCP_REPO } from '#lib/cliLinks.js';
@@ -9,12 +9,15 @@
   import AgentSetupButton from './AgentSetupButton.svelte';
   import McpSetup from './McpSetup.svelte';
 
+  // Agent tracks first: this page is the hub for developers and the agents they run, so the
+  // open surfaces (MCP, CLI, the API) lead and the hosted Pro assistant follows them.
   const tabs = [
-    { id: 'assistant', label: 'freehire Assistant · Pro', icon: MessageSquare },
     { id: 'mcp', label: 'MCP', icon: Plug },
     { id: 'cli', label: 'CLI', icon: Terminal },
+    { id: 'api', label: 'API', icon: Braces },
+    { id: 'assistant', label: 'freehire Assistant · Pro', icon: MessageSquare },
   ] as const;
-  let active = $state<(typeof tabs)[number]['id']>('assistant');
+  let active = $state<(typeof tabs)[number]['id']>('mcp');
   const uid = $props.id();
   const panelId = `${uid}-setup`;
   const commands = [
@@ -51,10 +54,10 @@
 {/snippet}
 
 <section class="pb-9 pt-10 sm:pt-14">
-  <h1 class="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">Your job search, with AI.</h1>
+  <h1 class="max-w-3xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">Every tech job, for your agent.</h1>
   <p class="mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-    Use the freehire assistant or connect the tools you already work with.
-    Find jobs, compare employers and keep your applications moving.
+    Plug the whole catalogue into Claude, ChatGPT, Cursor or Codex over MCP, script it from the CLI,
+    or build on the API. Search is free and needs no account; open source end to end.
   </p>
   <AgentSetupButton />
 </section>
@@ -141,6 +144,26 @@
       </ol>
     </div>
   </div>
+
+  <div hidden={active !== 'api'}>
+    <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">Build on the catalogue.</h2>
+    <p class="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
+      Every page here is one unauthenticated JSON call, in a schema that carries the facets the page only
+      renders. The read API is free for personal and non-commercial use; an API plan licenses the data for
+      your product at one flat monthly price, not per record.
+    </p>
+    <div class="mt-6 flex flex-wrap gap-3">
+      <Button href={resolve('/jobs-api')} variant="primary" size="lg">Get an API key</Button>
+      <Button href={resolve('/docs/api')} variant="outline" size="lg">API reference</Button>
+    </div>
+    <div class="mt-5 flex flex-wrap gap-3">
+      <Button href="https://freehire.me/openapi.yaml" target="_blank" rel="noopener noreferrer" variant="outline" size="sm">OpenAPI schema</Button>
+      <Button href="https://freehire.me/llms.txt" target="_blank" rel="noopener noreferrer" variant="outline" size="sm">llms.txt</Button>
+      <Button href={resolve('/cli') + '#mcp'} variant="outline" size="sm">Local MCP setup</Button>
+      <Button href={CLI_REPO} target="_blank" rel="noopener noreferrer" variant="ghost" size="sm">CLI source</Button>
+      <Button href={MCP_REPO} target="_blank" rel="noopener noreferrer" variant="ghost" size="sm">MCP source</Button>
+    </div>
+  </div>
 </div>
 
 <section class="border-t border-border py-10 sm:py-12">
@@ -167,19 +190,3 @@
     {/each}
   </div>
 </section>
-
-<details class="border-t border-border py-6">
-  <summary class="cursor-pointer font-medium">Developer details</summary>
-  <p class="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-    Building your own integration? Use the API reference and machine-readable documentation.
-    The CLI guide also covers the local MCP server and agent skills.
-  </p>
-  <div class="mt-5 flex flex-wrap gap-3">
-    <Button href={resolve('/docs/api')} variant="outline" size="sm">API reference</Button>
-    <Button href="https://freehire.me/llms.txt" target="_blank" rel="noopener noreferrer" variant="outline" size="sm">llms.txt</Button>
-    <Button href="https://freehire.me/openapi.yaml" target="_blank" rel="noopener noreferrer" variant="outline" size="sm">OpenAPI schema</Button>
-    <Button href={resolve('/cli') + '#mcp'} variant="outline" size="sm">Local MCP setup</Button>
-    <Button href={CLI_REPO} target="_blank" rel="noopener noreferrer" variant="ghost" size="sm">CLI source</Button>
-    <Button href={MCP_REPO} target="_blank" rel="noopener noreferrer" variant="ghost" size="sm">MCP source</Button>
-  </div>
-</details>

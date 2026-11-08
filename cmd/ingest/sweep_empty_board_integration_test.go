@@ -55,6 +55,7 @@ func TestEmptiedBoardClosesItsPostingsOnlyForAnAdapterThatProvesEmpty(t *testing
 		wantClose bool
 	}{
 		{"greenhouse", true},
+		{"workday", true},
 		{"smartrecruiters", false},
 	}
 	for _, tc := range cases {

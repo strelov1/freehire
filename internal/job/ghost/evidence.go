@@ -46,7 +46,7 @@ type Evidence struct {
 // caller filtering, so a catalogue-wide lookup stays proportional to the evidence
 // rather than to the catalogue.
 //
-// Both channels are judged by internal/application/userjob's silence ladder rather than by
+// Both channels are judged by internal/job/silence's ladder rather than by
 // numbers of their own. Restating the ladder here would let a change to it
 // disagree silently with the personal tracking board — the same application
 // judged twice, by two ladders, with nothing binding them.

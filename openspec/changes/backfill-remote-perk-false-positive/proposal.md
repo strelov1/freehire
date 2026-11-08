@@ -1,6 +1,6 @@
 ## Why
 
-#2710 (freehire#2696) fixed `WorkModeFromDescription` so a bounded travel/PTO perk
+PR #2710 (freehire#2696) fixed `WorkModeFromDescription` so a bounded travel/PTO perk
 phrase ("work from anywhere ... for up to a month") no longer fills
 `work_mode=remote` on a hybrid or onsite posting. That fix only reaches postings
 ingested from now on.
@@ -21,8 +21,7 @@ fix:
   re-read and `jobderive` never re-runs against it for an open, still-live
   posting.
 
-Measured against production (read-only Meilisearch queries, the same 143/61 figures
-#2710's proposal.md cites): the affected population is real and will stay wrong
+Measured against production (read-only Meilisearch queries, the same 143/61 figures #2710's proposal.md cites): the affected population is real and will stay wrong
 indefinitely without a dedicated pass.
 
 ## What Changes

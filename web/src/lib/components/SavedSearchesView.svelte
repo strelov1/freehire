@@ -139,7 +139,8 @@
 {:else}
   <div class="flex flex-col gap-6">
     <div class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight">Saved searches &amp; alerts</h1>
+      <!-- An h2: the page already carries the Notifications h1 and its tab strip. -->
+      <h2 class="text-base font-semibold tracking-tight">Saved searches &amp; alerts</h2>
       <p class="text-sm text-muted-foreground">
         Each saved set of filters can send you its new jobs — in Telegram, by email, or both.
         Reuse one anytime. Create new saved searches from the filters panel on the jobs page.
@@ -221,7 +222,7 @@
             </div>
 
             <!-- Per-search alerts: the shared toggle chips (Telegram / Email). -->
-            <div class="mt-3 border-t border-dashed border-border pt-3">
+            <div class="mt-3 border-t border-border/60 pt-3">
               <AlertChannels savedSearchId={s.id} />
             </div>
           </article>

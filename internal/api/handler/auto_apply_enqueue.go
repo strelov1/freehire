@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -181,7 +182,7 @@ func (r *autoApplyAllowanceRefusal) Error() string {
 //
 // An unknown slug comes back as pgx.ErrNoRows, which the HTTP path renders as 404.
 func (h *assistantHandlers) startAutoApply(ctx context.Context, userID int64, slug string) error {
-	job, err := h.queries.GetJobBySlug(ctx, slug)
+	job, err := jobBySlugOrCode(ctx, h.queries, slug)
 	if err != nil {
 		return err
 	}
@@ -345,7 +346,8 @@ func (h *assistantHandlers) chargeAutoApply(ctx context.Context, userID, jobID i
 	case isRefusal(err):
 		return &autoApplyAllowanceRefusal{decision: d}
 	default:
-		log.Printf("plan: charging an auto-apply for user %d on job %d: %v", userID, jobID, err)
-		return fiber.NewError(fiber.StatusServiceUnavailable, "auto-apply is not available")
+		// Wrapped rather than phrased as a 503: classify reports only a 500, and this is a
+		// genuine fault (database down, pool exhausted) that must reach the exception log.
+		return fmt.Errorf("charge auto-apply for job %d: %w", jobID, err)
 	}
 }

@@ -30,7 +30,10 @@ export const load: PageServerLoad = async ({ url, fetch, request }) => {
   if (!pageWithinWindow(pageNumber)) error(404, 'Page not found');
   // Personal filters read the caller's history or experience bank. The cache hook
   // keeps requests carrying a session private (see #lib/httpCache).
-  const personal = params.get('former_employers') === 'true' || params.get('hide_seen') === 'true';
+  const personal =
+    params.get('former_employers') === 'true' ||
+    params.get('hide_seen') === 'true' ||
+    (params.get('min_skill_match') !== null && params.get('sort') === 'match');
   const cookie = personal ? request.headers.get('cookie') : null;
   const initial = await serverApi(fetch, cookie)
     .searchJobs(params, LIMIT, pageOffset(pageNumber))

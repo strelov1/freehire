@@ -21,11 +21,17 @@ shellcheck = "latest"
 "github:oasdiff/oasdiff" = "1.34.1"
 "github:agent-sh/agnix" = "0.59.3"
 "github:crate-ci/typos" = "1.52.0"
+"github:rvben/rumdl" = "0.3.2"
+"github:astral-sh/ruff" = "0.17.4"
 "go:golang.org/x/tools/cmd/deadcode" = "0.52.0"
 # psql only: the integration tests' harness migrates through it (internal/platform/testdb).
 # The server itself is docker-compose's pgvector image.
 postgres = "18"
 ast-grep = "0.51.1"
+# The web/ architecture check (web/easement.yml) and the indexer it runs; CI's web-work job
+# pins the same two. Built from a commit until mokevnin/easement#130 is released.
+"cargo:https://github.com/strelov1/easement" = "rev:191f55c0661aeaec7ecf1d17713b7d683333daa9"
+"npm:@sourcegraph/scip-typescript" = "0.6.1"
 
 [env]
 _.source = "{{config_root}}/scripts/dev-env.sh"

@@ -162,8 +162,9 @@ func TestPasswordReauthPreservesInfrastructureFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != fiber.StatusServiceUnavailable {
-		t.Fatalf("status=%d, want 503", resp.StatusCode)
+	// A reported 500, never a 401 that would read as a wrong password.
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("status=%d, want 500", resp.StatusCode)
 	}
 }
 

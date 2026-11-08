@@ -12,7 +12,7 @@
 // marks the shared Settings group every workspace ends with. Workspace names and hints
 // live in the i18n catalog (`i18n/shell.ts`), keyed by id.
 export type WorkspaceId = 'seeker' | 'buddies' | 'mentor' | 'referrer' | 'employer';
-type NavGroupId = 'main' | 'found' | 'help' | 'settings';
+type NavGroupId = 'main' | 'network' | 'settings';
 
 const workspaces = [
   { id: 'seeker', home: '/my/profile' },
@@ -53,16 +53,16 @@ export const accountNav = [
   // builder below, nothing meters its spend yet.
   { href: '/my/assistant', label: 'Agent', workspace: 'seeker', group: 'main' },
   // The tailoring workspace's re-open list: CVs already tailored to a vacancy. Open to every
-  // signed-in user (the plan meters the AI spend). Named after what the section is FOR — a CV
-  // here is always aimed at one posting, and "CV builder" described the tool it grew out of.
-  { href: '/my/cvs', label: 'Tailor', workspace: 'seeker', group: 'main' },
+  // signed-in user (the plan meters the AI spend). Named "CVs", the page's own title: the
+  // sidebar label and the heading it opens must agree ("Tailor" opened a page titled CVs).
+  { href: '/my/cvs', label: 'CVs', workspace: 'seeker', group: 'main' },
   // Being found instead of applying: the anonymous public catalogue's own settings page.
   // It used to be reachable ONLY from the profile layout's invitation card, which made it
   // invisible to anyone who never opened Profile — and that card is dismissible now, so
   // this entry is what keeps closing a banner from meaning losing the feature.
-  { href: '/my/talent-network', label: 'Talent Network', workspace: 'seeker', group: 'found' },
+  { href: '/my/talent-network', label: 'Talent Network', workspace: 'seeker', group: 'network' },
   // Employee referrals, the member's side: asking for one. Open to every signed-in user.
-  { href: '/my/referrals', label: 'Referral requests', workspace: 'seeker', group: 'help' },
+  { href: '/my/referrals', label: 'Referral requests', workspace: 'seeker', group: 'network' },
   // The insider's side of referrals: what they offer and who asked. Anonymous, unlike a
   // mentor — which is why this is a workspace of its own rather than part of Mentor.
   { href: '/my/referrals/offers', label: 'Offers to refer', workspace: 'referrer', group: 'main' },
@@ -78,7 +78,7 @@ export const accountNav = [
   // Beta-only while the marketplace has no supply: mentors are onboarded by hand, and a
   // section that opens on an empty directory reads as a broken feature rather than a new
   // one. Drop the flag once there are mentors to show.
-  { href: '/my/mentorship', label: 'Mentorship', workspace: 'seeker', group: 'help', betaOnly: true },
+  { href: '/my/mentorship', label: 'Mentorship', workspace: 'seeker', group: 'network', betaOnly: true },
   // The mentor's own panes. They used to be a tab strip inside Mentorship, beside the
   // member's own booked sessions — two roles on one page. `/my/mentorship` above stays
   // the member-as-mentee view, under Job search.
@@ -163,7 +163,9 @@ export function workspaceFor(path: string): WorkspaceId {
   return activeSection(path, accountNav)?.workspace ?? 'seeker';
 }
 
-const GROUP_ORDER: readonly NavGroupId[] = ['main', 'found', 'help', 'settings'];
+// Being found and getting help from people share one group: apart, each was a heading over
+// a single link.
+const GROUP_ORDER: readonly NavGroupId[] = ['main', 'network', 'settings'];
 
 // The current workspace's sections, grouped, followed by the shared settings. A group the
 // gate empties is dropped rather than left as a heading over nothing.

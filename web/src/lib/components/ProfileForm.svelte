@@ -157,7 +157,7 @@
        résumé, /my/cvs being the per-vacancy builder. `scroll-mt-20` clears the sticky
        `h-14` TopBar. -->
   <div id="account-cv" class="flex scroll-mt-20 flex-col gap-1.5">
-    <span class="text-sm font-medium">{s.cv}</span>
+    <span class="text-base font-semibold">{s.cv}</span>
     <input
       type="file"
       accept="application/pdf,.pdf"
@@ -178,13 +178,17 @@
         dragActive = false;
       }}
       ondrop={onDrop}
-      class="flex items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors {dragActive
-        ? 'border-brand bg-brand/5'
-        : 'border-border'}"
+      class={[
+        'flex items-center gap-3 rounded-xl text-center transition-colors',
+        // A stored CV is a file, not an empty target: a solid row, left-aligned. The dashed
+        // dropzone is for when there is nothing yet (dropping still replaces either way).
+        hasCv ? 'border px-4 py-3' : 'justify-center border-2 border-dashed px-6 py-8',
+        dragActive ? 'border-brand bg-brand/5' : 'border-border',
+      ]}
     >
       {#if hasCv}
-        <span class="flex size-11 items-center justify-center rounded-full bg-brand text-brand-foreground">
-          <Check class="size-5" />
+        <span class="flex size-9 items-center justify-center rounded-full bg-brand/10 text-brand">
+          <Check class="size-4" />
         </span>
         <span class="flex flex-col items-start gap-1.5 text-left">
           <span class="text-sm font-semibold">{resumeBusy ? s.analyzing : uploadedAtLabel}</span>

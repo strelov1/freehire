@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -323,10 +324,27 @@ type jobSlugReader interface {
 	ListJobsBySlugCode(ctx context.Context, code string) ([]db.Job, error)
 }
 
+// slugFromLink reduces a pasted job link to its slug: the last path segment, without a
+// query, fragment or trailing slash. Agents pass whole URLs, and the shortcode match reads
+// the END of its input, so "…/jobs/a-x?ref=b-t35nijto" would otherwise pick job t35nijto.
+// A bare slug passes unchanged: it never holds '/', '?' or '#'.
+func slugFromLink(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexAny(s, "?#"); i >= 0 {
+		s = s[:i]
+	}
+	s = strings.TrimRight(s, "/")
+	if i := strings.LastIndex(s, "/"); i >= 0 {
+		s = s[i+1:]
+	}
+	return s
+}
+
 // jobBySlugOrCode resolves stale links by identity. Collision recovery URLs carry
 // the full hash; legacy links resolve only among original short-format URLs.
 // Genuine shortcode ambiguity still answers pgx.ErrNoRows rather than guessing.
 func jobBySlugOrCode(ctx context.Context, q jobSlugReader, slug string) (db.Job, error) {
+	slug = slugFromLink(slug)
 	job, err := q.GetJobBySlug(ctx, slug)
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return job, err

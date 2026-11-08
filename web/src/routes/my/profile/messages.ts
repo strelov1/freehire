@@ -9,7 +9,6 @@ export const messages = defineMessages(
     description: 'Your CV, skills and role — measured against live market demand.',
     loadError: "Couldn't load your profile.",
     completeness: {
-      summary: '{filled}/{total} sections',
       incomplete: 'not filled in',
     },
     tabs: {
@@ -29,7 +28,6 @@ export const messages = defineMessages(
       description: 'Ваше резюме, навыки и роль — в сравнении с живым спросом рынка.',
       loadError: 'Не удалось загрузить профиль.',
       completeness: {
-        summary: 'Заполнено: {filled}/{total}',
         incomplete: 'не заполнено',
       },
       tabs: {

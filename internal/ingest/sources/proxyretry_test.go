@@ -146,3 +146,20 @@ func TestFallbackTriedOnlyOnce(t *testing.T) {
 		t.Errorf("fallback hits = %d, want 1 — the shared proxy IP gets one try, not every retry", got)
 	}
 }
+
+// The 403 path has its own once-only guard (the proxy is only ever tried through
+// switchToRefusalEgress), separate from the 429 path's. teamtailor meets bulk 403s, so a proxy
+// that refuses too must not be offered the same request again on every remaining attempt.
+func TestFallbackTriedOnlyOnceOn403(t *testing.T) {
+	var directHits, fallbackHits atomic.Int64
+	direct := countingServer(t, http.StatusForbidden, "", &directHits)
+	fallback := countingServer(t, http.StatusForbidden, "", &fallbackHits)
+
+	var out struct{}
+	if err := twoWayClient(t, direct, fallback).GetJSON(context.Background(), "https://board.example/x", &out); err == nil {
+		t.Fatal("GetJSON succeeded, want a 403 error")
+	}
+	if got := fallbackHits.Load(); got != 1 {
+		t.Errorf("fallback hits = %d, want 1 — the shared proxy IP gets one try, not every retry", got)
+	}
+}

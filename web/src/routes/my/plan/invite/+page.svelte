@@ -37,7 +37,7 @@
   <title>Invite a friend — freehire</title>
 </svelte:head>
 
-<div class="flex max-w-3xl flex-col gap-6">
+<div class="flex flex-col gap-6">
   <header class="flex flex-col gap-2">
     <h2 class="text-lg font-semibold tracking-tight">Invite a friend</h2>
     {#if summary}

@@ -1,0 +1,7 @@
+**EasyCruit traps** (`easycruit`, Visma EasyCruit at `<site>.easycruit.com`; live-verified 2026-10-25 — 193 site labels in five Common Crawl snapshots, 158 with openings, 1,837 vacancies, NL 563 / NO 659 / SE 69 / DK 79 by country, ~5% technical by title, the largest `lentis` at 134):
+
+- **Two open XML exports**: `/export/xml/vacancy/list.xml` (every open vacancy, no body) and `/export/xml/vacancy/<id>.xml` (one with `Description`, `CandidateProfile`, `JobOffer`, HTML entity-encoded). The career site's HTML is behind an AWS WAF browser challenge (HTTP 202 and a script); the exports are not.
+- **An unknown label answers the list with a plain 404** (`ErrBoardGone`); a site with no openings answers an empty `<VacancyList/>`.
+- **A vacancy published under several departments has one page URL per department, in no stable order** between two reads of the same list; the lowest department id's page is kept so the URL does not flip.
+- **The country is named in the site's language** ("Nederland", "Norge", "Noreg", "Sverige") and goes through `location.NormalizeCountry`, so a name that dictionary lacks yields no country and the location parser decides; the numeric country id beside it is EasyCruit's own, not ISO.
+- **`duration` and `extent` are picklists keyed in English** whatever the label language (`permanent`, `fixed-term-contract`, `temporary`, `extra-help`, `fulltime`, `parttime`, `internship`, …). A placement is an internship, a fixed or temporary engagement a contract, otherwise a single extent decides.

@@ -107,6 +107,18 @@ jobs:
           done
           exit 1
 
+      # Tool archives come from a cache, so a GitHub Releases outage (504s for minutes on
+      # 2026-11-08) fails only a run that bumps a version. A digest check (all but typst's)
+      # covers a cached file like a downloaded one, and a job that fails it saves no cache.
+      # shortcut: old versions' archives stay in the cache until GitHub evicts it (7 days unused).
+      - name: Cache tool archives
+        if: matrix.task != 'checks'
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/ci-tools
+          key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: ci-tools-${{ github.job }}-
+
       # CV rendering shells out to typst, and the render tests skip without it — including the
       # registry-driven guard that every template emits clickable links, which is the only
       # thing standing between a new template and tracer links silently counting nothing.
@@ -118,8 +130,9 @@ jobs:
         env:
           TYPST_VERSION: 0.15.0
         run: |
-          curl -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz" -o /tmp/typst.tar.xz
-          tar -xJf /tmp/typst.tar.xz -C /tmp
+          f=~/.cache/ci-tools/typst-${TYPST_VERSION}.tar.xz
+          [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz" -o "$f"
+          tar -xJf "$f" -C /tmp
           sudo install -m 0755 /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst
           typst --version
 
@@ -217,6 +230,36 @@ jobs:
           RESULT: ${{ needs.backend-jobs.result }}
         run: test "$CHANGES" = success && test "$RESULT" = success
 
+      # Changed-line coverage, gated on pull requests only. It runs here and not in a backend-jobs
+      # shard because this is the one place where every shard's profile is visible, and after the
+      # assertion above so a red backend task is never hidden behind a coverage message.
+      - name: Checkout
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # diff-cover diffs against origin/main, which needs the history to reach it.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Go
+        if: github.event_name == 'pull_request'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Download Go coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: go-coverage-*
+          path: coverage
+          merge-multiple: true
+
+      - name: Changed-line Go coverage
+        if: github.event_name == 'pull_request'
+        run: bash .github/scripts/diff-cover-gate.sh go coverage
+
   # The three artefacts this repository hands to someone else, none of which any other job
   # reads: a shell script the site serves to be piped into sh, the images that get deployed,
   # and the API description integrations are built against. A mistake in any of them is
@@ -280,16 +323,25 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Tool archives come from a cache: see "Cache tool archives" in backend-jobs for why.
+      - name: Cache tool archives
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/ci-tools
+          key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: ci-tools-${{ github.job }}-
+
       # Pinned by a digest written here, the same argument as agnix in `docs`.
       - name: Install oasdiff
         env:
           OASDIFF_VERSION: 1.34.1
           OASDIFF_SHA256: 75775f65b0adebd26a8e013af51a799342dfdc6262d89efa9e3b7bdf89657d90
         run: |
-          curl -fsSL -o /tmp/oasdiff.tar.gz \
+          f=~/.cache/ci-tools/oasdiff-${OASDIFF_VERSION}.tar.gz
+          [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs -o "$f" \
             "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz"
-          echo "${OASDIFF_SHA256}  /tmp/oasdiff.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/oasdiff.tar.gz -C /tmp oasdiff
+          echo "${OASDIFF_SHA256}  $f" | sha256sum -c -
+          tar -xzf "$f" -C /tmp oasdiff
 
       - name: Check for breaking API changes
         env:
@@ -323,6 +375,35 @@ jobs:
       - name: Test
         run: python -m pytest -q
 
+  pii-filter:
+    # services/pii-filter de-identifies CV text before it reaches the LLM gateway. Its tests
+    # use only the standard library (numpy/onnxruntime/tokenizers load lazily inside
+    # `Model`), so there is no install step: adding one would hide a test that quietly
+    # started needing a package. The scripts/ tests ride along here: they are plain
+    # `test_*` functions with their own runner, which `unittest discover` would report as
+    # "Ran 0 tests" and pass, so each file runs as a script instead.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Test pii-filter
+        working-directory: services/pii-filter
+        run: python -m unittest -v
+
+      - name: Test scripts
+        run: |
+          for f in scripts/test_*.py; do
+            python3 "$f" || exit 1
+          done
+
   docs:
     runs-on: ubuntu-latest
     steps:
@@ -339,6 +420,14 @@ jobs:
       - name: Check documentation links
         run: node scripts/check-doc-links.mjs
 
+      # Tool archives come from a cache: see "Cache tool archives" in backend-jobs for why.
+      - name: Cache tool archives
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/ci-tools
+          key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: ci-tools-${{ github.job }}-
+
       # The instruction files as an agent reads them: an unclosed code fence silently turns
       # the rest of an AGENTS.md into one code block, and a .cursor/rules file whose
       # frontmatter does not parse is a rule that never applies — neither of which a link
@@ -352,10 +441,11 @@ jobs:
           AGNIX_VERSION: v0.59.3
           AGNIX_SHA256: f2e0549286fb148b2814559222129bd561db69ddc21cd3c6c05b52f3cef09ee4
         run: |
-          curl -fsSL -o /tmp/agnix.tar.gz \
+          f=~/.cache/ci-tools/agnix-${AGNIX_VERSION}.tar.gz
+          [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs -o "$f" \
             "https://github.com/agent-sh/agnix/releases/download/${AGNIX_VERSION}/agnix-x86_64-unknown-linux-gnu.tar.gz"
-          echo "${AGNIX_SHA256}  /tmp/agnix.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/agnix.tar.gz -C /tmp agnix
+          echo "${AGNIX_SHA256}  $f" | sha256sum -c -
+          tar -xzf "$f" -C /tmp agnix
           /tmp/agnix --strict .
 
       # Spelling over code, docs and web strings; _typos.toml argues what is excluded and
@@ -366,11 +456,63 @@ jobs:
           TYPOS_VERSION: v1.52.0
           TYPOS_SHA256: 6155d4114f9a0f5b8f6d4fda96266c9d5f6add71df80da7f684ee5e72eb14588
         run: |
-          curl -fsSL -o /tmp/typos.tar.gz \
+          f=~/.cache/ci-tools/typos-${TYPOS_VERSION}.tar.gz
+          [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs -o "$f" \
             "https://github.com/crate-ci/typos/releases/download/${TYPOS_VERSION}/typos-${TYPOS_VERSION}-x86_64-unknown-linux-musl.tar.gz"
-          echo "${TYPOS_SHA256}  /tmp/typos.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/typos.tar.gz -C /tmp ./typos
+          echo "${TYPOS_SHA256}  $f" | sha256sum -c -
+          tar -xzf "$f" -C /tmp ./typos
           /tmp/typos
+
+      # Markdown structure: an unclosed code fence, a skipped heading level, a malformed table
+      # or list. .rumdl.toml argues every rule that is off. Same digest rule as agnix and
+      # typos: a bump changes RUMDL_VERSION and RUMDL_SHA256 together, and .mise.toml moves
+      # with them.
+      - name: Lint Markdown
+        env:
+          RUMDL_VERSION: v0.3.2
+          RUMDL_SHA256: 395c4061041c5a25301c7b3564a93c4a661ed4df93427a77b6fc9e426ec8a13a
+        run: |
+          curl -fsSL -o /tmp/rumdl.tar.gz \
+            "https://github.com/rvben/rumdl/releases/download/${RUMDL_VERSION}/rumdl-${RUMDL_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          echo "${RUMDL_SHA256}  /tmp/rumdl.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/rumdl.tar.gz -C /tmp rumdl
+          /tmp/rumdl check --no-cache .
+
+  # Every tracked .py file: ruff.toml holds the rules, and none are baselined. The release
+  # binary is checked against a digest written HERE, as in the docs job. A version bump
+  # changes RUFF_VERSION, RUFF_SHA256 and .mise.toml together.
+  python-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Tool archives come from a cache: see "Cache tool archives" in backend-jobs for why.
+      - name: Cache tool archives
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/ci-tools
+          key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: ci-tools-${{ github.job }}-
+
+      - name: Install Ruff
+        env:
+          RUFF_VERSION: 0.17.4
+          RUFF_SHA256: 3ab2b34aeacdbc1ea5c529cdbda3e05792633d587228123fd09f3b5a0facb27a
+        run: |
+          f=~/.cache/ci-tools/ruff-${RUFF_VERSION}.tar.gz
+          [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs -o "$f" \
+            "https://github.com/astral-sh/ruff/releases/download/${RUFF_VERSION}/ruff-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${RUFF_SHA256}  $f" | sha256sum -c -
+          tar -xzf "$f" -C /tmp --strip-components=1 ruff-x86_64-unknown-linux-gnu/ruff
+
+      - name: Lint
+        run: /tmp/ruff check .
+
+      - name: Check formatting
+        run: /tmp/ruff format --check .
 
   # The version of every package whose TYPES cross the design system's `link:` boundary.
   # design-system is symlinked into web and extension rather than copied, so each of the
@@ -456,6 +598,14 @@ jobs:
         with:
           persist-credentials: false
 
+      # Tool archives come from a cache: see "Cache tool archives" in backend-jobs for why.
+      - name: Cache tool archives
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/ci-tools
+          key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: ci-tools-${{ github.job }}-
+
       # Checked before it is unpacked, like gitleaks: the digest is the release's own and
       # moves with AST_GREP_VERSION, which .mise.toml pins too (bump both together).
       - name: Install ast-grep
@@ -463,9 +613,10 @@ jobs:
           AST_GREP_VERSION: 0.51.1
           AST_GREP_SHA256: 42514f77ae0c8a25d7d32154d31d3e7e16f3ab894f8ce76ce417de234ee49157
         run: |
-          curl -fsSL "https://github.com/ast-grep/ast-grep/releases/download/${AST_GREP_VERSION}/app-x86_64-unknown-linux-gnu.zip" -o /tmp/ast-grep.zip
-          echo "${AST_GREP_SHA256}  /tmp/ast-grep.zip" | sha256sum --check --strict -
-          unzip -q /tmp/ast-grep.zip ast-grep -d /tmp/ast-grep
+          f=~/.cache/ci-tools/ast-grep-${AST_GREP_VERSION}.zip
+          [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs "https://github.com/ast-grep/ast-grep/releases/download/${AST_GREP_VERSION}/app-x86_64-unknown-linux-gnu.zip" -o "$f"
+          echo "${AST_GREP_SHA256}  $f" | sha256sum --check --strict -
+          unzip -q "$f" ast-grep -d /tmp/ast-grep
           sudo install -m 0755 /tmp/ast-grep/ast-grep /usr/local/bin/ast-grep
           ast-grep --version
 
@@ -798,6 +949,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
+    env:
+      # Bump together with .mise.toml.
+      EASEMENT_REV: 191f55c0661aeaec7ecf1d17713b7d683333daa9
+      SCIP_TYPESCRIPT_VERSION: 0.6.1
     # Not gated on design-system: web consumes the package's *source* (its
     # "svelte" export is ./src/index.ts) plus the two committed dist/tokens-*.css,
     # so nothing here waits on that job's build.
@@ -808,6 +963,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # diff-cover diffs against origin/main, which needs the history to reach it.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup pnpm
@@ -839,6 +996,33 @@ jobs:
       - name: Type check
         run: pnpm run check
 
+      # The boundaries between the app's parts (web/easement.yml): a component never
+      # imports a route or lib/server, src/lib never imports a component, and a new
+      # dependency between two parts has to be written into the config with its reason.
+      # It holds no baseline of known violations. It runs after the type check because the
+      # TypeScript indexer needs the .svelte-kit types `svelte-kit sync` just wrote.
+      #
+      # shortcut: easement is built from a pinned commit of strelov1/easement, because
+      # reading .svelte files is mokevnin/easement#130 and not released yet; once a
+      # release carries it, install that release instead and drop the cargo build.
+      - name: Cache easement
+        id: easement-cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cargo/bin/easement
+          key: easement-${{ runner.os }}-${{ env.EASEMENT_REV }}
+
+      - name: Build easement
+        if: steps.easement-cache.outputs.cache-hit != 'true'
+        working-directory: .
+        run: cargo install --locked --git https://github.com/strelov1/easement --rev "$EASEMENT_REV" easement
+
+      - name: Install the TypeScript indexer
+        run: npm install --global "@sourcegraph/scip-typescript@$SCIP_TYPESCRIPT_VERSION" # zizmor: ignore[adhoc-packages] pinned by SCIP_TYPESCRIPT_VERSION above
+
+      - name: Check web architecture
+        run: easement check --no-cache
+
       # docs/API.md and docs/API.internal.md (the external and internal-audience
       # halves of the API reference, split by each endpoint's `auth` level — see
       # partitionForAudience in gen-api-docs.mjs) are both generated from
@@ -861,7 +1045,7 @@ jobs:
           if [ -n "$(git status --porcelain -- ../docs/API.md ../docs/API.internal.md)" ]; then
             git --no-pager diff -- ../docs/API.md ../docs/API.internal.md
             echo
-            echo 'docs/API.md or docs/API.internal.md is stale. Run "pnpm run gen:api-docs" in web/ and commit the result.'
+            echo 'docs/API.md or docs/API.internal.md is stale. Run "pnpm run gen:api-docs" in web/ and commit the result. This is not a bug in the code: regenerating fixes it (the api-docs-drift pre-commit hook does it for you).'
             exit 1
           fi
           echo 'docs/API.md and docs/API.internal.md match web/src/lib/docs/api-spec.ts.'
@@ -884,7 +1068,7 @@ jobs:
           if [ -n "$(git status --porcelain -- src/lib/docs/generated/api-reference.openapi.json src/lib/docs/generated/api-reference.internal.openapi.json)" ]; then
             git --no-pager diff -- src/lib/docs/generated/api-reference.openapi.json src/lib/docs/generated/api-reference.internal.openapi.json
             echo
-            echo 'web/src/lib/docs/generated/api-reference.openapi.json or api-reference.internal.openapi.json is stale. Run "pnpm run gen:openapi" in web/ and commit the result.'
+            echo 'web/src/lib/docs/generated/api-reference.openapi.json or api-reference.internal.openapi.json is stale. Run "pnpm run gen:openapi" in web/ and commit the result. This is not a bug in the code: regenerating fixes it (the api-docs-drift pre-commit hook does it for you).'
             exit 1
           fi
           echo 'Both generated OpenAPI references match web/src/lib/docs/api-spec.ts.'
@@ -901,6 +1085,10 @@ jobs:
 
       - name: Unit tests with coverage
         run: pnpm run test:coverage
+
+      - name: Changed-line web coverage
+        if: github.event_name == 'pull_request'
+        run: bash ../.github/scripts/diff-cover-gate.sh web coverage/lcov.info
 
       - name: Upload web coverage
         if: always()

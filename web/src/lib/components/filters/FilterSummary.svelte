@@ -154,7 +154,10 @@
   {#snippet afterButton()}
     {#if canSave && store.value.formerEmployers}
       <p class="text-sm text-muted-foreground">Turn off Hiring again to save this search or set up alerts.</p>
-    {:else if canSave}
+    {:else if canSave && store.active > 0}
+      <!-- Only once a filter is set: on the bare feed the button saved nothing and was the
+           heaviest control in an otherwise empty panel. Any active filter counts, a minimum
+           skill match included, since it narrows the list even where alerts cannot use it. -->
       <SaveSearchAlert query={current} variant="full" alerts="manage" />
     {/if}
   {/snippet}

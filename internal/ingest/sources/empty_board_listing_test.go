@@ -20,6 +20,7 @@ var emptyBoardListingAdapters = map[string]struct {
 	"recruitee":      {func(f *fakeHTTP) Source { return NewRecruitee(f) }, `{"offers":[]}`, []string{`{}`, `{"offers":null}`}},
 	"breezy":         {func(f *fakeHTTP) Source { return NewBreezy(f) }, `[]`, []string{`null`}},
 	"bamboohr":       {func(f *fakeHTTP) Source { return NewBambooHR(f) }, `{"meta":{"totalCount":0},"result":[]}`, []string{`{}`, `{"meta":{"totalCount":0}}`, `{"result":null}`}},
+	"workday":        {func(f *fakeHTTP) Source { return NewWorkday(f) }, `{"total":0,"jobPostings":[],"facets":[]}`, []string{`{}`, `{"total":0}`, `{"jobPostings":null}`, `{"total":5,"jobPostings":[]}`}},
 	"beehire":        {func(f *fakeHTTP) Source { return NewBeehire(f) }, `{"campaigns":[]}`, []string{`{}`, `{"campaigns":null}`}},
 	"seamlesshiring": {func(f *fakeHTTP) Source { return NewSeamlessHiring(f) }, `{"status":"success","status_code":200,"data":{"jobs":{"data":[],"total":0,"current_page":1,"last_page":1,"per_page":100}}}`, []string{`{}`, `{"status":"success","status_code":200,"data":null}`, `{"status":"success","status_code":200,"data":{"jobs":null}}`, `{"status":"success","status_code":200,"data":{"jobs":{"total":0,"current_page":1,"last_page":1,"per_page":100,"data":null}}}`}},
 }
@@ -29,7 +30,7 @@ var emptyBoardListingAdapters = map[string]struct {
 func TestEmptyBoardListingAdaptersReturnAnEmptiedBoardAsEmpty(t *testing.T) {
 	for provider, a := range emptyBoardListingAdapters {
 		t.Run(provider, func(t *testing.T) {
-			jobs, err := a.newSource(&fakeHTTP{body: a.empty}).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+			jobs, err := a.newSource(&fakeHTTP{body: a.empty}).Fetch(context.Background(), emptyBoardEntry(provider))
 			if err != nil {
 				t.Fatalf("Fetch(%s) = %v, want an empty listing", a.empty, err)
 			}
@@ -47,7 +48,7 @@ func TestEmptyBoardListingAdaptersFailAnAnswerWithoutTheCollection(t *testing.T)
 	for provider, a := range emptyBoardListingAdapters {
 		for _, body := range a.notEmpty {
 			t.Run(provider+" "+body, func(t *testing.T) {
-				if jobs, err := a.newSource(&fakeHTTP{body: body}).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"}); err == nil {
+				if jobs, err := a.newSource(&fakeHTTP{body: body}).Fetch(context.Background(), emptyBoardEntry(provider)); err == nil {
 					t.Errorf("Fetch(%s) = %d jobs and no error, want a failed fetch", body, len(jobs))
 				}
 			})
@@ -84,4 +85,12 @@ func TestEmptyBoardListingProvidersAreCheckedCompleteListings(t *testing.T) {
 	if got["smartrecruiters"] {
 		t.Error("smartrecruiters must not carry emptyBoardListing: an unknown company answers empty")
 	}
+}
+
+// emptyBoardEntry names a board in the shape the provider's own parser accepts.
+func emptyBoardEntry(provider string) CompanyEntry {
+	if provider == "workday" {
+		return CompanyEntry{Company: "Acme", Board: "acme.wd1.myworkdayjobs.com/Careers"}
+	}
+	return CompanyEntry{Company: "Acme", Board: "acme"}
 }

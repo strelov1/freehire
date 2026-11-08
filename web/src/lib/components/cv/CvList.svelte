@@ -10,6 +10,7 @@
   import type { CvBaseItem, CvTailoredItem, CvTemplate } from '#lib/cv.js';
   import { messages } from './CvList.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { formatDate } from '#lib/utils.js';
   import { format, t } from '#lib/i18n/t.js';
   import { announce } from '#lib/announce.svelte.js';
 
@@ -129,7 +130,8 @@
     }
   }
 
-  const fmt = (iso: string) => new Date(iso).toLocaleDateString();
+  // The site's one date format ("Oct 27, 2026"), not the browser's numeric default.
+  const fmt = (iso: string) => formatDate(iso, locale());
   const iconButton =
     'flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground';
 </script>

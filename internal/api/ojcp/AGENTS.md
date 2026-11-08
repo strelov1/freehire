@@ -1,6 +1,7 @@
 # OJCP projection conventions
 
 ## Scope
+
 Projecting this catalogue into the wire shapes of the **Open Job Context Protocol** (OJCP,
 draft v0.1) — the standard AI agents read job data through. This package is the projection
 and the manifest; the two transports that publish it live elsewhere:
@@ -109,7 +110,7 @@ and the manifest; the two transports that publish it live elsewhere:
   answer that degraded to keyword-only must say so, or an agent reads keyword relevance as a
   match on meaning. A `semantic: true` with no query has nothing to embed and is reported in
   `ignored_params`. The behaviour lives in `internal/api/handler/ojcp.go`
-  (`hybridSearch`); see `internal/search/search/AGENTS.md` for the index side.
+  (`semanticSearch`); see `internal/search/search/AGENTS.md` for the index side.
 
 ## Known gaps in the standard
 

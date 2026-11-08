@@ -98,8 +98,8 @@
     // (e.g. the profile editor's "import skills from CV").
     extra?: Snippet<[StagedFilters]>;
     // The "Minimum skill match" slider atop the Skills pane: a threshold over the
-    // viewer's own profile skills (`minSkillMatch` in JobFilters, applied in the browser by
-    // JobsView). Hidden unless the caller has a real percent to filter on.
+    // viewer's own profile skills (`minSkillMatch` in JobFilters, applied by the server under
+    // best match, in the browser by JobsView under any other ordering). Hidden unless the caller has a real percent to filter on.
     matchAvailable?: boolean;
   } = $props();
 
@@ -500,7 +500,7 @@
     <button
       type="button"
       onclick={applyProfileOrSignIn}
-      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 ring-2 ring-brand/30 ring-offset-2 ring-offset-background"
+      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 shadow-sm"
     >
       <UserRound class="size-4 shrink-0" aria-hidden="true" />
       Apply my profile
@@ -603,8 +603,8 @@
       </div>
     {/if}
     {#if entry.key === 'skills' && matchAvailable}
-      <!-- Client-only post-filter (`minSkillMatch`): it narrows the fetched page in memory,
-           so the footer's server-side count does not move with it. -->
+      <!-- Under best match the server applies `minSkillMatch` across the catalogue; under any
+           other ordering it narrows the fetched page in memory, so the footer's count does not move. -->
       <div class="mb-2 flex items-center justify-between">
         <h3 class="text-sm font-semibold tracking-tight">Minimum skill match</h3>
         <span class="text-xs font-medium text-muted-foreground">{staged.value.minSkillMatch != null ? `${staged.value.minSkillMatch}%+` : 'Any'}</span>

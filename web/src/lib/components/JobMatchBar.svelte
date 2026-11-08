@@ -24,7 +24,7 @@
   <div
     class={[
       'mt-3 flex items-center gap-2 border-t border-dashed border-border pt-2.5',
-      blurred && 'pointer-events-none select-none opacity-90 blur-[1.5px]',
+      blurred && 'pointer-events-none select-none opacity-50 grayscale blur-[1.5px]',
     ]}
     aria-hidden={blurred ? 'true' : undefined}
   >

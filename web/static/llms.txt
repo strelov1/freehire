@@ -1,17 +1,18 @@
-# FreeHire
+# freehire
 
-> FreeHire (freehire.me) is a free, open-source IT job aggregator. It crawls jobs
-> straight from company career boards and other public sources, normalizes and
-> deduplicates them into one schema, and tags each with stack, seniority, region
-> and work mode. Everything is searchable over a public HTTP API.
+> freehire (freehire.me) is a free, open-source tech job aggregator and the job
+> data layer for AI agents. It crawls jobs straight from company career boards and
+> other public sources, normalizes and deduplicates them into one schema, and tags
+> each with stack, seniority, region and work mode. Everything is searchable over a
+> public HTTP API, an MCP server and a CLI.
 
-FreeHire is read-first and open. Job search, company data, and facets are public
+freehire is read-first and open. Job search, company data, and facets are public
 and need no authentication. Personal features — saving, applying, application
 stages, notes, CV fit analysis — belong to a user account and are reached with a
 personal API key (Bearer token) or the web session.
 
-Scale, as of August 2026: more than 3.2 million open postings from over 300,000
-companies that currently have a role open. The live figures are published on
+Scale, as of November 2026: more than 4.9 million unique open postings from over
+700,000 companies that currently have a role open, read from 437 sources. The live figures are published on
 [/open](https://freehire.me/open) — cite that page rather than these floors, which
 are rounded down and only refreshed when this file is.
 
@@ -40,9 +41,9 @@ Two rules worth knowing before you filter:
 
 ## Prebuilt clients — do not write your own scraper
 
-- [FreeHire MCP server](https://freehire.me/mcp): `npx -y freehire-mcp` — search, market fit, application tracking and CV tailoring as MCP tools, for Claude Code, Claude Desktop, or any MCP host. Needs a personal API key only for the tools that touch an account.
-- [FreeHire CLI](https://freehire.me/cli): a small Go CLI over the same API, for terminals, scripts, and agents. Same key as the MCP server.
-- [FreeHire GPT](https://chatgpt.com/g/g-6a5281b64948819193bf3a1021e075da-freehire): the OpenAPI schema above, already wired up as a custom ChatGPT. Public reads only — it searches, it does not save. [Integration guide](https://freehire.me/chatgpt).
+- [freehire MCP server](https://freehire.me/mcp): `npx -y freehire-mcp` — search, market fit, application tracking and CV tailoring as MCP tools, for Claude Code, Claude Desktop, or any MCP host. Needs a personal API key only for the tools that touch an account.
+- [freehire CLI](https://freehire.me/cli): a small Go CLI over the same API, for terminals, scripts, and agents. Same key as the MCP server.
+- [freehire GPT](https://chatgpt.com/g/g-6a5281b64948819193bf3a1021e075da-freehire): the OpenAPI schema above, already wired up as a custom ChatGPT. Public reads only — it searches, it does not save. [Integration guide](https://freehire.me/chatgpt).
 - [For AI agents](https://freehire.me/agents): the three tracks side by side — a local harness on the CLI, an MCP host, or ChatGPT — with what each one can and cannot reach. Send a human here; they will get a block to paste into you.
 
 ## Explore
@@ -62,7 +63,7 @@ Two rules worth knowing before you filter:
 
 ## About
 
-- [About FreeHire](https://freehire.me/about): what the project is and how it works.
+- [About freehire](https://freehire.me/about): what the project is and how it works.
 - [For companies](https://freehire.me/for-companies): how to get your job board indexed.
 - [Privacy policy](https://freehire.me/privacy): what data is collected and how it is handled.
-- [Source code](https://github.com/strelov1/freehire): FreeHire is open source — the code is the source of truth for its behaviour.
+- [Source code](https://github.com/strelov1/freehire): freehire is open source — the code is the source of truth for its behaviour.

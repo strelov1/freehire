@@ -5,10 +5,11 @@ package userjob
 // not determine the stage — which is why dropping a card into Closed has to ask which outcome
 // applies.
 //
-// The membership lives here, next to activeRank and silenceThresholds, because it answers a
-// question about the same vocabulary and had drifted into four separate copies: the board's
-// STAGE_COLUMN, the seven pipeline buckets, the funnel's own list, and a fourth inside
-// HomeFunnel.svelte. TestEveryStageBelongsToExactlyOneGroup is what keeps this the only one.
+// The membership lives here, next to activeRank (the silence thresholds are in
+// internal/job/silence), because it answers a question about the same vocabulary and had
+// drifted into four separate copies: the board's STAGE_COLUMN, the seven pipeline buckets,
+// the funnel's own list, and a fourth inside HomeFunnel.svelte.
+// TestEveryStageBelongsToExactlyOneGroup is what keeps this the only one.
 type Group struct {
 	// ID is the stable key. The generated frontend contract keys off it, so it is not a label.
 	ID string

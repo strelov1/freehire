@@ -423,7 +423,7 @@
             type="button"
             onclick={runApply}
             disabled={applyDisabled || applyBusy}
-            class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand px-6 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ring-2 ring-brand/30 ring-offset-2 ring-offset-background"
+            class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand px-6 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
           >
             {#if applyLabel}
               {applyBusy ? 'Saving…' : applyLabel}

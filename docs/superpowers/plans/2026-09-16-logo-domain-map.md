@@ -52,7 +52,7 @@
 
 ---
 
-# Part A — `hire`: publish the map
+## Part A — `hire`: publish the map
 
 ## Task A1: The pure `logodomain` package
 
@@ -957,7 +957,7 @@ so it yields to everything."
 
 ---
 
-# Part B — `freehire-logo`: consult the map
+## Part B — `freehire-logo`: consult the map
 
 All paths in Part B are relative to `~/Projects/freehire-logo`. Work on a branch:
 
@@ -1536,7 +1536,7 @@ changes, which is the rollback."
 
 After the "Status" section in `README.md`:
 
-```markdown
+````markdown
 ## The domain map
 
 Resolving a logo by name sometimes answers with a different company — `g2i` returns an
@@ -1555,7 +1555,7 @@ one declaring a `version`/`normalization` this build does not implement, and the
 resolves exactly as it did before the map existed. That is the rollback.
 
 An explicit `?domain=` from a caller always wins over the map.
-```
+````
 
 - [ ] **Step 2: Commit**
 
@@ -1567,7 +1567,7 @@ git commit -m "Document the domain map and its rollback"
 
 ---
 
-# Part C — Verify against production
+## Part C — Verify against production
 
 ## Task C1: Prove the fix on real data
 
@@ -1578,6 +1578,7 @@ git commit -m "Document the domain map and its rollback"
 ```bash
 curl -s -o /dev/null -w "%{http_code} %{size_download}\n" https://logo.freehire.me/g2i
 ```
+
 Expected today: `200 1814` — the wrong company.
 
 - [ ] **Step 2: Prove the correct answer is reachable**
@@ -1585,6 +1586,7 @@ Expected today: `200 1814` — the wrong company.
 ```bash
 curl -s -o /dev/null -w "%{http_code} %{size_download}\n" "https://logo.freehire.me/g2i?domain=g2i.co"
 ```
+
 Expected: `200 2984` — the correct mark. This is the target state for step 5.
 
 - [ ] **Step 3: Run the publisher once on the host, by hand**
@@ -1655,6 +1657,7 @@ ssh root@89.167.94.146 'systemctl daemon-reload && systemctl enable --now freehi
 ```bash
 cd /tmp/wt-logo-domain && ./deploy/check-drift.sh
 ```
+
 Expected: the new unit and timer match. Anything else it reports was already there.
 
 ---

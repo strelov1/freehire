@@ -84,9 +84,17 @@ WHERE id = $1;
 -- The account's current session generation, read on every authenticated request to
 -- decide whether a correctly-signed token was revoked. One primary-key lookup; this
 -- is the price of making a stateless JWT revocable at all.
-SELECT token_version
-FROM users
-WHERE id = $1;
+--
+-- The same statement stamps last_active_at, at most once a day, because this is the
+-- one place every signed-in request passes; mail_recipient (migration 0247) reads it
+-- to stop optional mail to people who have not used freehire in 180 days.
+WITH seen AS (
+    UPDATE users AS su SET last_active_at = now()
+    WHERE su.id = $1 AND su.last_active_at < now() - interval '1 day'
+)
+SELECT u.token_version
+FROM users AS u
+WHERE u.id = $1;
 
 -- name: BumpUserTokenVersion :one
 -- Invalidate every token issued for this account (sign out everywhere) by advancing

@@ -243,6 +243,9 @@
     skillsSettled && matchSortNeedsSkills(filters.value, matchFilterAvailable),
   );
 
+  // Under best match the server applies the threshold across the whole ranking, so the
+  // page is used as served; under any other ordering the browser still trims the page.
+  const serverMatch = $derived(minMatch != null && selectedSort === 'match');
   const matchSortHint = $derived(minMatch != null && selectedSort !== 'match');
 
   // Which date the above-list select bounds. Not $derived: the flag is a runtime env
@@ -445,7 +448,7 @@
   const visibleJobs = $derived(
     displayItems.filter((j) => {
       if (isDismissed(j.public_slug)) return false;
-      if (matchFilterAvailable && minMatch != null && (j.skills ?? []).length > 0) {
+      if (!serverMatch && matchFilterAvailable && minMatch != null && (j.skills ?? []).length > 0) {
         return computeClientMatch(j.skills ?? [], profileSkills).percent >= minMatch;
       }
       return true;
@@ -457,7 +460,9 @@
   // trims the already-fetched page client-side. Showing the raw total next to a
   // shrunk list would read as a lie ("500 open jobs" over three visible cards), so
   // swap in what's actually on screen while the threshold is active.
-  const listTotal = $derived(matchFilterAvailable && minMatch != null ? visibleJobs.length : jobs.total);
+  const listTotal = $derived(
+    !serverMatch && matchFilterAvailable && minMatch != null ? visibleJobs.length : jobs.total,
+  );
 
   // The pending "Job hidden — Undo" toast, or null. Set when a card is hidden; the
   // toast owns its auto-dismiss. Undo clears the slug's hidden mark (card returns via
@@ -512,7 +517,7 @@
 
   // Personal feed preferences must be re-applied when the reader changes in-tab.
   const searchUserID = $derived(
-    standalone && (filters.applied.hideSeen || filters.applied.formerEmployers) ? currentUser()?.id ?? null : null,
+    standalone && (filters.applied.hideSeen || filters.applied.formerEmployers || serverMatch) ? currentUser()?.id ?? null : null,
   );
 
   let lastSearchUserID = untrack(() => searchUserID);
@@ -801,6 +806,15 @@
     <MapIcon class="size-4" />
     <span class="hidden sm:inline">Map</span>
   </Button>
+  <!-- Desktop swipe-mode entry, beside Map in the toolbar: as a tab pinned to the viewport
+       edge it sat half outside the content column, aligned with nothing. Phones keep
+       their own entry in the inline toolbar. -->
+  {#if standalone}
+    <Button variant="outline" size="sm" onclick={openSwipe} aria-label="Swipe mode" title="Swipe mode" class="hidden md:inline-flex">
+      <Layers class="size-4" />
+      <span class="hidden lg:inline">Swipe</span>
+    </Button>
+  {/if}
 {/snippet}
 
 {#snippet listControls()}
@@ -820,7 +834,9 @@
          is then what is left of the viewport, less the same 24px at the bottom. -->
     <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-4 overflow-y-auto">
       {@render sidebarTop?.()}
-      <div class="rounded-xl border border-border bg-card p-4">
+      <!-- Card chrome only once there are filters to list: around one "All filters" button it
+           was a framed box holding nothing. -->
+      <div class={filters.active > 0 ? 'rounded-xl border border-border bg-card p-4' : 'px-1'}>
         <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} matchAvailable={matchFilterAvailable} />
       </div>
     </div>
@@ -830,6 +846,7 @@
     <ListToolbar
       total={displayItems.length > 0 ? listTotal : null}
       unit={listTotal === 1 ? 'job' : 'jobs'}
+      atLeast={serverMatch && jobs.totalIsLowerBound}
       settled={jobs.status === 'ready'}
       announceKey={resultSetKey}
       onSwipe={standalone ? openSwipe : undefined}
@@ -954,16 +971,18 @@
              so this is somewhere to leave rather than a dead end. -->
         <States
           state="empty"
-          message={minMatch === null
+          message={minMatch === null || serverMatch
             ? 'Every job on this page is one you hid.'
             : 'Every job on this page is hidden or below your match threshold.'}
         />
       {:else}
         <!-- Busy while held-over rows stand in for a reload underneath them (see
              `holdover`): the rows are real but about to be replaced. -->
-        <div class="flex flex-col gap-3" aria-busy={holdingOver}>
+        <!-- One list surface with hairline dividers rather than a stack of separately framed
+             cards: twenty bordered boxes read as a wall. -->
+        <div class="flex flex-col divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70 bg-card" aria-busy={holdingOver}>
           {#each visibleJobs as job (job.public_slug)}
-            <JobRow {job} {onHide} />
+            <JobRow {job} {onHide} hideCompany={!!scope.company_slug} flat />
           {/each}
         </div>
       {/if}
@@ -983,21 +1002,6 @@
   </div>
 </div>
 
-{#if standalone}
-  <!-- Desktop swipe-mode entry: an icon-only button pinned to the right viewport edge
-       (mobile uses the inline toolbar / scroll-revealed tab, so this is md-only). Fixed,
-       so it exists only while the standalone list is mounted and stays reachable while
-       scrolling; kept below the z-40 mobile overlays. -->
-  <button
-    type="button"
-    onclick={openSwipe}
-    aria-label="Swipe mode"
-    title="Swipe mode"
-    class="fixed right-0 top-16 z-30 hidden items-center rounded-l-xl border border-r-0 border-border bg-secondary py-2.5 pl-2.5 pr-2 text-secondary-foreground shadow-md transition-colors hover:bg-accent md:flex"
-  >
-    <Layers class="size-4 shrink-0" />
-  </button>
-{/if}
 
 {#if standalone && mapLoaded && !filters.value.formerEmployers}
   {#await import('./map/JobsMapDialog.svelte') then { default: JobsMapDialog }}

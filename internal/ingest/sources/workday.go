@@ -66,6 +66,14 @@ func (workday) Provider() string { return "workday" }
 // success (see splitByFacet). See the fullBoardListing interface for the bar.
 func (workday) fullBoardListing() {}
 
+// emptyBoardListing: listPostings fails a non-2xx answer (an unknown tenant is 422, an unknown
+// site 404) and an undecodable one (a challenge or HTML page), and it fails a first page whose
+// jobPostings is absent or null or contradicts a positive total. Only a 200 carrying the
+// collection present and empty with total 0 is an empty board. Quiet backoff is left alone: a
+// board turning empty changes its fingerprint, which ends the quiet state, and later empty
+// crawls pause at most quietMax, each ending with Quiet == 0 so boardListedEmpty admits it.
+func (workday) emptyBoardListing() {}
+
 // workdayBoard is a configured board parsed into the parts the CXS endpoints need, plus the
 // board's prefix on the public careers site — which is not the CXS path, and differs between
 // the two host shapes.
@@ -211,6 +219,14 @@ func (s workday) listPostings(ctx context.Context, b workdayBoard) ([]workdayPos
 	first, err := s.fetchListPage(ctx, url, map[string]any{}, 0)
 	if err != nil {
 		return nil, fmt.Errorf("workday: list board %s: %w", b.site, err)
+	}
+	if first.JobPostings == nil {
+		return nil, errListingAbsent("workday", b.site, "jobPostings")
+	}
+	// A capped total is walked by facet below, whatever its first page carries.
+	if len(first.JobPostings) == 0 && first.Total > 0 && first.Total != workdayCapTotal {
+		return nil, fmt.Errorf("workday: board %s/%s: the first page lists no postings but reports a total of %d",
+			b.tenant, b.site, first.Total)
 	}
 	if first.Total != workdayCapTotal {
 		return s.pageAll(ctx, url, map[string]any{}, first)

@@ -8,8 +8,6 @@
   import {
     resolveMatchState,
     matchBarSegments,
-    matchTeaser,
-    teaserChips,
     partitionBlockers,
     claimSkill,
     toneText,
@@ -203,25 +201,6 @@
   const segments = $derived(view ? matchBarSegments(view) : { exact: 0, adjacent: 0 });
   const blockers = $derived(partitionBlockers(view?.blockers));
 
-  // The locked states' teaser — deliberately not a real score, but built from this job's
-  // own skills and seeded from its slug, so it agrees with the same job's card in the
-  // feed instead of naming skills the posting never mentioned.
-  // Gated on the block state, not just on the template branch it renders in, so "can the
-  // teaser reach a viewer with a real match?" is answered here rather than by reading the
-  // markup — and so the derivation doesn't run for the states that discard it.
-  const teaser = $derived(
-    blockState === 'guest' || blockState === 'no-profile'
-      ? matchTeaser(job.public_slug, jobSkills)
-      : null,
-  );
-  // Three is what a ~285px sidebar column fits at natural chip width; a fourth forced
-  // every name down to an unreadable stub ("anal…", "c…"). teaserChips makes sure the
-  // short row still carries a missing skill.
-  const TEASER_CHIPS = 3;
-  const teaserSkills = $derived(
-    teaser ? teaserChips(jobSkills, teaser.missing, TEASER_CHIPS) : [],
-  );
-
   const haveChip = haveChipClass;
   const adjChip = adjacentChipClass;
   const missChip = missingChipClass;
@@ -307,56 +286,20 @@
   {#if blockState === 'no-skills'}
     <p class="text-sm text-muted-foreground">Not enough data to compare this job to your profile.</p>
   {:else if blockState === 'guest' || blockState === 'no-profile'}
-    <!-- Locked teaser: lightly-blurred figures (not a real score) over the job's own
-         skills + a footer CTA. A single-skill job has no teaser (nothing to contrast),
-         and then the call-to-action stands alone under the heading. -->
-    {#if teaser}
-      <div class="pointer-events-none select-none space-y-3 opacity-90 blur-[1.5px]" aria-hidden="true">
-        <div class="flex items-baseline justify-between gap-2">
-          <span class="text-2xl font-bold tabular-nums leading-none">{teaser.percent}%</span>
-          <span class="shrink-0 text-xs text-muted-foreground">
-            {teaser.matched} of {teaser.total} skills
-          </span>
-        </div>
-        <div class="flex h-2 overflow-hidden rounded bg-secondary">
-          <div class="h-full bg-brand" style="width: {teaser.percent}%"></div>
-        </div>
-        <!-- Chips keep their natural width and the row clips at the panel edge, rather
-             than every name being ellipsised to fit — a clipped last chip still reads,
-             an "anal…" does not. -->
-        <div class="flex flex-nowrap gap-1.5 overflow-hidden">
-          {#each teaserSkills as skill (skill)}
-            {@const missingSkill = teaser.missing.has(skill)}
-            <span class={`${missingSkill ? missChip : haveChip} whitespace-nowrap`}>
-              {#if missingSkill}
-                <Ban class="size-3 shrink-0" aria-hidden="true" />
-              {:else}
-                <Check class="size-3 shrink-0" aria-hidden="true" />
-              {/if}
-              <SkillIcon slug={skill} />{skillLabel(skill)}
-            </span>
-          {/each}
-        </div>
-      </div>
-    {/if}
-    <!-- The dashed rule divides the teaser from the call-to-action; with no teaser above
-         it there is nothing to divide, so it goes. -->
-    <div
-      class={[
-        'flex items-center justify-between gap-2',
-        teaser && 'border-t border-dashed border-border pt-3',
-      ]}
-    >
+    <!-- Locked state: one line and the action that unlocks it. It used to show blurred
+         made-up figures, which read as a page that failed to render. -->
+    <div class="flex items-center justify-between gap-2">
       {#if blockState === 'guest'}
         <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Lock class="size-3.5 shrink-0" />Sign in to see your match
         </span>
-        <Button variant="primary" size="sm" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</Button>
+        <!-- Outline: Tailor my CV is the page's one filled button. -->
+        <Button variant="outline" size="sm" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</Button>
       {:else}
         <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
           <FileText class="size-3.5 shrink-0" />Add your skills or upload a CV
         </span>
-        <Button variant="primary" size="sm" href={profileHref}>Upload CV</Button>
+        <Button variant="outline" size="sm" href={profileHref}>Upload CV</Button>
       {/if}
     </div>
   {:else if blockState === 'ready' && view}
@@ -496,7 +439,7 @@
     <MatchSummary slug={job.public_slug} {matchAnalysis} />
   {:else}
     <!-- Skeleton: the profile is still loading, or the match is in flight (ready but
-         not yet fetched). A signed-in profiled viewer never sees the locked teaser. -->
+         not yet fetched). A signed-in profiled viewer never sees the locked state. -->
     <div class="h-2 animate-pulse rounded bg-secondary"></div>
     <div class="flex gap-1.5">
       <div class="h-5 w-14 animate-pulse rounded-full bg-secondary"></div>

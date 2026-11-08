@@ -111,8 +111,9 @@
       </Button>
     {:else if mailbox?.available}
       <p class="mt-1 text-xs text-muted-foreground">{s.getMailboxHint}</p>
-      <Button variant="primary" size="sm" class="mt-3" disabled={claiming} onclick={claimMailbox}>
-        {claiming ? s.creating : s.getMailbox} <AtSign class="h-4 w-4" />
+      <!-- The same weight as the Gmail card's button: two equal ways in, neither favoured. -->
+      <Button variant="secondary" size="sm" class="mt-3" disabled={claiming} onclick={claimMailbox}>
+        <AtSign class="size-4" aria-hidden="true" /> {claiming ? s.creating : s.getMailbox}
       </Button>
     {:else}
       <p class="mt-1 text-xs text-muted-foreground">{s.notAvailable}</p>

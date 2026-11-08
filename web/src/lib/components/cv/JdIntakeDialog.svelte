@@ -5,7 +5,7 @@
   import { api, ApiError } from '#lib/api.js';
   import type { CvBaseItem } from '#lib/cv.js';
   import type { Job } from '#lib/types.js';
-  import { tailorHref } from '#lib/tailor/tailorHref.js';
+  import { tailorHref } from '#lib/tailorHref.js';
   import { companyLogoUrl } from '#lib/logo.js';
   import { Button, Dialog, EntityLogo } from '#lib/ui/index.js';
   import BasePicker from './BasePicker.svelte';

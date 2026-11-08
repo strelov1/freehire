@@ -17,7 +17,7 @@ import {
   PREVIEW_LINE_HEIGHT,
   axisValue,
   stepAxis,
-} from './geometry';
+} from './cvGeometry';
 
 describe('previewTypography', () => {
   // An unset style must leave the preview exactly as it has always rendered, so an existing

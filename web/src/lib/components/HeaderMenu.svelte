@@ -20,6 +20,7 @@
   import { ProviderIcon } from '#lib/ui/index.js';
   import { NAV } from '#lib/siteNav.js';
   import { DISCORD_URL } from '#lib/socialLinks.js';
+  import { isAccountArea } from '#lib/shellLayout.js';
 
   // This menu carries the site nav and the theme toggle on every viewport; on
   // mobile it additionally carries the workspace switcher and the auth
@@ -103,6 +104,11 @@
     lockScroll();
     return () => unlockScroll();
   });
+
+  // Inside /my the visitor came to work: the project's own links (stars, Discord) and the
+  // setup nudge (Profile already carries the checklist) step out of the bar there. Both
+  // stay in the drawer.
+  const inAccount = $derived(isAccountArea(page.url.pathname));
 
   function closeSelf() {
     open = false;
@@ -190,6 +196,7 @@
        collapse into the drawer (below) and the two that are the visitor's stay: the
        bell is how they learn something happened, and it cannot be a tap deeper than
        the menu that would tell them. -->
+  {#if !inAccount}
   <GithubStars class="hidden sm:inline-flex" />
 
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
@@ -201,6 +208,7 @@
   >
     <ProviderIcon provider="discord" />
   </a>
+  {/if}
 
   <NotificationBell />
 
@@ -210,7 +218,7 @@
 
   <button
     type="button"
-    aria-label={setupOutstanding() > 0 ? 'Menu — account setup unfinished' : 'Menu'}
+    aria-label={setupOutstanding() > 0 && !inAccount ? 'Menu — account setup unfinished' : 'Menu'}
     aria-haspopup="menu"
     aria-expanded={open}
     onclick={(e) => {
@@ -241,7 +249,7 @@
          The screen-reader equivalent is in this button's aria-label, not an sr-only span
          in here: an aria-label REPLACES an element's contents as its accessible name, so
          a span would have been silently unreadable. -->
-    {#if isAuthenticated() && !open && setupOutstanding() > 0}
+    {#if isAuthenticated() && !open && !inAccount && setupOutstanding() > 0}
       <span
         class="absolute right-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-background"
         aria-hidden="true"

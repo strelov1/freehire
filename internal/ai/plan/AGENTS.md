@@ -54,6 +54,40 @@ transaction. `store.go` is the transaction around it and nothing else.
   never carry an upgrade link and never feed `recordLimitHit`. Tests that need an
   allowance to consume partway into pin a real PRO ceiling with `WithProCeiling`.
 
+- **A paid-gate refusal is recorded as a paywall hit, and the record never touches the 402.**
+  `plan.decide` refuses the free tier before any allowance is read, so those refusals never
+  reach `plan_limit_hits` — the two tables are different questions ("the plan never included
+  it" against "a ceiling was reached"). `Store.RecordPaywallHit` writes `paywall_hits`
+  (migration 0248), once per (user, feature, job, day) with `ON CONFLICT DO NOTHING`: one row
+  per refusal would let a free account grow the table without bound by retrying or iterating
+  job slugs, and "who hit which wall" needs only that it happened and when it first did. The
+  job is resolved INSIDE the insert from a bound identifier — a job slug, or the caller's own
+  CV or assistant session — so it costs no round trip, stores no request text, and a foreign
+  or unknown identifier yields a NULL job, never another user's. The gate
+  (`internal/api/handler/paid_ai.go`) calls it from a detached goroutine (`WithoutCancel`, a
+  5 s timeout, its own `recover`), because an in-request insert would add a database round
+  trip to every 402 and a failed write must not change it; a failure is logged and dropped.
+  Not recorded: a 503 (an unreadable plan is not a paywall hit), a paid caller, a metered
+  ceiling (that is `plan_limit_hits`), and the auto-apply orchestrator's tailor refusal (it
+  acts for a queue owner, nobody pressed a button). `feature` is the plan feature name, or
+  `ats_review` / `mail_recall` / `autofill` for the three routes with no allowance, chosen
+  from the route template. The table links an account to jobs it looked at; it is erased with
+  the account (`ON DELETE CASCADE`), and has no retention sweep yet.
+
+  Operator report, who hit which paywall in the last 7 days (change `7` for another window):
+
+  ```sql
+  SELECT h.feature, h.user_id, j.public_slug AS job_slug, h.day, h.created_at
+  FROM paywall_hits h
+  LEFT JOIN jobs j ON j.id = h.job_id
+  WHERE h.created_at >= now() - interval '7 days'
+  ORDER BY h.feature, h.created_at DESC;
+  ```
+
+  The same list is the sqlc query `ListPaywallHitsByFeature`. For the counts per feature, group
+  it: `SELECT feature, count(*) AS hits, count(DISTINCT user_id) AS users FROM paywall_hits
+  WHERE created_at >= now() - interval '7 days' GROUP BY feature ORDER BY hits DESC`.
+
 - **Every metered feature enforces on arrival.** auto-apply was the first to ship this
   way: pro's ceiling there is what the tier above is sold on, and one that only counts
   leaves Ultra selling nothing, so shadow mode never applied to it. The other five joined it

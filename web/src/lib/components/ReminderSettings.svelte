@@ -31,8 +31,8 @@
   // once there is one — or while push is already chosen, so it can be removed.
   let pushAvailable = $state(false);
 
-  // The server's default is an hourly interval digest (migration 0233).
-  let digestFrequency = $state('interval');
+  // The server's default is a daily digest at 09:00 (migration 0246).
+  let digestFrequency = $state('daily');
   let digestTime = $state('09:00');
   let digestIntervalHours = $state(1);
   // 1-23: a full day is the Daily option, which also picks the hour.
@@ -81,7 +81,7 @@
       channels = settings.channels;
       telegramAvailable = tg.enabled;
       pushAvailable = pushDevice;
-      digestFrequency = settings.digest_frequency || 'interval';
+      digestFrequency = settings.digest_frequency || 'daily';
       digestTime = settings.digest_time ?? '09:00';
       digestIntervalHours = settings.digest_interval_hours || 1;
       quietHoursOn = Boolean(settings.quiet_hours_start && settings.quiet_hours_end);

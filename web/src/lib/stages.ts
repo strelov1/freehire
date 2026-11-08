@@ -8,7 +8,7 @@
 
 import { STAGE_GROUPS, type Stage } from './generated/contracts';
 import { t } from './i18n/t';
-import type { Locale } from './locale';
+import type { Locale } from './i18n/locale';
 import { messages } from './stages.messages';
 
 interface StageOption {

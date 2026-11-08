@@ -68,44 +68,15 @@
   // whichever is present so the link renders regardless of which importer filled it.
   const website = $derived(info.website ?? info.homepage);
   const websiteHref = $derived(website ? (website.startsWith('http') ? website : `https://${website}`) : '');
+  // Shown as the bare host ("stripe.com"), the way people say it; the link keeps the URL.
+  const websiteLabel = $derived(website ? website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : '');
   const linkedin = $derived(info.linkedin);
 
   const hasMeta = $derived(industries.length > 0 || !!website || !!linkedin);
 </script>
 
-<section class="rounded-2xl border border-border bg-card p-5">
-  <div class="flex items-start gap-3">
-    <EntityLogo name={company.name} src={companyLogoUrl(company.name) ?? undefined} shape="square" size="lg" />
-    <div class="min-w-0 flex-1">
-      <!-- break-words: a long single word ("International") is wider than the phone
-           column and would otherwise overflow the card instead of wrapping. -->
-      <h1 class="break-words text-xl font-semibold tracking-tight sm:text-2xl">{company.name}</h1>
-      {#if company.tagline}
-        <p class="mt-1 text-sm text-muted-foreground">{company.tagline}</p>
-      {/if}
-      <!-- Who backed the company, then the register-backed credentials (visa-sponsor
-           licences) — both facts about the employer, so both sit under the identity.
-           Backers lead: "picked by Y Combinator" is what a reader came to know.
-           Each credential carries its issuing body and the disclaimer that the
-           licence is not a promise about any given role. -->
-      {#if company.collections?.length}
-        <div class="mt-2 flex flex-wrap items-center gap-1.5">
-          <BackerBadge collections={company.collections} withLabel />
-          <CredentialBadge collections={company.collections} />
-        </div>
-      {/if}
-    </div>
-    <!-- flex-1 above lets the name/tagline use the full width; the follow CTA stays
-         top-right and never shrinks (it collapses to an icon on mobile itself). -->
-    <div class="shrink-0">
-      <CompanyFollowButton {slug} companyName={company.name} />
-    </div>
-  </div>
-  <!-- Feedback + votes get their own right-aligned row instead of sharing the identity
-       row: together they are ~220px of non-shrinking width, which on a phone would leave
-       the name/tagline column too narrow to hold a word. The discussion is a tab now
-       (CompanyTabs), not a link here. -->
-  <div class="mt-3 flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+{#snippet feedback(cls: string)}
+  <div class={cls}>
     <button
       type="button"
       class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
@@ -127,6 +98,42 @@
       myVote={company.my_vote ?? 0}
     />
   </div>
+{/snippet}
+
+<section class="rounded-2xl border border-border bg-card p-5">
+  <div class="flex items-start gap-3">
+    <EntityLogo name={company.name} src={companyLogoUrl(company.name) ?? undefined} shape="square" size="lg" />
+    <div class="min-w-0 flex-1">
+      <!-- break-words: a long single word ("International") is wider than the phone
+           column and would otherwise overflow the card instead of wrapping. -->
+      <h1 class="break-words text-xl font-semibold tracking-tight sm:text-2xl">{company.name}</h1>
+      {#if company.tagline}
+        <p class="mt-1 text-sm text-muted-foreground">{company.tagline}</p>
+      {/if}
+      <!-- Who backed the company, then the register-backed credentials (visa-sponsor
+           licences) — both facts about the employer, so both sit under the identity.
+           Backers lead: "picked by Y Combinator" is what a reader came to know.
+           Each credential carries its issuing body and the disclaimer that the
+           licence is not a promise about any given role. -->
+      {#if company.collections?.length}
+        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+          <!-- Three backers, then "+N": six in a row wrapped the header onto a second line. -->
+          <BackerBadge collections={company.collections} withLabel max={3} />
+          <CredentialBadge collections={company.collections} />
+        </div>
+      {/if}
+    </div>
+    <!-- flex-1 above lets the name/tagline use the full width; the follow CTA stays
+         top-right and never shrinks (it collapses to an icon on mobile itself). -->
+    <div class="shrink-0">
+      <CompanyFollowButton {slug} companyName={company.name} />
+    </div>
+  </div>
+  <!-- Feedback + votes ride the end of the industries/links row below, so the card has no
+       row holding only them; with no such row they keep one of their own. -->
+  {#if !hasMeta}
+    {@render feedback('mt-3 flex flex-wrap items-center justify-end gap-x-4 gap-y-2')}
+  {/if}
   <!-- The employer-level fact, where it belongs: an AI interviewer is a property of
        how this company hires, not of any one posting. Renders nothing until somebody
        reports it. -->
@@ -139,7 +146,7 @@
       {#if industries.length}
         <div class="flex flex-wrap items-center gap-2">
           {#each industries as industry (industry)}
-            <span class="rounded-full bg-secondary px-2.5 py-0.5 text-xs text-secondary-foreground">{industry}</span>
+            <span class="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">{industry}</span>
           {/each}
         </div>
       {/if}
@@ -151,7 +158,7 @@
               class="min-w-0 break-all text-sm font-medium text-primary hover:underline"
               href={websiteHref}
               target="_blank"
-              rel="noopener noreferrer">{website} ↗</a
+              rel="noopener noreferrer">{websiteLabel} ↗</a
             >
             <!-- eslint-enable svelte/no-navigation-without-resolve -->
           {/if}
@@ -167,6 +174,7 @@
           {/if}
         </div>
       {/if}
+      {@render feedback('ml-auto flex flex-wrap items-center gap-x-4 gap-y-2')}
     </div>
   {/if}
 </section>

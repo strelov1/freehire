@@ -42,8 +42,9 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   reused by every CV. `GET /api/v1/me/photo` is metadata — the bytes are the `/image`
   sub-resource, and the URL carries `?v=<uploaded_at>` because it is otherwise stable. The
   control renders nothing when `enabled` is false (object storage unconfigured).
-- `ResumeStructuredView.svelte` is read-only; the backend serves the structured CV from
-  `GET /api/v1/me/resume` (`structured` field, null when absent/stale/unconfigured).
+- The profile tabs read the structured CV through one store, `src/lib/resume.svelte.ts`, from
+  `GET /api/v1/me/resume` (`structured` field: banked experience and the candidate-owned
+  contacts composed over the extract, so a stale extract does not empty it; null only when nothing worth serving is left).
 - Environment variables reach the app only through `src/env.ts`. SvelteKit 3 exposes
   nothing undeclared — not even through the deprecated `$env/*` modules — so a variable
   missing there is `undefined` at runtime however the host sets it, and nothing reports it.
@@ -80,6 +81,14 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   a precache whose every URL 404ed. `web/static/sw.js` is a kill switch for browsers that still
   have the old worker registered — it clears their caches and unregisters itself; nothing
   registers it otherwise. Do not bring a service worker back without a reason it serves.
+- The boundaries between the app's parts are checked by easement against
+  [easement.yml](easement.yml): a component never imports a route or `lib/server`,
+  `src/lib` never imports a component, and only routes, hooks and tests reach `lib/server`.
+  Any dependency between two parts that the file does not list fails, so a new one is
+  written there with its reason, not worked around. Run `easement check` in `web/` after
+  changing imports (`mise install` provides it and its indexer); `easement why <a> <b>`
+  shows the imports behind an edge. There is no baseline of known violations, and
+  `easement baseline` is not the way to get a change through.
 
 ## Worth knowing
 
