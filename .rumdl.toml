@@ -51,6 +51,12 @@ disable = [
   # MD036, bold line used as a heading. `**Why:**` and `**Revisit if …**` lead paragraphs in
   # the specs and the decision records; they are labels, not sections that belong in a TOC.
   "MD036",
+  # MD077, list continuation indent. Measured here it reports 57 lines in five openspec
+  # changes, nearly all an ordered item's continuation lines aligned under the text after
+  # `1. ` — correctly — as "over-indented", and its fix dedents them to a lazy continuation,
+  # which is the wrong direction. The breakage it is meant to find, a continuation that
+  # falls out of its item, is visible in the rendered page.
+  "MD077",
   # MD038, spaces inside a code span. The space is the content: `query: ` and ` (CC)` name a
   # prefix or suffix WITH its separator, and "fixing" it drops the very character the
   # sentence is about.
