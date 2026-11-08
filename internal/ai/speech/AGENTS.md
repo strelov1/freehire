@@ -1,6 +1,7 @@
 # Speech to text
 
 ## Scope
+
 `internal/ai/speech` — one method that turns recorded audio into text, and nothing else.
 Its HTTP surface is `internal/api/handler/speech.go`; the microphone that feeds it is
 `web/src/lib/assistant/VoiceInput.svelte`.
@@ -25,6 +26,7 @@ records, fails once and only then latches away — a worse first impression than
 microphone.
 
 ## Always true
+
 - **It is not part of `internal/platform/llm`.** That package is built on langchaingo, which
   models chat completions and has no audio surface; a multipart audio POST bolted onto
   it would reach around the abstraction it exists to provide. What the two DO share is
@@ -46,6 +48,7 @@ microphone.
   the API did nothing wrong and has no remedy.
 
 ## The filename is not the client's
+
 The gateway identifies the container by file extension, so a name has to travel — but
 not the one the browser sent. Go's `multipart.Writer` escapes quotes in a filename and
 **not CRLF**, so a crafted name would inject header lines into the request this server
@@ -55,17 +58,23 @@ container to the browser's preference list in `dictation.ts` without adding it h
 a 400 the caller cannot explain.
 
 ## What bounds the spend
-Transcription is billed per minute of audio, and a turn is not metered
-(`internal/ai/plan` meters it: one dictation allowance per accepted recording, returned when nothing usable comes back). Three things stand in for that,
-none of which depends on metering landing first:
 
-- a per-**caller** rate limit (`transcriptionsPerHour`), keyed on the user rather than
-  the address, because an IP key is lifted by any rotating proxy pool;
+Transcription is billed per minute of audio. `internal/ai/plan` meters it: one dictation
+allowance per accepted recording (`FeatureDictation`), returned when nothing usable comes
+back. That allowance is what bounds a caller's volume, with two gaps: an empty
+transcription is released only after the billed upstream call, so repeated silent recordings
+cost without spending it, and the meter fails open when its counter cannot be read. There is **no inbound HTTP quota**
+on this path: #4160 moved request quotas to the operations gateway in the private
+`freehire-ops`, which routes `/api/v1/speech/transcriptions` with the assistant and
+exempts it, leaving the cost to the allowance (this package's `transcriptionsPerHour`
+went with that change). Two limits bound a single recording:
+
 - a 2 MiB body cap enforced on the bytes read, not on the size the client declares;
 - a client-side recording ceiling (`MAX_RECORDING_MS`) well under that cap, so the cap
   is a backstop rather than something a caller discovers after they finish speaking.
 
 ## Limitations
+
 - One request per recording: no streaming, no partial results. A caller sees nothing
   until they stop talking.
 - No language hint is sent. Whisper detects it, which is why the browser's
