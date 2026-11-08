@@ -80,11 +80,14 @@
    *  into a link by the same `planForSuggestion` the dropdown applies — so which facet
    *  a craft means is answered in one place, not two. */
   const crafts = $derived<Chip[]>(
-    starterSuggestions(counts, CHIP_LIMIT).map((s) => ({
-      href: planHref(planForSuggestion(s)),
-      label: s.label,
-      count: s.count,
-    })),
+    starterSuggestions(counts, CHIP_LIMIT)
+      .map((s) => ({
+        href: planHref(planForSuggestion(s)),
+        label: s.label,
+        count: s.count,
+      }))
+      // Biggest first, as the row's own label promises.
+      .sort((a, b) => (b.count ?? 0) - (a.count ?? 0)),
   );
 
   /** Where, rather than what. Remote leads because it is the answer that is not a place;
