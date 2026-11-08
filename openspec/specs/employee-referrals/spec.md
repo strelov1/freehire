@@ -71,7 +71,8 @@ an "ask for a referral" affordance only when a referral is available.
 
 ### Requirement: Job page links to potential referrers
 
-The job page SHALL offer a way to find people at the employer on LinkedIn. When
+The job page SHALL offer a quiet text link to find people at the employer on
+LinkedIn, worded as finding people rather than promising a referrer. When
 the company has an approved referral offer, the existing in-product request
 SHALL appear before the LinkedIn option; when it has none, no empty referral
 card SHALL appear. The LinkedIn option SHALL open the stored company page's
@@ -81,7 +82,7 @@ for this action.
 
 #### Scenario: Finding a potential referrer from a job
 
-- **WHEN** a seeker chooses "Find someone to refer you" on a job page
+- **WHEN** a seeker chooses "Find people at <company> on LinkedIn" on a job page
 - **THEN** the company People tab opens when available, or a people search
   prefilled with the company name opens instead
 
