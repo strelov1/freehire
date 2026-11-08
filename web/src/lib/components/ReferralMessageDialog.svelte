@@ -122,9 +122,10 @@
       maxlength="4000"
       rows="5"
       placeholder="Name, current role, and a few relevant lines"
-      class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-    ></textarea>
-    <p class="text-xs text-muted-foreground">The draft uses your job and candidate-stated experience. The contact text is not saved.</p>
+      class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"></textarea>
+    <p class="text-xs text-muted-foreground">
+      The draft uses your job and candidate-stated experience. The contact text is not saved.
+    </p>
     <Button variant="outline" disabled={drafting || !profile.trim()} onclick={() => void generate()}>
       {#if drafting}
         <Loader2 class="size-4 animate-spin" aria-hidden="true" />
@@ -149,8 +150,7 @@
           cited = [];
         }}
         rows="8"
-        class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-      ></textarea>
+        class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"></textarea>
       {#if cited.length}
         <p class="text-xs text-muted-foreground">Experience used in this draft:</p>
         <ul class="list-disc pl-5 text-xs text-muted-foreground">

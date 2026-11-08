@@ -16,32 +16,46 @@ afterEach(() => {
 });
 
 it('sends pasted text for one draft and lets the seeker edit before copying', async () => {
-  const request = vi.fn().mockResolvedValue(new Response(
-    'event: message\ndata: {"body":"Hello Sam. Would you consider a referral?","cited":[]}\n\n',
-    { status: 200, headers: { 'content-type': 'text/event-stream' } },
-  ));
+  const request = vi.fn().mockResolvedValue(
+    new Response('event: message\ndata: {"body":"Hello Sam. Would you consider a referral?","cited":[]}\n\n', {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    }),
+  );
   vi.stubGlobal('fetch', request);
   const copied = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copied } });
   render(ReferralMessageDialog, { slug: 'acme-role', company: 'Acme', onClose: vi.fn() });
 
-  await fireEvent.input(screen.getByLabelText("Contact's public profile text"), { target: { value: 'Sam, engineer at Acme' } });
+  await fireEvent.input(screen.getByLabelText("Contact's public profile text"), {
+    target: { value: 'Sam, engineer at Acme' },
+  });
   await fireEvent.click(screen.getByRole('button', { name: 'Draft message' }));
   await waitFor(() => expect(screen.getByLabelText('Your message — edit before sending')).not.toBeNull());
   expect(request).toHaveBeenCalledOnce();
-  expect(JSON.parse(request.mock.lastCall?.[1]?.body ?? '{}')).toEqual({ channel: 'linkedin', profile: 'Sam, engineer at Acme' });
+  expect(JSON.parse(request.mock.lastCall?.[1]?.body ?? '{}')).toEqual({
+    channel: 'linkedin',
+    profile: 'Sam, engineer at Acme',
+  });
 
-  await fireEvent.input(screen.getByLabelText('Your message — edit before sending'), { target: { value: 'Hello Sam, may I ask for a referral?' } });
+  await fireEvent.input(screen.getByLabelText('Your message — edit before sending'), {
+    target: { value: 'Hello Sam, may I ask for a referral?' },
+  });
   await fireEvent.click(screen.getByRole('button', { name: 'Copy message' }));
   expect(copied).toHaveBeenCalledWith('Hello Sam, may I ask for a referral?');
 });
 
 it('shows the paid-plan link when drafting is refused', async () => {
   const refusal = { error: 'A paid plan is required.', upgrade_url: '/my/plan' };
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(refusal), {
-    status: 402,
-    headers: { 'content-type': 'application/json' },
-  })));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(refusal), {
+        status: 402,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ),
+  );
   render(ReferralMessageDialog, { slug: 'acme-role', company: 'Acme', onClose: vi.fn() });
 
   await fireEvent.input(screen.getByLabelText("Contact's public profile text"), { target: { value: 'Sam at Acme' } });
