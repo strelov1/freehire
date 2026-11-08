@@ -77,9 +77,13 @@ func (h *assistantHandlers) requireAgentsMayApply(ctx context.Context, userID in
 // bare error counted every refusal as internal_error. pgx.ErrNoRows from a slug lookup and the
 // plan's refusals are the bare errors they return that mean something to the caller.
 func toolError(err error) error {
+	var refused *autoApplyAllowanceRefusal
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return fiber.NewError(fiber.StatusNotFound, "no job with this slug")
+	// The day's auto-apply allowance is spent: the 402 the start route answers it with.
+	case errors.As(err, &refused):
+		return fiber.NewError(fiber.StatusPaymentRequired, err.Error())
 	case errors.Is(err, plan.ErrPaymentRequired):
 		return fiber.NewError(fiber.StatusPaymentRequired, err.Error())
 	case errors.Is(err, plan.ErrRefused):
@@ -468,7 +472,7 @@ func (h *assistantHandlers) answerBankDeleteTool() assistant.Tool {
 			}
 			if err := h.answerBank.Delete(ctx, userID, in.ID); err != nil {
 				if errors.Is(err, answerbank.ErrNotFound) {
-					return nil, errors.New("no such answer")
+					return nil, fiber.NewError(fiber.StatusNotFound, "no such answer")
 				}
 				return nil, err
 			}

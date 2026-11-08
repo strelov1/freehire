@@ -88,6 +88,13 @@ catalogue the keyword hits are the answer anyway.
 
 ## What the tools must not do
 
+- **Hand an internal error's text to the agent.** On the signed-in server a failed tool's
+  text reaches a third-party model verbatim, so `agentErrorText` (`account.go`) shows it
+  only for a `*fiber.Error` or a bad argument (`assistant.ErrInvalidArguments`); anything
+  else reads as a generic sentence, and is not logged either, because the tool logs carry
+  no error text. A message written for the agent ("slug is required", "no such answer")
+  is therefore a `fiber.NewError` with its status, never `errors.New`: a plain one reaches
+  the agent as "something went wrong". Its status is also what the metrics count it as.
 - **Return a full description from `search_jobs`.** `/agent/jobs/search` rehydrates every
   hit's body from Postgres, deliberately, because a programmatic consumer reading whole
   bodies is what it is for. Here ten of those in one turn is the context window spent on

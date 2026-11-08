@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
@@ -113,7 +114,7 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 			if errors.Is(err, assistant.ErrInvalidArguments) {
 				code = "invalid_request"
 			}
-			result := errorResult(err.Error())
+			result := errorResult(agentErrorText(err))
 			result.Meta = mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": code}}
 			return result, nil
 		}
@@ -123,6 +124,27 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(payload)}}}, nil
 	}
+}
+
+// agentErrorText is what an agent is told when a tool fails. A *fiber.Error and a bad
+// argument are written for the caller, so their text is shown; anything else is an internal
+// fault whose text may name accounts, rows or personal data, so the agent gets a generic
+// sentence, as an HTTP caller gets a generic 500. Not logged either, for the same reason the
+// tool logs carry no error text: the result's diagnostics (request id, error code) are the
+// correlation.
+func agentErrorText(err error) string {
+	var fe *fiber.Error
+	switch {
+	// The fiber error's own message, never err.Error(): a wrapper around it may add internal context.
+	case errors.As(err, &fe):
+		return fe.Message
+	// Only DecodeArgs makes these, from the caller's own arguments.
+	case errors.Is(err, assistant.ErrInvalidArguments):
+		return err.Error()
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return "the request was cancelled or timed out; try again"
+	}
+	return "something went wrong on freehire's side; try again later"
 }
 
 func errorResult(text string) *mcp.CallToolResult {
