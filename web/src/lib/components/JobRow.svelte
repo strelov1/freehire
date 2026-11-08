@@ -482,7 +482,8 @@
              wrapper (rather than a span inside) also makes the badge's own padding
              hoverable — the same shape the job's own page uses. -->
         <span title={badge.tooltip} class="inline-flex shrink-0">
-          <Badge variant="brand">{badge.label}</Badge>
+          <!-- Neutral: the brand fill is kept for the page's one primary action. -->
+          <Badge variant="secondary">{badge.label}</Badge>
         </span>
       {/each}
       <!-- The role's facets, then the pay and the cost of applying, as one line of quiet

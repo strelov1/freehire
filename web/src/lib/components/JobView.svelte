@@ -1040,7 +1040,7 @@
              variant/class/children, so a `title` passed to it would be dropped
              silently and the badge would state a claim with its evidence gone. -->
         <span title={badge.tooltip} class="inline-flex">
-          <Chip variant="brand" class="font-semibold">{badge.label}</Chip>
+          <Chip class="font-semibold">{badge.label}</Chip>
         </span>
       {/each}
     </div>

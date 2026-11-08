@@ -20,7 +20,7 @@
   const apiPrice = $derived(pick('api'));
   const dataPrice = $derived(pick('api_data'));
 
-  const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency);
+  const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency, undefined, { trimWhole: true });
 
   // Which plan's checkout is opening, so only its own button says so.
   let busyId = $state<string | null>(null);

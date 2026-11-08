@@ -110,9 +110,6 @@
     {:else}
       <Button
         variant={subscribed ? 'secondary' : 'outline'}
-        class={subscribed
-          ? undefined
-          : 'border-brand-strong bg-transparent text-brand-strong hover:bg-brand-muted'}
         size="sm"
         onclick={toggle}
         disabled={busy}
