@@ -122,7 +122,7 @@ export function seniorityLabel(e: Pick<Enrichment, 'seniority'>): string | null 
  * reach or an onsite role's area). Null when regions is unknown (empty is
  * unknown, not global).
  */
-function regionLabel(job: Pick<Job, 'regions'>): string | null {
+export function regionLabel(job: Pick<Job, 'regions'>): string | null {
   if (!job.regions?.length) return null;
   return job.regions.map((r) => label(REGION_LABELS, r)).join(', ');
 }

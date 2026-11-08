@@ -44,7 +44,7 @@
     (interval === 'year' ? ultraAnnual : ultraMonthly) ?? ultraMonthly ?? ultraAnnual,
   );
 
-  const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency);
+  const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency, undefined, { trimWhole: true });
 
   // What one tier's allowance reads as. `unlimited` makes the number a fair-use guard rather
   // than a ceiling, so it is not shown — quoting a guard as a limit would promise less than
@@ -363,7 +363,7 @@
     </section>
 
     <!-- Pro -->
-    <section class="flex flex-col gap-4 rounded-xl border-2 border-primary p-6">
+    <section class="flex flex-col gap-4 rounded-xl border border-brand/40 bg-brand/[0.03] p-6 shadow-sm ring-1 ring-brand/20">
       <div class="flex flex-col gap-1">
         <h2 class="text-lg font-semibold">Pro</h2>
         {#if chosen}
@@ -487,7 +487,7 @@
   </div>
 
   {#if plans}
-    <ApiPlans prices={plans.prices} />
+    <ApiPlans prices={plans.prices} buttonVariant="outline" />
   {/if}
 
   <!-- Said plainly rather than buried: what a subscription does and does not commit anyone

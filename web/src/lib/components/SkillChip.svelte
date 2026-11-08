@@ -49,7 +49,9 @@
      arbitrary value where a token exists. It encloses the WHOLE chip so hovering the
      label — the obvious gesture — opens the definition, not only the "?". -->
 <Tooltip side="top">
-  <span class={badgeVariants({ variant: 'brand' })}>
+  <!-- Outline, the site's one chip for a skill: brand-filled here, it was a second chip style
+       louder than the same skills on the cards beside it. -->
+  <span class={badgeVariants({ variant: 'outline' })}>
     {#if linked}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
       <a href={filterHref('skills', slug)} class="inline-flex items-center gap-1 transition hover:opacity-80" onpointerdown={keepTapOnTheLink}>
@@ -68,7 +70,7 @@
          chip's own link and a near miss would navigate instead. -->
     <button
       type="button"
-      class="ml-0.5 inline-flex size-6 items-center justify-center opacity-70 transition hover:opacity-100"
+      class="ml-0.5 inline-flex size-6 items-center justify-center opacity-50 transition hover:opacity-100"
       aria-label="Show what {label} is"
     >
       <span

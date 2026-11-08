@@ -4,7 +4,7 @@
   import { pushState, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { CircleAlert, Search, X as XIcon } from '@lucide/svelte';
+  import { ChevronDown, CircleAlert, Search, X as XIcon } from '@lucide/svelte';
   import { refreshAppliedCompanies } from '#lib/appliedCompanies.svelte.js';
   import { api } from '#lib/api.js';
   import { Button, EmptyState, alertVariants, cn } from '#lib/ui/index.js';
@@ -624,26 +624,35 @@
         <CircleAlert class="size-4 shrink-0" aria-hidden="true" />
         <span class="sr-only sm:not-sr-only">{s.needsAttention}</span>
       </button>
-      <select value={sort} onchange={(e) => filters.setNow({ ...filters.value, sort: parseBoardSort(e.currentTarget.value) })}
-        aria-label={s.sortAria} class="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs sm:w-40 sm:flex-none sm:text-sm">
-        <option value="default">{s.sortDefault}</option>
-        <option value="company">{s.sortCompany}</option>
-        <option value="added">{s.sortAdded}</option>
-        <option value="deadline">{s.sortDeadline}</option>
-      </select>
+      <span class="relative flex min-w-0 flex-1 items-center sm:w-40 sm:flex-none">
+        <select value={sort} onchange={(e) => filters.setNow({ ...filters.value, sort: parseBoardSort(e.currentTarget.value) })}
+          aria-label={s.sortAria} class="h-8 w-full min-w-0 appearance-none rounded-lg border border-input bg-background pl-2.5 pr-7 text-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm">
+          <option value="default">{s.sortDefault}</option>
+          <option value="company">{s.sortCompany}</option>
+          <option value="added">{s.sortAdded}</option>
+          <option value="deadline">{s.sortDeadline}</option>
+        </select>
+        <ChevronDown class="pointer-events-none absolute right-2 size-3.5 text-muted-foreground" aria-hidden="true" />
+      </span>
       {#if view === 'board'}
-        <select value={visibleColumn} onchange={(e) => goToColumn(e.currentTarget.value)}
-          aria-label={s.boardStage} class="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs sm:w-40 sm:flex-none sm:text-sm">
-          {#each BOARD_COLUMNS as col (col.id)}
-            <option value={col.id}>{columnLabel(col)} ({shown[col.id].length})</option>
-          {/each}
-        </select>
+        <span class="relative flex min-w-0 flex-1 items-center sm:w-40 sm:flex-none">
+          <select value={visibleColumn} onchange={(e) => goToColumn(e.currentTarget.value)}
+            aria-label={s.boardStage} class="h-8 w-full min-w-0 appearance-none rounded-lg border border-input bg-background pl-2.5 pr-7 text-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm">
+            {#each BOARD_COLUMNS as col (col.id)}
+              <option value={col.id}>{columnLabel(col)} ({shown[col.id].length})</option>
+            {/each}
+          </select>
+          <ChevronDown class="pointer-events-none absolute right-2 size-3.5 text-muted-foreground" aria-hidden="true" />
+        </span>
       {:else}
-        <select value={stageFilter} onchange={(e) => filters.setNow({ ...filters.value, stage: e.currentTarget.value })}
-          aria-label={s.stageFilterAria} class="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs sm:w-40 sm:flex-none sm:text-sm">
-          <option value="">{s.allStages}</option>
-          {#each BOARD_COLUMNS as col (col.id)}<option value={col.id}>{columnLabel(col)}</option>{/each}
-        </select>
+        <span class="relative flex min-w-0 flex-1 items-center sm:w-40 sm:flex-none">
+          <select value={stageFilter} onchange={(e) => filters.setNow({ ...filters.value, stage: e.currentTarget.value })}
+            aria-label={s.stageFilterAria} class="h-8 w-full min-w-0 appearance-none rounded-lg border border-input bg-background pl-2.5 pr-7 text-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm">
+            <option value="">{s.allStages}</option>
+            {#each BOARD_COLUMNS as col (col.id)}<option value={col.id}>{columnLabel(col)}</option>{/each}
+          </select>
+          <ChevronDown class="pointer-events-none absolute right-2 size-3.5 text-muted-foreground" aria-hidden="true" />
+        </span>
       {/if}
     </div>
     {#if filtering}
@@ -674,14 +683,15 @@
       class={cn(
         'no-scrollbar flex gap-3 overflow-x-auto pb-2',
         !dragging && 'snap-x snap-mandatory',
-        !rowEdges.atStart && 'mask-l-from-90%',
-        !rowEdges.atEnd && 'mask-r-from-90%',
+        !rowEdges.atStart && 'mask-l-from-97%',
+        !rowEdges.atEnd && 'mask-r-from-97%',
       )}
     >
       {#each BOARD_COLUMNS as col (col.id)}
         <BoardColumn
           id={col.id}
           label={columnLabel(col)}
+          emptyHint={s.columnEmpty}
           items={shown[col.id]}
           dragDisabled={filtering || sort !== 'default'}
           {onconsider}

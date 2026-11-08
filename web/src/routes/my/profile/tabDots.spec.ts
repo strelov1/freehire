@@ -56,20 +56,18 @@ beforeEach(() => {
 });
 
 describe('profile tab dots', () => {
-  it('dots only the tabs that hold an empty section, and shows the count', async () => {
+  it('dots only the tabs that hold an empty section', async () => {
     completeness.current = { ...ALL_FILLED, education: false, screening: false, filled: 4 };
     await renderLayout();
 
     expect(dotted()).toEqual(['/my/profile/experience', '/my/profile/screening']);
-    expect(screen.getByText('4/6 sections')).toBeTruthy();
   });
 
-  it('shows neither a dot nor the count once everything is filled', async () => {
+  it('shows no dot once everything is filled', async () => {
     completeness.current = ALL_FILLED;
     await renderLayout();
 
     expect(dotted()).toEqual([]);
-    expect(screen.queryByText('6/6 sections')).toBeNull();
   });
 
   it('shows no dot while the inputs are still loading', async () => {

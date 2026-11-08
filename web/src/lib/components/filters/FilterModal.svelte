@@ -500,7 +500,7 @@
     <button
       type="button"
       onclick={applyProfileOrSignIn}
-      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 ring-2 ring-brand/30 ring-offset-2 ring-offset-background"
+      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 shadow-sm"
     >
       <UserRound class="size-4 shrink-0" aria-hidden="true" />
       Apply my profile

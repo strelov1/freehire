@@ -206,8 +206,9 @@
       <div
         class="-mx-4 mt-8 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
       >
+        <!-- Greyed until hovered: in full colour the red badge was the loudest thing in the footer. -->
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
-        <a href={productHunt.href} target="_blank" rel="noopener noreferrer" class="h-14 w-64 shrink-0 snap-start">
+        <a href={productHunt.href} target="_blank" rel="noopener noreferrer" class="h-14 w-64 shrink-0 snap-start opacity-70 grayscale transition hover:opacity-100 hover:grayscale-0 focus-visible:opacity-100 focus-visible:grayscale-0">
           <img
             src={productHunt.light}
             alt={productHunt.alt}

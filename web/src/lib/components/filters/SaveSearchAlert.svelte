@@ -89,16 +89,20 @@
   onMount(() => {
     if (autostart) void save();
   });
+
+  // The brand fill is earned by a search worth saving: on an unfiltered feed this button
+  // was the loudest thing on the page while there was nothing yet to save.
+  const saveVariant = $derived(queryNarrows(query) ? 'primary' : 'outline');
 </script>
 
 <div class="flex flex-col gap-1.5">
   {#if !isAuthenticated()}
-    <Button variant="primary" size={saveBig ? 'lg' : 'md'} onclick={save} class={saveBtnClass}>
+    <Button variant={saveVariant} size={saveBig ? 'lg' : 'md'} onclick={save} class={saveBtnClass}>
       <Bookmark class={saveBig ? 'size-[1.15rem]' : 'size-4'} aria-hidden="true" />
       Save this search
     </Button>
   {:else if !matched}
-    <Button variant="primary" size={saveBig ? 'lg' : 'md'} onclick={save} disabled={busy} class={saveBtnClass}>
+    <Button variant={saveVariant} size={saveBig ? 'lg' : 'md'} onclick={save} disabled={busy} class={saveBtnClass}>
       <Bookmark class={saveBig ? 'size-[1.15rem]' : 'size-4'} aria-hidden="true" />
       {busy ? 'Saving…' : 'Save filter'}
     </Button>
