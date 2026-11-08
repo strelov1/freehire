@@ -1042,7 +1042,8 @@
              variant/class/children, so a `title` passed to it would be dropped
              silently and the badge would state a claim with its evidence gone. -->
         <span title={badge.tooltip} class="inline-flex">
-          <Chip class="font-semibold">{badge.label}</Chip>
+          <!-- The same look as on every job card: accent text, no pill. -->
+          <span class="text-xs font-semibold text-brand-strong">{badge.label}</span>
         </span>
       {/each}
     </div>
