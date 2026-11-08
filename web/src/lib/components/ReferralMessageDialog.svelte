@@ -23,6 +23,7 @@
   });
   $effect(() => () => controller?.abort());
 
+  // Read only the stage, final message, and error events from the response stream.
   function handleFrame(frame: string) {
     const event = /^event: (.+)$/m.exec(frame)?.[1];
     const raw = /^data: (.+)$/m.exec(frame)?.[1];
@@ -41,6 +42,7 @@
     }
   }
 
+  // Send the pasted profile for one draft and keep the result in this dialog.
   async function generate() {
     if (drafting || !profile.trim() || [...profile].length > 4000) return;
     drafting = true;
@@ -63,7 +65,7 @@
         const body = await response.json().catch(() => null);
         trackPlanRefusal(response.status, body);
         error = body?.error ?? 'The message could not be drafted.';
-        upgradeOffered = response.status === 402 && body?.upgrade_url === '/pricing';
+        upgradeOffered = response.status === 402 && body?.upgrade_url === '/my/plan';
         return;
       }
       const reader = response.body.getReader();
@@ -88,6 +90,7 @@
     }
   }
 
+  // Copy only after the seeker presses the button; FreeHire never sends the message.
   async function copy() {
     try {
       await navigator.clipboard.writeText(message);
@@ -138,7 +141,7 @@
       <p role="alert" class="text-sm text-destructive">{error}</p>
     {/if}
     {#if upgradeOffered}
-      <a href={resolve('/pricing')} class="text-sm text-primary underline">See paid plans</a>
+      <a href={resolve('/my/plan')} class="text-sm text-primary underline">See paid plans</a>
     {/if}
     {#if message}
       <label class="block text-sm font-medium" for="referral-draft">Your message — edit before sending</label>

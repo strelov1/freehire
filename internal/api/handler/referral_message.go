@@ -35,6 +35,8 @@ func (h *referralMessageHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/jobs/:slug/referral-message/stream", mw.cookie, mw.paidAI(unmeteredAI), h.Stream)
 }
 
+// Stream drafts a request-only referral message over SSE for a paid seeker.
+// The pasted profile and generated body are never written to a store or log.
 func (h *referralMessageHandlers) Stream(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {

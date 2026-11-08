@@ -37,7 +37,7 @@ it('sends pasted text for one draft and lets the seeker edit before copying', as
 });
 
 it('shows the paid-plan link when drafting is refused', async () => {
-  const refusal = { error: 'A paid plan is required.', upgrade_url: '/pricing' };
+  const refusal = { error: 'A paid plan is required.', upgrade_url: '/my/plan' };
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(refusal), {
     status: 402,
     headers: { 'content-type': 'application/json' },
@@ -48,6 +48,6 @@ it('shows the paid-plan link when drafting is refused', async () => {
   await fireEvent.click(screen.getByRole('button', { name: 'Draft message' }));
 
   await waitFor(() => expect(screen.getByRole('alert').textContent).toContain(refusal.error));
-  expect(screen.getByRole('link', { name: 'See paid plans' }).getAttribute('href')).toBe('/pricing');
+  expect(screen.getByRole('link', { name: 'See paid plans' }).getAttribute('href')).toBe('/my/plan');
   expect(trackPlanRefusal).toHaveBeenCalledWith(402, refusal);
 });

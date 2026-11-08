@@ -136,6 +136,7 @@
   let loadingReferralMessage = $state(false);
   let referralMessageLoadError = $state(false);
 
+  // Load the drafting dialog only when a signed-in seeker opens it.
   async function openReferralMessage() {
     if (!isAuthenticated()) {
       promptSignIn();

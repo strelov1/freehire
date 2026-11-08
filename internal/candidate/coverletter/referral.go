@@ -18,6 +18,7 @@ const MaxReferralProfileRunes = 4000
 
 var ErrInvalidReferral = errors.New("choose linkedin or email and paste 1 to 4000 characters of public profile text")
 
+// Valid bounds the one-request profile and limits output to the supported channels.
 func (r Referral) Valid() bool {
 	return (r.Channel == "linkedin" || r.Channel == "email") &&
 		strings.TrimSpace(r.Profile) != "" && utf8.RuneCountInString(r.Profile) <= MaxReferralProfileRunes
@@ -36,6 +37,7 @@ func referralInstructions(channel string) string {
 		"Do not promise an attachment or claim that a message has been sent. Keep one specific, supported experience point and a low-pressure request.\n"
 }
 
+// referralProfileBlock quotes pasted text as untrusted prompt data.
 func referralProfileBlock(r *Referral) string {
 	if r == nil {
 		return ""
