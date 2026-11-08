@@ -7,7 +7,7 @@ Deterministic seniority/category tagging from job title, feeding enrichment face
 - Parses the **job title** at ingest into canonical `jobs.seniority`/`jobs.category` columns.
 - Values from `vocab.SeniorityValues`/`vocab.CategoryValues` — EN+RU aliases, whole-word matched. Russian forms are full surface forms (not stems): the matcher requires word boundaries. **Never guesses**.
 - Same alias→canonical dictionary design as `internal/dict/location` and `internal/dict/skilltag`.
-- The main table resolves in declaration order, not title order. When it resolves nothing, the fallbacks run in this order (see `classify.go`): German, Dutch, Danish, Spanish, Portuguese, French, Polish, BCS, Slovenian. A `categoryNone` veto at any step ends the chain. Seniority reads `indianSeniorityTable` first, then the same chain. A fallback never changes a title an earlier table resolved.
+- The main table resolves in declaration order, not title order. When it resolves nothing, the fallbacks run in this order (see `classify.go`): German, Dutch, Danish, Spanish, Portuguese, French, Polish, BCS, Slovenian. A `categoryNone` veto at any step ends the chain. Seniority reads `japaneseSeniorityTable`, `chineseSeniorityTable` and then `indianSeniorityTable` first, then the same chain. A fallback never changes a title an earlier table resolved.
 
 ## Grade-blind phrases
 
@@ -69,7 +69,7 @@ Slovenian vocabulary came from 3,288 titles (#3518), curated: catch-all nouns an
 - **The craft**, here: a manager title resolves what it manages (Restaurant `hospitality`, Tax `finance`, IT `devops`, Engineering Manager `software_engineering`; discipline-named "Mechanical/Project/Plant/... Engineering Manager" pinned to `industrial_engineering` ahead of it). These sit in the managers block at the END of the table.
 - **Whether it manages people**, in `internal/dict/roletype` (`role_type` facet). General/Assistant/Store/Branch/District/Area/Plant/Shift Manager and начальник/заведующий/директор name no craft; roletype marks them `people_manager`, search keeps postings that facet reaches (`search.CategoryUnresolved`), and `ConfirmedNonTech` vetoes refusal the same way.
 
-There is no bare "manager"/"менеджер" alias. A manager title naming neither craft nor people marker (Case Manager, Portfolio Manager, "Senior Manager, X") resolves nothing and is excluded from search — ~2.9% of postings on a 2% sample at retirement. A stored `category=management` is answered as `role_type=people_manager` by the search filter.
+There is no bare "manager"/"менеджер" alias. A manager title naming neither craft nor people marker (Case Manager, Portfolio Manager, "Senior Manager, X") resolves no category, but `NamesManager` keeps it past both catalogue gates (`search.CategoryUnresolved`, `ConfirmedNonTech`): findable by keyword, reached by no facet — ~2.9% of postings on a 2% sample at retirement. A `category=management` filter value (saved searches, old links) is answered as `role_type=people_manager` by the search filter.
 
 ## Public safety
 
@@ -187,7 +187,7 @@ Grades: višji/višja/višjega senior — never "višje"/"višjo" ("higher", "z 
 
 ## Serving: dict-only
 
-`jobview.FromRow` overwrites nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the dictionary always wins, the LLM value is never a fallback. They stay **nested under `enrichment`** so search facets, SPA and generated contracts are unchanged.
+`jobview.FromRow` (through `FromDomain`) overwrites nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the column always wins, the LLM value is never a fallback. That column is `jobderive.Derive`'s answer: a source's structured value first, then the title dictionary, then the description. They stay **nested under `enrichment`** so search facets, SPA and generated contracts are unchanged.
 
 ## Convention
 
@@ -203,6 +203,6 @@ Two 2026-09-15 changes reach only postings written after them; neither backfill 
 
 So ~**6,300 stored postings wrongly read `is_tech = true`**.
 
-An open posting corrects itself on its next crawl: `job.New` runs `jobderive.Derive`, and `is_tech` is in `RefreshUnchangedJob`'s match key, so a moved row goes through `UpsertJob`. The backfill is for rows never crawled again — **closed postings above all**, and boards/providers no longer crawled. Until then those stay in technical search, and `cmd/search-ping` spends some of Google's 200/day allowance on the open ones it reaches first (2026-09-15: 14 of 398 announcements, 3.5%).
+An open posting re-read in full corrects itself on its next crawl: `job.New` runs `jobderive.Derive`, and `is_tech` is in `RefreshUnchangedJob`'s match key, so a moved row goes through `UpsertJob`. Not on a hydrating source (`FetchNew`: `workday`, `smartrecruiters`, ...): it re-lists a seen posting as `SeenRefresh`, which the pipeline only `touch`es. The backfill is for those rows and for rows never crawled again — **closed postings above all**, and boards/providers no longer crawled. Until then those stay in technical search, and `cmd/search-ping` spends some of Google's 200/day allowance on the open ones it reaches first (2026-09-15: 14 of 398 announcements, 3.5%).
 
 Fix: `cmd/backfill-derive` (~15h; `BACKFILL_CONCURRENCY` 2-3, 6 degraded prod) then a full `make reindex` — `is_tech` is not in `content_hash`, so an incremental push never reaches these rows.

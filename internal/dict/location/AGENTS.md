@@ -21,7 +21,8 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   `global`" default: moderator reports (job_reports 29-34) showed region-restricted
   postings (`[Remote-US]` title suffix, "hiring in the US … only") served as worldwide. `jobderive.Derive`'s
   precedence chain rescues a bare-remote posting, in order: `RestrictionFromTitle`
-  (anchor-gated bracket/parenthetical suffix, `title_restriction.go`),
+  (an anchor-gated bracket/parenthetical suffix, else with no anchor a place-only trailing
+  label like "(LATAM)" / "- India" or a leading macro-region, `title_restriction.go`),
   `EligibilityFromDescription` (citizenship phrases), `RegionScopeFromDescription` (anchor-gated "candidates based in
   X" / "hiring in X" / "restricted to X", `region_scope.go`), and last an adapter's
   `FallbackCountries` (Greenhouse's offices — see `internal/ingest/sources/AGENTS.md`),
@@ -349,7 +350,7 @@ perk/refusal guards after).
 
 ## How it works
 
-`jobderive.Derive` calls `ParseIn` with the adapter's countries; output reaches users through Meilisearch facets, so a dictionary change needs `cmd/backfill-derive` then `cmd/reindex`.
+`jobderive.Derive` calls `ParseIn` with the adapter's countries; output reaches users through Meilisearch facets, so a dictionary change needs `cmd/backfill-derive` then `cmd/reindex`. The backfill keeps a stored `work_mode` (`internal/ingest/rederive` passes it back to `Derive`, which keeps a set mode; only a `remote` the description contradicts turns `onsite`), so a work-mode rule change reaches only rows with none.
 
 ## Limitations
 
