@@ -73,6 +73,8 @@ CREATE INDEX cv_lifecycle_enrollments_open_idx
 -- retries. Re-arming one step is a deliberate DELETE.
 CREATE TABLE cv_lifecycle_sends (
     user_id bigint      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- A three-value letter number held to 1..3 by the CHECK; it can never approach the limit.
+    -- squawk-ignore prefer-bigint-over-smallint
     step    smallint    NOT NULL CHECK (step BETWEEN 1 AND 3),
     sent_at timestamptz NOT NULL DEFAULT now(),
     error   text        NOT NULL DEFAULT '',
