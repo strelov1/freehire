@@ -162,6 +162,11 @@ pre-commit:
     doc-links:
       run: node scripts/check-doc-links.mjs
 
+    # Staged files over the token limit (scripts/check-file-size.mjs holds the limit, the
+    # ignore list and the splitting instructions). The file-size CI job runs it over every file.
+    file-size:
+      run: node scripts/check-file-size.mjs
+
     # THE ONLY HOOK HERE THAT PREVENTS SOMETHING RATHER THAN REPORTING IT.
     #
     # Everything else in this file is a convenience: it fails locally so CI does not

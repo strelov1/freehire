@@ -541,6 +541,25 @@ jobs:
       - name: Check shared dependency versions
         run: node scripts/check-shared-deps.mjs
 
+  # No file people or agents write may exceed the token limit in scripts/check-file-size.mjs.
+  # The pre-commit hook checks staged files; this checks all of them, since --no-verify
+  # walks past the hook.
+  file-size:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Check file sizes
+        run: node scripts/check-file-size.mjs --all
+
   # The workflows themselves. Nothing has ever read them except GitHub, at the moment it
   # runs one — so an unknown runner label, a mistyped `needs:` or a broken expression is
   # discovered by a job failing, and a job that only runs on a tag or a schedule is
