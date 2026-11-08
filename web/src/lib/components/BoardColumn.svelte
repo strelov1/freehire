@@ -98,15 +98,20 @@
     <h2 id={titleId}>{label}</h2>
     <span class="text-xs tabular-nums text-muted-foreground">{items.length}</span>
   </header>
-  {#if items.length === 0 && emptyHint && !dragDisabled}
-    <p class="px-1 text-xs text-muted-foreground/70">{emptyHint}</p>
-  {/if}
+
   <!-- Each column's card list is its own bounded scroll container. svelte-dnd-action
        auto-scrolls a scrollable *container* correctly during a drag, but mis-places
        the drop once the *window* auto-scrolls (a card dropped low in a long column
        would snap back near the top). Capping the height and scrolling here keeps the
        drag inside a container the library handles, so a card lands where it's
        dropped — and the column header/count stay put. -->
+  <!-- The empty-column hint sits OVER the drop zone, not above it, and lets the pointer
+       through: above the zone, a card released on the hint landed outside it and sprang back.
+       It is not a child of the zone, which svelte-dnd-action reserves for its items. -->
+  <div class="relative">
+  {#if items.length === 0 && emptyHint && !dragDisabled}
+    <p class="pointer-events-none absolute inset-x-1 top-2 text-xs text-muted-foreground/70">{emptyHint}</p>
+  {/if}
   <div
     class="flex max-h-[calc(100dvh-14rem)] min-h-24 flex-col gap-2 overflow-y-auto"
     bind:this={zone}
@@ -129,5 +134,6 @@
         <BoardCard {item} {onopen} {onremove} removing={removing.includes(item.id)} />
       </div>
     {/each}
+  </div>
   </div>
 </section>

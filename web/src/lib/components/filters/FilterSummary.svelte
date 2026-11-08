@@ -1,6 +1,6 @@
 <script lang="ts">
   import { dynamicLabel, FACETS } from '#lib/facets.js';
-  import { type FilterStore, savedSearchQuery, displayQuery, appliesWorkModeRemoteAnywhere, workModeRemoteLabel, queryNarrows } from '#lib/filters.js';
+  import { type FilterStore, savedSearchQuery, displayQuery, appliesWorkModeRemoteAnywhere, workModeRemoteLabel } from '#lib/filters.js';
   import { experienceLabel, freshnessLabel, salaryLabel } from '#lib/filterControls.js';
   import { unsummarized } from '#lib/filterSummary.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -154,9 +154,10 @@
   {#snippet afterButton()}
     {#if canSave && store.value.formerEmployers}
       <p class="text-sm text-muted-foreground">Turn off Hiring again to save this search or set up alerts.</p>
-    {:else if canSave && queryNarrows(current)}
-      <!-- Only once there is a search to save: on the bare feed the button saved nothing
-           and was the heaviest control in an otherwise empty panel. -->
+    {:else if canSave && store.active > 0}
+      <!-- Only once a filter is set: on the bare feed the button saved nothing and was the
+           heaviest control in an otherwise empty panel. Any active filter counts, a minimum
+           skill match included, since it narrows the list even where alerts cannot use it. -->
       <SaveSearchAlert query={current} variant="full" alerts="manage" />
     {/if}
   {/snippet}

@@ -379,7 +379,7 @@
        card has moved it into the action row at its foot, leaving the corner free. -->
   <!-- Without the company there is nothing to the date's left, so it floats beside the
        title instead of holding a row of its own. -->
-  <div class={['flex items-center gap-2', compact ? 'pr-11' : onHide ? 'pr-28' : 'pr-20', hideCompany && 'float-right ml-3 mt-1.5']}>
+  <div class={['flex items-center gap-2', compact ? 'pr-11' : onHide ? 'pr-28' : 'pr-20', !compact && (applyJob || directApply) && 'pointer-coarse:pr-48', hideCompany && 'float-right ml-3 mt-1.5']}>
     <div class="flex min-w-0 items-center gap-2">
       {#if !hideCompany}
       <EntityLogo
@@ -636,7 +636,8 @@
        Hide, where the card has them, hover-reveal beside it (over the date, which they cover
        only while the pointer is on the card). `pointer-coarse`
        keeps Hide visible on touch, which has no hover to reveal anything. The rail inside
-       the link reserves the corner (see its `pr-*`), so the date never slides under it. -->
+       the link reserves the corner (see its `pr-*`; wider on touch, where Apply and Hide are
+       always shown), so the date never slides under it. -->
   <div class="absolute right-3 top-3 flex items-center gap-1">
     <!-- Direct-apply shortcut (freehire#2755): a way out to the posting's own site
          without opening the job page first. Outline, never the brand-green primary —

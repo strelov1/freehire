@@ -922,7 +922,7 @@
 <div bind:this={wrapEl} class="relative min-w-0 flex-1">
   <div
     class={cn(
-      'flex items-center border border-border bg-background transition-shadow focus-within:border-ring/60 focus-within:ring-4 focus-within:ring-ring/15',
+      'flex items-center border border-border bg-background focus-within:ring-2 focus-within:ring-ring',
       hero
         ? // Taller, rounder and lifted off the page: at the centre of an otherwise
           // empty screen this is the only interactive thing, so it carries the weight
