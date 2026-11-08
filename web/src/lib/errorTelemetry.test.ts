@@ -51,6 +51,21 @@ describe('error telemetry', () => {
     expect(exporter.getFinishedLogRecords()).toHaveLength(20);
     await telemetry?.shutdown();
   });
+  it('reports noise the caller vouches broke the page, tagged with its error code', async () => {
+    const exporter = new InMemoryLogRecordExporter();
+    const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', exporter });
+    const chunk = new TypeError('Importing a module script failed.');
+    telemetry?.capture(chunk);
+    telemetry?.capture(chunk, { reportNoise: true, errorId: 'ab12cd34' });
+    await telemetry?.flush();
+    const records = exporter.getFinishedLogRecords();
+    expect(records).toHaveLength(1);
+    expect(records[0]?.attributes).toMatchObject({
+      'exception.message': 'Importing a module script failed.',
+      'error.id': 'ab12cd34',
+    });
+    await telemetry?.shutdown();
+  });
   it('is inert without configuration', () => {
     expect(createErrorTelemetry({ service: 'freehire-web' })).toBeUndefined();
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isTransientNoise } from './transientNoise';
+import { isModuleLoadFailure, isTransientNoise } from './transientNoise';
 
 /** The shape `#lib/api`'s `call()` throws, without importing it — see the module's own
  *  note on why the filter duck-types instead. */
@@ -64,5 +64,32 @@ describe('isTransientNoise', () => {
   // introduce. FREEHIRE-WEB-29 is a rejected promise whose reason was an object with no keys.
   it.each([[null], [undefined], ['a thrown string'], [42], [{}]])('reports what it cannot read: %s', (err) => {
     expect(isTransientNoise(err)).toBe(false);
+  });
+});
+
+describe('isModuleLoadFailure', () => {
+  it.each([
+    [
+      'Chrome',
+      new TypeError('Failed to fetch dynamically imported module: https://freehire.me/_app/immutable/nodes/74.js'),
+    ],
+    [
+      'Firefox',
+      new TypeError('error loading dynamically imported module: https://freehire.me/_app/immutable/chunks/a.js'),
+    ],
+    ['Safari', new TypeError('Importing a module script failed.')],
+  ])('recognizes the %s wording, which is also transient noise', (_browser, error) => {
+    expect(isModuleLoadFailure(error)).toBe(true);
+    expect(isTransientNoise(error)).toBe(true);
+  });
+
+  it.each([
+    ['a plain transport failure', new TypeError('Failed to fetch')],
+    ['an abort', Object.assign(new Error('signal is aborted without reason'), { name: 'AbortError' })],
+    ['a defect', new TypeError("undefined is not an object (evaluating 'x.length')")],
+    ['no error at all', undefined],
+    ['a string', 'Importing a module script failed.'],
+  ])('ignores %s', (_label, error) => {
+    expect(isModuleLoadFailure(error)).toBe(false);
   });
 });
