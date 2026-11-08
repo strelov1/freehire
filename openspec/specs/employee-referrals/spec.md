@@ -91,11 +91,12 @@ for this action.
 A signed-in paid seeker MAY paste public text about one contact into the job
 page, choose LinkedIn DM or email, and request a short draft they can edit and
 copy. The chain SHALL use the job and only candidate-asserted experience bank
-achievements as evidence for claims about the seeker. It SHALL audit the draft
-before returning it. The pasted text SHALL be used for that request only, with
-no profile or draft stored or sent to the contact by freehire. The model call
-SHALL carry its own feature tag. Each successful draft SHALL consume one
-cover-letter daily allowance, released when drafting fails or the stream cannot
+achievements as evidence for claims about the seeker. The one-call draft SHALL
+cite at least one offered achievement; a draft with unknown citations or no
+usable citation SHALL fail. The pasted text SHALL be used for that request
+only, with no profile or draft stored or sent to the contact by freehire. The
+model call SHALL carry its own feature tag. Each successful draft SHALL consume
+one cover-letter daily allowance, released when drafting fails or the stream cannot
 deliver the message. A missing approved in-product referrer SHALL NOT prevent
 this action.
 
