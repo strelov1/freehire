@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -484,22 +483,9 @@ func accountsError(err error) error {
 	case errors.Is(err, accounts.ErrUsernameCooldown):
 		return fiber.NewError(fiber.StatusTooManyRequests, "username changed too recently")
 	default:
-		if isInfraError(err) {
-			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
-		}
+		// Anything else is ours: classify answers a client cancel 499 and reports the rest.
 		return err
 	}
-}
-
-func isInfraError(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return true
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "connection") || strings.Contains(msg, "closed") || strings.Contains(msg, "timeout") || strings.Contains(msg, "refusal") || strings.Contains(msg, "pool")
 }
 
 // Register creates an account, starts a session (auth cookie), and returns the

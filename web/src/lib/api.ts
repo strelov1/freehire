@@ -1821,8 +1821,8 @@ export function createApi(
    *  they change their card or cancel. Generated per visit and short-lived, so it is fetched
    *  when a surface is about to show it rather than stored.
    *
-   *  404 when there is no subscription, or the provider is unreachable. Either way the
-   *  surface omits the link rather than rendering a broken one. */
+   *  404 when there is no subscription; 500 when the provider is unreachable. Either way
+   *  the surface omits the link rather than rendering a broken one. */
   async function billingManageUrl(): Promise<{ url: string }> {
     return requestData<{ url: string }>('/api/v1/billing/manage');
   }
