@@ -117,6 +117,15 @@ func TestWatchlist_CapIsAllOrNothingAndNeverRefusesWhatIsAlreadyThere(t *testing
 			t.Fatal(err)
 		}
 	}
+	// One place left and two new companies: the batch is refused whole, not half-written.
+	if _, err := svc.Import(ctx, user, []string{"last", "over"}); !errors.Is(err, companywatch.ErrFull) {
+		t.Errorf("over-limit batch = %v, want ErrFull", err)
+	}
+	var imported int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM company_watchlist
+		WHERE user_id = $1 AND company_slug IN ('last', 'over')`, user).Scan(&imported); err != nil || imported != 0 {
+		t.Fatalf("over-limit batch stored %d companies (%v), want 0", imported, err)
+	}
 	if _, err := svc.Add(ctx, user, "last"); err != nil {
 		t.Fatalf("the last free place: %v", err)
 	}
