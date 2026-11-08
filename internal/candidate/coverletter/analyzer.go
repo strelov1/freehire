@@ -45,6 +45,8 @@ type Input struct {
 	// decides what the letter is actually written in.
 	PostingLanguage string
 	Bounds          Bounds
+	// Referral adapts the same evidence/draft/audit chain to a request-only message.
+	Referral *Referral
 }
 
 // Analyzer runs the three-stage chain. A nil client (LLM unconfigured) makes Draft a no-op,
@@ -123,6 +125,21 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 // gate leaves nothing to write from. Any gateway failure is returned as an error with no
 // letter, so a caller can never overwrite a stored draft with an empty one.
 func (a *Analyzer) DraftStream(ctx context.Context, in Input, emit Emit) (*Letter, error) {
+	if in.Referral != nil {
+		if !in.Referral.Valid() {
+			return nil, ErrInvalidReferral
+		}
+		in.Band = BandShort
+		in.Bounds = Bounds{ShortCeiling: 900, Floor: 60, MaxCited: 3}.OrDefault()
+		if in.Referral.Channel == "email" {
+			in.Bounds.ShortCeiling = 1400
+		}
+		if a != nil {
+			clone := *a
+			clone.client = a.client.WithoutTracing()
+			a = &clone
+		}
+	}
 	if a == nil || a.client == nil {
 		return nil, nil
 	}
@@ -252,7 +269,11 @@ func (a *Analyzer) write(ctx context.Context, in Input, atoms []experience.Atom,
 	if err != nil {
 		return Letter{}, err
 	}
-	raw, err := a.client.GenerateJSON(ctx, draftSystemPrompt(in.Band, in.Bounds), prompt)
+	system := draftSystemPrompt(in.Band, in.Bounds)
+	if in.Referral != nil {
+		system += referralInstructions(in.Referral.Channel)
+	}
+	raw, err := a.client.GenerateJSON(ctx, system, prompt)
 	if err != nil {
 		return Letter{}, fmt.Errorf("coverletter: draft: %w", err)
 	}
@@ -275,7 +296,12 @@ func (a *Analyzer) audit(ctx context.Context, in Input, drafted Letter, atoms []
 	if err != nil {
 		return nil, err
 	}
-	raw, err := a.client.GenerateJSON(ctx, auditSystemPrompt(in.Band, in.Bounds), prompt)
+	system := auditSystemPrompt(in.Band, in.Bounds)
+	if in.Referral != nil {
+		system += referralInstructions(in.Referral.Channel)
+		prompt += referralProfileBlock(in.Referral)
+	}
+	raw, err := a.client.GenerateJSON(ctx, system, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("coverletter: audit: %w", err)
 	}

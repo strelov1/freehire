@@ -67,8 +67,13 @@ func draftSystemPrompt(band Band, bounds Bounds) string {
 
 func draftUserPrompt(in Input, atoms []experience.Atom, language string) (string, error) {
 	var b strings.Builder
-	b.WriteString("Write the letter in this language (ISO code): " + language + ".\n")
-	b.WriteString("It is the language of the VACANCY. The employer reads this letter, not the candidate.\n\n")
+	if in.Referral != nil {
+		b.WriteString("Write the message in this language (ISO code): " + language + ".\n")
+		b.WriteString("The recipient reads this message; use the vacancy's language.\n\n")
+	} else {
+		b.WriteString("Write the letter in this language (ISO code): " + language + ".\n")
+		b.WriteString("It is the language of the VACANCY. The employer reads this letter, not the candidate.\n\n")
+	}
 	b.WriteString(vacancyBlock(in))
 	b.WriteString("\nREQUIREMENTS THE CV UNDERSELLS (this is what the letter is for):\n")
 	b.WriteString(requirementList(in.Context.MissingHave))
@@ -87,6 +92,7 @@ func draftUserPrompt(in Input, atoms []experience.Atom, language string) (string
 	}
 	b.WriteString(llm.TruncateRunes(string(cand), maxCandidateRunes))
 	b.WriteString("\n")
+	b.WriteString(referralProfileBlock(in.Referral))
 	return b.String(), nil
 }
 

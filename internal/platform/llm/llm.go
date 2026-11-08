@@ -106,6 +106,17 @@ func (c *Client) temperatureOptions() []llms.CallOption {
 	return []llms.CallOption{llms.WithTemperature(*c.temperature)}
 }
 
+// WithoutTracing returns a client that does not send request or response content
+// to the optional generation tracer. Use it for ephemeral inputs.
+func (c *Client) WithoutTracing() *Client {
+	if c == nil {
+		return nil
+	}
+	clone := *c
+	clone.tracer = nil
+	return &clone
+}
+
 // WithTimeout returns a shallow copy of the client with a different per-call timeout,
 // so a slow use case (a reasoning-heavy multi-stage analysis) can allow longer calls
 // without raising the shared client's default for everyone. Nil-safe.

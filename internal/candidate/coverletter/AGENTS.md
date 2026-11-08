@@ -7,6 +7,10 @@ from the achievement atoms the candidate has actually asserted. It owns the thre
 the wire shape and its sanitize pass, the evidence gathering, and the single stored draft per
 (candidate, vacancy).
 
+The referral-message path reuses that chain with a pasted public contact profile and short
+message bounds. The profile and result live only in the request; no cover-letter store is used.
+Generation tracing is disabled for this path so the contact text is not copied into traces.
+
 Of the 402,117 open postings whose apply form we have captured, 209,297 ask for a letter and
 172,783 of those accept it as text. The remaining 36,514 (recruitee, ashby) take a file upload
 only — the letter is still useful there, but by hand.
