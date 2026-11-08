@@ -364,7 +364,7 @@
     </section>
 
     <!-- Pro -->
-    <section class="flex flex-col gap-4 rounded-xl border border-brand/40 bg-brand/[0.03] p-6 shadow-sm ring-1 ring-brand/20">
+    <section class="flex flex-col gap-4 rounded-xl border border-brand/40 bg-brand/[0.03] p-6 shadow-sm">
       <div class="flex flex-col gap-1">
         <h2 class="text-lg font-semibold">Pro</h2>
         {#if chosen}

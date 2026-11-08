@@ -356,7 +356,7 @@
      `group` lets the hover-revealed hide control fade in on card hover. -->
 <div
   data-testid="job-card"
-  class="group relative rounded-xl border border-border bg-card transition hover:border-brand hover:bg-accent"
+  class="group relative rounded-xl border border-border/70 bg-card transition hover:border-brand hover:bg-accent"
 >
 <a
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}

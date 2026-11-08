@@ -92,7 +92,7 @@
     <div class="flex items-center justify-between">
       <!-- Focusable from script only: where focus lands once the control holding it has
            removed itself and no chip is left (see `removeThenRefocus`). -->
-      <h2 bind:this={heading} tabindex="-1" class="text-base font-semibold tracking-tight outline-none">Filters</h2>
+      <h2 bind:this={heading} tabindex="-1" class="text-xs font-medium uppercase tracking-wider text-muted-foreground outline-none">Filters</h2>
       {#if active > 0}
         <button type="button" class="relative text-xs text-muted-foreground transition-colors after:absolute after:-inset-1 hover:text-foreground" onclick={() => removeThenRefocus(onReset, null)}>Clear all</button>
       {/if}

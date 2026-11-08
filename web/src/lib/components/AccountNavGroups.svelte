@@ -42,7 +42,7 @@
       variant === 'drawer' && 'gap-3 any-pointer-coarse:min-h-11',
       iconOnly && 'justify-center',
       active
-        ? 'bg-brand/10 font-medium text-brand-strong'
+        ? 'bg-accent font-medium text-brand-strong'
         : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
     );
 </script>
