@@ -232,13 +232,16 @@
          it said anything. -->
     <div class="flex flex-col items-center gap-5 text-center">
       <h1 class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-        Every tech job, straight from the source — for you and your agent.
+        Every tech job, straight from the source.
       </h1>
+      <!-- The developer doors live in this one sentence rather than in a row of buttons
+           under the box: the box stays the page's only task, and the hero stays two lines. -->
       <p class="text-balance text-base leading-relaxed text-muted-foreground">
-        {jobsFigure} live postings from company career boards and other public sources,
-        deduplicated and structured.
-        Search them here, plug them into Claude, Cursor or Codex over MCP, or build on the
-        API. Free search, open source.
+        {jobsFigure} live postings. Search them here, from
+        <a href={resolve('/agents')} class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">your AI agent</a>
+        or through
+        <a href={resolve('/jobs-api')} class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">the API</a>.
+        Free and open source.
       </p>
     </div>
 
@@ -279,14 +282,6 @@
     {/if}
 
     {@render onward(resolve('/jobs'), 'See every specialization and location in the catalogue')}
-
-    <!-- The two developer doors, under the box rather than beside it: the box stays the
-         page's one task for a visitor who came to search, and these are for the visitor
-         who came to wire the catalogue into an agent or a product. -->
-    <div class="flex flex-wrap justify-center gap-3">
-      <Button href={resolve('/agents')} variant="outline" size="md">Add to your agent</Button>
-      <Button href={resolve('/jobs-api')} variant="ghost" size="md">Get an API key</Button>
-    </div>
   </div>
 </section>
 

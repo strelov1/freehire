@@ -36,9 +36,9 @@ describe('HomeLandingView hero', () => {
     expect(screen.getByText(/4\.9M\+ live postings/)).toBeTruthy();
   });
 
-  it('offers the two developer doors under the search box', () => {
+  it('links the agent and API doors from the hero sentence', () => {
     render(HomeLandingView, { props: { counts: null, scale: null } });
-    expect(screen.getByRole('link', { name: 'Add to your agent' }).getAttribute('href')).toBe('/agents');
-    expect(screen.getByRole('link', { name: 'Get an API key' }).getAttribute('href')).toBe('/jobs-api');
+    expect(screen.getByRole('link', { name: 'your AI agent' }).getAttribute('href')).toBe('/agents');
+    expect(screen.getByRole('link', { name: 'the API' }).getAttribute('href')).toBe('/jobs-api');
   });
 });
