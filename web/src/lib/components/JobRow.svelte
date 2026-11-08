@@ -173,13 +173,24 @@
   const regionTag = $derived(job.countries?.length ? regionLabel({ regions: job.regions ?? [] }) : null);
   // On the employer's own page the rail (logo, name, date) is not drawn, so the date leads
   // the meta line instead — the same place a reader finds it relative to the title elsewhere.
-  const railEmpty = $derived(hideCompany && !(views > 0 || isViewed || job.application_deadline));
   // On touch, Apply and Hide never hide, so the corner cluster is wide; the date then
   // moves from the rail to the meta line so the company name keeps its room.
   const touchActions = $derived(!compact && Boolean(applyJob || directApply));
   const touchPosted = $derived(touchActions && !hideCompany ? posted : null);
   const metaFacts = $derived(
-    [hideCompany ? posted : null, ...tags.filter((t) => t !== regionTag), equity, questions].filter(
+    [
+      // With no rail on the employer's own page, its date, views and deadline lead this line.
+      ...(hideCompany
+        ? [
+            posted,
+            views > 0 ? `${formatCount(views)} views` : null,
+            job.application_deadline ? `Apply by ${job.application_deadline}` : null,
+          ]
+        : []),
+      ...tags.filter((t) => t !== regionTag),
+      equity,
+      questions,
+    ].filter(
       (f): f is string => Boolean(f),
     ),
   );
@@ -392,9 +403,9 @@
   <!-- Reserves the top-right corner for the Save overlay outside this link, so the
        timestamp never slides under it. Only a compact card keeps Save up here; a normal
        card has moved it into the action row at its foot, leaving the corner free. -->
-  <!-- On the employer's own page (`hideCompany`) the date leads the meta line instead, so
-       the rail is drawn there only for what else it carries: views, the viewed mark, a deadline. -->
-  <div class={['flex items-center gap-2', !compact && onHide ? 'pr-20' : 'pr-11', touchActions && 'pointer-coarse:pr-30', railEmpty && 'hidden']}>
+  <!-- Not drawn on the employer's own page (`hideCompany`): with no company the rail would
+       hold only small facts floating above the title, so they lead the meta line instead. -->
+  <div class={['flex items-center gap-2', !compact && onHide ? 'pr-20' : 'pr-11', touchActions && 'pointer-coarse:pr-30', hideCompany && 'hidden']}>
     <div class="flex min-w-0 items-center gap-2">
       {#if !hideCompany}
       <EntityLogo
@@ -460,8 +471,8 @@
     class={[
       'font-semibold leading-snug tracking-tight',
       compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-base sm:text-lg',
-      !compact && !railEmpty && 'mt-1.5',
-      railEmpty && 'pr-10',
+      !compact && !hideCompany && 'mt-1.5',
+      hideCompany && 'pr-10',
     ]}
   >
     {job.title}
@@ -472,7 +483,7 @@
   <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && posted) || touchPosted}
+  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && (posted || views > 0 || job.application_deadline)) || touchPosted}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
