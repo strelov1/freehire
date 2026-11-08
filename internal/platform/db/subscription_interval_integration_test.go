@@ -12,7 +12,8 @@ import (
 // subscription that is not due is never claimed (and released) at all. This pins who is
 // claimable: an interval subscription only once its interval has passed since the last
 // digest, everything else regardless of the stamp — daily is timed in Go, instant is not
-// timed. It also pins the defaults: no settings row reads as an hourly interval.
+// timed. It also pins the defaults: no settings row reads as daily at 09:00 (migration 0246),
+// which the claim does not gate — the daily hour is decided in Go.
 func TestClaimSubscriptionMatches_IntervalGate(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
@@ -49,12 +50,13 @@ func TestClaimSubscriptionMatches_IntervalGate(t *testing.T) {
 	}
 
 	notDue := []int64{
-		seed("default-recent@example.test", "", "30 minutes"),
+		seed("hourly-recent@example.test", "digest_frequency = 'interval'", "30 minutes"),
 		seed("three-hours@example.test", "digest_frequency = 'interval', digest_interval_hours = 3", "2 hours"),
 	}
 	due := []int64{
-		seed("default-elapsed@example.test", "", "61 minutes"),
-		seed("default-never@example.test", "", ""),
+		seed("hourly-elapsed@example.test", "digest_frequency = 'interval'", "61 minutes"),
+		seed("no-row-never@example.test", "", ""),
+		seed("no-row-recent@example.test", "", "30 minutes"),
 		seed("three-hours-elapsed@example.test", "digest_frequency = 'interval', digest_interval_hours = 3", "3 hours 1 minute"),
 		seed("instant@example.test", "digest_frequency = 'instant'", "1 minute"),
 		seed("daily@example.test", "digest_frequency = 'daily', digest_time = '09:00'", "1 minute"),
@@ -79,17 +81,17 @@ func TestClaimSubscriptionMatches_IntervalGate(t *testing.T) {
 		}
 	}
 
-	t.Run("a new settings row defaults to an hourly interval", func(t *testing.T) {
+	t.Run("a new settings row defaults to daily at 09:00", func(t *testing.T) {
 		uid := insertUser(t, pool, "fresh-row@example.test")
-		var freq string
+		var freq, at string
 		var hours int16
 		if err := pool.QueryRow(ctx,
-			`INSERT INTO notification_settings (user_id) VALUES ($1) RETURNING digest_frequency, digest_interval_hours`,
-			uid).Scan(&freq, &hours); err != nil {
+			`INSERT INTO notification_settings (user_id) VALUES ($1) RETURNING digest_frequency, digest_time::text, digest_interval_hours`,
+			uid).Scan(&freq, &at, &hours); err != nil {
 			t.Fatal(err)
 		}
-		if freq != "interval" || hours != 1 {
-			t.Errorf("defaults = %q/%d, want interval/1", freq, hours)
+		if freq != "daily" || at != "09:00:00" || hours != 1 {
+			t.Errorf("defaults = %q at %s / %d, want daily at 09:00:00 / 1", freq, at, hours)
 		}
 		if _, err := pool.Exec(ctx, `UPDATE notification_settings SET digest_interval_hours = 24 WHERE user_id = $1`, uid); err == nil {
 			t.Error("digest_interval_hours = 24 accepted, want the CHECK to refuse it (a day is 'daily')")
@@ -128,6 +130,13 @@ func TestClaimSubscriptionMatches_IntervalGateIsPerPersonAndChannel(t *testing.T
 
 	recent := insertUser(t, pool, "recent@example.test")
 	elapsed := insertUser(t, pool, "elapsed@example.test")
+	// Both on the hourly interval: the no-row default is daily (migration 0246), which
+	// the claim does not gate.
+	for _, uid := range []int64{recent, elapsed} {
+		if _, err := pool.Exec(ctx, `INSERT INTO notification_settings (user_id, digest_frequency) VALUES ($1, 'interval')`, uid); err != nil {
+			t.Fatalf("seed settings: %v", err)
+		}
+	}
 	notDue := []int64{
 		sub(recent, "email", "10 minutes"),
 		sub(recent, "email", ""),            // new: waits for the person's next mail

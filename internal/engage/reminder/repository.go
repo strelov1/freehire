@@ -30,10 +30,12 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 func (r *QueriesRepository) GetSettings(ctx context.Context, userID int64) (Settings, error) {
 	row, err := r.q.GetNotificationSettings(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
+		defaultTime := notify.DefaultDigestTime
 		return Settings{
 			Enabled:             true,
 			Channels:            []string{notify.ChannelEmail},
-			DigestFrequency:     notify.FrequencyInterval,
+			DigestFrequency:     notify.FrequencyDaily,
+			DigestTime:          &defaultTime,
 			DigestIntervalHours: notify.DefaultIntervalHours,
 		}, nil
 	}
@@ -62,8 +64,13 @@ func (r *QueriesRepository) HasPushDevice(ctx context.Context, userID int64) (bo
 // default, not violate digest_interval_hours' bounds.
 func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s Settings) (Settings, error) {
 	freq := s.DigestFrequency
+	digestTime := s.DigestTime
 	if freq == "" {
-		freq = notify.FrequencyInterval
+		freq = notify.FrequencyDaily
+		if digestTime == nil {
+			t := notify.DefaultDigestTime
+			digestTime = &t
+		}
 	}
 	hours := s.DigestIntervalHours
 	if hours == 0 {
@@ -74,7 +81,7 @@ func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s 
 		Enabled:             s.Enabled,
 		Channels:            s.Channels,
 		DigestFrequency:     freq,
-		DigestTime:          pgconv.Duration(s.DigestTime),
+		DigestTime:          pgconv.Duration(digestTime),
 		DigestIntervalHours: int16(hours),
 		QuietHoursStart:     pgconv.Duration(s.QuietHoursStart),
 		QuietHoursEnd:       pgconv.Duration(s.QuietHoursEnd),
