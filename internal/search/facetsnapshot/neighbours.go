@@ -3,7 +3,6 @@ package facetsnapshot
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"sort"
 
 	"github.com/strelov1/freehire/internal/search/search"
@@ -28,8 +27,9 @@ type facetCounter interface {
 
 // Neighbours computes, for every skill, the skills listed most often beside it. It asks
 // the engine the same question the glossary page used to ask on every render — the
-// skills distribution under `skills=<skill>`, built by the same FilterFromValues the
-// live endpoint uses, so the snapshot matches what the page showed. One query at a
+// skills distribution under `skills = <skill>`, one exact value (the query-string
+// parser would split a value at commas), so the snapshot matches what the page showed
+// for every real skill. Open, canonical postings only, as everywhere. One query at a
 // time: this runs nightly and must not compete with the site for the engine. Any error
 // aborts the pass so the previous snapshot keeps serving.
 func Neighbours(ctx context.Context, fc facetCounter, skills []string, limit int) ([]NeighbourRow, error) {
@@ -37,7 +37,7 @@ func Neighbours(ctx context.Context, fc facetCounter, skills []string, limit int
 	var rows []NeighbourRow
 	for _, skill := range skills {
 		res, err := fc.FacetCounts(ctx, search.FacetParams{
-			Filter: search.FilterFromValues(url.Values{"skills": {skill}}),
+			Filter: search.Filter([]string{search.Eq(attr, skill)}),
 			Facets: []string{attr},
 		})
 		if err != nil {

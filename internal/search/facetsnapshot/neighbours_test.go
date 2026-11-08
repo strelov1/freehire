@@ -53,6 +53,16 @@ func TestNeighboursRanksDropsSelfAndCaps(t *testing.T) {
 	}
 }
 
+func TestNeighboursKeepsACommaBearingSkillWhole(t *testing.T) {
+	fc := &fakeCounter{}
+	if _, err := Neighbours(context.Background(), fc, []string{"go,python"}, 5); err != nil {
+		t.Fatal(err)
+	}
+	if len(fc.filters) != 1 || !strings.Contains(fc.filters[0], `"go,python"`) {
+		t.Fatalf("filter = %v, want one exact value \"go,python\"", fc.filters)
+	}
+}
+
 func TestNeighboursAbortsOnEngineError(t *testing.T) {
 	fc := &fakeCounter{fail: "jira", dists: map[string]map[string]int64{
 		"go": {"docker": 1}, "jira": {"confluence": 1},
