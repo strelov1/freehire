@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -241,8 +242,34 @@ func (h *statsHandlers) CatalogScale(c *fiber.Ctx) error {
 	})
 }
 
+// engagementCacheKey and engagementCacheTTL hold the engagement row between requests.
+// The query sums the whole job_daily_views rollup, which only grows (2-2.7s measured
+// from outside on 2026-11-08, /open's slowest leg), and the figures are totals nobody
+// reads to the minute.
+const (
+	engagementCacheKey = "stats:engagement:v1"
+	engagementCacheTTL = 10 * time.Minute
+)
+
+func (h *statsHandlers) engagementStats(ctx context.Context) (db.GetEngagementStatsRow, error) {
+	if h.cache != nil {
+		if s, found, err := cache.GetJSON[db.GetEngagementStatsRow](ctx, h.cache, engagementCacheKey); err == nil && found {
+			return s, nil
+		}
+	}
+	s, err := h.queries.GetEngagementStats(ctx)
+	if err != nil {
+		return s, err
+	}
+	if h.cache != nil {
+		// Best-effort: a failed write only means the next request recomputes.
+		_ = cache.SetJSON(ctx, h.cache, engagementCacheKey, s, engagementCacheTTL)
+	}
+	return s, nil
+}
+
 func (h *statsHandlers) EngagementStats(c *fiber.Ctx) error {
-	s, err := h.queries.GetEngagementStats(c.Context())
+	s, err := h.engagementStats(c.Context())
 	if err != nil {
 		return err
 	}
