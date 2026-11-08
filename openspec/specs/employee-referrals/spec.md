@@ -86,6 +86,23 @@ for this action.
 - **THEN** the company People tab opens when available, or a people search
   prefilled with the company name opens instead
 
+### Requirement: Draft a referral message
+
+A signed-in paid seeker MAY paste public text about one contact into the job
+page, choose LinkedIn DM or email, and request a short draft they can edit and
+copy. The chain SHALL use the job and only candidate-asserted experience bank
+achievements as evidence for claims about the seeker. It SHALL audit the draft
+before returning it. The pasted text SHALL be used for that request only, with
+no profile or draft stored or sent to the contact by freehire. The model call
+SHALL carry its own feature tag. A missing approved in-product referrer SHALL
+NOT prevent this action.
+
+#### Scenario: Drafting from a pasted public profile
+
+- **WHEN** a paid seeker pastes profile text and requests a LinkedIn DM or email
+- **THEN** an editable message appears with an option to copy it
+- **AND** the message makes no unsupported claim that the contact agreed to refer
+
 ### Requirement: Seeker requests a referral
 
 A signed-in seeker SHALL be able to request a referral into a referral-eligible
