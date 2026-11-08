@@ -30,10 +30,16 @@ PII_FILTER_MODEL_DIR=/path/to/privacy-filter PII_FILTER_ADDR=127.0.0.1:8099 pyth
 curl -s localhost:8099/detect -d '{"text":"Jane Doe jane@doe.com"}'
 ```
 
+`requirements.txt` pins the three runtime packages to exactly what production runs
+(`onnxruntime==1.27.0`, `tokenizers==0.23.1`, `numpy==2.5.1`, read from the production venv
+on 2026-11-08, Python 3.12), so a rebuild cannot pull a new major of the model runtime. The
+deploy in `freehire-ops` must install the venv from this file, and a bump here is a deliberate
+change to what production runs.
+
 ## Test
 
-`python -m unittest test_detector` covers the pure BIOES→span decode and the kind map. The
-ONNX inference is validated by the manual smoke check against real CVs (weights not in CI).
+`python -m unittest -v` covers the pure BIOES→span decode and the kind map, with the standard
+library alone; the `pii-filter` CI job runs exactly that, with no install step. The ONNX inference is validated by the manual smoke check against real CVs (weights not in CI).
 
 ## Notes
 
