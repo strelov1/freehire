@@ -61,7 +61,9 @@ a 400 the caller cannot explain.
 
 Transcription is billed per minute of audio. `internal/ai/plan` meters it: one dictation
 allowance per accepted recording (`FeatureDictation`), returned when nothing usable comes
-back — that allowance is what bounds a caller's volume. There is **no inbound HTTP quota**
+back. That allowance is what bounds a caller's volume, with two gaps: an empty
+transcription is released only after the billed upstream call, so repeated silent recordings
+cost without spending it, and the meter fails open when its counter cannot be read. There is **no inbound HTTP quota**
 on this path: #4160 moved request quotas to the operations gateway in the private
 `freehire-ops`, which routes `/api/v1/speech/transcriptions` with the assistant and
 exempts it, leaving the cost to the allowance (this package's `transcriptionsPerHour`

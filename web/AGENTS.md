@@ -43,7 +43,8 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   sub-resource, and the URL carries `?v=<uploaded_at>` because it is otherwise stable. The
   control renders nothing when `enabled` is false (object storage unconfigured).
 - The profile tabs read the structured CV through one store, `src/lib/resume.svelte.ts`, from
-  `GET /api/v1/me/resume` (`structured` field, null when absent/stale/unconfigured).
+  `GET /api/v1/me/resume` (`structured` field: banked experience and the candidate-owned
+  contacts composed over the extract, so a stale extract does not empty it).
 - Environment variables reach the app only through `src/env.ts`. SvelteKit 3 exposes
   nothing undeclared — not even through the deprecated `$env/*` modules — so a variable
   missing there is `undefined` at runtime however the host sets it, and nothing reports it.

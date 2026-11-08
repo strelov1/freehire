@@ -13,8 +13,8 @@ package userjob
 // is what now fails instead.
 //
 // The keys are the same six that internal/job/silence's thresholds key on — a test binds
-// them — though `preparing`'s threshold is unreachable in practice; see that threshold's
-// own comment in internal/job/silence.
+// them — and `preparing`'s threshold, though rarely read, is live; see its own comment in
+// internal/job/silence.
 var activeRank = map[string]int{
 	"preparing": 0,
 	"applied":   1,
