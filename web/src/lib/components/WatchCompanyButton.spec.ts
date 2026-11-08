@@ -51,4 +51,15 @@ describe('WatchCompanyButton', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.getByRole('button', { name: 'Watching' })).toBeTruthy();
   });
+  it('leaves the next company alone when the page moves before a Watch answers', async () => {
+    let done: () => void = () => {};
+    vi.mocked(api.watchCompany).mockImplementationOnce(() => new Promise<void>((r) => (done = r)));
+    const view = render(WatchCompanyButton, { slug: 'acme', companyName: 'Acme' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Watch' }));
+    await view.rerender({ slug: 'globex', companyName: 'Globex' });
+    done();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole('button', { name: 'Watch' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Turn on alerts' })).toBeNull();
+  });
 });

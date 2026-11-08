@@ -58,24 +58,32 @@
     }
     busy = true;
     error = null;
+    // The page can move to another company while a request is out; a late answer about the
+    // old one must not land on the new one's button.
+    const target = slug;
+    const name = companyName;
     try {
       if (watched) {
-        await api.unwatchCompany(slug);
+        await api.unwatchCompany(target);
+        if (target !== slug) return;
         toggled = true;
         watched = false;
         justWatched = false;
-        announce(`Stopped watching ${companyName}`);
+        announce(`Stopped watching ${name}`);
       } else {
-        await api.watchCompany(slug);
+        await api.watchCompany(target);
+        if (target !== slug) return;
         toggled = true;
         watched = true;
         // Loaded only now, so a company page costs nobody these two reads until they watch,
         // and awaited so the hint does not flash for someone whose alert is already on.
         await Promise.all([savedSearches.ensureLoaded(), notifications.ensureLoaded()]).catch(() => {});
+        if (target !== slug) return;
         justWatched = true;
-        announce(`Watching ${companyName}`);
+        announce(`Watching ${name}`);
       }
     } catch (e) {
+      if (target !== slug) return;
       error = e instanceof ApiError ? e.message : 'Could not update the watchlist. Please try again.';
       announce(error, 'assertive');
     } finally {
