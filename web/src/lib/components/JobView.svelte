@@ -1152,9 +1152,20 @@
       />
     {/if}
 
-    <!-- Beside the referral block rather than a fourth button of its own: the two are the
-         same insider seen from different ends, and this page's CTA hierarchy is the
-         subject of its own open change. -->
+    {#if job.company?.trim()}
+      <!-- Resolve the stored company page only on click, keeping crawler visits cheap. -->
+      <a
+        href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        class="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+      >
+        Find someone to refer you on LinkedIn
+        <ExternalLink class="size-4 shrink-0" aria-hidden="true" />
+      </a>
+    {/if}
+
+    <!-- Mentorship is a separate way to get help from someone at this company. -->
     {#if job.company_slug}
       <MentorBlock companySlug={job.company_slug} companyName={job.company} />
     {/if}
