@@ -66,7 +66,7 @@
 {#if cards.length > 0}
   <section id="api" class="flex scroll-mt-20 flex-col gap-6">
     <header class="flex flex-col items-center gap-2 text-center">
-      <h2 class="text-2xl font-semibold tracking-tight">API</h2>
+      <h2 class="text-2xl font-semibold tracking-tight">Jobs API</h2>
       <p class="max-w-2xl text-balance text-muted-foreground">
         The read API is free for personal and non-commercial use. An API plan licenses
         the data for use in your product. Send a full-access key as
