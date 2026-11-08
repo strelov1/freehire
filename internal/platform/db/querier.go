@@ -4974,6 +4974,9 @@ type Querier interface {
 	// every read here. Projects are not employers, a blank company names nobody, and a current
 	// role is not a former employer — the filter is about going BACK.
 	ListPastEmployerNames(ctx context.Context, userID int64) ([]ListPastEmployerNamesRow, error)
+	// Who hit which paywall in the last window_days, by feature and newest first: the operator
+	// report. job_slug is NULL when the action concerned no vacancy, or the vacancy is gone.
+	ListPaywallHitsByFeature(ctx context.Context, windowDays int32) ([]ListPaywallHitsByFeatureRow, error)
 	// The moderator review queue: every claim that could not auto-activate (unknown or
 	// mismatched work-email domain), oldest first so the queue drains in claim order. A claim
 	// whose code was never entered is not reviewable — nobody has shown they can read that
@@ -6347,6 +6350,15 @@ type Querier interface {
 	// transport failure when it did not. ON CONFLICT DO NOTHING makes a double run
 	// harmless: the first row stands and the send is never repeated.
 	RecordOnboardingEmail(ctx context.Context, arg RecordOnboardingEmailParams) error
+	// Queries for the paywall-hit record (migration 0248): every refusal of a free user by the
+	// paid-AI gate, written by plan.Store.RecordPaywallHit.
+	// Records that the paid-AI gate refused this user on this feature today, once per
+	// (user, feature, job, day) — a retried request or an iteration over slugs adds nothing the
+	// first row did not say. The vacancy is resolved here from whichever identifier the route
+	// carries, as a bound parameter, so no request text is stored and no extra round trip is
+	// made: a job slug, or the CV or assistant session the route is about (both scoped to the
+	// caller, so another user's id resolves to nothing). An unknown identifier leaves job_id NULL.
+	RecordPaywallHit(ctx context.Context, arg RecordPaywallHitParams) error
 	// Queries for the limit-nudge feature (internal/engage/limitnudge): one personal mail,
 	// sent once per account, to a free-tier user who has run into a plan ceiling.
 	// Records that a real plan-ceiling refusal happened for (user, feature, day) — any
