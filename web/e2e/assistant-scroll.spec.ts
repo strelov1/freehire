@@ -34,6 +34,8 @@ type App = { origin: string };
 
 const test = base.extend<{ baseURL: string }, { app: App }>({
   app: [
+    // Playwright reads a fixture's dependencies from the destructured first argument and rejects anything else.
+    // oxlint-disable-next-line no-empty-pattern
     async ({}, use) => {
       const backend: Server = createMockBackend((req, res) => {
         res.setHeader('content-type', 'application/json');
