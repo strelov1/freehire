@@ -15,13 +15,18 @@
 {#if cards.length > 0}
   <section class="mt-8">
     <h2 class="mb-3 text-sm font-semibold text-muted-foreground">See also</h2>
-    <!-- Wraps rather than scrolling sideways: a hidden-scrollbar row cut its last card mid-word
-         ("Data A…") with nothing to say there was more. -->
-    <div class="flex flex-wrap gap-2">
+    <!-- On a phone, one sideways-scrolling row that runs to the screen's edges (the negative
+         margin cancels the page gutter, the padding restores it for the first card), so a
+         card cut at the edge reads as "there is more" and a swipe reaches it. From lg the
+         row wraps instead: a mouse has no swipe, and the hidden scrollbar left it no way
+         to reach the cards past the edge. -->
+    <div
+      class="no-scrollbar -mx-5 flex snap-x gap-2 overflow-x-auto scroll-px-5 px-5 pb-1 sm:-mx-4 sm:scroll-px-4 sm:px-4 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0"
+    >
       {#each cards as card (card.slug)}
         <a
           href={resolve('/collections/[slug]', { slug: card.slug })}
-          class="flex max-w-full flex-col items-start gap-1.5 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-muted"
+          class="flex w-max shrink-0 snap-start flex-col items-start gap-1.5 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-muted"
         >
           <div class="flex w-full items-center justify-between gap-2">
             <CollectionMark mark={card.mark} />
@@ -31,7 +36,7 @@
               </span>
             {/if}
           </div>
-          <span class="break-words text-sm font-medium text-foreground">{card.title} jobs</span>
+          <span class="whitespace-nowrap text-sm font-medium text-foreground">{card.title} jobs</span>
         </a>
       {/each}
     </div>

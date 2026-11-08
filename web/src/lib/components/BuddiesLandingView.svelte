@@ -97,17 +97,17 @@
 
 <div class="flex flex-col">
   <!-- Hero -->
-  <section class="dot-grid -mx-4 grid items-center gap-12 px-4 pb-16 pt-8 lg:grid-cols-2">
+  <section class="dot-grid -mx-4 grid items-center gap-10 px-4 pb-12 pt-6 lg:grid-cols-2">
     <div>
       <SectionLabel text="interview buddies · free" />
-      <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
+      <h1 class="mt-5 max-w-2xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-5xl">
         Find people interviewing where you are.
       </h1>
-      <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty">
+      <p class="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground text-pretty sm:text-lg">
         Join anonymously, see who's applying to the same companies and how far they got, and message the one who just
         had the interview you're preparing for.
       </p>
-      <div class="mt-9 flex flex-wrap items-center gap-3">
+      <div class="mt-7 flex flex-wrap items-center gap-3">
         {@render join('buddies-consent-hero')}
         <a href="#how-it-works" class="text-sm font-medium text-muted-foreground hover:text-foreground"
           >See how it works ↓</a
@@ -167,7 +167,7 @@
           <h3 class="text-balance text-lg font-semibold tracking-tight">{v.title}</h3>
           <ul class="mt-4 flex flex-wrap gap-2">
             {#each v.items as item (item)}
-              <li class="rounded-md border px-2 py-0.5 font-mono text-xs {v.chip}">{item}</li>
+              <li class="rounded-md border px-2 py-0.5 text-xs {v.chip}">{item}</li>
             {/each}
           </ul>
         </div>
