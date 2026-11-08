@@ -21,6 +21,15 @@ type Querier interface {
 	// than a silent re-stamp of verified_at. An unconfirmed work email is the same miss: a
 	// moderator must never be able to activate a claim on an address nobody proved they read.
 	ActivateCompanyAccount(ctx context.Context, userID int64) (CompanyAccount, error)
+	// Add a batch all-or-nothing: when the new slugs would take the list past the limit nothing
+	// is written. Slugs already stored are skipped and do not count toward it. `fresh` is how
+	// many were new and `inserted` how many were written, so fresh > 0 with inserted = 0 is the
+	// limit refusing the batch.
+	AddManyToWatchlist(ctx context.Context, arg AddManyToWatchlistParams) (AddManyToWatchlistRow, error)
+	// Add one company, or find it already there, and return when it was added. No row means the
+	// list is at the limit and this company is not on it: the limit never refuses a company
+	// already stored, so adding it again stays idempotent on a full list.
+	AddToWatchlist(ctx context.Context, arg AddToWatchlistParams) (pgtype.Timestamptz, error)
 	// Move the narrated-event cursor, but only from the value the caller read: two syncs racing
 	// over the same events both narrate, and only the first to finish moves the cursor, so the
 	// second neither rewinds it nor skips past an event it never saw.
@@ -434,6 +443,13 @@ type Querier interface {
 	// Bounded to future mocks cancelled in the last day: an announcement lost to a crash is not
 	// worth sending weeks later.
 	ClaimBuddyMockCancelNotices(ctx context.Context, actorID int64) ([]pgtype.UUID, error)
+	// Writes the step row if, and only if, the account is STILL eligible: the one statement
+	// that gates a send. It repeats ListCVLifecycleDue's predicate (see the note at the top),
+	// so a CV re-uploaded and not yet parsed again, a new unsubscribe or a payment stops the
+	// letter even when the list was read a moment earlier.
+	// No row back (pgx.ErrNoRows) means do not send. The row is written before SES is called,
+	// so a crash or a concurrent run can never send the same step twice.
+	ClaimCVLifecycleSend(ctx context.Context, arg ClaimCVLifecycleSendParams) (int64, error)
 	// Take up to max_runs due runs, exactly once each, from the HEAVY pool only. See
 	// ClaimDueLightRuns for the sibling that claims from the other pool: the scheduler calls
 	// both every tick, each against its own budget (ingestsched.DefaultHeavyCap /
@@ -505,6 +521,13 @@ type Querier interface {
 	// lease predicate reclaims entries whose worker died (stale claimed_at), so no
 	// separate reaper process is needed.
 	ClaimEnrichmentBatch(ctx context.Context, arg ClaimEnrichmentBatchParams) ([]ClaimEnrichmentBatchRow, error)
+	// The shared one-optional-letter-a-day claim (internal/engage/maildaily). Every sender of
+	// optional mail takes it before calling SES, so an account gets at most one such letter
+	// per UTC day whichever worker reaches it first. See migration 0248.
+	// Takes today's slot for one account. No row back (pgx.ErrNoRows) means somebody else
+	// already holds it and the caller must not send. The day is returned so a release after
+	// a failure that straddles midnight removes the row that was written, not today's.
+	ClaimMailDay(ctx context.Context, arg ClaimMailDayParams) (pgtype.Date, error)
 	// Claim-and-delete a bounded batch, oldest first, joined to jobs for the fields the
 	// feed displays. company_slug rides along beside company: recentfeed.Group buckets a
 	// same-company burst by the slug (the canonical company key — see AGENTS.md, "Company
@@ -1342,6 +1365,8 @@ type Querier interface {
 	// How many people a campaign would reach right now. Read before sending: a campaign
 	// is irreversible and goes to everyone, so the number is worth seeing first.
 	CountBroadcastCandidates(ctx context.Context, arg CountBroadcastCandidatesParams) (int64, error)
+	// What EnrollCVLifecycleUsers would enrol, for a dry run. Same predicate, no LIMIT.
+	CountCVLifecycleEnrollable(ctx context.Context, windowDays int32) (int64, error)
 	// Exact open-job and company totals for the published catalogue-scale snapshot
 	// (internal/ingest/catalogstats). Deliberately the opposite trade to EstimateOpenJobs below:
 	// this is a full scan and belongs only in the scheduled rollup worker, never on a
@@ -2305,6 +2330,21 @@ type Querier interface {
 	// SQL, so a parameterized table name would cost both the codegen and the schema's
 	// compile-time guarantee to save two dozen lines.
 	EnrichmentOutboxMetrics(ctx context.Context) (EnrichmentOutboxMetricsRow, error)
+	// Queries for the CV lifecycle letters (internal/engage/cvlifecycle). See migration 0248.
+	//
+	// The eligibility predicate (a mailable address, a parsed CV, the free tier, consent, not
+	// a holdout, the step due and its successor not) appears twice on purpose: in
+	// ListCVLifecycleDue, which only DECIDES whom to prepare a letter for, and in
+	// ClaimCVLifecycleSend, which re-checks it inside the statement that writes the step row.
+	// The list may be stale by the time the runner reaches a user — somebody unsubscribed,
+	// paid or lapsed — and only the claim's copy is the one that gates the send. Change one,
+	// change both.
+	// Enrols accounts whose CV has just been parsed. One row per account, ever: a re-upload
+	// never moves uploaded_at, so the clock the offsets run from is the first parsed upload
+	// seen, and NOT EXISTS plus ON CONFLICT keep a concurrent run from adding a second.
+	// Consent is not tested here: an account that had already opted out is enrolled and then
+	// marked unsubscribed by ExitCVLifecycleUnsubscribed, so the conversion read still has it.
+	EnrollCVLifecycleUsers(ctx context.Context, arg EnrollCVLifecycleUsersParams) (int64, error)
 	// Seed a balance row for a brand-new user so the subsequent SELECT ... FOR UPDATE
 	// always has a row to lock (this is what serializes concurrent first-ever debits).
 	// For an existing user the row is left untouched; a stale period is reset later
@@ -2418,6 +2458,10 @@ type Querier interface {
 	// edit is re-read, and the deadline arm re-reads a posting whose stored deadline has just
 	// passed; see ExistingExternalIDs for all three.
 	ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error)
+	// Ends the sequence for good for an account that turned the letters off. The unsubscribe
+	// link writes news_email_enabled = false without a session; a missing settings row is
+	// "never touched it", not an opt-out, so only an explicit false counts.
+	ExitCVLifecycleUnsubscribed(ctx context.Context) (int64, error)
 	// Take up to batch_size STALE matches out of the pending set by stamping expired_at: a
 	// match older than the freshness window, or one whose job has closed. A stale match is
 	// never delivered — nobody wants a three-week-old posting announced as new, least of all
@@ -3643,6 +3687,10 @@ type Querier interface {
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
+	// Whether the person watches this company, by the slug a company page carries. A stored
+	// alias of it counts: the person added the company under its old spelling. An alias slug a
+	// company row still holds is its own company, as in the reads above, and does not count.
+	IsWatchingCompany(ctx context.Context, arg IsWatchingCompanyParams) (bool, error)
 	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
 	// this board, and which board does a pasted job id belong to. Named after
 	// link_contributions for historical reasons — that table is gone (migration 0131), and
@@ -3990,6 +4038,11 @@ type Querier interface {
 	// follow-up reminders, and an account with no settings row could not decline at
 	// all, because the only thing that creates the row is a page behind the login.
 	// Migration 0153 split the two.
+	//
+	// An account that already holds today's mail_day_claims row is left out — one optional
+	// letter per account per UTC day across all senders — and stays a candidate for the next
+	// run. CountBroadcastCandidates does not carry that clause: it answers how much of the
+	// audience is still to be reached, and a person who got another letter today is.
 	ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error)
 	// Greeted a while ago: an introduction to interview buddies. It skips two kinds
 	// of account, each of which already knows the feature or has already been pitched it:
@@ -4088,6 +4141,14 @@ type Querier interface {
 	// feed page. Only active members count, and never one on either side of a block with the
 	// viewer: a reaction is as visible as the member who gave it.
 	ListBuddyReactionCounts(ctx context.Context, arg ListBuddyReactionCountsParams) ([]ListBuddyReactionCountsRow, error)
+	// Accounts whose letter `step` is due and that no step row covers yet. Due means the
+	// upload anchor plus `after_days` has passed; a step whose successor is also due
+	// (`next_after_days`, NULL for the last step) is dropped, so a missed day never turns
+	// into a burst of catch-up letters. An account that already holds today's daily claim is
+	// left out, so a capped pass is not spent on people the claim would refuse.
+	// Paged by user id (`after_user_id`, 0 for the first page): accounts the runner skips stay
+	// due, and without a cursor they would fill the head of every page and starve the rest.
+	ListCVLifecycleDue(ctx context.Context, arg ListCVLifecycleDueParams) ([]ListCVLifecycleDueRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
 	// Every revision of one agent turn or autopilot run that is still standing, newest first —
@@ -4974,6 +5035,9 @@ type Querier interface {
 	// every read here. Projects are not employers, a blank company names nobody, and a current
 	// role is not a former employer — the filter is about going BACK.
 	ListPastEmployerNames(ctx context.Context, userID int64) ([]ListPastEmployerNamesRow, error)
+	// Who hit which paywall in the last window_days, by feature and newest first: the operator
+	// report. job_slug is NULL when the action concerned no vacancy, or the vacancy is gone.
+	ListPaywallHitsByFeature(ctx context.Context, windowDays int32) ([]ListPaywallHitsByFeatureRow, error)
 	// The moderator review queue: every claim that could not auto-activate (unknown or
 	// mismatched work-email domain), oldest first so the queue drains in claim order. A claim
 	// whose code was never entered is not reviewable — nobody has shown they can read that
@@ -5239,6 +5303,10 @@ type Querier interface {
 	// Pro feature. An account with a live Pro or Ultra tier already has it, and a letter
 	// selling it what it bought reads as nobody looking. pro_until/ultra_until rather than
 	// the per-provider sources, for the reason ListProWelcomeCandidates gives.
+	//
+	// An account whose CV has parsed is left to the CV lifecycle letters (internal/engage/
+	// cvlifecycle), which say the same thing with the account's own score in them; mailing
+	// both would be the tailoring pitch twice in a week.
 	ListTailorCandidates(ctx context.Context, arg ListTailorCandidatesParams) ([]ListTailorCandidatesRow, error)
 	// Resolve tailored-CV ids to their target job's display labels for the credit-history page
 	// (tailor debits). Only tailored CVs (job_id set) whose job still exists resolve; the handler
@@ -5467,6 +5535,30 @@ type Querier interface {
 	// Closed jobs are included: dimming a closed posting that still shows in a
 	// history surface is correct, and the browse list filters closed jobs itself.
 	ListViewedJobSlugs(ctx context.Context, userID int64) ([]string, error)
+	// The companies — hiring or not — whose slug folds to one of the keys or IS one of the
+	// slugs: the candidates a typed company name is resolved among. Unlike
+	// ListHiringCompaniesByFoldedSlug it keeps a company with nothing open, since that is the one
+	// a watchlist most wants; job_count is returned so the caller can prefer a hiring namesake.
+	// The keys are joined through unnest for the same reason as there: one probe of
+	// companies_folded_slug_idx each.
+	ListWatchableCompaniesByFoldedSlug(ctx context.Context, arg ListWatchableCompaniesByFoldedSlugParams) ([]ListWatchableCompaniesByFoldedSlugRow, error)
+	// A person's company watchlist (migration 0248). company_slug carries no foreign key, so a
+	// stored slug may belong to a company a merge has since retired. Every read below follows it
+	// to the canonical slug through company_slug_aliases — but only while no company row still
+	// holds the slug, the same order GET /companies/:slug uses, so a company that came back is
+	// never shadowed by the alias that once retired it. Two stored slugs that resolve to one
+	// company collapse into a single entry, the older date winning.
+	// One page of the person's watchlist, newest first, with each company's display name
+	// (the slug itself when no company row carries it any more) and the number of entries the
+	// name filter leaves. The filter is a substring test on the folded name, not LIKE, so a
+	// `%` or `_` typed into it means itself.
+	ListWatchlist(ctx context.Context, arg ListWatchlistParams) ([]ListWatchlistRow, error)
+	// Every company the person watches, resolved as ListWatchlist resolves them: what the
+	// alert's search is narrowed to.
+	ListWatchlistSlugs(ctx context.Context, userID int64) ([]string, error)
+	// ListWatchlistSlugs for a batch of people in one round trip: the notify worker resolves
+	// every watchlist alert's owner at once.
+	ListWatchlistSlugsForUsers(ctx context.Context, userIds []int64) ([]ListWatchlistSlugsForUsersRow, error)
 	// Candidate readers for the founder signup sequence (internal/engage/onboarding).
 	//
 	// Three rules hold across all of them, and each is load-bearing:
@@ -5486,6 +5578,10 @@ type Querier interface {
 	//     reminders — and an account with no settings row could not decline either
 	//     one, because the page that creates the row is behind the login. Migration
 	//     0153 split them; the unsubscribe link writes this column without a session.
+	//
+	// And every List below leaves out an account that already holds today's mail_day_claims
+	// row: one optional letter per account per UTC day across all senders (migration 0248).
+	// Leaving it out keeps the step pending — the ledger row is written only once it is sent.
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
@@ -5897,6 +5993,17 @@ type Querier interface {
 	// prod 2026-11-05 (16k digests, 1.5k recipients): 25ms warm, on
 	// user_notifications_user_id_created_at_idx.
 	NotifyDigestVolumeMetrics(ctx context.Context) (NotifyDigestVolumeMetricsRow, error)
+	// A live tier that is only GRANTED (by hand, or an invite reward) is not a payment: the
+	// row is marked 'entitled' with no paid_at, so it is not counted as a conversion. Runs
+	// after ObserveCVLifecyclePaid, so a row with both is already 'paid'. The row stays
+	// eligible for letters when the grant lapses, which is why 'entitled' is not a final state.
+	ObserveCVLifecycleEntitled(ctx context.Context, windowDays int32) (int64, error)
+	// The paying observation. An enrolment inside its window with no paid_at yet whose Stripe
+	// or RevenueCat tier (Pro or Ultra) is live has STARTED PAYING: paid_at is stamped, status
+	// becomes 'paid' and the sequence ends. Holdout and unsubscribed rows are observed too,
+	// since the point is to compare them with the mailed ones. A granted tier is deliberately
+	// not here: it is not a payment (see ObserveCVLifecycleEntitled).
+	ObserveCVLifecyclePaid(ctx context.Context, windowDays int32) (int64, error)
 	// Record one confident job-mail sighting for a sender domain, returning its running
 	// count. The classifier calls this whenever it confidently labels an email as
 	// application mail, so a recurring unknown ATS domain accrues hits toward promotion.
@@ -6064,6 +6171,9 @@ type Querier interface {
 	// Drops snapshot rows older than the retention window (~26 weeks), keeping
 	// the table bounded.
 	PruneInsightsSkillHistory(ctx context.Context, cutoff pgtype.Date) (int64, error)
+	// Claims only matter for the day they were taken; a week of them is kept for the
+	// one-letter-a-day report and the rest is dropped.
+	PruneMailDayClaims(ctx context.Context) (int64, error)
 	// Drop the demand rows that have stopped being vocabulary: asked for only once, and
 	// not since the cut-off. Run at the end of a dictionary build.
 	//
@@ -6222,6 +6332,9 @@ type Querier interface {
 	// send only after this returns 1. The rule is checked here, in the claim, because a batch
 	// leaves time between that read and this statement.
 	RecordBuddyMockReminder(ctx context.Context, arg RecordBuddyMockReminderParams) (int64, error)
+	// Burns the step after a definite send failure: the row stays, with the error, and the
+	// step is never retried on its own — re-arming one is a deliberate DELETE.
+	RecordCVLifecycleSendError(ctx context.Context, arg RecordCVLifecycleSendErrorParams) error
 	// Record that this company page was announced to this engine. Idempotent, for the same
 	// reason its job sibling is: the row is what stops a re-run after a partial failure from
 	// spending a bounded budget twice.
@@ -6347,6 +6460,15 @@ type Querier interface {
 	// transport failure when it did not. ON CONFLICT DO NOTHING makes a double run
 	// harmless: the first row stands and the send is never repeated.
 	RecordOnboardingEmail(ctx context.Context, arg RecordOnboardingEmailParams) error
+	// Queries for the paywall-hit record (migration 0248): every refusal of a free user by the
+	// paid-AI gate, written by plan.Store.RecordPaywallHit.
+	// Records that the paid-AI gate refused this user on this feature today, once per
+	// (user, feature, job, day) — a retried request or an iteration over slugs adds nothing the
+	// first row did not say. The vacancy is resolved here from whichever identifier the route
+	// carries, as a bound parameter, so no request text is stored and no extra round trip is
+	// made: a job slug, or the CV or assistant session the route is about (both scoped to the
+	// caller, so another user's id resolves to nothing). An unknown identifier leaves job_id NULL.
+	RecordPaywallHit(ctx context.Context, arg RecordPaywallHitParams) error
 	// Queries for the limit-nudge feature (internal/engage/limitnudge): one personal mail,
 	// sent once per account, to a free-tier user who has run into a plan ceiling.
 	// Records that a real plan-ceiling refusal happened for (user, feature, day) — any
@@ -6684,6 +6806,10 @@ type Querier interface {
 	// carrying the OLD slug, so an updated row leaves the set. A re-run updates zero, and
 	// stopping mid-way costs nothing — the next run resumes with what is left.
 	RekeyCompanySlugChunk(ctx context.Context, arg RekeyCompanySlugChunkParams) (int64, error)
+	// Takes the step row back when the letter was not sent for a reason that is not the
+	// account's fault (the daily claim was lost, or sending is paused), so the step stays
+	// pending. Only an unerrored row: a burned step is never reopened by this.
+	ReleaseCVLifecycleSend(ctx context.Context, arg ReleaseCVLifecycleSendParams) error
 	// Void a consumption taken as a RESERVATION for work that then produced nothing.
 	//
 	// It RESTAMPS the row rather than deleting it or adding a compensating entry, and the
@@ -6705,6 +6831,9 @@ type Querier interface {
 	// Gives up a delivery claim after the email failed, so the candidate's retry is immediate
 	// rather than waiting out the claim.
 	ReleaseDirectApplication(ctx context.Context, id int64) error
+	// Gives the slot back after a DEFINITE failure to send. Scoped to the source that took
+	// it, so a sender can never free a slot another one is relying on.
+	ReleaseMailDay(ctx context.Context, arg ReleaseMailDayParams) error
 	// Release the lease on a subscription's claimed jobs without counting an attempt,
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
 	// a later pass instead of waiting out the lease.
@@ -6722,6 +6851,9 @@ type Querier interface {
 	// Give a claim back after every channel failed, so the next run retries. Guarded on the
 	// stamp being the claim's own: a participant re-notified since keeps its newer one.
 	ReleaseUnread(ctx context.Context, arg ReleaseUnreadParams) error
+	// Remove a company by the slug a page carries, together with any stored alias of it that no
+	// company row still holds (that one is a company of its own, and stays).
+	RemoveFromWatchlist(ctx context.Context, arg RemoveFromWatchlistParams) error
 	// Apply a resolved display name to every stored job of ONE board whose company is still that
 	// board's placeholder (see ListPlaceholderCompanyBoards). board_pattern is
 	// externalid.BoardPattern(board), the board's external_id namespace, so only this board's rows
@@ -6900,6 +7032,10 @@ type Querier interface {
 	// `present_jobs` tool uses it for the same absence: a slug the model invented is
 	// missing here, and is dropped from the deck rather than shown to the user.
 	ResolveSlugsToJobIDs(ctx context.Context, slugs []string) ([]ResolveSlugsToJobIDsRow, error)
+	// The company a slug names, following a retired slug to its canonical one. No row means no
+	// such company, which is what a typo in a request looks like. A company with no open job
+	// still resolves — it is the one a watchlist is for.
+	ResolveWatchableCompany(ctx context.Context, slug string) (ResolveWatchableCompanyRow, error)
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)

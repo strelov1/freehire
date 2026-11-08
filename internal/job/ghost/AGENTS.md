@@ -1,12 +1,14 @@
 # Ghost-signal conventions
 
 ## Scope
+
 The hedged "is this posting real" verdict — `none` / `possible` / `likely` — derived from
 two tiers of evidence, plus the cross-check that stamps aggregator postings absent from
 the employer's own board. Pure classifier over scalars: no database, no clock of its own.
 The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
 
 ## Always true
+
 - **Two tiers of evidence, and the tiers are the point** (classify.go:1-13). STRUCTURAL
   criteria describe the shape of a posting — `evergreen_posting` (from
   `internal/job/jobreality`'s class) and `ats_absent` (the cross-check stamp). OUTCOME criteria
@@ -69,8 +71,8 @@ The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
   run's verdict and nothing else**: every stamped OPEN posting a run does not re-stamp —
   present, skipped or gated — is cleared (a closed one carries no signal and is not re-read), so a rule tightened after a stamp was written stops
   accusing on the next run. A posting already unstamped and not stamped now produces no write.
-- **Outcome judgement reuses `internal/application/userjob`'s silence ladder** (evidence.go:49-52,
-  68-77). An application counts as silent only when `userjob.SilenceStateFor` returns
+- **Outcome judgement reuses the silence ladder in `internal/job/silence`** (evidence.go:49-52,
+  68-77). An application counts as silent only when `silence.StateFor` (`internal/job/silence`) returns
   outright `silent`; a user report counts only after the reported apply date clears the
   `applied` stage's own threshold. Restating thresholds here would let the same application
   be judged by two ladders with nothing binding them.
@@ -78,6 +80,7 @@ The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
   posting is already down, so there is nobody left to warn.
 
 ## Consumers
+
 - `cmd/gen-contracts` — emits `CriterionCodes` into the web contracts as
   `GHOST_CRITERION_VALUES`; the SPA's checklist is keyed off it.
 - `cmd/ghost-crosscheck` (main.go + report.go) — the worker that runs `Crosscheck` per

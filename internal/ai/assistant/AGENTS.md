@@ -1,12 +1,14 @@
 # The in-app assistant
 
 ## Scope
+
 The `internal/ai/assistant` package — the agent's turn loop, its tool contract, the
 session/transcript store, and the prompts each preset runs under. The tools
 themselves live in `internal/api/handler` (`assistant_*_tools.go`), because they are
 built from the same services the HTTP handlers use.
 
 ## Always true
+
 - **The agent runs in this process.** There is no external runtime, no shell, and
   no credential: a tool receives the session owner's `userID` and calls a Go
   service directly. Anything a tool must not reach is a tool that does not exist.
@@ -70,7 +72,7 @@ built from the same services the HTTP handlers use.
 
 ## How it works
 
-```
+```text
 POST /api/v1/assistant/sessions/:id/messages
   └─ handler: owner check → registry for the session's preset → SSE writer
        └─ Runner.Run
@@ -258,9 +260,9 @@ presets sharing a tool set is new here, and it is the prompt — not the tools �
 allowed to differ; a tool added to one and forgotten in the other would be a debrief that
 cannot read the interview it is reviewing.
 
-The stage governs where the client offers it (`offersDebrief` in `web/src/lib/stages.ts`:
-`interview`, `offer`, `accepted`, `rejected`), never what the endpoint accepts. Somebody
-who sat an interview and never moved their application's stage is exactly who it is for.
+The endpoint accepts a debrief at any stage. Somebody who sat an interview and never moved
+their application's stage is exactly who it is for. (The tracker's stage-gated entry point,
+`offersDebrief`, went with the tracker layout rework, so the SPA no longer offers it anywhere.)
 
 **The application chat** (`apply`, openspec/changes/auto-apply-chat) is held against one
 automatic application, minted from `POST /assistant/sessions?preset=apply&job=<slug>` — and
@@ -358,6 +360,7 @@ to `OnText`, reasoning to `OnThinking`. The chat renders them apart, so reasonin
 is never mistaken for the answer.
 
 ## Adding a tool
+
 1. Write it in `internal/api/handler/assistant_*_tools.go` as an `assistant.Tool`:
    a name, a one-paragraph description the model reads, a JSON schema, and a
    `Run` that decodes with `assistant.DecodeArgs` and calls the same service the
@@ -436,6 +439,7 @@ text beside its vacancy so a reader judges the rest. See
 asserts it: swapping both would measure two models and attribute the result to one.
 
 ## Limitations
+
 - **Bounded by the allowance, not by spend.** A turn is attributed to the account that ran
   it and its cost is readable (`GET /me/usage`, and per-feature on the gateway). What
   refuses one is `internal/ai/plan`: `assistant_meter.go` consumes `plan.FeatureAssistant`

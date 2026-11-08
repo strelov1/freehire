@@ -47,8 +47,7 @@ const fullDoc = (key: string, rows: unknown[]): Document => {
   return doc;
 };
 
-const roleValues = () =>
-  screen.getAllByPlaceholderText('Role').map((el) => (el as HTMLInputElement).value);
+const roleValues = () => screen.getAllByPlaceholderText('Role').map((el) => (el as HTMLInputElement).value);
 
 describe('CvSectionForm', () => {
   it('adds a new role at the top of the list, not the bottom', async () => {
@@ -65,12 +64,24 @@ describe('CvSectionForm', () => {
   });
 
   it.each(sections)('disables Add once $key is at its ceiling ($max)', ({ key, max, make, add }) => {
-    render(CvSectionForm, { doc: fullDoc(key, Array.from({ length: max }, () => make())), title: 'CV' });
+    render(CvSectionForm, {
+      doc: fullDoc(
+        key,
+        Array.from({ length: max }, () => make()),
+      ),
+      title: 'CV',
+    });
     expect((screen.getByRole('button', { name: add }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it.each(sections)('keeps Add enabled for $key below its ceiling', ({ key, max, make, add }) => {
-    render(CvSectionForm, { doc: fullDoc(key, Array.from({ length: max - 1 }, () => make())), title: 'CV' });
+    render(CvSectionForm, {
+      doc: fullDoc(
+        key,
+        Array.from({ length: max - 1 }, () => make()),
+      ),
+      title: 'CV',
+    });
     expect((screen.getByRole('button', { name: add }) as HTMLButtonElement).disabled).toBe(false);
   });
 

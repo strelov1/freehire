@@ -168,8 +168,8 @@
   <header class="mb-3">
     <h3 class="text-sm font-semibold text-foreground">Cover letter</h3>
     <p class="mt-0.5 text-xs leading-snug text-muted-foreground">
-      Written from achievements you have confirmed as your own. Nothing here is invented — every
-      claim about your experience traces to the evidence listed below it.
+      Written from achievements you have confirmed as your own. Nothing here is invented — every claim about your
+      experience traces to the evidence listed below it.
     </p>
   </header>
 
@@ -227,8 +227,8 @@
       <!-- Shown, never hidden: a letter written by a retired model is still the letter the
            candidate may already have sent. -->
       <p class="mb-3 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs text-muted-foreground">
-        This letter was written before the current model or before the vacancy's language was
-        re-read. It is still yours to use — write again for a fresh one.
+        This letter was written before the current model or before the vacancy's language was re-read. It is still yours
+        to use — write again for a fresh one.
       </p>
     {/if}
 
@@ -259,15 +259,15 @@
           </ul>
         {:else}
           <p class="mt-1.5 text-xs leading-snug text-muted-foreground">
-            This draft names no specific achievement. Confirm a few in the Experience tab and
-            write again — the letter gets sharper the more it has to stand on.
+            This draft names no specific achievement. Confirm a few in the Experience tab and write again — the letter
+            gets sharper the more it has to stand on.
           </p>
         {/if}
       </section>
     {:else if !error}
       <p class="text-sm text-muted-foreground">
-        No letter yet for this vacancy. Writing one reads the fit analysis and your experience
-        bank, then drafts and edits it down.
+        No letter yet for this vacancy. Writing one reads the fit analysis and your experience bank, then drafts and
+        edits it down.
       </p>
     {/if}
   {/if}

@@ -499,6 +499,12 @@ type CompanyVote struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CompanyWatchlist struct {
+	UserID      int64              `json:"user_id"`
+	CompanySlug string             `json:"company_slug"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type Conversation struct {
 	ID         int64              `json:"id"`
 	Kind       string             `json:"kind"`
@@ -582,6 +588,28 @@ type CvAppearanceDefault struct {
 	Style      []byte             `json:"style"`
 	Margins    []byte             `json:"margins"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+// CV lifecycle letters: one row per account. uploaded_at is the clock anchor and never moves; holdout rows are observed but never mailed.
+type CvLifecycleEnrollment struct {
+	ID         int64              `json:"id"`
+	UserID     int64              `json:"user_id"`
+	UploadedAt pgtype.Timestamptz `json:"uploaded_at"`
+	EnrolledAt pgtype.Timestamptz `json:"enrolled_at"`
+	Holdout    bool               `json:"holdout"`
+	// active = in the sequence; unsubscribed = turned the letters off; paid = a Stripe or RevenueCat tier went live; entitled = only a granted tier is live, which is not a payment.
+	Status string `json:"status"`
+	// When the paying observation first saw a Stripe or RevenueCat tier live. NULL for a granted-only account.
+	PaidAt   pgtype.Timestamptz `json:"paid_at"`
+	ExitedAt pgtype.Timestamptz `json:"exited_at"`
+}
+
+// CV lifecycle letters step ledger. PK (user_id, step) = one claim per pair, ever; error is the transport failure that burned the step.
+type CvLifecycleSend struct {
+	UserID int64              `json:"user_id"`
+	Step   int16              `json:"step"`
+	SentAt pgtype.Timestamptz `json:"sent_at"`
+	Error  string             `json:"error"`
 }
 
 type CvLinkClick struct {
@@ -1149,6 +1177,14 @@ type LearnedAtsDomain struct {
 	OtherHits     int64              `json:"other_hits"`
 }
 
+// The shared one-optional-letter-a-day claim. PK (user_id, day), day in UTC; source says who took it.
+type MailDayClaim struct {
+	UserID    int64              `json:"user_id"`
+	Day       pgtype.Date        `json:"day"`
+	Source    string             `json:"source"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+}
+
 type Mailbox struct {
 	ID        int64              `json:"id"`
 	UserID    int64              `json:"user_id"`
@@ -1349,6 +1385,16 @@ type OnboardingEmail struct {
 	SentAt pgtype.Timestamptz `json:"sent_at"`
 	// Transport error if the send failed. The row still blocks a retry; re-arm by deleting it.
 	Error string `json:"error"`
+}
+
+// One row per (user, feature, job, day) a free user was refused by the paid-AI gate (402). Operator report, last 7 days by feature: SELECT h.feature, h.user_id, j.public_slug, h.day, h.created_at FROM paywall_hits h LEFT JOIN jobs j ON j.id = h.job_id WHERE h.created_at >= now() - interval '7 days' ORDER BY h.feature, h.created_at DESC. Not plan_limit_hits: that one is a metered ceiling being reached.
+type PaywallHit struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Feature   string             `json:"feature"`
+	JobID     pgtype.Int8        `json:"job_id"`
+	Day       pgtype.Date        `json:"day"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 // One row per (user, feature, day) a real plan-ceiling refusal was recorded (any tier). Feeds cmd/limit-nudge-mail's candidate query, which filters to free tier.

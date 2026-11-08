@@ -4,7 +4,14 @@
   import { messages } from './FacetSection.messages';
   import type { Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
-  import { dynamicLabel, dynamicOptions, reportedCount, type FacetDef, type FacetOption, type FacetStore } from '#lib/facets.js';
+  import {
+    dynamicLabel,
+    dynamicOptions,
+    reportedCount,
+    type FacetDef,
+    type FacetOption,
+    type FacetStore,
+  } from '#lib/facets.js';
   import type { FacetCounts } from '#lib/types.js';
   import PillGroup from './PillGroup.svelte';
   import RemoteSearchSelect from './RemoteSearchSelect.svelte';
@@ -24,7 +31,13 @@
     counts,
     expand = false,
     empty,
-  }: { def: FacetDef; store: FacetStore; counts?: FacetCounts | null; expand?: boolean; empty?: Snippet<[string]> } = $props();
+  }: {
+    def: FacetDef;
+    store: FacetStore;
+    counts?: FacetCounts | null;
+    expand?: boolean;
+    empty?: Snippet<[string]>;
+  } = $props();
 
   const prompts: Partial<Record<string, string>> = $derived(t(messages, locale()));
   const placeholder = $derived(def.placeholder ? prompts[def.param] : undefined);
@@ -39,7 +52,8 @@
   // values absent from the current distribution are still listed so they stay
   // removable.
   const selectOptions = $derived.by((): FacetOption[] => {
-    if (def.dynamic) return dynamicOptions(def.param, counts?.facets?.[def.param] ?? {}, [...st.include, ...st.exclude]);
+    if (def.dynamic)
+      return dynamicOptions(def.param, counts?.facets?.[def.param] ?? {}, [...st.include, ...st.exclude]);
     const dist = counts?.facets?.[def.param];
     const base = def.options ?? [];
     return dist ? base.map((o) => ({ ...o, count: reportedCount(dist[o.value] ?? 0) })) : base;

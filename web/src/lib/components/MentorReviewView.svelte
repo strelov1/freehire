@@ -56,9 +56,7 @@
 <div class="flex flex-col gap-4">
   <div>
     <h2 class="text-sm font-medium">Mentor profiles</h2>
-    <p class="text-muted-foreground mt-1 text-sm">
-      Oldest first. Approving one publishes it; nothing else does.
-    </p>
+    <p class="text-muted-foreground mt-1 text-sm">Oldest first. Approving one publishes it; nothing else does.</p>
   </div>
 
   {#if status === 'loading'}
@@ -103,9 +101,7 @@
                  for the same company. The spec is explicit that an approved offer does not
                  approve a mentor profile, so this is shown and nothing acts on it. -->
             {#if profile.has_approved_referral_offer}
-              <p class="text-muted-foreground text-sm">
-                Already an approved referrer for this company.
-              </p>
+              <p class="text-muted-foreground text-sm">Already an approved referrer for this company.</p>
             {/if}
 
             <div>
@@ -151,11 +147,7 @@
             {/if}
 
             <div class="flex gap-2">
-              <Button
-                size="sm"
-                disabled={acting === profile.id}
-                onclick={() => decide(profile, 'approved')}
-              >
+              <Button size="sm" disabled={acting === profile.id} onclick={() => decide(profile, 'approved')}>
                 Approve
               </Button>
               <Button

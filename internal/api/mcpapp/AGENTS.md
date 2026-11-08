@@ -2,7 +2,7 @@
 
 The canonical MCP at `/api/v1/mcp` combines anonymous catalogue reads with
 OAuth account tools (`mixed.go`). Anonymous and OAuth sessions discover the same
-38 tools; personal calls without authentication never reach business code.
+51 tools; personal calls without authentication never reach business code.
 ChatGPT (User-Agent `openai-mcp`) gets an error result carrying `mcp/www_authenticate`,
 the in-band challenge its Apps SDK opens sign-in from. Every other host gets HTTP 401 with
 `WWW-Authenticate`, because Grok and Claude.ai ignore the in-band challenge and open sign-in
@@ -30,8 +30,10 @@ It also admits a **full-scope API key** (`fhk_…`), the mirror of REST admittin
 grant wherever a key goes. That is how the local npm server (`freehire-mcp`), which holds a
 key and no grant, manages job alerts through these same tools instead of a second
 implementation. `mcpKeyTools` omits OAuth-only actions: auto-apply, dictionary
-suggestions and problem reports. Dictionary suggestions preserve the cookie-only REST
-gate; problem reports use the signed-in agent's reporting workflow. A narrow (`cv`) key is a 403.
+suggestions, problem reports and the interview-buddy tools. Dictionary suggestions and the
+buddy tools (`internal/api/handler/buddy_mcp_tools.go`: membership, mock hosts, slots,
+booking, cancelling and the hosting schedule) preserve the cookie-only REST gate; problem
+reports use the signed-in agent's reporting workflow. A narrow (`cv`) key is a 403.
 
 OAuth clients use `suggest_dictionary_term` when a user-requested specialization, skill
 or company industry cannot be resolved; zero search hits alone do not prove a gap.

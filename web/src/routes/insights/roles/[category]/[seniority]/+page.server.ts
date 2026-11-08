@@ -1,13 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '#lib/server/api.js';
 import { loadInsightsGate } from '#lib/server/insights.js';
-import {
-  coveredCategories,
-  roleAddressExists,
-  roleQualifies,
-  roleSkillsIntro,
-  seniorityLabel,
-} from '#lib/insights.js';
+import { coveredCategories, roleAddressExists, roleQualifies, roleSkillsIntro, seniorityLabel } from '#lib/insights.js';
 import { categoryLabel } from '#lib/labels.js';
 import type { PageServerLoad } from './$types';
 

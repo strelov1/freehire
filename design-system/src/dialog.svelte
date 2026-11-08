@@ -104,7 +104,12 @@
       <h2 id={titleId} class="pr-8 text-base font-semibold sm:text-lg">{title}</h2>
     {/if}
     {#if description}
-      <p id={descriptionId} class={cn('mt-2 text-sm leading-relaxed text-muted-foreground', !title && dismissible && 'pr-8')}>{description}</p>
+      <p
+        id={descriptionId}
+        class={cn('mt-2 text-sm leading-relaxed text-muted-foreground', !title && dismissible && 'pr-8')}
+      >
+        {description}
+      </p>
     {/if}
     <div class="mt-4">
       {@render children()}

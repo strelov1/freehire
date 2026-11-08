@@ -6,8 +6,7 @@
   // One party's sessions, both halves. The two panes that show them — the seeker's own and
   // the mentor's incoming — differ only in the data and in what an empty list should say,
   // so the shape and the reason behind it live here once.
-  let { sessions, empty, asMentor }: { sessions: MentorSessions; empty: string; asMentor: boolean } =
-    $props();
+  let { sessions, empty, asMentor }: { sessions: MentorSessions; empty: string; asMentor: boolean } = $props();
 
   const timezone = browserTimezone();
 </script>

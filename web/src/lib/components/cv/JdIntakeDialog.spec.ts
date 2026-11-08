@@ -11,7 +11,9 @@ const { listBaseCvs, searchJobs, goto } = vi.hoisted(() => ({
 
 vi.mock('$app/navigation', () => ({ goto }));
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/my/cvs') } }));
-vi.mock('$app/paths', () => ({ resolve: (route: string, params: Record<string, string>) => route.replace('[slug]', params.slug ?? '') }));
+vi.mock('$app/paths', () => ({
+  resolve: (route: string, params: Record<string, string>) => route.replace('[slug]', params.slug ?? ''),
+}));
 vi.mock('#lib/api.js', () => ({
   api: { listBaseCvs, searchJobs, resolveJd: vi.fn() },
   ApiError: class extends Error {},

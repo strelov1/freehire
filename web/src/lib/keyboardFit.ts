@@ -61,16 +61,14 @@ export type KeyboardFit = {
 export const NO_FIT: Readonly<KeyboardFit> = { lift: 0, ceiling: 0 };
 
 export function keyboardFit(geometry: PanelGeometry): KeyboardFit {
-  const covered =
-    geometry.windowHeight - geometry.viewportHeight - geometry.viewportOffsetTop;
+  const covered = geometry.windowHeight - geometry.viewportHeight - geometry.viewportOffsetTop;
   // `app.html` also asks Chrome to shrink the page itself
   // (`interactive-widget=resizes-content`) and the two must not double up: where the
   // browser honours that, the window shrinks with it and this measures nothing.
   if (covered < KEYBOARD_FLOOR) return NO_FIT;
   if (geometry.bottomAnchored) return { lift: covered, ceiling: 0 };
 
-  const room =
-    geometry.viewportOffsetTop + geometry.viewportHeight - geometry.anchorBottom - PANEL_GAP;
+  const room = geometry.viewportOffsetTop + geometry.viewportHeight - geometry.anchorBottom - PANEL_GAP;
   // An inline `max-height` beats the class, so a ceiling taller than the stylesheet's own
   // cap would quietly RAISE it — the panel would grow because a keyboard appeared, which
   // is the opposite of the point. Nothing to tighten means nothing to say.

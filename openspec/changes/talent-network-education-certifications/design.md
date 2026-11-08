@@ -68,11 +68,13 @@ problem the `location` package was already built to avoid, and the `card.go` hea
 comment already commits to "moving the dictionary down" as the fix.
 
 `internal/job/jobfacts.EducationLevel` becomes:
+
 ```go
 func EducationLevel(description string) string {
     return edulevel.ForRequirement(hardRequirementText(description))
 }
 ```
+
 Same signature, same single caller (`internal/job/jobderive/jobderive.go:234`), same
 behavior — `hardRequirementText`'s required/optional clause split stays in `job` since it
 depends on `internal/job/reqextract`, a `job`-layer package `dict` may not import.
@@ -83,9 +85,11 @@ depends on `internal/job/reqextract`, a `job`-layer package `dict` may not impor
 existing pattern for "candidate-claimed free tokens → whitelisted canonical set,
 unresolved dropped" (already used by `card.go:119` for skills). `certification` exposes
 the same shape:
+
 ```go
 func Canonicalize(tokens []string) []string
 ```
+
 backed by a hand-curated alias map (AWS, Azure, GCP, PMP, CKA/CKAD, CISSP, Scrum
 certifications, CompTIA family, etc. — seeded from what's observably common in CVs, grown
 over time the way `skilltag`'s own list has). No acronym-ambiguity option like skilltag's
@@ -109,10 +113,12 @@ type EducationEntry struct {
 ```
 
 `ProjectCard` gains:
+
 ```go
 Education:      cardEducation(s.Education),
 Certifications: certification.Canonicalize(s.Certifications),
 ```
+
 where `cardEducation` maps each `resumeextract.Education`, calls
 `edulevel.ForDegree(e.Degree)`, and skips the entry when that returns `""`.
 

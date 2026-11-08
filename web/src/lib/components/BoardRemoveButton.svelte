@@ -5,7 +5,11 @@
   import { format, t } from '#lib/i18n/t.js';
   import { messages } from './BoardRemoveButton.messages';
 
-  let { item, onremove, disabled = false }: {
+  let {
+    item,
+    onremove,
+    disabled = false,
+  }: {
     item: MyJob;
     onremove: (item: MyJob) => void;
     disabled?: boolean;

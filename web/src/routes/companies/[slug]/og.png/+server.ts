@@ -36,16 +36,9 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
     throw e;
   }
 
-  const [openJobsSlice, fonts, logo] = await Promise.all([
-    openJobsPromise,
-    loadOgFonts(),
-    resolveLogo(company.name),
-  ]);
+  const [openJobsSlice, fonts, logo] = await Promise.all([openJobsPromise, loadOgFonts(), resolveLogo(company.name)]);
 
-  const png = await renderMarkupPng(
-    buildCompanyCard(company, { logo, openJobs: openJobsSlice.total ?? 0 }),
-    fonts,
-  );
+  const png = await renderMarkupPng(buildCompanyCard(company, { logo, openJobs: openJobsSlice.total ?? 0 }), fonts);
 
   return new Response(png, {
     headers: {

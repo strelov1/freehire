@@ -30,15 +30,12 @@
   // filter changes reload the list client-side off `applied`. Getting that wrong is not
   // subtle: the address bar would change and the list would not.
 
-  let {
-    initial,
-    currentPage,
-  }: { initial: Slice<CatalogueMember>; currentPage: number } = $props();
+  let { initial, currentPage }: { initial: Slice<CatalogueMember>; currentPage: number } = $props();
 
   // The recruiter side of the catalogue — seeing who is behind a card — is not built
   // yet, so asking for it is a mail to a person rather than a form with nowhere to land.
   const recruiterAccessHref = `mailto:hello@freehire.me?subject=${encodeURIComponent(
-    'Talent Network: recruiter access request'
+    'Talent Network: recruiter access request',
   )}&body=${encodeURIComponent('Company:\nRoles I am hiring for:\n')}`;
 
   const filters = new TalentFilterStore(new URLSearchParams(page.url.search));
@@ -123,9 +120,7 @@
   <aside class="hidden w-72 shrink-0 md:block">
     <!-- `top-20` is the site header's own `h-14` plus 24px of air, matching the companies
          sidebar: at `top-6` the opaque sticky header covers the card's first rows. -->
-    <div
-      class="sticky top-20 max-h-[calc(100vh-6.5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4"
-    >
+    <div class="sticky top-20 max-h-[calc(100vh-6.5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
       <TalentFilterSummary store={filters} onOpen={() => (modalOpen = true)} />
     </div>
   </aside>
@@ -151,9 +146,7 @@
       <!-- Stated rather than left to be discovered: a timezone filter drops everyone whose
       zone is unknown, which otherwise reads as a small talent pool rather than a missing
       field. -->
-      <p class="mb-3 text-xs text-muted-foreground">
-        Filtering by timezone hides candidates who have not set one.
-      </p>
+      <p class="mb-3 text-xs text-muted-foreground">Filtering by timezone hides candidates who have not set one.</p>
     {/if}
 
     {#if members.status === 'loading'}
@@ -175,12 +168,7 @@
       </div>
 
       {#if pages > 1}
-        <Pagination
-          current={activePage}
-          total={pages}
-          pathname={page.url.pathname}
-          params={filters.params}
-        />
+        <Pagination current={activePage} total={pages} pathname={page.url.pathname} params={filters.params} />
       {/if}
     {/if}
   </div>

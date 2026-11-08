@@ -117,7 +117,8 @@
   <div class="flex flex-col gap-6">
     <header class="flex flex-col gap-2 border-b border-border pb-6">
       <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-strong">
-        <Building2 class="size-3.5" /> {s.headTitle}
+        <Building2 class="size-3.5" />
+        {s.headTitle}
       </p>
       <h1 class="text-3xl font-semibold tracking-tight">{s.claimTitle}</h1>
       <p class="max-w-2xl text-sm text-muted-foreground">{s.claimIntro}</p>

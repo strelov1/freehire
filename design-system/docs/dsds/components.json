@@ -462,7 +462,7 @@
       "id": "component.avatar",
       "type": "component",
       "name": "Avatar",
-      "description": "Image-or-initials avatar with deterministic hue from name. A broken/missing src falls back to the initials render. Also exported as EntityLogo (same component) for the company/entity-mark call site, as distinct from a person avatar.",
+      "description": "Image-or-initials avatar with deterministic hue from name. A broken/missing src falls back to the initials render. It never shrinks in a flex row (shrink-0): beside a long name that truncates, a logo squeezed into a sliver reads as broken; a caller's class can still override it. Also exported as EntityLogo (same component) for the company/entity-mark call site, as distinct from a person avatar.",
       "source": {
         "file": "../../src/avatar.svelte"
       },
@@ -509,7 +509,7 @@
       "id": "component.entity-logo",
       "type": "component",
       "name": "EntityLogo",
-      "description": "Same implementation as Avatar (src/avatar.svelte), exported under a second name for the company/entity-mark call site — a rounded-square tile, as distinct from Avatar's circular person default.",
+      "description": "Same implementation as Avatar (src/avatar.svelte), exported under a second name for the company/entity-mark call site — a rounded-square tile, as distinct from Avatar's circular person default. It never shrinks in a flex row (shrink-0): beside a long name that truncates, a logo squeezed into a sliver reads as broken; a caller's class can still override it.",
       "source": {
         "file": "../../src/avatar.svelte"
       },

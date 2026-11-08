@@ -1,6 +1,20 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { AlertTriangle, Archive, Bell, CalendarClock, CheckCircle2, Clock, FileText, Heart, MessageCircle, MessagesSquare, Search, Target, XCircle } from '@lucide/svelte';
+  import {
+    AlertTriangle,
+    Archive,
+    Bell,
+    CalendarClock,
+    CheckCircle2,
+    Clock,
+    FileText,
+    Heart,
+    MessageCircle,
+    MessagesSquare,
+    Search,
+    Target,
+    XCircle,
+  } from '@lucide/svelte';
   import { notificationCenter } from '#lib/notificationCenter.svelte.js';
   import { notificationTarget } from '#lib/notificationTarget.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';

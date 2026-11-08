@@ -37,10 +37,11 @@ var workerClass = map[string]Class{
 	"message-notify":    ClassEngagement,
 	"mentorship-remind": ClassEngagement,
 
-	"onboarding":       ClassLifecycle,
-	"nudge":            ClassLifecycle,
-	"remind":           ClassLifecycle,
-	"limit-nudge-mail": ClassLifecycle,
+	"onboarding":        ClassLifecycle,
+	"nudge":             ClassLifecycle,
+	"remind":            ClassLifecycle,
+	"limit-nudge-mail":  ClassLifecycle,
+	"cv-lifecycle-mail": ClassLifecycle,
 }
 
 // ClassOf reports the class of a worker binary, and false for one that sends no

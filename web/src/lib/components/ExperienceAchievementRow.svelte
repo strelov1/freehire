@@ -32,12 +32,7 @@
     scrollToAtomId?: string;
     onToggleSelect: (id: string) => void;
     onConfirm: (atom: ExperienceAtom) => void;
-    onSaveEdit: (
-      atom: ExperienceAtom,
-      claim: string,
-      context: string,
-      metricsRaw: string,
-    ) => Promise<boolean>;
+    onSaveEdit: (atom: ExperienceAtom, claim: string, context: string, metricsRaw: string) => Promise<boolean>;
     onSavePromote: (atom: ExperienceAtom, name: string, link: string) => Promise<boolean>;
     onRemove: (atom: ExperienceAtom) => void;
   } = $props();
@@ -131,33 +126,18 @@
   });
 </script>
 
-<li
-  bind:this={rowEl}
-  data-atom-id={atom.id}
-  tabindex="-1"
-  class="rounded-md py-2 pl-1 pr-2 {rowBackground}"
->
+<li bind:this={rowEl} data-atom-id={atom.id} tabindex="-1" class="rounded-md py-2 pl-1 pr-2 {rowBackground}">
   {#if isEditing}
     <div class="flex flex-col gap-2">
       <FormField label="Achievement">
         {#snippet children({ id, describedBy })}
-          <textarea
-            {id}
-            aria-describedby={describedBy}
-            bind:value={draftClaim}
-            rows="2"
-            class={textareaClass}
+          <textarea {id} aria-describedby={describedBy} bind:value={draftClaim} rows="2" class={textareaClass}
           ></textarea>
         {/snippet}
       </FormField>
       <FormField label="Context" hint="Where this happened — team, product, constraint…">
         {#snippet children({ id, describedBy })}
-          <textarea
-            {id}
-            aria-describedby={describedBy}
-            bind:value={draftContext}
-            rows="2"
-            class={textareaClass}
+          <textarea {id} aria-describedby={describedBy} bind:value={draftContext} rows="2" class={textareaClass}
           ></textarea>
         {/snippet}
       </FormField>
@@ -168,8 +148,7 @@
             aria-describedby={describedBy}
             bind:value={draftMetrics}
             rows="2"
-            class="{textareaClass} font-mono"
-          ></textarea>
+            class="{textareaClass} font-mono"></textarea>
         {/snippet}
       </FormField>
       <div class="flex items-center gap-2">
@@ -188,7 +167,12 @@
       <p class="text-sm text-foreground">{atom.claim}</p>
       <FormField label="Project name">
         {#snippet children({ id, describedBy })}
-          <Input {id} aria-describedby={describedBy} bind:value={promoteName} placeholder="e.g. Sandrock, Git helpers" />
+          <Input
+            {id}
+            aria-describedby={describedBy}
+            bind:value={promoteName}
+            placeholder="e.g. Sandrock, Git helpers"
+          />
         {/snippet}
       </FormField>
       <FormField label="Link (optional)">
@@ -282,13 +266,7 @@
             <Check class="size-4" />
           </Button>
         {/if}
-        <Button
-          size="icon"
-          variant="ghost"
-          data-row-action="edit"
-          onclick={startEdit}
-          aria-label="Edit achievement"
-        >
+        <Button size="icon" variant="ghost" data-row-action="edit" onclick={startEdit} aria-label="Edit achievement">
           <Pencil class="size-4" />
         </Button>
         <Button

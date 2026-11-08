@@ -11,6 +11,7 @@ export const messages = defineMessages(
       '/my/profile': 'Profile',
       '/my/activity': 'Activity',
       '/my/tracking': 'Tracking',
+      '/my/watchlist': 'Watchlist',
       '/my/inbox': 'Inbox',
       '/my/market-pulse': 'Market Pulse',
       '/my/assistant': 'Agent',
@@ -70,6 +71,7 @@ export const messages = defineMessages(
         '/my/profile': 'Профиль',
         '/my/activity': 'Активность',
         '/my/tracking': 'Трекинг',
+        '/my/watchlist': 'Избранные компании',
         '/my/inbox': 'Входящие',
         '/my/market-pulse': 'Пульс рынка',
         '/my/assistant': 'Агент',
@@ -132,10 +134,6 @@ export const messages = defineMessages(
 
 /** A nav item's translated label, falling back to its English default (the
  *  literal from accountNav.ts) if this catalog has no entry for its href. */
-export function navLabel(
-  resolved: { navItems: Record<string, string> },
-  href: string,
-  fallback: string,
-): string {
+export function navLabel(resolved: { navItems: Record<string, string> }, href: string, fallback: string): string {
   return resolved.navItems[href] ?? fallback;
 }

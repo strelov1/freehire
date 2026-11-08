@@ -20,12 +20,16 @@
   // A fresh draft for every opening, so a message meant for one member never lingers
   // into the dialog aimed at the next.
   $effect(() => {
-    if (open) { body = ''; error = ''; }
+    if (open) {
+      body = '';
+      error = '';
+    }
   });
 
   async function send() {
     if (busy || !body.trim() || body.length > MAX) return;
-    busy = true; error = '';
+    busy = true;
+    error = '';
     try {
       const conversation = await api.inviteBuddy(handle, body.trim());
       open = false;
@@ -35,7 +39,9 @@
         const retryAt = err.body?.retry_at;
         error = `${err.message}${typeof retryAt === 'string' ? ` Try again after ${new Date(retryAt).toLocaleString()}.` : ''}`;
       } else error = err instanceof Error ? err.message : 'Could not send the message.';
-    } finally { busy = false; }
+    } finally {
+      busy = false;
+    }
   }
 </script>
 
@@ -45,8 +51,19 @@
   description="Your first message is an invitation. You can keep chatting once they accept."
   class="sm:max-w-lg"
 >
-  <form class="flex flex-col gap-3" onsubmit={(e) => { e.preventDefault(); void send(); }}>
-    <textarea bind:value={body} maxlength={MAX} rows="5" class="w-full rounded-md border border-border bg-background p-3 text-sm" aria-label="Message"></textarea>
+  <form
+    class="flex flex-col gap-3"
+    onsubmit={(e) => {
+      e.preventDefault();
+      void send();
+    }}
+  >
+    <textarea
+      bind:value={body}
+      maxlength={MAX}
+      rows="5"
+      class="w-full rounded-md border border-border bg-background p-3 text-sm"
+      aria-label="Message"></textarea>
     <span class="text-right text-xs text-muted-foreground">{body.length}/{MAX}</span>
     {#if error}<p role="alert" class="text-sm text-destructive">{error}</p>{/if}
     <Button type="submit" variant="primary" disabled={busy || !body.trim()}>Send message</Button>

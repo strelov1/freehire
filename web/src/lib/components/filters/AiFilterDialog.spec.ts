@@ -167,7 +167,9 @@ describe('AiFilterDialog', () => {
 
     await waitFor(() => expect(interpretSearch).toHaveBeenCalled());
     const text = interpretSearch.mock.calls[0]?.[0];
-    expect(text).toMatch(/^Find jobs that fit my CV\n\nFrom my CV: seniority senior; field design; skills figma, ux\.$/);
+    expect(text).toMatch(
+      /^Find jobs that fit my CV\n\nFrom my CV: seniority senior; field design; skills figma, ux\.$/,
+    );
   });
 
   it('runs the overview and applies the plan with Show N jobs', async () => {
@@ -214,7 +216,13 @@ describe('AiFilterDialog', () => {
     await screen.findByRole('button', { name: 'Show 799 jobs' });
     const remote = { ...BRAZIL, summary: 'Remote product designer roles in Brazil.' };
     interpretSearch.mockResolvedValueOnce(remote);
-    facetCounts.mockResolvedValueOnce({ total: 120, facets: { countries: { br: 120 } }, stats: {}, companies_total: 30, top_companies: [] });
+    facetCounts.mockResolvedValueOnce({
+      total: 120,
+      facets: { countries: { br: 120 } },
+      stats: {},
+      companies_total: 30,
+      top_companies: [],
+    });
 
     const field = screen.getByRole('textbox', { name: 'Message to the assistant' });
     await fireEvent.input(field, { target: { value: 'remote only' } });

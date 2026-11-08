@@ -152,14 +152,14 @@
     {s.subscriptionNote}
     {#if manageUrl}
       <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's own management page, not a SvelteKit route -->
-      <a class="underline" href={manageUrl} target="_blank" rel="noopener noreferrer"
-        >{s.manageSubscription}</a
+      <a class="underline" href={manageUrl} target="_blank" rel="noopener noreferrer">{s.manageSubscription}</a
       ><!-- eslint-enable svelte/no-navigation-without-resolve -->
     {/if}
   </p>
 
   <label class="mt-4 block text-sm font-medium" for={confirmId}>
-    {s.confirmPrefix} <span class="font-mono">{email}</span> {s.confirmSuffix}
+    {s.confirmPrefix} <span class="font-mono">{email}</span>
+    {s.confirmSuffix}
   </label>
   <Input
     id={confirmId}

@@ -49,6 +49,8 @@ import type {
   CompanyListItem,
   FacetCounts,
   ListMeta,
+  WatchedCompany,
+  WatchlistImportResult,
   Mentor,
   MentorAvailabilityRule,
   MentorCalendar,
@@ -426,11 +428,7 @@ export function isPlanRefusal(e: unknown): boolean {
  *  not an outage to apologize for. The check is on the error CODE, not the status:
  *  a future 403 from an unrelated rule is not an origin refusal. */
 export function isCrossSiteRefusal(e: unknown): boolean {
-  return (
-    e instanceof ApiError &&
-    e.status === 403 &&
-    e.body?.code === 'cross_site_refused'
-  );
+  return e instanceof ApiError && e.status === 403 && e.body?.code === 'cross_site_refused';
 }
 
 /** A resource that has permanently moved, carrying the slug it moved TO.
@@ -718,9 +716,7 @@ export function createApi(
     if (limit != null) qs.set('limit', String(limit));
     if (offset != null) qs.set('offset', String(offset));
     const suffix = qs.toString() ? `?${qs}` : '';
-    const res = await request<{ data: JobCopy[]; meta: { total: number } }>(
-      `/api/v1/jobs/${slug}/copies${suffix}`,
-    );
+    const res = await request<{ data: JobCopy[]; meta: { total: number } }>(`/api/v1/jobs/${slug}/copies${suffix}`);
     // Every list endpoint returns a `meta` envelope (see the backend contract), so
     // access it directly — same convention as toSlice/listMyJobs/getInbox.
     return { copies: res.data, total: res.meta.total };
@@ -791,18 +787,17 @@ export function createApi(
    *  Engineer Google" carries the role AND the company, and applying only one of them
    *  discards what was typed. An empty query returns nothing: what an empty box offers
    *  is a curated starting point the client owns (see starterSuggestions). */
-  async function suggest(
-    q: string,
-    limit: number,
-    signal?: AbortSignal,
-  ): Promise<ApiSuggestion[]> {
+  async function suggest(q: string, limit: number, signal?: AbortSignal): Promise<ApiSuggestion[]> {
     const params = new URLSearchParams({ q, limit: String(limit) });
     return requestData<ApiSuggestion[]>(`/api/v1/suggest?${params}`, { signal });
   }
 
   /** Ask for a specialization, skill, or industry the dictionary does not hold yet. Signed-in
    *  only; 409 when the term already resolves, 429 past the daily cap. */
-  function recordDictionaryGap(kind: 'specialization' | 'skill' | 'industry', term: string): Promise<{ request_count: number; status: string }> {
+  function recordDictionaryGap(
+    kind: 'specialization' | 'skill' | 'industry',
+    term: string,
+  ): Promise<{ request_count: number; status: string }> {
     return requestData('/api/v1/dictionary/gaps', jsonBody('POST', { kind, term }));
   }
 
@@ -842,7 +837,7 @@ export function createApi(
    *  derives its queries from the selection rather than from this list. */
   async function facetCounts(
     params: URLSearchParams,
-    opts?: { disjunctive?: boolean; facets?: string[] }
+    opts?: { disjunctive?: boolean; facets?: string[] },
   ): Promise<FacetCounts> {
     const p = new URLSearchParams(params);
     if (opts?.disjunctive) p.set('disjunctive', '1');
@@ -862,11 +857,7 @@ export function createApi(
    *  range (`from`/`to`, ISO YYYY-MM-DD; the server defaults a sensible recent
    *  window per granularity). The series is dense — empty periods carry zeros —
    *  so the chart draws without gap-filling. Unauthenticated. */
-  async function jobsActivity(
-    granularity: ActivityGranularity,
-    from?: string,
-    to?: string,
-  ): Promise<ActivityPoint[]> {
+  async function jobsActivity(granularity: ActivityGranularity, from?: string, to?: string): Promise<ActivityPoint[]> {
     const params = new URLSearchParams({ granularity });
     if (from) params.set('from', from);
     if (to) params.set('to', to);
@@ -954,10 +945,7 @@ export function createApi(
     if (q) params.set('q', q);
     params.set('limit', String(limit));
     params.set('offset', String(offset));
-    return toSlice(
-      await request<Page<CompanyListItem>>(`/api/v1/companies?${params}`, { signal }),
-      offset,
-    );
+    return toSlice(await request<Page<CompanyListItem>>(`/api/v1/companies?${params}`, { signal }), offset);
   }
 
   /** Propose a correction about the company at `slug`: that it is the same employer as
@@ -978,10 +966,9 @@ export function createApi(
   /** Apply a proposed relation. A `same` approval moves the retiring company's jobs and
    *  reports how many; approving it again resumes a move that stopped part-way. */
   async function approveCompanyRelation(id: number) {
-    return requestData<{ kind: CompanyRelationKind; moved_jobs: number }>(
-      `/api/v1/company-relations/${id}/approve`,
-      { method: 'POST' },
-    );
+    return requestData<{ kind: CompanyRelationKind; moved_jobs: number }>(`/api/v1/company-relations/${id}/approve`, {
+      method: 'POST',
+    });
   }
 
   /** Close a proposed relation without applying it. Moderator-only. */
@@ -989,17 +976,10 @@ export function createApi(
     await call(`/api/v1/company-relations/${id}/reject`, { method: 'POST' });
   }
 
-  async function getCompany(
-    slug: string,
-    limit: number,
-    offset: number,
-  ): Promise<CompanyDetail> {
+  async function getCompany(slug: string, limit: number, offset: number): Promise<CompanyDetail> {
     // `redirect: 'manual'` so a slug a merge retired surfaces as MovedError rather than
     // silently rendering the canonical company under the old url.
-    return requestData<CompanyDetail>(
-      `/api/v1/companies/${slug}${query(limit, offset)}`,
-      { redirect: 'manual' },
-    );
+    return requestData<CompanyDetail>(`/api/v1/companies/${slug}${query(limit, offset)}`, { redirect: 'manual' });
   }
 
   /** The company page's Closed tab: a page of the company's closed postings. No total —
@@ -1083,10 +1063,7 @@ export function createApi(
     slug: string,
     body: { starts_at: string; timezone: string; note?: string; job_id?: number },
   ): Promise<MentorSession> {
-    return requestData<MentorSession>(
-      `/api/v1/mentors/${slug}/bookings`,
-      jsonBody('POST', body),
-    );
+    return requestData<MentorSession>(`/api/v1/mentors/${slug}/bookings`, jsonBody('POST', body));
   }
 
   /** The caller's own sessions, split by the server against one clock. */
@@ -1105,18 +1082,12 @@ export function createApi(
    *  PUT, not POST: there is one review per session and a second submission REPLACES the
    *  first. The mentor's review count does not move on an edit. */
   async function reviewMySession(id: string, rating: number, comment: string): Promise<void> {
-    await call(
-      `/api/v1/me/mentorship/sessions/${id}/review`,
-      jsonBody('PUT', { rating, comment }),
-    );
+    await call(`/api/v1/me/mentorship/sessions/${id}/review`, jsonBody('PUT', { rating, comment }));
   }
 
   /** Cancel, as either party, before the start. Frees the hour and tells the other side. */
   async function cancelMySession(id: string, reason: string): Promise<MentorSession> {
-    return requestData<MentorSession>(
-      `/api/v1/me/mentorship/sessions/${id}/cancel`,
-      jsonBody('POST', { reason }),
-    );
+    return requestData<MentorSession>(`/api/v1/me/mentorship/sessions/${id}/cancel`, jsonBody('POST', { reason }));
   }
 
   // --- The mentor's own cabinet ----------------------------------------------
@@ -1151,10 +1122,7 @@ export function createApi(
 
   /** Leave the directory without moderation, keeping confirmed bookings standing. */
   async function pauseMentorProfile(paused: boolean): Promise<OwnMentorProfile> {
-    return requestData<OwnMentorProfile>(
-      '/api/v1/me/mentorship/profile/pause',
-      jsonBody('POST', { paused }),
-    );
+    return requestData<OwnMentorProfile>('/api/v1/me/mentorship/profile/pause', jsonBody('POST', { paused }));
   }
 
   /** Withdraw. Every confirmed future booking is cancelled and each seeker told; past
@@ -1192,9 +1160,7 @@ export function createApi(
    *  Whole-week and not per-row on purpose: a schedule is a shape a mentor reasons about
    *  all at once, and the replacement is one transaction — a half-applied edit leaves them
    *  bookable at hours they just removed. Dated overrides are untouched. */
-  async function replaceWeeklyAvailability(
-    rules: { weekday: number; start: string; end: string }[],
-  ): Promise<void> {
+  async function replaceWeeklyAvailability(rules: { weekday: number; start: string; end: string }[]): Promise<void> {
     // 204 No Content, so there is nothing to unwrap — `requestData` here would parse an
     // empty body, throw, and report a write that actually succeeded as a failure. Callers
     // that need the stored rows (their server-assigned ids, which the delete route takes)
@@ -1205,11 +1171,7 @@ export function createApi(
   /** Add a dated exception. An equal start and end CLOSES that date, beating every other
    *  rule on it — that is how "I am away on the 16th" is one insert rather than a rewrite
    *  of the weekly schedule. */
-  async function addAvailabilityOverride(
-    date: string,
-    start: string,
-    end: string,
-  ): Promise<MentorAvailabilityRule> {
+  async function addAvailabilityOverride(date: string, start: string, end: string): Promise<MentorAvailabilityRule> {
     return requestData<MentorAvailabilityRule>(
       '/api/v1/me/mentorship/availability/overrides',
       jsonBody('POST', { date, start, end }),
@@ -1235,14 +1197,8 @@ export function createApi(
 
   /** Approve or reject one profile. Approval is what puts it in the public directory;
    *  nothing else infers it, including an approved referral offer for the same company. */
-  async function decideMentorProfile(
-    id: number,
-    status: 'approved' | 'rejected',
-  ): Promise<PendingMentorProfile> {
-    return requestData<PendingMentorProfile>(
-      `/api/v1/mentorship/profiles/${id}/decide`,
-      jsonBody('POST', { status }),
-    );
+  async function decideMentorProfile(id: number, status: 'approved' | 'rejected'): Promise<PendingMentorProfile> {
+    return requestData<PendingMentorProfile>(`/api/v1/mentorship/profiles/${id}/decide`, jsonBody('POST', { status }));
   }
 
   async function searchCities(q: string, country?: string): Promise<{ value: string; country: string }[]> {
@@ -1281,9 +1237,7 @@ export function createApi(
    *  the request carries a session. Returns null when the role has no rollup row —
    *  the route renders that as a 404 rather than as an empty page. */
   async function insightsRole(category: string, seniority: string): Promise<InsightRole | null> {
-    const rows = await requestData<InsightRole[]>(
-      `/api/v1/insights/roles?${insightsQuery({ category, seniority })}`,
-    );
+    const rows = await requestData<InsightRole[]>(`/api/v1/insights/roles?${insightsQuery({ category, seniority })}`);
     return rows[0] ?? null;
   }
 
@@ -1297,9 +1251,7 @@ export function createApi(
 
   /** One category's market pulse and its all-seniority open count. */
   async function insightsRolePulse(category: string): Promise<InsightRolePulse> {
-    return requestData<InsightRolePulse>(
-      `/api/v1/insights/role-pulse?${insightsQuery({ category })}`,
-    );
+    return requestData<InsightRolePulse>(`/api/v1/insights/role-pulse?${insightsQuery({ category })}`);
   }
 
   /** Ranked skills, optionally scoped by category or country (not both). */
@@ -1320,19 +1272,14 @@ export function createApi(
   }
 
   async function insightsSalaryByCategory(category: string): Promise<InsightSalaryBand[]> {
-    return requestData<InsightSalaryBand[]>(
-      `/api/v1/insights/salary?category=${encodeURIComponent(category)}`,
-    );
+    return requestData<InsightSalaryBand[]>(`/api/v1/insights/salary?category=${encodeURIComponent(category)}`);
   }
 
   /** The salary bands for one category in one country, as the /roles landings read
    *  them. Scoping by country drops the per-seniority breakdown the category-only
    *  call returns — the endpoint answers with one row per (currency, period) for the
    *  scope as a whole — so the rows carry no seniority and are not merged. */
-  async function insightsSalaryByCategoryInCountry(
-    category: string,
-    country: string,
-  ): Promise<InsightSalaryBand[]> {
+  async function insightsSalaryByCategoryInCountry(category: string, country: string): Promise<InsightSalaryBand[]> {
     const q = new URLSearchParams({ category, country });
     return requestData<InsightSalaryBand[]>(`/api/v1/insights/salary?${q}`);
   }
@@ -1375,9 +1322,7 @@ export function createApi(
    *  cheap, no ordering available), the other searches with a sort (ordered, bounded
    *  to a shallow window) — so they cannot share a cost model or a bound. */
   async function sitemapJobsFresh(offset: number, limit: number): Promise<SitemapEntry[]> {
-    return requestData<SitemapEntry[]>(
-      `/api/v1/jobs/sitemap/fresh?offset=${offset}&limit=${limit}`,
-    );
+    return requestData<SitemapEntry[]>(`/api/v1/jobs/sitemap/fresh?offset=${offset}&limit=${limit}`);
   }
 
   /** The offset opening each `chunk`-sized page of jobs — every sub-sitemap's cursor,
@@ -1388,9 +1333,7 @@ export function createApi(
 
   /** One page of company sitemap entries starting at `offset` in the search index. */
   async function sitemapCompanies(offset: number, limit: number): Promise<SitemapEntry[]> {
-    return requestData<SitemapEntry[]>(
-      `/api/v1/companies/sitemap?offset=${offset}&limit=${limit}`,
-    );
+    return requestData<SitemapEntry[]>(`/api/v1/companies/sitemap?offset=${offset}&limit=${limit}`);
   }
 
   /** The offset opening each `chunk`-sized page of companies, including the first (0). */
@@ -1495,14 +1438,16 @@ export function createApi(
 
   async function reauthenticatePassword(password: string): Promise<string> {
     const result = await requestData<{ recent_auth_expires_at: string }>(
-      '/api/v2/auth/reauth/password', jsonBody('POST', { password }),
+      '/api/v2/auth/reauth/password',
+      jsonBody('POST', { password }),
     );
     return result.recent_auth_expires_at;
   }
 
   async function exchangeOAuthReauthentication(code: string, codeVerifier: string): Promise<string> {
     const result = await requestData<{ recent_auth_expires_at: string }>(
-      '/api/v2/auth/oauth/exchange', jsonBody('POST', { code, code_verifier: codeVerifier }),
+      '/api/v2/auth/oauth/exchange',
+      jsonBody('POST', { code, code_verifier: codeVerifier }),
     );
     return result.recent_auth_expires_at;
   }
@@ -1682,6 +1627,41 @@ export function createApi(
     return requestData<VoteResult>(`/api/v1/companies/${slug}/vote`, { method: 'DELETE' });
   }
 
+  /** A page of the caller's watchlist, newest added first, optionally narrowed to the
+   *  names containing `q`. `max` is the most companies a list may hold. */
+  async function listWatchlist(
+    q: string,
+    limit: number,
+    offset: number,
+  ): Promise<Slice<WatchedCompany> & { max: number }> {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (q) params.set('q', q);
+    const page = await request<{ data: WatchedCompany[]; meta: ListMeta & { max: number } }>(
+      `/api/v1/me/watchlist?${params}`,
+    );
+    return { ...toSlice(page, offset), max: page.meta.max };
+  }
+
+  /** Whether the caller watches this company. */
+  async function isWatched(slug: string): Promise<boolean> {
+    return (await requestData<{ watched: boolean }>(`/api/v1/me/watchlist/${encodeURIComponent(slug)}`)).watched;
+  }
+
+  /** Put a company on the watchlist. Idempotent; a full list is a 400 whose message says so. */
+  function watchCompany(slug: string): Promise<WatchedCompany> {
+    return requestData<WatchedCompany>(`/api/v1/me/watchlist/${encodeURIComponent(slug)}`, { method: 'PUT' });
+  }
+
+  /** Take a company off the watchlist. Idempotent. */
+  async function unwatchCompany(slug: string): Promise<void> {
+    await call(`/api/v1/me/watchlist/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+  }
+
+  /** Add many companies at once from names or slugs, one per entry. */
+  function importWatchlist(names: string[]): Promise<WatchlistImportResult> {
+    return requestData<WatchlistImportResult>('/api/v1/me/watchlist/import', jsonBody('POST', { names }));
+  }
+
   /** Drop a job's pipeline progress (stage + applied), keeping its saved mark —
    *  the board's backward "move to Saved" drag. */
   function clearJobStage(slug: string): Promise<UserJob> {
@@ -1781,20 +1761,14 @@ export function createApi(
     // jsonBody and not a hand-built init: it carries the Content-Type the server's body
     // parser requires. Without that header the request is refused before the code is even
     // read, which looks exactly like a code that does not exist.
-    return requestData<{ percent_off: number }>(
-      '/api/v1/me/promo/preview',
-      jsonBody('POST', { code }),
-    );
+    return requestData<{ percent_off: number }>('/api/v1/me/promo/preview', jsonBody('POST', { code }));
   }
 
   /** Spend this account's one lifetime redemption on a code. Durable: once recorded, every
    *  later checkout reads the percentage back, so a provider failure while opening the
    *  payment page costs a retry rather than the offer. */
   async function promoRedeem(code: string): Promise<{ percent_off: number }> {
-    return requestData<{ percent_off: number }>(
-      '/api/v1/me/promo/redeem',
-      jsonBody('POST', { code }),
-    );
+    return requestData<{ percent_off: number }>('/api/v1/me/promo/redeem', jsonBody('POST', { code }));
   }
 
   /** This account's invite link and what it has earned. */
@@ -1910,7 +1884,10 @@ export function createApi(
   async function getNotifications(
     limit = 20,
     offset = 0,
-  ): Promise<{ data: NotificationItem[]; meta: { total: number; unread_count: number; limit: number; offset: number } }> {
+  ): Promise<{
+    data: NotificationItem[];
+    meta: { total: number; unread_count: number; limit: number; offset: number };
+  }> {
     return request<{
       data: NotificationItem[];
       meta: { total: number; unread_count: number; limit: number; offset: number };
@@ -1958,11 +1935,7 @@ export function createApi(
    *  for the default full-access key; the only other value a client may request is
    *  `"embed"` (for the volunteer-embed-mvp service — see that scope's own doc on
    *  the server). */
-  async function createApiKey(
-    name: string,
-    expiresAt?: string,
-    scope?: string,
-  ): Promise<CreatedApiKey> {
+  async function createApiKey(name: string, expiresAt?: string, scope?: string): Promise<CreatedApiKey> {
     return requestData<CreatedApiKey>(
       '/api/v1/me/api-keys',
       jsonBody('POST', { name, expires_at: expiresAt ?? null, scope: scope ?? null }),
@@ -2043,11 +2016,7 @@ export function createApi(
    *  query string (may be empty). A duplicate name or the per-user cap is a 409.
    *  `derivedFromProfile` marks the auto-generated "notify me about jobs matching my
    *  profile" search; a second one for the same user is a 409. */
-  async function createSavedSearch(
-    name: string,
-    query: string,
-    derivedFromProfile = false,
-  ): Promise<SavedSearch> {
+  async function createSavedSearch(name: string, query: string, derivedFromProfile = false): Promise<SavedSearch> {
     return requestData<SavedSearch>(
       '/api/v1/me/searches',
       jsonBody('POST', { name, query, derived_from_profile: derivedFromProfile }),
@@ -2055,10 +2024,7 @@ export function createApi(
   }
 
   /** Overwrite a saved search's name and/or query; an omitted field is unchanged. */
-  async function updateSavedSearch(
-    id: number,
-    patch: { name?: string; query?: string },
-  ): Promise<SavedSearch> {
+  async function updateSavedSearch(id: number, patch: { name?: string; query?: string }): Promise<SavedSearch> {
     return requestData<SavedSearch>(`/api/v1/me/searches/${id}`, jsonBody('PATCH', patch));
   }
 
@@ -2086,10 +2052,7 @@ export function createApi(
 
   /** Fold two achievements into one richer keep. Cookie-only — merge deletes the other. */
   async function mergeExperienceAtoms(ids: [string, string]): Promise<ExperienceAtom> {
-    return requestData<ExperienceAtom>(
-      '/api/v1/me/experience/atoms/merge',
-      jsonBody('POST', { ids }),
-    );
+    return requestData<ExperienceAtom>('/api/v1/me/experience/atoms/merge', jsonBody('POST', { ids }));
   }
 
   /** Remove one achievement. This is the only path that takes evidence out of the bank. */
@@ -2106,10 +2069,7 @@ export function createApi(
   async function createExperienceEmployment(
     body: Partial<ExperienceEmployment> & { kind: 'job' | 'project' },
   ): Promise<ExperienceEmployment> {
-    return requestData<ExperienceEmployment>(
-      '/api/v1/me/experience/employments',
-      jsonBody('POST', body),
-    );
+    return requestData<ExperienceEmployment>('/api/v1/me/experience/employments', jsonBody('POST', body));
   }
 
   /** Update employment metadata (name/company, link, dates). Cookie-only. */
@@ -2203,10 +2163,7 @@ export function createApi(
   /** Record that this account has been through the onboarding wizard, so the layout stops
    *  routing it there. Idempotent — a second call keeps the original timestamp. */
   async function completeOnboarding(): Promise<void> {
-    await requestData<{ onboarding_complete: boolean }>(
-      '/api/v1/me/onboarding/complete',
-      jsonBody('POST', {}),
-    );
+    await requestData<{ onboarding_complete: boolean }>('/api/v1/me/onboarding/complete', jsonBody('POST', {}));
   }
 
   // Talent Network: the caller's own membership toggle, and the public catalogue it puts
@@ -2220,13 +2177,8 @@ export function createApi(
 
   /** Update the caller's own Talent Network visibility. Returns the echoed setting rather
    *  than assuming success, same as saveProfile. */
-  async function setTalentNetworkVisibility(
-    visibility: TalentNetworkVisibility,
-  ): Promise<TalentNetworkSetting> {
-    return requestData<TalentNetworkSetting>(
-      '/api/v1/me/talent-network',
-      jsonBody('PUT', { visibility }),
-    );
+  async function setTalentNetworkVisibility(visibility: TalentNetworkVisibility): Promise<TalentNetworkSetting> {
+    return requestData<TalentNetworkSetting>('/api/v1/me/talent-network', jsonBody('PUT', { visibility }));
   }
 
   /** One filtered page of the public Talent Network catalogue. Unauthenticated.
@@ -2294,10 +2246,7 @@ export function createApi(
         `This PDF is larger than ${RESUME_MAX_MB} MB. Compress it or export a lighter PDF and try again.`,
       );
     }
-    return requestData<ResumeProfile>(
-      '/api/v1/me/resume/extract',
-      resumeInit('POST', input),
-    );
+    return requestData<ResumeProfile>('/api/v1/me/resume/extract', resumeInit('POST', input));
   }
 
   /** The caller's résumé status, including the read-only structured résumé parsed from
@@ -2332,9 +2281,7 @@ export function createApi(
    *  profile's specializations. Session-scoped (404 when no profile). */
   async function getProfileVerdict(params?: URLSearchParams): Promise<Verdict> {
     const qs = params?.toString();
-    return requestData<Verdict>(
-      `/api/v1/me/profile/verdict${qs ? `?${qs}` : ''}`,
-    );
+    return requestData<Verdict>(`/api/v1/me/profile/verdict${qs ? `?${qs}` : ''}`);
   }
 
   /** The CV ATS-readiness report for the caller's profile: structural checks over the
@@ -2343,9 +2290,7 @@ export function createApi(
    *  when no CV is stored — the page then prompts an upload. Session-scoped. */
   async function getATSReport(params?: URLSearchParams): Promise<ATSResponse> {
     const qs = params?.toString();
-    return requestData<ATSResponse>(
-      `/api/v1/me/profile/ats-report${qs ? `?${qs}` : ''}`,
-    );
+    return requestData<ATSResponse>(`/api/v1/me/profile/ats-report${qs ? `?${qs}` : ''}`);
   }
 
   /** Run the optional LLM qualitative review over the caller's stored CV; returns the
@@ -2353,10 +2298,7 @@ export function createApi(
    *  LLM configured this is just the deterministic report. */
   async function runATSReview(params?: URLSearchParams): Promise<ATSResponse> {
     const qs = params?.toString();
-    return requestData<ATSResponse>(
-      `/api/v1/me/profile/ats-report${qs ? `?${qs}` : ''}`,
-      { method: 'POST' },
-    );
+    return requestData<ATSResponse>(`/api/v1/me/profile/ats-report${qs ? `?${qs}` : ''}`, { method: 'POST' });
   }
 
   /** Score an uploaded CV for an ANONYMOUS caller — no session, no stored bytes, no model
@@ -2383,7 +2325,10 @@ export function createApi(
 
   /** Subscribe a saved search to a channel (telegram by default). A duplicate is a 409. */
   async function createSubscription(savedSearchId: number, channel = 'telegram'): Promise<Subscription> {
-    return requestData<Subscription>('/api/v1/me/subscriptions', jsonBody('POST', { saved_search_id: savedSearchId, channel }));
+    return requestData<Subscription>(
+      '/api/v1/me/subscriptions',
+      jsonBody('POST', { saved_search_id: savedSearchId, channel }),
+    );
   }
 
   /** Pause or resume a subscription. */
@@ -2489,11 +2434,7 @@ export function createApi(
   /** Submit an offer to refer into a company: a proof CV (PDF) uploaded as multipart, with
    *  the company slug and the referrer's LinkedIn URL as form fields. Enters moderation.
    *  409 on a duplicate offer, 422 on a bad LinkedIn URL. */
-  async function submitReferralOffer(
-    companySlug: string,
-    linkedinUrl: string,
-    file: File,
-  ): Promise<ReferralOffer> {
+  async function submitReferralOffer(companySlug: string, linkedinUrl: string, file: File): Promise<ReferralOffer> {
     const form = new FormData();
     form.append('company_slug', companySlug);
     form.append('linkedin_url', linkedinUrl);
@@ -2512,9 +2453,15 @@ export function createApi(
   }
 
   // ── Interview buddies ────────────────────────────────────────────────────
-  async function buddyStatus(): Promise<BuddyStatus> { return requestData('/api/v1/me/buddies'); }
-  async function joinBuddies(): Promise<BuddyStatus> { return requestData('/api/v1/me/buddies', { method: 'POST' }); }
-  async function leaveBuddies(): Promise<void> { await call('/api/v1/me/buddies', { method: 'DELETE' }); }
+  async function buddyStatus(): Promise<BuddyStatus> {
+    return requestData('/api/v1/me/buddies');
+  }
+  async function joinBuddies(): Promise<BuddyStatus> {
+    return requestData('/api/v1/me/buddies', { method: 'POST' });
+  }
+  async function leaveBuddies(): Promise<void> {
+    await call('/api/v1/me/buddies', { method: 'DELETE' });
+  }
   async function listBuddySimilar(limit = 20, offset = 0): Promise<BuddySimilar[]> {
     return requestData(`/api/v1/me/buddies/similar?limit=${limit}&offset=${offset}`);
   }
@@ -2542,9 +2489,13 @@ export function createApi(
   async function getBuddyActivity(handle: string): Promise<BuddyActivity> {
     return requestData(`/api/v1/me/buddies/profiles/${encodeURIComponent(handle)}/activity`);
   }
-  async function listBuddyHiddenApplications(): Promise<number[]> { return requestData('/api/v1/me/buddies/hidden-applications'); }
+  async function listBuddyHiddenApplications(): Promise<number[]> {
+    return requestData('/api/v1/me/buddies/hidden-applications');
+  }
   async function setBuddyApplicationHidden(id: string, hidden: boolean): Promise<void> {
-    await call(`/api/v1/me/buddies/hidden-applications/${encodeURIComponent(id)}`, { method: hidden ? 'PUT' : 'DELETE' });
+    await call(`/api/v1/me/buddies/hidden-applications/${encodeURIComponent(id)}`, {
+      method: hidden ? 'PUT' : 'DELETE',
+    });
   }
   async function inviteBuddy(handle: string, body: string): Promise<Conversation> {
     return requestData('/api/v1/me/buddies/invite', jsonBody('POST', { handle, body }));
@@ -2618,11 +2569,15 @@ export function createApi(
   }
 
   // ── Conversations (the messaging core, every kind) ───────────────────────
-  async function listConversations(): Promise<Conversation[]> { return requestData('/api/v1/me/conversations'); }
+  async function listConversations(): Promise<Conversation[]> {
+    return requestData('/api/v1/me/conversations');
+  }
   async function answerConversation(id: number, action: 'accept' | 'decline'): Promise<Conversation> {
     return requestData(`/api/v1/me/conversations/${id}/${action}`, jsonBody('POST', {}));
   }
-  async function blockConversation(id: number): Promise<void> { await call(`/api/v1/me/conversations/${id}/block`, { method: 'POST' }); }
+  async function blockConversation(id: number): Promise<void> {
+    await call(`/api/v1/me/conversations/${id}/block`, { method: 'POST' });
+  }
   async function reportConversation(id: number, reason: ConversationReport['reason'], note: string): Promise<void> {
     await call(`/api/v1/me/conversations/${id}/report`, jsonBody('POST', { reason, note }));
   }
@@ -2639,11 +2594,21 @@ export function createApi(
   async function markConversationRead(id: number, upTo: number): Promise<void> {
     await call(`/api/v1/me/conversations/${id}/read`, jsonBody('POST', { up_to: upTo }));
   }
-  async function listConversationReports(limit = 30, offset = 0, includeResolved = false): Promise<ConversationReport[]> {
-    const q = new URLSearchParams({ limit: String(limit), offset: String(offset), include_resolved: String(includeResolved) });
+  async function listConversationReports(
+    limit = 30,
+    offset = 0,
+    includeResolved = false,
+  ): Promise<ConversationReport[]> {
+    const q = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+      include_resolved: String(includeResolved),
+    });
     return requestData(`/api/v1/moderation/conversation-reports?${q}`);
   }
-  async function resolveConversationReport(id: number): Promise<void> { await call(`/api/v1/moderation/conversation-reports/${id}/resolve`, jsonBody('POST', {})); }
+  async function resolveConversationReport(id: number): Promise<void> {
+    await call(`/api/v1/moderation/conversation-reports/${id}/resolve`, jsonBody('POST', {}));
+  }
 
   /** The referrer inbox: open requests for the companies the caller is approved for. */
   async function listIncomingReferrals(): Promise<IncomingReferralRequest[]> {
@@ -2651,10 +2616,7 @@ export function createApi(
   }
 
   /** Mark an incoming request contacted or declined on the caller's behalf. */
-  async function resolveReferral(
-    id: string,
-    status: 'contacted' | 'declined',
-  ): Promise<IncomingReferralRequest> {
+  async function resolveReferral(id: string, status: 'contacted' | 'declined'): Promise<IncomingReferralRequest> {
     return requestData<IncomingReferralRequest>(
       `/api/v1/me/referrals/incoming/${encodeURIComponent(id)}/resolve`,
       jsonBody('POST', { status }),
@@ -2673,7 +2635,10 @@ export function createApi(
 
   /** Approve or reject a pending offer. Moderator-only. */
   async function decideReferralOffer(id: string, approve: boolean): Promise<ReferralOffer> {
-    return requestData<ReferralOffer>(`/api/v1/referrals/offers/${encodeURIComponent(id)}/decide`, jsonBody('POST', { approve }));
+    return requestData<ReferralOffer>(
+      `/api/v1/referrals/offers/${encodeURIComponent(id)}/decide`,
+      jsonBody('POST', { approve }),
+    );
   }
 
   /** The URL that streams an offer's proof CV (moderator-only, opened in a new tab). */
@@ -2847,12 +2812,7 @@ export function createApi(
 
   /** Resolve a pending report; optionally soft-close the reported job. The note is
    *  emailed to the reporter when `notifyReporter` is set. */
-  async function resolveReport(
-    id: number,
-    closeJob: boolean,
-    note = '',
-    notifyReporter = false,
-  ): Promise<Report> {
+  async function resolveReport(id: number, closeJob: boolean, note = '', notifyReporter = false): Promise<Report> {
     return requestData<Report>(
       `/api/v1/reports/${id}/resolve`,
       jsonBody('POST', { close_job: closeJob, note, notify_reporter: notifyReporter }),
@@ -2912,7 +2872,7 @@ export function createApi(
     if (opts.status) params.set('status', opts.status);
     if (opts.includeOther) params.set('include_other', '1');
     const page = await request<Page<InboxMessage> & { meta: { hidden?: number } }>(
-      `/api/v1/me/inbox?${params.toString()}`
+      `/api/v1/me/inbox?${params.toString()}`,
     );
     return { ...toSlice(page, opts.offset ?? 0), hidden: page.meta.hidden ?? 0 };
   }
@@ -2924,10 +2884,9 @@ export function createApi(
     if (source) params.set('source', source);
     if (status) params.set('status', status);
     if (q) params.set('q', q);
-    const res = await requestData<{ marked: number }>(
-      `/api/v1/me/inbox/read-all?${params.toString()}`,
-      { method: 'POST' },
-    );
+    const res = await requestData<{ marked: number }>(`/api/v1/me/inbox/read-all?${params.toString()}`, {
+      method: 'POST',
+    });
     return res.marked;
   }
 
@@ -2972,10 +2931,9 @@ export function createApi(
    *  reached, which is deliberately not an empty result: "your mailbox holds nothing" is
    *  the wrong thing to say about a gateway being down. */
   async function recallApplicationMail(slug: string): Promise<MailRecallResult> {
-    return requestData<MailRecallResult>(
-      `/api/v1/me/tracking/${encodeURIComponent(slug)}/mail-recall`,
-      { method: 'POST' }
-    );
+    return requestData<MailRecallResult>(`/api/v1/me/tracking/${encodeURIComponent(slug)}/mail-recall`, {
+      method: 'POST',
+    });
   }
 
   /** Import a message the sweep found in the mailbox and link it to the application.
@@ -2985,7 +2943,7 @@ export function createApi(
   async function linkRecalledMail(slug: string, providerId: string): Promise<EmailBody> {
     return requestData<EmailBody>(
       `/api/v1/me/tracking/${encodeURIComponent(slug)}/mail-recall/link`,
-      jsonBody('POST', { provider_id: providerId })
+      jsonBody('POST', { provider_id: providerId }),
     );
   }
 
@@ -3035,10 +2993,7 @@ export function createApi(
    *  so an image it cannot decode comes back as a 400 and nothing is stored. */
   async function putPhoto(file: File): Promise<PhotoMeta> {
     if (file.size > PHOTO_MAX_BYTES) {
-      throw new ApiError(
-        413,
-        `This image is larger than ${PHOTO_MAX_MB} MB. Pick a smaller photo and try again.`,
-      );
+      throw new ApiError(413, `This image is larger than ${PHOTO_MAX_MB} MB. Pick a smaller photo and try again.`);
     }
     const form = new FormData();
     form.append('file', file);
@@ -3074,10 +3029,7 @@ export function createApi(
   /** Replace the caller's saved CV appearance defaults wholesale. Only seeds CVs created
    *  afterward — never touches an existing CV. */
   async function setCvAppearanceDefaults(defaults: CvAppearanceDefaults): Promise<CvAppearanceDefaults> {
-    return requestData<CvAppearanceDefaults>(
-      '/api/v1/me/cv-appearance-defaults',
-      jsonBody('PUT', defaults),
-    );
+    return requestData<CvAppearanceDefaults>('/api/v1/me/cv-appearance-defaults', jsonBody('PUT', defaults));
   }
 
   /** List the caller's TAILORED CVs (the re-open list): each with its vacancy slug + bound
@@ -3165,10 +3117,7 @@ export function createApi(
    *  Same id and agent session; presentation preserved. 409 when the CV is not tailored or
    *  there is nothing to seed from. */
   async function reseedCv(id: string): Promise<CvRecord> {
-    return requestData<CvRecord>(
-      `/api/v1/me/cvs/${encodeURIComponent(id)}/reseed`,
-      jsonBody('POST', {}),
-    );
+    return requestData<CvRecord>(`/api/v1/me/cvs/${encodeURIComponent(id)}/reseed`, jsonBody('POST', {}));
   }
 
   /** Rebuild the base CV from the current seed. Cookie-only. Does not touch
@@ -3192,7 +3141,6 @@ export function createApi(
   async function updateCv(id: string, input: UpdateCvInput): Promise<CvMeta> {
     return requestData<CvMeta>(`/api/v1/me/cvs/${id}`, jsonBody('PUT', input));
   }
-
 
   /** Turn link tracing on or off for one CV. 409 when the deployment has no visitor salt: there
    *  is then no honest way to count visitors, so the consent is refused rather than accepted and
@@ -3245,10 +3193,7 @@ export function createApi(
    * searchable. 422 when a URL cannot be read at all.
    */
   async function resolveJd(input: JdResolveInput): Promise<string> {
-    const { job_slug } = await requestData<{ job_slug: string }>(
-      '/api/v1/me/jd/resolve',
-      jsonBody('POST', input),
-    );
+    const { job_slug } = await requestData<{ job_slug: string }>('/api/v1/me/jd/resolve', jsonBody('POST', input));
     return job_slug;
   }
 
@@ -3262,18 +3207,14 @@ export function createApi(
   ): Promise<{ threads: CommunityThread[]; nextCursor?: string }> {
     const qs = new URLSearchParams({ subject_type: subjectType, subject_slug: subjectSlug });
     if (cursor) qs.set('cursor', cursor);
-    const res = await request<{ data: CommunityThread[]; meta: { next_cursor?: string } }>(
-      `/api/v1/threads?${qs}`,
-    );
+    const res = await request<{ data: CommunityThread[]; meta: { next_cursor?: string } }>(`/api/v1/threads?${qs}`);
     return { threads: res.data, nextCursor: res.meta?.next_cursor };
   }
 
   /** Open discussion threads across every subject, newest first — the /discussions
    *  feed. Each row names its own subject, since the caller has no other way to know
    *  what a thread is about. Public — no auth needed to read. */
-  async function listRecentThreads(
-    cursor?: string,
-  ): Promise<{ threads: CommunityFeedThread[]; nextCursor?: string }> {
+  async function listRecentThreads(cursor?: string): Promise<{ threads: CommunityFeedThread[]; nextCursor?: string }> {
     const qs = new URLSearchParams();
     if (cursor) qs.set('cursor', cursor);
     const suffix = qs.size ? `?${qs}` : '';
@@ -3314,11 +3255,7 @@ export function createApi(
 
   /** Post a reply to a thread. Requires a signed-in session. `parentReplyId` nests
    *  the reply under another reply (0/omitted = a top-level reply). */
-  async function createReply(
-    threadId: number,
-    body: string,
-    parentReplyId = 0,
-  ): Promise<CommunityReply> {
+  async function createReply(threadId: number, body: string, parentReplyId = 0): Promise<CommunityReply> {
     return requestData<CommunityReply>(
       `/api/v1/threads/${threadId}/replies`,
       jsonBody('POST', { body, parent_reply_id: parentReplyId }),
@@ -3543,6 +3480,11 @@ export function createApi(
     clearJobVote,
     voteCompany,
     clearCompanyVote,
+    listWatchlist,
+    isWatched,
+    watchCompany,
+    unwatchCompany,
+    importWatchlist,
     clearJobStage,
     untrackJob,
     trackJob,

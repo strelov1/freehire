@@ -17,9 +17,7 @@
 </script>
 
 {#if rounded === null}
-  <span
-    class="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground"
-  >
+  <span class="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
     {s.new}
   </span>
 {:else if rounded > 0}
@@ -35,9 +33,7 @@
     <TrendingDown class="size-3" />{fmtPct(rounded)}
   </span>
 {:else}
-  <span
-    class="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground"
-  >
+  <span class="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
     <Minus class="size-3" />0%
   </span>
 {/if}

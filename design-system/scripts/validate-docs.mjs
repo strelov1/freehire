@@ -155,9 +155,7 @@ function checkEntity(file, path, entity) {
   // A token list is a copy of the token file's keys. Drift either way means the
   // docs describe a palette the package no longer ships.
   if (entity.tokens) {
-    const shipped = Object.keys(JSON.parse(readFileSync(target, 'utf-8'))).filter(
-      (name) => !name.startsWith('$'),
-    );
+    const shipped = Object.keys(JSON.parse(readFileSync(target, 'utf-8'))).filter((name) => !name.startsWith('$'));
     const { undocumented, gone } = drift(shipped, entity.tokens);
     if (undocumented.length) {
       fail(`${file}: entity "${entity.id}" does not document ${undocumented.join(', ')}`);

@@ -60,19 +60,31 @@
     animation: shimmer-pan 2.4s linear infinite;
   }
   @keyframes shimmer-pan {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
   }
   .star-glow {
     color: var(--color-foreground);
     animation: star-pulse 1.8s ease-in-out infinite;
   }
   @keyframes star-pulse {
-    0%, 100% { opacity: 0.7; }
-    50%      { opacity: 1; }
+    0%,
+    100% {
+      opacity: 0.7;
+    }
+    50% {
+      opacity: 1;
+    }
   }
   @media (prefers-reduced-motion: reduce) {
-    .star-glow { animation: none; opacity: 1; }
+    .star-glow {
+      animation: none;
+      opacity: 1;
+    }
     .shimmer {
       animation: none;
       background: none;

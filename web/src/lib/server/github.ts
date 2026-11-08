@@ -41,10 +41,7 @@ export async function githubStats(fetchImpl: typeof fetch): Promise<GithubStats 
     // read the last-page number out of the Link header.
     let contributors: number | null = null;
     try {
-      const c = await fetchImpl(
-        `https://api.github.com/repos/${REPO}/contributors?per_page=1&anon=true`,
-        { headers },
-      );
+      const c = await fetchImpl(`https://api.github.com/repos/${REPO}/contributors?per_page=1&anon=true`, { headers });
       const last = c.headers.get('link')?.match(/[?&]page=(\d+)>;\s*rel="last"/);
       contributors = last ? Number(last[1]) : c.ok ? 1 : null;
     } catch {

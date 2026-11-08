@@ -93,7 +93,11 @@ describe('HeaderSearch suggestion panel', () => {
 // then the full focus ring returns.
 describe('HeaderSearch autofocus ring', () => {
   it('draws no ring for focus the page placed, and the ring once the visitor acts', async () => {
-    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('min-width'), addEventListener() {}, removeEventListener() {} }));
+    vi.stubGlobal('matchMedia', (q: string) => ({
+      matches: q.includes('min-width'),
+      addEventListener() {},
+      removeEventListener() {},
+    }));
     render(HeaderSearch, { props: { placeholder: 'Search jobs', label: 'Search jobs', autofocus: true } });
     const input = screen.getByRole('combobox', { name: 'Search jobs' });
     const frame = () => input.closest('div.flex.items-center') as HTMLElement;
@@ -106,4 +110,3 @@ describe('HeaderSearch autofocus ring', () => {
     vi.unstubAllGlobals();
   });
 });
-

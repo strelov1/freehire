@@ -322,7 +322,11 @@ describe('buildActivityGrid counting', () => {
 
   it('orders a day events oldest first', () => {
     const noon = on('2026-09-10');
-    const morning = { ...on('2026-09-10'), id: 2, occurred_at: new Date(2026, 8, 10, 8).toISOString() } as TimelineEvent;
+    const morning = {
+      ...on('2026-09-10'),
+      id: 2,
+      occurred_at: new Date(2026, 8, 10, 8).toISOString(),
+    } as TimelineEvent;
     const grid = buildActivityGrid([noon, morning], TODAY);
 
     expect(grid.days.find((d) => d.key === '2026-09-10')?.events.map((e) => e.id)).toEqual([2, 1]);
@@ -337,7 +341,10 @@ describe('buildActivityGrid counting', () => {
 
 describe('buildActivityGrid streaks', () => {
   it('counts consecutive active days ending today', () => {
-    const grid = buildActivityGrid(['2026-09-14', '2026-09-15', '2026-09-16'].map((d) => on(d)), TODAY);
+    const grid = buildActivityGrid(
+      ['2026-09-14', '2026-09-15', '2026-09-16'].map((d) => on(d)),
+      TODAY,
+    );
 
     expect(grid.currentStreak).toBe(3);
   });
@@ -345,20 +352,29 @@ describe('buildActivityGrid streaks', () => {
   // A naive "days ending today" resets at every midnight and tells somebody they lost a run
   // they are still in the middle of. The day is not over.
   it('holds the streak open while today is still running', () => {
-    const grid = buildActivityGrid(['2026-09-13', '2026-09-14', '2026-09-15'].map((d) => on(d)), TODAY);
+    const grid = buildActivityGrid(
+      ['2026-09-13', '2026-09-14', '2026-09-15'].map((d) => on(d)),
+      TODAY,
+    );
 
     expect(grid.currentStreak).toBe(3);
   });
 
   it('ends the streak at a gap', () => {
-    const grid = buildActivityGrid(['2026-09-10', '2026-09-11', '2026-09-16'].map((d) => on(d)), TODAY);
+    const grid = buildActivityGrid(
+      ['2026-09-10', '2026-09-11', '2026-09-16'].map((d) => on(d)),
+      TODAY,
+    );
 
     expect(grid.currentStreak).toBe(1);
   });
 
   it('finds the longest run anywhere in the window', () => {
     const days = ['2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04', '2026-09-16'];
-    const grid = buildActivityGrid(days.map((d) => on(d)), TODAY);
+    const grid = buildActivityGrid(
+      days.map((d) => on(d)),
+      TODAY,
+    );
 
     expect(grid.longestStreak).toBe(4);
     expect(grid.currentStreak).toBe(1);
@@ -394,7 +410,10 @@ describe('buildActivityGridFromCounts', () => {
       days.map((d) => [d, 1] as const),
       TODAY,
     );
-    const fromEvents = buildActivityGrid(days.map((d) => on(d)), TODAY);
+    const fromEvents = buildActivityGrid(
+      days.map((d) => on(d)),
+      TODAY,
+    );
 
     expect(fromCounts.total).toBe(5);
     expect(fromCounts.currentStreak).toBe(fromEvents.currentStreak);

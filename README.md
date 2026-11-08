@@ -7,9 +7,11 @@
 
 # freehire
 
-### Every IT job, straight from the source.
+<!-- The tagline is a deliberate subtitle under the title, so it skips a heading level. -->
+<!-- rumdl-disable-next-line MD001 -->
+### Every tech job, straight from the source — for you and your agent.
 
-**4.7M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
+**4.9M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
 [**Try it live →**](https://freehire.me/?utm_source=github&utm_medium=readme&utm_campaign=hero) · [Features](docs/features.md) · [Architecture](docs/architecture.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
@@ -40,7 +42,7 @@
 
 <br>
 
-<img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 4.7M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
+<img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 4.9M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
 
 </div>
 
@@ -62,9 +64,9 @@
   workspace on top of the catalogue — see [Beyond the catalogue](#beyond-the-catalogue).
   Use the hosted site, run your own, or build on top.
 
-Aggregating **4.7M+ unique live postings** from **700,000+ companies** across
+Aggregating **4.9M+ unique live postings** from **700,000+ companies** across
 **168 ATS platforms**, a long tail of aggregators and direct feeds, and **97
-Telegram channels** — **421 sources** in all, see [Sources](#sources) for the full
+Telegram channels** — **437 sources** in all, see [Sources](#sources) for the full
 breakdown. Reposts of one job across boards are collapsed, so every figure here is
 what [freehire.me/jobs](https://freehire.me/jobs?utm_source=github&utm_medium=readme&utm_campaign=stats) actually shows.
 

@@ -148,7 +148,8 @@
      nothing else, so a button promising to read a profile link would promise more than the
      page behind it can give. -->
 <p class="mt-4 text-xs text-muted-foreground text-pretty">
-  No CV file? Open your profile on LinkedIn, choose <span class="font-medium text-foreground">More → Save to PDF</span>, and upload that.
+  No CV file? Open your profile on LinkedIn, choose <span class="font-medium text-foreground">More → Save to PDF</span>,
+  and upload that.
 </p>
 
 <button type="button" onclick={onSkip} class="mt-6 text-sm font-medium text-muted-foreground hover:text-foreground">

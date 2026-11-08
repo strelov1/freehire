@@ -10,7 +10,13 @@ vi.stubGlobal('matchMedia', (q: string) => ({
   addEventListener() {},
   removeEventListener() {},
 }));
-vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} });
+vi.stubGlobal(
+  'IntersectionObserver',
+  class {
+    observe() {}
+    disconnect() {}
+  },
+);
 
 describe('BuddiesLandingView', () => {
   it('leads with the headline and sends every join button to /buddies', () => {
@@ -19,6 +25,23 @@ describe('BuddiesLandingView', () => {
     const joins = screen.getAllByRole('link', { name: 'Join interview buddies' });
     expect(joins.length).toBeGreaterThan(0);
     for (const a of joins) expect(a.getAttribute('href')).toBe('/buddies');
+    expect(screen.queryByText(/^Joining shows members/)).toBeNull();
+  });
+
+  it('joins in place when given onJoin, for a signed-in non-member at /buddies', async () => {
+    const onJoin = vi.fn();
+    render(BuddiesLandingView, { onJoin });
+    expect(screen.queryByRole('link', { name: 'Join interview buddies' })).toBeNull();
+    const joins = screen.getAllByRole('button', { name: 'Join interview buddies' });
+    expect(joins.length).toBeGreaterThan(0);
+    for (const b of joins) b.click();
+    expect(onJoin).toHaveBeenCalledTimes(joins.length);
+    // Consent sits beside every button that joins, not only in a section further down.
+    // and is announced with the button itself, since the click joins at once.
+    for (const b of joins) {
+      const note = document.getElementById(b.getAttribute('aria-describedby') ?? '');
+      expect(note?.textContent).toMatch(/role titles in your CV.*including applications you made before\s+joining/s);
+    }
   });
 
   it('renders every FAQ question', () => {

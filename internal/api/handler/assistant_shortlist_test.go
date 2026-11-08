@@ -42,8 +42,8 @@ func TestNormalizeShortlistQueryRefusesUnenforceableConditions(t *testing.T) {
 
 func TestShortlistSearchMatchesListingConstraints(t *testing.T) {
 	index := &fakeSearcher{}
-	h := &searchHandlers{search: index, seen: &fakeSeen{ids: []int64{11}}, appliedCompanies: &fakeAppliedCompanies{slugs: []string{"old-co"}}, formerEmployers: &fakeFormerEmployers{slugs: []string{"new-co"}}}
-	query := "q=backend&q_fields=title&salary_min=80000&skills=go,rust&skills_mode=and&skills_exclude=php&hide_seen=true&hide_applied_companies=true&former_employers=true"
+	h := &searchHandlers{search: index, seen: &fakeSeen{ids: []int64{11}}, appliedCompanies: &fakeAppliedCompanies{slugs: []string{"old-co"}}, formerEmployers: &fakeFormerEmployers{slugs: []string{"new-co", "watched-co"}}, watchlist: &fakeWatchlist{slugs: []string{"watched-co"}}}
+	query := "q=backend&q_fields=title&salary_min=80000&skills=go,rust&skills_mode=and&skills_exclude=php&hide_seen=true&hide_applied_companies=true&former_employers=true&watchlist=true"
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/jobs/search", func(c *fiber.Ctx) error { c.Locals(auth.LocalsUserID, int64(7)); return h.SearchJobs(c) })
 	status, _ := doGet(t, app, "/jobs/search?"+query+"&limit=20")
@@ -60,7 +60,7 @@ func TestShortlistSearchMatchesListingConstraints(t *testing.T) {
 }
 
 func TestShortlistSearchDoesNotReturnDegradedOrUnscopedResults(t *testing.T) {
-	for _, query := range []string{"skills=go", "hide_seen=true", "former_employers=true", "hide_applied_companies=true"} {
+	for _, query := range []string{"skills=go", "hide_seen=true", "former_employers=true", "watchlist=true", "hide_applied_companies=true"} {
 		t.Run(query, func(t *testing.T) {
 			h := &searchHandlers{search: &fakeSearcher{err: search.ErrBadQuery}}
 			if _, err := h.runShortlistSearch(context.Background(), 7, query, 20, 0); err == nil {

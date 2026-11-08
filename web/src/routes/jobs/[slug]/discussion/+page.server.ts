@@ -1,5 +1,4 @@
 import { loadDiscussionIndex } from '#lib/server/community.js';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, fetch }) =>
-  loadDiscussionIndex(fetch, 'job', params.slug);
+export const load: PageServerLoad = async ({ params, fetch }) => loadDiscussionIndex(fetch, 'job', params.slug);

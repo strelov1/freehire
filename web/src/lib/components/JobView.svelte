@@ -208,9 +208,7 @@
     { id: 'description', label: 'Description' },
     ...(companySlug ? [{ id: 'company' as const, label: 'Company' }] : []),
     // The screening form is pointless once the posting stops taking applications.
-    ...(!closed && applyFormWorthShowing(applyForm)
-      ? [{ id: 'application' as const, label: 'Application' }]
-      : []),
+    ...(!closed && applyFormWorthShowing(applyForm) ? [{ id: 'application' as const, label: 'Application' }] : []),
   ]);
   let contentTab = $state<ContentTab>('description');
   // Per-instance so a second JobView on one page can't claim the same panel, which
@@ -247,8 +245,7 @@
         // `isIntersecting` alone also reads false while the sentinel is BELOW the fold,
         // which is where it sits on a short viewport before anything has been scrolled.
         // The rect settles which edge it left by.
-        headerPinned =
-          !entry.isIntersecting && entry.boundingClientRect.top < PINNED_HEADER_TOP;
+        headerPinned = !entry.isIntersecting && entry.boundingClientRect.top < PINNED_HEADER_TOP;
       },
       { rootMargin: `-${PINNED_HEADER_TOP}px 0px 0px 0px` },
     );
@@ -335,7 +332,8 @@
     if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
     untrack(ensureAppliedCompaniesLoaded);
     if (job.direct_apply) {
-      api.getDirectApplyForm(slug)
+      api
+        .getDirectApplyForm(slug)
         .then((f) => {
           if (job.public_slug === slug) directApplied = f.applied;
         })
@@ -344,7 +342,8 @@
     // The Avoid control below reads the profile's excluded_sources; without this its mark
     // would be wrong on a first load until something else happened to fetch the profile.
     untrack(() => profileStore.ensureLoaded());
-    api.recordJobView(slug)
+    api
+      .recordJobView(slug)
       .then((rec) => {
         // Mark it locally so its card dims on back-navigation without a reload.
         markViewed(slug);
@@ -512,13 +511,7 @@
   let autoApplySubmitting = $state(false);
   let autoApplyError = $state<string | null>(null);
   const autoApplyState = $derived(
-    autoApplyButtonState(
-      job.source,
-      autoApplyOverrideStatus ?? job.auto_apply_status,
-      applied,
-      isPro,
-      closed,
-    ),
+    autoApplyButtonState(job.source, autoApplyOverrideStatus ?? job.auto_apply_status, applied, isPro, closed),
   );
   // How loud each of the two CTAs is, and what they say. The table and the rule it keeps
   // ("never two primaries; one wherever an action remains") live in autoApplyButton.ts,
@@ -618,7 +611,13 @@
      link from every job page, which is what the SEO submissions are actually after. -->
 {#snippet applyCta(size: 'md' | 'lg', className: string, external: JobCtaPlan['external'])}
   {#if job.direct_apply}
-    <Button variant="outline" {size} onclick={onDirectApplyClick} disabled={directApplied || loadingDirectApply} class={className}>
+    <Button
+      variant="outline"
+      {size}
+      onclick={onDirectApplyClick}
+      disabled={directApplied || loadingDirectApply}
+      class={className}
+    >
       {directApplied ? 'Application sent' : external.label}
       {#if !directApplied}<ArrowRight class="size-4" />{/if}
     </Button>
@@ -632,7 +631,8 @@
       onclick={onApplyClick}
       class={className}
     >
-      {external.label} <ArrowRight class="size-4" />
+      {external.label}
+      <ArrowRight class="size-4" />
     </Button>
   {/if}
 {/snippet}
@@ -756,7 +756,7 @@
     <Flag class="size-4 shrink-0" aria-hidden="true" />
     <!-- Icon only from lg, where it sits beside the CTAs: a rare action, it should not
          weigh as much as Apply. The accessible name stays on the button. -->
-    <span class="lg:sr-only">Report</span>
+    <span class="sr-only">Report</span>
   </Button>
 {/snippet}
 
@@ -848,9 +848,9 @@
       onclick={onDiscussionClick}
     >
       <MessageSquare class="size-4 shrink-0" aria-hidden="true" />
-      <!-- Icon (and count) only from lg, beside the CTAs, like Report; the name stays for
-           screen readers. -->
-      <span class="lg:sr-only">Discussion</span>{threadCount ? ` · ${threadCount}` : ''}
+      <!-- Icon (and count) only, like Report; the title names it on hover and the name
+           stays for screen readers. -->
+      <span class="sr-only">Discussion</span>{threadCount ? ` · ${threadCount}` : ''}
     </a>
     {@render reportButton()}
     {@render saveButton()}
@@ -1019,9 +1019,7 @@
        "Be an early / applicant" inside itself. `max-w-full` plus its own `flex-wrap` let
        the chips wrap BETWEEN each other instead when even a line of their own is too
        narrow for all of them. -->
-  <div
-    class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 lg:col-start-2 lg:row-start-1 lg:gap-x-3"
-  >
+  <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 lg:col-start-2 lg:row-start-1 lg:gap-x-3">
     <EntityLogo
       name={job.company || 'Unknown company'}
       src={companyLogoUrl(job.company) ?? undefined}
@@ -1030,7 +1028,10 @@
     />
     <p class="min-w-0 text-sm text-muted-foreground max-lg:truncate">
       {#if job.company_slug}
-        <a href={resolve('/companies/[slug]', { slug: job.company_slug })} class="hover:text-foreground hover:underline">
+        <a
+          href={resolve('/companies/[slug]', { slug: job.company_slug })}
+          class="hover:text-foreground hover:underline"
+        >
           {job.company || 'Unknown company'}
         </a>
       {:else}
@@ -1154,7 +1155,6 @@
     <!-- Below lg the provenance line already spends its width on the company name and its
          badges, so the dates read here instead — a caption under the title rather than
          right-aligned, which on one phone-width column would only look adrift. -->
-    {@render postingMeta('flex lg:hidden')}
 
     <!-- Below lg the strip rides here rather than on the tab row: the sidebar stacks
          between the title and the description on a phone, so a strip left down there
@@ -1168,9 +1168,12 @@
          does not (the link out), and five labels do not fit one phone-width line — without
          it the row simply overflowed its left edge and ate "Discussion". The lg copy shares
          a line with the TabStrip and must not wrap. -->
-    {@render actionStrip(
-      '-mr-2 flex w-full flex-wrap justify-end border-b border-border pb-2 lg:hidden',
-    )}
+    <!-- On a phone the dates and the strip share one left-aligned line, wrapping when it
+         must: right-aligned, the strip floated under a short date with nothing to its left. -->
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2 lg:hidden">
+      {@render postingMeta('flex flex-wrap')}
+      {@render actionStrip('-ml-2 flex max-w-full flex-wrap')}
+    </div>
 
     <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
          once for the whole page: a gauge and the hedged wording here, the criteria and
@@ -1192,30 +1195,17 @@
       />
     {/if}
 
-    {#if job.company?.trim()}
-      <!-- A muted text link, not a button: it shows on every posting. The company page is
-           resolved only on click, keeping crawler visits cheap. -->
-      <a
-        href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
-        target="_blank"
-        rel="nofollow noopener noreferrer"
-        class="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+    {#if job.company?.trim() && !closed}
+      <button
+        type="button"
+        disabled={loadingReferralMessage}
+        onclick={() => void openReferralMessage()}
+        class="w-fit text-sm text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
       >
-        Find people at {job.company.trim()} on LinkedIn
-        <ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />
-      </a>
-      {#if !closed}
-        <button
-          type="button"
-          disabled={loadingReferralMessage}
-          onclick={() => void openReferralMessage()}
-          class="w-fit text-sm text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
-        >
-          Draft a referral message
-        </button>
-        {#if referralMessageLoadError}
-          <span role="alert" class="text-sm text-destructive">Could not open the draft form. Please try again.</span>
-        {/if}
+        Draft a referral message
+      </button>
+      {#if referralMessageLoadError}
+        <span role="alert" class="text-sm text-destructive">Could not open the draft form. Please try again.</span>
       {/if}
     {/if}
 
@@ -1272,12 +1262,13 @@
                   />
                 </dd>
               {:else}
-                <dd class="min-w-0 break-words text-right font-medium"
-                  >{#each facet.values as v, i (v.text)}{#if i > 0}, {/if}{#if v.href}<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal filter link from filterHref; query-only, no route to resolve --><a
+                <dd class="min-w-0 break-words text-right font-medium">
+                  {#each facet.values as v, i (v.text)}{#if i > 0},
+                    {/if}{#if v.href}<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal filter link from filterHref; query-only, no route to resolve --><a
                         href={v.href}
                         class="hover:text-foreground hover:underline">{v.text}</a
-                      >{:else}{v.text}{/if}{/each}</dd
-                >
+                      >{:else}{v.text}{/if}{/each}
+                </dd>
               {/if}
             </div>
           {/each}
@@ -1286,7 +1277,9 @@
 
       <!-- One quiet footer line: where the posting came from (with the control to stop seeing
            that source) and the votes. They were two divided bands, each holding one control. -->
-      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0">
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0"
+      >
         <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
         <div class="flex shrink-0">
           <!-- Keyed on the slug so a client-side navigation to another job remounts
@@ -1389,6 +1382,23 @@
       {:else}
         <div class="min-w-0 flex-1 border-b border-border" aria-hidden="true"></div>
       {/if}
+      {#if job.company?.trim()}
+        <!-- At the tab row's end, where it reads as one more thing to look at about this job,
+             rather than a sentence of its own under the CTAs. The full wording is the link's
+             name; the visible label stays short so it fits beside the tabs. The company page
+             is resolved only on click, keeping crawler visits cheap. -->
+        <a
+          href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          aria-label="Find people at {job.company.trim()} on LinkedIn"
+          title="Find people at {job.company.trim()} on LinkedIn"
+          class="inline-flex shrink-0 items-center gap-1.5 self-stretch border-b border-border pl-3 text-sm text-muted-foreground hover:text-foreground"
+        >
+          Find people
+          <ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />
+        </a>
+      {/if}
     </div>
 
     <!-- The three states of one exchange. They sit at the top of the content column rather
@@ -1418,10 +1428,7 @@
         <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
           <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> Added to your board
         </span>
-        <a
-          href={resolve('/my/tracking')}
-          class="text-sm font-medium text-brand-strong underline underline-offset-4"
-        >
+        <a href={resolve('/my/tracking')} class="text-sm font-medium text-brand-strong underline underline-offset-4">
           View on your board →
         </a>
       </div>
@@ -1432,8 +1439,8 @@
         class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
       >
         <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
-          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored CV — you'll get
-          a notification to review it.
+          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored CV — you'll get a notification
+          to review it.
         </span>
         <a
           href={resolve('/my/tracking/[id]', { id: job.public_slug })}
@@ -1522,11 +1529,7 @@
         {#if cta.autoApply?.leads}
           {@render autoApplyCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg')}
         {:else}
-          {@render applyCta(
-            'lg',
-            'flex-1 rounded-xl font-semibold shadow-lg',
-            cta.external,
-          )}
+          {@render applyCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg', cta.external)}
         {/if}
       </div>
     </div>
@@ -1551,9 +1554,7 @@
   }
 
   :global(html.job-scroll-pad.job-scroll-pad-bar) {
-    scroll-padding-bottom: calc(
-      4.75rem + env(safe-area-inset-bottom) + var(--job-scroll-pad-feedback-height, 0px)
-    );
+    scroll-padding-bottom: calc(4.75rem + env(safe-area-inset-bottom) + var(--job-scroll-pad-feedback-height, 0px));
   }
 
   @media (min-width: 64rem) {

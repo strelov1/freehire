@@ -116,7 +116,10 @@
           <div class="flex flex-col gap-1">
             <div class="flex flex-wrap items-center gap-2">
               {#if r.job_slug}
-                <a href={resolveRoute('/jobs/[slug]', { slug: r.job_slug })} class="text-sm font-medium hover:underline">
+                <a
+                  href={resolveRoute('/jobs/[slug]', { slug: r.job_slug })}
+                  class="text-sm font-medium hover:underline"
+                >
                   {r.job_title || r.job_slug}
                 </a>
               {:else}
@@ -126,9 +129,10 @@
             </div>
             <p class="whitespace-pre-wrap text-sm text-muted-foreground">{r.details}</p>
             <span class="text-xs text-muted-foreground">
-              by {r.reporter_email ?? 'unknown'}{r.contact_telegram
-                ? ` · TG: ${r.contact_telegram}`
-                : ''} · {timeAgo(r.created_at, locale())}
+              by {r.reporter_email ?? 'unknown'}{r.contact_telegram ? ` · TG: ${r.contact_telegram}` : ''} · {timeAgo(
+                r.created_at,
+                locale(),
+              )}
             </span>
           </div>
 
@@ -140,8 +144,7 @@
                   bind:value={note}
                   rows="3"
                   placeholder={decisionNotePlaceholder(deciding.kind)}
-                  class="w-full resize-y rounded border border-border bg-background px-2 py-1 text-sm"
-                ></textarea>
+                  class="w-full resize-y rounded border border-border bg-background px-2 py-1 text-sm"></textarea>
               </label>
               <label class="flex items-center gap-2 text-sm">
                 <input type="checkbox" bind:checked={notifyReporter} class="size-4 rounded border-input" />

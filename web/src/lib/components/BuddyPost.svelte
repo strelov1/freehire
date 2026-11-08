@@ -41,7 +41,10 @@
   <BuddyCompanyLogo name={it.company.name} size="sm" class="size-6" />
   <span class="truncate font-semibold group-hover:underline group-hover:underline-offset-2">{lines.title}</span>
   <span class="truncate text-muted-foreground">{lines.where}</span>
-  <ArrowUpRight class="ml-auto size-4 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" aria-hidden="true" />
+  <ArrowUpRight
+    class="ml-auto size-4 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
+    aria-hidden="true"
+  />
 {/snippet}
 
 <article class="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
@@ -74,14 +77,20 @@
     <div class="flex items-center gap-3">
       <span class="flex shrink-0 pl-1" aria-hidden="true">
         {#each post.items.slice(0, FAN) as it, i (it.id)}
-          <BuddyCompanyLogo name={it.company.name} size="lg" class={cn('ring-2 ring-card', TILT[i], i > 0 && '-ml-3')} />
+          <BuddyCompanyLogo
+            name={it.company.name}
+            size="lg"
+            class={cn('ring-2 ring-card', TILT[i], i > 0 && '-ml-3')}
+          />
         {/each}
       </span>
       <p class="min-w-0 text-sm">
         <!-- Jobs, not companies: two postings at one employer are two applications. -->
         <span class="text-muted-foreground">Applied to</span>
         <span class="font-semibold">{post.items.length} jobs</span>
-        <span class="block truncate text-xs text-muted-foreground">{[...new Set(post.items.map((it) => it.company.name))].join(', ')}</span>
+        <span class="block truncate text-xs text-muted-foreground"
+          >{[...new Set(post.items.map((it) => it.company.name))].join(', ')}</span
+        >
       </p>
     </div>
     <ul class="-mx-2 flex flex-col">
@@ -89,15 +98,25 @@
         <li>
           <!-- To the job while it has a page, to the company once it is gone (as BuddyJobCard). -->
           {#if it.job_slug}
-            <a href={resolve('/jobs/[slug]', { slug: it.job_slug })} class="group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted">{@render jobRow(it)}</a>
+            <a
+              href={resolve('/jobs/[slug]', { slug: it.job_slug })}
+              class="group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+              >{@render jobRow(it)}</a
+            >
           {:else}
-            <a href={resolve('/companies/[slug]', { slug: it.company.slug })} class="group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted">{@render jobRow(it)}</a>
+            <a
+              href={resolve('/companies/[slug]', { slug: it.company.slug })}
+              class="group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+              >{@render jobRow(it)}</a
+            >
           {/if}
         </li>
       {/each}
     </ul>
   {/if}
   {#if anchor}
-    <div class="-mx-1 -mb-1 border-t border-border pt-1"><BuddyReactionBar eventId={anchor.id} type={anchor.type} reactions={anchor.reactions} /></div>
+    <div class="-mx-1 -mb-1 border-t border-border pt-1">
+      <BuddyReactionBar eventId={anchor.id} type={anchor.type} reactions={anchor.reactions} />
+    </div>
   {/if}
 </article>

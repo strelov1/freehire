@@ -6,8 +6,7 @@
 // The store's own share links carry `?hl=` and `?utm_source=ext_sidebar`; both are
 // dropped here — a locale pin would override the visitor's, and the tracking
 // parameter describes a click that did not happen from the sidebar.
-export const EXTENSION_STORE_URL =
-  'https://chromewebstore.google.com/detail/freehire/ijfaechijopdlikalojadpojmpilplnj';
+export const EXTENSION_STORE_URL = 'https://chromewebstore.google.com/detail/freehire/ijfaechijopdlikalojadpojmpilplnj';
 
 /** The same extension on addons.mozilla.org — built from the same source as a
  *  Firefox MV2 add-on whose side panel is Firefox's sidebar (extension/AGENTS.md). */

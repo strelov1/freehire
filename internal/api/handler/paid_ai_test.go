@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -23,6 +24,40 @@ type fakeEntitlement struct {
 	tier  plan.Tier
 	err   error
 	asked atomic.Int32
+
+	// recordErr and recordPanic make the paywall-hit write fail or panic; hits collects what
+	// the gate asked to record.
+	recordErr   error
+	recordPanic bool
+	mu          sync.Mutex
+	hits        []recordedHit
+}
+
+type recordedHit struct {
+	userID  int64
+	feature string
+	job     plan.PaywallJob
+}
+
+func (f *fakeEntitlement) RecordPaywallHit(_ context.Context, userID int64, feature string, job plan.PaywallJob) error {
+	if f.recordPanic {
+		panic("record exploded")
+	}
+	if f.recordErr != nil {
+		return f.recordErr
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.hits = append(f.hits, recordedHit{userID, feature, job})
+	return nil
+}
+
+// recorded waits for every detached paywall-hit write to finish and returns what they stored.
+func (f *fakeEntitlement) recorded() []recordedHit {
+	paywallWrites.Wait()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]recordedHit(nil), f.hits...)
 }
 
 func (f *fakeEntitlement) RequirePaid(context.Context, int64) (plan.Tier, error) {

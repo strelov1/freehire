@@ -102,11 +102,10 @@ export function claimSkill<M extends JobMatch>(match: M, skill: string): M {
 /** The two progress-bar segment widths (in percent of the track): a full-weight
  *  green segment for exact matches and a half-weight warning segment for adjacent
  *  ones. Their sum is the (unrounded) coverage percent. */
-export function matchBarSegments(m: {
-  total: number;
-  exact_count: number;
-  adjacent_count: number;
-}): { exact: number; adjacent: number } {
+export function matchBarSegments(m: { total: number; exact_count: number; adjacent_count: number }): {
+  exact: number;
+  adjacent: number;
+} {
   if (m.total <= 0) return { exact: 0, adjacent: 0 };
   return {
     exact: (m.exact_count / m.total) * 100,

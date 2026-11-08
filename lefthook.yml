@@ -44,6 +44,33 @@ pre-commit:
           exit 0
         fi
         typos --force-exclude {staged_files}
+    # Markdown structure over the staged docs (unclosed fences, heading levels, broken tables
+    # and lists); .rumdl.toml decides what is checked and what is excluded, and a staged file
+    # it excludes is skipped. Steps aside when the binary is missing: the docs CI job is the
+    # gate.
+    rumdl:
+      glob: "*.md"
+      run: |
+        if ! command -v rumdl >/dev/null 2>&1; then
+          echo "rumdl not installed (mise install) - skipping"
+          exit 0
+        fi
+        rumdl check {staged_files}
+    # Python lint and format over the staged files; ruff.toml decides the rules, and
+    # --force-exclude makes it honour its exclusions for files named explicitly. Both checks
+    # run so one pass reports everything. Steps aside when the binary is missing: the
+    # python-lint CI job is the gate.
+    ruff:
+      glob: "*.py"
+      run: |
+        if ! command -v ruff >/dev/null 2>&1; then
+          echo "ruff not installed (mise install) - skipping"
+          exit 0
+        fi
+        status=0
+        ruff check --force-exclude {staged_files} || status=1
+        ruff format --check --force-exclude {staged_files} || status=1
+        exit $status
     # internal/platform/db is generated and committed, so a query edited without
     # regenerating ships the OLD Go with every check green — nothing else here reads
     # both halves. Same shape of check as design-system's check:dist, except that an
@@ -74,6 +101,40 @@ pre-commit:
         if [ -n "$unstaged$untracked" ]; then
           printf '%s\n' $unstaged $untracked
           echo 'Generated code was stale — make sqlc has just fixed it; stage the result.'
+          exit 1
+        fi
+
+    # docs/API*.md and the two Scalar OpenAPI documents are generated from
+    # web/src/lib/docs/{api-spec,filters}.ts and committed, so the same trap as sqlc:
+    # a filter added without regenerating ships with every local check green and only
+    # the `web-work` CI job says so. PR #4321 spent three CI-fix attempts on exactly
+    # this, editing Go while the log said "Run pnpm run gen:openapi".
+    #
+    # The glob is wide on purpose: filters.ts imports ../facets, which pulls in most of
+    # src/lib, and both generators take under a second. The generated outputs are in
+    # the glob too, so a hand edit to them, or a merge that brings them in, runs it.
+    # No `root:` (see design-system-tokens below): the outputs live outside web/.
+    # svelte-kit sync first: the generators load api-spec.ts through Vite, which needs
+    # the $app/tsconfig it writes, and a fresh worktree has none.
+    api-docs-drift: &api-docs-drift
+      glob:
+        - "web/src/lib/*.ts"
+        - "web/src/lib/**/*.ts"
+        - "web/scripts/gen-api-docs.mjs"
+        - "web/scripts/gen-openapi.mjs"
+        - "web/scripts/renderFilterSection.mjs"
+        - "web/src/lib/docs/generated/*.json"
+        - "docs/API.md"
+        - "docs/API.internal.md"
+      run: |
+        set -e
+        pnpm --dir web exec svelte-kit sync
+        pnpm --dir web run gen:api-docs
+        pnpm --dir web run gen:openapi
+        stale="$(git diff --name-only -- docs/API.md docs/API.internal.md web/src/lib/docs/generated)"
+        if [ -n "$stale" ]; then
+          printf '%s\n' $stale
+          echo 'API docs were stale — the generators have just fixed them; stage the result.'
           exit 1
         fi
 
@@ -170,6 +231,31 @@ pre-commit:
         - "extension/**/*.{js,ts,svelte}"
         - "extension/*.{js,ts,svelte}"
       run: pnpm exec eslint {staged_files}
+    # The same `format:check` the three CI jobs run, over the staged files only: oxfmt takes
+    # its settings from the one .oxfmtrc.json at the repository root, and that file's
+    # `ignorePatterns` already leave out what is not TypeScript, JavaScript or Svelte, so
+    # these globs only decide when the hook has something to look at. A failure is fixed by
+    # `pnpm run format` in the package. A staged file the config ignores (web/src/lib/generated)
+    # is not an error, hence --no-error-on-unmatched-pattern. Unlike the lint commands above, these include .mjs
+    # and .cjs — oxfmt formats them, and web/scripts is mostly .mjs.
+    web-format:
+      root: "web/"
+      glob:
+        - "web/**/*.{js,mjs,cjs,ts,mts,svelte}"
+        - "web/*.{js,mjs,cjs,ts,mts,svelte}"
+      run: pnpm exec oxfmt --check --no-error-on-unmatched-pattern {staged_files}
+    extension-format:
+      root: "extension/"
+      glob:
+        - "extension/**/*.{js,mjs,cjs,ts,mts,svelte}"
+        - "extension/*.{js,mjs,cjs,ts,mts,svelte}"
+      run: pnpm exec oxfmt --check --no-error-on-unmatched-pattern {staged_files}
+    design-system-format:
+      root: "design-system/"
+      glob:
+        - "design-system/**/*.{js,mjs,cjs,ts,mts,svelte}"
+        - "design-system/*.{js,mjs,cjs,ts,mts,svelte}"
+      run: pnpm exec oxfmt --check --no-error-on-unmatched-pattern {staged_files}
     # The remaining design-system-* commands mirror the fast checks from the
     # `design-system` CI job (see .github/workflows/ci.yml) so a broken commit
     # fails locally instead of burning a CI run. build-storybook and its CSS
@@ -247,3 +333,29 @@ pre-commit:
         - "design-system/scripts/check-adoption.mjs"
         - "web/src/**/*.{svelte,ts,js}"
       run: pnpm --dir design-system run check:adoption
+
+# The same commitlint config CI applies to the PR title (commitlint.config.js). Local
+# commits are not what lands on main — the squash merge takes the PR title — but a branch
+# that follows the convention makes a title easy to write. Steps aside when the root
+# tooling is not installed (`pnpm install` at the repository root): the PR title check is
+# the gate.
+commit-msg:
+  commands:
+    commitlint:
+      # Merge and rebase messages are git's own, and only the squash title reaches main.
+      skip:
+        - merge
+        - rebase
+      run: |
+        if [ ! -x node_modules/.bin/commitlint ]; then
+          echo "commitlint not installed (pnpm install at the repository root) - skipping"
+          exit 0
+        fi
+        node_modules/.bin/commitlint --edit {1}
+
+# A merge commit skips pre-commit and runs pre-merge-commit instead, and a merge from
+# main is the usual way generated docs go stale: main brings new outputs (or a new CI
+# check on them) while this branch's api-spec/filters edits are not in them.
+pre-merge-commit:
+  commands:
+    api-docs-drift: *api-docs-drift

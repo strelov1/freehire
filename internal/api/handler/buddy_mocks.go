@@ -113,11 +113,7 @@ func (h *buddyHandlers) GetMockAvailability(c *fiber.Ctx) error {
 	if err != nil {
 		return mockError(err)
 	}
-	out := make([]availabilityRuleResponse, 0, len(rules))
-	for _, rule := range rules {
-		out = append(out, toAvailabilityResponse(rule))
-	}
-	return c.JSON(fiber.Map{"data": out})
+	return c.JSON(fiber.Map{"data": toAvailabilityResponses(rules)})
 }
 
 // ReplaceMockWeekly swaps the whole recurring week, as the mentor schedule's PUT does.
@@ -307,6 +303,11 @@ func (h *buddyHandlers) MockHosts(c *fiber.Ctx) error {
 	if err != nil {
 		return mockError(err)
 	}
+	out := toBuddyMockHostResponses(res)
+	return c.JSON(fiber.Map{"data": out, "meta": fiber.Map{"timezone": res.Zone, "count": len(out)}})
+}
+
+func toBuddyMockHostResponses(res buddy.MockHosts) []buddyMockHostResponse {
 	out := make([]buddyMockHostResponse, 0, len(res.Hosts))
 	for _, host := range res.Hosts {
 		slot := slotResponses([]slots.Interval{host.NextSlot})[0]
@@ -316,7 +317,7 @@ func (h *buddyHandlers) MockHosts(c *fiber.Ctx) error {
 			RatingAvg: host.Summary.RatingAvg, RatingCount: host.Summary.RatingCount, Completed: host.Summary.Completed,
 		})
 	}
-	return c.JSON(fiber.Map{"data": out, "meta": fiber.Map{"timezone": res.Zone, "count": len(out)}})
+	return out
 }
 
 type buddyBookMockBody struct {

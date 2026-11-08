@@ -21,9 +21,7 @@ describe('LocationPreferencesFields', () => {
     expect(screen.getByText('Формат работы')).toBeTruthy();
     expect(screen.getByText('Где вы базируетесь')).toBeTruthy();
     expect(screen.getByPlaceholderText('Город или страна')).toBeTruthy();
-    expect(
-      screen.getByText('Выберите формат работы выше, чтобы указать, где вы можете работать.'),
-    ).toBeTruthy();
+    expect(screen.getByText('Выберите формат работы выше, чтобы указать, где вы можете работать.')).toBeTruthy();
 
     // Facet dictionary values (WORK_MODE_OPTIONS) are untouched by this catalog — they
     // stay in whatever the dictionary itself is written in.

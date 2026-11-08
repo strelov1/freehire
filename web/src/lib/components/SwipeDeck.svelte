@@ -345,9 +345,7 @@
   {@attach focusTrap()}
 >
   <!-- Top bar: Filters (left) · Close (right). Safe-area top padding clears the notch. -->
-  <header
-    class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]"
-  >
+  <header class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
     <button
       type="button"
       onclick={() => (modalOpen = true)}
@@ -366,9 +364,7 @@
     </button>
 
     <!-- The route's only h1 (the card title below is an h2). -->
-    <h1 id="swipe-deck-title" class="text-sm font-medium text-muted-foreground">
-      Swipe to triage
-    </h1>
+    <h1 id="swipe-deck-title" class="text-sm font-medium text-muted-foreground">Swipe to triage</h1>
 
     <button
       type="button"
@@ -538,9 +534,7 @@
       </button>
     </footer>
 
-    <p
-      class="hidden shrink-0 pb-3 text-center text-xs text-muted-foreground md:block"
-    >
+    <p class="hidden shrink-0 pb-3 text-center text-xs text-muted-foreground md:block">
       <kbd class="rounded border border-border px-1">←</kbd> skip ·
       <kbd class="rounded border border-border px-1">→</kbd> save ·
       <kbd class="rounded border border-border px-1">↑</kbd> open ·

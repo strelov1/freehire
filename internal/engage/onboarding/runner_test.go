@@ -8,12 +8,16 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/maildaily"
 	"github.com/strelov1/freehire/internal/engage/onboarding"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // fakeStore serves fixed candidate lists and records what was written back.
 type fakeStore struct {
+	// Memory is the shared daily claim; Hold on it stands in for another sender.
+	maildaily.Memory
+
 	welcome, advancedSearch, noAlert, extension, openSource, tailor, buddies []int64
 	recorded                                                                 []db.RecordOnboardingEmailParams
 	listErr                                                                  error
@@ -373,5 +377,91 @@ func TestRun_BuddiesLetterLinksTheLanding(t *testing.T) {
 	}
 	if len(store.recorded) != 1 || store.recorded[0].Step != string(onboarding.StepBuddies) {
 		t.Errorf("recorded = %+v, want one 'buddies' ledger row", store.recorded)
+	}
+}
+
+// Another sender already took the account's mail for today: the step is left pending
+// with no send and no ledger row, so tomorrow's pass finds it again.
+func TestRun_LostDailyClaimLeavesTheStepPending(t *testing.T) {
+	store := &fakeStore{welcome: []int64{1, 2}}
+	store.Hold(1, maildaily.SourceBroadcast)
+	sender := &fakeSender{}
+
+	stats, err := newRunner(store, sender).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(sender.sent) != 1 {
+		t.Fatalf("sent %d mails, want only the unclaimed account's", len(sender.sent))
+	}
+	if len(store.recorded) != 1 || store.recorded[0].UserID != 2 {
+		t.Errorf("recorded = %+v, want a ledger row for user 2 only", store.recorded)
+	}
+	if stats.Deferred[onboarding.StepWelcome] != 1 || stats.Failed[onboarding.StepWelcome] != 0 {
+		t.Errorf("stats = %+v, want one deferral and no failure", stats)
+	}
+	if got := store.Holder(1); got != maildaily.SourceBroadcast {
+		t.Errorf("holder of user 1 = %q, want the other sender's claim left alone", got)
+	}
+}
+
+// The claim is taken and kept for a send that worked.
+func TestRun_SuccessfulSendKeepsTheDailyClaim(t *testing.T) {
+	store := &fakeStore{welcome: []int64{1}}
+	if _, err := newRunner(store, &fakeSender{}).Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := store.Holder(1); got != maildaily.SourceOnboarding {
+		t.Errorf("holder = %q, want onboarding to hold the day it used", got)
+	}
+}
+
+// A definite failure gives the day back; so does SES refusing the whole account.
+func TestRun_FailedSendReleasesTheDailyClaim(t *testing.T) {
+	for name, sendErr := range map[string]error{
+		"definite failure": errors.New("bounce"),
+		"paused account":   fmt.Errorf("send: %w", emailnotify.ErrSendingPaused),
+	} {
+		t.Run(name, func(t *testing.T) {
+			store := &fakeStore{welcome: []int64{1}}
+			if _, err := newRunner(store, &fakeSender{err: sendErr}).Run(context.Background()); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if got := store.Holder(1); got != "" {
+				t.Errorf("holder = %q, want the claim released", got)
+			}
+		})
+	}
+}
+
+// A claim that cannot be recorded bounds nothing, so nothing is sent.
+func TestRun_ClaimErrorSendsNothing(t *testing.T) {
+	store := &fakeStore{welcome: []int64{1}}
+	store.ClaimErr = errors.New("connection reset")
+	sender := &fakeSender{}
+
+	stats, err := newRunner(store, sender).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(sender.sent) != 0 || len(store.recorded) != 0 {
+		t.Errorf("sent %d, recorded %d; want neither without a claim", len(sender.sent), len(store.recorded))
+	}
+	if stats.Failed[onboarding.StepWelcome] != 1 {
+		t.Errorf("stats = %+v, want the failure counted", stats)
+	}
+}
+
+// A release that fails is logged and costs one letter fewer, not the pass.
+func TestRun_ReleaseErrorDoesNotStopThePass(t *testing.T) {
+	store := &fakeStore{welcome: []int64{1, 2}}
+	store.ReleaseErr = errors.New("connection reset")
+	sender := &fakeSender{err: errors.New("bounce")}
+
+	if _, err := newRunner(store, sender).Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(sender.sent) != 2 {
+		t.Errorf("attempted %d sends, want both tried", len(sender.sent))
 	}
 }

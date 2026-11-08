@@ -29,8 +29,8 @@
     <div class="space-y-4">
       {#each Array(12) as _, i (i)}
         <p class="text-sm text-muted-foreground">
-          Paragraph {i + 1}. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
-          eiusmod tempor incididunt ut labore et dolore magna aliqua.
+          Paragraph {i + 1}. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
+          ut labore et dolore magna aliqua.
         </p>
       {/each}
     </div>

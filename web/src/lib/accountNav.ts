@@ -41,6 +41,9 @@ export const accountNav = [
   // Mail inbox: connect Gmail and/or claim a freehire mailbox to track application
   // replies. Open to every signed-in user.
   { href: '/my/inbox', label: 'Inbox', workspace: 'seeker', group: 'main' },
+  // The companies the member follows, and the alert for their new postings. Open to every
+  // signed-in user.
+  { href: '/my/watchlist', label: 'Watchlist', workspace: 'seeker', group: 'main' },
   // Named lists of specific jobs — independent of the "Save" star — optionally
   // shared read-only by link. Replaces the retired public saved-search "boards".
   // Personal skill-demand trend: how the market for the candidate's own profile
@@ -127,10 +130,7 @@ export type AccountNavItem = (typeof accountNav)[number];
 // `moderatorOrBeta` section needs either. This is a UI affordance only — the relevant
 // server surfaces re-check on every request, so hiding the nav is not the security
 // boundary.
-export function visibleAccountNav(
-  isModerator: boolean,
-  isBetaTester: boolean,
-): readonly AccountNavItem[] {
+export function visibleAccountNav(isModerator: boolean, isBetaTester: boolean): readonly AccountNavItem[] {
   return accountNav.filter((i) => {
     if ('moderatorOnly' in i && i.moderatorOnly) return isModerator;
     if ('betaOnly' in i && i.betaOnly) return isBetaTester;

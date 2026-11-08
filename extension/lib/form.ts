@@ -827,7 +827,10 @@ function chosenOptions(controls: Fillable[], value: string): Fillable[] | null {
     const next = byLongestLabel.find((c) => startsWithOption(rest, extractLabel(c)));
     if (!next) return null;
     chosen.push(next);
-    rest = rest.slice(extractLabel(next).trim().length).replace(/^\s*,\s*/, '').trim();
+    rest = rest
+      .slice(extractLabel(next).trim().length)
+      .replace(/^\s*,\s*/, '')
+      .trim();
   }
   return chosen.length ? chosen : null;
 }

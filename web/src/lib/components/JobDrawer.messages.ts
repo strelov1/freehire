@@ -57,7 +57,8 @@ export const messages = defineMessages(
       approved: "Auto-apply approved this application — it's queued for automatic submission.",
       pendingReview: 'Auto-apply tailored a CV for this job and is ready to send it.',
       blocked: "Auto-apply couldn't finish this application.",
-      blockedRetryHint: 'Answer the questions above, then try again — your answers are reused on every later application.',
+      blockedRetryHint:
+        'Answer the questions above, then try again — your answers are reused on every later application.',
       declined: 'You declined the tailored CV auto-apply prepared for this job. This attempt is final.',
       failed: 'Auto-apply could not submit this application after several tries.',
       failedUncertain:
@@ -198,7 +199,8 @@ export const messages = defineMessages(
       viewTailoredCv: 'Открыть адаптированное CV',
       tailorACv: 'Адаптировать CV',
       willBeFilledAutomatically: '{label} — будет заполнено автоматически',
-      cannotAnswerForYou: '{label} — мы не можем ответить на это за вас; вам нужно будет заполнить это самостоятельно при отклике',
+      cannotAnswerForYou:
+        '{label} — мы не можем ответить на это за вас; вам нужно будет заполнить это самостоятельно при отклике',
       answerPlaceholder: 'Ваш ответ — сохранится и на будущее',
       save: 'Сохранить',
       savedToBank: 'Сохранено — больше не спросим об этом.',
@@ -231,7 +233,8 @@ export const messages = defineMessages(
         many: 'Возможных совпадений: {count} из {scanned} писем. Ничего не привязывается, пока вы не скажете.',
         other: 'Возможных совпадений: {count} из {scanned} писем. Ничего не привязывается, пока вы не скажете.',
       }),
-      searchedMailboxFor: 'Мы искали в вашей почте по запросу «{company}». Ничего не сохраняется, пока вы не привяжете письмо.',
+      searchedMailboxFor:
+        'Мы искали в вашей почте по запросу «{company}». Ничего не сохраняется, пока вы не привяжете письмо.',
       noSubject: '(без темы)',
       carriesInvitation: 'Содержит приглашение в календарь',
       link: 'Привязать',

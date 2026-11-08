@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  accountSteps,
-  outstandingOf,
-  stepLeadsSomewhere,
-  type CompletenessInput,
-} from './accountCompleteness';
+import { accountSteps, outstandingOf, stepLeadsSomewhere, type CompletenessInput } from './accountCompleteness';
 import type { UserProfile } from './types';
 
 // What the account card measures. The predicates are the whole point of the module, so
@@ -123,9 +118,9 @@ describe('stepLeadsSomewhere', () => {
   it('wants both a specialization and a seniority before the role step is done', () => {
     expect(doneIds({ ...empty, profile: profile({ specializations: ['backend'] }) })).toEqual([]);
     expect(doneIds({ ...empty, profile: profile({ seniorities: ['senior'] }) })).toEqual([]);
-    expect(
-      doneIds({ ...empty, profile: profile({ specializations: ['backend'], seniorities: ['senior'] }) }),
-    ).toEqual(['role']);
+    expect(doneIds({ ...empty, profile: profile({ specializations: ['backend'], seniorities: ['senior'] }) })).toEqual([
+      'role',
+    ]);
   });
 
   it('counts skills once the profile names any', () => {

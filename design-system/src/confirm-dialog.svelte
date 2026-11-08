@@ -62,21 +62,21 @@
 
 <Dialog bind:open {title} {description} dismissible={!busy}>
   <div class="flex flex-col gap-4">
-  {#if children}
-    {@render children()}
-  {/if}
-  {#if error}
-    <p role="alert" class="text-sm text-destructive">{error}</p>
-  {/if}
-  <div class="flex items-center justify-end gap-2">
-    <!-- md, not sm: the two buttons are the whole point of the dialog, and a bare ghost
+    {#if children}
+      {@render children()}
+    {/if}
+    {#if error}
+      <p role="alert" class="text-sm text-destructive">{error}</p>
+    {/if}
+    <div class="flex items-center justify-end gap-2">
+      <!-- md, not sm: the two buttons are the whole point of the dialog, and a bare ghost
          Cancel read as a stray word beside the confirm. -->
-    <Button variant="outline" disabled={busy} onclick={() => (open = false)}>
-      {cancelLabel}
-    </Button>
-    <Button {variant} disabled={busy} onclick={confirm}>
-      {busy ? `${confirmLabel}…` : confirmLabel}
-    </Button>
-  </div>
+      <Button variant="outline" disabled={busy} onclick={() => (open = false)}>
+        {cancelLabel}
+      </Button>
+      <Button {variant} disabled={busy} onclick={confirm}>
+        {busy ? `${confirmLabel}…` : confirmLabel}
+      </Button>
+    </div>
   </div>
 </Dialog>

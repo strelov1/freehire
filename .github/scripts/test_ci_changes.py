@@ -1,11 +1,11 @@
 import contextlib
 import io
 import json
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from ci_changes import Scope, classify, read_changes
@@ -20,7 +20,14 @@ class ClassificationTests(unittest.TestCase):
                 self.assertEqual(scope.backend_tasks, ("unit",))
 
     def test_backend_changes_do_not_run_independent_web_checks(self):
-        for path in ("internal/job/jobview/view.go", "cmd/ingest/main.go", "migrations/0999_test.sql", "go.mod", "go.sum", ".golangci.yml"):
+        for path in (
+            "internal/job/jobview/view.go",
+            "cmd/ingest/main.go",
+            "migrations/0999_test.sql",
+            "go.mod",
+            "go.sum",
+            ".golangci.yml",
+        ):
             with self.subTest(path=path):
                 scope = classify([path])
                 self.assertEqual(scope, Scope(backend=True, web=False))
@@ -35,26 +42,48 @@ class ClassificationTests(unittest.TestCase):
             self.assertEqual(classify([path]), Scope(False, True))
 
     def test_prose_and_extension_changes_keep_unit_guards(self):
-        for path in ("README.md", "AGENTS.md", "docs/agents/example.md", "openspec/specs/example/spec.md", "extension/lib/tools/testdata/fill-simple-call.json"):
+        for path in (
+            "README.md",
+            "AGENTS.md",
+            "docs/agents/example.md",
+            "openspec/specs/example/spec.md",
+            "extension/lib/tools/testdata/fill-simple-call.json",
+        ):
             with self.subTest(path=path):
                 scope = classify([path])
                 self.assertEqual(scope, Scope(False, False))
                 self.assertEqual(scope.backend_tasks, ("unit",))
 
     def test_go_files_outside_backend_directories_still_run_backend(self):
-        self.assertEqual(classify(["web/example_integration_test.go"]), Scope(True, True))
+        self.assertEqual(
+            classify(["web/example_integration_test.go"]), Scope(True, True)
+        )
         self.assertTrue(classify(["docs/example.go"]).backend)
 
     def test_global_and_unknown_inputs_run_everything(self):
-        for path in (".github/workflows/ci.yml", ".github/scripts/ci_changes.py", "scripts/check-deps.mjs", "package.json", "pnpm-lock.yaml", "Dockerfile", "services/new/config.json", "new-area/example.txt"):
+        for path in (
+            ".github/workflows/ci.yml",
+            ".github/scripts/ci_changes.py",
+            "scripts/check-deps.mjs",
+            "package.json",
+            "pnpm-lock.yaml",
+            "Dockerfile",
+            "services/new/config.json",
+            "new-area/example.txt",
+        ):
             with self.subTest(path=path):
                 self.assertEqual(classify([path]), Scope(True, True))
         self.assertEqual(classify([]), Scope(True, True))
         self.assertEqual(classify(None), Scope(True, True))
 
     def test_mixed_changes_union_the_required_checks(self):
-        self.assertEqual(classify(["web/src/lib/api.ts", "internal/job/jobview/view.go"]), Scope(True, True))
-        self.assertEqual(classify(["internal/job/jobview/view.go", "README.md"]), Scope(True, False))
+        self.assertEqual(
+            classify(["web/src/lib/api.ts", "internal/job/jobview/view.go"]),
+            Scope(True, True),
+        )
+        self.assertEqual(
+            classify(["internal/job/jobview/view.go", "README.md"]), Scope(True, False)
+        )
 
 
 class GitChangesTests(unittest.TestCase):
@@ -69,7 +98,9 @@ class GitChangesTests(unittest.TestCase):
         self.git("config", "commit.gpgsign", "false")
 
     def git(self, *args):
-        return subprocess.check_output(["git", "-C", str(self.repo), *args], text=True, timeout=30).strip()
+        return subprocess.check_output(
+            ["git", "-C", str(self.repo), *args], text=True, timeout=30
+        ).strip()
 
     def write(self, path, text):
         target = self.repo / path
@@ -96,7 +127,9 @@ class GitChangesTests(unittest.TestCase):
         base = self.commit()
         (self.repo / "internal/example/file.go").unlink()
         head = self.commit()
-        self.assertEqual(classify(read_changes(base, head, self.repo)), Scope(True, False))
+        self.assertEqual(
+            classify(read_changes(base, head, self.repo)), Scope(True, False)
+        )
 
     def test_paths_with_spaces_and_newlines_are_not_split(self):
         self.write("README.md", "fixture\n")
@@ -111,21 +144,45 @@ class GitChangesTests(unittest.TestCase):
         head = self.commit()
         for base in ("0" * 40, "f" * 40, "", "--cached"):
             with self.subTest(base=base), contextlib.redirect_stderr(io.StringIO()):
-                self.assertEqual(classify(read_changes(base, head, self.repo)), Scope(True, True))
+                self.assertEqual(
+                    classify(read_changes(base, head, self.repo)), Scope(True, True)
+                )
 
     def test_diff_timeout_falls_back_to_full(self):
-        with patch("ci_changes.subprocess.run", side_effect=subprocess.TimeoutExpired("git", 60)):
+        with patch(
+            "ci_changes.subprocess.run",
+            side_effect=subprocess.TimeoutExpired("git", 60),
+        ):
             with contextlib.redirect_stderr(io.StringIO()):
-                self.assertEqual(classify(read_changes("a" * 40, "b" * 40, self.repo)), Scope(True, True))
+                self.assertEqual(
+                    classify(read_changes("a" * 40, "b" * 40, self.repo)),
+                    Scope(True, True),
+                )
 
     def test_cli_only_emits_static_github_output_fields(self):
         self.write("README.md", "before\n")
         base = self.commit()
         self.write("README.md", "after\n")
         head = self.commit()
-        result = subprocess.run([sys.executable, str(Path(__file__).with_name("ci_changes.py")), "--base", base, "--head", head], cwd=self.repo, capture_output=True, text=True, check=True, timeout=30)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).with_name("ci_changes.py")),
+                "--base",
+                base,
+                "--head",
+                head,
+            ],
+            cwd=self.repo,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        )
         outputs = dict(line.split("=", 1) for line in result.stdout.splitlines())
-        self.assertEqual(outputs, {"backend_tasks": json.dumps(["unit"]), "web": "false"})
+        self.assertEqual(
+            outputs, {"backend_tasks": json.dumps(["unit"]), "web": "false"}
+        )
 
 
 if __name__ == "__main__":

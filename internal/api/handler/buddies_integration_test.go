@@ -35,6 +35,8 @@ type buddyEnv struct {
 	iss   *auth.Issuer
 	pool  *pgxpool.Pool
 	users map[string]int64
+	// buddies is the handler behind the routes, for the MCP tools built on it.
+	buddies *buddyHandlers
 }
 
 func newBuddyEnv(t *testing.T, names ...string) *buddyEnv {
@@ -77,7 +79,8 @@ func newBuddyEnv(t *testing.T, names ...string) *buddyEnv {
 	// Notices land in the notification center only (no mail transport), which is what the
 	// leave and block tests read to see that the other participant was told.
 	mocks := buddy.NewMockService(svc, repo, buddy.NewMockMailNotifier(queries, nil, "", ""))
-	newBuddyHandlers(svc, mocks).register(env.app.Group("/api/v1"), mw)
+	env.buddies = newBuddyHandlers(svc, mocks)
+	env.buddies.register(env.app.Group("/api/v1"), mw)
 	newConversationHandlers(msg, mocks).register(env.app.Group("/api/v1"), mw)
 	return env
 }

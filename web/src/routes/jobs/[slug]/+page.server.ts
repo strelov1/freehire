@@ -1,12 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import { ApiError } from '#lib/api.js';
 import { backerBadges } from '#lib/backers.js';
-import {
-  collectionBySlug,
-  jobFacetsFromJob,
-  relatedCollectionLinks,
-  type SeeAlsoCard,
-} from '#lib/collections.js';
+import { collectionBySlug, jobFacetsFromJob, relatedCollectionLinks, type SeeAlsoCard } from '#lib/collections.js';
 import { resolveSeeAlsoMark } from '#lib/seeAlsoMark.js';
 import { serverApi } from '#lib/server/api.js';
 import { rethrowUpstream } from '#lib/server/upstream.js';
@@ -68,13 +63,11 @@ async function buildSeeAlso(job: Job, api: Api): Promise<SeeAlsoCard[]> {
   }
   const groupedFacets = new Map<string, FacetCounts | null>(
     await Promise.all(
-      [...filterGroups.entries()].map(
-        async ([groupKey, { filter, keys }]): Promise<[string, FacetCounts | null]> => [
-          groupKey,
-          await api.facetCounts(new URLSearchParams(filter), { facets: [...keys] }).catch(() => null),
-        ]
-      )
-    )
+      [...filterGroups.entries()].map(async ([groupKey, { filter, keys }]): Promise<[string, FacetCounts | null]> => [
+        groupKey,
+        await api.facetCounts(new URLSearchParams(filter), { facets: [...keys] }).catch(() => null),
+      ]),
+    ),
   );
 
   return resolvedLinks.map(({ link, resolved }): SeeAlsoCard => {

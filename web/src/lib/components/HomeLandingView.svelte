@@ -19,6 +19,7 @@
   import McpSetup from './McpSetup.svelte';
   import ChatExample from './ChatExample.svelte';
   import type { CatalogScale, FacetCounts } from '#lib/types.js';
+  import { formatCount } from '#lib/utils.js';
 
   // The homepage. One search box on an otherwise empty screen, and under it — for the
   // visitor who came to look rather than to search — how big the catalogue is and the
@@ -120,6 +121,13 @@
     return { value: value.toLocaleString('en-US'), label };
   }
 
+  /** The hero's one number, live from the same snapshot as the figures below and
+   *  floored to a tenth of a million (4,968,000 → "4.9M+", never "5M+"): a "+" figure
+   *  must not overstate the catalogue. The fallback is the last measured floor. */
+  const jobsFigure = $derived(
+    scale?.unique_open_jobs ? `${formatCount(Math.floor(scale.unique_open_jobs / 1e5) * 1e5)}+` : '4.9M+',
+  );
+
   const figures = $derived(
     [
       // The de-duplicated count, the one /jobs shows — `open_jobs` counts a posting
@@ -150,13 +158,11 @@
    *
    *  `disjunctive` so each facet's numbers ignore its own selection — the same call
    *  every other host of this modal makes. */
-  const stagedCounts = (params: URLSearchParams) =>
-    api.facetCounts(params, { disjunctive: true });
+  const stagedCounts = (params: URLSearchParams) => api.facetCounts(params, { disjunctive: true });
 
   /** How many postings the staged selection would open, for the footer's Apply — read
    *  off the same count call rather than a one-row search, the way /analytics does. */
-  const previewCount = (params: URLSearchParams) =>
-    api.facetCounts(params).then((c) => c.total);
+  const previewCount = (params: URLSearchParams) => api.facetCounts(params).then((c) => c.total);
 
   function searchWithFilters(staged: StagedFilters) {
     filtersOpen = false;
@@ -170,22 +176,21 @@
      places — and they differ only in what they list, so they are one shape. -->
 {#snippet chipRow(label: string, chips: Chip[])}
   <div class="flex flex-col items-center gap-2">
-  <p class="text-xs uppercase tracking-wide text-muted-foreground/80" aria-hidden="true">{label}</p>
-  <nav aria-label={label} class="flex flex-wrap justify-center gap-2">
-    {#each chips as chip (chip.href)}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->
-      <a href={chip.href}
-        class="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-brand-strong hover:text-foreground"
-      >
-        {chip.label}
-        {#if chip.count !== undefined}
-          <span class="ml-1 text-xs tabular-nums"
-            >{chip.count.toLocaleString('en-US')}</span
-          >
-        {/if}
-      </a>
-    {/each}
-  </nav>
+    <p class="text-xs uppercase tracking-wide text-muted-foreground/80" aria-hidden="true">{label}</p>
+    <nav aria-label={label} class="flex flex-wrap justify-center gap-2">
+      {#each chips as chip (chip.href)}
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->
+        <a
+          href={chip.href}
+          class="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-brand-strong hover:text-foreground"
+        >
+          {chip.label}
+          {#if chip.count !== undefined}
+            <span class="ml-1 text-xs tabular-nums">{chip.count.toLocaleString('en-US')}</span>
+          {/if}
+        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
+      {/each}
+    </nav>
   </div>
 {/snippet}
 
@@ -193,13 +198,14 @@
      when you point at it. Written once so the two cannot drift into being two
      different-looking ways of saying "there is more of this over there". -->
 {#snippet onward(href: string, text: string)}
-  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every caller passes a resolve() result; the rule cannot see through a snippet parameter -->
-  <a {href}
+  <!-- eslint-disable svelte/no-navigation-without-resolve -- every caller passes a resolve() result; the rule cannot see through a snippet parameter -->
+  <a
+    {href}
     class="group inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
   >
     {text}
     <ArrowRight class="size-4 transition-transform group-hover:translate-x-0.5" />
-  </a>
+  </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
 {/snippet}
 
 <!-- Hero. Deliberately shorter than the viewport: `-19rem` is the 3.5rem header plus
@@ -226,9 +232,21 @@
       <h1 class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
         Every tech job, straight from the source.
       </h1>
+      <!-- The developer doors live in this one sentence rather than in a row of buttons
+           under the box: the box stays the page's only task, and the hero stays two lines. -->
       <p class="text-balance text-base leading-relaxed text-muted-foreground">
-        Indexed from company career boards, deduplicated, and tagged by stack, seniority
-        and location. Free, open source, no walls.
+        {jobsFigure} live postings. Search them here, from
+        <a
+          href={resolve('/agents')}
+          class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+          >your AI agent</a
+        >
+        or through
+        <a
+          href={resolve('/jobs-api')}
+          class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+          >the API</a
+        >. Free and open source.
       </p>
     </div>
 
@@ -299,14 +317,12 @@
   </section>
 {/if}
 
-<RecentJobsFeed />
-
 <!-- The two places freehire runs that are not a web page. Side by side because they
      are the same offer twice — the catalogue where you already work — and stacking
      them would make the second read as an afterthought. Each card carries its own
      evidence: the CLI its install line, the extension what the panel actually does. -->
 <section class="border-t border-border py-12 sm:py-16">
-  <SectionLabel as="h2" text="take it with you" />
+  <SectionLabel as="h2" text="for your agent and your browser" />
   <!-- `grid-cols-1` is load-bearing, not the default written out: with no column template
        the single track below `lg` is `auto`, which sizes to its widest content — the
        install line in the `pre`, which does not wrap. That took the track to 416px on a
@@ -334,8 +350,8 @@
       <div class="flex flex-col gap-3">
         <h3 class="text-2xl font-semibold tracking-tight">Apply where you already are.</h3>
         <p class="text-sm leading-relaxed text-muted-foreground">
-          A job-application agent in Chrome's side panel, next to the posting you are
-          reading — on any site, not just the ones freehire tracks.
+          A job-application agent in Chrome's side panel, next to the posting you are reading — on any site, not just
+          the ones freehire tracks.
         </p>
       </div>
 
@@ -357,6 +373,8 @@
     </div>
   </div>
 </section>
+
+<RecentJobsFeed />
 
 <!-- Seeded empty and applied by navigating: see `searchWithFilters`. `savedSearches`
      is off — that tab manages the alerts a signed-in visitor saved from a list, and

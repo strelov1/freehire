@@ -103,11 +103,23 @@
       intro:
         'freehire fetches no mail on this tier: your own client does, and inbox push hands it over. Then an agent judges each message and links it to an application.',
       commands: [
-        { cmd: 'inbox push --file mail.json', desc: 'Upload a batch. Keyed by Message-ID, so a re-sync updates instead of duplicating.' },
+        {
+          cmd: 'inbox push --file mail.json',
+          desc: 'Upload a batch. Keyed by Message-ID, so a re-sync updates instead of duplicating.',
+        },
         { cmd: 'inbox list --unclassified --body', desc: 'The work queue: unjudged mail with bodies inline.' },
-        { cmd: 'inbox triage <id> <signal>', desc: 'Record what a message is; a confident verdict moves the application forward.' },
-        { cmd: 'inbox list --link suggested', desc: 'Proposed links awaiting your word — inbox confirm / inbox reject.' },
-        { cmd: 'inbox list --link unlinked', desc: 'Mail with no application — inbox application records one from it.' },
+        {
+          cmd: 'inbox triage <id> <signal>',
+          desc: 'Record what a message is; a confident verdict moves the application forward.',
+        },
+        {
+          cmd: 'inbox list --link suggested',
+          desc: 'Proposed links awaiting your word — inbox confirm / inbox reject.',
+        },
+        {
+          cmd: 'inbox list --link unlinked',
+          desc: 'Mail with no application — inbox application records one from it.',
+        },
       ],
     },
     {
@@ -115,7 +127,10 @@
       label: 'Contribute',
       intro: 'Widen the catalogue. The last two need the moderator role.',
       commands: [
-        { cmd: 'contribute <url>', desc: "Hand freehire a job link; a board we don't track yet gets added and crawled." },
+        {
+          cmd: 'contribute <url>',
+          desc: "Hand freehire a job link; a board we don't track yet gets added and crawled.",
+        },
         { cmd: 'contributions', desc: "The boards you've contributed and their state." },
         { cmd: 'submissions', desc: 'Jobs you submitted, and the review queue for moderators.' },
         { cmd: 'jobs add --url <url> --title … --company …', desc: 'Author a posting (moderator).' },
@@ -154,7 +169,6 @@
 }`;
 
   const mcpUrl = $derived(`${page.url.origin}${MCP_PATH}`);
-
 </script>
 
 {#snippet copyButton(text: string, label: string)}
@@ -183,10 +197,9 @@
         </h1>
 
         <p class="reveal mt-7 max-w-lg text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
-          A small CLI and an <a href="#mcp" class="text-foreground underline-offset-4 hover:underline"
-            >MCP server</a
-          > over the same API the site runs on — so you, a script or an AI agent can search jobs, track applications
-          and tailor a CV without opening a browser.
+          A small CLI and an <a href="#mcp" class="text-foreground underline-offset-4 hover:underline">MCP server</a> over
+          the same API the site runs on — so you, a script or an AI agent can search jobs, track applications and tailor a
+          CV without opening a browser.
         </p>
 
         <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:240ms">
@@ -201,8 +214,7 @@
         <p class="reveal mt-5 text-sm leading-relaxed text-muted-foreground" style="--d:300ms">
           Not on the terminal? <a
             href={resolve('/agents')}
-            class="font-medium text-foreground underline-offset-4 hover:underline"
-            >Every way to connect an agent</a
+            class="font-medium text-foreground underline-offset-4 hover:underline">Every way to connect an agent</a
           > — MCP hosts, ChatGPT, and your own client.
         </p>
       </div>
@@ -211,9 +223,7 @@
         class="reveal overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm"
         style="--d:320ms"
       >
-        <figcaption
-          class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
-        >
+        <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
           <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
           Get started in three steps
         </figcaption>
@@ -299,7 +309,8 @@
             {#each group.commands as row (row.cmd)}
               <div class="grid gap-x-6 gap-y-1 px-4 py-3 sm:grid-cols-5 sm:items-center">
                 <dt class="font-mono text-sm sm:col-span-2">
-                  <span class="text-muted-foreground">freehire</span> {row.cmd}
+                  <span class="text-muted-foreground">freehire</span>
+                  {row.cmd}
                 </dt>
                 <dd class="text-sm leading-relaxed text-muted-foreground sm:col-span-2">{row.desc}</dd>
                 <dd class="hidden justify-self-end sm:block">{@render copyButton(`freehire ${row.cmd}`, row.cmd)}</dd>
@@ -318,8 +329,8 @@
       <div>
         <h2 class="text-2xl font-semibold tracking-tight">Same sign-in, any AI host</h2>
         <p class="mt-4 max-w-md leading-relaxed text-muted-foreground">
-          <code class="font-mono text-foreground">freehire-mcp</code> exposes the same search, market-fit and
-          tracking tools over the
+          <code class="font-mono text-foreground">freehire-mcp</code> exposes the same search, market-fit and tracking
+          tools over the
           <a
             href="https://modelcontextprotocol.io"
             target="_blank"
@@ -329,11 +340,15 @@
           <code class="font-mono text-foreground">npx</code> — no global install.
         </p>
         <p class="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
-          It reads the CLI's sign-in from <code class="font-mono text-foreground">~/.freehire/creds.json</code>.
-          On a machine without it, add
-          <code class="whitespace-nowrap font-mono text-foreground">"env": &lbrace; "FREEHIRE_TOKEN": "fhk_…" &rbrace;</code> with a key
-          from <a href={resolve('/my/integrations/api-keys')} class="font-medium text-foreground underline-offset-4 hover:underline"
-            >API keys</a
+          It reads the CLI's sign-in from <code class="font-mono text-foreground">~/.freehire/creds.json</code>. On a
+          machine without it, add
+          <code class="whitespace-nowrap font-mono text-foreground"
+            >"env": &lbrace; "FREEHIRE_TOKEN": "fhk_…" &rbrace;</code
+          >
+          with a key from
+          <a
+            href={resolve('/my/integrations/api-keys')}
+            class="font-medium text-foreground underline-offset-4 hover:underline">API keys</a
           >.
         </p>
         <div class="mt-6">
@@ -343,9 +358,7 @@
         </div>
       </div>
       <figure class="overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">
-        <figcaption
-          class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
-        >
+        <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
           <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
           <span class="font-mono">~/.claude.json</span>
           <span class="ml-auto">{@render copyButton(mcpConfig, 'MCP config')}</span>
@@ -356,8 +369,8 @@
 
     <h3 class="mt-12 text-lg font-semibold tracking-tight">Or connect by URL — nothing to install</h3>
     <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      In Claude, add a custom connector; in ChatGPT, add a custom MCP server. Use the same address for public search
-      and OAuth account access.
+      In Claude, add a custom connector; in ChatGPT, add a custom MCP server. Use the same address for public search and
+      OAuth account access.
     </p>
     <div class="mt-6 max-w-2xl rounded-xl border border-border bg-secondary/40 p-4">
       <div class="flex items-center gap-3 rounded-lg border border-border bg-secondary/60 px-3 py-2">
@@ -366,8 +379,10 @@
       </div>
       <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
         Search jobs, employers and market data without an account. Sign in through your assistant to read your profile,
-        save jobs, update tracking and manage alerts. Hosted MCP uses OAuth, with no API key to paste.
-        The <a href={resolve('/mcp')} class="font-medium text-foreground underline-offset-4 hover:underline">MCP setup guide</a>
+        save jobs, update tracking and manage alerts. Hosted MCP uses OAuth, with no API key to paste. The <a
+          href={resolve('/mcp')}
+          class="font-medium text-foreground underline-offset-4 hover:underline">MCP setup guide</a
+        >
         includes the sign-in steps for each assistant.
       </p>
     </div>
@@ -388,8 +403,8 @@
             rel="noopener noreferrer"
             class="font-medium text-foreground underline-offset-4 hover:underline">agent skill</a
           ><!-- eslint-enable svelte/no-navigation-without-resolve -->
-          is named for the task, so a host loads only what the question needs. Install the Claude Code plugin to
-          get them with their slash commands.
+          is named for the task, so a host loads only what the question needs. Install the Claude Code plugin to get them
+          with their slash commands.
         </p>
       </div>
       <div class="flex items-start gap-3 rounded-lg border border-border bg-secondary/60 p-3">
@@ -397,7 +412,7 @@
 /plugin install freehire@freehire-cli</pre>
         {@render copyButton(
           '/plugin marketplace add strelov1/freehire-cli\n/plugin install freehire@freehire-cli',
-          'plugin install'
+          'plugin install',
         )}
       </div>
     </div>
