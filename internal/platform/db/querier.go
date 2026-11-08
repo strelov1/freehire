@@ -210,13 +210,18 @@ type Querier interface {
 	// scope, enforcing expiry and touching last_used_at in one atomic statement. No row
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
 	// and an insufficient scope as 403.
+	//
+	// A key in use is the account in use, so the same statement keeps users.last_active_at
+	// current (at most once a day), as GetUserTokenVersion does for a session: optional
+	// mail stops after 180 idle days (mail_recipient, migration 0247).
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error)
 	// Resolve a presented bearer token to its owning user, touching last_used_at in
 	// the same statement. A grant is live only while BOTH hold: it has not outlived
 	// its own expires_at, AND its issued_token_version still matches the user's
 	// current one (a mismatch means LogoutAll or a password change ran since). No row
 	// covers unknown, expired, and revoked-by-version-bump alike; the caller reads
-	// that as 401, same as AuthenticateAPIKey's contract.
+	// that as 401, same as AuthenticateAPIKey's contract. It also keeps
+	// users.last_active_at current, as AuthenticateAPIKey does.
 	AuthenticateOAuthGrant(ctx context.Context, accessTokenHash string) (int64, error)
 	// Same idea as SearchOutboxMetrics, but this queue has THREE terminal-ish states rather
 	// than two, so it cannot be a copy of it.

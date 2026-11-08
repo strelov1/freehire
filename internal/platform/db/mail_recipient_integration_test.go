@@ -65,6 +65,18 @@ func TestMailRecipient(t *testing.T) {
 		t.Errorf("after a session check: got %q, want the address", got)
 	}
 
+	// So does a request made with an API key, which never passes the session check.
+	keyUser := seed("mr-key@example.com", true, "200 days")
+	if _, err := q.CreateAPIKey(ctx, CreateAPIKeyParams{UserID: keyUser, Name: "cli", TokenHash: "mr-hash", TokenPrefix: "fhk_mr", Scope: "full"}); err != nil {
+		t.Fatalf("CreateAPIKey: %v", err)
+	}
+	if _, err := q.AuthenticateAPIKey(ctx, "mr-hash"); err != nil {
+		t.Fatalf("AuthenticateAPIKey: %v", err)
+	}
+	if got := recipient(keyUser); got != "mr-key@example.com" {
+		t.Errorf("after an API-key request: got %q, want the address", got)
+	}
+
 	// The broadcast audience applies the same rule.
 	n, err := q.CountBroadcastCandidates(ctx, CountBroadcastCandidatesParams{Campaign: "mr-test", Half: ""})
 	if err != nil {

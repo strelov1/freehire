@@ -406,7 +406,7 @@ WITH pending AS (
 SELECT
     (CASE s.channel
         WHEN 'telegram' THEN tl.chat_id IS NOT NULL
-        WHEN 'email'    THEN u.email <> ''
+        WHEN 'email'    THEN mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
         WHEN 'push'     THEN EXISTS (SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id)
         WHEN 'webhook'  THEN COALESCE(wc.enabled, false) AND COALESCE(wc.url, '') <> ''
         ELSE COALESCE(s.destination, '') <> ''
