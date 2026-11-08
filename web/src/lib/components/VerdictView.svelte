@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Check, TrendingUp } from '@lucide/svelte';
+  import { Check, Plus, TrendingUp } from '@lucide/svelte';
   import type { Verdict } from '#lib/types.js';
-  import { Badge } from '#lib/ui/index.js';
+  import { Badge, Button } from '#lib/ui/index.js';
   import { messages } from './VerdictView.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, plural, t, tokenLabel } from '#lib/i18n/t.js';
@@ -10,13 +10,17 @@
   // how many of the role's open vacancies the profile's skills reach, which missing
   // skill unlocks the most new vacancies, and a breakdown of the role's top in-demand
   // skills scored against the CV. `gapHref`, when given, links a gap skill to the
-  // matching job search. The page owns the header/tabs; this renders the body.
+  // matching job search. `onAdd`, when given, puts a skill the CV lacks into the
+  // profile; the page writes it and reloads the verdict. The page owns the header/tabs;
+  // this renders the body.
   let {
     verdict,
     gapHref,
+    onAdd,
   }: {
     verdict: Verdict;
     gapHref?: (skill: string) => string;
+    onAdd?: (skill: string) => Promise<void>;
   } = $props();
 
   const gaps = $derived(verdict.gaps ?? []);
@@ -29,6 +33,24 @@
   // shows at a time — keeps the coverage view compact under the headline + stats.
   let sub = $state<'gaps' | 'skills'>('gaps');
 
+  // One add at a time (the profile store queues writes anyway); `failed` names the skill
+  // whose last add was refused so its row can say so.
+  let adding = $state<string | null>(null);
+  let failed = $state<string | null>(null);
+
+  async function add(skill: string) {
+    if (!onAdd || adding) return;
+    adding = skill;
+    failed = null;
+    try {
+      await onAdd(skill);
+    } catch {
+      failed = skill;
+    } finally {
+      adding = null;
+    }
+  }
+
   // Status → badge styling (STRONG green / HIDDEN warning / ADJACENT olive-on-grey / MISSING red).
   const statusStyle: Record<string, string> = {
     strong: 'bg-brand/10 text-primary',
@@ -37,6 +59,23 @@
     missing: 'bg-destructive/10 text-destructive-strong',
   };
 </script>
+
+{#snippet addButton(skill: string)}
+  {#if onAdd}
+    {@const label = format(failed === skill ? s.addFailed : s.addToProfile, { skill })}
+    <Button
+      variant="ghost"
+      size="icon"
+      class="shrink-0 {failed === skill ? 'text-destructive-strong' : ''}"
+      disabled={adding !== null}
+      aria-label={label}
+      title={label}
+      onclick={() => add(skill)}
+    >
+      <Plus class="size-4 {adding === skill ? 'animate-pulse' : ''}" aria-hidden="true" />
+    </Button>
+  {/if}
+{/snippet}
 
 <div class="flex flex-col gap-8">
   <!-- Coverage headline -->
@@ -160,6 +199,7 @@
                   >{format(s.unlockPercent, { pct: String(gap.unlock_percent) })}</span
                 >
               </div>
+              {@render addButton(gap.name)}
             </li>
           {/each}
         </ul>
@@ -202,6 +242,7 @@
               >
                 {tokenLabel(s.status, skill.status)}
               </span>
+              {#if skill.status !== 'strong'}{@render addButton(skill.name)}{/if}
             </div>
             {#if skill.advice}
               <p class="pl-9 text-xs leading-relaxed text-muted-foreground">{skill.advice}</p>
