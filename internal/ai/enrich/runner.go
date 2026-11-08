@@ -102,6 +102,56 @@ type Runner struct {
 	Store    Store
 	// Progress, when set, is advanced once per successfully written enrichment.
 	Progress *Progress
+	// wait pauses between waves while the upstream refuses every call; nil sleeps for
+	// real. Tests replace it to observe the pauses without spending them.
+	wait func(context.Context, time.Duration)
+}
+
+// The pause between waves while the upstream refuses every call starts at
+// backoffMin, doubles per refused wave and stops growing at backoffMax.
+//
+// Why pause at all: an upstream failure costs the posting nothing (it waits out the
+// grace window, see postingAtFault), but the drain claims the next wave at once, so a
+// spent provider quota became 120-240 refused calls a minute for hours (z.ai, 2026-11-08),
+// burning the same key pool other consumers share. The cap keeps recovery prompt: once
+// the quota resets, the drain notices within one capped pause.
+const (
+	backoffMin = 30 * time.Second
+	backoffMax = 15 * time.Minute
+)
+
+// upstreamBackoff decides the pause after each wave from the run's cumulative counts.
+// A wave that wrote nothing and had at least one upstream failure grows the pause; any
+// write, or a wave with no upstream failure, resets it. Failures the posting caused
+// never pause the drain: they say nothing about the upstream.
+type upstreamBackoff struct {
+	cur                time.Duration
+	lastSucceeded      int
+	lastUpstreamFailed int64
+}
+
+// next returns the pause before the next wave, given the run's cumulative writes and
+// upstream failures after the wave that just finished.
+func (b *upstreamBackoff) next(succeeded int, upstreamFailed int64) time.Duration {
+	wrote := succeeded > b.lastSucceeded
+	refused := upstreamFailed > b.lastUpstreamFailed
+	b.lastSucceeded, b.lastUpstreamFailed = succeeded, upstreamFailed
+	if wrote || !refused {
+		b.cur = 0
+		return 0
+	}
+	b.cur = min(max(b.cur*2, backoffMin), backoffMax)
+	return b.cur
+}
+
+// sleepCtx waits d, or less if ctx ends first.
+func sleepCtx(ctx context.Context, d time.Duration) {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+	case <-t.C:
+	}
 }
 
 // Run enqueues pending jobs and drains the queue until no claimable entries remain.
@@ -125,6 +175,11 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 	log.Printf("enrich: enqueued %d pending, draining (concurrency=%d)", enqueued, opt.Concurrency)
 
 	rn := &run{provider: r.Provider, store: r.Store, opt: opt, progress: r.Progress}
+	wait := r.wait
+	if wait == nil {
+		wait = sleepCtx
+	}
+	var backoff upstreamBackoff
 	s, err := outbox.RunPool(ctx, r.Store, outbox.RunOptions{
 		// The wave is sized to the concurrency, then drained in parallel: each entry
 		// starts processing at once, so its lease window stays ≈ one LLM call.
@@ -135,6 +190,11 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 			// A heartbeat per wave so a long drain shows running totals instead of
 			// going silent for hours.
 			log.Printf("enrich: progress enriched=%d failed=%d dead=%d", cum.Succeeded, cum.Failed, cum.DeadLettered)
+			// OnWave runs between waves with nothing claimed, so pausing here holds no lease.
+			if d := backoff.next(cum.Succeeded, rn.upstreamFailed.Load()); d > 0 {
+				log.Printf("enrich: whole wave refused upstream, pausing %s", d)
+				wait(ctx, d)
+			}
 		},
 	}, rn.process)
 	stats := Stats{Enriched: s.Succeeded, Failed: s.Failed, DeadLettered: s.DeadLettered, Reaped: int(reaped)}
@@ -151,6 +211,8 @@ type run struct {
 	store    Store
 	opt      RunOptions
 	progress *Progress
+	// upstreamFailed counts failures the posting did not cause; the backoff reads it.
+	upstreamFailed atomic.Int64
 }
 
 // process handles one claimed entry and reports what happened; internal/platform/outbox's
@@ -249,6 +311,9 @@ func (rn *run) failN(ctx context.Context, entry Claimed, cause error, maxAttempt
 		PostingAtFault:    postingAtFault(cause),
 		MaxAttempts:       maxAttempts,
 		UpstreamGraceDays: rn.opt.UpstreamGraceDays,
+	}
+	if !policy.PostingAtFault {
+		rn.upstreamFailed.Add(1)
 	}
 	dead, err := rn.store.Fail(ctx, entry.OutboxID, cause.Error(), policy)
 	if err != nil {
