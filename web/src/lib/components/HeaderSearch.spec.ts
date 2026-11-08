@@ -87,3 +87,23 @@ describe('HeaderSearch suggestion panel', () => {
     expect(goto).toHaveBeenCalled();
   });
 });
+
+// The page places the caret in the homepage search on wide screens. That focus is not one
+// the visitor moved, so the ring stays off until they press a key or the pointer inside;
+// then the full focus ring returns.
+describe('HeaderSearch autofocus ring', () => {
+  it('draws no ring for focus the page placed, and the ring once the visitor acts', async () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('min-width'), addEventListener() {}, removeEventListener() {} }));
+    render(HeaderSearch, { props: { placeholder: 'Search jobs', label: 'Search jobs', autofocus: true } });
+    const input = screen.getByRole('combobox', { name: 'Search jobs' });
+    const frame = () => input.closest('div.flex.items-center') as HTMLElement;
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(input));
+    expect(frame().className).not.toContain('focus-within:ring-2');
+
+    await fireEvent.keyDown(input, { key: 'a' });
+    expect(frame().className).toContain('focus-within:ring-2');
+    vi.unstubAllGlobals();
+  });
+});
+
