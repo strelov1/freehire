@@ -18,8 +18,10 @@ func TestJibeProvider(t *testing.T) {
 // value every sampled posting carries: a geocoding setting, not a work arrangement.
 func jibeJob(slug, title, locName, tags, org, posted string, canonical ...string) string {
 	if len(canonical) > 0 {
+		if tags != "" {
+			tags += ","
+		}
 		tags += `"meta_data": {"canonical_url": "` + canonical[0] + `"}`
-		tags = strings.TrimPrefix(tags, ",")
 	}
 	if tags != "" {
 		tags += ","
@@ -190,6 +192,7 @@ func TestJibeJobURL(t *testing.T) {
 		{"http", "http://www.example.careers/jobs/42", fallback},
 		{"relative", "/careers-home/jobs/42", fallback},
 		{"empty host", "https:///jobs/42", fallback},
+		{"port only", "https://:443/jobs/42", fallback},
 		{"userinfo", "https://user:pass@evil.example/jobs/42", fallback},
 		{"unparsable", "https://exa mple.com/%zz", fallback},
 	}
@@ -200,6 +203,19 @@ func TestJibeJobURL(t *testing.T) {
 	}
 	if got, want := jibeJobURL(board, "a/b?c#d", ""), "https://www.example.careers/jobs/a%2Fb%3Fc%23d"; got != want {
 		t.Errorf("escaped fallback = %q, want %q", got, want)
+	}
+}
+
+func TestJibeFetchCanonicalURLWithTags(t *testing.T) {
+	fake := (&routedHTTP{}).route("page=1", `{"totalCount": 1, "jobs": [`+
+		jibeJob("5500", "Hybrid Role", "Berlin", `"tags1": ["Hybrid"]`, "Org", "2026-06-15T10:00:00+0000", "https://www.example.careers/acme/jobs/5500")+
+		`]}`)
+	jobs, err := NewJibe(fake).Fetch(context.Background(), CompanyEntry{Board: "www.example.careers"})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("Fetch = %v, %v; want one job", jobs, err)
+	}
+	if jobs[0].URL != "https://www.example.careers/acme/jobs/5500" || jobs[0].WorkMode != "hybrid" {
+		t.Errorf("URL = %q, WorkMode = %q", jobs[0].URL, jobs[0].WorkMode)
 	}
 }
 

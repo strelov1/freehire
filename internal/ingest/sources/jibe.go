@@ -160,7 +160,7 @@ func (s jibe) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // Otherwise it falls back to /jobs/<id>, which Jibe redirects to the right path.
 func jibeJobURL(board, id, canonical string) string {
 	if u, err := url.Parse(strings.TrimSpace(canonical)); err == nil &&
-		u.Scheme == "https" && u.Host != "" && u.User == nil {
+		u.Scheme == "https" && u.Hostname() != "" && u.User == nil {
 		return u.String()
 	}
 	return fmt.Sprintf("https://%s/jobs/%s", board, url.PathEscape(id))
