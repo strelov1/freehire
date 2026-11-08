@@ -48,7 +48,7 @@ require (
 	github.com/xuri/excelize/v2 v2.11.1-0.20261020033641-611b222fd8f7
 	github.com/yuin/goldmark v1.8.6
 	go.opentelemetry.io/otel v1.47.0
-	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.21.0
+	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.23.0
 	go.opentelemetry.io/otel/log v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/sdk/log v1.47.0
