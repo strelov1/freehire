@@ -42,27 +42,40 @@ func (emptyReferralBank) Professional(context.Context, int64, resumeextract.Stru
 	return resumeextract.Professional{}, nil
 }
 
-// TestReferralMessageRejectsInvalidRequests exercises the handler's three early exits.
+// TestReferralMessageRejectsInvalidRequests exercises request validation and access guards.
 func TestReferralMessageRejectsInvalidRequests(t *testing.T) {
 	tests := []struct {
-		name    string
-		job     db.Job
-		channel string
-		want    int
+		name        string
+		job         db.Job
+		channel     string
+		body        string
+		missingJobs bool
+		want        int
 	}{
 		{name: "another user's private job", job: db.Job{ID: 9, IsPrivate: true, CreatedBy: pgtype.Int8{Int64: 8, Valid: true}}, channel: "linkedin", want: fiber.StatusNotFound},
 		{name: "unsupported channel", job: db.Job{ID: 9}, channel: "sms", want: fiber.StatusBadRequest},
+		{name: "oversized request", body: strings.Repeat("x", 24001), want: fiber.StatusRequestEntityTooLarge},
+		{name: "malformed JSON", body: `{`, want: fiber.StatusBadRequest},
+		{name: "missing job reader", channel: "linkedin", missingJobs: true, want: fiber.StatusServiceUnavailable},
 		{name: "empty experience bank", job: db.Job{ID: 9}, channel: "linkedin", want: fiber.StatusConflict},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := newReferralMessageHandlers(referralJobReaderFake{job: tt.job}, emptyReferralBank{}, nil, nil, coverletter.NewAnalyzer(nil), llmBinding{}, nil)
+			var jobs jobSlugReader = referralJobReaderFake{job: tt.job}
+			if tt.missingJobs {
+				jobs = nil
+			}
+			h := newReferralMessageHandlers(jobs, emptyReferralBank{}, nil, nil, coverletter.NewAnalyzer(nil), llmBinding{}, nil)
 			app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 			app.Post("/jobs/:slug/referral-message/stream", func(c *fiber.Ctx) error {
 				c.Locals(auth.LocalsUserID, int64(7))
 				return c.Next()
 			}, h.Stream)
-			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/jobs/test-job/referral-message/stream", strings.NewReader(`{"channel":"`+tt.channel+`","profile":"Sam is an engineer"}`))
+			body := tt.body
+			if body == "" {
+				body = `{"channel":"` + tt.channel + `","profile":"Sam is an engineer"}`
+			}
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/jobs/test-job/referral-message/stream", strings.NewReader(body))
 			req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 			response, err := app.Test(req)
 			if err != nil {

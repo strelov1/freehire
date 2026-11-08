@@ -34,10 +34,12 @@ type referralMessageHandlers struct {
 	plans  *plan.Store
 }
 
+// newReferralMessageHandlers shares the existing job, bank, fit, model, and plan services.
 func newReferralMessageHandlers(jobs jobSlugReader, bank letterBankPort, resumes *resume.Store, fit *fitanalysis.Service, chain *coverletter.Analyzer, binding llmBinding, plans *plan.Store) *referralMessageHandlers {
 	return &referralMessageHandlers{jobs: jobs, bank: bank, resume: resumes, fit: fit, chain: chain, llm: binding, plans: plans}
 }
 
+// register protects drafting with both the signed-in cookie and paid-AI allowance gate.
 func (h *referralMessageHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/jobs/:slug/referral-message/stream", mw.cookie, mw.paidAI(plan.FeatureCoverLetter), h.Stream)
 }
