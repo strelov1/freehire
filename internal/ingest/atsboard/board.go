@@ -315,6 +315,13 @@ var atsBoards = []struct{ host, source, mode string }{
 	// apply links (easyapply.co/a/<uuid>, easyapply.co/job/<slug>) sit on the bare apex and
 	// name no tenant, so they stay unrecognised — the board is only on the career site.
 	{"easyapply.co", "gethired", modeSubdomain},
+	// Firefish (firefishsoftware.com): every tenant career site is a subdomain of the vendor's
+	// domain, and the board is that WHOLE host — the address the tenant's postings carry and the
+	// host the adapter reads the RSS feed at. Host mode, not subdomain: a tenant label is not a
+	// usable id, its own careers domain is. The vendor's own site is jobs.firefishsoftware.com,
+	// and unknown labels NXDOMAIN rather than serve a page, so nothing else on the domain reads
+	// as a tenant; www, the marketing site, is declined through the label list below.
+	{"firefishsoftware.com", "firefish", modeHost},
 	{"portaldetalentos.senior.com.br", "senior", modeSubdomain},
 	{"vagas.solides.com.br", "solides", modeSubdomain},
 	{"softgarden.io", "softgarden", modeSubdomain},
@@ -1716,6 +1723,9 @@ var platformLabelsByApex = map[string][]string{
 	// one feed host every tenant's feed is served from, and its asset hosts.
 	"homerun.co":    {"www", "try", "404", "feed", "static", "cdn"},
 	"easycruit.com": {"www"}, // Visma's EasyCruit product site
+	// Firefish's marketing site; jobs is the vendor's own careers site (which runs the same
+	// RSS feed as every tenant's, and is a crawlerable source of ONE — the vendor's).
+	"firefishsoftware.com": {"www", "jobs"},
 	// Recruitify's marketing site, its API, and the vendor's video-interview and sourcing products.
 	"recruitify.ai": {"www", "api", "iview", "glb", "sourcingnow"},
 	// Oorwin's marketing site and the vendor's own demo/CRM portals, which answer the careers API
