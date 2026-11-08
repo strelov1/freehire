@@ -100,7 +100,7 @@ func TestClient_SendGoesThroughTheSMTPRelay(t *testing.T) {
 	c := &Client{ses: f, relay: relay}
 	err := c.Send(context.Background(), Message{
 		From: "freehire <notifications@mail.freehire.me>", To: "a@example.com",
-		Subject: "Hi", HTML: "<p>x</p>", Text: "x",
+		Subject: "Hi", HTML: "<a href=\"https://freehire.me/u/1\">u</a>", Text: "x" + emailprefs.TextFooter("https://freehire.me/u/1"),
 		Group: emailprefs.GroupAlerts, UnsubscribeURL: "https://freehire.me/u/1",
 	})
 	if err != nil {

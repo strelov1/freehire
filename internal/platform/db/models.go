@@ -1758,6 +1758,7 @@ type User struct {
 	ApiUntilStripe     pgtype.Timestamptz `json:"api_until_stripe"`
 	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
 	AgentsMayApply     bool               `json:"agents_may_apply"`
+	LastActiveAt       pgtype.Timestamptz `json:"last_active_at"`
 }
 
 type UserBlock struct {

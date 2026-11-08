@@ -210,13 +210,18 @@ type Querier interface {
 	// scope, enforcing expiry and touching last_used_at in one atomic statement. No row
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
 	// and an insufficient scope as 403.
+	//
+	// A key in use is the account in use, so the same statement keeps users.last_active_at
+	// current (at most once a day), as GetUserTokenVersion does for a session: optional
+	// mail stops after 180 idle days (mail_recipient, migration 0247).
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error)
 	// Resolve a presented bearer token to its owning user, touching last_used_at in
 	// the same statement. A grant is live only while BOTH hold: it has not outlived
 	// its own expires_at, AND its issued_token_version still matches the user's
 	// current one (a mismatch means LogoutAll or a password change ran since). No row
 	// covers unknown, expired, and revoked-by-version-bump alike; the caller reads
-	// that as 401, same as AuthenticateAPIKey's contract.
+	// that as 401, same as AuthenticateAPIKey's contract. It also keeps
+	// users.last_active_at current, as AuthenticateAPIKey does.
 	AuthenticateOAuthGrant(ctx context.Context, accessTokenHash string) (int64, error)
 	// Same idea as SearchOutboxMetrics, but this queue has THREE terminal-ish states rather
 	// than two, so it cannot be a copy of it.
@@ -3300,6 +3305,10 @@ type Querier interface {
 	// The account's current session generation, read on every authenticated request to
 	// decide whether a correctly-signed token was revoked. One primary-key lookup; this
 	// is the price of making a stateless JWT revocable at all.
+	//
+	// The same statement stamps last_active_at, at most once a day, because this is the
+	// one place every signed-in request passes; mail_recipient (migration 0247) reads it
+	// to stop optional mail to people who have not used freehire in 180 days.
 	GetUserTokenVersion(ctx context.Context, id int64) (int32, error)
 	// The account's own username (NULL until claimed/allocated) and, when set, the
 	// time of its last EXPLICIT change via SetUsername — NULL for a lazily
@@ -3866,8 +3875,8 @@ type Querier interface {
 	// description vectors. A job with no captured form simply has no row.
 	ListApplyFormsForJobs(ctx context.Context, jobIds []int64) ([]ListApplyFormsForJobsRow, error)
 	// The notify fan-out targets: every approved referrer of a company with their email and
-	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
-	// optional Telegram ping.
+	// linked Telegram chat (NULL when unlinked). Email is '' when mail_recipient (0247) says
+	// the address may not be mailed; chat_id drives the optional Telegram ping.
 	ListApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]ListApprovedReferrerRecipientsRow, error)
 	// The caller's session rail: their unbound conversations, most recently active first.
 	// Owner-scoped by construction — another user's sessions can never appear.

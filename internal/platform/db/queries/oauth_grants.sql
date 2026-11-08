@@ -52,15 +52,23 @@ RETURNING id, created_at, expires_at;
 -- its own expires_at, AND its issued_token_version still matches the user's
 -- current one (a mismatch means LogoutAll or a password change ran since). No row
 -- covers unknown, expired, and revoked-by-version-bump alike; the caller reads
--- that as 401, same as AuthenticateAPIKey's contract.
-UPDATE oauth_grants
-SET last_used_at = now()
-FROM users
-WHERE oauth_grants.access_token_hash = $1
-  AND oauth_grants.user_id = users.id
-  AND oauth_grants.expires_at > now()
-  AND oauth_grants.issued_token_version = users.token_version
-RETURNING oauth_grants.user_id;
+-- that as 401, same as AuthenticateAPIKey's contract. It also keeps
+-- users.last_active_at current, as AuthenticateAPIKey does.
+WITH g AS (
+    UPDATE oauth_grants
+    SET last_used_at = now()
+    FROM users
+    WHERE oauth_grants.access_token_hash = $1
+      AND oauth_grants.user_id = users.id
+      AND oauth_grants.expires_at > now()
+      AND oauth_grants.issued_token_version = users.token_version
+    RETURNING oauth_grants.user_id
+), seen AS (
+    UPDATE users AS su SET last_active_at = now()
+    FROM g
+    WHERE su.id = g.user_id AND su.last_active_at < now() - interval '1 day'
+)
+SELECT g.user_id FROM g;
 
 -- name: ResolveOAuthGrantIdentity :one
 -- Read-only credential identity and entitlements with the same liveness rules as
