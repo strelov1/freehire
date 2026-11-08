@@ -122,6 +122,13 @@ backlog blocks nothing.
 - diff-cover is installed from `.github/requirements/diff-cover.txt` (hash-pinned, in a
   virtualenv); `COVERAGE_FAIL_UNDER=<n>` overrides both thresholds for one local run.
 
+## Python: pii-filter and scripts
+
+The `pii-filter` CI job runs `services/pii-filter`'s tests with `python -m unittest` and no
+install step (the service's tests use only the standard library; an install would hide a
+test that started needing a package), then every `scripts/test_*.py` as a script — they
+have their own runner, so `unittest discover` would report "Ran 0 tests" and pass.
+
 ## Artifacts we hand to others
 
 The `artifacts` CI job: `web/static/install.sh` is served at `freehire.me/install.sh` to be
