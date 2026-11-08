@@ -52,9 +52,9 @@
 
 ---
 
-## Part A — `hire`: publish the map
+# Part A — `hire`: publish the map
 
-### Task A1: The pure `logodomain` package
+## Task A1: The pure `logodomain` package
 
 **Files:**
 
@@ -355,7 +355,7 @@ belonging to the other."
 
 ---
 
-### Task A2: The two reads
+## Task A2: The two reads
 
 **Files:**
 
@@ -436,7 +436,7 @@ seq scan's sequential read of the same heap. The caller filters in Go."
 
 ---
 
-### Task A3: The snapshot format
+## Task A3: The snapshot format
 
 **Files:**
 
@@ -664,7 +664,7 @@ them is indistinguishable from the map not covering a company."
 
 ---
 
-### Task A4: The `publish-logo-domains` worker
+## Task A4: The `publish-logo-domains` worker
 
 **Files:**
 
@@ -853,7 +853,7 @@ every logo on the site to a name guess at once."
 
 ---
 
-### Task A5: Ship it — unit, timer, build list, docs
+## Task A5: Ship it — unit, timer, build list, docs
 
 **Files:**
 
@@ -962,7 +962,7 @@ so it yields to everything."
 
 ---
 
-## Part B — `freehire-logo`: consult the map
+# Part B — `freehire-logo`: consult the map
 
 All paths in Part B are relative to `~/Projects/freehire-logo`. Work on a branch:
 
@@ -973,7 +973,7 @@ cd ~/Projects/freehire-logo && git fetch origin && git switch -c feat/domain-map
 If `origin/main` does not exist, check `git branch -a` — the README says the service was
 implemented on `feat/logo-proxy`; branch from whatever is deployed.
 
-### Task B1: The `domainmap` package
+## Task B1: The `domainmap` package
 
 **Files:**
 
@@ -1309,7 +1309,7 @@ good map rather than blanking every logo on the site."
 
 ---
 
-### Task B2: Consult the map in the handler
+## Task B2: Consult the map in the handler
 
 **Files:**
 
@@ -1534,7 +1534,7 @@ changes, which is the rollback."
 
 ---
 
-### Task B3: Document the map
+## Task B3: Document the map
 
 **Files:**
 
@@ -1577,9 +1577,9 @@ git commit -m "Document the domain map and its rollback"
 
 ---
 
-## Part C — Verify against production
+# Part C — Verify against production
 
-### Task C1: Prove the fix on real data
+## Task C1: Prove the fix on real data
 
 **Files:** none — this task changes nothing and produces evidence.
 
@@ -1672,7 +1672,7 @@ Expected: the new unit and timer match. Anything else it reports was already the
 
 ---
 
-### Self-review notes
+## Self-review notes
 
 **Spec coverage**
 

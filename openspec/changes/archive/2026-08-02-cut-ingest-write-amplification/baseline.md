@@ -72,12 +72,12 @@ this change's strength.
 
 ---
 
-## Post-release, 2026-08-02T21:39Z (partial)
+# Post-release, 2026-08-02T21:39Z (partial)
 
 Released to prod (blue, `2c3c9690`). `release.sh` applied migration 0073 as one of its own
 steps — prod `reloptions` is now `fillfactor=90, autovacuum_vacuum_scale_factor=0.02`.
 
-### The mechanism works
+## The mechanism works
 
 24 providers reported a cheap-write share within the first 20 minutes. **20 of them at 100%**,
 `habr_career` and `himalayas` at 99%, `arbeitsagentur` at 89%. **No provider at 0%** — the
@@ -90,7 +90,7 @@ Candidate explanations (repeated saves within a run, aliased boards, measurement
 were not distinguishable from the data to hand. The next runs settle whether 57% is a
 transitional first-run figure or a real signal.
 
-### The success criterion in this document was WRONG — corrected here
+## The success criterion in this document was WRONG — corrected here
 
 Stated above: "`jobs.n_tup_upd` should fall toward the rate of genuine content change." It should
 not, and it did not. **The cheap write is still an `UPDATE`** and counts in `n_tup_upd` exactly
@@ -126,7 +126,7 @@ not a ceiling.
 share, NOT on `n_tup_upd`. Reading the total would have shown a −25% move that means little, and
 could as easily have been read as failure.
 
-### Cheap-path share, measured
+## Cheap-path share, measured
 
 Across the fleet, including the heavy boards once they cycled onto the new binary:
 
@@ -142,7 +142,7 @@ Across the fleet, including the heavy boards once they cycled onto the new binar
 
 No provider at 0% — the silent-zero failure this change most feared did not occur.
 
-### Open finding: `rippling` does ~3× redundant work per run
+## Open finding: `rippling` does ~3× redundant work per run
 
 Two runs an hour apart produced byte-identical tallies — `cheap=1039/1809 (57%)` at 21:43:51 and
 again at 22:44:12, different PIDs. Deterministic, not transitional.

@@ -1,7 +1,6 @@
 ## Why
 
-# 2074 made the `industries` facet match through the curated column **or** the
-
+#2074 made the `industries` facet match through the curated column **or** the
 job-derived `domains` one, as two equal sources. Measured against real companies
 rather than aggregates, they are not equal, and the change put well-known companies
 under industries they are not in.

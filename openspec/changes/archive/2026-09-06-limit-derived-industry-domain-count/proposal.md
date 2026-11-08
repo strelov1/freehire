@@ -1,7 +1,6 @@
 ## Why
 
-# 2082 stopped the loud half of the derived-industry defect: a company an importer
-
+#2082 stopped the loud half of the derived-industry defect: a company an importer
 has already classified is now answered from that classification alone, so Uber
 stopped matching `?industries=gaming`. It does nothing for the quiet half — a
 company with **no** curated industry at all, where the job-derived `companies.domains`

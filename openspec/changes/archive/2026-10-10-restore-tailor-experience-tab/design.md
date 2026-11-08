@@ -1,9 +1,7 @@
 ## Context
 
 The Experience tab and its bank-edit reseed offer existed in the Tailor workspace from
-
-# 1669 until `ae1c13c8` removed them. Nothing else in the file changed shape in a way that
-
+#1669 until `ae1c13c8` removed them. Nothing else in the file changed shape in a way that
 blocks restoring them: `ExperienceBankView`'s `onBankMutated` prop, `offerCvRefresh`/
 `askCvRefresh`, and the reseed endpoint (`api.reseedCv`, now wrapped by `applyReseed`/
 `reseed`/`confirmResetOpen` under the History tab's "Reset" control) are all still present

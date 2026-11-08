@@ -160,8 +160,7 @@ So "compare before you consolidate" has now produced all three answers: the find
 not demonstrated (#27/#29). The third is the one that most needs saying out loud, because a PR
 that repeats an unverified live claim teaches the next reader to trust the next one.
 
-## 28's remedy was deliberately modest and stayed that way: `notify.ValidChannel` exported, two
-
+#28's remedy was deliberately modest and stayed that way: `notify.ValidChannel` exported, two
 hand-built allowlists deleted, and `notifications.md` corrected — it claimed adding a channel
 "means adding a package, not touching `notify` or `reminder`", which is false. Collapsing the
 duplicated `Router`/`Notifier` pair is deferred until a third channel lands, and that deferral is
@@ -426,13 +425,13 @@ than the abort it replaces. A test pins it at 499-of-500 with the old check rest
 
 ---
 
-### Verdict
+## Verdict
 
 This codebase is in good architectural shape, and the honest headline is that most of the review's original hypotheses were wrong. The big shared seams that would normally rot — jobview as the one job wire type, internal/ingest/sources' capability-segregated HTTP client and its single date-parsing home for 186 adapters, internal/platform/worker's bootstrap for 33 of 34 cron binaries, internal/platform/llm as the only LLM construction path, cvedit as the only CV writer — all actually hold under grep. Nine reviewers looking for duplication mostly found deliberate, documented divergence, and the skeptic pass killed or downgraded roughly half of what they filed. What survives is not a structural rot story; it is a set of localized holdouts: a handful of call paths that bypass a shared thing that already exists, and a handful of load-bearing rules that are enforced by a comment or by constructor ordering where a type could enforce them. Two of those have already produced live defects (the incremental search pushers narrowing a role's cluster geography; two web label maps that disagree on SEO-indexed pages), and three more are latent fail-opens waiting for the next field to be added (the CV contact blacklist, the evidence gate's nil check, the manual-job derived columns). The one genuinely mis-cut boundary is small and specific: internal/api/handler serves a generated sqlc row as the public JSON of /api/v1/companies and never imports internal/platform/pgconv, so the persistence vocabulary is held out of the wire per-endpoint rather than by a type. Nothing here calls for a re-cut of a package, a new framework, or a migration; the whole list is roughly a dozen small PRs.
 
 ---
 
-### What holds
+## What holds
 
 Findings are the visible half of a review. These are the seams that were attacked and did not
 move — recorded so a future reader does not re-litigate them:
@@ -448,33 +447,33 @@ move — recorded so a future reader does not re-litigate them:
 
 ---
 
-### Themes
+## Themes
 
-#### 1. Transport has no company-shaped type
+### 1. Transport has no company-shaped type
 
 **Thesis.** internal/api/handler holds the persistence vocabulary out of the wire endpoint-by-endpoint rather than with a type: one list endpoint serves the generated sqlc row verbatim, the package never imports the shared pgconv converters and redeclares two of them, and one list endpoint re-implements the shared pagination clamp without its ceiling.
 
 **Cost today.** `make sqlc` is currently an API-changing operation for GET /api/v1/companies — a column rename or SELECT alias change rewrites the public JSON with no compile error — and the Meili branch has to fabricate a fake db row (re-wrapping strings into pgtype.Text) to stay byte-compatible with it. The missing clamp is a live 500 on a public endpoint.
 
-#### 2. Invariants held by prose, wiring order, or an env var
+### 2. Invariants held by prose, wiring order, or an env var
 
 **Thesis.** Five rules the code documents as load-bearing are enforced by a doc comment, by the order Register happens to run constructors in, or by whether a credential is set — where a constructor argument, a mapper, or a package move would enforce them. Three already have a call path that violates them.
 
 **Cost today.** A moderator- or submission-authored vacancy lands with role_fingerprint and content_hash NULL, so it never clusters against the ATS copy of the same role and its semantic vector freezes after the first edit. The CV evidence gate is a post-construction mutator with two independent fail-open nil checks. The provider taxonomy silently loses three aggregators wherever their keys are unset, and the comment reasoning about that is wrong.
 
-#### 3. One decision, two implementations that have already drifted
+### 3. One decision, two implementations that have already drifted
 
 **Thesis.** Genuine duplication where both copies encode the same decision, the copies must stay in step, and at least one has visibly diverged — as opposed to the many places in this repo where two similar-looking implementations differ for documented, real reasons.
 
 **Cost today.** Two of these are user-visible today: a collapsed multi-city role loses the cities its reposts hold on every incremental push until the next full rebuild, and the same facet code renders under different names on the filter panel versus the SEO-indexed /insights pages.
 
-#### 4. The shared worker substrate has holdouts
+### 4. The shared worker substrate has holdouts
 
 **Thesis.** internal/platform/worker is a successful shared bootstrap — 33 of 34 cron binaries use it — but the exceptions are precisely the workers doing the riskiest things, and two domain packages now import it just to reach one SQLSTATE constant that belongs in pgerr.
 
 **Cost today.** The two LLM-spending backfills over stored user CVs are invisible to Sentry and drop their Langfuse trace flush on exactly the failed run; cmd/backfill-derive has no resume flag and no corruption tolerance, so one XX001 row makes a whole-catalogue re-derive permanently unfinishable; cmd/classify-mail exits 0 no matter how much mail dead-letters.
 
-#### 5. Docs that outran the code
+### 5. Docs that outran the code
 
 **Thesis.** This repo's doc-comment and AGENTS.md culture is unusually good, which is exactly why the places where a doc now asserts something false are expensive: a reader trusts them and stops looking.
 
@@ -482,25 +481,25 @@ move — recorded so a future reader does not re-litigate them:
 
 ---
 
-### First three moves
+## First three moves
 
 The three changes that make the rest cheaper. Each is scoped to a single PR.
 
-#### Move 1
+### Move 1
 
 Delete insights.ts's CATEGORY_LABELS/SENIORITY_LABELS, import both from $lib/labels, move the differing overrides (fullstack → 'Full-Stack', the seniority set, the '' all-levels key) into labels.ts, and add a RELOCATION_LABELS there read by both enrichment.ts and facets.ts.
 
 - **Why first:** It is the only finding on the list that is both S-effort and already user-visible: the same facet code renders under different names on the filter panel and on the SEO-indexed /insights pages. It is a pure deletion plus imports, needs no backend change, and it settles the rule labels.ts already claims ('Keeping ONE map prevents the drift…') before the next facet vocabulary forks the same way.
 - **Unlocks:** Any future facet-label work has one place to land, and the remaining humanize question (sentence-case vs title-case) becomes a deliberate visual decision instead of an accident.
 
-#### Move 2
+### Move 2
 
 Put cmd/backfill-experience and cmd/backfill-resume-structured on worker.Main(run) + worker.Bootstrap(context.Background()), replacing their hand-rolled config.Load/context.Background/database.Connect and converting every os.Exit(1)/log.Fatalf to `return 1` so the deferred pool close and Langfuse flush actually run.
 
 - **Why first:** These are the only two DB-writing production workers outside the shared path and both spend LLM money on stored user CVs, yet a failure in either is invisible to Sentry and backfill-experience drops its trace flush on exactly the run that failed. The change is a drop-in against an existing, well-used helper.
 - **Unlocks:** Everything else about those two workers becomes diagnosable — including whether the résumé-extraction chain they duplicate is worth touching at all, a question currently unanswerable because failures leave no trace.
 
-#### Move 3
+### Move 3
 
 Add a per-(company_slug, role_fingerprint) cluster-geography query next to RoleClusterCount and call doc.MergeClusterGeography in the three incremental pushers (cmd/ingest/store.go, internal/ingest/linkimport, cmd/embed/indexer.go).
 
@@ -509,7 +508,7 @@ Add a per-(company_slug, role_fingerprint) cluster-geography query next to RoleC
 
 ---
 
-### Ranked shortlist
+## Ranked shortlist
 
 The top findings by *(cost of leaving it in) / (effort to fix)* — not by severity label alone.
 Entries whose id contains a `+` are two area findings merged into one during synthesis; their
@@ -538,7 +537,7 @@ unmerged originals appear in the full catalogue below.
 | 19 | ✅ | experience.ProfessionalFrom is a second implementation of Store.Professional reachable from nothing but its own tests, and the docs still name it as the fit-analysis path | `cv-user` | simplicity | low | S |
 | 20 | ✅ | cmd/classify-mail is the one worker that bypasses worker.ExitCode, because its Fail statement dropped the dead-letter signal its two siblings return | `ai-stack` | reuse | low | S |
 
-#### ✅ S1. CATEGORY_LABELS and SENIORITY_LABELS are declared twice in the web app, against labels.ts's own 'keep ONE map' rule, and have already drifted
+### ✅ S1. CATEGORY_LABELS and SENIORITY_LABELS are declared twice in the web app, against labels.ts's own 'keep ONE map' rule, and have already drifted
 
 `web-frontend + cross-cutting` · reuse · severity **medium** · effort **S** · id `38+42`
 
@@ -555,7 +554,7 @@ unmerged originals appear in the full catalogue below.
 - web/src/lib/facets.ts:305 — humanize() title-cases every word; web/src/lib/enrichment.ts:47 — a different humanize() capitalizes only the first letter; web/src/lib/insights.ts:79 — a third inline regex fallback
 - web/src/lib/facets.ts:358 — RELOCATION not_supported: 'None' vs web/src/lib/enrichment.ts:31 — not_supported: 'Not supported'; every other facets.ts vocabulary imports its overrides from labels.ts
 
-#### ✅ S2. Building a job's search document is re-implemented in four places, and only the full reindex applies the role cluster's geography union
+### ✅ S2. Building a job's search document is re-implemented in four places, and only the full reindex applies the role cluster's geography union
 
 `job-core` · reuse · severity **medium** · effort **M** · id `14`
 
@@ -572,7 +571,7 @@ unmerged originals appear in the full catalogue below.
 - internal/search/client.go:496 — SubmitJobs uses UpdateDocumentsWithContext, a field-level update, and jobview's Cities/Countries/Regions carry no omitempty (internal/job/jobview/jobview.go:67), so the keys always overwrite
 - internal/search/document.go:78-83 — MergeClusterGeography's doc says only the full reindex has the whole cluster in view
 
-#### ✅ S3. The two LLM-spending backfill workers bypass worker.Bootstrap/worker.Main, losing Sentry, SIGTERM handling and the exit-code convention
+### ✅ S3. The two LLM-spending backfill workers bypass worker.Bootstrap/worker.Main, losing Sentry, SIGTERM handling and the exit-code convention
 
 `infra-workers + cross-cutting` · reuse · severity **medium** · effort **S** · id `30+44`
 
@@ -589,7 +588,7 @@ unmerged originals appear in the full catalogue below.
 - internal/platform/observability/AGENTS.md — "observability.Init lives in worker.Bootstrap"; only harvest-*/gen-contracts are declared out of scope
 - verified: `grep -L worker.Bootstrap cmd/*/main.go` returns only these two plus cmd/server and nine DB-free dev tools
 
-#### ✅ S4. content_hash and role_fingerprint are comment-enforced columns each write path must remember; the moderator path sets neither and Telegram/link-import set only one
+### ✅ S4. content_hash and role_fingerprint are comment-enforced columns each write path must remember; the moderator path sets neither and Telegram/link-import set only one
 
 `job-core` · boundary · severity **medium** · effort **M** · id `12`
 
@@ -606,7 +605,7 @@ unmerged originals appear in the full catalogue below.
 - internal/platform/db/queries/jobs.sql:287-300 — RoleClusterCount filters `role_fingerprint <> ''`, so a NULL fingerprint never clusters
 - internal/platform/db/queries/semantic.sql:23 — the re-embed trigger is `semantic_embedded_hash IS DISTINCT FROM content_hash`; internal/api/handler/match_analysis.go:381-387 justifies the NULL stamp with "a non-board job with no content_hash is never re-crawled, so its text is stable" — which UpdateManualJob falsifies
 
-#### ✅ S5. The evidence gate — the rule the tailoring capability exists to enforce — is an optional post-construction mutator with two independent fail-open nil checks
+### ✅ S5. The evidence gate — the rule the tailoring capability exists to enforce — is an optional post-construction mutator with two independent fail-open nil checks
 
 `cv-user` · coupling · severity **medium** · effort **M** · id `22`
 
@@ -623,7 +622,7 @@ unmerged originals appear in the full catalogue below.
 - internal/api/handler/cv_tailor.go:241 — PatchCV (mounted mw.key at internal/api/handler/cv.go:157) sets ActorAgent for any API-key caller; that path has nothing to do with the assistant
 - internal/api/handler/handler.go:266 — an equivalent experience.Store is already constructed 23 lines before newCVHandlers at :289, so the stated reason for late binding (internal/api/handler/cv.go:90-91, internal/candidate/cvedit/editor.go:128-131: "the bank is wired after this") is false
 
-#### ✅ S6. worker.ResilientPage is the shared corruption-tolerant full scan over jobs, but only cmd/reindex uses it — two backfills run the identical keyset scan raw
+### ✅ S6. worker.ResilientPage is the shared corruption-tolerant full scan over jobs, but only cmd/reindex uses it — two backfills run the identical keyset scan raw
 
 `infra-workers` · reuse · severity **medium** · effort **M** · id `32`
 
@@ -640,7 +639,7 @@ unmerged originals appear in the full catalogue below.
 - cmd/backfill-descriptions/main.go:188-194 — the same raw scan, aborting at :119-121
 - commit 1153d215 ("survive corrupted (XX001) rows in full-scan workers") records that a broken TOAST pointer already crashed a full facet reindex on this prod database
 
-#### ✅ S7. sources.All gates adapter registration on env credentials, so the provider taxonomy silently loses three aggregators wherever those keys are unset
+### ✅ S7. sources.All gates adapter registration on env credentials, so the provider taxonomy silently loses three aggregators wherever those keys are unset
 
 `ingest-sources` · coupling · severity **medium** · effort **M** · id `7`
 
@@ -657,7 +656,7 @@ unmerged originals appear in the full catalogue below.
 - internal/api/handler/status.go:123,134 — a keyless server renders those three providers as KindOther
 - internal/ingest/pipeline/AGENTS.md:11 carries the stale one-adapter claim while internal/ingest/sources/AGENTS.md:12 says three — the doc drift is itself evidence the conflation confuses maintainers
 
-#### ✅ S8. The 'de-identified CV' seam is a JSON string, so the contact whitelist is enforced three ways — one of them the blacklist the codebase's own doc calls wrong
+### ✅ S8. The 'de-identified CV' seam is a JSON string, so the contact whitelist is enforced three ways — one of them the blacklist the codebase's own doc calls wrong
 
 `ai-stack` · boundary · severity **medium** · effort **M** · id `17`
 
@@ -674,7 +673,7 @@ unmerged originals appear in the full catalogue below.
 - internal/candidate/matchanalysis/analyzer.go:385-393 — candidateContext unmarshals the string back into Structured and calls .Professional() again: a full JSON round trip whose second projection is a no-op, since internal/api/handler/match_analysis.go:333 already marshalled a Professional
 - internal/api/handler/me_profile.go:92 — the correct shape of the same seam, returning *resumeextract.Professional
 
-#### ✅ S9. GET /api/v1/companies serves the sqlc-generated db.ListCompaniesRow as its public JSON contract, and the Meilisearch path hand-fakes that persistence type to match
+### ✅ S9. GET /api/v1/companies serves the sqlc-generated db.ListCompaniesRow as its public JSON contract, and the Meilisearch path hand-fakes that persistence type to match
 
 `http-layer + cross-cutting` · boundary · severity **medium** · effort **M** · id `1+41`
 
@@ -692,7 +691,7 @@ unmerged originals appear in the full catalogue below.
 - grep of every listResponse call site (agent_search.go:48, jobs.go:75, search.go:98, swipe.go:50, recommendations.go:50, inbox.go:154) — every other list serves a projection; /companies is the sole exception
 - internal/job/jobview/AGENTS.md:1 — "One type, projected from the job.Job aggregate, so the API surfaces cannot drift apart"
 
-#### ✅ S10. JobDrawer re-implements two lib modules whose stated job is to be the single home for exactly that code
+### ✅ S10. JobDrawer re-implements two lib modules whose stated job is to be the single home for exactly that code
 
 `web-frontend` · reuse · severity **medium** · effort **S** · id `37`
 
@@ -709,7 +708,7 @@ unmerged originals appear in the full catalogue below.
 - web/src/lib/scrollLock.ts:12 — a reference-counted body lock, "the body only unlocks once every requester has released"
 - web/src/lib/components/JobDrawer.svelte:127-133 — hand-rolls the lock, bypassing the refcount HeaderSearch.svelte:98 and HeaderMenu.svelte:106 use
 
-#### ✅ S11. JobCopies hand-rolls limit/offset parsing and drops the int32 clamp the shared helper exists for
+### ✅ S11. JobCopies hand-rolls limit/offset parsing and drops the int32 clamp the shared helper exists for
 
 `cross-cutting` · reuse · severity **low** · effort **S** · id `43`
 
@@ -725,7 +724,7 @@ unmerged originals appear in the full catalogue below.
 - internal/api/handler/copies.go:44 — `RowOffset: int32(offset)` feeds that unclamped value straight into the int4 param
 - internal/platform/db/jobs.sql.go:1464 — ListRoleClusterCopiesParams.RowOffset is int32
 
-#### ✅ S12. internal/api/handler never imports internal/platform/pgconv and re-declares two of its converters locally
+### ✅ S12. internal/api/handler never imports internal/platform/pgconv and re-declares two of its converters locally
 
 `cross-cutting` · reuse · severity **low** · effort **S** · id `46`
 
@@ -741,7 +740,7 @@ unmerged originals appear in the full catalogue below.
 - verified: `grep -n pgconv internal/api/handler/*.go` returns nothing — the largest package in the repo never imports it
 - internal/job/jobview/jobview.go:363 — the sibling read-path package does use pgconv.Timestamptz/pgconv.TimePtr
 
-#### ✅ S13. internal/api/handler carries two hand-rolled SSE stream writers with the same headers, deadline discipline and keepalive, already sharing one constant across the split
+### ✅ S13. internal/api/handler carries two hand-rolled SSE stream writers with the same headers, deadline discipline and keepalive, already sharing one constant across the split
 
 `ai-stack` · reuse · severity **medium** · effort **M** · id `18`
 
@@ -758,7 +757,7 @@ unmerged originals appear in the full catalogue below.
 - internal/api/handler/match_analysis_stream.go:190 — sseWriteTimeout is declared here and used from assistant.go:421 and :448, so the assistant already reaches into the other file's constant while re-implementing the type that owns it
 - drift: assistant.go:133 uses the named assistantKeepalive; match_analysis_stream.go:125 uses a bare 15*time.Second; handler/AGENTS.md:91 still contrasts writeEvent with `writeSSE`, a function that no longer exists
 
-#### ✅ S14. The db.Job → UpsertJobParams remap needed for jobhash.Of is copy-pasted verbatim into two backfill commands
+### ✅ S14. The db.Job → UpsertJobParams remap needed for jobhash.Of is copy-pasted verbatim into two backfill commands
 
 `job-core` · reuse · severity **low** · effort **S** · id `16`
 
@@ -773,7 +772,7 @@ unmerged originals appear in the full catalogue below.
 - internal/job/job.go:171 — Fields.UpsertParams already exists "so every write path (ingest, telegram extraction) shares one mapping instead of re-listing the columns"
 - internal/job/jobhash/jobhash.go:23-49 — Of's own field list omits Cities, EnglishLevel and IsTech, which internal/job/jobview/jobview.go:67,77 shows the document does carry — the drift the duplication makes cheap
 
-#### ✅ S15. SQLSTATE classification is split between internal/platform/pgerr and internal/platform/worker, contradicting pgerr's own 'single home' claim — and two domain packages now import worker for it
+### ✅ S15. SQLSTATE classification is split between internal/platform/pgerr and internal/platform/worker, contradicting pgerr's own 'single home' claim — and two domain packages now import worker for it
 
 `infra-workers` · boundary · severity **low** · effort **S** · id `35`
 
@@ -789,7 +788,7 @@ unmerged originals appear in the full catalogue below.
 - internal/platform/worker/exit.go:1-5 — worker's own doc scopes it to "shared bootstrap and run-outcome plumbing"
 - internal/ai/enrich/runner.go:123 and internal/ai/embed/runner.go:182 — both import internal/platform/worker for nothing but IsCorruptedRow (grep confirms those are their only worker.* references), so two domain packages transitively depend on config, database and observability to classify one SQLSTATE
 
-#### ✅ S16. The application pipeline's forward order and its terminal set live in internal/application/mailclassify, not in internal/application/userjob which owns the stage vocabulary
+### ✅ S16. The application pipeline's forward order and its terminal set live in internal/application/mailclassify, not in internal/application/userjob which owns the stage vocabulary
 
 `mail-notify` · boundary · severity **medium** · effort **M** · id `29`
 
@@ -807,7 +806,7 @@ unmerged originals appear in the full catalogue below.
 - internal/application/inbox/mutate.go:226 and internal/application/maillink/decide.go:51 — both the interactive and the worker path ask mailclassify how an application may move
 - internal/application/mailclassify/classification_test.go:12-23 — the only binding between the packages, and it checks one direction only
 
-#### ✅ S17. atsdetect.FromURL is a second, drifted implementation of atsboard.Recognize despite atsboard's stated 'one definition' contract
+### ✅ S17. atsdetect.FromURL is a second, drifted implementation of atsboard.Recognize despite atsboard's stated 'one definition' contract
 
 `ingest-sources` · reuse · severity **medium** · effort **L** · id `8`
 
@@ -824,7 +823,7 @@ unmerged originals appear in the full catalogue below.
 - internal/ingest/atsdetect/atsdetect.go:26 — `reserved = map[string]bool{"embed": true}` vs internal/ingest/boardresolve/boardresolve.go:73 — the same rule re-encoded inline as `matched && b != "embed"`
 - nothing in atsdetect.go, fromurl.go or their tests mentions atsboard at all, and no rationale for the split is recorded anywhere
 
-#### ✅ S18. The employer-reply ledger reconcile — a two-statement ordering rule — is implemented once in internal/application/inbox and again in cmd/classify-mail
+### ✅ S18. The employer-reply ledger reconcile — a two-statement ordering rule — is implemented once in internal/application/inbox and again in cmd/classify-mail
 
 `mail-notify` · boundary · severity **low** · effort **S** · id `28`
 
@@ -841,7 +840,7 @@ unmerged originals appear in the full catalogue below.
 - internal/application/appevent/appevent.go:2-3 — names internal/application/maillink as a recording path, but `grep -rn appevent internal/application/maillink/*.go` returns nothing
 - internal/application/inbox/inbox.go:52-53 — the two reconcile methods are already isolated as a narrow interface pair that *db.Queries and a WithTx copy both satisfy
 
-#### ✅ S19. experience.ProfessionalFrom is a second implementation of Store.Professional reachable from nothing but its own tests, and the docs still name it as the fit-analysis path
+### ✅ S19. experience.ProfessionalFrom is a second implementation of Store.Professional reachable from nothing but its own tests, and the docs still name it as the fit-analysis path
 
 `cv-user` · simplicity · severity **low** · effort **S** · id `24`
 
@@ -857,7 +856,7 @@ unmerged originals appear in the full catalogue below.
 - internal/api/handler/match_analysis.go:321 — the fit chain calls bank.Professional(...)
 - internal/candidate/resumeextract/AGENTS.md:20 — still claims "experience.ProfessionalFrom takes the work history from the bank and everything else from here, and that is the only candidate text matchanalysis sends"
 
-#### ✅ S20. cmd/classify-mail is the one worker that bypasses worker.ExitCode, because its Fail statement dropped the dead-letter signal its two siblings return
+### ✅ S20. cmd/classify-mail is the one worker that bypasses worker.ExitCode, because its Fail statement dropped the dead-letter signal its two siblings return
 
 `ai-stack` · reuse · severity **low** · effort **S** · id `19`
 
@@ -875,7 +874,7 @@ unmerged originals appear in the full catalogue below.
 
 ---
 
-### Full catalogue
+## Full catalogue
 
 All 46 surviving findings, grouped by area. Includes the ones the shortlist
 merged or omitted, each with the skeptic's verification note. A verdict of `overstated` means
@@ -894,11 +893,11 @@ note before acting.
 | SvelteKit app and design system | 5 | 3 | 1 | 0 | 1 |
 | Cross-cutting duplication sweep | 6 | 4 | 1 | 1 | 0 |
 
-#### HTTP transport layer
+### HTTP transport layer
 
 > **Reviewer's note on what is well-factored here.** Genuinely well-factored, and deliberately not flagged:\n\n- **jobview holds.** I checked all 11 non-test files that import it and grepped for hand-rolled job shapes (`json:\"title\"`/`json:\"public_slug\"` struct fields across the package). There is no second job projection anywhere — even `myJobResponse` (internal/api/handler/me_tracking.go:23) nests `*jobview.Job` rather than flattening fields into it, and `companyDetailResponse` (companies.go:55) does the same. `internal/search/document.go` embeds the same type, so the index and the API cannot disagree. The claim in internal/job/jobview/AGENTS.md is true.\n- **Error rendering is genuinely single-source.** `RenderError`/`classify` (internal/api/handler/errors.go:48, :66) is wired once in cmd/server, and I found zero hand-rolled `c.Status(...).JSON(fiber.Map{\"error\": ...})` in the package. The 20 per-feature `xxxError(err) error` mappers (mapCVError, trackingError, referralError, …) each translate *their own domain's* sentinels into `fiber.NewError` and delegate the rest — that is the correct shape, not duplication, and I did not flag it. The one wrinkle I decided was too small to report: `classify` hard-codes four `internal/application/inbox` sentinels centrally (errors.go:70-84) while `mailToolError` (assistant_inbox_tools.go:407) re-lists the same four for the model-facing rendering, so the inbox is the one feature whose vocabulary lives in the shared classifier.\n- **The per-feature `*Handlers` pattern holds** — 28 structs, each with its own `new<Feature>Handlers` and `register(api, mw)`. Only four routes bypass it (health, autofill-profile, autofill/run, tools/ws), which is the subject of one finding above rather than evidence the pattern failed.\n- **Not flagged: the ~50 `BodyParser` + 400 repetitions.** Three lines of Go idiom each; a generic helper would buy nothing and cost a type parameter.\n- **Not flagged: internal/api/handler having 90 non-test files.** Given cohesive per-feature structs, that is fine Go; the actual weight problem is the 2,400 lines of assistant tooling, which is a specific finding with a specific cause, not a general \"split the package\" complaint.\n- **Not flagged: the two `attachGhost` variants** (jobs.go:147 vs search.go:178). They read from deliberately different sources (rows in hand vs Postgres stamps the index cannot carry), both funnel into the shared `ghostEvidenceFor` and `jobview.ClassifyGhost`, and both carry doc comments explaining why. Documented, deliberate, correct.\n- **Not flagged: the credits check-then-debit rule** repeated at match_analysis.go:185, match_analysis_stream.go:50 and cv_tailor.go:71. It is three lines each and the three sites genuinely differ on when the debit lands (after cache / after the SSE writer / after the session mints). A `credits.Store.CanAfford` would tidy it, but the rule is not drifting.
 
-##### 1. GET /api/v1/companies serves the sqlc-generated db.ListCompaniesRow as its public JSON contract, and the Meilisearch path hand-fakes that persistence type to match
+#### 1. GET /api/v1/companies serves the sqlc-generated db.ListCompaniesRow as its public JSON contract, and the Meilisearch path hand-fakes that persistence type to match
 
 `company-list-serves-sqlc-row-as-wire-shape` · boundary · severity **medium** · effort **M** · verdict **confirmed**
 
@@ -918,7 +917,7 @@ note before acting.
 
 **Verifier.** Every citation checks out. internal/api/handler/companies.go:230 returns `listResponse(c, companies, ...)` where `companies` is `[]db.ListCompaniesRow` from sqlc; internal/platform/db/companies.sql.go:307-314 is the generated struct whose json tags (`slug`, `job_count`, `tagline`, `hq_country`) are literally the public JSON of GET /api/v1/companies. companies.go:336-373 builds fake persistence rows from search hits (`companyRowFromDoc`) and companies.go:375 exists only to re-wrap plain strings into pgtype.Text. I grepped every `listResponse` call site (agent_search.go:48, jobs.go:75, search.go:98, swipe.go:50, recommendations.go:50, inbox.go:154) — every other list serves a projection (jobview.Job or a local struct); /companies is the sole exception, so this is not a house style, it is a one-off. It does contradict the doctrine internal/job/jobview/AGENTS.md states ("One type, projected from the job.Job aggregate, so the API surfaces cannot drift apart"). Two corrections to the framing, which is why I drop severity to medium: (a) the sibling `companyView` (companies.go:69-100) is NOT a clean projection either — it exposes pgtype.Text/pgtype.Int4/json.RawMessage as its wire fields, so the contrast is weaker than claimed; (b) the causal claim that web/src/lib/types.ts:156 is hand-copied "because there is no Go projection type for cmd/gen-contracts to emit" is wrong — `Company` at web/src/lib/types.ts:120 is equally hand-copied and it DOES have a Go projection (companyView); cmd/gen-contracts/main.go:88 emits from package paths and cannot see unexported handler types either way. Nothing here breaks today; the exposure is a future `make sqlc` after a column/alias rename.
 
-##### ✅ 2. The extension's autofill endpoint runs raw SQL against users and cvs, bypassing sqlc and cv.Store — and picks a different CV than cv.Store.BaseCV deliberately picks
+#### ✅ 2. The extension's autofill endpoint runs raw SQL against users and cvs, bypassing sqlc and cv.Store — and picks a different CV than cv.Store.BaseCV deliberately picks
 
 `autofill-raw-sql-bypasses-cv-store` · boundary · severity **low** · effort **S** · verdict **confirmed**
 
@@ -937,7 +936,7 @@ note before acting.
 
 **Verifier.** The bypass is real and the citations are exact. `grep -n 'pool.QueryRow|pool.Query(|pool.Exec' internal/api/handler/*.go` (non-test) returns exactly two hits, both in autofill_profile.go — :76 `SELECT email FROM users WHERE id = $1` and :80 `SELECT data FROM cvs WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, followed by a hand `json.Unmarshal` into cv.Document, while internal/candidate/cv/store.go:255 `BaseCV` and internal/platform/db/queries/users.sql:21 `GetUserByID` already exist. That is invisible to sqlc and duplicates the store's document decode, in a package whose AGENTS.md gives every feature a handler struct with its own dependencies. Two corrections that pull severity down from medium: (a) the headline harm is close to inert — internal/candidate/cv/store.go:320 creates a tailored CV as `CreateTailored(..., base.TemplateID, base.Document)`, a copy of the base document, so the tailored row's contact header is the base's header; the "tailored header autofilled into an unrelated application" scenario needs the header itself to have been edited on the tailored copy; (b) "delete the browserTools field from API" is wrong — `a.browserTools` is also passed to the assistant at handler.go:324, so it is genuinely shared, not an autofill-only dependency.
 
-##### 3. The 13-value company facet vocabulary is enumerated five times inside ListCompanies and a sixth time in internal/search, so adding a facet is an eight-file edit
+#### 3. The 13-value company facet vocabulary is enumerated five times inside ListCompanies and a sixth time in internal/search, so adding a facet is an eight-file edit
 
 `company-facet-vocabulary-enumerated-five-times` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -955,7 +954,7 @@ note before acting.
 
 **Verifier.** The enumeration count is right (companies.go:149-161 locals, :169 and :205 the two isCompanyFilter calls, :178 ListCompaniesParams, :207 CountCompaniesParams, plus search/company.go:120-133), but the finding's central danger argument is factually wrong. `isCompanyFilter` is declared at companies.go:236 as `func isCompanyFilter(search string, facets ...[]string) bool` and its whole body is `if search != "" {return true}` then `for _, f := range facets { if len(f) > 0 {return true} }` — it is order-independent, so a mis-ordered argument cannot "silently mis-route the exact-count decision". It cannot mis-route anything. The two calls being identical is a redundancy worth one local variable, not a positional hazard. "Eight-file edit" is also wrong: it is three files (internal/api/handler/companies.go, internal/platform/db/queries/companies.sql, internal/search/company.go). The remedy is disproportionate on two counts: sqlc does not share a params struct across two queries (they are generated per query), and driving the Postgres param names off `search.CompanyFacetParams()` would make the SQL layer's arguments depend on the Meili attribute table — the wrong direction, and populating a generated struct by ranging over names needs reflection or a map.
 
-##### ✅ 4. Shared services are constructed inside a feature handler's constructor and then extracted from it by Register — the opposite of what AGENTS.md states — forcing three post-construction setters and load-bearing ordering
+#### ✅ 4. Shared services are constructed inside a feature handler's constructor and then extracted from it by Register — the opposite of what AGENTS.md states — forcing three post-construction setters and load-bearing ordering
 
 `handlers-own-shared-services-forcing-two-phase-wiring` · coupling · severity **low** · effort **M** · verdict **overstated**
 
@@ -974,7 +973,7 @@ note before acting.
 
 **Verifier.** There is a real, documented contradiction inside this, but the list of nine is padded. Confirmed: internal/api/handler/AGENTS.md names "CV store/renderer" among the services "built once in Register and passed to each constructor", yet cv.NewStore is at internal/api/handler/cv.go:80 and cv.NewTypstRenderer at cv.go:106, and Register digs both back out at handler.go:363. assistant.Store is likewise built inside newAssistantHandlers (assistant.go:74) and extracted at handler.go:325 — a genuine cycle the ownership choice created. moderation.New at handler.go:242 is already built in Register (inline) and only needs to be a local so submissionsH at :247 stops reaching into jobsH. Refuted parts: `inboxH.revokeGmailGrant` (handler.go:295) is a METHOD on inboxHandlers (gmail.go:260), not a service — AGENTS.md explicitly blesses it ("the Gmail grant revoked ... shared with GmailDisconnect via revokeGmailGrant"), so hoisting it is not the same move. `authH.accounts.WithCodes` (:343) and `reportsH.report.WithNotifier` (:350) are each a feature's OWN service being handed an optional SES dependency that only exists inside the `if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != ""` block at :339-352 — hoisting the services does not remove that two-phase step; the conditional does. And `assistantH.withFollowUps(cfg.LLM)` at :328 breaks no cycle at all: cfg.LLM is available before construction, so it is simply a missing constructor argument. So "three setters exist only to break cycles the ownership choice created" is true of exactly one of the three.
 
-##### 5. Three handler structs each hold a `searcher` and re-implement the same availability check, pagination guard and hit→jobview loop; the documented shared core is private to one of them
+#### 5. Three handler structs each hold a `searcher` and re-implement the same availability check, pagination guard and hit→jobview loop; the documented shared core is private to one of them
 
 `search-list-preamble-split-across-three-handler-structs` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -993,7 +992,7 @@ note before acting.
 
 **Verifier.** The three `searcher` fields are real (search.go:21, user_jobs.go:26, resume.go:35) and the `views[i] = hit.Job` loop does appear five times, but the five endpoints are not one query with five wrappers: SimilarJobs (similar.go:33) calls `SimilarJobs(ctx, id, limit)` with its own limit bounds and no pagination or filter at all, Recommendations (recommendations.go:42) calls `RecommendByVector(vec, filter, limit, offset)`, SwipeDeck (swipe.go:35) calls `Search` with an exclusion filter. What is genuinely shared is a two-line window guard and a three-line projection loop. The semantic_ratio "divergence" is weaker than claimed: swipe.go's own comment scopes the sameness explicitly — "the same Meilisearch query as SearchJobs (same facets, free-text q, and sort)" — it never claims the semantic ratio, and the deck has no reason to accept one. Citation slop: the SearchParams literal is at swipe.go:35, not :32 (:32 is `return err` inside the ExcludedJobIDs check). The remedy is the part I reject outright: a `jobFeed.page(c *fiber.Ctx, extra ...)` returning five values and folding three different backend calls behind a variadic is precisely the generic-abstraction-over-two-cases the project's rules forbid, and it would be harder to read than the five explicit handlers.
 
-##### 6. The assistant's 2,400-line tool layer lives in internal/api/handler only because it reaches through sibling handler structs into their unexported service fields
+#### 6. The assistant's 2,400-line tool layer lives in internal/api/handler only because it reaches through sibling handler structs into their unexported service fields
 
 `assistant-tools-reach-through-sibling-handlers` · coupling · severity **low** · effort **L** · verdict **overstated**
 
@@ -1012,11 +1011,11 @@ note before acting.
 
 **Verifier.** The mechanics are accurately reported: I counted the hops and they match — h.tracking.tracking at assistant_tracking_tools.go:26,32,41,69,116,119,148,157; h.search.facets/.search at assistant_tools.go:105,112,152,174,297; h.cv.cvStore/.editor/.jobReader/.matchAnalysisCache at assistant_cv_tools.go:90,216,318 and assistant.go:550,575,592 and assistant_interview_tools.go:124; h.profile.userProfile at assistant_profile_tool.go:47; h.mail.inbox at assistant_inbox_tools.go:397-400; and the constructor does mutate a handler it was handed at assistant.go:96. But the structure is a documented decision, not an accident: assistant.go:29-32 says outright "reaches the other feature handlers for the services its tools call — the assistant is a facade over the same use cases the HTTP surface exposes", and internal/api/handler/AGENTS.md repeats it for get_profile. Two of the claimed costs do not survive checking: (a) "adding a field to trackingHandlers is a change the assistant's tests feel" is false — the tests use named-field literals (assistant_tracking_tools_test.go:109 `&assistantHandlers{tracking: &trackingHandlers{tracking: jobtracking.New(repo)}}`), so a new field costs them nothing; (b) "unconstructible without six other handlers" describes Register only — every test builds a partial `&assistantHandlers{...}` already. Nothing about this blocks feature work or causes bugs, so "high" is not defensible; it is a wiring preference with a small real kernel.
 
-#### Source adapters and ingest
+### Source adapters and ingest
 
 > **Reviewer's note on what is well-factored here.** The core hypothesis of this review — \"180 adapters that each re-implement fetch/parse/normalize\" — is mostly WRONG, and I want to say so plainly. The shared substrate is real and genuinely used:\n\n- Date parsing is fully centralised. `internal/ingest/sources/dates.go` funnels every parser through `NotFuture`; a repo-wide grep for `time.Parse(` outside dates.go returns exactly ONE hit (arbeitsagentur.go:170). That is a 185-of-186 hit rate on the hardest thing to keep consistent.\n- Transport is one client with capability-segregated interfaces (http.go:29-107). Retry, 429/Retry-After, the 64 MiB body cap with its non-transient BodyTooLargeError, the AWS-WAF challenge detection and the SSRF guard are written once; adapters narrow to `JSONGetter`/`HTMLGetter`/etc. so their tests stub one method. This is textbook accept-interfaces Go.\n- Detail fan-out (`fetchDetails`/`fetchDetailsStream`, helpers.go:20-66), DOM walking (html.go), schema.org JobPosting decoding (jsonld.go, schema.go), remote/work-mode mapping (helpers.go:71-122), sanitisation (sanitize.go) and plain-text→HTML reconstruction (plaintext.go) are all shared and widely called.\n- Adding a provider really is a small diff: the most recently added adapters are hibob.go (115 lines, of which ~40 are code), compleo.go (105), instaffo.go (126). One line in registry.go. That is the 30-line answer, not the 300-line one.\n- The optional-capability markers (`boardless`/`aggregator`/`selfClosing`/`fullCatalog`/`sweepGrace`, source.go:111-146) are a good seam: the sweep policy in cmd/ingest reads adapter-declared facts rather than a parallel hardcoded list, and each marker's doc states the soundness condition. `linksource.boardCoverage` reusing the ingest registry instead of writing 50 single-page adapters is the right call and is well argued in its own doc.\n\nThings I deliberately did NOT flag:\n- Per-provider structs that redeclare `addressLocality`/`addressCountry` (radancy, northstone, globalpayments, talentlyft, itechart…) rather than using schemaAddress. schema.go:38 explicitly warns that a board deliberately omitting the region must not use the shared `Location()`, and the variants differ in real ways (radancy blanks numeric regions, globalpayments has a Place.name fallback, several are 2-field). Five duplicated struct fields is cheaper than the wrong abstraction here.\n- The exported alias shims in sources (`SanitizeHTML`→`sanitizeHTML`, `IsRemote`→`isRemote`, `ParseDate`→`parseDate`, `ElementAttr`→`elementAttr`). Pure indirection, but it is the conventional Go way to keep the in-package name lowercase while giving siblings a stable surface, and it is 6 one-line functions.\n- The identical `greenhouseJobPath` regex in internal/ingest/sources/postingurl.go:22 and internal/ingest/linksource/greenhouse.go:30. Real duplication, but one regex, and the two answer different questions ((source, external_id) vs a resolved job); the practical consequence I could construct (EU greenhouse hosts absent from postingurl.go:44's host switch) is absorbed by catalogSlugForURL's second URL-match tier.\n- `internal/ingest/sources` also owning catalog identity (identity.go), the provider taxonomy (classify.go), posting-URL canonicalisation for the browser extension (postingurl.go) and the description sanitisation policy — this is why 23 packages import a 58k-LOC adapter package. It is a real seam smell (internal/api/handler and internal/ingest/moderation import the whole adapter tree for three small functions), but splitting it is churn with no behavioural payoff today and the AGENTS.md treats the placement as deliberate. Noting the seam rather than flagging it.\n- The `sources.All(nil)` transport-free marker path (5 nil-guard sites in registry.go, 4 consumers). It currently works — no constructor dereferences its client — and rebuilding 186 structs per /status request is not a cost that matters at this traffic. The one genuine defect it produces (env-gated adapters vanishing) is filed as the credentials/taxonomy finding instead.
 
-##### 7. sources.All gates adapter registration on env credentials, so the provider taxonomy silently loses three aggregators wherever those keys are unset
+#### 7. sources.All gates adapter registration on env credentials, so the provider taxonomy silently loses three aggregators wherever those keys are unset
 
 `registry-conflates-credentials-with-taxonomy` · coupling · severity **medium** · effort **M** · verdict **confirmed**
 
@@ -1035,7 +1034,7 @@ note before acting.
 
 **Verifier.** Every citation is real. internal/ingest/sources/registry.go:269/272/282 gate usajobs/reed/whatjobs on env vars; reed.go:72, whatjobs.go:76, usajobs.go:48 all declare aggregator(). cmd/reindex/main.go:420-425 does read the aggregator set through sources.All(nil), and its comment is factually wrong today — it asserts "usajobs is the one adapter sources.All only registers when USAJOBS_API_KEY is set" while reed and whatjobs are gated identically (git shows the comment was written when usajobs was the lone keyed adapter, #1158, and was never revisited). internal/ingest/pipeline/AGENTS.md:11 carries the same stale claim, while internal/ingest/sources/AGENTS.md:12 has been updated to three — the doc drift itself is evidence the conflation is confusing maintainers. There is a SECOND uncited consumer with the same leak: cmd/ghost-crosscheck/main.go:85-86 also does sources.AggregatorProviders(sources.All(nil)). internal/api/handler/status.go:123/134 confirmed verbatim. I downgrade high→medium on two counts the reviewer overstated. (a) The contracts.ts artifact is inert: web/src/lib/facets.ts:533 declares the source facet `dynamic: true` (distribution-driven, labelled via sourceLabel at :331), it never imports SOURCE_VALUES (only mentions it in a comment at :6), and the exported `Source` type has zero uses anywhere in web/src — so the drift at contracts.ts:1012 is a stale artifact, not a broken filter. (b) The duplicate-suppression harm requires the reindex host to lack WHATJOBS_PUBLISHER_ID, which is not verifiable from this repo. What is certain and live: the taxonomy is not total, the reasoning comment guarding it is wrong, and two separate binaries plus the public status page silently misclassify.
 
-##### 8. atsdetect.FromURL is a second, drifted implementation of atsboard.Recognize despite atsboard's stated "one definition" contract
+#### 8. atsdetect.FromURL is a second, drifted implementation of atsboard.Recognize despite atsboard's stated "one definition" contract
 
 `two-url-to-board-recognizers` · reuse · severity **medium** · effort **L** · verdict **confirmed**
 
@@ -1054,7 +1053,7 @@ note before acting.
 
 **Verifier.** Citations hold (fromurl.go:19 not :20, a one-line slip). The overlap is real and is not two vendors' JSON shapes: both tables answer the identical question (URL → provider+board keyed to the ingest external_id namespace) and 11 providers appear in both — greenhouse, lever, ashby, jazzhr, recruitee, pinpoint, careerplug, cornerstone(csod), pageup, smartrecruiters, workday. Crucially, nothing in atsdetect.go, fromurl.go or their tests mentions atsboard at all, while atsboard's package doc (board.go:1-16) and AGENTS.md:9-12 assert "One definition means a host added once is recognised by all three" — the code contradicts its own documented boundary, with no stated rationale for the split. The divergences are verified, in both directions: fromurl.go:35-37 takes segs[0] for jobs.smartrecruiters.com, which board.go:30-32 documents as a bug and fixes at board.go:80 + :174-183 via segmentBeforePosting/smartrecruitersPosting; localeSegment differs (fromurl.go:11 `[A-Za-z]{2}` vs board.go:288 `[A-Z]{2}`); and board.go:159-172 (modeHostPath) has no equivalent of workdaySite's job/details rejection. atsboard/AGENTS.md:42-43's claim that Taleo/Oracle "cannot be derived from a URL at all" is contradicted by fromurl.go:76-88, which derives both from the platform's own hosts. I downgrade high→medium because the claimed data harm is unproven: cmd/harvest-role's output is only a seed, and cmd/harvest-boards probes every candidate against the platform API before committing (main.go:69-78), so a SmartRecruiters portal slug would almost certainly probe dead and be dropped — the cost is a wasted probe, not a committed wrong board. The reviewer offers no evidence of a portal slug actually in sources/smartrecruiters.yml.
 
-##### ✅ 9. boardresolve scans the same page twice with two recognizers and a verbatim-copied URL regex, and its trusted-set gate discards everything the first scan found
+#### ✅ 9. boardresolve scans the same page twice with two recognizers and a verbatim-copied URL regex, and its trusted-set gate discards everything the first scan found
 
 `boardresolve-double-scans-with-copied-regex` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -1071,7 +1070,7 @@ note before acting.
 
 **Verifier.** Every line citation is exact (boardresolve.go:25-30, :48, :66, :72-73; atsdetect.go:31, :44-49), and the two absURLRe declarations are byte-identical — so the page really is regex-scanned twice. But the two central claims do not survive reading the docs. (1) The `trusted` gate is not "a third restatement of atsboard's invariant": boardresolve.go:22-24 states it constrains atsdetect's output, which carries no namespace contract at all, whereas step 2's atsboard results are ungated precisely because atsboard's table does carry that contract (board.go:12-16). Two different guards on two different recognizers, not one rule copied. (2) "A page whose only ATS link is careers-acme.icims.com resolves to nothing" is true, but that is a deliberate, documented conservatism (the package doc at boardresolve.go:6-7: "Only providers whose (provider, board) matches how the ingest pipeline namespaces jobs.external_id are accepted"), and widening it is a missing feature, which this review explicitly excludes. The only hard duplication is one regexp line that cannot be shared because atsdetect's copy is unexported. One genuine detail the reviewer missed and which is worth more than the finding as written: "workable" at boardresolve.go:29 is dead — atsdetect can never return it (fromurl.go has no apply.workable.com case and atsdetect.go:16-21's matchers cover only greenhouse/lever/ashby).
 
-##### 10. cmd/harvest-boards hand-writes the listing call for 33 platforms whose adapter already makes exactly that call, while the adapterProber seam that avoids it is used for 3
+#### 10. cmd/harvest-boards hand-writes the listing call for 33 platforms whose adapter already makes exactly that call, while the adapterProber seam that avoids it is used for 3
 
 `harvest-probers-duplicate-adapter-listings` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -1091,7 +1090,7 @@ note before acting.
 
 **Verifier.** The line citations are all exact (prober.go:14, :255, :303, :322, :340, :397, :541-576; adapter_prober.go:21-27), but the load-bearing claim — that these probers "issue the identical single request the adapter issues" — is false for most of the named examples, and I checked each. breezy: prober.go:334-350 is one GET, but internal/ingest/sources/breezy.go:47-58 fans out a detail-page fetch per posting via fetchDetails — adapterProber would multiply probe cost by the posting count across every candidate slug. personio: prober.go:391-403 is one XML GET, while internal/ingest/sources/personio.go:49-75 fetches the default feed, then the English feed, then per-job detail pages as a fallback. workable: the prober hits the same URL, but it returns resp.Name (prober.go:250, :261) — the account name the adapter never surfaces, and adapterProber returns "" by construction (adapter_prober.go:20-27, doc: "These adapters expose no cheap employer name"). That leaves recruitee and pinpoint as genuine no-value duplicates (~15 lines each, both returning the slug as the name), out of 35 map entries. The claimed harm is also weaker than stated, in a way that argues against the remedy: probers swallow fetch errors as `return "", 0, nil`, so main.go:160-165 never increments `failures` and the "all probes failed" guard at :73 never fires — but adapterProber does exactly the same (adapter_prober.go:23-25), so routing through it fixes nothing. adapterProber also ignores the injected httpClient, so it cannot be stubbed in tests, unlike the bespoke probers.
 
-##### ✅ 11. The "page until a page adds nothing new" walk is extracted for []string in html.go but hand-rolled five more times with the same three rules
+#### ✅ 11. The "page until a page adds nothing new" walk is extracted for []string in html.go but hand-rolled five more times with the same three rules
 
 `paged-enumeration-loop-reimplemented` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -1110,7 +1109,7 @@ note before acting.
 
 **Verifier.** Every citation is accurate — I read all six loops (html.go:270-292, peopleforce.go:58-77, bayt.go:89-116, teamtailor.go:47-77, neogov.go:60-90, hhru.go:146-176) and they do repeat the same three rules. But the finding's own severity argument collapses on inspection. Only two adapters implement fullCatalog (geekjob.go:39, habrcareer.go:66) and both already use crawlAllPagedLinks (geekjob.go:56); none of the five hand-rolled loops is a fullCatalog provider, so "none participate in that distinction" describes correct code, not a latent mass-close. There is no live bug in any of the five. The variations the reviewer calls worrying are each documented in place and are not omissions: teamtailor.go:43-46 explains the /jobs→root 404 fallback AND mutates listPath so later pages follow it (state the proposed fetchPage closure would have to carry); neogov's `total` early-exit at :87 is an extra stop condition, not a missing one; hh starts at page 0 so `page == 0` is its first-page check; bayt keys on the extracted job id but appends a transformed absolute URL. Each also wraps its page-1 error with its own provider-prefixed message. Extracting `pagedDistinct[T]` with a `key func(T) string` plus a `failOnGap bool` flag over five fetch steps that differ in transport (GetHTML / GetTextWithHeaders / embedded-state decode), page origin, and stop conditions is exactly the premature generic the project's stated principles rule out — it would be harder than the 15-line loop it replaces.
 
-#### Job domain core and pipeline
+### Job domain core and pipeline
 
 > **Reviewer's note on what is well-factored here.** Genuinely well-factored in this area, and deliberately not flagged:
 
@@ -1130,7 +1129,7 @@ note before acting.
 
 - **Deliberately not flagged as a finding: `jobhash.Of` omitting cities/english_level/is_tech** despite claiming to cover the search document. It is a known defect rather than a structural one, and it is cited as evidence inside finding 5 where the duplication that makes it hard to fix actually lives.
 
-##### 12. content_hash and role_fingerprint are comment-enforced columns each write path must remember; the moderator path sets neither and Telegram/link-import set only one
+#### 12. content_hash and role_fingerprint are comment-enforced columns each write path must remember; the moderator path sets neither and Telegram/link-import set only one
 
 `post-hoc-hash-columns-have-no-owner` · boundary · severity **medium** · effort **M** · verdict **confirmed**
 
@@ -1150,7 +1149,7 @@ note before acting.
 
 **Verifier.** Every citation is exact. internal/job/job.go:168 states the prose contract; cmd/ingest/store.go:87,90 is the only site setting both; cmd/tg-extract/store.go:49 and internal/ingest/linkimport/linkimport.go:198 set RoleFingerprint only; UpsertManualJob (jobs.sql:587) and UpdateManualJob (jobs.sql:685) list neither column — I read both column lists in full. Both consequences check out: RoleClusterCount (jobs.sql:287-300) filters `role_fingerprint <> ''`, and manual jobs are minted by moderation.Create via UpsertManualJob (internal/ingest/moderation/repository.go:48) including the submission-approval path (internal/api/handler/submissions.go:16), so a curated copy of an ATS-crawled role never clusters or dedups. The content_hash arm is stronger than the reviewer knew: internal/api/handler/match_analysis.go:381-387 justifies the NULL-stamp rule with "a non-board job with no content_hash is never re-crawled, so its text is stable" — an assumption UpdateManualJob (an editable manual job) directly falsifies, and semantic.sql:23/84 then freezes the vector. Not high: manual/submission jobs are a small slice of the catalogue and the missing fingerprint degrades the reality signal to the neutral (1,1) rather than to a wrong value.
 
-##### 13. Building a job's search document is re-implemented in four places and only the full reindex applies the role cluster's geography union
+#### 13. Building a job's search document is re-implemented in four places and only the full reindex applies the role cluster's geography union
 
 `search-doc-assembled-four-times` · reuse · severity **medium** · effort **M** · verdict **confirmed**
 
@@ -1169,7 +1168,7 @@ note before acting.
 
 **Verifier.** All four sites verified line-exact and read in full: cmd/reindex/main.go:515-531 (count → FromJob:520 → ClassifyReality:524 → MergeClusterGeography:530), cmd/ingest/store.go:153-171, internal/ingest/linkimport/linkimport.go:281-296, cmd/embed/indexer.go:31-53 — identical `repost, mass := 1, 1` degrade-then-FromJob-then-ClassifyReality preamble, only the reindex merges cluster geography. The harm mechanism is real: internal/search/client.go:496 uses UpdateDocumentsWithContext (field-level update) and jobview's Cities/Countries/Regions carry no omitempty (internal/job/jobview/jobview.go:67), so the keys are always present and always overwrite. I checked the counter-argument that this is a documented boundary — document.go:82-83 says the merge is "Called by the full reindex (which alone has the whole cluster in view); the single-row FromJob cannot" — but that documents why FromJob itself does not merge, not that an incremental push may narrow an already-widened doc; and ingest already pays a per-row RoleClusterCount, so "a single row cannot ask" is not true. Staying at medium rather than high: cmd/reindex always rebuilds and swaps a full index (main.go:186-196), so every narrowing self-heals on the next scheduled rebuild.
 
-##### 14. The db.Job → UpsertJobParams remap needed for jobhash.Of is copy-pasted verbatim into two backfill commands, bypassing job.FromRow + Fields.UpsertParams
+#### 14. The db.Job → UpsertJobParams remap needed for jobhash.Of is copy-pasted verbatim into two backfill commands, bypassing job.FromRow + Fields.UpsertParams
 
 `hashparams-twins-bypass-fields-mapping` · reuse · severity **low** · effort **S** · verdict **confirmed**
 
@@ -1188,7 +1187,7 @@ note before acting.
 
 **Verifier.** cmd/backfill-descriptions/main.go:205 and cmd/backfill-justjoin/main.go:117 are byte-identical functions with identical doc comments — I diffed both bodies field by field (19 fields, same order). The drift claim also checks out: jobhash.Of (jobhash.go:23-49) omits Cities, EnglishLevel and IsTech while the document carries all three (jobview.go:67,77 and the fold at :154-180). Severity stays low, and one part of the narrative is wrong: a stale twin hash causes exactly ONE spurious `changed` on the next crawl (ingest recomputes and stores the full hash at cmd/ingest/store.go:87), not a re-push "on each pass".
 
-##### ✅ 15. pipeline.Store's three optional capabilities are unexported interfaces discovered by runtime type assertion, so the sole production implementation cannot be checked at compile time
+#### ✅ 15. pipeline.Store's three optional capabilities are unexported interfaces discovered by runtime type assertion, so the sole production implementation cannot be checked at compile time
 
 `pipeline-store-capabilities-unexported` · boundary · severity **low** · effort **S** · verdict **overstated**
 
@@ -1206,7 +1205,7 @@ note before acting.
 
 **Verifier.** Citations are exact — Store at pipeline.go:33 (one method), closer:41, toucher:51, seenLookup:68, the three assertions at 437/460/525 each with a silent-degrade branch, and cmd/ingest/board_health.go:24 is indeed the lone `var _` proof. The asymmetry is real and the export is cheap. But the impact is inflated: this is a latent typing gap, not a defect — dbStore satisfies all four today, the optional-capability shape is explicitly documented at each interface AND in internal/ingest/pipeline/AGENTS.md:40 ("pipeline.ingestStream routes that to the Store's optional closer"), and there is no evidence of drift. "Degrades production quietly" describes a hypothetical future rename, which the rubric puts at low, not medium.
 
-##### ✅ 16. cmd/backfill-derive hand-rolls its own db.Job → jobderive.Input mapping and drops the structured regions/cities, so a run permanently erases moderator-stated geography
+#### ✅ 16. cmd/backfill-derive hand-rolls its own db.Job → jobderive.Input mapping and drops the structured regions/cities, so a run permanently erases moderator-stated geography
 
 `backfill-derive-rebuilds-derive-input` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -1225,11 +1224,11 @@ note before acting.
 
 **Verifier.** The factual core holds: cmd/backfill-derive/main.go:146 passes seven fields with no Regions/Cities, UpdateJobDerived (jobs.sql:911) writes `regions/cities = COALESCE(arg,'{}')` unconditionally, and backfillProgress pages the whole table with no source/created_by filter (cmd/backfill-derive/main.go:243-250) — so a pass does blank moderator-stated geography. But the framing fails on two counts. (1) The REUSE lens does not apply: deriveRow is the ONLY db.Job→jobderive.Input mapping in the repo (grep for `jobderive.Input{` returns 5 sites, the other four build an Input from raw adapter/moderator input, not from a row), so the two sides a reuse finding needs do not exist. (2) The erasure is not a backfill-specific divergence: internal/ingest/moderation/moderation.go:191-196 already documents "The edit path re-derives every facet from content and carries no explicit structured overrides" and passes `structuredFacets{}`, so ANY moderator edit — even a title typo fix — wipes the stated regions/cities through repository.Update (internal/ingest/moderation/repository.go:96-98) today. The project has already decided stored geography is re-derivable; the backfill is consistent with that, not a rogue second door. The CleanLocation point (job.go:126) is real but near-inert: every path that writes Location goes through job.New, so stored values are already cleaned and re-cleaning is idempotent.
 
-#### LLM / AI subsystem
+### LLM / AI subsystem
 
 > **Reviewer's note on what is well-factored here.** What is genuinely well-factored here, and worth protecting:\n\n- **`internal/platform/llm` is a real single provider abstraction, and nothing reaches past it.** All eight LLM callers (`enrich`, `telegram`, `resumeextract`, `matchanalysis`, `atscheck`, `mailclassify`, `autofillagent`, `assistant/followups`) go through `GenerateJSON`/`GenerateJSONStream`/`Chat`. `llm.NewClient` (llm.go:141) is the only construction path and it wires tracing there, so no entrypoint can build a client and forget it. The one package with its own `http.Client` — `internal/ai/speech` (speech.go:56) — is explicitly argued for in internal/ai/speech/AGENTS.md (langchaingo models chat completions and has no audio surface), and the argument is right. `internal/platform/llm/schema.go`'s `schemaInjector` is a genuinely well-reasoned workaround for a langchaingo type that cannot express `[\"string\",\"null\"]`, cached per rendered schema and keyed to defeat name collisions.\n\n- **The tolerant-decoder family is deliberate, not drift.** `internal/platform/flexjson`'s package doc (flexjson.go:11-16) names its two siblings — `enrich`'s `roundInt`/`stringOrFirst` and `resumeextract`'s `truncInt`/`verbatimString` — and states the exact semantic each diverges on (round vs truncate, coerce vs keep verbatim, strict vs lenient). I looked for drift and found the opposite: three of the four packages that could reuse `flexjson` do (`matchanalysis/flexdecode.go`, `telegram/flexdecode.go`, `mailclassify/flexdecode.go`), and the two that don't say why. Not flagged.\n\n- **Prompts are owned.** Per-preset system prompts live in `internal/ai/assistant/prompt.go` behind `NormalizePreset`, with `TestPromptOnlyNamesToolsThePresetHas` guarding prompt/registry agreement. Feature prompts sit in the package that owns the contract they describe (`enrich/langchain.go:83`, `matchanalysis/analyzer.go:224-293`, `telegram/llm.go:97`). The two server-side briefs in the handler (`openingBrief` assistant.go:486, `autopilotBrief` assistant.go:536) are turn kick-offs, not method — both say so and both point at the system prompt that holds the method. Correct.\n\n- **`internal/candidate/experience`'s split is the sharpest boundary in the area.** `professional.go:11-14` names itself as an adapter so `Store`/`Retrieve` stay ignorant of résumés; the publish gate is a service check (`experienceFromBank` skipping `!atom.Provenance.Publishable()` at professional.go:74), not a prompt rule.\n\nWhat I deliberately did NOT flag:\n\n- **`matchanalysis`, `atscheck` and `autofillagent` not passing `llm.WithSchema`.** It looks like an inconsistency (five of eight callers do), but openspec/changes/archive/2026-07-28-llm-structured-outputs/design.md:46 explicitly scoped them out and design.md:190 records the follow-up as open. A documented deferral, not a defect.\n\n- **The `sync.Once` + `schema` + `schemaErr` + `requestSchema()` idiom repeated in five packages** (`enrich/schema.go:49`, `resumeextract/schema.go:20`, `telegram/schema.go:14`, `mailclassify/schema.go:14`, `assistant/followups.go:96`). Real repetition, ~12 lines each, but the only honest fix is a generic memoizer in `llmschema` — premature generics for a per-process one-time derivation the client already caches downstream (llm/schema.go:119). Below the bar.\n\n- **`experience.ProfessionalFrom` (professional.go:58) is called only from `professional_test.go:39`** — a two-line duplicate of `Store.Professional`'s body with no production caller. Orphaned, but it is pre-existing and one line of cleanup, not a structural finding.\n\n- **`llm.TruncateRunes`/`TrimTruncateRunes` used by `internal/candidate/cv` and `internal/candidate/experience`,** which make no LLM calls. Mildly the wrong home, but two pure functions in an otherwise coherent package is naming taste, not structure.\n\n- **Assistant tool schemas hand-written as `map[string]any` in 26 places** rather than derived via `llmschema`. They are argument schemas for closures over anonymous structs, not contract types; `assistant.DecodeArgs` (tool.go:137) already rejects unknown fields and trailing content strictly. Deriving them would need a named struct per tool for no gain.
 
-##### 17. The "de-identified CV" seam is a JSON string, so the contact whitelist is enforced three different ways — one of them the blacklist the codebase's own doc calls wrong
+#### 17. The "de-identified CV" seam is a JSON string, so the contact whitelist is enforced three different ways — one of them the blacklist the codebase's own doc calls wrong
 
 `cv-deidentification-seam-is-a-json-string` · boundary · severity **medium** · effort **M** · verdict **confirmed**
 
@@ -1248,7 +1247,7 @@ note before acting.
 
 **Verifier.** Every citation is real and says what is claimed. internal/candidate/resumeextract/structured.go:57-64 states the whitelist rationale verbatim ("A blacklist — dropping the four known contact keys — would disclose that new field by default, which is the wrong way round"), and internal/candidate/atscheck/analyzer.go:106-125 is precisely that blacklist (`for _, k := range []string{"full_name","email","phone","links"} { delete(m, k) }`). internal/api/handler/ats_report.go:211 does `json.Marshal(st)` over the FULL resumeextract.Structured and ats_report.go:83 feeds it to Analyze, so the blacklist is the only thing standing between a new Structured field and the gateway. The complement of Professional today is exactly those four keys, so nothing leaks yet — but the two mechanisms are only accidentally equal. The fit path is as described: handler/match_analysis.go:321-337 marshals a resumeextract.Professional (candidateProfiler.Professional, match_analysis.go:356), and matchanalysis/analyzer.go:385-393 unmarshals it into Structured and re-projects — a genuine no-op round trip. matchanalysis/AGENTS.md calls Input.StructuredResume "the resumeextract wire shape (contact fields stripped)", i.e. the code enforces by convention what it documents as a type. I checked the deterministic ATS score (internal/candidate/atscheck/atscheck.go:126 Score(cvText, ...)) — it never reads Structured, so no consumer needs the contact fields, and only two producers exist (candidateProfileJSON ×2, structuredResumeJSON ×1), so the type swap is small. Downgrading to medium only because nothing leaks today: the defect fires the first time somebody adds a field to Structured, which is ordinary but future work, not an active bug.
 
-##### 18. internal/api/handler carries two hand-rolled SSE stream writers with the same headers, deadline discipline and keepalive, and they already share one constant across the split
+#### 18. internal/api/handler carries two hand-rolled SSE stream writers with the same headers, deadline discipline and keepalive, and they already share one constant across the split
 
 `two-sse-stream-implementations-in-handler` · reuse · severity **medium** · effort **M** · verdict **confirmed**
 
@@ -1266,7 +1265,7 @@ note before acting.
 
 **Verifier.** Citations check out line for line. internal/api/handler/match_analysis_stream.go:202-241 is the sseStream type (mu/w/conn/timeout; event at 214, comment at 224, write at 231 doing the per-write SetWriteDeadline + Flush), and internal/api/handler/assistant.go:411-454 hand-rolls the same thing: the write closure at 419-424 setting the same deadline, `var mu sync.Mutex` at 433, and a keepalive goroutine at 437-454 that locks, re-arms the deadline and writes. The frame formats are identical (assistant.go:650 vs match_analysis_stream.go:219; assistant.go:636 vs 225), the four header Set calls are identical including the nginx comment (assistant.go:393-396 vs 77-80), and the hub clone with the same rationale is identical (assistant.go:406-409 vs 90-93). The cross-file reach is real: `sseWriteTimeout` is declared at match_analysis_stream.go:190 and used from assistant.go:421 and 448 (grep confirms these are the only two SetBodyStreamWriter sites in the repo). The duplicated part is not vendor-shaped divergence — it is one subtle concurrency/deadline protocol, documented in both files with near-identical prose, and the only real behavioural difference is one bool. Drift evidence beyond the keepalive literal: handler/AGENTS.md:91 still contrasts writeEvent with `writeSSE`, a function that no longer exists anywhere in the tree. Nothing in handler/AGENTS.md blesses the split. Medium stands: no live bug, but the next fix to the deadline race has to be made twice.
 
-##### ✅ 19. Two config structs declare the same six LLM/Langfuse fields and seven entrypoints hand-copy them into llm.Settings field by field
+#### ✅ 19. Two config structs declare the same six LLM/Langfuse fields and seven entrypoints hand-copy them into llm.Settings field by field
 
 `llm-settings-mapped-by-hand-seven-times` · simplicity · severity **low** · effort **S** · verdict **confirmed**
 
@@ -1285,7 +1284,7 @@ note before acting.
 
 **Verifier.** The count is exact: seven llm.Settings literals with the same six fields — cmd/server/main.go:143 and :160, cmd/enrich/main.go:34, cmd/tg-extract/main.go:46, cmd/classify-mail/main.go:32, cmd/backfill-experience/main.go:205, cmd/backfill-resume-structured/main.go:70 — over two config structs that read the same six env vars (config.go:70-72 + :99-101, read at :192-205; enrich.go:15-17 + :26-28, read at :42-51). llm.go:117-120 does claim to be "the one shape every entrypoint maps its env config into", and the mapping is what got copied. One supporting claim is wrong, though: Enrich.LangfuseEnabled (enrich.go:34) is referenced by nothing outside config/enrich_test.go — grep shows zero production callers — so it is dead code, not an asymmetry between the server's and the workers' tracing predicate; both actually get their predicate from llm.NewTracer inside llm.NewClient (llm.go:150). Severity low is right: forgetting a site when a seventh field lands silently disables that binary's tracing, which is annoying, not dangerous.
 
-##### ✅ 20. The outbox lease/attempt/dead-letter policy is written three times in SQL and three times in Go, and the third copy silently dropped the dead-letter signal
+#### ✅ 20. The outbox lease/attempt/dead-letter policy is written three times in SQL and three times in Go, and the third copy silently dropped the dead-letter signal
 
 `outbox-drain-hand-rolled-three-times` · reuse · severity **low** · effort **L** · verdict **overstated**
 
@@ -1305,7 +1304,7 @@ note before acting.
 
 **Verifier.** The citations are accurate but the framing inflates a small, real drift into triplicated policy. The SQL side is not a defect: sqlc has no way to express one claim/fail statement over three different tables, so enrichment.sql:30, semantic.sql:41 and mail_classification.sql:20 must be three statements — and the finding's own remedy concedes this. The Go side is two ~15-line failN funcs (enrich/runner.go:194-212 vs embed/runner.go:262-275) that already differ for real reasons: enrich tallies under a mutex because a wave runs concurrently, embed does not and deliberately calls Fail on context.Background() so a timed-out call still records itself. Extracting a worker.Outcome + a Fail port shape for two (soon three) callers of a dozen lines is symmetry-driven abstraction, and internal/platform/worker is a good place to put it only if there were more. What IS confirmed, and is the only part worth acting on: internal/platform/db/queries/mail_classification.sql:103 is `FailEmailClassification :exec` where its two siblings are `:one ... RETURNING attempts, failed_at`; internal/application/maillink/runner.go:69 declares `Fail(...) error`; the Run loop at 131-138 keeps no tallies; and cmd/classify-mail/main.go:59-60 logs "done" and returns 0 unconditionally. worker.ExitCode is a live convention in eight binaries (cmd/enrich:72, cmd/embed:85, cmd/notify:77, cmd/ingest:231, cmd/liveness:182, cmd/tg-ingest:56, cmd/remind:69, cmd/tg-extract:83) — classify-mail is the lone bypass, and nothing else reads email_classification_outbox.failed_at, so a permanently dead-lettering mail queue is visible in journalctl only. Low rather than medium: no user-visible bug, and the fix is roughly ten lines.
 
-#### CV / user-profile domain
+### CV / user-profile domain
 
 > **Reviewer's note on what is well-factored here.** What is genuinely well-factored here, and worth protecting:
 
@@ -1318,7 +1317,7 @@ note before acting.
 
 **What I deliberately did NOT flag:** `internal/candidate/headshot` and `internal/candidate/resume` are near-identical blob+pointer stores (Enabled/Put/Get/Status/Delete, nil-degradation). Unifying them would be exactly the speculative infrastructure CLAUDE.md warns against — their payloads, their validation, and their extra columns genuinely differ. Also skipped: `accountdelete`'s ordering (Postgres/S3/Google), which is correct and well-documented; and the `ListUserBlobKeys` SQL enumeration, which is a load-bearing list but is the right place for it.
 
-##### 21. The evidence gate — the rule the tailoring capability exists to enforce — is an optional post-construction mutator with two independent fail-open nil checks
+#### 21. The evidence gate — the rule the tailoring capability exists to enforce — is an optional post-construction mutator with two independent fail-open nil checks
 
 `evidence-gate-is-optional-by-construction` · coupling · severity **medium** · effort **M** · verdict **confirmed**
 
@@ -1338,7 +1337,7 @@ note before acting.
 
 **Verifier.** Every citation is accurate. internal/api/handler/cv.go:92 builds the editor with an explicit nil gate; internal/candidate/cvedit/policy.go:157 `if e.gate == nil { return nil }`; internal/api/handler/assistant_cv_tools.go:355-357 `if g.bank == nil { return nil }` is a second, independent fail-open on the same rule (and g.bank is never nil in production — it is always experience.NewStore at internal/api/handler/assistant.go:75); the only production attachment is internal/api/handler/assistant.go:96. The doc's stated reason at internal/candidate/cvedit/editor.go:128-131 does not hold: an equivalent experience.Store is already constructed at internal/api/handler/handler.go:266, twenty-three lines before newCVHandlers at handler.go:289, and the store is stateless. The agent write path is genuinely independent of the assistant — internal/api/handler/cv_tailor.go:241-243 sets ActorAgent for any API-key caller on PATCH /me/cvs/:id, mounted mw.key at internal/api/handler/cv.go:157. cvedit's own comment calls a missing gate 'a wiring mistake rather than a configuration choice', and internal/api/handler/assistant_integration_test.go:67-80 admits the hazard in a comment while re-doing the wiring by hand. Not 'high' though: production is wired correctly today, so nothing is broken now and no feature work is blocked — this is a latent fail-open, not a live bug.
 
-##### 22. experience.ProfessionalFrom is a second implementation of Store.Professional reachable from nothing but its own tests, and the docs still name it as the fit-analysis path
+#### 22. experience.ProfessionalFrom is a second implementation of Store.Professional reachable from nothing but its own tests, and the docs still name it as the fit-analysis path
 
 `professionalfrom-orphaned-duplicate` · simplicity · severity **low** · effort **S** · verdict **confirmed**
 
@@ -1356,7 +1355,7 @@ note before acting.
 
 **Verifier.** Verified by exhaustive grep over the repo (excluding .claude worktrees): the only references to ProfessionalFrom are internal/candidate/experience/professional.go:42/58 and seven call sites in internal/candidate/experience/professional_test.go. No cmd/ or internal/ non-test caller exists. It duplicates the two-line composition of Store.Professional (internal/candidate/experience/professional.go:23-24 vs :59-60), and the real fit path is internal/api/handler/match_analysis.go:321 `bank.Professional(...)`. internal/candidate/resumeextract/AGENTS.md:20 does still name `experience.ProfessionalFrom` as 'the only candidate text matchanalysis sends', which sends a reader to the dead function. Remedy is proportionate: delete, retarget the tests at experienceFromBank/Store.Professional, fix the doc line.
 
-##### 23. "Work history comes from the bank, the rest from the structure, and the structure's own experience is discarded" is reimplemented in four handlers instead of once in internal/candidate/experience
+#### 23. "Work history comes from the bank, the rest from the structure, and the structure's own experience is discarded" is reimplemented in four handlers instead of once in internal/candidate/experience
 
 `bank-plus-structure-composition-inlined-four-times` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -1375,7 +1374,7 @@ note before acting.
 
 **Verifier.** The four sites exist, but two of them are not copies of the rule — internal/api/handler/me_profile.go:108 and internal/api/handler/match_analysis.go:321 both CALL the domain method experience.Store.Professional (internal/candidate/experience/professional.go:18). Only internal/api/handler/resume.go:400-408 and internal/api/handler/cv_seed.go:53-61 inline it, so it is two sites and about six lines, not four handlers. The 'they have already drifted in their degradation' framing is also wrong: each degradation is a documented, deliberately different policy (resume.go:385-391, cv_seed.go:51-52, me_profile.go:103-105, match_analysis.go:327-331), and the finding itself later concedes this. Worse, the proposed remedy does not remove what it identifies: the rule that must not drift is 'the structure's own experience is discarded', which lives in the `st.Experience = nil` line, and with a possibly-nil bank interface that line plus the nil-check plus the log-and-continue all still have to stay at each caller — WithWorkHistory would save roughly one line per site.
 
-##### ✅ 24. "Which CV fields are the candidate's identity" is answered by three hand-maintained lists in two packages, and the read-side one is a blacklist
+#### ✅ 24. "Which CV fields are the candidate's identity" is answered by three hand-maintained lists in two packages, and the read-side one is a blacklist
 
 `contact-field-classification-in-three-hand-lists` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -1394,7 +1393,7 @@ note before acting.
 
 **Verifier.** Citations are real: internal/candidate/cv/cv.go:179 zeroes exactly FullName/Email/Phone/Links; internal/candidate/cv/store.go:165 GetForModel applies it as the only redaction, reached from internal/api/handler/cv.go:331 (API-key GET) and internal/api/handler/assistant_cv_tools.go:216 (cv_get); internal/candidate/cvedit/policy.go:33-40 denies the same four paths; internal/candidate/cvedit/policy.go:106-127 is presentationShapes; internal/candidate/cvedit/path.go:221 Paths() is reflection-derived; internal/candidate/resumeextract/structured.go:57-65 does argue the whitelist direction. But 'three lists answering one question' is wrong. Only TWO sets coincide (withoutContacts and DefaultPolicy's header entries). presentationShapes answers a different question and gives a different answer — it exempts header.location, the bare `header` container and `header.links[]`, plus style/margins/title/template_id — and its own comment (policy.go:96-105) states that the inverted direction is deliberate so an unknown field defaults to 'is a claim', i.e. it already fails SAFE for a new field; being asked for an evidence_id is a refusal, not a leak. The remedy is also partly infeasible as written: Title and TemplateID are fields of cvedit.State (internal/candidate/cvedit/path.go:23-27), not of cv.Document (internal/candidate/cv/cv.go:61-75), so a `cv.PresentationPaths()` cannot own them. And the trigger is hypothetical — cv.Header has not changed since it was introduced (git log -L on internal/candidate/cv/cv.go:164-171 shows only the introducing commit #802).
 
-#### Mail, applications and notifications
+### Mail, applications and notifications
 
 > **Reviewer's note on what is well-factored here.** Genuinely well-factored, and deliberately not flagged:
 
@@ -1411,7 +1410,7 @@ Deliberately NOT flagged:
 - `mailbox`'s package doc claiming "allocation lives in the handler" (mailbox.go:1-3, echoed at docs/agents/mail-stack.md:38) while `allocate.go` is in the package — stale prose, not a structural defect; the code is better than the doc.
 - The three `emails` insert statements (gmail DO NOTHING / hosted DO NOTHING without thread_id / external DO UPDATE) — they differ in ways that matter, and merging them would need a flag argument per difference.
 
-##### 25. The application pipeline's forward order and its terminal set live in internal/application/mailclassify, not in internal/application/userjob which owns the stage vocabulary
+#### 25. The application pipeline's forward order and its terminal set live in internal/application/mailclassify, not in internal/application/userjob which owns the stage vocabulary
 
 `stage-pipeline-order-owned-by-mailclassify` · boundary · severity **medium** · effort **M** · verdict **confirmed**
 
@@ -1431,7 +1430,7 @@ Deliberately NOT flagged:
 
 **Verifier.** Verified: mailclassify/classification.go:86-88 (stageOrder 1..5), :94-96 (terminalStages), :114-126 (AdvanceStage) — the forward-only, never-resurrect rule and the terminal set both live in the mail package, while userjob/stages.go:5-11 documents Stages as 'the ordered application-stage vocabulary (active stages then terminal) and the single source of truth' and feeds the SPA through cmd/gen-contracts/main.go:285 → contracts.ts:1014 (STAGE_VALUES verified). The latent trap is real: inserting a stage into userjob.Stages gives it stageOrder rank 0, below `applied`, and it is not in terminalStages, so AdvanceStage(current=new_stage, any forward signal) advances BACKWARD to `applied` — and classification_test.go:12-23 cannot catch it, since it only asserts mailclassify→userjob, never userjob→mailclassify. userjob/silence.go:44-50 hand-lists the same five active stages and would go silently stale too (as would userjob/buckets.go:45-49, a fourth stage-keyed table). Both consumers cited are accurate: inbox/mutate.go:226 and maillink/decide.go:51. One citation is misattributed: the 'don't fold two vocabularies together' argument is at appevent/appevent.go:12-15, not mailclassify/classification.go:13-15 (which are just signal constants) — it does not change the finding.
 
-##### 26. The employer-reply ledger reconcile — a two-statement ordering rule — is implemented once in internal/application/inbox and again in cmd/classify-mail, so the worker's copy of the rule sits in a main package
+#### 26. The employer-reply ledger reconcile — a two-statement ordering rule — is implemented once in internal/application/inbox and again in cmd/classify-mail, so the worker's copy of the rule sits in a main package
 
 `ledger-reconcile-lives-in-a-main-package` · boundary · severity **low** · effort **S** · verdict **confirmed**
 
@@ -1449,7 +1448,7 @@ Deliberately NOT flagged:
 
 **Verifier.** Both sites are exactly as described: inbox/mutate.go:194-213 (SourceForMail → RetractSupersededEmailEvent → RecordEmailApplicationEvent, with 'Order matters' at :200-201) and cmd/classify-mail/store.go:140-153 (same three steps, same order). The doc-vs-code contradiction is real and unusually blunt: mail-stack.md:107-119 says 'the rule is one reconcile with five callers' and store.go:138-139 asserts 'The reconcile is the same statement the inbox's manual paths call; the rule has one home' — there are two homes. appevent/appevent.go:2-3 naming internal/application/maillink as a recording path is also wrong; `grep -rn appevent internal/application/maillink/*.go` returns nothing. Two mitigations keep this small: the ordering is pinned at the query itself (application_events.sql labels them 'Step 1'/'Step 2' and RecordEmailApplicationEvent's comment says 'Run RetractSupersededEmailEvent first'), and `grep RetractSupersededEmailEvent` finds both callers, so the rule is not as unfindable as claimed. Actual duplicated logic is ~10 lines.
 
-##### ✅ 27. "When did this application last move" and "is a suggestion still pending" are copied into four SQL statements whose comments swear they mirror each other — and the pending-suggestion copies already test different columns
+#### ✅ 27. "When did this application last move" and "is a suggestion still pending" are copied into four SQL statements whose comments swear they mirror each other — and the pending-suggestion copies already test different columns
 
 `application-activity-rule-copied-into-four-queries` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -1469,7 +1468,7 @@ Deliberately NOT flagged:
 
 **Verifier.** The SQL citations are accurate (user_jobs.sql:284-291 and the predicate at :301 — cited as :300, off by one; mail_linking.sql:7-14,23; ghost.sql:25-30 and :38 — cited as :37; applications.sql:62-68), and the last-activity expression really is written three times (the fourth, ListOrphanedApplications, MUST differ — job_id is NULL for those rows, so it correlates through application_id; a shared (user_id, job_id) view cannot serve it, so the proposed remedy is partly infeasible as stated). The claimed live disagreement is refuted: for the board and the gate to differ, a row must have `suggested_job_id` set together with either a non-NULL job_id + NULL application_id, or a NULL job_id + non-NULL application_id. Neither is reachable. suggested_job_id is written only by SetEmailClassification (mail_classification.sql:50), whose caller maillink/decide.go:34-42 returns job_id and suggested_job_id mutually exclusively; every other path that touches it (ConfirmEmailLink :46, RejectEmailLink :52, LinkEmailToJob :63, AgentTriageEmail mail_classification.sql:95) sets it to NULL. And application_id is always derived from job_id, so it is NULL whenever job_id is. The two predicates evaluate identically on every row the system can produce — a latent inconsistency in wording, not the badge-vs-gate contradiction described.
 
-##### ✅ 28. The "one channel abstraction" the docs promise is two forked copies — Notifier, Router, ErrChannelNotConfigured and recipient() all exist twice, and have already drifted
+#### ✅ 28. The "one channel abstraction" the docs promise is two forked copies — Notifier, Router, ErrChannelNotConfigured and recipient() all exist twice, and have already drifted
 
 `notification-channel-seam-forked-in-two` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -1489,7 +1488,7 @@ Deliberately NOT flagged:
 
 **Verifier.** Every citation is real: notify/notify.go:60 vs reminder/engine.go:25 (same-signature Notifier), notify/router.go:17,23 vs reminder/engine.go:32,36 (byte-for-byte parallel Router + ErrChannelNotConfigured), transports.go:23,55, cmd/notify/main.go:50-63 vs cmd/remind/main.go:43-56, subscription.go:43 vs reminder.go:46 (two identical 6-line validChannels maps). So the parallelism is real. But the load-bearing claim — 'ALREADY DRIFTED... a channel that stores its destination in the destination column works for subscriptions and is silently undeliverable for reminders' — is false. `destination` is a subscriptions column only (migrations/0001_init.sql:341); job_reminders stores `channels text[]` and NO destination (migrations/0034_saved_job_reminders.sql:24,39; reminders.sql:81-93 GetReminderForDelivery selects no destination). reminder.recipient (engine.go:203-217) therefore CANNOT fall through to a stored destination — there is none to fall through to. The two functions resolve over two different row shapes, not one decision written twice; the only truly shared logic is ~10 lines of telegram-chat-id/account-email resolution. Nothing is broken today, and the third channel that would make the seam hurt does not exist — building for it is exactly the 'infrastructure before there's a concrete need' the project forbids. The one thing the code genuinely contradicts is a doc line: notifications.md:9 says internal/engage/emailnotify 'implements both Notifier interfaces' when emailnotify/notifier.go:19 asserts only `notify.Notifier` and the reminder-side email transport lives in reminder/transports.go:55.
 
-##### ✅ 29. Only the pure stage→threshold mapping is shared; the actual silence derivation (day math + last-activity fallback + "is this even an application") is written three times, and the follow-up gate's copy is missing a guard the board's copy deliberately keeps
+#### ✅ 29. Only the pure stage→threshold mapping is shared; the actual silence derivation (day math + last-activity fallback + "is this even an application") is written three times, and the follow-up gate's copy is missing a guard the board's copy deliberately keeps
 
 `silence-verdict-derived-three-times` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -1508,7 +1507,7 @@ Deliberately NOT flagged:
 
 **Verifier.** Line numbers check out (userjob/silence.go:72, jobtracking/silence.go:32-56, handler/followup.go:46-52 and 94-99, ghost/evidence.go:73,107-113, userjob/AGENTS.md:27). But the stated failure — 'board shows an amber 24d badge with a follow-up button that answers 409' because followup.go omits the applied_at fallback — is not reachable. Both queries wrap the expression in `CASE WHEN a.applied_at IS NOT NULL THEN GREATEST(a.applied_at, max(e.received_at))` (mail_linking.sql:7-14, user_jobs.sql:284-291), and Postgres GREATEST ignores NULL arguments, so last_activity_at is NULL if and only if applied_at is NULL — i.e. the row is not an application. In that case followup.go computes days=0, SilenceStateFor returns `active`, and the handler 409s, which is the correct answer; jobtracking.Silence returns nil for the same row, so board and gate agree. The applied_at fallback in jobtracking is explicitly documented (silence.go:29-31) as defensive repetition of a guarantee the SQL already gives, not a hole the handler forgot. What actually survives is much smaller: three copies of a 4-line 'whole days, floored at zero' helper (jobtracking/silence.go:48-51, handler/followup.go:94-99, ghost/evidence.go:107-113). The ladder itself — the part that could actually disagree — is already shared through SilenceStateFor at all three sites, exactly as userjob/AGENTS.md:27 promises.
 
-#### Shared infrastructure and the 43 binaries
+### Shared infrastructure and the 43 binaries
 
 > **Reviewer's note on what is well-factored here.** The shared bootstrap is a genuine, successful answer, not a fig leaf. 33 of the 34 production cron binaries call worker.Bootstrap + worker.Main, and per-main boilerplate really is down to ~8 lines (cmd/recount-companies/main.go:20-38 is the whole binary at 39 lines). worker.ExitCode / worker.Heartbeat are small, documented, and used where they matter. The remaining non-Bootstrap mains — harvest-*, gen-cities, gen-contracts, cv-previews — are explicitly exempted as dev tools by internal/platform/observability/AGENTS.md, and cmd/server's own signal/shutdown story is legitimately different.
 
@@ -1516,7 +1515,7 @@ Configuration IS one typed struct plus five scoped loaders (Settings/Enrich/Embe
 
 Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/backfill-semantic-vectors:108, cmd/rollup-views:220 and cmd/backfill-derive:132 (too small to justify a seam; config's are unexported on purpose); the keyset-page loop repeated across the backfills as a general shape (a generic page iterator would be premature generics — the specific ResilientPage bypass above is the real defect); cmd/server not using worker.Bootstrap; the repeated `if cfg.MeiliKey == "" { return 1 }` guard in six workers (two lines each, worker-specific message); cmd/cv-previews:21-27 reimplementing config.resolveTypstBin (a dev tool that genuinely wants fatal, not "disabled"); and cmd/embed:46 reading EMBED_PG_ONLY via os.Getenv rather than config.LoadEmbed (one knob, arguably a mode switch rather than tuning).
 
-##### 30. Two production LLM-spending backfill workers bypass worker.Bootstrap/worker.Main, losing Sentry, SIGTERM handling and the exit-code convention
+#### 30. Two production LLM-spending backfill workers bypass worker.Bootstrap/worker.Main, losing Sentry, SIGTERM handling and the exit-code convention
 
 `backfill-workers-off-the-shared-bootstrap` · reuse · severity **medium** · effort **S** · verdict **confirmed**
 
@@ -1535,7 +1534,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** Every citation checks out. I enumerated all 43 cmd/ dirs for worker.Bootstrap/worker.Main: the only non-users are server, gen-cities, gen-contracts, harvest-* (declared out of scope in internal/platform/observability/AGENTS.md), cv-previews (no DB at all — cmd/cv-previews/main.go:4 "no database"), and exactly the two named. cmd/backfill-experience/main.go:62-65 hand-rolls config.Load + context.Background + database.Connect; :136 `os.Exit(1)` runs with `defer pool.Close()` (:69) and `defer flush()` (:76) pending, and flush() at :76 is the Langfuse tracer drain returned by llm.NewClient at :205-212 — so the LLM traces really are dropped precisely on the failed run. cmd/backfill-resume-structured/main.go:47-50 is the same hand-roll, and :161-162 logs `failed` then falls off the end of main, so the process exits 0 even when every user failed; it also uses log.Fatalf at :52/:64/:79/:108/:120/:126, each of which skips the `defer llmFlush()` at :81. This contradicts internal/platform/observability/AGENTS.md, which scopes the exemption to harvest-*/gen-contracts only. Downgrading from high: both are operator-run one-shot seeds (not cron-timed units — nothing in the repo schedules them), so the missing SIGTERM context is largely theoretical, and an operator watching the terminal sees the log lines Sentry would have carried. The exit-code and flush defects are real but narrow.
 
-##### 31. worker.ResilientPage is the shared corruption-tolerant full scan over jobs, but only cmd/reindex uses it — two backfills run the identical ListJobsByIDAfter keyset scan raw
+#### 31. worker.ResilientPage is the shared corruption-tolerant full scan over jobs, but only cmd/reindex uses it — two backfills run the identical ListJobsByIDAfter keyset scan raw
 
 `resilient-full-scan-bypassed-by-backfills` · reuse · severity **medium** · effort **M** · verdict **confirmed**
 
@@ -1553,7 +1552,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** Citations verified exactly: internal/platform/worker/resilient.go:52-64 (NewFullScanReader over ListJobsByIDAfter/ListJobIDsAfter/GetJob), :101-141 (the XX001 degrade path), and grep confirms cmd/reindex/main.go:153, :156, :338 are the only non-test consumers. cmd/backfill-derive/main.go:245-247 issues the raw ListJobsByIDAfter inside the producer goroutine and cmd/backfill-descriptions/main.go:188-194 does the same via pageJobs, aborting at :119-121. What makes this more than tidiness: the commit that added ResilientPage (1153d215, "feat(workers): survive corrupted (XX001) rows in full-scan workers") says a broken TOAST pointer had already crashed a full facet reindex on this prod database — so XX001 is an observed condition here, not hypothetical. And cmd/backfill-derive has NO resume flag (only BACKFILL_CONCURRENCY at :133), so a single corrupted row makes the whole-catalogue re-derive permanently unable to finish past that id, re-failing at the same place every run. That is a blocked operational worker, which is what medium means.
 
-##### ✅ 32. Postgres session advisory-lock single-flight is hand-rolled three times with no shared key namespace, and internal/platform/migrate still asserts it is the only user
+#### ✅ 32. Postgres session advisory-lock single-flight is hand-rolled three times with no shared key namespace, and internal/platform/migrate still asserts it is the only user
 
 `advisory-lock-single-flight-triplicated` · coupling · severity **low** · effort **S** · verdict **overstated**
 
@@ -1571,7 +1570,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** Line numbers are right (internal/platform/migrate/migrate.go:38-41 and :162-171; cmd/liveness/main.go:45 and :73-93; cmd/ghost-crosscheck/main.go:45 and :66-81), but three of the four supports fail. (1) It is duplicated twice, not three times: migrate uses blocking pg_advisory_lock, a deliberately different decision the finding itself concedes, so it is not an instance of the try-lock ritual. (2) The "drift into two different release shapes" is cosmetic — both are correct. ghost-crosscheck's `defer lockConn.Release()` at :71 followed by the unlock defer at :81 unwinds LIFO (unlock, then release), and liveness's three manual Release() calls cover the same paths. Neither leaks. (3) The flock claim is simply wrong. flock is the cron/systemd unit wrapper, not Go code, and the repo says so in three places: cmd/reindex-companies/main.go:4 ("on its own flock"), internal/platform/llm/llm.go:27 ("holding its cron flock open"), internal/ingest/sources/yandex.go:82 ("it hung a prod custom.yml ingest for ~4h, holding its flock"). CLAUDE.md:52 describes ops reality accurately; the finding's "grep finds no flock anywhere" is a false negative. The keys are also ASCII-derived and self-documenting (0x66686c76 "fhlv", 0x66686763 "fhgc"), each commented "unique to this worker" — collision is not a live hazard. What survives is small: two ~16-line copies, and migrate.go:40's "the project has none" is now factually stale.
 
-##### 33. SQLSTATE classification is split between internal/platform/pgerr and internal/platform/worker, contradicting pgerr's own "single home" claim
+#### 33. SQLSTATE classification is split between internal/platform/pgerr and internal/platform/worker, contradicting pgerr's own "single home" claim
 
 `sqlstate-classification-split-from-pgerr` · boundary · severity **low** · effort **S** · verdict **confirmed**
 
@@ -1588,7 +1587,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** All four citations are exact: internal/platform/pgerr/pgerr.go:1-5 claims to be "the single home for the SQLSTATE constants", :14-17 and :21-30 hold the codes and the errors.As(*pgconn.PgError) unwrap, and internal/platform/worker/resilient.go:19 and :24-27 are a second declaration of the same pattern in a package whose own doc (worker/exit.go:1-5) scopes it to "shared bootstrap and run-outcome plumbing". The finding's predicted consequence has already happened, which strengthens it: internal/ai/enrich/runner.go:123 and internal/ai/embed/runner.go:182 import internal/platform/worker for nothing but IsCorruptedRow (grep confirms those are their only worker.* references), so two domain packages now transitively depend on config, database and observability via worker/bootstrap.go to classify one SQLSTATE. The remedy is a three-line move with no new abstraction, and the policy (which errors opt into the degrade path) correctly stays in worker. Low is the right severity — nothing misbehaves today.
 
-##### ✅ 34. The same six LLM/Langfuse env fields are declared in three struct types and hand-copied at seven construction sites, and the copies have already drifted
+#### ✅ 34. The same six LLM/Langfuse env fields are declared in three struct types and hand-copied at seven construction sites, and the copies have already drifted
 
 `llm-settings-restated-three-times` · reuse · severity **low** · effort **M** · verdict **overstated**
 
@@ -1608,7 +1607,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** The duplication is real and the counts are right: internal/platform/config/config.go:192-205 and internal/platform/config/enrich.go:42-51 both read LLM_BASE_URL/LLM_API_KEY/LLM_MODEL/LANGFUSE_*, internal/platform/llm/llm.go:121-131 is the third struct, and grep finds exactly seven `llm.Settings{` construction sites (backfill-resume-structured:70, classify-mail:32, server:143, server:160, backfill-experience:205, tg-extract:46, enrich:34). The double-parse in cmd/enrich is real too (LoadEnrich at :25, then config.Load inside worker.Bootstrap at :48), and config.go:19-21's stated reason for the split — "Only the server calls Load — the enrich worker reads its own LoadEnrich" — is now stale. But the headline claim is false: cmd/server/main.go:160-167 has not "drifted". The cmp.Or is a deliberate, commented decision at :156-159 ("The in-app assistant runs on its own model: ASSISTANT_MODEL is chosen for reliable tool calling... Unset falls back to LLM_MODEL"). Citing an intentional per-client override as evidence of accidental divergence is the finding's main support, and it does not hold. The cited precedent also cuts the other way: internal/platform/config/embed.go:47-56 shows config holding a PLAIN struct while "cmd wires them into search.NewClient's WithEmbed* options" — config imports nothing from internal/ today (config.go:3-10 imports only stdlib). So the precedent argues against `func (s Settings) LLM() llm.Settings`, not for it. Real risk reduces to: adding a seventh field to llm.Settings compiles fine and silently zeroes it at seven sites. Annoying, not medium.
 
-##### 35. The catalogue-wide dedup campaign — three ordered passes plus the fuzzy-similarity thresholds — lives in package main under cmd/reindex, while the write-path half it must agree with lives in internal/job/jobdedup
+#### 35. The catalogue-wide dedup campaign — three ordered passes plus the fuzzy-similarity thresholds — lives in package main under cmd/reindex, while the write-path half it must agree with lives in internal/job/jobdedup
 
 `batch-dedup-trapped-in-package-main` · boundary · severity **low** · effort **L** · verdict **overstated**
 
@@ -1627,7 +1626,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** The citations are roughly right (fuzzyThreshold is at cmd/reindex/fuzzy.go:16, not :15; collapseFuzzyDuplicates is :42-50 with the per-company body at :52-94; bucketByRole :111-125, clusterBucket :139-163), but the framing is wrong on three counts. (1) The canon rule is NOT in package main. cmd/reindex/main.go:406-412 and :419-436 are ten-line wrappers over sqlc calls; the actual MIN(id) rule lives in internal/platform/db/queries/jobs.sql (RecomputeRoleDuplicatesForCompany at :423, CanonicalJobForRole at :316, whose comment explicitly says it "Mirrors the canon RecomputeRoleDuplicatesForCompany picks (MIN(id) among the cluster's open rows)"). Changing the canon means editing two queries in one file, not two Go packages. (2) The two-tier contract is not "a doc comment" — internal/ingest/pipeline/AGENTS.md documents it at length ("Role-cluster dedup is two-tier, and the tiers must agree on the canon or they undo each other... The synchronous answer deliberately refuses a canon NEWER than the row being written"). This is a documented, reasoned boundary, not an accident. (3) "Nothing can test against it" is false: cmd/reindex/fuzzy_test.go and main_test.go exist and exercise clusterBucket/bucketByRole through the fuzzyDedupQuerier interface declared at fuzzy.go:28-33 for exactly that purpose. The backfill-derive point is also weak: cmd/backfill-derive/main.go:42-44 tells the operator to run `make reindex` because moving role_fingerprints invalidates the Meili index, which requires a reindex regardless of where the collapse code lives.
 
-#### SvelteKit app and design system
+### SvelteKit app and design system
 
 > **Reviewer's note on what is well-factored here.** Genuinely well-factored, and I deliberately did NOT flag it:
 
@@ -1645,7 +1644,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 - **Borderline, not raised as its own finding:** `lib/assistant/api.ts:27` re-implements `credentials`+envelope-unwrap (`lib/api.ts:266-290`) and throws a bare `Error` where `api.ts` throws a status-carrying `ApiError`. It is ~15 lines and the assistant is a self-contained sub-app with its own SSE transport; I judged it deliberate rather than accidental.
 
-##### ✅ 36. The "single source of display labels" is forked: two exported categoryLabel functions, four humanize fallbacks, and a relocation map that has already drifted
+#### ✅ 36. The "single source of display labels" is forked: two exported categoryLabel functions, four humanize fallbacks, and a relocation map that has already drifted
 
 `category-label-fallback-forked` · reuse · severity **medium** · effort **S** · verdict **confirmed**
 
@@ -1665,7 +1664,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** Every citation checks out and the divergence is user-visible. labels.ts:1-6 declares itself the single source 'shared by … enrichment.ts … and facets.ts'. enrichment.ts:47-50 humanize uppercases only the first character; facets.ts:305-310 humanize title-cases every word; insights.ts:79 uses a third regex fallback over its OWN CATEGORY_LABELS map (insights.ts:15). CATEGORY_VALUES (contracts.ts:1020) has 37 codes and labels.ts:50-61 overrides only 10, so seven multi-word codes actually diverge — network_engineering, engineering_design, business_analysis, solutions_engineering, developer_relations, technical_writing, customer_success render as 'Network engineering' in the detail-page Category row (enrichment.ts:189 link(...) → label() → humanize) and 'Network Engineering' in the filter panel (facets.ts:363 options(CATEGORY_VALUES, CATEGORY_LABELS)); 'fullstack' is a third split ('Full-Stack' in insights, 'Fullstack' elsewhere). Relocation is the cleanest instance: every other facets.ts vocabulary imports its overrides from labels.ts (WORK_MODE_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, ENGLISH_LEVEL_LABELS, COMPANY_TYPE_LABELS at facets.ts:354-362) — RELOCATION at facets.ts:358 is the one that inlines its own, with not_supported:'None' against enrichment.ts:31's not_supported:'Not supported'. Two exported categoryLabel functions confirmed at facets.ts:375 (imported by filterSections.ts:12, ProfileForm.svelte:6) and insights.ts:78 (imported by the three routes/insights/*/+page.server.ts:3).
 
-##### 37. JobDrawer re-implements two lib modules whose stated job is to be the single home for exactly that code
+#### 37. JobDrawer re-implements two lib modules whose stated job is to be the single home for exactly that code
 
 `jobdrawer-reimplements-shared-modules` · reuse · severity **medium** · effort **S** · verdict **confirmed**
 
@@ -1684,7 +1683,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** The duplication half is exact and contradicts a documented boundary. `diff <(sed -n '420,463p' JobDrawer.svelte) <(sed -n '17,60p' JobDescription.svelte)` is empty — 44 byte-identical lines. JobDrawer.svelte:371 inlines the same `<div class="job-description text-sm leading-relaxed">{@html …}</div>` that JobDescription.svelte:11 owns, and JobDrawer.svelte:419's comment 'Styles mirror JobView's .job-description' is stale: JobView.svelte has no .job-description rule left (grep finds none), it renders <JobDescription> at line 452. Strongest part: JobDescription.svelte:2-4 documents itself as 'Reused by the job page (JobView), the tracker/drawer, and the tailor artifact panel — one home for the CSS' while the drawer is the one caller that does not import it (only JobView.svelte:16 and tailor/ArtifactPanel.svelte:17 do). The scrollLock half is a real bypass (JobDrawer.svelte:127-133 writes document.body.style.overflow directly while HeaderSearch.svelte:98 and HeaderMenu.svelte:106 use the refcount) but the claimed live defect is NOT reachable: JobDrawer.svelte:158 is `fixed inset-0 z-50` and TopBar.svelte:80 is `sticky top-0 z-40`, so the header menu cannot be opened over an open drawer, and the reverse order is equally blocked by the menu's own overlay.
 
-##### ✅ 38. savedJobs / viewedJobs / dismissedJobs are three copies of one class differing only in which endpoint they call
+#### ✅ 38. savedJobs / viewedJobs / dismissedJobs are three copies of one class differing only in which endpoint they call
 
 `three-identical-slug-set-stores` · simplicity · severity **low** · effort **S** · verdict **confirmed**
 
@@ -1702,7 +1701,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** Verified line by line. savedJobs.svelte.ts:19-52 and dismissedJobs.svelte.ts:18-51 are identical class bodies modulo the load() method name (api.listSavedSlugs vs api.listDismissedSlugs) and comment wording; viewedJobs.svelte.ts:15-43 is the same minus unmark. Each restates the same non-obvious invariant in its own words ('SvelteSet (not a plain Set): a plain Set in $state is not deeply reactive…' at savedJobs:20, dismissedJobs:19, viewedJobs:16), and the files even document the relationship instead of factoring it ('Sibling of viewedJobs.svelte.ts', 'Sibling of savedJobs.svelte.ts: same two-way toggle shape, different mark'). userResource.svelte.ts:22-82 already owns the load-once/generation-guard/reset half, so only the SvelteSet plumbing is copied. The 196-line total and the triple free-function façade (savedJobs:56-70, viewedJobs:47-57, dismissedJobs:55-69, consumed under three different naming families by JobRow.svelte:23-25) are both as stated. The remedy is proportionate — one more concrete subclass of an existing base, parameterised by its loader, not a framework. Two caveats: the 'fourth axis in api.listMyJobs("board")' is speculation (that returns job rows, not a slug set), and nothing is broken today, so this is tidiness rather than a live hazard.
 
-##### ✅ 39. The mail feature's wire shapes are split across api.ts and types.ts with no rule, and the same email row is modelled twice
+#### ✅ 39. The mail feature's wire shapes are split across api.ts and types.ts with no rule, and the same email row is modelled twice
 
 `mail-wire-shapes-split-across-api-and-types` · boundary · severity **low** · effort **M** · verdict **overstated**
 
@@ -1722,7 +1721,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** The observations are accurate but the diagnosis is refuted by the backend. api.ts:204/213/221/224/237 and types.ts:462/472/485/505 are where claimed (±1 line). But 'the same email row is modelled twice' is not a frontend defect: the server models it twice on purpose — internal/api/handler/inbox_linking.go:15 `applicationEmail` is a FLAT struct with only status_signal + link_source, while internal/api/handler/inbox.go:26 `emailLinking` is embedded by inboxMessage/emailBody. types.ts:1 states its job is 'Wire types mirroring the backend JSON', so ApplicationEmail hand-listing two fields instead of `extends EmailLinking` is correct — extending it would advertise linked_slug/linked_company/suggested_* that GET /me/tracking/:slug never sends. 'Transport extends domain, the wrong direction' is invented: types.ts is not a domain module, it is the other wire-shape module, and api.ts already declares 13 endpoint-shaped types (Slice, SitemapEntry, InsightRole/Skill/SalaryBand/Company, JobCopy, MyJobsFilter) that insights.ts:7 imports the same way — so the api.ts/types.ts line is roughly 'endpoint response shape' vs 'model mirror', imperfect but not absent. The causal claim ('because the types differ, JobDrawer could not reuse InboxView's row') is not supported: InboxView.svelte:609-655 is a selectable master-list item (aria-current, unread dot, snippet, linked/suggested indicator) and JobDrawer.svelte:312-336 is an accordion header (aria-expanded, no dot, no snippet, no link chip) — different affordances, not a copy blocked by typing. The shared decisions here are ALREADY extracted (emailStatus.ts statusLabel/statusClass, avatar.ts avatarInitials/avatarColor); what remains duplicated is layout markup that legitimately differs, and the iframes differ too (JobDrawer.svelte:345 `h-96 w-full` vs InboxView.svelte:769 `min-h-0 w-full flex-1 rounded-md border`).
 
-##### ✅ 40. Six independent tab-strip implementations coexist while the design system's Tabs primitive has zero call sites
+#### ✅ 40. Six independent tab-strip implementations coexist while the design system's Tabs primitive has zero call sites
 
 `six-tab-strips-ds-tabs-unused` · reuse · severity **low** · effort **L** · verdict **overstated**
 
@@ -1743,11 +1742,11 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** The census is real but two load-bearing claims are false. Real: design-system/scripts/adoption-baseline.json:15 says "Tabs": 0; TabRow.svelte is imported by exactly 2 files (routes/my/profile/+page.svelte:17, ProfileForm.svelte:18); actions/tablist.ts by 3 (JobDrawer.svelte:8, my/activity/+layout.svelte:6, my/tracking/+layout.svelte:6); my/tracking/+layout.svelte:21-27 and my/activity/+layout.svelte:31-37 are byte-identical tabClass helpers; the underline visual exists three times with drift (TabRow.svelte:147 'px-1 pb-2.5 … font-medium', JobRelated.svelte:28-33 'px-1 pb-2 … font-medium', ReferralsView.svelte:147-149 'px-3 py-2.5 … font-semibold'). FALSE: (a) 'JobDrawer's tabClass is a hand-transcription of tabsTriggerVariants' — JobDrawer.svelte:143-149 is 'rounded-full px-4 py-1.5 … transition-colors' against tabs.svelte:9's 'rounded-md px-3 py-1 … transition-all focus-visible:ring-2'; different radius, padding, transition and no focus ring. And the stated failure mode ('a token change in the package silently leaves that drawer behind') is wrong: bg-card/text-foreground are token-backed utilities, so a token value change reaches both. (b) 'both JobRelated and ReferralsView fail the ARIA promise (role="tablist" without roving tabindex)' — JobRelated.svelte:39-48 carries no role at all, so there is no tablist promise to break; only ReferralsView.svelte:140-144 has role=tablist/role=tab with no keyboard handling. Also, the DS's own AGENTS.md documents unused primitives as a tracked, ratcheted state ('names the unused ones every run (eleven of fifteen today)') and reasons case-by-case about legitimate non-migrations ('What Dialog does not cover'), so adoption=0 is not by itself the defect the finding treats it as.
 
-#### Cross-cutting duplication sweep
+### Cross-cutting duplication sweep
 
 > **Reviewer's note on what is well-factored here.** Genuinely well-factored, and deliberately NOT flagged:\n\n- **The small shared packages are real, not decorative.** `internal/dict/wordmatch` is used by every dictionary that needs whole-word matching (roletag.go:392, classify/classify.go:81 and :121, classify/tech.go:96, classify/nontech.go:231, classify/description.go:103/:119, skilltag/skilltag.go:85/:241, cvmatch/title.go:44, hardconstraint/degrees.go:55) with the two boundary policies factored as `Boundary` funcs — that is exactly the right seam. `internal/dict/normalize.Slug`/`JobSlug` is the only slug generator in the repo. `internal/ingest/sources/dates.go` is the single date-parsing home for 186 adapters. `internal/ingest/sources/helpers.go` (isRemote, workModeFromRemote, workplaceTypeMode, fetchDetails) is well used, with only a couple of justified adapter-specific variants.\n\n- **The dictionary/facet packages are NOT five copies of one engine.** I checked the hypothesis directly. `internal/dict/classify` uses an ordered `[]aliasEntry` first-match walk (classify.go:119 `matchOrdered`); `internal/dict/skilltag` uses a word-token map plus a separate phrase-regex pass over stripped markup; `internal/dict/location`, `internal/dict/roletag` and `internal/job/collections` each have a genuinely different lookup shape. The one thing they DO share — token-boundary matching — is already factored into `wordmatch`. The 1185-line `skilltag/dictionaries.go` and 632-line `classify/dictionaries.go` are data, not logic.\n\n- **`internal/job/jobderive` + `internal/job` is a model of the pattern.** `job.New` (job.go:118) is a single guarded construction door with unexported state, and every write path (pipeline.go:574, moderation.go:239, linkimport.go:178, tg-extract) goes through it. `search.JobDocument` embeds `jobview.Job` rather than re-projecting.\n\n- **Considered and dropped: `cmd/backfill-derive` discarding structured-source facets.** `deriveRow` (main.go:146) rebuilds a `jobderive.Input` without Seniority/Category/Skills/EmploymentType/ExperienceYearsMin, so a backfill run overwrites adapter-supplied structured values with dictionary output. That looked like a strong finding until I read the command's own doc comment (cmd/backfill-derive/main.go:30-39), which states the behaviour and the reasoning explicitly. Documented deliberate decision — not a defect.\n\n- **Considered and dropped: six copies of `<[^>]*>` tag stripping** (lang.go:25, skilltag.go:34, jobhash/rolefingerprint.go:40, mailclassify/keyword.go:15, collections/nlsponsor.go:22, harvest-ats/resolve.go:80). The entity-handling does differ (only jobhash calls `html.UnescapeString`), but I ran the skill tagger against entity-encoded descriptions and could not produce a divergent result, so I have no failure scenario. Reported as a note rather than a finding.\n\n- **Not flagged: the four `flexdecode.go` files** (atscheck, mailclassify, matchanalysis, telegram). They look like copy-paste but each is a per-type `UnmarshalJSON` alias shim over `internal/platform/flexjson` — that is the idiomatic Go form and cannot be shared further without reflection.\n\n- **Not flagged: `internal/platform/config`'s per-worker structs** (Enrich/Embed/Credits/Reindex). The split is deliberate and documented; my finding is scoped narrowly to the LLM block that is genuinely modelled three times.
 
-##### 41. CATEGORY_LABELS and SENIORITY_LABELS are declared twice in the web app, against labels.ts's own stated "keep ONE map" rule, and have already drifted
+#### 41. CATEGORY_LABELS and SENIORITY_LABELS are declared twice in the web app, against labels.ts's own stated "keep ONE map" rule, and have already drifted
 
 `duplicate-facet-label-maps-web` · reuse · severity **medium** · effort **S** · verdict **confirmed**
 
@@ -1768,7 +1767,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 **Verifier.** Verified line-for-line. web/src/lib/labels.ts:1-6 states 'Keeping ONE map prevents the drift...'; labels.ts:50 declares CATEGORY_LABELS with `ai_engineering: 'AI Engineer'` at :52 and SENIORITY_LABELS at :35 (`{ c_level: 'C-level' }`). web/src/lib/insights.ts:15 declares a second CATEGORY_LABELS (35 entries) with `ai_engineering: 'AI Engineering'` at :27, and a second SENIORITY_LABELS at :66. The two maps really do feed different surfaces: facets.ts:362 `options(CATEGORY_VALUES, CATEGORY_LABELS)` and :376 `sourceLabel`-style lookup, enrichment.ts:189 `link('Category','category',e.category,CATEGORY_LABELS)` — vs insights.ts:79 categoryLabel, imported only by src/routes/insights/**/+page.server.ts and sitemap-insights.xml/+server.ts. So the same facet code renders 'AI Engineer' in the filter panel and 'AI Engineering' on an SEO page, and nothing keeps them in sync. This is a duplicated decision contradicting its own module's documented rule, and it has already drifted.
 
-##### 42. A company has no wire-shape owner: the generated sqlc row IS the public JSON, and the Meili path fabricates a fake sqlc row to match it
+#### 42. A company has no wire-shape owner: the generated sqlc row IS the public JSON, and the Meili path fabricates a fake sqlc row to match it
 
 `company-has-no-wire-projection` · boundary · severity **medium** · effort **M** · verdict **overstated**
 
@@ -1791,7 +1790,7 @@ Deliberately NOT flagged: the 5-line envInt/envOr helpers redeclared in cmd/back
 
 But two of the claims do not survive. (1) 'The same request then returns different bodies depending on whether Meilisearch is reachable' is false today: companyRowFromDoc sets all six ListCompaniesRow fields (Slug, Name, JobCount, Tagline, Industries, HqCountry) and normalizes nil industries to []; pgText is the exact inverse of FromCompany's unwrap. The drift is latent, not present. (2) The pgtype leak is not visible on the wire — pgx v5.10.0's pgtype.Text/Int4 implement MarshalJSON (~/go/pkg/mod/.../pgtype/text.go:61), so the JSON is a bare string or null. That leaves a type-ownership smell with a latent parity trap, not something that actively causes bugs or blocks work — 'high' is not earned.
 
-##### 43. JobCopies hand-rolls limit/offset parsing and the list envelope instead of using pageParamsMax/listResponse, dropping the int32 clamp those helpers exist for
+#### 43. JobCopies hand-rolls limit/offset parsing and the list envelope instead of using pageParamsMax/listResponse, dropping the int32 clamp those helpers exist for
 
 `copies-endpoint-bypasses-page-helpers` · reuse · severity **low** · effort **S** · verdict **confirmed**
 
@@ -1812,7 +1811,7 @@ But two of the claims do not survive. (1) 'The same request then returns differe
 
 **Verifier.** The defect is real and the citations are near-exact (only handler.go:130 vs :131 for the offset line is off by one). internal/api/handler/handler.go:119-124 documents the int32 clamp as pageParams' reason for existing; handler.go:131 does `offset = min(max(c.QueryInt("offset",0),0), math.MaxInt32)`. internal/api/handler/copies.go:40 is `offset := max(c.QueryInt("offset", 0), 0)` with no ceiling, and :44 feeds it to `RowOffset: int32(offset)`; db.ListRoleClusterCopiesParams.RowOffset is int32 (internal/platform/db/jobs.sql.go:1464) and the query ends `LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset)` (internal/platform/db/queries/jobs.sql), so a wrapped-negative offset is a Postgres error → 500 on a public endpoint. Fiber v2's QueryInt is strconv.Atoi, so offset=3000000000 does parse on 64-bit. Downgraded to low: it takes a hostile/absurd query value to trigger, nothing is corrupted, and the second half of the finding is weak — copies' meta carries the whole-cluster COUNT(*) OVER (copies.go:60-65), a different quantity from a filtered list total, and JobCopies' own doc comment already declares its response shape.
 
-##### 44. internal/api/handler never imports internal/platform/pgconv and re-declares two of its converters locally
+#### 44. internal/api/handler never imports internal/platform/pgconv and re-declares two of its converters locally
 
 `handler-reimplements-pgconv` · reuse · severity **low** · effort **S** · verdict **confirmed**
 
@@ -1831,7 +1830,7 @@ But two of the claims do not survive. (1) 'The same request then returns differe
 
 **Verifier.** Verified exactly. internal/platform/pgconv/pgconv.go:1-5 states the one-place rule; :27 `func Timestamptz(t *time.Time) pgtype.Timestamptz` and :45 `func IntPtr(n pgtype.Int4) *int`. internal/api/handler/match_analysis.go:427-432 is a body-identical `tsFromPtr`, used at :282 (`CvUploadedAt: tsFromPtr(cvUploadedAt)`), and internal/api/handler/hardconstraint_inputs.go:138-143 is a body-identical `int4Ptr`, used at :78 (`ExperienceYearsMin: int4Ptr(job.ExperienceYearsMin)`). `grep -n pgconv internal/api/handler/*.go` returns nothing — the largest package in the repo genuinely never imports it, while the sibling read-path package does (internal/job/jobview/jobview.go:363 uses pgconv.Timestamptz and pgconv.TimePtr). Low severity is correctly stated; the remedy is a two-function deletion and an import, with no new abstraction.
 
-##### ✅ 45. The six LLM/Langfuse env values are modelled by three separate structs and copied field-by-field at seven call sites; two workers import the enrichment config just to reach them
+#### ✅ 45. The six LLM/Langfuse env values are modelled by three separate structs and copied field-by-field at seven call sites; two workers import the enrichment config just to reach them
 
 `llm-settings-modelled-three-times` · reuse · severity **low** · effort **S** · verdict **overstated**
 
@@ -1851,7 +1850,7 @@ But two of the claims do not survive. (1) 'The same request then returns differe
 
 **Verifier.** Citations all check out: config.go:70 (LLMBaseURL/APIKey/Model), config.go:99 (Langfuse trio), loaded at :192/:203; internal/platform/config/enrich.go:15-17 and :26-28 re-declare the same six and LoadEnrich re-reads the same env keys; the seven `llm.Settings{...}` literals are exactly where claimed (server:143 and :160, enrich:34, tg-extract:46, classify-mail:32, backfill-resume-structured:70, backfill-experience:205); `grep ecfg\.` proves tg-extract and classify-mail touch only the six LLM fields and never Concurrency/LeaseSeconds/MaxAttempts; and LangfuseEnabled (enrich.go:34) has no caller outside enrich_test.go. So there IS a real duplicate: config.Settings and config.Enrich read the same six env vars, and a dead method has already grown out of it. The framing is what is wrong. llm.Settings is not a third copy — internal/platform/llm/llm.go:121-126 documents it as 'the one shape every entrypoint maps its env config into, so client construction and tracing live in exactly one place', the same env-free-library split config/embed.go:44-49 documents for EmbedClient vs search. The two config structs also differ in policy on purpose (config.go:65-69 says the server's LLM is optional and degrades; LoadEnrich fails fast naming every missing var), so this is not one decision written twice so much as two requirement levels over shared keys. Nothing here causes a bug or blocks work — it is edit-in-N-places friction.
 
-##### 46. Two backfill workers hand-roll worker.Bootstrap and duplicate the whole résumé-extractor construction stack
+#### 46. Two backfill workers hand-roll worker.Bootstrap and duplicate the whole résumé-extractor construction stack
 
 `backfill-workers-bypass-worker-bootstrap` · coupling · severity **low** · effort **M** · verdict **overstated**
 
@@ -1874,12 +1873,12 @@ But two of the claims do not survive. (1) 'The same request then returns differe
 
 ---
 
-### Found while implementing
+## Found while implementing
 
 Findings raised by the work of fixing the ones above, not by the original review pass.
 They carry no verifier note — they were established against the code by the implementer.
 
-#### ✅ I1. Three test fixtures exercise the AGENT write path with no evidence gate, and one documents the divergence as intentional
+### ✅ I1. Three test fixtures exercise the AGENT write path with no evidence gate, and one documents the divergence as intentional
 
 `cv-user` · coverage · severity **medium** · effort **M** · found while implementing S5
 
@@ -1910,7 +1909,7 @@ fixture comment.
 - verified: the two cases that DO exercise the gate (`TestCVEditWithoutAnyEvidenceIdNamesWhereItGoes`, `TestCVEditWritesACitedBullet`) had to attach a bank by hand; they now construct with one
 - verified against the code: with the CV surface assembled through `newCVHandlers` and no gate, an API-key `PATCH` inserting a bullet returned **200** — a new integration test now pins it at 403
 
-#### ✅ I2. Autofill has TWO contact sources, not one, and reads only the one that appears second
+### ✅ I2. Autofill has TWO contact sources, not one, and reads only the one that appears second
 
 `extension-autofill` · boundary · severity **medium** · effort **S** · found while implementing #2
 
@@ -1948,7 +1947,7 @@ Three things worth keeping:
 - internal/candidate/resume/resume.go:239-253 — `Structured` applies the stamp-freshness rule; production has 174 of 174 stamps current
 - prod `hire` 2026-08-02: `users` 408 · with résumé 174 · with structure 174 · with base CV 10 · tailored-without-base 0; key holders 17 · with base CV 1 · structure-only 7
 
-#### I3. The command list in AGENTS.md is not a list of where the tagged tests live
+### I3. The command list in AGENTS.md is not a list of where the tagged tests live
 
 `repo-docs` · coverage · severity **low** · effort **XS** · found while implementing #2
 
@@ -1969,7 +1968,7 @@ claim it never made.
 
 ---
 
-### Method
+## Method
 
 - Nine area reviewers, one per slice of the repo, each applying all four lenses and required to
   cite `file:line` for every claim (two sites minimum for a reuse or coupling claim).

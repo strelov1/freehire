@@ -16,9 +16,7 @@ And a **third the finding does not name**: `api_keys.go` wrote `pgconv.Timestamp
 a `var` plus an `if`, four lines doing one function's job.
 
 Small in isolation. It is the same habit that produced `pgText` in `companies.go` (deleted in
-
-# 1409, where it turned out to duplicate `pgconv.Text`), and it is what keeps the `pgtype`
-
+#1409, where it turned out to duplicate `pgconv.Text`), and it is what keeps the `pgtype`
 vocabulary alive inside the transport layer.
 
 ## What Changes
