@@ -6,6 +6,7 @@
   import { companyLogoUrl } from '#lib/logo.js';
   import { Badge, EntityLogo } from '#lib/ui/index.js';
   import { humanizeStage } from '#lib/stages.js';
+  import { columnOf } from '#lib/board.js';
   import { chasedLabel, cvOpenedLabel } from '#lib/followup.js';
   import { autoApplyNeedsReviewBadge } from '#lib/autoApplyReview.js';
   import type { MyJob } from '#lib/types.js';
@@ -33,6 +34,10 @@
   const statusId = `${indicatorsId}-status`;
   const hasStatus = $derived(Boolean(item.job?.closed_at || item.job?.application_deadline));
   const s = $derived(t(messages, locale()));
+  // A stage that only repeats the column the card sits in ("Preparing" under Preparing)
+  // is said to assistive technology alone; a finer one ("Phone screen" under Interview)
+  // still shows.
+  const stageRepeatsColumn = $derived(item.stage === columnOf(item));
 
   const hasNotes = $derived(!!item.notes && item.notes.trim().length > 0);
   // pending_review (a decision to make) or blocked (a submission attempt stopped) —
@@ -123,7 +128,7 @@
   <BoardPostingStatus job={item.job} id={statusId} />
   <span id={indicatorsId} class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
     {#if item.stage}
-      <Badge variant="secondary">{humanizeStage(item.stage, locale())}</Badge>
+      <Badge variant="secondary" class={stageRepeatsColumn ? 'sr-only' : undefined}>{humanizeStage(item.stage, locale())}</Badge>
     {/if}
     {#if needsAutoApplyReview}
       <span
