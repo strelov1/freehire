@@ -375,7 +375,7 @@
        card has moved it into the action row at its foot, leaving the corner free. -->
   <!-- Without the company there is nothing to the date's left, so it floats beside the
        title instead of holding a row of its own. -->
-  <div class={['flex items-center justify-between gap-3', compact ? 'pr-11' : onHide ? 'pr-28' : 'pr-20', hideCompany && 'float-right ml-3 mt-1.5']}>
+  <div class={['flex items-center gap-2', compact ? 'pr-11' : onHide ? 'pr-28' : 'pr-20', hideCompany && 'float-right ml-3 mt-1.5']}>
     <div class="flex min-w-0 items-center gap-2">
       {#if !hideCompany}
       <EntityLogo
@@ -394,6 +394,11 @@
       <BackerBadge collections={job.collections} class="shrink-0" />
       {/if}
     </div>
+    <!-- The date reads with the company ("Stripe · 2 hours ago"), not pinned to the far
+         edge where it floated alone beside the corner controls. -->
+    {#if !hideCompany && (posted || views > 0 || isViewed || job.application_deadline)}
+      <span class="text-muted-foreground" aria-hidden="true">·</span>
+    {/if}
     <div class="flex shrink-0 items-center gap-1.5 text-muted-foreground">
       {#if isViewed}
         <!-- A quiet "you've seen this" marker, paired with the lighter dim on the card

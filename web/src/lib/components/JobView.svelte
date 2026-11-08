@@ -727,7 +727,9 @@
     class="shrink-0 gap-1.5 px-2 text-muted-foreground"
   >
     <Flag class="size-4 shrink-0" aria-hidden="true" />
-    Report
+    <!-- Icon only from lg, where it sits beside the CTAs: a rare action, it should not
+         weigh as much as Apply. The accessible name stays on the button. -->
+    <span class="lg:sr-only">Report</span>
   </Button>
 {/snippet}
 

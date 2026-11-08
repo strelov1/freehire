@@ -9,7 +9,10 @@
         // The page's one call to action (create the account, show the results, pay,
         // apply on a job page): the brand fill, lifted by a soft shadow. One per view.
         cta: 'bg-brand text-brand-foreground shadow-sm hover:opacity-90',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-accent',
+        // A bordered white button, lifted a hair off the page: the one look for every
+        // non-primary action. It was a grey fill, which beside the outline buttons made two
+        // secondary styles that no reader could tell a rule apart from.
+        secondary: 'border border-border bg-card text-foreground shadow-xs hover:bg-accent',
         outline: 'border border-border bg-background hover:bg-accent hover:text-accent-foreground',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         // Filled, for the action that destroys something and cannot be undone —
