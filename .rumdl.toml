@@ -20,10 +20,28 @@ exclude = [
 ]
 
 disable = [
+  # MD012, consecutive blank lines. Invisible in the rendered page. `openspec archive` merges a
+  # change's deltas into the spec and leaves doubled blank lines behind (167 of the 177 in
+  # openspec/specs), so a rule that fails on them fails every archive PR.
+  "MD012",
   # MD013, line length. Prose is written one paragraph to a line, in AGENTS.md, specs and
   # tasks alike, so a limit flags most of the repository (37k lines outside the archive)
   # and wrapping would turn every later edit into a whole-paragraph diff.
   "MD013",
+  # MD022 and MD032, blank lines around headings and lists. CommonMark ends a paragraph at a
+  # heading or a list, so a list straight under its heading or under a `**Files:**` label
+  # renders the same with or without the blank line. It is the layout the openspec templates
+  # and the superpowers plan skill both write (`#### Scenario:` then `- **WHEN**`;
+  # `## Purpose` straight under the title block), and `openspec archive` writes the same into
+  # openspec/specs, so the rules would fail ~4k places and every PR that follows the
+  # templates. What a blank line DOES decide — a code fence's edges (MD031) and a list item's
+  # continuation lines (MD077) — stays on.
+  "MD022",
+  "MD032",
+  # MD026, trailing punctuation in a heading. A heading that is a sentence ends in a full
+  # stop (the README tagline, "NOT OPTIONAL."); the rule's concern, a stray `:` or `!`, has
+  # never broken a page here.
+  "MD026",
   # MD033, inline HTML. `<details>`, `<br>`, `<img>` and `<picture>` are how the README and
   # the docs collapse a long section or size a logo; Markdown has no equivalent.
   "MD033",
@@ -33,9 +51,20 @@ disable = [
   # MD036, bold line used as a heading. `**Why:**` and `**Revisit if …**` lead paragraphs in
   # the specs and the decision records; they are labels, not sections that belong in a TOC.
   "MD036",
+  # MD038, spaces inside a code span. The space is the content: `query: ` and ` (CC)` name a
+  # prefix or suffix WITH its separator, and "fixing" it drops the very character the
+  # sentence is about.
+  "MD038",
   # MD040, fence without a language. A fence holding a diagram, a directory tree or command
   # output has no language to name, and `text` on each would be noise.
   "MD040",
+  # MD064, runs of spaces inside a line. A double space after a full stop and aligned
+  # columns in a hand-drawn row are prose habit, not markup, and render as one space anyway.
+  "MD064",
+  # MD076, loose versus tight list. Whether items are separated by blank lines is a
+  # presentation choice that both renders correctly; plans mix the two on purpose, a tight
+  # run of one-line items next to a loose run of paragraphs.
+  "MD076",
   # MD041, first line must be a heading. openspec's tasks and spec deltas open with a
   # section (`## 1. …`) or a front-matter-like block by the format's own convention.
   "MD041",
