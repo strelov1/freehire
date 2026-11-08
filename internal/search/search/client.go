@@ -386,8 +386,10 @@ func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, do
 		return err
 	}
 	pk := primaryKey
-	// Submit every part before awaiting any: consecutive additions to one index are
-	// auto-batched into one indexing pass, so the split costs no extra pass.
+	// Submit every part before awaiting any. Meilisearch only merges additions that are
+	// already queued when it picks the next batch, and an idle engine starts on the
+	// first part at once, so each extra part usually costs its own indexing pass
+	// (~2.5 min on prod, 2026-11-07). That is still far cheaper than a rejected request.
 	var firstErr error
 	uids := make([]int64, 0, len(parts))
 	for _, part := range parts {
