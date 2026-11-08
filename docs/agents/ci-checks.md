@@ -15,8 +15,8 @@ migration the branch itself added is new at the merge base, so editing it is nev
 The same script lints (squawk) only the migrations a change ADDS — the applied history holds
 many findings that stay, because rewriting an applied file is a worse hazard than any of
 them. Whether a file runs inside a transaction is a property of the FILE (the
-`migrate: no-transaction` marker, which must be a comment line of its OWN — quoted inside a
-sentence it does not count), so the check runs two passes; `.squawk.toml` carries the
+`migrate: no-transaction` marker, which must be a comment line of its OWN in the leading
+comment block, before the first statement — quoted inside a sentence it does not count), so the check runs two passes; `.squawk.toml` carries the
 argument. Suppress a rule with `-- squawk-ignore <rule-name>` on the line before the
 statement, with the reason beside it.
 

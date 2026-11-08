@@ -48,8 +48,11 @@ itself — `/companies` through `UnknownCompanyParams`, `/jobs` (which reads no 
 through its own two-param list.
 
 Its value-level twin is `meta.ignored_values`: a closed-vocabulary facet value outside
-`internal/dict/vocab` (`work_mode=foo`) still narrows — to nothing — and
-`search.IgnoredValues` names it rather than letting `total: 0` pass for an empty market.
+`internal/dict/vocab` (`work_mode=foo`) typically still narrows — to nothing — and
+`search.IgnoredValues` names it rather than letting `total: 0` pass for an empty market. Not
+every unknown value narrows to nothing: a true-or-absent boolean reads anything but `false`
+as true (`requires_clearance=flase` filters FOR clearance), and an unknown `_exclude` value
+excludes nothing; both are named all the same.
 
 The same rule decides what may be SUBSCRIBED to: `search.Narrows` asks whether a saved search
 selects less than the catalogue, and a subscription to one that does not is refused rather

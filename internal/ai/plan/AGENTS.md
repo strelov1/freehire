@@ -77,7 +77,9 @@ transaction. `store.go` is the transaction around it and nothing else.
   be read must not become unbounded spend: the per-account daily figure answers 402, the
   per-session and global figures 429. `SUPPORT_MODEL` picks its model (falling back to
   `LLM_MODEL`); `ONBOARDING_REPLY_TO` is the inbox its handover mail goes to. The generic
-  `/assistant/sessions/:id/...` routes answer a support session 404.
+  `/assistant/sessions/:id/...` routes answer a support session 404 — on the ones behind
+  `mw.paidAI` (messages, opening, autopilot, …) only once that gate passes, so a free caller
+  gets its 402 first.
 
 - **Every metered feature enforces on arrival.** auto-apply was the first to ship this
   way: pro's ceiling there is what the tier above is sold on, and one that only counts

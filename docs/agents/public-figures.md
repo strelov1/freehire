@@ -38,9 +38,9 @@ delete-and-reinsert.
   unreachable index costs that one figure, not the run; a 0 would state on a public page
   that every source carries nothing.
 - **The spine is `sourcestats.Union` over THREE sets**, each covering a hole the others
-  leave: the adapter registry (without it a source with postings and no adapter —
-  `telegram`, absent from `sources.Taxonomy()` — is dropped), this run's scan (without it an
-  adapter whose postings have all closed is dropped, the case the page most needs to state),
+  leave: the adapter registry (without it an adapter whose postings have all closed is
+  dropped, the case the page most needs to state), this run's scan (without it a source with
+  postings and no adapter — `telegram`, absent from `sources.Taxonomy()` — is dropped),
   and the KEYS of the snapshot being replaced (without it a source in neither of the first
   two vanishes the moment it goes quiet). Only names carry over; every figure is
   re-measured. `GET /api/v1/sources` calls the same `Union` rather than keeping its own copy.

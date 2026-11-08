@@ -36,7 +36,8 @@ rather than here — their census of `web/` was already off by a third.
   name. `pnpm check:deps` (`scripts/check-shared-deps.mjs`, the `shared-deps` CI job) holds
   the three manifests to the same version for exactly the packages this package imports as
   types — a set it DERIVES from `design-system/src` rather than listing, so a new type import
-  joins the rule by existing. It reads no lockfile and compares the declared range
+  joins the rule by existing — if it is a single-quoted `import type … from '…'` in a file
+  directly under `src/` (not `src/email/`), the only form `typeSurface()` matches. It reads no lockfile and compares the declared range
   literally: `^1.25.0` and `^1.45.0` overlap and are the two ranges that put `@lucide/svelte`
   on disk twice (freehire#2836), so "the ranges are compatible" is the wrong question.
   `peerDependencies` is exempt — a library's peer range is deliberately wider than what it
