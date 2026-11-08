@@ -215,6 +215,27 @@ test.describe('company page', () => {
     expect(calls.del).toEqual(['acme']);
   });
 
+  // On a phone the sentence under Watch used to sit in the button's column, which never
+  // shrinks, and squeezed the company name into a narrow strip beside it.
+  test('the alerts hint takes its own row on a phone instead of narrowing the name', async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockWatchlist(page, baseURL, []);
+    await openCompany(page);
+
+    const name = page.getByRole('heading', { level: 1, name: 'Acme Corp' });
+    const before = await name.boundingBox();
+    await page.getByRole('button', { name: 'Watch', exact: true }).click();
+    const hint = page.getByText('Added to your watchlist.');
+    await expect(hint).toBeVisible();
+
+    const after = await name.boundingBox();
+    const line = await hint.boundingBox();
+    if (!before || !after || !line) throw new Error('the name or the hint is not laid out');
+    expect(after.width).toBe(before.width);
+    expect(line.y).toBeGreaterThanOrEqual(after.y + after.height);
+    await page.screenshot({ path: test.info().outputPath('watch-hint-phone.png') });
+  });
+
   test('starts as Watching for a company already on the list', async ({ page, baseURL }) => {
     await mockWatchlist(page, baseURL, [entry('acme', 'Acme Corp')]);
     await openCompany(page);
