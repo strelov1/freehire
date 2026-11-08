@@ -256,6 +256,10 @@ pre-commit:
 commit-msg:
   commands:
     commitlint:
+      # Merge and rebase messages are git's own, and only the squash title reaches main.
+      skip:
+        - merge
+        - rebase
       run: |
         if [ ! -x node_modules/.bin/commitlint ]; then
           echo "commitlint not installed (pnpm install at the repository root) - skipping"

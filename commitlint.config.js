@@ -4,6 +4,8 @@
 // by the commit-msg hook in lefthook.yml.
 export default {
   extends: ['@commitlint/config-conventional'],
+  // Without this a title like `Revert "fix: x"` is skipped by commitlint's built-in ignores.
+  defaultIgnores: false,
   rules: {
     'type-enum': [
       2,
