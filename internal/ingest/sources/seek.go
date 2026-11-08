@@ -68,6 +68,18 @@ var seekNetworkProviders = map[string]func(JSONGetter, *seekDetailNetwork) Sourc
 
 func (s seekCrawler) Provider() string { return s.provider }
 
+// BoardURLPrefix: a SEEK or JobStreet board id (an ICT subclassification) repeats in every market, and
+// external_id carries no market, so the board-scoped close narrows each board to its market
+// by the host its postings are served from (toJob builds every URL as host + "/job/" + id).
+// See the RegionScopedBoards interface.
+func (s seekCrawler) BoardURLPrefix(region string) (string, bool) {
+	m, ok := s.markets[strings.ToLower(strings.TrimSpace(region))]
+	if !ok {
+		return "", false
+	}
+	return m.host + "/job/", true
+}
+
 // aggregator marks seek as a genuine multi-company aggregator: a vacancy an employer also posts on
 // its own ATS appears here too, so the cross-source dedup pass prefers the first-party copy. Unlike
 // the boardless aggregators seek still requires a board (the subclassification id) to bound the
@@ -84,6 +96,12 @@ func (seekCrawler) aggregator() {}
 // as its search pages.
 func (seek) sweepGrace() time.Duration { return 14 * 24 * time.Hour }
 
+// sliceBoardListing: the 14-day sweepGrace window stands in for a full listing. A finished slice
+// closes its own postings unseen for that long, so a posting whose company dropped out of the capped
+// pages still closes. The tail of a busy slice past SEEK's result window cannot be told from a
+// removal, and is left to the window alone, as WhatJobs does. See the sliceBoardListing interface.
+func (seek) sliceBoardListing() {}
+
 // fullBoardListing: JobStreet has no SEEK-style result window — live SG 6290 served 17 pages
 // to its natural end — and at pageSize 100 the search's totalCount equals the distinct postings
 // a full walk reads (2026-10-29: SG 6290 1,629 of 1,629, SG 6302 9/9, MY 6287 641/641, ID 6287
@@ -91,18 +109,6 @@ func (seek) sweepGrace() time.Duration { return 14 * 24 * time.Hour }
 // and on a distinct count that differs from the last page's totalCount. See the
 // fullBoardListing interface for the bar.
 func (jobStreet) fullBoardListing() {}
-
-// BoardURLPrefix: a JobStreet board id (an ICT subclassification) repeats in every market, and
-// external_id carries no market, so the board-scoped close narrows each board to its market
-// by the host its postings are served from (toJob builds every URL as host + "/job/" + id).
-// See the RegionScopedBoards interface.
-func (s jobStreet) BoardURLPrefix(region string) (string, bool) {
-	m, ok := s.markets[strings.ToLower(strings.TrimSpace(region))]
-	if !ok {
-		return "", false
-	}
-	return m.host + "/job/", true
-}
 
 const (
 	seekPageSize = 100

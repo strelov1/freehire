@@ -157,19 +157,19 @@ it('shows exact source salary bounds in the job detail summary', () => {
 it('offers a LinkedIn people search when no in-product referrer is available', () => {
   render(JobView, { job });
   expect(screen.queryByRole('button', { name: 'Ask for a referral' })).toBeNull();
-  const people = screen.getByRole('link', { name: 'Find someone to refer you on LinkedIn' });
+  const people = screen.getByRole('link', { name: /^Find people at .+ on LinkedIn$/ });
   expect(people.getAttribute('target')).toBe('_blank');
 });
 
 it('omits the LinkedIn action when the employer name is blank', () => {
   render(JobView, { job: { ...job, company: '  ' } });
-  expect(screen.queryByRole('link', { name: 'Find someone to refer you on LinkedIn' })).toBeNull();
+  expect(screen.queryByRole('link', { name: /^Find people at\b.*\bon LinkedIn$/ })).toBeNull();
 });
 
 it('shows an approved in-product referrer before the LinkedIn option', () => {
   render(JobView, { job: { ...job, referral_available: true } });
   const referral = screen.getByRole('button', { name: 'Ask for a referral' });
-  const people = screen.getByRole('link', { name: 'Find someone to refer you on LinkedIn' });
+  const people = screen.getByRole('link', { name: /^Find people at .+ on LinkedIn$/ });
   expect(referral.compareDocumentPosition(people) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
 });
 
