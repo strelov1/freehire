@@ -23,13 +23,12 @@
     <p class="font-mono text-xs uppercase tracking-widest text-muted-foreground">// sources</p>
     <h1 class="mt-4 text-4xl font-semibold tracking-tighter sm:text-5xl">Where the jobs come from.</h1>
     <p class="mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-      Every place we read postings from, what each one currently carries, and when we last
-      read it. For aggregators we also show how much of what they carry we had already found
-      at the employer's own applicant tracking system.
+      Every place we read postings from, what each one currently carries, and when we last read it. For aggregators we
+      also show how much of what they carry we had already found at the employer's own applicant tracking system.
     </p>
     <p class="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      Job counts are the de-duplicated figures search itself shows, so a source's number and
-      the search it links to agree. Crawl health in more detail lives on
+      Job counts are the de-duplicated figures search itself shows, so a source's number and the search it links to
+      agree. Crawl health in more detail lives on
       <a href={resolve('/status')} class="underline underline-offset-4">the status page</a>.
     </p>
   </header>
@@ -43,6 +42,7 @@
     <a
       class="underline underline-offset-4"
       href="https://human-settlement.emergency.copernicus.eu/ghs_fua.php"
-      rel="noopener">GHS Functional Urban Areas</a>, European Commission JRC (CC BY 4.0).
+      rel="noopener">GHS Functional Urban Areas</a
+    >, European Commission JRC (CC BY 4.0).
   </p>
 </div>

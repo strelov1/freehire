@@ -10,10 +10,7 @@ describe('unsummarized', () => {
   // facet the hand list does not place falls through to a group of its own.
   it('returns every facet no group has shown, in declaration order', () => {
     const facets = [def('category'), def('source', 'Source'), def('reality', 'Posting reality')];
-    expect(unsummarized(facets, new Set(['category']), []).map((d) => d.label)).toEqual([
-      'Source',
-      'Posting reality',
-    ]);
+    expect(unsummarized(facets, new Set(['category']), []).map((d) => d.label)).toEqual(['Source', 'Posting reality']);
   });
 
   it('leaves out the facets the host page excludes', () => {

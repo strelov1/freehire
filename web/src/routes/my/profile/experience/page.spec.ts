@@ -50,9 +50,7 @@ describe('experience page: base-CV refresh error', () => {
 
     await triggerBankMutated();
 
-    expect(
-      await screen.findByText(/Staff Engineer at Contoso already has 20 bullets/),
-    ).toBeTruthy();
+    expect(await screen.findByText(/Staff Engineer at Contoso already has 20 bullets/)).toBeTruthy();
   });
 
   it('falls back to a generic message when the failure carries no useful message', async () => {
@@ -62,9 +60,7 @@ describe('experience page: base-CV refresh error', () => {
     await triggerBankMutated();
 
     expect(
-      await screen.findByText(
-        'Could not update your base CV. Try Reset from résumé in a tailoring workspace.',
-      ),
+      await screen.findByText('Could not update your base CV. Try Reset from résumé in a tailoring workspace.'),
     ).toBeTruthy();
   });
 });

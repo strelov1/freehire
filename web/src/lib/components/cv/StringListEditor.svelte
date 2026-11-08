@@ -37,7 +37,13 @@
 <div class="space-y-2">
   {#each items as _, i (ids[i])}
     <div class="flex items-center gap-2">
-      <Input bind:value={items[i]} {placeholder} aria-label="{label} {i + 1}" data-path={path ? `${path}[${i}]` : undefined} class="flex-1" />
+      <Input
+        bind:value={items[i]}
+        {placeholder}
+        aria-label="{label} {i + 1}"
+        data-path={path ? `${path}[${i}]` : undefined}
+        class="flex-1"
+      />
       <Button variant="ghost" size="icon" onclick={() => remove(i)} aria-label="Remove {label.toLowerCase()} {i + 1}">
         <X class="h-4 w-4" />
       </Button>

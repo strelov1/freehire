@@ -75,7 +75,8 @@
   function cellLabel(category: string, country: string, cell: GridCell): string {
     const rounded = roundedGrowth(cell);
     let change: string;
-    if (jumped(country)) change = `change not shown: postings for ${columnName(country)} grew at least ${COVERAGE_JUMP_RATIO}× in 30 days, likely new coverage`;
+    if (jumped(country))
+      change = `change not shown: postings for ${columnName(country)} grew at least ${COVERAGE_JUMP_RATIO}× in 30 days, likely new coverage`;
     else if (rounded === null) change = `fewer than ${GROWTH_MIN_BASE} 30 days ago`;
     else if (rounded === 0) change = 'unchanged over 30 days';
     else change = `${rounded > 0 ? 'up' : 'down'} ${Math.abs(rounded)}% over 30 days`;
@@ -110,7 +111,9 @@
         {#each SHADINGS as [value, label] (value)}
           <button
             type="button"
-            class="rounded px-2.5 py-1 {shading === value ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}"
+            class="rounded px-2.5 py-1 {shading === value
+              ? 'bg-muted font-medium text-foreground'
+              : 'text-muted-foreground'}"
             aria-pressed={shading === value}
             onclick={() => (shading = value)}>{label}</button
           >
@@ -120,25 +123,32 @@
 
     <div class="mt-4 overflow-x-auto rounded-lg border border-border">
       <table class="w-full border-collapse text-sm tabular-nums">
-        <caption class="sr-only">
-          Open roles per role and country, each with its change over 30 days
-        </caption>
+        <caption class="sr-only"> Open roles per role and country, each with its change over 30 days </caption>
         <thead>
           <tr class="border-b border-border text-left text-xs text-muted-foreground">
             <th scope="col" class="sticky left-0 z-10 bg-background px-3 py-2 font-medium">Role</th>
             {#each grid.columns as country (country)}
-              <th scope="col" class="px-2 py-2 text-right font-medium {country === ALL_COUNTRIES ? 'border-r border-border' : ''}">
+              <th
+                scope="col"
+                class="px-2 py-2 text-right font-medium {country === ALL_COUNTRIES ? 'border-r border-border' : ''}"
+              >
                 {#if country === ALL_COUNTRIES}
                   {columnName(country)}
                 {:else}
-                  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string, no dynamic route to resolve -->
-                  <a href={`${resolve('/jobs')}?countries=${encodeURIComponent(country)}`} class="hover:text-foreground hover:underline">
+                  <!-- eslint-disable svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string, no dynamic route to resolve -->
+                  <a
+                    href={`${resolve('/jobs')}?countries=${encodeURIComponent(country)}`}
+                    class="hover:text-foreground hover:underline"
+                  >
                     {columnName(country)}
-                  </a>
+                  </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
                 {/if}
                 {#if jumped(country)}
-                  <span title="Postings grew {COVERAGE_JUMP_RATIO}× or more in 30 days, likely new coverage; change not shown"
-                    ><span aria-hidden="true">*</span><span class="sr-only"> (coverage grew, change not shown)</span></span
+                  <span
+                    title="Postings grew {COVERAGE_JUMP_RATIO}× or more in 30 days, likely new coverage; change not shown"
+                    ><span aria-hidden="true">*</span><span class="sr-only">
+                      (coverage grew, change not shown)</span
+                    ></span
                   >
                 {/if}
               </th>
@@ -148,8 +158,14 @@
         <tbody id="role-country-rows">
           {#each grid.rows as row, i (row.category)}
             <tr class="border-b border-border last:border-b-0 {i >= VISIBLE_ROWS && !showAll ? 'hidden' : ''}">
-              <th scope="row" class="sticky left-0 z-10 bg-background px-3 py-1.5 text-left font-medium whitespace-nowrap">
-                <a href={resolve('/insights/roles/[category]', { category: row.category })} class="text-foreground hover:underline">
+              <th
+                scope="row"
+                class="sticky left-0 z-10 bg-background px-3 py-1.5 text-left font-medium whitespace-nowrap"
+              >
+                <a
+                  href={resolve('/insights/roles/[category]', { category: row.category })}
+                  class="text-foreground hover:underline"
+                >
                   {categoryLabel(row.category)}
                 </a>
               </th>
@@ -158,17 +174,25 @@
                 <td class="p-0 text-right {country === ALL_COUNTRIES ? 'border-r border-border' : ''}">
                   {#if cell}
                     {@const growth = growthText(country, cell)}
-                    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- hrefOf builds every target with resolve(); the rule cannot see through the call -->
-                    <a href={hrefOf(cellTarget(row.category, country, cell.open))}
+                    <!-- eslint-disable svelte/no-navigation-without-resolve -- hrefOf builds every target with resolve(); the rule cannot see through the call -->
+                    <a
+                      href={hrefOf(cellTarget(row.category, country, cell.open))}
                       aria-label={cellLabel(row.category, country, cell)}
-                      title="{categoryLabel(row.category)} · {columnName(country)}: {full.format(cell.open)} open, {full.format(cell.prev)} 30 days ago"
-                      class="block px-2 py-1.5 transition-colors hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-foreground {shadeOf(country, cell)}"
+                      title="{categoryLabel(row.category)} · {columnName(country)}: {full.format(
+                        cell.open,
+                      )} open, {full.format(cell.prev)} 30 days ago"
+                      class="block px-2 py-1.5 transition-colors hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-foreground {shadeOf(
+                        country,
+                        cell,
+                      )}"
                     >
                       <span class="block font-medium text-foreground">{compact.format(cell.open)}</span>
                       <span class="block text-xs whitespace-nowrap {growth.tone}">{growth.text}</span>
-                    </a>
+                    </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
                   {:else}
-                    <span class="block px-2 py-1.5 text-muted-foreground"><span aria-hidden="true">·</span><span class="sr-only">none</span></span>
+                    <span class="block px-2 py-1.5 text-muted-foreground"
+                      ><span aria-hidden="true">·</span><span class="sr-only">none</span></span
+                    >
                   {/if}
                 </td>
               {/each}
@@ -194,13 +218,11 @@
       {shading === 'open'
         ? 'Darker means a larger share of that country’s open roles.'
         : 'Green grew, red shrank over 30 days.'}
-      Change compares postings by when they were published, and shows "—" when there were
-      fewer than {GROWTH_MIN_BASE} a month ago. These are postings on freehire, not the whole
-      job market.
+      Change compares postings by when they were published, and shows "—" when there were fewer than {GROWTH_MIN_BASE} a month
+      ago. These are postings on freehire, not the whole job market.
       {#if grid.coverageJumps.size > 0}
-        * postings freehire carries for that country grew {COVERAGE_JUMP_RATIO}× or more in 30
-        days — a jump that size is usually new sources rather than hiring, and the two cannot be
-        told apart, so its change is not shown.
+        * postings freehire carries for that country grew {COVERAGE_JUMP_RATIO}× or more in 30 days — a jump that size
+        is usually new sources rather than hiring, and the two cannot be told apart, so its change is not shown.
       {/if}
     </p>
   </section>

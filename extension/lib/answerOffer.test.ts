@@ -49,10 +49,7 @@ describe('answersToOffer', () => {
   });
 
   it('keys each offer by frame and question index, so a repeated label stays two rows', () => {
-    const offers = answersToOffer(
-      [field('Years', '3', { index: 1 }), field('Years', '5', { index: 2 })],
-      new Set(),
-    );
+    const offers = answersToOffer([field('Years', '3', { index: 1 }), field('Years', '5', { index: 2 })], new Set());
     expect(offers.map((o) => o.key)).toEqual(['0:1', '0:2']);
   });
 });

@@ -45,10 +45,7 @@
 <!-- The dashed dot and the label — everything an outstanding step shows whether or not it
      is a link, so the two branches below cannot drift apart in padding or wording. -->
 {#snippet dotAndLabel(step: CompletenessStep)}
-  <span
-    class="size-4 shrink-0 rounded-full border border-dashed border-muted-foreground"
-    aria-hidden="true"
-  ></span>
+  <span class="size-4 shrink-0 rounded-full border border-dashed border-muted-foreground" aria-hidden="true"></span>
   <span class="min-w-0 flex-1">{step.label}</span>
 {/snippet}
 
@@ -72,61 +69,63 @@
       />
     </summary>
     <div class="border-t border-border px-4 pb-4">
-    <ul class="mt-3 flex flex-col gap-1">
-      {#each steps as step (step.id)}
-        <li>
-          {#if step.done}
-            <!-- Completed steps stay listed rather than disappearing: a list that only
+      <ul class="mt-3 flex flex-col gap-1">
+        {#each steps as step (step.id)}
+          <li>
+            {#if step.done}
+              <!-- Completed steps stay listed rather than disappearing: a list that only
                  shows what is left cannot show progress, and progress is the reason
                  somebody finishes the next one. Not a link — there is nothing to go
                  and do. -->
-            <p class="flex items-center gap-2 px-1 py-1.5 text-sm text-muted-foreground">
-              <Check class="size-4 shrink-0 text-brand" aria-hidden="true" />
-              <!-- Muted with a check, not struck through: a line through it read as cancelled. -->
-              <span>{step.label}</span>
-            </p>
-          {:else if leadsSomewhere(step)}
-            <!-- The dismiss button (alerts only) must not nest inside the link, so the
+              <p class="flex items-center gap-2 px-1 py-1.5 text-sm text-muted-foreground">
+                <Check class="size-4 shrink-0 text-brand" aria-hidden="true" />
+                <!-- Muted with a check, not struck through: a line through it read as cancelled. -->
+                <span>{step.label}</span>
+              </p>
+            {:else if leadsSomewhere(step)}
+              <!-- The dismiss button (alerts only) must not nest inside the link, so the
                  row itself carries the hover background and the group, and the link
                  covers only the part that navigates. -->
-            <div class="group flex items-center gap-1 rounded-lg py-1.5 pl-1 pr-1.5 text-sm transition-colors hover:bg-accent">
-              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- stepHref() wraps resolve(step.href); the rule can't see through the appended #anchorId -->
-              <a href={stepHref(step)} class="flex min-w-0 flex-1 items-center gap-2">
-                {@render dotAndLabel(step)}
-                <ArrowRight
-                  class="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                  aria-hidden="true"
-                />
-              </a>
-              {#if step.id === 'alerts'}
-                <!-- Not everyone is job-hunting right now — this is the only step that
+              <div
+                class="group flex items-center gap-1 rounded-lg py-1.5 pl-1 pr-1.5 text-sm transition-colors hover:bg-accent"
+              >
+                <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- stepHref() wraps resolve(step.href); the rule can't see through the appended #anchorId -->
+                <a href={stepHref(step)} class="flex min-w-0 flex-1 items-center gap-2">
+                  {@render dotAndLabel(step)}
+                  <ArrowRight
+                    class="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                    aria-hidden="true"
+                  />
+                </a>
+                {#if step.id === 'alerts'}
+                  <!-- Not everyone is job-hunting right now — this is the only step that
                      can be waved off instead of completed. -->
-                <button
-                  type="button"
-                  onclick={dismissAlertsStep}
-                  aria-label="Hide the &quot;{step.label}&quot; step"
-                  class="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background hover:text-accent-foreground"
-                >
-                  <X class="size-4" aria-hidden="true" />
-                </button>
-              {:else}
-                <!-- Holds the dismiss button's width, so every row's arrow lines up. -->
-                <span class="size-6 shrink-0" aria-hidden="true"></span>
-              {/if}
-            </div>
-          {:else}
-            <!-- The step is done on the page already open. Still listed — it is genuinely
+                  <button
+                    type="button"
+                    onclick={dismissAlertsStep}
+                    aria-label="Hide the &quot;{step.label}&quot; step"
+                    class="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background hover:text-accent-foreground"
+                  >
+                    <X class="size-4" aria-hidden="true" />
+                  </button>
+                {:else}
+                  <!-- Holds the dismiss button's width, so every row's arrow lines up. -->
+                  <span class="size-6 shrink-0" aria-hidden="true"></span>
+                {/if}
+              </div>
+            {:else}
+              <!-- The step is done on the page already open. Still listed — it is genuinely
                  outstanding — but as a statement rather than a link, with the section it
                  names sitting right below this card. -->
-            <p class="flex items-center gap-2 px-1 py-1.5 text-sm">
-              {@render dotAndLabel(step)}
-              <span class="shrink-0 text-xs text-muted-foreground">on this page</span>
-            </p>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-    {@render extra?.()}
+              <p class="flex items-center gap-2 px-1 py-1.5 text-sm">
+                {@render dotAndLabel(step)}
+                <span class="shrink-0 text-xs text-muted-foreground">on this page</span>
+              </p>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+      {@render extra?.()}
     </div>
   </details>
 {:else}

@@ -750,6 +750,10 @@ func TestNarrows(t *testing.T) {
 		// A modifier alone reads nothing, like every other modifier.
 		{"work_mode_remote_anywhere=true", false},
 		{"work_mode_remote_regions=eu&work_mode_remote_countries=us", false},
+		// The watchlist narrows to a company set only its owner can resolve.
+		{"watchlist=true", true},
+		{"watchlist=false", false},
+		{"watchlist=1", false},
 	}
 	for _, c := range cases {
 		if got := Narrows(vals(c.query)); got != c.want {

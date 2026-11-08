@@ -124,7 +124,8 @@
       // credentials (login-CSRF defence). A person can only hit this from a stale tab
       // on a foreign origin or a blocked privacy extension, so say where to sign in
       // from instead of apologizing for a fault.
-      if (isCrossSiteRefusal(e)) return 'For safety, authentication requests from other sites are refused. Open freehire in its own tab and try again.';
+      if (isCrossSiteRefusal(e))
+        return 'For safety, authentication requests from other sites are refused. Open freehire in its own tab and try again.';
     }
     return credentialErrorMessage(e) ?? 'Something went wrong. Please try again.';
   }
@@ -277,13 +278,7 @@
       <form class="flex flex-col gap-3" onsubmit={submit}>
         <label class="flex flex-col gap-1 text-sm">
           <span class="text-muted-foreground">Email</span>
-          <input
-            type="email"
-            bind:value={email}
-            required
-            autocomplete="email"
-            class={inputClass}
-          />
+          <input type="email" bind:value={email} required autocomplete="email" class={inputClass} />
         </label>
 
         {#if mode === 'reset'}
@@ -329,7 +324,11 @@
 
       {#if mode === 'login'}
         <p class="text-center text-sm">
-          <button type="button" onclick={() => switchMode('forgot')} class="text-muted-foreground underline-offset-4 hover:underline">
+          <button
+            type="button"
+            onclick={() => switchMode('forgot')}
+            class="text-muted-foreground underline-offset-4 hover:underline"
+          >
             Forgot your password?
           </button>
         </p>

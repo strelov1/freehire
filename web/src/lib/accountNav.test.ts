@@ -10,8 +10,8 @@ import {
 } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the twenty-three account sections', () => {
-    expect(accountNav).toHaveLength(23);
+  it('lists the twenty-four account sections', () => {
+    expect(accountNav).toHaveLength(24);
   });
 
   // Submissions and the invite link are tabs of Contributions and Plan now; their old
@@ -183,7 +183,7 @@ describe('workspaceFor', () => {
 
   // A session is read by both parties, so it has an address per role: one shared address
   // dropped a mentor into Job search the moment they opened a booking.
-  it("keeps a session in the workspace of the side that opened it", () => {
+  it('keeps a session in the workspace of the side that opened it', () => {
     expect(workspaceFor('/my/mentorship/bookings/abc123')).toBe('mentor');
     expect(workspaceFor('/my/mentorship/sessions/abc123')).toBe('seeker');
   });
@@ -230,6 +230,7 @@ describe('workspaceNav', () => {
           '/my/activity',
           '/my/tracking',
           '/my/inbox',
+          '/my/watchlist',
           '/my/market-pulse',
           '/my/assistant',
           '/my/cvs',
@@ -275,7 +276,7 @@ describe('visibleWorkspaces', () => {
     expect(visibleWorkspaces(true).map((w) => w.id)).toEqual(['seeker', 'buddies', 'mentor', 'referrer', 'employer']);
   });
 
-  it("opens each workspace on one of its own sections", () => {
+  it('opens each workspace on one of its own sections', () => {
     for (const w of visibleWorkspaces(true)) expect(workspaceFor(w.home)).toBe(w.id);
   });
 });

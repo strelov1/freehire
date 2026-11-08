@@ -9,7 +9,7 @@ function entry(over: Partial<SourceEntry> & { source: string }): SourceEntry {
   return {
     kind: 'ats',
     adapter: true,
-      jobs: null,
+    jobs: null,
     health: null,
     ...over,
   };
@@ -189,7 +189,7 @@ describe('SourceCatalog', () => {
     expect(img?.getAttribute('loading')).toBe('lazy');
   });
 
-  it('resolves a logo by the source\'s display name, not by a posting host', async () => {
+  it("resolves a logo by the source's display name, not by a posting host", async () => {
     // The logo proxy resolves a BRAND from a name — its own doc comment says so. A host is
     // either a 404 (a per-tenant subdomain like jobs.smartrecruiters.com) or, worse, the
     // right image for the wrong company (an employer's own domain: bankrate.com came back

@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  isLocale,
-  isTranslatedLocale,
-  LOCALE_COOKIE,
-  SUPPORTED_LOCALES,
-  TRANSLATED_LOCALES,
-} from './locale';
+import { isLocale, isTranslatedLocale, LOCALE_COOKIE, SUPPORTED_LOCALES, TRANSLATED_LOCALES } from './locale';
 
 describe('isLocale', () => {
   it('accepts every supported locale', () => {

@@ -108,9 +108,11 @@ describe('support turns', () => {
     // renders with a link to the plans page.
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        Response.json({ error: 'Please email help@example.com', support_email: 'help@example.com' }, { status }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json({ error: 'Please email help@example.com', support_email: 'help@example.com' }, { status }),
+        ),
     );
 
     const turn = sendTurn('s1', 'hello', () => {}, [], SUPPORT);

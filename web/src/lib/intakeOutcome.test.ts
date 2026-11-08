@@ -16,9 +16,7 @@ describe('intakeOutcomeMessage', () => {
 
   it('separates a new company from a new board of a company we carry', () => {
     const newCompany = intakeOutcomeMessage(link({ status: 'imported' }));
-    const knownCompany = intakeOutcomeMessage(
-      link({ status: 'imported', company_slug: 'acme' }),
-    );
+    const knownCompany = intakeOutcomeMessage(link({ status: 'imported', company_slug: 'acme' }));
     expect(newCompany).toMatch(/new to us/i);
     expect(knownCompany).toMatch(/already carry this company/i);
   });
@@ -41,9 +39,7 @@ describe('intakeOutcomeMessage', () => {
   });
 
   it('defaults to English, so the public search box needs no locale', () => {
-    expect(intakeOutcomeMessage(link({ status: 'found' }))).toBe(
-      intakeOutcomeMessage(link({ status: 'found' }), 'en'),
-    );
+    expect(intakeOutcomeMessage(link({ status: 'found' }))).toBe(intakeOutcomeMessage(link({ status: 'found' }), 'en'));
   });
 
   it('answers in Russian, keeping the five outcomes distinct', () => {

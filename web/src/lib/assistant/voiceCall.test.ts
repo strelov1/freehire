@@ -3,9 +3,7 @@ import { applyRealtimeEvent, canUseVoiceCall, initVoiceCallState } from './voice
 
 describe('canUseVoiceCall', () => {
   it('is true only when both APIs are present', () => {
-    expect(
-      canUseVoiceCall({ mediaDevices: { getUserMedia: () => {} }, RTCPeerConnection: {} }),
-    ).toBe(true);
+    expect(canUseVoiceCall({ mediaDevices: { getUserMedia: () => {} }, RTCPeerConnection: {} })).toBe(true);
   });
 
   it('is false without RTCPeerConnection', () => {

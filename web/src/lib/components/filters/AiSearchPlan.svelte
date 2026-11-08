@@ -67,7 +67,9 @@
       <p class="mt-1 text-muted-foreground">{s.cardBody}</p>
       <div class="mt-3 grid gap-2 {compact ? '' : 'sm:grid-cols-2'}">
         <Button variant="primary" size="lg" onclick={onRun}><Play class="size-4" /> {s.run}</Button>
-        <Button variant="outline" size="lg" onclick={onKeepChatting}><MessageSquare class="size-4" /> {s.keepChatting}</Button>
+        <Button variant="outline" size="lg" onclick={onKeepChatting}
+          ><MessageSquare class="size-4" /> {s.keepChatting}</Button
+        >
       </div>
     </Card>
   {/if}

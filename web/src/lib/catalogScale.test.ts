@@ -46,10 +46,7 @@ describe('catalogScale', () => {
   // "0 companies" is worse than a page showing no companies stat at all.
   it('passes a degraded snapshot through unchanged', async () => {
     const client = createApi(
-      snapshotFetch(
-        {},
-        { open_jobs: 3_150_000, companies: 0, sources: 227, telegram_channels: 0, exact: false },
-      ),
+      snapshotFetch({}, { open_jobs: 3_150_000, companies: 0, sources: 227, telegram_channels: 0, exact: false }),
       '',
       {},
     );

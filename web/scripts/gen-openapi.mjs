@@ -142,7 +142,11 @@ function requestBodyFor(ep) {
   const properties = {};
   const required = [];
   for (const p of real) {
-    properties[p.name] = { ...schemaFor(p.type), description: p.description, ...(p.example ? { example: p.example } : {}) };
+    properties[p.name] = {
+      ...schemaFor(p.type),
+      description: p.description,
+      ...(p.example ? { example: p.example } : {}),
+    };
     if (p.required) required.push(p.name);
   }
   const schema = {
@@ -196,7 +200,10 @@ function responsesFor(ep) {
 }
 
 function operationId(method, path) {
-  const cleaned = path.replace(/[{}]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+  const cleaned = path
+    .replace(/[{}]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
   return `${method.toLowerCase()}_${cleaned}`;
 }
 
@@ -208,7 +215,9 @@ function operationFor(ep) {
   if (ep.filterable) descriptionParts.push('Plus every filter in the "Filtering jobs" section above.');
   for (const note of placeholderNotes) descriptionParts.push(note);
   if (ep.deprecated) {
-    descriptionParts.push(`**Deprecated** since ${ep.deprecated.since} — use \`${ep.deprecated.replacement}\` instead.`);
+    descriptionParts.push(
+      `**Deprecated** since ${ep.deprecated.since} — use \`${ep.deprecated.replacement}\` instead.`,
+    );
   }
 
   const parameters = [
@@ -273,7 +282,9 @@ export function renderOpenApi(spec, filters, { title = 'freehire API' } = {}) {
       }
       const op = { ...operationFor(ep), tags: [group.title] };
       if (seenOperationIds.has(op.operationId)) {
-        throw new Error(`Duplicate operationId "${op.operationId}" for "${ep.method} ${ep.path}" — add a case to operationId() in gen-openapi.mjs to disambiguate.`);
+        throw new Error(
+          `Duplicate operationId "${op.operationId}" for "${ep.method} ${ep.path}" — add a case to operationId() in gen-openapi.mjs to disambiguate.`,
+        );
       }
       seenOperationIds.add(op.operationId);
       paths[ep.path][method] = op;

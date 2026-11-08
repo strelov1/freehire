@@ -9,13 +9,7 @@
   import { filterHref } from '#lib/enrichment.js';
   import { categoryLabel } from '#lib/labels.js';
   import { categoryLandingLink } from '#lib/roleLandings.js';
-  import {
-    breadcrumbJsonLd,
-    jobPageTitle,
-    jobPostingJsonLd,
-    jsonLdScript,
-    metaDescription,
-  } from '#lib/seo.js';
+  import { breadcrumbJsonLd, jobPageTitle, jobPostingJsonLd, jsonLdScript, metaDescription } from '#lib/seo.js';
   import type { Job } from '#lib/types.js';
   import { Breadcrumbs } from '#lib/ui/index.js';
   import type { PageData } from './$types';
@@ -51,7 +45,7 @@
     metaDescription(data.job.description) ||
       (data.job.company
         ? `${data.job.title} at ${data.job.company} — apply on freehire.`
-        : `${data.job.title} — apply on freehire.`)
+        : `${data.job.title} — apply on freehire.`),
   );
   // The one breadcrumb trail behind both the visible nav (via visibleBreadcrumbItems below)
   // and the structured data — a single array so the two can never disagree about what the
@@ -94,7 +88,7 @@
           url: item.href ? `${origin}${item.href}` : canonical,
         })),
       ),
-    ])
+    ]),
   );
 </script>
 
@@ -119,12 +113,7 @@
          on the Similar tab whenever there are similar postings, which is the only case in
          which JobView offers the link. -->
     <div id="similar-jobs">
-      <JobRelated
-        {similar}
-        copies={data.copies}
-        copiesTotal={data.copiesTotal}
-        slug={data.job.public_slug}
-      />
+      <JobRelated {similar} copies={data.copies} copiesTotal={data.copiesTotal} slug={data.job.public_slug} />
     </div>
 
     <!-- Below the related postings and right above "See also" on every width: at the top

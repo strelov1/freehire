@@ -74,20 +74,15 @@ function statesLocation(profile: UserProfile | null): boolean {
   if (!loc) return false;
   return Boolean(
     loc.work_modes?.length ||
-      loc.base?.country ||
-      loc.base?.city ||
-      loc.remote?.regions?.length ||
-      loc.remote?.countries?.length,
+    loc.base?.country ||
+    loc.base?.city ||
+    loc.remote?.regions?.length ||
+    loc.remote?.countries?.length,
   );
 }
 
 /** The setup steps and whether each is done, in the order they are asked for. */
-export function accountSteps({
-  hasCv,
-  profile,
-  alertCount,
-  alertsDismissed,
-}: CompletenessInput): CompletenessStep[] {
+export function accountSteps({ hasCv, profile, alertCount, alertsDismissed }: CompletenessInput): CompletenessStep[] {
   const steps: CompletenessStep[] = [
     {
       id: 'cv',

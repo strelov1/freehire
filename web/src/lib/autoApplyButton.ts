@@ -41,7 +41,7 @@ export function autoApplyButtonState(
   status: string | null | undefined,
   alreadyApplied: boolean,
   isPro: boolean,
-  closed: boolean
+  closed: boolean,
 ): AutoApplyButtonState {
   if (!isPro) return { kind: 'hidden' };
   if (closed) return { kind: 'hidden' };

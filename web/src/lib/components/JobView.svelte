@@ -182,9 +182,7 @@
     { id: 'description', label: 'Description' },
     ...(companySlug ? [{ id: 'company' as const, label: 'Company' }] : []),
     // The screening form is pointless once the posting stops taking applications.
-    ...(!closed && applyFormWorthShowing(applyForm)
-      ? [{ id: 'application' as const, label: 'Application' }]
-      : []),
+    ...(!closed && applyFormWorthShowing(applyForm) ? [{ id: 'application' as const, label: 'Application' }] : []),
   ]);
   let contentTab = $state<ContentTab>('description');
   // Per-instance so a second JobView on one page can't claim the same panel, which
@@ -221,8 +219,7 @@
         // `isIntersecting` alone also reads false while the sentinel is BELOW the fold,
         // which is where it sits on a short viewport before anything has been scrolled.
         // The rect settles which edge it left by.
-        headerPinned =
-          !entry.isIntersecting && entry.boundingClientRect.top < PINNED_HEADER_TOP;
+        headerPinned = !entry.isIntersecting && entry.boundingClientRect.top < PINNED_HEADER_TOP;
       },
       { rootMargin: `-${PINNED_HEADER_TOP}px 0px 0px 0px` },
     );
@@ -308,7 +305,8 @@
     if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
     untrack(ensureAppliedCompaniesLoaded);
     if (job.direct_apply) {
-      api.getDirectApplyForm(slug)
+      api
+        .getDirectApplyForm(slug)
         .then((f) => {
           if (job.public_slug === slug) directApplied = f.applied;
         })
@@ -317,7 +315,8 @@
     // The Avoid control below reads the profile's excluded_sources; without this its mark
     // would be wrong on a first load until something else happened to fetch the profile.
     untrack(() => profileStore.ensureLoaded());
-    api.recordJobView(slug)
+    api
+      .recordJobView(slug)
       .then((rec) => {
         // Mark it locally so its card dims on back-navigation without a reload.
         markViewed(slug);
@@ -485,13 +484,7 @@
   let autoApplySubmitting = $state(false);
   let autoApplyError = $state<string | null>(null);
   const autoApplyState = $derived(
-    autoApplyButtonState(
-      job.source,
-      autoApplyOverrideStatus ?? job.auto_apply_status,
-      applied,
-      isPro,
-      closed,
-    ),
+    autoApplyButtonState(job.source, autoApplyOverrideStatus ?? job.auto_apply_status, applied, isPro, closed),
   );
   // How loud each of the two CTAs is, and what they say. The table and the rule it keeps
   // ("never two primaries; one wherever an action remains") live in autoApplyButton.ts,
@@ -591,7 +584,13 @@
      link from every job page, which is what the SEO submissions are actually after. -->
 {#snippet applyCta(size: 'md' | 'lg', className: string, external: JobCtaPlan['external'])}
   {#if job.direct_apply}
-    <Button variant="outline" {size} onclick={onDirectApplyClick} disabled={directApplied || loadingDirectApply} class={className}>
+    <Button
+      variant="outline"
+      {size}
+      onclick={onDirectApplyClick}
+      disabled={directApplied || loadingDirectApply}
+      class={className}
+    >
       {directApplied ? 'Application sent' : external.label}
       {#if !directApplied}<ArrowRight class="size-4" />{/if}
     </Button>
@@ -605,7 +604,8 @@
       onclick={onApplyClick}
       class={className}
     >
-      {external.label} <ArrowRight class="size-4" />
+      {external.label}
+      <ArrowRight class="size-4" />
     </Button>
   {/if}
 {/snippet}
@@ -992,9 +992,7 @@
        "Be an early / applicant" inside itself. `max-w-full` plus its own `flex-wrap` let
        the chips wrap BETWEEN each other instead when even a line of their own is too
        narrow for all of them. -->
-  <div
-    class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 lg:col-start-2 lg:row-start-1 lg:gap-x-3"
-  >
+  <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 lg:col-start-2 lg:row-start-1 lg:gap-x-3">
     <EntityLogo
       name={job.company || 'Unknown company'}
       src={companyLogoUrl(job.company) ?? undefined}
@@ -1003,7 +1001,10 @@
     />
     <p class="min-w-0 text-sm text-muted-foreground max-lg:truncate">
       {#if job.company_slug}
-        <a href={resolve('/companies/[slug]', { slug: job.company_slug })} class="hover:text-foreground hover:underline">
+        <a
+          href={resolve('/companies/[slug]', { slug: job.company_slug })}
+          class="hover:text-foreground hover:underline"
+        >
           {job.company || 'Unknown company'}
         </a>
       {:else}
@@ -1167,7 +1168,6 @@
       />
     {/if}
 
-
     <!-- Mentorship is a separate way to get help from someone at this company. -->
     {#if job.company_slug}
       <MentorBlock companySlug={job.company_slug} companyName={job.company} />
@@ -1221,12 +1221,13 @@
                   />
                 </dd>
               {:else}
-                <dd class="min-w-0 break-words text-right font-medium"
-                  >{#each facet.values as v, i (v.text)}{#if i > 0}, {/if}{#if v.href}<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal filter link from filterHref; query-only, no route to resolve --><a
+                <dd class="min-w-0 break-words text-right font-medium">
+                  {#each facet.values as v, i (v.text)}{#if i > 0},
+                    {/if}{#if v.href}<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal filter link from filterHref; query-only, no route to resolve --><a
                         href={v.href}
                         class="hover:text-foreground hover:underline">{v.text}</a
-                      >{:else}{v.text}{/if}{/each}</dd
-                >
+                      >{:else}{v.text}{/if}{/each}
+                </dd>
               {/if}
             </div>
           {/each}
@@ -1235,7 +1236,9 @@
 
       <!-- One quiet footer line: where the posting came from (with the control to stop seeing
            that source) and the votes. They were two divided bands, each holding one control. -->
-      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0">
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0"
+      >
         <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
         <div class="flex shrink-0">
           <!-- Keyed on the slug so a client-side navigation to another job remounts
@@ -1384,10 +1387,7 @@
         <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
           <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> Added to your board
         </span>
-        <a
-          href={resolve('/my/tracking')}
-          class="text-sm font-medium text-brand-strong underline underline-offset-4"
-        >
+        <a href={resolve('/my/tracking')} class="text-sm font-medium text-brand-strong underline underline-offset-4">
           View on your board →
         </a>
       </div>
@@ -1398,8 +1398,8 @@
         class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
       >
         <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
-          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored CV — you'll get
-          a notification to review it.
+          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored CV — you'll get a notification
+          to review it.
         </span>
         <a
           href={resolve('/my/tracking/[id]', { id: job.public_slug })}
@@ -1488,11 +1488,7 @@
         {#if cta.autoApply?.leads}
           {@render autoApplyCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg')}
         {:else}
-          {@render applyCta(
-            'lg',
-            'flex-1 rounded-xl font-semibold shadow-lg',
-            cta.external,
-          )}
+          {@render applyCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg', cta.external)}
         {/if}
       </div>
     </div>
@@ -1513,9 +1509,7 @@
   }
 
   :global(html.job-scroll-pad.job-scroll-pad-bar) {
-    scroll-padding-bottom: calc(
-      4.75rem + env(safe-area-inset-bottom) + var(--job-scroll-pad-feedback-height, 0px)
-    );
+    scroll-padding-bottom: calc(4.75rem + env(safe-area-inset-bottom) + var(--job-scroll-pad-feedback-height, 0px));
   }
 
   @media (min-width: 64rem) {

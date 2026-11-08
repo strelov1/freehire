@@ -31,7 +31,13 @@ export async function transcribe(audio: Blob, filename: string): Promise<string>
   // sees a refusal here — see trackPlanRefusal. Read before the ladder, because every
   // rung below throws rather than falling through.
   if (res.status === 402) {
-    trackPlanRefusal(res.status, await res.clone().json().catch(() => null));
+    trackPlanRefusal(
+      res.status,
+      await res
+        .clone()
+        .json()
+        .catch(() => null),
+    );
     throw new Error('Dictation is part of a paid plan — see /pricing.');
   }
   if (res.status === 501) throw new TranscriptionUnavailable();

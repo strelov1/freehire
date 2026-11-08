@@ -11,6 +11,8 @@ export default ts.config(
   js.configs.recommended,
   ...ts.configs.strict,
   ...svelte.configs.recommended,
+  // The formatter (oxfmt, shared .oxfmtrc.json) owns layout: switch off the Svelte rules about it.
+  ...svelte.configs.prettier,
 
   // Extension contexts see both DOM globals (sidepanel, content script) and
   // the WebExtension API surface (chrome/browser, background). Type-aware

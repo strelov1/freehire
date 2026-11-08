@@ -59,13 +59,7 @@
 
       <!-- filled area + line -->
       <polygon points={model.area} class="fill-foreground/10" />
-      <polyline
-        points={model.line}
-        fill="none"
-        class="stroke-foreground"
-        stroke-width="2"
-        stroke-linejoin="round"
-      />
+      <polyline points={model.line} fill="none" class="stroke-foreground" stroke-width="2" stroke-linejoin="round" />
       <!-- end marker -->
       <circle cx={model.endX} cy={model.endY} r="3.5" class="fill-foreground" />
 

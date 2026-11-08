@@ -55,7 +55,7 @@ export const messages = defineMessages(
       sortDeadline: 'Срок подачи',
       allStages: 'Все этапы',
       noStage: 'Без этапа',
-    columnEmpty: 'Перетащите вакансию сюда',
+      columnEmpty: 'Перетащите вакансию сюда',
       noMatches: 'Подходящих заявок нет',
       noMatchesDescription: 'Попробуйте другую компанию или роль либо сбросьте фильтры.',
       clearFilters: 'Сбросить фильтры',

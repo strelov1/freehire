@@ -21,11 +21,7 @@
   // `dynamic` in TALENT_FACETS, so the shell's live counts drive them: they arrive
   // searchable, with the number of members behind each value, which is the whole reason
   // this modal exists rather than another row of pills.
-  let {
-    store,
-    open = false,
-    onClose,
-  }: { store: TalentFilterStore; open?: boolean; onClose: () => void } = $props();
+  let { store, open = false, onClose }: { store: TalentFilterStore; open?: boolean; onClose: () => void } = $props();
 
   const staged = new StagedTalentFilters();
 

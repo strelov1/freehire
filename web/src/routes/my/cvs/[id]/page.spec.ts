@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { listBaseCvs, listCvs, goto } = vi.hoisted(() => ({ listBaseCvs: vi.fn(), listCvs: vi.fn(), goto: vi.fn() }));
 
 vi.mock('$app/navigation', () => ({ goto }));
-vi.mock('$app/state', () => ({ page: { data: {}, params: { id: 'cv-1' }, url: new URL('http://localhost/my/cvs/cv-1') } }));
+vi.mock('$app/state', () => ({
+  page: { data: {}, params: { id: 'cv-1' }, url: new URL('http://localhost/my/cvs/cv-1') },
+}));
 vi.mock('$app/paths', () => ({
   resolve: (route: string, params?: Record<string, string>) =>
     route.replace('[slug]', params?.slug ?? '').replace('[id]', params?.id ?? ''),
@@ -19,7 +21,7 @@ beforeEach(() => {
 
 // A CV's address is one door to the one workspace, whichever kind of CV it is.
 describe('/my/cvs/[id]', () => {
-  it('opens a base CV in the workspace\'s base mode', async () => {
+  it("opens a base CV in the workspace's base mode", async () => {
     listBaseCvs.mockResolvedValue([{ id: 'cv-1' }]);
     listCvs.mockResolvedValue([]);
     render(Page);

@@ -85,30 +85,36 @@ async function main() {
   assert('external doc cross-links to the internal reference', external.includes('freehire.me/docs/api/internal'));
   assert('internal doc cross-links back to the external reference', internal.includes('freehire.me/docs/api'));
   assert(
-    'internal doc cross-link is not confused for the external doc\'s own link',
+    "internal doc cross-link is not confused for the external doc's own link",
     !internal.includes('freehire.me/docs/api/internal'),
   );
 
-  assert('unknown audience throws', (() => {
-    try {
-      partitionForAudience(spec, 'nonsense');
-      return false;
-    } catch {
-      return true;
-    }
-  })());
+  assert(
+    'unknown audience throws',
+    (() => {
+      try {
+        partitionForAudience(spec, 'nonsense');
+        return false;
+      } catch {
+        return true;
+      }
+    })(),
+  );
 
   // An `Auth` level AUDIENCE_AUTH doesn't route to either side must fail loudly,
   // not silently drop whatever endpoint carries it from both documents.
-  assert('an auth level AUDIENCE_AUTH does not cover throws', (() => {
-    const bogusSpec = { ...spec, AUTH_LABELS: { ...spec.AUTH_LABELS, mystery: 'Mystery' } };
-    try {
-      partitionForAudience(bogusSpec, 'external');
-      return false;
-    } catch {
-      return true;
-    }
-  })());
+  assert(
+    'an auth level AUDIENCE_AUTH does not cover throws',
+    (() => {
+      const bogusSpec = { ...spec, AUTH_LABELS: { ...spec.AUTH_LABELS, mystery: 'Mystery' } };
+      try {
+        partitionForAudience(bogusSpec, 'external');
+        return false;
+      } catch {
+        return true;
+      }
+    })(),
+  );
 
   let failed = 0;
   for (const c of checks) {

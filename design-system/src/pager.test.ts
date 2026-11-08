@@ -6,7 +6,10 @@ import { must } from './test-utils';
 function setup(props: { page?: number; total: number; perPage?: number }) {
   const { container, getByLabelText } = render(Pager, props);
   return {
-    label: () => must(must(container.querySelector('span')).textContent).replace(/\s+/g, ' ').trim(),
+    label: () =>
+      must(must(container.querySelector('span')).textContent)
+        .replace(/\s+/g, ' ')
+        .trim(),
     prev: getByLabelText('Previous page') as HTMLButtonElement,
     next: getByLabelText('Next page') as HTMLButtonElement,
   };

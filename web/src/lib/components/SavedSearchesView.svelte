@@ -40,11 +40,7 @@
   async function load() {
     status = 'loading';
     try {
-      await Promise.all([
-        savedSearches.ensureLoaded(),
-        notifications.ensureLoaded(),
-        profileStore.ensureLoaded(),
-      ]);
+      await Promise.all([savedSearches.ensureLoaded(), notifications.ensureLoaded(), profileStore.ensureLoaded()]);
       status = 'ready';
     } catch {
       status = 'error';
@@ -134,7 +130,9 @@
 {#if !isAuthenticated()}
   <div class="flex flex-col items-center gap-3 py-12 text-center">
     <p class="text-sm text-muted-foreground">Sign in to manage your saved searches.</p>
-    <Button variant="primary" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</Button>
+    <Button variant="primary" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}
+      >Sign in</Button
+    >
   </div>
 {:else}
   <div class="flex flex-col gap-6">
@@ -142,8 +140,8 @@
       <!-- An h2: the page already carries the Notifications h1 and its tab strip. -->
       <h2 class="text-base font-semibold tracking-tight">Saved searches &amp; alerts</h2>
       <p class="text-sm text-muted-foreground">
-        Each saved set of filters can send you its new jobs — in Telegram, by email, or both.
-        Reuse one anytime. Create new saved searches from the filters panel on the jobs page.
+        Each saved set of filters can send you its new jobs — in Telegram, by email, or both. Reuse one anytime. Create
+        new saved searches from the filters panel on the jobs page.
       </p>
     </div>
 
@@ -183,50 +181,49 @@
       {/if}
 
       {#if items.length === 0}
-        <States
-          state="empty"
-          message="No saved searches yet. Save a filter set from the jobs page to see it here."
-        />
+        <States state="empty" message="No saved searches yet. Save a filter set from the jobs page to see it here." />
       {:else}
         <div class="flex flex-col gap-3">
-        {#each items as s (s.id)}
-          <article class="flex flex-col rounded-xl border border-border p-4 transition-colors hover:border-muted-foreground/30">
-            <div class="flex items-start gap-3">
-              <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span class="truncate text-sm font-medium">{s.name}</span>
-                <span class="text-xs text-muted-foreground">
-                  {s.query === '' ? 'All jobs' : 'Custom filters'}
-                </span>
+          {#each items as s (s.id)}
+            <article
+              class="flex flex-col rounded-xl border border-border p-4 transition-colors hover:border-muted-foreground/30"
+            >
+              <div class="flex items-start gap-3">
+                <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span class="truncate text-sm font-medium">{s.name}</span>
+                  <span class="text-xs text-muted-foreground">
+                    {s.query === '' ? 'All jobs' : 'Custom filters'}
+                  </span>
+                </div>
+                <div class="flex shrink-0 items-center gap-1">
+                  <Button variant="secondary" size="sm" href={openHref(s.query)}>Open</Button>
+                  <button
+                    type="button"
+                    aria-label="Rename “{s.name}”"
+                    title="Rename"
+                    onclick={() => requestRename(s)}
+                    class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <Pencil class="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Delete “{s.name}”"
+                    title="Delete"
+                    onclick={() => requestRemove(s)}
+                    class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 class="size-4" />
+                  </button>
+                </div>
               </div>
-              <div class="flex shrink-0 items-center gap-1">
-                <Button variant="secondary" size="sm" href={openHref(s.query)}>Open</Button>
-                <button
-                  type="button"
-                  aria-label="Rename “{s.name}”"
-                  title="Rename"
-                  onclick={() => requestRename(s)}
-                  class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  <Pencil class="size-4" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Delete “{s.name}”"
-                  title="Delete"
-                  onclick={() => requestRemove(s)}
-                  class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 class="size-4" />
-                </button>
-              </div>
-            </div>
 
-            <!-- Per-search alerts: the shared toggle chips (Telegram / Email). -->
-            <div class="mt-3 border-t border-border/60 pt-3">
-              <AlertChannels savedSearchId={s.id} />
-            </div>
-          </article>
-        {/each}
+              <!-- Per-search alerts: the shared toggle chips (Telegram / Email). -->
+              <div class="mt-3 border-t border-border/60 pt-3">
+                <AlertChannels savedSearchId={s.id} />
+              </div>
+            </article>
+          {/each}
         </div>
       {/if}
     {/if}

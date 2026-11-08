@@ -10,7 +10,13 @@ vi.stubGlobal('matchMedia', (q: string) => ({
   addEventListener() {},
   removeEventListener() {},
 }));
-vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} });
+vi.stubGlobal(
+  'IntersectionObserver',
+  class {
+    observe() {}
+    disconnect() {}
+  },
+);
 
 describe('BuddiesLandingView', () => {
   it('leads with the headline and sends every join button to /buddies', () => {
@@ -34,7 +40,7 @@ describe('BuddiesLandingView', () => {
     // and is announced with the button itself, since the click joins at once.
     for (const b of joins) {
       const note = document.getElementById(b.getAttribute('aria-describedby') ?? '');
-      expect(note?.textContent).toMatch(/role titles in your CV.*including applications you made before joining/s);
+      expect(note?.textContent).toMatch(/role titles in your CV.*including applications you made before\s+joining/s);
     }
   });
 

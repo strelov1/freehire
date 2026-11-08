@@ -6,7 +6,9 @@ import { FilterStore } from '#lib/filters.js';
 import JobsMapDialog from './JobsMapDialog.svelte';
 
 vi.mock('$app/env', () => ({ browser: false }));
-const { page } = vi.hoisted(() => ({ page: { data: {} as { locale?: string }, url: new URL('http://localhost/jobs') } }));
+const { page } = vi.hoisted(() => ({
+  page: { data: {} as { locale?: string }, url: new URL('http://localhost/jobs') },
+}));
 vi.mock('$app/state', () => ({ page }));
 vi.mock('$app/navigation', () => ({ replaceState: vi.fn(), goto: vi.fn() }));
 
@@ -37,7 +39,11 @@ const BRAZIL = counts(700, {
   regions: { global: 5 },
 });
 
-const SAO_PAULO = counts(500, { countries: { br: 500 }, cities: { 'São Paulo': 500, Campinas: 2 }, regions: { global: 2 } });
+const SAO_PAULO = counts(500, {
+  countries: { br: 500 },
+  cities: { 'São Paulo': 500, Campinas: 2 },
+  regions: { global: 2 },
+});
 
 // A store seeded through its own writes, the way a visitor's clicks would leave it.
 function storeWith(...writes: [string, string][]) {

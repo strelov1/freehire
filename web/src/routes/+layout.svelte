@@ -49,9 +49,7 @@
   // at module level, so the component mounting late reads `open` as already true and
   // settling goes through the same controller. A chunk that fails to load must still
   // answer the ask, or the caller would await forever; the next ask retries the import.
-  let confirmTailorModule = $state<Promise<typeof import('#lib/components/ConfirmTailorDialog.svelte')> | null>(
-    null,
-  );
+  let confirmTailorModule = $state<Promise<typeof import('#lib/components/ConfirmTailorDialog.svelte')> | null>(null);
   $effect(() => {
     if (!confirmTailorDialog.open || confirmTailorModule) return;
     const load = import('#lib/components/ConfirmTailorDialog.svelte');
@@ -72,14 +70,19 @@
     if (isAuthenticated()) void messagingDock.ensureLoaded();
   });
   $effect(() => {
-    if (messagingDock.active && !messagingDockModule) messagingDockModule = import('#lib/components/MessagingDock.svelte');
+    if (messagingDock.active && !messagingDockModule)
+      messagingDockModule = import('#lib/components/MessagingDock.svelte');
   });
   // Room under the page for the dock's bars, so they never sit over its last line. A
   // full-bleed route sizes itself to the viewport, where padding would only add a scroll.
   const dockReserve = $derived(
     isFullBleedRoute(page.url.pathname)
       ? ''
-      : dockReserveClass(messagingDock.shownOn(page.url.pathname), ownsMobileStickyCta(page.url.pathname), messagingDock.windows),
+      : dockReserveClass(
+          messagingDock.shownOn(page.url.pathname),
+          ownsMobileStickyCta(page.url.pathname),
+          messagingDock.windows,
+        ),
   );
 
   // The account area (/my/*) is an app-like surface with its own sidebar nav — the
@@ -91,9 +94,7 @@
   // pages (a fixed inset-0 overlay covers TopBar too).
   const isAccountRoute = $derived(isAccountArea(page.url.pathname));
   const hideFooter = $derived(
-    isFullBleedRoute(page.url.pathname) ||
-      page.url.pathname === '/onboarding' ||
-      page.url.pathname === '/signin',
+    isFullBleedRoute(page.url.pathname) || page.url.pathname === '/onboarding' || page.url.pathname === '/signin',
   );
   const compactFooter = $derived(isAccountRoute && !hideFooter);
 
@@ -118,7 +119,13 @@
     // redirect fired in between races that navigation. The tour, opened for an instant,
     // would record itself as shown and the visitor would never see it.
     const path = page.url.pathname;
-    if (isAuthenticated() && needsOnboarding && !onboardingGate.dismissed && path !== '/onboarding' && path !== '/signin') {
+    if (
+      isAuthenticated() &&
+      needsOnboarding &&
+      !onboardingGate.dismissed &&
+      path !== '/onboarding' &&
+      path !== '/signin'
+    ) {
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
       void goto(onboardingUrl(page.url.pathname + page.url.search));
     }

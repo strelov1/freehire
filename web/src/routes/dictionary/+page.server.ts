@@ -10,9 +10,7 @@ export const load: PageServerLoad = async ({ fetch, setHeaders }) => {
   const client = serverApi(fetch);
   const [catalog, counts] = await Promise.all([
     loadSkillDescriptions(),
-    client
-      .facetCounts(new URLSearchParams(), { facets: ['category', 'skills'] })
-      .catch((): FacetCounts | null => null),
+    client.facetCounts(new URLSearchParams(), { facets: ['category', 'skills'] }).catch((): FacetCounts | null => null),
   ]);
 
   setHeaders({ 'cache-control': 'public, max-age=0, s-maxage=3600' });

@@ -89,10 +89,7 @@
 <!-- Offered in every terminal state, empty and failed included, so the click is never a
      dead end: the company's own page holds what the visitor came to this tab for. -->
 {#snippet companyLink()}
-  <a
-    class="text-sm font-medium text-primary hover:underline"
-    href={resolve('/companies/[slug]', { slug })}
-  >
+  <a class="text-sm font-medium text-primary hover:underline" href={resolve('/companies/[slug]', { slug })}>
     All jobs at {name} →
   </a>
 {/snippet}
@@ -183,10 +180,7 @@
       <div class="flex flex-col gap-2 border-t border-border pt-6 first:border-t-0 first:pt-0">
         <p
           bind:this={para}
-          class={[
-            'whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground',
-            !expanded && 'line-clamp-5',
-          ]}
+          class={['whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground', !expanded && 'line-clamp-5']}
         >
           {description}
         </p>

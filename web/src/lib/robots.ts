@@ -85,10 +85,7 @@ const group = (agent: string, disallowed: readonly string[]) =>
 // form to Google — which is why the two lists are composed here rather than written
 // out twice.
 export function robotsBody(origin: string): string {
-  const groups = [
-    group('*', DISALLOWED),
-    ...SEARCH_CRAWLERS.map((agent) => group(agent, SEARCH_CRAWLER_DISALLOWED)),
-  ];
+  const groups = [group('*', DISALLOWED), ...SEARCH_CRAWLERS.map((agent) => group(agent, SEARCH_CRAWLER_DISALLOWED))];
 
   return `${groups.join('\n\n')}
 

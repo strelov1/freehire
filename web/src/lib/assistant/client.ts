@@ -183,13 +183,7 @@ export class TurnRefused extends Error {
   readonly turns: number;
   readonly ceiling: number;
 
-  constructor(
-    message: string,
-    sessionId: string,
-    canExtend: boolean,
-    turns: number,
-    ceiling: number,
-  ) {
+  constructor(message: string, sessionId: string, canExtend: boolean, turns: number, ceiling: number) {
     super(message);
     this.name = 'TurnRefused';
     this.sessionId = sessionId;

@@ -31,9 +31,7 @@ describe('appendTranscript', () => {
 
 describe('canRecord', () => {
   it('is true only when both APIs are present', () => {
-    expect(canRecord({ mediaDevices: { getUserMedia: () => {} }, MediaRecorder: {} })).toBe(
-      true,
-    );
+    expect(canRecord({ mediaDevices: { getUserMedia: () => {} }, MediaRecorder: {} })).toBe(true);
   });
 
   it('is false without MediaRecorder', () => {

@@ -168,7 +168,6 @@ function readList(input: unknown, key: string): string | null {
   return parts.length > 0 ? truncate(parts.join(', '), 60) : null;
 }
 
-
 /** How many edits one cv_edit call carried — the tool takes a batch, not a single patch. */
 function editCount(input: unknown, locale: Locale = 'en'): string | null {
   if (!input || typeof input !== 'object') return null;

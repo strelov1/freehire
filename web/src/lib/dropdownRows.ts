@@ -52,11 +52,7 @@ export type DropdownRow = { key: string; first: boolean } & (
  *
  *  Deliberately NOT pushed into the endpoint: fuzzy matching is correct for its other
  *  caller, and this is a rule about what a three-row section may show. */
-export function namedCompanies(
-  companies: readonly CompanyListItem[],
-  text: string,
-  limit = 3,
-): CompanyListItem[] {
+export function namedCompanies(companies: readonly CompanyListItem[], text: string, limit = 3): CompanyListItem[] {
   const q = text.trim().toLowerCase();
   if (q === '') return [];
   return companies.filter((c) => c.name.toLowerCase().startsWith(q)).slice(0, limit);

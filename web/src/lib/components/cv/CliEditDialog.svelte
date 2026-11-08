@@ -35,10 +35,12 @@
 
 <Dialog bind:open title="Edit this CV from the CLI" class="sm:max-w-lg">
   <p class="text-sm leading-relaxed text-muted-foreground">
-    Give this to your own coding agent — with the freehire CLI installed and signed in, it reads
-    and writes this exact CV the same way the in-app assistant does.
+    Give this to your own coding agent — with the freehire CLI installed and signed in, it reads and writes this exact
+    CV the same way the in-app assistant does.
   </p>
-  <div class="mt-3 flex items-start gap-2 rounded-md border border-border bg-background/60 p-3 font-mono text-sm leading-relaxed">
+  <div
+    class="mt-3 flex items-start gap-2 rounded-md border border-border bg-background/60 p-3 font-mono text-sm leading-relaxed"
+  >
     <p class="min-w-0 flex-1 break-words">{prompt}</p>
     <button
       type="button"
@@ -53,9 +55,8 @@
     <a
       href={resolve('/my/integrations/api-keys')}
       class="font-medium text-foreground underline-offset-4 hover:underline">API key</a
-    > and the CLI installed and signed in — setup and the rest of the commands are on the
-    <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline"
-      >CLI reference</a
-    >.
+    >
+    and the CLI installed and signed in — setup and the rest of the commands are on the
+    <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline">CLI reference</a>.
   </p>
 </Dialog>

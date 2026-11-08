@@ -37,12 +37,8 @@ describe('account nav label catalog', () => {
     // source, so an untranslated section is present but still English — the
     // per-key fallback working as designed. Equality with the English label is
     // therefore the signal, and the only one available from a merged catalog.
-    const untranslated = hrefs.filter(
-      (href) => href in en && !SAME_IN_RUSSIAN.has(href) && ru[href] === en[href],
-    );
-    expect(untranslated, 'navigation sections still showing their English label in Russian').toEqual(
-      [],
-    );
+    const untranslated = hrefs.filter((href) => href in en && !SAME_IN_RUSSIAN.has(href) && ru[href] === en[href]);
+    expect(untranslated, 'navigation sections still showing their English label in Russian').toEqual([]);
   });
 
   it('English label matches the navigation item it renders for', () => {

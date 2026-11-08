@@ -39,9 +39,7 @@ describe('viewAtsDelta', () => {
           tailored: 55,
           change: -15,
           regressed: true,
-          categories: [
-            { id: 'format_compliance', label: 'Format Compliance', base: 30, tailored: 15, change: -15 },
-          ],
+          categories: [{ id: 'format_compliance', label: 'Format Compliance', base: 30, tailored: 15, change: -15 }],
         },
       }),
     );
@@ -49,9 +47,7 @@ describe('viewAtsDelta', () => {
   });
 
   it('says nothing changed rather than showing a bare zero', () => {
-    const v = viewAtsDelta(
-      resp({ delta: { base: 60, tailored: 60, change: 0, regressed: false, categories: [] } }),
-    );
+    const v = viewAtsDelta(resp({ delta: { base: 60, tailored: 60, change: 0, regressed: false, categories: [] } }));
     expect(v?.overall.text).toBe('no change');
   });
 
@@ -85,9 +81,7 @@ describe('viewAtsDelta', () => {
           change: -5,
           regressed: true,
           worst_category: 'a_category_the_client_does_not_know',
-          categories: [
-            { id: 'keyword_strength', label: 'Keyword Strength', base: 20, tailored: 15, change: -5 },
-          ],
+          categories: [{ id: 'keyword_strength', label: 'Keyword Strength', base: 20, tailored: 15, change: -5 }],
         },
       }),
     );

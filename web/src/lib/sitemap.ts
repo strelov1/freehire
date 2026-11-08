@@ -205,7 +205,10 @@ export function contributorPaths(): string[] {
  *  its own schedule. The index carries the newest post's date, since that is
  *  exactly when its content last changed. */
 export function blogPaths(posts: { slug: string; date: string }[]): PathEntry[] {
-  const newest = posts.map((post) => post.date).sort().at(-1);
+  const newest = posts
+    .map((post) => post.date)
+    .sort()
+    .at(-1);
   return [
     { path: '/blog', lastmod: newest },
     ...posts.map((post) => ({ path: `/blog/${post.slug}`, lastmod: post.date })),
@@ -239,10 +242,7 @@ export function insightsPaths(categories: string[], roleLeaves: [string, string]
  *  request. One sub-sitemap per category costs one call each, and the index can name
  *  all 37 without reading anything. */
 export function roleLandingPaths(categorySlug: string, countrySlugs: string[]): string[] {
-  return [
-    `/roles/${categorySlug}`,
-    ...countrySlugs.map((country) => `/roles/${categorySlug}/${country}`),
-  ];
+  return [`/roles/${categorySlug}`, ...countrySlugs.map((country) => `/roles/${categorySlug}/${country}`)];
 }
 
 /** Sitemap paths for the skill glossary: the index plus one page per skill that has a

@@ -54,8 +54,8 @@
     </h1>
     <p class="max-w-xl text-lg leading-relaxed text-muted-foreground">
       freehire is a free, open-source search engine for tech jobs. Its one job is to be
-      <span class="text-foreground">complete</span> — to surface every open role on the market, in
-      one searchable place. A company we don’t track is a blind spot. Help us close them.
+      <span class="text-foreground">complete</span> — to surface every open role on the market, in one searchable place. A
+      company we don’t track is a blind spot. Help us close them.
     </p>
     <div class="flex flex-wrap items-center gap-3">
       <Button href={resolve('/my/contributions')} variant="primary" size="lg">Contribute a board</Button>
@@ -67,10 +67,9 @@
   <section class="flex flex-col gap-6">
     <h2 class="text-2xl font-semibold tracking-tight">Coverage is the whole game</h2>
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      Every source we crawl folds into one normalized, deduplicated feed — searchable by stack,
-      seniority and location. The more company boards we track, the more of the real market you can
-      actually see and compare. Openness is how it scales: because freehire is open source, anyone
-      can widen that coverage.
+      Every source we crawl folds into one normalized, deduplicated feed — searchable by stack, seniority and location.
+      The more company boards we track, the more of the real market you can actually see and compare. Openness is how it
+      scales: because freehire is open source, anyone can widen that coverage.
     </p>
   </section>
 
@@ -85,9 +84,11 @@
           <h3 class="text-base font-semibold tracking-tight">Add a board slug, or a whole adapter</h3>
         </div>
         <p class="text-sm leading-relaxed text-muted-foreground">
-          The source is on GitHub. Add one line to a board file to track a company on a supported
-          ATS, or write a small adapter for a platform we don’t read yet. See
-          <a href={resolve('/for-companies')} class="font-medium text-foreground underline-offset-4 hover:underline">for companies</a>
+          The source is on GitHub. Add one line to a board file to track a company on a supported ATS, or write a small
+          adapter for a platform we don’t read yet. See
+          <a href={resolve('/for-companies')} class="font-medium text-foreground underline-offset-4 hover:underline"
+            >for companies</a
+          >
           for the details.
         </p>
         <div class="flex flex-wrap gap-3">
@@ -103,9 +104,8 @@
           <h3 class="text-base font-semibold tracking-tight">Just paste a link — and get rewarded</h3>
         </div>
         <p class="text-sm leading-relaxed text-muted-foreground">
-          We simplified that first step down to a single link, and we reward the community for it.
-          Spot a company we’re missing? Drop its link and you’ve just made the market a little
-          more complete for everyone.
+          We simplified that first step down to a single link, and we reward the community for it. Spot a company we’re
+          missing? Drop its link and you’ve just made the market a little more complete for everyone.
         </p>
         <div class="flex flex-wrap gap-2">
           {#each supportedAts as ats (ats)}
@@ -134,9 +134,9 @@
       {/each}
     </div>
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      The unit is the <span class="text-foreground">company board</span>, not a single vacancy —
-      once we know the board, we pull in all of its jobs. So a second link to a company we already
-      cover earns nothing, and that’s deliberate: you’re rewarded for genuinely new coverage.
+      The unit is the <span class="text-foreground">company board</span>, not a single vacancy — once we know the board,
+      we pull in all of its jobs. So a second link to a company we already cover earns nothing, and that’s deliberate:
+      you’re rewarded for genuinely new coverage.
     </p>
   </section>
 
@@ -144,8 +144,8 @@
   <section class="flex flex-col gap-4 rounded-lg border border-border p-6">
     <h2 class="text-xl font-semibold tracking-tight">What it’s for</h2>
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      A board we don’t track yet is a whole company’s openings nobody searching here can see.
-      Adding one widens the market for everyone looking — including you, next time you search.
+      A board we don’t track yet is a whole company’s openings nobody searching here can see. Adding one widens the
+      market for everyone looking — including you, next time you search.
     </p>
   </section>
 
@@ -153,8 +153,8 @@
   <section class="flex flex-col items-start gap-4 rounded-lg border border-border bg-secondary/40 p-6">
     <h2 class="text-xl font-semibold tracking-tight">Found a company we’re missing?</h2>
     <p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
-      Paste its link — a vacancy or its careers page. If we don’t track it yet, you’ve found
-      new coverage for everyone searching here.
+      Paste its link — a vacancy or its careers page. If we don’t track it yet, you’ve found new coverage for everyone
+      searching here.
     </p>
     <div class="flex flex-wrap gap-3">
       <Button href={resolve('/my/contributions')} variant="primary" size="lg">Contribute a board</Button>

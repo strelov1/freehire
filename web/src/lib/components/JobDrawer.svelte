@@ -36,7 +36,7 @@
     MailRecallResult,
     RecalledEmail,
     StageSuggestion,
-    TimelineEvent
+    TimelineEvent,
   } from '#lib/types.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import { lockScroll, unlockScroll } from '#lib/ui/index.js';
@@ -201,7 +201,9 @@
     } catch (err) {
       hiddenInBuddyFeed = previous;
       buddyVisibilityError = err instanceof Error ? err.message : s.errors.buddyVisibility;
-    } finally { buddyVisibilityBusy = false; }
+    } finally {
+      buddyVisibilityBusy = false;
+    }
   }
 
   // Once a successful submission retires the live attempt, `autoApply` goes back to null
@@ -222,12 +224,10 @@
   // already submitted there is nothing left to pause. `pausedOverride` lets a press inside
   // this mount take effect immediately, without waiting on a reload to re-read storage.
   const canPauseAutoApply = $derived(
-    !!autoApply && ['tailoring', 'pending_review', 'approved', 'blocked'].includes(autoApply.status)
+    !!autoApply && ['tailoring', 'pending_review', 'approved', 'blocked'].includes(autoApply.status),
   );
   let pausedOverride = $state<boolean | null>(null);
-  const autoApplyPaused = $derived(
-    pausedOverride ?? (autoApply ? isAutoApplyPaused(autoApply.queue_id) : false)
-  );
+  const autoApplyPaused = $derived(pausedOverride ?? (autoApply ? isAutoApplyPaused(autoApply.queue_id) : false));
   function toggleAutoApplyPaused() {
     if (!autoApply) return;
     const next = !autoApplyPaused;
@@ -351,7 +351,12 @@
     { id: 'description', label: s.tabs.jobDescription },
     { id: 'history', label: s.history },
     ...(canSeeMail
-      ? [{ id: 'emails' as Tab, label: emails ? format(s.tabs.emailsWithCount, { count: String(emails.length) }) : s.tabs.emails }]
+      ? [
+          {
+            id: 'emails' as Tab,
+            label: emails ? format(s.tabs.emailsWithCount, { count: String(emails.length) }) : s.tabs.emails,
+          },
+        ]
       : []),
   ]);
   // Local UI state. The parent re-keys this component per job (JobBoard's {#key}),
@@ -369,7 +374,7 @@
   // rather than on the next load.
   let recallResolved = $state.raw<string[]>([]);
   const recallPending = $derived(
-    (recall?.suggested ?? []).filter((e) => !recallResolved.includes(e.provider_id ?? String(e.id)))
+    (recall?.suggested ?? []).filter((e) => !recallResolved.includes(e.provider_id ?? String(e.id))),
   );
   // Only applications can be swept: the window is anchored on the date it was recorded, and
   // a job that was merely saved has none.
@@ -508,62 +513,58 @@
   const tabClass = (active: boolean) =>
     cn(
       'min-h-11 shrink-0 border-b-2 px-1 py-2 text-xs font-medium transition-colors sm:px-2 sm:text-sm',
-      active
-        ? 'border-foreground text-foreground'
-        : 'border-transparent text-muted-foreground hover:text-foreground',
+      active ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
     );
   const sectionLabel = 'text-sm font-medium text-muted-foreground';
 </script>
 
 {#snippet answerList(rows: PendingAnswerRow[])}
-<ul class="flex flex-col gap-2 text-xs text-muted-foreground">
-  {#each rows as row (row.key)}
-    {#if row.kind === 'draft'}
-      <li>{format(s.willBeFilledAutomatically, { label: row.pending.label })}</li>
-    {:else if row.kind === 'blocked'}
-      <!-- A work-authorization question: the bank refuses to recall an
+  <ul class="flex flex-col gap-2 text-xs text-muted-foreground">
+    {#each rows as row (row.key)}
+      {#if row.kind === 'draft'}
+        <li>{format(s.willBeFilledAutomatically, { label: row.pending.label })}</li>
+      {:else if row.kind === 'blocked'}
+        <!-- A work-authorization question: the bank refuses to recall an
            answer for it (the correct one depends on this posting's own
            country), and offering an input would only collect one it could
            never safely reuse. Plain text, distinct in wording and color from
            both the "filled automatically" row above and an answerable
            question's input below, so the candidate sees what is blocking
            the application instead of nothing at all. -->
-      <li class="text-warning-strong">
-        {format(s.cannotAnswerForYou, { label: row.pending.label })}
-      </li>
-    {:else if row.kind === 'answerable'}
-      <li class="flex flex-col gap-1">
-        <label class="text-foreground" for={`bank-${row.key}`}>{row.pending.label}</label>
-        <div class="flex items-start gap-2">
-          <!-- A textarea, not an input: the bound is 2000 characters, and a
+        <li class="text-warning-strong">
+          {format(s.cannotAnswerForYou, { label: row.pending.label })}
+        </li>
+      {:else if row.kind === 'answerable'}
+        <li class="flex flex-col gap-1">
+          <label class="text-foreground" for={`bank-${row.key}`}>{row.pending.label}</label>
+          <div class="flex items-start gap-2">
+            <!-- A textarea, not an input: the bound is 2000 characters, and a
                single-line control collects a paragraph the writer cannot
                re-read. -->
-          <textarea
-            id={`bank-${row.key}`}
-            rows="2"
-            maxlength="2000"
-            class="min-w-0 flex-1 resize-y rounded-md border border-border bg-background px-2 py-1"
-            bind:value={bankDrafts[row.key]}
-            placeholder={s.answerPlaceholder}
-          ></textarea>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={bankSaving !== null || !bankDrafts[row.key]?.trim()}
-            onclick={() => saveBankedAnswer(row.key, row.pending.label)}
-          >
-            {s.save}
-          </Button>
-        </div>
-        {#if bankSaved[row.key]}
-          <span class="text-brand-strong">{s.savedToBank}</span>
-        {/if}
-      </li>
-    {/if}
-  {/each}
-</ul>
+            <textarea
+              id={`bank-${row.key}`}
+              rows="2"
+              maxlength="2000"
+              class="min-w-0 flex-1 resize-y rounded-md border border-border bg-background px-2 py-1"
+              bind:value={bankDrafts[row.key]}
+              placeholder={s.answerPlaceholder}></textarea>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={bankSaving !== null || !bankDrafts[row.key]?.trim()}
+              onclick={() => saveBankedAnswer(row.key, row.pending.label)}
+            >
+              {s.save}
+            </Button>
+          </div>
+          {#if bankSaved[row.key]}
+            <span class="text-brand-strong">{s.savedToBank}</span>
+          {/if}
+        </li>
+      {/if}
+    {/each}
+  </ul>
 {/snippet}
-
 
 <!-- The confirmation is stacked above the panel too: its Escape closes it, not both. -->
 <!-- Not while the application chat is open: Escape there belongs to the chat (the covering
@@ -594,7 +595,9 @@
           size="sm"
           class="shrink-0"
         />
-        <p class="min-w-0 flex-1 break-words text-sm font-medium text-muted-foreground">{company || s.unknownCompany}</p>
+        <p class="min-w-0 flex-1 break-words text-sm font-medium text-muted-foreground">
+          {company || s.unknownCompany}
+        </p>
         {#if item.job}
           <a
             href={resolve('/jobs/[slug]', { slug: item.job.public_slug })}
@@ -666,7 +669,12 @@
       {/if}
       {#if buddyMember && buddyApplicationId !== null}
         <label class="flex items-center gap-2 text-sm text-muted-foreground">
-          <input type="checkbox" checked={!hiddenInBuddyFeed} disabled={buddyVisibilityBusy} onchange={toggleBuddyVisibility} />
+          <input
+            type="checkbox"
+            checked={!hiddenInBuddyFeed}
+            disabled={buddyVisibilityBusy}
+            onchange={toggleBuddyVisibility}
+          />
           {s.showInBuddyFeed}
         </label>
       {/if}
@@ -775,7 +783,10 @@
                     <span class="shrink-0 text-xs {eventTone(e.kind)}" aria-hidden="true">●</span>
                     <div class="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
                       <span class="min-w-0 text-sm">{eventLabel(e, locale())}</span>
-                      <time datetime={e.occurred_at} class="text-xs text-muted-foreground sm:shrink-0 sm:whitespace-nowrap">
+                      <time
+                        datetime={e.occurred_at}
+                        class="text-xs text-muted-foreground sm:shrink-0 sm:whitespace-nowrap"
+                      >
                         {timeAgo(e.occurred_at, locale())}
                       </time>
                     </div>
@@ -786,7 +797,6 @@
           {:else}
             <p class="text-sm text-muted-foreground">{s.noHistory}</p>
           {/if}
-
         {/if}
       {:else if tab === 'auto_apply'}
         <div class="flex flex-col gap-4">
@@ -802,7 +812,7 @@
                         step.state === 'active' && 'bg-brand-muted text-brand-strong ring-2 ring-brand-ring',
                         step.state === 'queued' && 'bg-muted text-muted-foreground ring-2 ring-border',
                         step.state === 'error' && 'bg-destructive/15 text-destructive-strong',
-                        step.state === 'pending' && 'bg-muted text-muted-foreground'
+                        step.state === 'pending' && 'bg-muted text-muted-foreground',
                       )}
                     >
                       {#if step.state === 'done'}
@@ -829,7 +839,13 @@
                 <Button variant="outline" size="sm" class="w-fit" onclick={toggleAutoApplyPaused}>
                   {autoApplyPaused ? s.continue : s.pause}
                 </Button>
-                <Button variant="ghost" size="sm" class="w-fit" disabled={autoApplyActing || autoApplyDeciding} onclick={cancelAutoApply}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="w-fit"
+                  disabled={autoApplyActing || autoApplyDeciding}
+                  onclick={cancelAutoApply}
+                >
                   {s.cancelAutoApply}
                 </Button>
               </div>
@@ -914,10 +930,19 @@
                 </div>
               {/if}
               <div class="flex items-center gap-2">
-                <Button size="sm" disabled={autoApplyDeciding || autoApplyActing} onclick={() => decideAutoApply('approved')}>
+                <Button
+                  size="sm"
+                  disabled={autoApplyDeciding || autoApplyActing}
+                  onclick={() => decideAutoApply('approved')}
+                >
                   {s.approveAndSend}
                 </Button>
-                <Button size="sm" variant="outline" disabled={autoApplyDeciding || autoApplyActing} onclick={() => decideAutoApply('declined')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={autoApplyDeciding || autoApplyActing}
+                  onclick={() => decideAutoApply('declined')}
+                >
                   {s.decline}
                 </Button>
               </div>
@@ -1017,7 +1042,9 @@
                offered rather than applied, and it goes through the ordinary stage change so
                the ledger records the candidate as its source. -->
           {#if stageSuggestion}
-            <div class="flex flex-wrap items-center gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2">
+            <div
+              class="flex flex-wrap items-center gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2"
+            >
               <span class="min-w-0 flex-1 text-sm">
                 {format(s.looksLike, {
                   signal: statusLabel(stageSuggestion.signal, locale()).toLowerCase(),
@@ -1184,7 +1211,8 @@
                         class="h-96 w-full bg-white"
                       ></iframe>
                     {:else if expandedBody?.body_text}
-                      <pre class="max-h-96 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{expandedBody.body_text}</pre>
+                      <pre
+                        class="max-h-96 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{expandedBody.body_text}</pre>
                     {:else}
                       <p class="text-sm text-muted-foreground">{s.noContent}</p>
                     {/if}
@@ -1231,7 +1259,9 @@
        scrolling body, not an overlay, so it never sits over the notes editor. The bottom
        padding leaves room for both the button and the home indicator. -->
   <div class="shrink-0 border-t border-border">
-    <div class="mx-auto flex w-full max-w-2xl justify-end px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
+    <div
+      class="mx-auto flex w-full max-w-2xl justify-end px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 sm:px-6"
+    >
       <Button
         variant="ghost"
         size="sm"

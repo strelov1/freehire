@@ -22,8 +22,7 @@
     companyName,
     onClose,
     onWriteFeedback,
-  }: { slug: string; companyName?: string; onClose: () => void; onWriteFeedback: () => void } =
-    $props();
+  }: { slug: string; companyName?: string; onClose: () => void; onWriteFeedback: () => void } = $props();
 
   let open = $state(true);
   $effect(() => {

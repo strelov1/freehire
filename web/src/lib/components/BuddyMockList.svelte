@@ -13,11 +13,8 @@
   // The caller's own mocks as rows: a date tile, the hours in the viewer's zone, the other
   // member, the topic and role, and what can still be done — join, cancel, review. The
   // host draws the frame; rows are separated, not boxed, so nothing nests a card.
-  let {
-    mocks,
-    upcoming,
-    onchange,
-  }: { mocks: BuddyMock[]; upcoming: boolean; onchange: () => Promise<void> } = $props();
+  let { mocks, upcoming, onchange }: { mocks: BuddyMock[]; upcoming: boolean; onchange: () => Promise<void> } =
+    $props();
 
   const zone = browserTimezone();
   let cancelling = $state<BuddyMock | null>(null);
@@ -46,7 +43,10 @@
 {#snippet stars(rating: number)}
   <span class="inline-flex items-center gap-0.5" role="img" aria-label="{rating} out of 5">
     {#each [1, 2, 3, 4, 5] as n (n)}
-      <Star class="size-3.5 {n <= rating ? 'fill-current text-foreground' : 'text-muted-foreground/40'}" aria-hidden="true" />
+      <Star
+        class="size-3.5 {n <= rating ? 'fill-current text-foreground' : 'text-muted-foreground/40'}"
+        aria-hidden="true"
+      />
     {/each}
   </span>
 {/snippet}

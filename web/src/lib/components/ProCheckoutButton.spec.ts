@@ -14,7 +14,14 @@ vi.mock('#lib/signin.js', () => ({ promptSignIn }));
 vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => authed.value, currentUser: () => user.value }));
 vi.mock('#lib/api.js', () => ({ api: { billingCheckout } }));
 
-const price = { id: 'price_m', amount_cents: 500, currency: 'usd', interval: 'month', default: true, tier: 'pro' } as PublicPrice;
+const price = {
+  id: 'price_m',
+  amount_cents: 500,
+  currency: 'usd',
+  interval: 'month',
+  default: true,
+  tier: 'pro',
+} as PublicPrice;
 
 beforeEach(() => {
   promptSignIn.mockReset();

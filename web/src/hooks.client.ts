@@ -10,10 +10,19 @@ import { startTrackersIfAllowed } from '#lib/trackers.js';
 startTrackersIfAllowed();
 
 // Reports uncaught client-side errors to the OTLP endpoint; inert without one.
-const telemetry = createErrorTelemetry({ endpoint: PUBLIC_OTEL_LOGS_ENDPOINT, service: 'freehire-web', environment: PUBLIC_OTEL_ENVIRONMENT, version: PUBLIC_OTEL_SERVICE_VERSION });
+const telemetry = createErrorTelemetry({
+  endpoint: PUBLIC_OTEL_LOGS_ENDPOINT,
+  service: 'freehire-web',
+  environment: PUBLIC_OTEL_ENVIRONMENT,
+  version: PUBLIC_OTEL_SERVICE_VERSION,
+});
 if (telemetry) {
   installErrorListeners(window, telemetry);
   // The SDK flushes on document hide too; pagehide covers navigation/bfcache.
-  window.addEventListener('pagehide', () => { void telemetry.flush(); });
+  window.addEventListener('pagehide', () => {
+    void telemetry.flush();
+  });
 }
-export const handleError = ({ error }: { error: unknown }) => { telemetry?.capture(error); };
+export const handleError = ({ error }: { error: unknown }) => {
+  telemetry?.capture(error);
+};

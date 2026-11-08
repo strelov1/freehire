@@ -23,6 +23,17 @@ var scalarFilters = []string{
 	ApplyQuestionsMaxParam,
 }
 
+// WatchlistParam narrows a search to the companies on the caller's own watchlist
+// (internal/engage/companywatch). It is a fact about the CALLER, not a facet of the posting,
+// so FilterFromValues does not read it: whoever runs the search resolves the person's
+// company slugs and adds them (AndInStrings), the HTTP search per request and the notify
+// worker per subscriber. Narrows counts it, since a query carrying it selects less than the
+// catalogue, and that is what lets `watchlist=true` be saved as an alert.
+const WatchlistParam = "watchlist"
+
+// WantsWatchlist reports whether a parsed query asks for the caller's watchlist.
+func WantsWatchlist(v url.Values) bool { return v.Get(WatchlistParam) == "true" }
+
 // ExperienceIncludeUnspecifiedParam widens the experience bounds to also admit the
 // postings that state no requirement. It is a modifier, not a filter: alone it reads
 // nothing, so it lives beside scalarFilters rather than on it (whose test demands

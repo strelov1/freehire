@@ -68,9 +68,7 @@ describe('undoRun', () => {
       throw new Error('there is no autopilot run to undo');
     };
 
-    await expect(undoRun({ flush: async () => {}, undo: failing, refetch })).rejects.toThrow(
-      'no autopilot run',
-    );
+    await expect(undoRun({ flush: async () => {}, undo: failing, refetch })).rejects.toThrow('no autopilot run');
     expect(refetch).not.toHaveBeenCalled();
   });
 });

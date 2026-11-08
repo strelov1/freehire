@@ -14,7 +14,7 @@
   // One script carrying the site-level entities: what the site is (WebSite +
   // its search action), who publishes it (Organization), and the FAQ.
   const jsonLd = $derived(
-    jsonLdScript([websiteJsonLd(origin), siteOrganizationJsonLd(origin), faqPageJsonLd(HOME_FAQ)])
+    jsonLdScript([websiteJsonLd(origin), siteOrganizationJsonLd(origin), faqPageJsonLd(HOME_FAQ)]),
   );
 </script>
 

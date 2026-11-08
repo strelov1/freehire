@@ -11,7 +11,10 @@ const api = (...parts: ApiSuggestion['parts']): ApiSuggestion => ({
 describe('fromApi', () => {
   it('shows the whole phrase, not just the completion', () => {
     const got = fromApi([
-      api({ kind: 'category', slug: 'senior_software_engineer', text: 'Senior Software Engineer' }, { kind: 'company', slug: 'google', text: 'Google' }),
+      api(
+        { kind: 'category', slug: 'senior_software_engineer', text: 'Senior Software Engineer' },
+        { kind: 'company', slug: 'google', text: 'Google' },
+      ),
     ]);
     expect(got[0]?.label).toBe('Senior Software Engineer Google');
   });
@@ -26,7 +29,10 @@ describe('fromApi', () => {
   // typed.
   it('takes its kind from the part being completed', () => {
     const got = fromApi([
-      api({ kind: 'category', slug: 'backend', text: 'Backend Engineer' }, { kind: 'company', slug: 'google', text: 'Google' }),
+      api(
+        { kind: 'category', slug: 'backend', text: 'Backend Engineer' },
+        { kind: 'company', slug: 'google', text: 'Google' },
+      ),
     ]);
     expect(got[0]?.kind).toBe('company');
   });

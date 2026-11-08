@@ -26,9 +26,7 @@
   // A key into the catalog, not the message itself — the text is derived from `s`
   // below so an already-shown error follows a later locale change instead of
   // freezing in whatever locale was resolved when it was set.
-  let formErrorKind = $state<
-    'invalidUrl' | 'saveFailed' | 'updateFailed' | 'deleteFailed' | 'testFailed' | null
-  >(null);
+  let formErrorKind = $state<'invalidUrl' | 'saveFailed' | 'updateFailed' | 'deleteFailed' | 'testFailed' | null>(null);
   // What the destination answered when a test delivery failed — the server's
   // own words ("destination responded 404"), shown after the localized lead-in.
   let testFailure = $state('');
@@ -131,18 +129,10 @@
     {#if status === 'loading'}
       <States state="loading" />
     {:else}
-      <form
-        onsubmit={submit}
-        class="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-end"
-      >
+      <form onsubmit={submit} class="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-end">
         <label class="flex flex-1 flex-col gap-1">
           <span class="text-sm font-medium">{s.urlLabel}</span>
-          <Input
-            bind:value={url}
-            type="url"
-            placeholder={s.urlPlaceholder}
-            class="w-full"
-          />
+          <Input bind:value={url} type="url" placeholder={s.urlPlaceholder} class="w-full" />
         </label>
         <Button variant="primary" type="submit" disabled={!url.trim() || saving}>
           {saving ? s.saving : webhook ? s.save : s.create}
@@ -161,7 +151,8 @@
             <span class="truncate font-mono text-sm">{webhook.url}</span>
             <span class="text-xs text-muted-foreground">
               {#if webhook.enabled}
-                {s.enabledPrefix} · {s.createdPrefix} {timeAgo(webhook.created_at, locale())}
+                {s.enabledPrefix} · {s.createdPrefix}
+                {timeAgo(webhook.created_at, locale())}
                 {#if webhook.last_success_at}· {s.lastDeliveredPrefix} {timeAgo(webhook.last_success_at, locale())}{/if}
               {:else}
                 {s.disabled}
@@ -176,9 +167,7 @@
             <Button variant="outline" size="sm" onclick={toggleEnabled}>
               {webhook.enabled ? s.disable : s.enable}
             </Button>
-            <Button variant="ghost" size="sm" onclick={() => (confirmDeleteOpen = true)}
-              >{s.delete}</Button
-            >
+            <Button variant="ghost" size="sm" onclick={() => (confirmDeleteOpen = true)}>{s.delete}</Button>
           </div>
         </div>
       {/if}

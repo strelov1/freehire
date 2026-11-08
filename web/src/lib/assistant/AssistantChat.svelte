@@ -1,6 +1,17 @@
 <script lang="ts">
   import { onMount, tick, untrack, type Snippet } from 'svelte';
-  import { AlertTriangle, ArrowDown, FileText, MessagesSquare, PanelLeft, Phone, Plus, Rocket, Trash2, X } from '@lucide/svelte';
+  import {
+    AlertTriangle,
+    ArrowDown,
+    FileText,
+    MessagesSquare,
+    PanelLeft,
+    Phone,
+    Plus,
+    Rocket,
+    Trash2,
+    X,
+  } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import {
     createSession,
@@ -144,12 +155,7 @@
   // `profileKickoff`, which is our text put in their mouth and so stays fixed, each of these
   // is exactly the label they chose. Each one maps to a tool every chat session carries
   // (search_jobs + get_profile, market_fit, my_jobs, inbox_overview).
-  const starters = $derived([
-    s.starters.findJobs,
-    s.starters.marketFit,
-    s.starters.applications,
-    s.starters.inbox,
-  ]);
+  const starters = $derived([s.starters.findJobs, s.starters.marketFit, s.starters.applications, s.starters.inbox]);
 
   let phase = $state<Phase>('loading');
   // Startup requests may finish after the host has replaced this conversation.
@@ -766,7 +772,12 @@
     // A retry never emits user_prompt (that is the point), so "began" is not meaningful for it.
     let began = start.kind === 'retry';
     const watch = (event: TurnEvent) => {
-      if (event.type === 'user_prompt' || event.type === 'assistant_text' || event.type === 'assistant_thought' || event.type === 'tool_use') {
+      if (
+        event.type === 'user_prompt' ||
+        event.type === 'assistant_text' ||
+        event.type === 'assistant_thought' ||
+        event.type === 'tool_use'
+      ) {
         began = true;
       }
       onEvent(id, event);
@@ -976,392 +987,405 @@
 <!-- Single flex-1 root so a host can compose the chat beside another pane (e.g. the tailor
      artifact panel); the host supplies the outer height + flex row. -->
 <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-{#if error}
-  <div
-    class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong"
-    role="alert"
-  >
-    <AlertTriangle class="mt-0.5 size-4 shrink-0" />
-    <div class="flex min-w-0 flex-1 flex-col gap-1">
-      <span>{error.message}</span>
-      {#if error.planLimitReached}
-        <!-- outline, not the default primary: this alert is already destructive-styled, and a
+  {#if error}
+    <div
+      class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong"
+      role="alert"
+    >
+      <AlertTriangle class="mt-0.5 size-4 shrink-0" />
+      <div class="flex min-w-0 flex-1 flex-col gap-1">
+        <span>{error.message}</span>
+        {#if error.planLimitReached}
+          <!-- outline, not the default primary: this alert is already destructive-styled, and a
              filled brand-colored button would fight that treatment (see PlanLimitLink). -->
-        <PlanLimitLink variant="outline" />
-      {/if}
+          <PlanLimitLink variant="outline" />
+        {/if}
+      </div>
     </div>
-  </div>
-{/if}
-{#if refusal}
-  <div
-    class="m-3 mb-0 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm"
-    role="status"
-  >
-    <AlertTriangle class="mt-0.5 size-4 shrink-0 text-warning-strong" />
-    <div class="flex min-w-0 flex-1 flex-col gap-1">
-      <span>{refusal.message}</span>
-      {#if refusal.ceiling > 0}
-        <span class="text-xs text-muted-foreground">
-          {format(plural(locale(), refusal.ceiling, s.turnsUsed), { turns: String(refusal.turns), ceiling: String(refusal.ceiling) })}
-        </span>
-      {/if}
+  {/if}
+  {#if refusal}
+    <div
+      class="m-3 mb-0 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm"
+      role="status"
+    >
+      <AlertTriangle class="mt-0.5 size-4 shrink-0 text-warning-strong" />
+      <div class="flex min-w-0 flex-1 flex-col gap-1">
+        <span>{refusal.message}</span>
+        {#if refusal.ceiling > 0}
+          <span class="text-xs text-muted-foreground">
+            {format(plural(locale(), refusal.ceiling, s.turnsUsed), {
+              turns: String(refusal.turns),
+              ceiling: String(refusal.ceiling),
+            })}
+          </span>
+        {/if}
+      </div>
+      <button
+        type="button"
+        class="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-60"
+        onclick={continueSession}
+        disabled={extending}
+      >
+        {extending ? s.continuingEllipsis : s.continueUsesSession}
+      </button>
     </div>
-    <button
-      type="button"
-      class="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-60"
-      onclick={continueSession}
-      disabled={extending}
+  {/if}
+  {#if bulletCapAlert}
+    <div
+      class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-foreground"
+      role="status"
     >
-      {extending ? s.continuingEllipsis : s.continueUsesSession}
-    </button>
-  </div>
-{/if}
-{#if bulletCapAlert}
-  <div
-    class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-foreground"
-    role="status"
-  >
-    <AlertTriangle class="mt-0.5 size-4 shrink-0 text-warning-strong" />
-    <span class="min-w-0 flex-1">{bulletCapAlert}</span>
-    <button
-      type="button"
-      class="relative shrink-0 rounded-md p-0.5 text-muted-foreground transition-colors after:absolute after:-inset-0.5 hover:bg-muted hover:text-foreground"
-      aria-label={s.dismiss}
-      onclick={() => (bulletCapAlert = null)}
-    >
-      <X class="size-4" />
-    </button>
-  </div>
-{/if}
+      <AlertTriangle class="mt-0.5 size-4 shrink-0 text-warning-strong" />
+      <span class="min-w-0 flex-1">{bulletCapAlert}</span>
+      <button
+        type="button"
+        class="relative shrink-0 rounded-md p-0.5 text-muted-foreground transition-colors after:absolute after:-inset-0.5 hover:bg-muted hover:text-foreground"
+        aria-label={s.dismiss}
+        onclick={() => (bulletCapAlert = null)}
+      >
+        <X class="size-4" />
+      </button>
+    </div>
+  {/if}
 
-{#if notFound}
-  <div class="m-3 rounded-xl border border-border bg-card p-8 text-center">
-    <p class="text-sm text-muted-foreground">
-      {s.chatGone}
-    </p>
-    <a
-      href={resolve('/my/assistant/[[id]]', {})}
-      class="mt-4 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
-    >
-      {s.openYourChats}
-    </a>
-  </div>
-{:else}
-  <div class="flex min-h-0 flex-1">
-    <!-- Session rail (desktop): collapsible; hidden entirely when the host disables it. -->
-    {#if showSessionRail && sidebarOpen}
-      <SessionRail
-        {sessions}
-        {activeId}
-        {switching}
-        {creating}
-        ready={phase === 'ready'}
-        onNew={newChat}
-        onSelect={selectSession}
-        onDelete={requestRemoveChat}
-      />
-    {/if}
+  {#if notFound}
+    <div class="m-3 rounded-xl border border-border bg-card p-8 text-center">
+      <p class="text-sm text-muted-foreground">
+        {s.chatGone}
+      </p>
+      <a
+        href={resolve('/my/assistant/[[id]]', {})}
+        class="mt-4 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+      >
+        {s.openYourChats}
+      </a>
+    </div>
+  {:else}
+    <div class="flex min-h-0 flex-1">
+      <!-- Session rail (desktop): collapsible; hidden entirely when the host disables it. -->
+      {#if showSessionRail && sidebarOpen}
+        <SessionRail
+          {sessions}
+          {activeId}
+          {switching}
+          {creating}
+          ready={phase === 'ready'}
+          onNew={newChat}
+          onSelect={selectSession}
+          onDelete={requestRemoveChat}
+        />
+      {/if}
 
-    <!-- Chat pane -->
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-      <!-- Desktop: collapse/expand the session list (only when a rail exists). -->
-      {#if showSessionRail}
-        <div class="hidden items-center gap-1 border-b border-border px-2 py-1.5 md:flex">
-          {@render navTrigger?.()}
-          <button
-            type="button"
-            onclick={() => (sidebarOpen = !sidebarOpen)}
-            class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-            aria-label={sidebarOpen ? s.hideChats : s.showChats}
-            title={sidebarOpen ? s.hideChats : s.showChats}
-          >
-            <PanelLeft class="size-4" />
-          </button>
-          {#if !sidebarOpen}
+      <!-- Chat pane -->
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <!-- Desktop: collapse/expand the session list (only when a rail exists). -->
+        {#if showSessionRail}
+          <div class="hidden items-center gap-1 border-b border-border px-2 py-1.5 md:flex">
+            {@render navTrigger?.()}
             <button
               type="button"
-              onclick={newChat}
-              disabled={creating || switching || phase !== 'ready'}
-              class="flex items-center gap-1.5 rounded px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              title={s.newChat}
+              onclick={() => (sidebarOpen = !sidebarOpen)}
+              class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+              aria-label={sidebarOpen ? s.hideChats : s.showChats}
+              title={sidebarOpen ? s.hideChats : s.showChats}
             >
-              <Plus class="size-4" />{s.newChat}
+              <PanelLeft class="size-4" />
             </button>
-          {/if}
-        </div>
-      {/if}
-      <!-- Mobile session switcher -->
-      {#if showSessionRail}
-      <!-- One compact bar, every control at the design system's h-8: it is chrome above the
+            {#if !sidebarOpen}
+              <button
+                type="button"
+                onclick={newChat}
+                disabled={creating || switching || phase !== 'ready'}
+                class="flex items-center gap-1.5 rounded px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                title={s.newChat}
+              >
+                <Plus class="size-4" />{s.newChat}
+              </button>
+            {/if}
+          </div>
+        {/if}
+        <!-- Mobile session switcher -->
+        {#if showSessionRail}
+          <!-- One compact bar, every control at the design system's h-8: it is chrome above the
            conversation, and at 44px with a filled brand button it read as the page's main
            action and took ~60px of a phone's height. "New" stays labelled rather than a
            bare glyph. Delete is pushed away with a gap: an unlabelled trash icon flush
            against the "new" control is a mis-tap that destroys a conversation. -->
-      <div class="flex items-center gap-2 border-b border-border px-2 py-1.5 md:hidden">
-        {@render navTrigger?.()}
-        <select
-          value={activeId}
-          onchange={(e) => selectSession(e.currentTarget.value)}
-          disabled={switching}
-          aria-label={s.selectChat}
-          class="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm"
-        >
-          {#each sessions as sess (sess.id)}
-            <option value={sess.id}>{sess.label}</option>
-          {/each}
-        </select>
-        <Button
-          variant="outline"
-          size="sm"
-          class="shrink-0 gap-1.5 px-2.5"
-          onclick={newChat}
-          disabled={creating || switching || phase !== 'ready'}
-          title={s.newChat}
-        >
-          <Plus class="size-4" aria-hidden="true" />
-          {s.newChatShort}
-        </Button>
-        {#if activeId}
-          <Button
-            variant="ghost"
-            size="icon"
-            class="ml-1 shrink-0 text-muted-foreground"
-            onclick={() => requestRemoveChat(activeId as string)}
-            aria-label={s.deleteChatAria}
-            title={s.deleteChatAria}
-          >
-            <Trash2 class="size-4" aria-hidden="true" />
-          </Button>
+          <div class="flex items-center gap-2 border-b border-border px-2 py-1.5 md:hidden">
+            {@render navTrigger?.()}
+            <select
+              value={activeId}
+              onchange={(e) => selectSession(e.currentTarget.value)}
+              disabled={switching}
+              aria-label={s.selectChat}
+              class="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              {#each sessions as sess (sess.id)}
+                <option value={sess.id}>{sess.label}</option>
+              {/each}
+            </select>
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0 gap-1.5 px-2.5"
+              onclick={newChat}
+              disabled={creating || switching || phase !== 'ready'}
+              title={s.newChat}
+            >
+              <Plus class="size-4" aria-hidden="true" />
+              {s.newChatShort}
+            </Button>
+            {#if activeId}
+              <Button
+                variant="ghost"
+                size="icon"
+                class="ml-1 shrink-0 text-muted-foreground"
+                onclick={() => requestRemoveChat(activeId as string)}
+                aria-label={s.deleteChatAria}
+                title={s.deleteChatAria}
+              >
+                <Trash2 class="size-4" aria-hidden="true" />
+              </Button>
+            {/if}
+          </div>
         {/if}
-      </div>
-      {/if}
 
-      <!-- Message list -->
-      <div bind:this={scroller} onscroll={onPaneScroll} class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-        <!-- The transcript is a log, so a screen reader hears what arrives without moving
+        <!-- Message list -->
+        <div bind:this={scroller} onscroll={onPaneScroll} class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+          <!-- The transcript is a log, so a screen reader hears what arrives without moving
              to it. Busy while a turn streams (and while a conversation loads): the reply is
              re-rendered token by token, and announcing each re-render would read the same
              sentence dozens of times — the finished message is read once the turn ends. -->
-        <div
-          class="mx-auto flex max-w-3xl flex-col gap-3"
-          role="log"
-          aria-label={s.transcript}
-          aria-live="polite"
-          aria-relevant="additions"
-          aria-busy={phase === 'loading' || switching || turnActive}
-        >
-          {#if phase === 'loading'}
-            <p class="text-sm text-muted-foreground">{s.connecting}</p>
-          {:else if chat.messages.length === 0 && openingActions?.length}
-            <!-- A plain list of left-aligned rows rather than filled pills in a boxed card: the
+          <div
+            class="mx-auto flex max-w-3xl flex-col gap-3"
+            role="log"
+            aria-label={s.transcript}
+            aria-live="polite"
+            aria-relevant="additions"
+            aria-busy={phase === 'loading' || switching || turnActive}
+          >
+            {#if phase === 'loading'}
+              <p class="text-sm text-muted-foreground">{s.connecting}</p>
+            {:else if chat.messages.length === 0 && openingActions?.length}
+              <!-- A plain list of left-aligned rows rather than filled pills in a boxed card: the
                  brand fill is kept for the unattended run, the one action that does the work;
                  a question to ask is a quiet row, so three of them no longer read as three
                  competing calls to action. -->
-            <div>
-              <div class="flex flex-col gap-2">
-                <!-- The icon comes from the action's kind, not from the action itself: the
+              <div>
+                <div class="flex flex-col gap-2">
+                  <!-- The icon comes from the action's kind, not from the action itself: the
                      surfaces that offer these are plain modules, and a Svelte component cannot
                      travel through one. The two kinds are the two rhythms — the unattended run
                      and the conversation — so the mapping is complete by construction. -->
-                {#each openingActions as action (action.label)}
-                  {@const Icon = action.kind === 'autopilot' ? Rocket : MessagesSquare}
-                  <button
-                    type="button"
-                    class={[
-                      'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors disabled:opacity-50',
-                      action.kind === 'autopilot'
-                        ? 'bg-brand text-brand-foreground hover:opacity-90'
-                        : 'border border-border bg-card text-foreground hover:bg-accent',
-                    ]}
-                    disabled={turnActive || switching}
-                    onclick={() => runOpening(action)}
-                  >
-                    <Icon class={['size-4 shrink-0', action.kind !== 'autopilot' && 'text-muted-foreground']} />
-                    {action.label}
-                  </button>
-                {/each}
-              </div>
-              {#each openingActions.filter((a) => a.hint) as action (action.label)}
-                <p class="mt-2 text-xs text-muted-foreground">{action.hint}</p>
-              {/each}
-            </div>
-          {:else if chat.messages.length === 0 && !autoRun}
-            <!-- Never shown on a cold start (autoRun): the brief hasn't landed as a message
-                 yet, but the run has already started — inviting the candidate to type here
-                 would contradict the "Crunching…" indicator already on screen. -->
-            <p class="text-sm text-muted-foreground">{s.askAnything}</p>
-            <!-- Starters only in a plain chat: a profile interview opens with its own
-                 kickoff, and these questions belong to the job search, not to it. -->
-            {#if activePreset === 'chat'}
-              <ul class="flex flex-wrap gap-2" aria-label={s.startersLabel}>
-                {#each starters as starter (starter)}
-                  <li>
+                  {#each openingActions as action (action.label)}
+                    {@const Icon = action.kind === 'autopilot' ? Rocket : MessagesSquare}
                     <button
                       type="button"
-                      class="rounded-lg border border-border bg-background px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                      disabled={!canStartTurn()}
-                      onclick={() => submitText(starter)}
-                    >
-                      {starter}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          {/if}
-
-          {#each chat.messages as message, i (i)}
-            {#if message.role === 'user'}
-              <article class="self-end max-w-[80%] rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-sm leading-relaxed text-secondary-foreground">
-                {#if message.text}
-                  <pre class="m-0 whitespace-pre-wrap break-words font-sans">{message.text}</pre>
-                {/if}
-                {#if message.attachments.length > 0}
-                  <ul class={['flex flex-wrap gap-1.5', message.text && 'mt-2']} aria-label={s.attachedFiles}>
-                    {#each message.attachments as name, j (j)}
-                      <li><Chip class="max-w-full gap-1 bg-background"><FileText class="size-3 shrink-0" /><span class="truncate">{name}</span></Chip></li>
-                    {/each}
-                  </ul>
-                {/if}
-              </article>
-            {:else}
-              {@const active = i === chat.messages.length - 1 && message.streaming}
-              {#if message.thinking}
-                <details class="self-start max-w-[88%] text-xs text-muted-foreground" open={active}>
-                  <summary class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/50 [&::-webkit-details-marker]:hidden [&::marker]:hidden">
-                    <span
                       class={[
-                        'font-mono text-[0.85rem] font-semibold',
-                        active ? 'star-glow' : 'text-muted-foreground/60',
+                        'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors disabled:opacity-50',
+                        action.kind === 'autopilot'
+                          ? 'bg-brand text-brand-foreground hover:opacity-90'
+                          : 'border border-border bg-card text-foreground hover:bg-accent',
                       ]}
+                      disabled={turnActive || switching}
+                      onclick={() => runOpening(action)}
                     >
-                      {active ? SPINNER_GLYPHS[spinnerIdx] : '✶'}
-                    </span>
-                    <span class={['font-medium', active && 'shimmer']}>{s.verbs.thinking}</span>
-                    {#if active}
-                      <span class="font-mono text-[0.7rem] text-muted-foreground">({elapsedSec}s)</span>
-                    {/if}
-                  </summary>
-                  <div class="md mt-1 max-h-56 overflow-y-auto border-l-2 border-border pl-3 py-1 text-muted-foreground">
-                    <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
-                    {@html renderMarkdown(message.thinking)}
-                  </div>
-                </details>
+                      <Icon class={['size-4 shrink-0', action.kind !== 'autopilot' && 'text-muted-foreground']} />
+                      {action.label}
+                    </button>
+                  {/each}
+                </div>
+                {#each openingActions.filter((a) => a.hint) as action (action.label)}
+                  <p class="mt-2 text-xs text-muted-foreground">{action.hint}</p>
+                {/each}
+              </div>
+            {:else if chat.messages.length === 0 && !autoRun}
+              <!-- Never shown on a cold start (autoRun): the brief hasn't landed as a message
+                 yet, but the run has already started — inviting the candidate to type here
+                 would contradict the "Crunching…" indicator already on screen. -->
+              <p class="text-sm text-muted-foreground">{s.askAnything}</p>
+              <!-- Starters only in a plain chat: a profile interview opens with its own
+                 kickoff, and these questions belong to the job search, not to it. -->
+              {#if activePreset === 'chat'}
+                <ul class="flex flex-wrap gap-2" aria-label={s.startersLabel}>
+                  {#each starters as starter (starter)}
+                    <li>
+                      <button
+                        type="button"
+                        class="rounded-lg border border-border bg-background px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        disabled={!canStartTurn()}
+                        onclick={() => submitText(starter)}
+                      >
+                        {starter}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
               {/if}
+            {/if}
 
-              <!-- A recommendation is a `present_jobs` call, not prose. Its cards
+            {#each chat.messages as message, i (i)}
+              {#if message.role === 'user'}
+                <article
+                  class="self-end max-w-[80%] rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-sm leading-relaxed text-secondary-foreground"
+                >
+                  {#if message.text}
+                    <pre class="m-0 whitespace-pre-wrap break-words font-sans">{message.text}</pre>
+                  {/if}
+                  {#if message.attachments.length > 0}
+                    <ul class={['flex flex-wrap gap-1.5', message.text && 'mt-2']} aria-label={s.attachedFiles}>
+                      {#each message.attachments as name, j (j)}
+                        <li>
+                          <Chip class="max-w-full gap-1 bg-background"
+                            ><FileText class="size-3 shrink-0" /><span class="truncate">{name}</span></Chip
+                          >
+                        </li>
+                      {/each}
+                    </ul>
+                  {/if}
+                </article>
+              {:else}
+                {@const active = i === chat.messages.length - 1 && message.streaming}
+                {#if message.thinking}
+                  <details class="self-start max-w-[88%] text-xs text-muted-foreground" open={active}>
+                    <summary
+                      class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/50 [&::-webkit-details-marker]:hidden [&::marker]:hidden"
+                    >
+                      <span
+                        class={[
+                          'font-mono text-[0.85rem] font-semibold',
+                          active ? 'star-glow' : 'text-muted-foreground/60',
+                        ]}
+                      >
+                        {active ? SPINNER_GLYPHS[spinnerIdx] : '✶'}
+                      </span>
+                      <span class={['font-medium', active && 'shimmer']}>{s.verbs.thinking}</span>
+                      {#if active}
+                        <span class="font-mono text-[0.7rem] text-muted-foreground">({elapsedSec}s)</span>
+                      {/if}
+                    </summary>
+                    <div
+                      class="md mt-1 max-h-56 overflow-y-auto border-l-2 border-border pl-3 py-1 text-muted-foreground"
+                    >
+                      <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
+                      {@html renderMarkdown(message.thinking)}
+                    </div>
+                  </details>
+                {/if}
+
+                <!-- A recommendation is a `present_jobs` call, not prose. Its cards
                    render as a deck here and the call itself is withheld from the
                    activity list, so no progress chip sits above the deck it
                    produced — the work that found the vacancies stays in the
                    activity list above them. `message.streaming` decides what an
                    unanswered call means: a placeholder mid-turn, nothing once the
                    turn has closed without its result. -->
-              {@const { decks, rest } = splitPresentingCalls(message.tools, message.streaming)}
-              <ToolGroupList calls={rest} onConfirm={submitText} disabled={turnActive || switching} />
-              {#each decks as slot, di (di)}
-                <div class="self-start w-full">
-                  <JobDeck {slot} />
-                </div>
-              {/each}
+                {@const { decks, rest } = splitPresentingCalls(message.tools, message.streaming)}
+                <ToolGroupList calls={rest} onConfirm={submitText} disabled={turnActive || switching} />
+                {#each decks as slot, di (di)}
+                  <div class="self-start w-full">
+                    <JobDeck {slot} />
+                  </div>
+                {/each}
 
-              {#if message.text}
-                <article class="md self-start max-w-[88%] px-1 py-1 text-sm leading-relaxed text-foreground">
-                  <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
-                  {@html renderMarkdown(message.text)}
-                </article>
+                {#if message.text}
+                  <article class="md self-start max-w-[88%] px-1 py-1 text-sm leading-relaxed text-foreground">
+                    <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
+                    {@html renderMarkdown(message.text)}
+                  </article>
+                {/if}
+
+                {#if message.errored}
+                  <div class="self-start flex flex-wrap items-center gap-2 text-xs">
+                    <p class="text-destructive">{s.turnErrored}</p>
+                    {#if !isSupport && i === chat.messages.length - 1 && !turnActive && !switching}
+                      <button
+                        type="button"
+                        class="rounded-md border border-border bg-background px-2 py-0.5 font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        disabled={!canStartTurn()}
+                        onclick={retryFailedTurn}
+                      >
+                        {s.retry}
+                      </button>
+                    {/if}
+                  </div>
+                {/if}
               {/if}
+            {/each}
 
-              {#if message.errored}
-                <div class="self-start flex flex-wrap items-center gap-2 text-xs">
-                  <p class="text-destructive">{s.turnErrored}</p>
-                  {#if !isSupport && i === chat.messages.length - 1 && !turnActive && !switching}
-                    <button
-                      type="button"
-                      class="rounded-md border border-border bg-background px-2 py-0.5 font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                      disabled={!canStartTurn()}
-                      onclick={retryFailedTurn}
-                    >
-                      {s.retry}
-                    </button>
-                  {/if}
-                </div>
-              {/if}
-            {/if}
-          {/each}
-
-          <!-- One indicator, two states. Queued is not working: nothing is being spent yet, and
+            <!-- One indicator, two states. Queued is not working: nothing is being spent yet, and
                the elapsed counter would be timing somebody else's turn. -->
-          {#if chat.queued || turnActive}
-            <ThinkingIndicator label={chat.queued ? s.waitingForTurn : undefined} />
+            {#if chat.queued || turnActive}
+              <ThinkingIndicator label={chat.queued ? s.waitingForTurn : undefined} />
+            {/if}
+          </div>
+
+          <!-- Jump to latest. Sticky rather than absolute so it needs no positioned
+             ancestor: as the scroller's last child its natural place is past the bottom
+             of the scrollport, which is exactly when `bottom-2` pins it into view. -->
+          {#if !stickToBottom}
+            <div class="pointer-events-none sticky bottom-2 mt-2 flex justify-center">
+              <button
+                type="button"
+                onclick={() => scrollToBottom(true)}
+                class="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-md transition-colors hover:text-foreground"
+              >
+                <ArrowDown class="size-3.5" />
+                {s.jumpToLatest}
+              </button>
+            </div>
           {/if}
         </div>
 
-        <!-- Jump to latest. Sticky rather than absolute so it needs no positioned
-             ancestor: as the scroller's last child its natural place is past the bottom
-             of the scrollport, which is exactly when `bottom-2` pins it into view. -->
-        {#if !stickToBottom}
-          <div class="pointer-events-none sticky bottom-2 mt-2 flex justify-center">
-            <button
-              type="button"
-              onclick={() => scrollToBottom(true)}
-              class="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-md transition-colors hover:text-foreground"
-            >
-              <ArrowDown class="size-3.5" />
-              {s.jumpToLatest}
-            </button>
-          </div>
-        {/if}
-      </div>
-
-      {#if voiceCallOpen && activeId}
-        <!-- Keyed on activeId: switching sessions while a call is open must destroy
+        {#if voiceCallOpen && activeId}
+          <!-- Keyed on activeId: switching sessions while a call is open must destroy
              this instance (its onDestroy ends the call cleanly) rather than reuse it
              with a new sessionId prop, which would silently post the OLD call's turns
              into the NEW session's transcript. -->
-        {#key activeId}
-          <div class="border-t border-border p-3">
-            <div class="mx-auto w-full max-w-3xl">
-              <VoiceCall
-                sessionId={activeId}
-                onClose={closeVoiceCall}
-                onUnavailable={() => {
-                  voiceModeOff = true;
-                  closeVoiceCall();
-                }}
-              />
+          {#key activeId}
+            <div class="border-t border-border p-3">
+              <div class="mx-auto w-full max-w-3xl">
+                <VoiceCall
+                  sessionId={activeId}
+                  onClose={closeVoiceCall}
+                  onUnavailable={() => {
+                    voiceModeOff = true;
+                    closeVoiceCall();
+                  }}
+                />
+              </div>
             </div>
-          </div>
-        {/key}
-      {:else}
-        <Composer
-          bind:draft
-          bind:attachments
-          {queue}
-          {turnActive}
-          attachable={!isSupport}
-          dictatable={!isSupport}
-          disabled={phase !== 'ready' || switching}
-          onSubmit={submitText}
-          onRemoveQueued={removeQueued}
-          onCancel={cancelTurn}
-        />
-        {#if activePreset === 'interview' && activeId && voiceSupported && !voiceModeOff}
-          <div class="flex justify-center border-t border-border/60 py-2">
-            <button
-              type="button"
-              onclick={() => (voiceCallOpen = true)}
-              disabled={phase !== 'ready' || switching || turnActive}
-              class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Phone class="size-3.5" />
-              {s.voiceModeButton}
-            </button>
-          </div>
+          {/key}
+        {:else}
+          <Composer
+            bind:draft
+            bind:attachments
+            {queue}
+            {turnActive}
+            attachable={!isSupport}
+            dictatable={!isSupport}
+            disabled={phase !== 'ready' || switching}
+            onSubmit={submitText}
+            onRemoveQueued={removeQueued}
+            onCancel={cancelTurn}
+          />
+          {#if activePreset === 'interview' && activeId && voiceSupported && !voiceModeOff}
+            <div class="flex justify-center border-t border-border/60 py-2">
+              <button
+                type="button"
+                onclick={() => (voiceCallOpen = true)}
+                disabled={phase !== 'ready' || switching || turnActive}
+                class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Phone class="size-3.5" />
+                {s.voiceModeButton}
+              </button>
+            </div>
+          {/if}
         {/if}
-      {/if}
+      </div>
     </div>
-  </div>
-{/if}
+  {/if}
 </div>
 
 <ConfirmDialog
@@ -1401,8 +1425,12 @@
     animation: shimmer-pan 2.4s linear infinite;
   }
   @keyframes shimmer-pan {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
   }
 
   .star-glow {
@@ -1410,12 +1438,20 @@
     animation: star-pulse 1.8s ease-in-out infinite;
   }
   @keyframes star-pulse {
-    0%, 100% { opacity: 0.7; }
-    50%      { opacity: 1; }
+    0%,
+    100% {
+      opacity: 0.7;
+    }
+    50% {
+      opacity: 1;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .star-glow { animation: none; opacity: 1; }
+    .star-glow {
+      animation: none;
+      opacity: 1;
+    }
     .shimmer {
       animation: none;
       background: none;
@@ -1425,9 +1461,16 @@
   }
 
   /* Markdown rendering — scoped, applied with :global to reach @html output. */
-  .md :global(*:first-child) { margin-top: 0; }
-  .md :global(*:last-child)  { margin-bottom: 0; }
-  .md :global(p) { margin: 0 0 0.5rem; line-height: 1.55; }
+  .md :global(*:first-child) {
+    margin-top: 0;
+  }
+  .md :global(*:last-child) {
+    margin-bottom: 0;
+  }
+  .md :global(p) {
+    margin: 0 0 0.5rem;
+    line-height: 1.55;
+  }
   .md :global(h1),
   .md :global(h2),
   .md :global(h3),
@@ -1436,21 +1479,38 @@
     line-height: 1.3;
     font-weight: 600;
   }
-  .md :global(h1) { font-size: 1.1rem; }
-  .md :global(h2) { font-size: 1.0rem; }
+  .md :global(h1) {
+    font-size: 1.1rem;
+  }
+  .md :global(h2) {
+    font-size: 1rem;
+  }
   .md :global(h3),
-  .md :global(h4) { font-size: 0.95rem; }
+  .md :global(h4) {
+    font-size: 0.95rem;
+  }
   .md :global(ul),
-  .md :global(ol) { margin: 0 0 0.5rem; padding-left: 1.25rem; }
-  .md :global(li) { margin: 0.1rem 0; }
-  .md :global(li > p) { margin: 0; }
+  .md :global(ol) {
+    margin: 0 0 0.5rem;
+    padding-left: 1.25rem;
+  }
+  .md :global(li) {
+    margin: 0.1rem 0;
+  }
+  .md :global(li > p) {
+    margin: 0;
+  }
   .md :global(a) {
     color: oklch(0.6 0.18 280);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
-  .md :global(strong) { font-weight: 600; }
-  .md :global(em) { font-style: italic; }
+  .md :global(strong) {
+    font-weight: 600;
+  }
+  .md :global(em) {
+    font-style: italic;
+  }
   .md :global(code) {
     font-family: var(--font-mono);
     font-size: 0.85em;

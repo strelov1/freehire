@@ -9,10 +9,7 @@ import type { PageServerLoad } from './$types';
 // without plans (no price cards), because the pitch and the docs links are the point.
 export const load: PageServerLoad = async ({ fetch }) => {
   const api = serverApi(fetch);
-  const [scale, plans] = await Promise.all([
-    api.catalogScale().catch(() => null),
-    api.plans().catch(() => null),
-  ]);
+  const [scale, plans] = await Promise.all([api.catalogScale().catch(() => null), api.plans().catch(() => null)]);
   return {
     stats: scale
       ? {

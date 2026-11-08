@@ -28,8 +28,7 @@ export const load: LayoutServerLoad = async ({ fetch, request, cookies, url, loc
     // #lib/i18n/locale for why that list is narrower than what `users.language`
     // accepts. An unrecognised or not-yet-translated value collapses to 'en'.
     const onAccountSection = url.pathname === '/my' || url.pathname.startsWith('/my/');
-    const locale =
-      onAccountSection && isTranslatedLocale(user.language) ? user.language : ('en' as const);
+    const locale = onAccountSection && isTranslatedLocale(user.language) ? user.language : ('en' as const);
     // Refines hooks.server.ts's cookie-derived guess with this request's fresh,
     // authoritative value. `event.locals` is one object for the whole request;
     // `transformPageChunk` reads `locals.locale` lazily (after this load

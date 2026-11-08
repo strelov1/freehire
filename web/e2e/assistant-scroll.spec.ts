@@ -64,9 +64,7 @@ async function mockAssistant(page: Page, baseURL: string | undefined) {
   );
   await page.route('**/api/v1/assistant/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
-    const data = path.endsWith('/sessions')
-      ? [SESSION]
-      : { session: SESSION, messages: transcript(60) };
+    const data = path.endsWith('/sessions') ? [SESSION] : { session: SESSION, messages: transcript(60) };
     await route.fulfill({ json: { data } });
   });
   await page.route('**/api/v1/auth/me', (route) => route.fulfill({ json: { data: USER } }));
@@ -163,10 +161,12 @@ test.describe('full-page assistant', () => {
     await wheelOverList(page, -100000);
     expect((await state(page)).top).toBe(0);
     await page.getByRole('button', { name: /latest/i }).click();
-    await expect.poll(async () => {
-      const s = await state(page);
-      return s.max - s.top;
-    }).toBeLessThan(4);
+    await expect
+      .poll(async () => {
+        const s = await state(page);
+        return s.max - s.top;
+      })
+      .toBeLessThan(4);
   });
 });
 

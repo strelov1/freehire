@@ -19,9 +19,7 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
   }
 
   // A missing company record still leaves the useful people-search fallback.
-  const company = job.company_slug
-    ? await api.getCompany(job.company_slug, 1, 0).catch(() => null)
-    : null;
+  const company = job.company_slug ? await api.getCompany(job.company_slug, 1, 0).catch(() => null) : null;
   const destination = referralPeopleUrl(job.company, company?.company.company_info?.linkedin);
   if (!destination) error(404, 'Company not found');
   redirect(302, destination, { external: ['https://www.linkedin.com'] });

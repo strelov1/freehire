@@ -1,0 +1,23 @@
+{
+  "$schema": "./web/node_modules/oxfmt/configuration_schema.json",
+  // One config for web/, design-system/ and extension/: oxfmt looks for it upward from
+  // wherever it runs. The values are the ones that move the fewest existing lines
+  // (measured over the three packages on 2026-11-08): 120 columns, single quotes,
+  // semicolons, trailing commas everywhere, parenthesised arrow parameters.
+  "printWidth": 120,
+  "singleQuote": true,
+  "semi": true,
+  "trailingComma": "all",
+  "arrowParens": "always",
+  // .svelte is opt-in; oxfmt hands it to prettier-plugin-svelte, which needs `svelte`
+  // installed beside it (every package has it).
+  "svelte": true,
+  "ignorePatterns": [
+    // Written by cmd/gen-contracts, and the `contracts` CI job fails when a regeneration
+    // differs from what is committed, so a formatter would make that job red.
+    "**/generated/**",
+    // Everything else oxfmt knows how to format. The brief is TypeScript, JavaScript and
+    // Svelte: a JSON, CSS or Markdown file is not this tool's to rewrite.
+    "**/*.{json,jsonc,json5,yaml,yml,toml,html,vue,css,scss,less,md,mdx,graphql,hbs,handlebars}"
+  ]
+}

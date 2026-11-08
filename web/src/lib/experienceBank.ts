@@ -5,9 +5,7 @@ export const isUnconfirmed = (atom: ExperienceAtom) => atom.provenance === 'agen
 /** The bank-order-first unconfirmed achievement, and where it lives — an employment or
  *  `unplaced`. Bank order is `employments` in the order the server returned them, then
  *  `unplaced`; this is what the unconfirmed-achievements banner jumps to. */
-export function findFirstUnconfirmed(
-  bank: ExperienceBank,
-): { employmentId: string | null; atomId: string } | null {
+export function findFirstUnconfirmed(bank: ExperienceBank): { employmentId: string | null; atomId: string } | null {
   for (const employment of bank.employments) {
     const found = employment.atoms.find(isUnconfirmed);
     if (found) return { employmentId: employment.id, atomId: found.id };
