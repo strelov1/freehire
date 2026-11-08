@@ -86,8 +86,8 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   Any dependency between two parts that the file does not list fails, so a new one is
   written there with its reason, not worked around. Run `easement check` in `web/` after
   changing imports (`mise install` provides it and its indexer); `easement why <a> <b>`
-  shows the imports behind an edge. Never edit `easement.baseline.yml` by hand or
-  regenerate it to get a change through: it only shrinks.
+  shows the imports behind an edge. There is no baseline of known violations, and
+  `easement baseline` is not the way to get a change through.
 
 ## Worth knowing
 

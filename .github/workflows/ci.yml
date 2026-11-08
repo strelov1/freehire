@@ -878,9 +878,8 @@ jobs:
       # The boundaries between the app's parts (web/easement.yml): a component never
       # imports a route or lib/server, src/lib never imports a component, and a new
       # dependency between two parts has to be written into the config with its reason.
-      # The violations that predate the check are in web/easement.baseline.yml, which only
-      # shrinks. It runs after the type check because the TypeScript indexer needs the
-      # .svelte-kit types `svelte-kit sync` just wrote.
+      # It holds no baseline of known violations. It runs after the type check because the
+      # TypeScript indexer needs the .svelte-kit types `svelte-kit sync` just wrote.
       #
       # shortcut: easement is built from a pinned commit of strelov1/easement, because
       # reading .svelte files is mokevnin/easement#130 and not released yet; once a

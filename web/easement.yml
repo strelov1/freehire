@@ -3,9 +3,8 @@
 # directory, a step of the `web-work` CI job. A dependency between two components that is
 # not listed here fails; add it here, with its reason, when it is meant. The Go backend
 # keeps its own guard (internal/platform/arch/layering), so this file covers web/ only.
-# The violations that predate it are recorded in easement.baseline.yml, which only shrinks.
-# A cycle is recorded there as a whole group, so each one also has a forbidden direction
-# below: its existing imports are baselined one by one, and a new one fails.
+# There is no baseline: every rule here holds today. A violation is fixed, or argued into
+# these rules with its reason; it is never recorded as known debt (`easement baseline`).
 version: 1
 tests: auto
 
@@ -17,6 +16,25 @@ components:
     allow_importers: [routes, hooks, tests]
   generated: { in: src/lib/generated }
   components: { in: src/lib/components }
+  # The composite views that embed the assistant, carved out of src/lib/components by
+  # their longer patterns. Everything else there is a building block the assistant itself
+  # draws (JobRow, PlanLimitLink), so a component that starts embedding the assistant is
+  # listed here on purpose rather than closing a loop.
+  views:
+    in:
+      - src/lib/components/AnalyticsView.svelte
+      - src/lib/components/CompanyView.svelte
+      - src/lib/components/ExperienceAssistantPanel.svelte
+      - src/lib/components/ExperienceBankView.svelte
+      - src/lib/components/HomeLandingView.svelte
+      - src/lib/components/JobBoard.svelte
+      - src/lib/components/JobDrawer.svelte
+      - src/lib/components/JobsView.svelte
+      - src/lib/components/SupportPanel.svelte
+      - src/lib/components/SwipeDeck.svelte
+      - src/lib/components/filters/AiFilterButton.svelte
+      - src/lib/components/filters/AiFilterDialog.svelte
+      - src/lib/components/filters/FilterModal.svelte
   assistant: { in: src/lib/assistant }
   tailor: { in: src/lib/tailor }
   actions: { in: src/lib/actions }
@@ -29,18 +47,19 @@ components:
 
 rules:
   routes:
-    may_depend_on: [hooks, server, generated, components, assistant, tailor, actions, i18n, ui, docs, lib]
+    may_depend_on: [hooks, server, generated, views, components, assistant, tailor, actions, i18n, ui, docs, lib]
   hooks: { may_depend_on: [i18n, lib] }
   server:
     may_depend_on: [lib, generated]
     because: lib/server runs only on the server, so only routes and hooks import it; code a component needs too belongs in src/lib
-  tailor: { may_depend_on: [assistant, components, actions, generated, i18n, ui, lib] }
+  tailor: { may_depend_on: [views, assistant, components, actions, generated, i18n, ui, lib] }
+  views: { may_depend_on: [assistant, components, actions, generated, i18n, ui, lib] }
   assistant:
-    may_depend_on: [generated, i18n, ui, lib]
-    because: components embed the assistant, not the other way; what both need belongs in src/lib
+    may_depend_on: [components, generated, i18n, ui, lib]
+    because: the assistant draws building blocks from src/lib/components and is embedded by the views above it, never by a view of its own
   components:
-    may_depend_on: [assistant, actions, generated, i18n, ui, lib]
-    because: a component never reaches into a route, lib/server or the tailor workspace that is built from components; a page passes it what it needs
+    may_depend_on: [actions, generated, i18n, ui, lib]
+    because: a building block never reaches into a route, lib/server, the assistant, a view or the tailor workspace, which are built from it; a component that embeds the assistant is listed under views
   docs: { may_depend_on: [lib] }
   i18n:
     may_depend_on: []
