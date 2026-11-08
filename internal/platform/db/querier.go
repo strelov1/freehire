@@ -3688,7 +3688,8 @@ type Querier interface {
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
 	// Whether the person watches this company, by the slug a company page carries. A stored
-	// alias of it counts: the person added the company under its old spelling.
+	// alias of it counts: the person added the company under its old spelling. An alias slug a
+	// company row still holds is its own company, as in the reads above, and does not count.
 	IsWatchingCompany(ctx context.Context, arg IsWatchingCompanyParams) (bool, error)
 	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
 	// this board, and which board does a pasted job id belong to. Named after
@@ -6850,7 +6851,8 @@ type Querier interface {
 	// Give a claim back after every channel failed, so the next run retries. Guarded on the
 	// stamp being the claim's own: a participant re-notified since keeps its newer one.
 	ReleaseUnread(ctx context.Context, arg ReleaseUnreadParams) error
-	// Remove a company by the slug a page carries, together with any stored alias of it.
+	// Remove a company by the slug a page carries, together with any stored alias of it that no
+	// company row still holds (that one is a company of its own, and stays).
 	RemoveFromWatchlist(ctx context.Context, arg RemoveFromWatchlistParams) error
 	// Apply a resolved display name to every stored job of ONE board whose company is still that
 	// board's placeholder (see ListPlaceholderCompanyBoards). board_pattern is

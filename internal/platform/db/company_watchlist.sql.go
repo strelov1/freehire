@@ -83,7 +83,9 @@ SELECT EXISTS (
     SELECT 1 FROM company_watchlist w
     WHERE w.user_id = $1
       AND (w.company_slug = $2
-           OR w.company_slug IN (SELECT a.alias_slug FROM company_slug_aliases a WHERE a.canonical_slug = $2))
+           OR w.company_slug IN (SELECT a.alias_slug FROM company_slug_aliases a
+                                 WHERE a.canonical_slug = $2
+                                   AND NOT EXISTS (SELECT 1 FROM companies c WHERE c.slug = a.alias_slug)))
 )
 `
 
@@ -93,7 +95,8 @@ type IsWatchingCompanyParams struct {
 }
 
 // Whether the person watches this company, by the slug a company page carries. A stored
-// alias of it counts: the person added the company under its old spelling.
+// alias of it counts: the person added the company under its old spelling. An alias slug a
+// company row still holds is its own company, as in the reads above, and does not count.
 func (q *Queries) IsWatchingCompany(ctx context.Context, arg IsWatchingCompanyParams) (bool, error) {
 	row := q.db.QueryRow(ctx, isWatchingCompany, arg.UserID, arg.Slug)
 	var exists bool
@@ -299,7 +302,9 @@ const removeFromWatchlist = `-- name: RemoveFromWatchlist :exec
 DELETE FROM company_watchlist
 WHERE user_id = $1
   AND (company_slug = $2
-       OR company_slug IN (SELECT a.alias_slug FROM company_slug_aliases a WHERE a.canonical_slug = $2))
+       OR company_slug IN (SELECT a.alias_slug FROM company_slug_aliases a
+                           WHERE a.canonical_slug = $2
+                             AND NOT EXISTS (SELECT 1 FROM companies c WHERE c.slug = a.alias_slug)))
 `
 
 type RemoveFromWatchlistParams struct {
@@ -307,7 +312,8 @@ type RemoveFromWatchlistParams struct {
 	Slug   string `json:"slug"`
 }
 
-// Remove a company by the slug a page carries, together with any stored alias of it.
+// Remove a company by the slug a page carries, together with any stored alias of it that no
+// company row still holds (that one is a company of its own, and stays).
 func (q *Queries) RemoveFromWatchlist(ctx context.Context, arg RemoveFromWatchlistParams) error {
 	_, err := q.db.Exec(ctx, removeFromWatchlist, arg.UserID, arg.Slug)
 	return err

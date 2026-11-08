@@ -98,6 +98,39 @@ func TestWatchlist_FollowsMergesAndKeepsCompaniesWithNoJobs(t *testing.T) {
 	}
 }
 
+func TestWatchlist_AliasThatIsALiveCompanyIsNotTheCanonicalOne(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	svc := companywatch.New(db.New(pool))
+
+	var user int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('live@example.test') RETURNING id`).Scan(&user); err != nil {
+		t.Fatal(err)
+	}
+	for _, slug := range []string{"alpha", "beta"} {
+		if _, err := pool.Exec(ctx, `INSERT INTO companies (slug, name, job_count) VALUES ($1, $1, 1)`, slug); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// "alpha" once merged into "beta", then came back as a company of its own.
+	if _, err := pool.Exec(ctx, `INSERT INTO company_slug_aliases (alias_slug, canonical_slug, folded_key, reason)
+		VALUES ('alpha', 'beta', 'alpha', 'spelling')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Add(ctx, user, "alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := svc.Watching(ctx, user, "beta"); ok {
+		t.Error("watching alpha reported beta as watched")
+	}
+	if err := svc.Remove(ctx, user, "beta"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := svc.Watching(ctx, user, "alpha"); !ok {
+		t.Error("removing beta took the live company alpha with it")
+	}
+}
+
 func TestWatchlist_CapIsAllOrNothingAndNeverRefusesWhatIsAlreadyThere(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
