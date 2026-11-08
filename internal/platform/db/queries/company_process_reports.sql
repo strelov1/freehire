@@ -75,10 +75,13 @@ WITH updated AS (
        SET ai_interview_reports = $2, updated_at = now()
      WHERE company_slug = $1
        AND ai_interview_reports IS DISTINCT FROM $2
-    RETURNING id, closed_at, COALESCE(posted_at, created_at) AS eff_posted_at
+    RETURNING id, closed_at, duplicate_of, is_private, COALESCE(posted_at, created_at) AS eff_posted_at
 )
+    -- Same eligibility as ClaimSearchOutboxBatch and every other search_outbox writer: a
+    -- duplicate or private posting is never indexed, and a private one's entry would
+    -- never be drained either.
 INSERT INTO search_outbox (job_id, job_posted_at)
-SELECT id, eff_posted_at FROM updated WHERE closed_at IS NULL
+SELECT id, eff_posted_at FROM updated WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ON CONFLICT (job_id) DO NOTHING;
 
 -- name: MyLiveCompanyProcessReportKinds :many
