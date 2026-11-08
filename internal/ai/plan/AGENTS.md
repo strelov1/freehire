@@ -54,6 +54,33 @@ transaction. `store.go` is the transaction around it and nothing else.
   never carry an upgrade link and never feed `recordLimitHit`. Tests that need an
   allowance to consume partway into pin a real PRO ceiling with `WithProCeiling`.
 
+- **The paid gate is enforced twice in `internal/api/handler`, and a few callers ask
+  themselves.** The `mw.paidAI(feature)` middleware (`paid_ai.go`) answers an unpaid caller
+  402 — in the body every plan refusal carries, before any stream opens — and an unreadable
+  plan 503, never a pass. The user-call binding (`llmBinding.bind/caller`, `user_llm.go`)
+  refuses a model client for a context without `WithPaidAI`/`WithFreeAI`, so a new
+  model-calling route mounted without the middleware fails its first test; a test also
+  forbids `llmkey.Bind/Caller` anywhere in the handler package outside the binding. Callers
+  the middleware cannot reach call `RequirePaid` themselves: the auto-apply orchestrator's
+  tailor run (for the queue entry's owner) and `cmd/auto-apply`'s drafting (a lapsed
+  candidate's attempt parks). Cached AI results, deterministic scoring, search and the
+  public CV roast stay open to free; ownerless background work (enrichment, embeddings,
+  Telegram) is unaffected.
+
+- **The `WithFreeAI` exceptions are marks, not missing checks.** The CV upload's background
+  extraction and its retry run for every account on their own cheap model
+  (`RESUME_EXTRACT_MODEL`, falling back to `LLM_MODEL`). The parse was paid until 2026-10-19
+  and that cost paying customers: a CV uploaded before upgrading was never parsed, upgrading
+  did not re-run it, and the experience bank every paid feature reads stayed empty. Support
+  (`POST /support/sessions/:id/messages`, `assistant_support.go`) meters itself through
+  `meterSupport`, which fails CLOSED — unlike the paid meter, because a counter that cannot
+  be read must not become unbounded spend: the per-account daily figure answers 402, the
+  per-session and global figures 429. `SUPPORT_MODEL` picks its model (falling back to
+  `LLM_MODEL`); `ONBOARDING_REPLY_TO` is the inbox its handover mail goes to. The generic
+  `/assistant/sessions/:id/...` routes answer a support session 404 — on the ones behind
+  `mw.paidAI` (messages, opening, autopilot, …) only once that gate passes, so a free caller
+  gets its 402 first.
+
 - **A paid-gate refusal is recorded as a paywall hit, and the record never touches the 402.**
   `plan.decide` refuses the free tier before any allowance is read, so those refusals never
   reach `plan_limit_hits` — the two tables are different questions ("the plan never included

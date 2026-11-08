@@ -37,6 +37,29 @@ applying the rule to whatever they push. See
 [docs/agents/job-lifecycle.md](../../docs/agents/job-lifecycle.md) for which sources are
 exempt and why.
 
+## A dropped filter says so (`meta.ignored_params`, `meta.ignored_values`)
+
+Any endpoint whose answer WIDENS when it does not understand a query param reports the
+params it did not read in `meta.ignored_params` (omitted when there are none). Refusing them
+would break saved searches and shared links that still carry a retired facet; staying silent
+is what let a mistyped `country=it` pass for a search of Italy. `search.UnknownParams` owns
+the SEARCH filter's vocabulary and only that, so an endpoint reading a different one says so
+itself — `/companies` through `UnknownCompanyParams`, `/jobs` (which reads no filter at all)
+through its own two-param list.
+
+Its value-level twin is `meta.ignored_values`: a closed-vocabulary facet value outside
+`internal/dict/vocab` (`work_mode=foo`) typically still narrows — to nothing — and
+`search.IgnoredValues` names it rather than letting `total: 0` pass for an empty market. Not
+every unknown value narrows to nothing: a true-or-absent boolean reads anything but `false`
+as true (`requires_clearance=flase` filters FOR clearance, `requires_clearance_exclude=flase`
+excludes the postings that require it), while an unknown `_exclude` value on an ordinary
+equality facet excludes nothing; all are named all the same.
+
+The same rule decides what may be SUBSCRIBED to: `search.Narrows` refuses a saved search with
+no text and no surviving filter, rather than reporting it, because nobody reads a digest's
+meta. It checks only that a filter exists, not that it removes anything:
+`source_exclude=notarealsource` passes and digests the whole catalogue.
+
 ## The suggestions dictionary (`suggest`)
 
 The search box's completions, in a SEPARATE Meilisearch index (`suggestions`) built
