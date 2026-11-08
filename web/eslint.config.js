@@ -13,6 +13,8 @@ export default ts.config(
   js.configs.recommended,
   ...ts.configs.strict,
   ...svelte.configs.recommended,
+  // The formatter (oxfmt, shared .oxfmtrc.json) owns layout: switch off the Svelte rules about it.
+  ...svelte.configs.prettier,
 
   // Browser globals for app code; the `.svelte` parser needs the TS parser to
   // understand `<script lang="ts">` and rune modules. Type-aware linting is left

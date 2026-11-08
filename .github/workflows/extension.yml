@@ -3,10 +3,10 @@ name: extension
 on:
   push:
     branches: [main]
-    paths: ['extension/**', 'design-system/**', '.github/workflows/extension.yml']
+    paths: ['extension/**', 'design-system/**', '.oxfmtrc.json', '.github/workflows/extension.yml']
   pull_request:
     branches: [main]
-    paths: ['extension/**', 'design-system/**', '.github/workflows/extension.yml']
+    paths: ['extension/**', 'design-system/**', '.oxfmtrc.json', '.github/workflows/extension.yml']
   workflow_dispatch:
 
 concurrency:
@@ -54,6 +54,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
 
       - name: Unit tests
         run: npm test

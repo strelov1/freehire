@@ -135,6 +135,8 @@ nothing), then `go vet ./...` and `go test ./...`. Do not commit if they fail. S
 suite when the commit has no Go. Integration-tagged tests stay push-time (`go vet
 -tags=integration ./...` before every push; the full tagged suite when behaviour changed).
 
+**Formatting TypeScript, JavaScript and Svelte: [oxfmt](https://oxc.rs/docs/guide/usage/formatter), one config for all three packages.** `.oxfmtrc.json` at the repository root is read by `web/`, `design-system/` and `extension/` alike; in each, `pnpm run format` (`npm run format` in `extension/`) rewrites the files and `format:check` is what CI and the lefthook hook run. The version is pinned exactly in each `package.json`, because a formatter that moves between releases rewrites code nobody touched. The config's `ignorePatterns` leave out `**/generated/**` (the `contracts` CI job compares it with a regeneration) and every file type that is not TypeScript, JavaScript or Svelte, so JSON, CSS and Markdown are not reformatted. `.svelte` is opt-in (`"svelte": true`) and runs through prettier-plugin-svelte inside oxfmt. The commit that first applied it is in `.git-blame-ignore-revs`; point blame at the file with `git config blame.ignoreRevsFile .git-blame-ignore-revs` (GitHub reads it by itself). There are no stylistic lint rules to keep in step: oxlint runs only correctness, suspicious and perf, and each `eslint.config.js` spreads `svelte.configs.prettier`.
+
 **Pre-commit hooks:** [lefthook](https://github.com/evilmartians/lefthook) (`go install
 github.com/evilmartians/lefthook@latest`, then `lefthook install` once per clone) runs
 gofmt/vet/golangci-lint on staged Go files and eslint on staged files in web/, extension/,

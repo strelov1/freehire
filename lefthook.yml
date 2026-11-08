@@ -231,6 +231,31 @@ pre-commit:
         - "extension/**/*.{js,ts,svelte}"
         - "extension/*.{js,ts,svelte}"
       run: pnpm exec eslint {staged_files}
+    # The same `format:check` the three CI jobs run, over the staged files only: oxfmt takes
+    # its settings from the one .oxfmtrc.json at the repository root, and that file's
+    # `ignorePatterns` already leave out what is not TypeScript, JavaScript or Svelte, so
+    # these globs only decide when the hook has something to look at. A failure is fixed by
+    # `pnpm run format` in the package. A staged file the config ignores (web/src/lib/generated)
+    # is not an error, hence --no-error-on-unmatched-pattern. Unlike the lint commands above, these include .mjs
+    # and .cjs — oxfmt formats them, and web/scripts is mostly .mjs.
+    web-format:
+      root: "web/"
+      glob:
+        - "web/**/*.{js,mjs,cjs,ts,mts,svelte}"
+        - "web/*.{js,mjs,cjs,ts,mts,svelte}"
+      run: pnpm exec oxfmt --check --no-error-on-unmatched-pattern {staged_files}
+    extension-format:
+      root: "extension/"
+      glob:
+        - "extension/**/*.{js,mjs,cjs,ts,mts,svelte}"
+        - "extension/*.{js,mjs,cjs,ts,mts,svelte}"
+      run: pnpm exec oxfmt --check --no-error-on-unmatched-pattern {staged_files}
+    design-system-format:
+      root: "design-system/"
+      glob:
+        - "design-system/**/*.{js,mjs,cjs,ts,mts,svelte}"
+        - "design-system/*.{js,mjs,cjs,ts,mts,svelte}"
+      run: pnpm exec oxfmt --check --no-error-on-unmatched-pattern {staged_files}
     # The remaining design-system-* commands mirror the fast checks from the
     # `design-system` CI job (see .github/workflows/ci.yml) so a broken commit
     # fails locally instead of burning a CI run. build-storybook and its CSS

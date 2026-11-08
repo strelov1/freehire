@@ -28,7 +28,7 @@ Work in the worktree `/Users/i_strelov/Projects/hire-metro-areas` (branch `metro
 - `internal/platform/db/` is generated: edit `queries/*.sql`, run `make sqlc`.
 - New migration file: `migrations/0186_jobs_metros.sql` (0185 is the current highest — re-check `ls migrations | tail -1` first and bump if main moved).
 - Never commit with backticks inside `git commit -m`; use `-F` with a file.
-- No prettier.
+- Format with `pnpm run format` (oxfmt), never prettier.
 
 ---
 
