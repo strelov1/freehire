@@ -15,7 +15,8 @@ country is known it remains the location constraint, and region is used only wit
 country/city. Unknown location or specialization yields no related postings. Results
 are re-read from Postgres to exclude currently closed, private, duplicate and unseen jobs.
 There is no precomputed similarity list or similarity backfill worker; its columns and
-HNSW index were dropped by migrations `0228` and `0229` (#4088).
+HNSW index were dropped by `0228_drop_precomputed_similar_jobs.sql` and
+`0229_drop_similarity_hnsw_index.sql` (#4088).
 
 ## Always true
 

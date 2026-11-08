@@ -117,15 +117,14 @@ rather than here — their census of `web/` was already off by a third.
 
 ## What `Dialog` does not cover
 
-Nine surfaces in `web/` were built by hand before this primitive was reached for. Three are
+Eight surfaces in `web/` were built by hand before this primitive was reached for. Three are
 now `Dialog` call sites — `ReportDialog`, `RequestReferralModal`, `DeleteAccountButton`. The
-other six are not stragglers; they are two gaps, and forcing either onto `Dialog` means
+other five are not stragglers; they are two gaps, and forcing either onto `Dialog` means
 re-adding by hand what it deliberately does not do.
 
 - **A sheet.** `JobDrawer` is a full-height drawer, `FilterModalShell` stretches on mobile
   and centres above `sm`, `CookieConsent` is a bottom banner. `Dialog` is a centred modal
-  and offers no positioning. All three want the
-  same thing — a **Sheet** primitive the system does not have.
+  and offers no positioning. All three want the same thing — a **Sheet** primitive the system does not have.
 - **A structured dialog.** `GmailConnectDialog` and `FollowUpDialog` both want a bordered
   header with an icon, a scrolling body and a bordered footer. `Dialog` renders its own
   `p-6` box with the title, the description and the close button in fixed positions, and

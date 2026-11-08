@@ -59,13 +59,14 @@ a 400 the caller cannot explain.
 
 ## What bounds the spend
 
-Transcription is billed per minute of audio, and a turn is not metered
-(`internal/ai/plan` meters it: one dictation allowance per accepted recording, returned when nothing usable comes back). Three things stand in for that,
-none of which depends on metering landing first:
+Transcription is billed per minute of audio. `internal/ai/plan` meters it: one dictation
+allowance per accepted recording (`FeatureDictation`), returned when nothing usable comes
+back — that allowance is what bounds a caller's volume. There is **no inbound HTTP quota**
+on this path: #4160 moved request quotas to the operations gateway in the private
+`freehire-ops`, which routes `/api/v1/speech/transcriptions` with the assistant and
+exempts it, leaving the cost to the allowance (this package's `transcriptionsPerHour`
+went with that change). Two limits bound a single recording:
 
-- a per-**caller** HTTP quota, enforced by the operations gateway in the private
-  `freehire-ops` since #4160 (it was `transcriptionsPerHour` here), keyed on the user rather than
-  the address, because an IP key is lifted by any rotating proxy pool;
 - a 2 MiB body cap enforced on the bytes read, not on the size the client declares;
 - a client-side recording ceiling (`MAX_RECORDING_MS`) well under that cap, so the cap
   is a backstop rather than something a caller discovers after they finish speaking.
