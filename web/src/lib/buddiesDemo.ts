@@ -1,53 +1,46 @@
-// The illustrative feed the interview-buddies landing animates in its hero
-// (BuddiesHeroDemo.svelte). Handles come from the real word banks
-// (internal/engage/buddy/handle.go) and the companies are invented. Event types are the
-// three the real feed shows; a rejection, a withdrawal or an accepted offer never
-// appears there, so it never appears here either. `summary` is the card summary the real
-// feed carries, in the dictionaries' own ids, so BuddyIdentity words it as the product does.
+import { buddyFeedPosts } from './buddyFeed.js';
+import type { BuddyFeedItem } from './types.js';
 
-export const DEMO_FEED: {
-  handle: string;
-  summary: { category: string; seniority: string; country: string };
-  type: 'applied' | 'interview' | 'offer';
-  company: string;
-  day: string;
-}[] = [
+// The illustrative feed the interview-buddies landing shows in its hero
+// (BuddiesHeroDemo.svelte), drawn by the real feed's own BuddyPost so the picture can
+// never drift from the product again. Handles come from the real word banks
+// (internal/engage/buddy/handle.go) and the companies are invented. Only the event types
+// the real feed shows appear: a rejection, a withdrawal or an accepted offer never does.
+// `card_summary` is in the dictionaries' own ids, so BuddyIdentity words it as the product does.
+
+const today = '2026-11-08';
+const none: BuddyFeedItem['reactions'] = { counts: {}, mine: '' };
+
+export const DEMO_ITEMS: BuddyFeedItem[] = [
   {
-    handle: 'amber-heron-42',
-    summary: { category: 'backend', seniority: 'mid', country: 'de' },
-    type: 'applied',
-    company: 'Northwind',
-    day: '3 days ago',
-  },
-  {
+    id: 1,
     handle: 'tidy-kestrel-318',
-    summary: { category: 'backend', seniority: 'senior', country: 'pl' },
+    card_summary: { category: 'backend', seniority: 'senior', country: 'pl' },
+    company: { slug: 'globex', name: 'Globex' },
+    job_title: 'Senior Backend Engineer',
+    job_slug: null,
+    job_location: 'Remote, Europe',
+    reactions: { counts: { luck: 4, rooting: 2 }, mine: '' },
     type: 'interview',
-    company: 'Globex',
-    day: 'yesterday',
+    day: today,
   },
-  {
-    handle: 'brisk-osprey-77',
-    summary: { category: 'devops', seniority: 'mid', country: 'nl' },
+  ...[
+    { name: 'Vandelay', title: 'Backend Engineer', where: 'Berlin' },
+    { name: 'Globex', title: 'Platform Engineer', where: 'Remote, Europe' },
+    { name: 'Initech', title: 'Go Developer', where: 'Munich' },
+  ].map((job, i): BuddyFeedItem => ({
+    id: 2 + i,
+    handle: 'amber-heron-42',
+    card_summary: { category: 'backend', seniority: 'mid', country: 'de' },
+    company: { slug: job.name.toLowerCase(), name: job.name },
+    job_title: job.title,
+    job_slug: null,
+    job_location: job.where,
+    reactions: none,
     type: 'applied',
-    company: 'Globex',
-    day: 'yesterday',
-  },
-  {
-    handle: 'kind-reef-2041',
-    summary: { category: 'backend', seniority: 'senior', country: 'us' },
-    type: 'offer',
-    company: 'Initech',
-    day: 'today',
-  },
+    day: today,
+  })),
 ];
 
-export const DEMO_INVITE = {
-  to: 'tidy-kestrel-318',
-  body: 'Hi! How was the Globex interview? Mine is on Friday.',
-};
-
-export const DEMO_REPLY = {
-  from: 'tidy-kestrel-318',
-  body: 'Went well! Happy to tell you what they asked.',
-};
+/** The hero's posts: one interview, one day of folded applications. */
+export const DEMO_POSTS = buddyFeedPosts(DEMO_ITEMS);

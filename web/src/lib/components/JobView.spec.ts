@@ -9,6 +9,7 @@ import {
 } from '#lib/appliedCompanies.svelte.js';
 import { resetUserStores } from '#lib/userResource.svelte.js';
 import { profileStore } from '#lib/profile.svelte.js';
+import { markViewed } from '#lib/viewedJobs.svelte.js';
 import JobView from './JobView.svelte';
 import JobRow from './JobRow.svelte';
 
@@ -299,4 +300,13 @@ it('moves the date from the rail to the meta line on touch when the card carries
   );
   expect(dates.map((d) => d.className.includes('pointer-coarse:hidden'))).toContain(true);
   expect(dates.map((d) => d.className.includes('pointer-coarse:inline'))).toContain(true);
+});
+
+it("keeps the viewed mark visible on the employer's own page", () => {
+  markViewed(job.public_slug);
+  const view = render(JobRow, { job, hideCompany: true });
+  const marks = [...view.container.querySelectorAll('[aria-label="You have viewed this"]')].filter(
+    (m) => !m.closest('.hidden'),
+  );
+  expect(marks).toHaveLength(1);
 });

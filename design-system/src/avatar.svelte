@@ -87,13 +87,13 @@
     {src}
     alt={shape === 'square' ? '' : (name ?? '')}
     loading="lazy"
-    class={cn(shapeClass, 'object-cover', sizes[size], className)}
+    class={cn('shrink-0', shapeClass, 'object-cover', sizes[size], className)}
     onerror={() => (failed = true)}
     {@attach catchMissedError}
   />
 {:else if !name && fallbackIcon}
   <div
-    class={cn('flex items-center justify-center text-muted-foreground', shapeClass, sizes[size], className)}
+    class={cn('flex shrink-0 items-center justify-center text-muted-foreground', shapeClass, sizes[size], className)}
     aria-hidden="true"
   >
     {@render fallbackIcon()}
@@ -103,7 +103,7 @@
        prohibits naming, and the initials would be spelled out instead of the
        name. Without a name it conveys nothing, so keep it out of the tree. -->
   <div
-    class={cn('flex items-center justify-center font-medium', shapeClass, sizes[size], className)}
+    class={cn('flex shrink-0 items-center justify-center font-medium', shapeClass, sizes[size], className)}
     style="background-color: {bg}; color: {fg}"
     role={name ? 'img' : undefined}
     aria-label={name}
