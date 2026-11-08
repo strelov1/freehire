@@ -1144,7 +1144,7 @@
          must: right-aligned, the strip floated under a short date with nothing to its left. -->
     <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2 lg:hidden">
       {@render postingMeta('flex flex-wrap')}
-      {@render actionStrip('-ml-2 flex flex-wrap')}
+      {@render actionStrip('-ml-2 flex max-w-full flex-wrap')}
     </div>
 
     <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
