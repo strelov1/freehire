@@ -279,6 +279,7 @@ except through `pg_stat_activity`. Worth a small PR.
    scp root@89.167.94.146:/tmp/retire-1200.patch .
    git checkout -b chore/retire-boards-wave2 && git apply retire-1200.patch
    ```
+
    Read `/tmp/retire-1200.log` first: it records how many entries moved and which
    providers were held back. **Spot-check a sample of the moved boards before merging**
    — #1162 exists because a mechanical reading of this report retired live IT employers.

@@ -1544,7 +1544,9 @@ unrelated leadership-training firm's mark, at HTTP 200, which no caller can dete
 `?domain=` removes the ambiguity, and `../hire` now publishes the domains it knows:
 
 ```
+
 LOGO_DOMAIN_MAP=/var/lib/freehire-logo-map/domains.json
+
 ```
 
 The file is written daily by `../hire`'s `cmd/publish-logo-domains` and holds normalized
@@ -1578,6 +1580,7 @@ git commit -m "Document the domain map and its rollback"
 ```bash
 curl -s -o /dev/null -w "%{http_code} %{size_download}\n" https://logo.freehire.me/g2i
 ```
+
 Expected today: `200 1814` — the wrong company.
 
 - [ ] **Step 2: Prove the correct answer is reachable**
@@ -1585,6 +1588,7 @@ Expected today: `200 1814` — the wrong company.
 ```bash
 curl -s -o /dev/null -w "%{http_code} %{size_download}\n" "https://logo.freehire.me/g2i?domain=g2i.co"
 ```
+
 Expected: `200 2984` — the correct mark. This is the target state for step 5.
 
 - [ ] **Step 3: Run the publisher once on the host, by hand**
@@ -1655,6 +1659,7 @@ ssh root@89.167.94.146 'systemctl daemon-reload && systemctl enable --now freehi
 ```bash
 cd /tmp/wt-logo-domain && ./deploy/check-drift.sh
 ```
+
 Expected: the new unit and timer match. Anything else it reports was already there.
 
 ---
