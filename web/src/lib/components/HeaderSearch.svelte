@@ -250,10 +250,16 @@
    *  are reasoning about switches on the same breakpoint. */
   const WIDE_QUERY = '(min-width: 640px)';
 
+  // True while the caret sits where the page put it, before the visitor touched anything:
+  // the focus ring is for focus somebody moved, and drawn on load it framed the homepage's
+  // search in a heavy ring nobody asked for. The first key or pointer press inside clears it.
+  let autoFocused = $state(false);
+
   $effect(() => {
     if (!autofocus) return;
     if (!window.matchMedia(WIDE_QUERY).matches) return;
     inputEl?.focus();
+    autoFocused = true;
     // Focusing normally opens the dropdown, and on a landing page that would drop a
     // ten-row panel over the page on every load, covering the very shortcuts printed
     // underneath it. A caret the visitor did not place is not the question "what can I
@@ -919,10 +925,17 @@
 <!-- `min-w-0` lets this flex item shrink below its content's intrinsic width (flex-1
      alone keeps min-width:auto), so the box narrows to fit the header row instead of
      overflowing it — the inner input (also min-w-0) absorbs the shrink. -->
-<div bind:this={wrapEl} class="relative min-w-0 flex-1">
+<div
+  bind:this={wrapEl}
+  class="relative min-w-0 flex-1"
+  onkeydowncapture={() => (autoFocused = false)}
+  onpointerdowncapture={() => (autoFocused = false)}
+  onfocusout={() => (autoFocused = false)}
+>
   <div
     class={cn(
-      'flex items-center border border-border bg-background focus-within:ring-2 focus-within:ring-ring',
+      'flex items-center border border-border bg-background',
+      !autoFocused && 'focus-within:ring-2 focus-within:ring-ring',
       hero
         ? // Taller, rounder and lifted off the page: at the centre of an otherwise
           // empty screen this is the only interactive thing, so it carries the weight

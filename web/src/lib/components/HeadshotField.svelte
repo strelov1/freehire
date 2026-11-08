@@ -99,7 +99,7 @@
 
 {#if loadFailed || loading}
   <div class="flex flex-col gap-2" aria-busy={loading}>
-    <span class="text-sm font-medium">{s.photo}</span>
+    <span class="text-base font-semibold">{s.photo}</span>
     {#if loadFailed}
       <p class="text-sm text-muted-foreground" role="status">{s.photoLoadError}</p>
       <button type="button" onclick={() => void load()} class="self-start text-sm underline underline-offset-4">{s.retry}</button>
@@ -109,7 +109,7 @@
   </div>
 {:else if meta?.enabled}
   <div class="flex flex-col gap-1.5">
-    <span class="text-sm font-medium">{s.photo}</span>
+    <span class="text-base font-semibold">{s.photo}</span>
     <div class="flex items-center gap-4">
       <input
         type="file"

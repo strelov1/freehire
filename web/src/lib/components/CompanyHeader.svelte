@@ -117,7 +117,8 @@
            licence is not a promise about any given role. -->
       {#if company.collections?.length}
         <div class="mt-2 flex flex-wrap items-center gap-1.5">
-          <BackerBadge collections={company.collections} withLabel />
+          <!-- Three backers, then "+N": six in a row wrapped the header onto a second line. -->
+          <BackerBadge collections={company.collections} withLabel max={3} />
           <CredentialBadge collections={company.collections} />
         </div>
       {/if}

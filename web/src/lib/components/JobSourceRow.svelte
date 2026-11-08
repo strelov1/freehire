@@ -59,9 +59,8 @@
   }
 </script>
 
-<div
-  class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 border-t border-border pt-4 text-xs text-muted-foreground first:border-t-0 first:pt-0"
->
+<!-- No frame of its own: the job page sets it in the sidebar's footer line beside the votes. -->
+<div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
   <a href={filterHref('source', source)} class="inline-flex items-center gap-1.5">
     <!-- The source's own brand mark: its DISPLAY NAME, plus the platform's own domain where

@@ -162,8 +162,9 @@
 {/snippet}
 
 {#if iconsOnly}
-  <!-- Just the marks, each a way into the full setup on /mcp. -->
-  <nav class="flex gap-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Assistants">
+  <!-- Just the marks, each a way into the full setup on /mcp. They wrap rather than scroll:
+       a hidden-scrollbar row cut its last mark mid-word at the card edge ("Cc…"). -->
+  <nav class="flex flex-wrap gap-x-5 gap-y-2" aria-label="Assistants">
     {#each hosts as h (h.id)}
       <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() path plus the host query -->
       <a

@@ -15,9 +15,9 @@
 
 <!-- The account shell (my/+layout) owns the container, auth gate and noindex. -->
 <div class="flex flex-col gap-6">
-  <div class="flex flex-col gap-1 max-lg:sr-only">
-    <h1 class="text-2xl font-semibold tracking-tight">Mentorship</h1>
-    <p class="text-muted-foreground text-sm">
+  <div class="flex flex-col gap-1">
+    <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">Mentorship</h1>
+    <p class="text-muted-foreground text-sm max-lg:sr-only">
       Half-hour conversations with people who work where you want to. Times shown in {timezone}.
     </p>
   </div>
