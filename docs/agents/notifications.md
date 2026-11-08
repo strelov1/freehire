@@ -274,6 +274,18 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   the digest announce only what it carries and retire only that. A claimed id whose job
   row was pruned stays in the claim and is stamped notified, or it would be re-claimed
   every pass forever.
+- **A match records the query revision it answered.** `saved_searches.query_revision` rises
+  by one only when `UpdateSavedSearch` changes the query text (a rename leaves it), and
+  `subscription_matches.query_revision` stores the revision a match was found under (migration
+  0243). `RecordSubscriptionMatches` takes it per pair from the `ListActiveSubscriptions` row
+  and refuses a pair whose search has moved on, so a pass that read the old query cannot
+  record after the edit; a still-pending row of an older revision is reset on conflict, or a
+  job both queries match would stay blocked. Claim, `CountCoveredMatches`,
+  `MarkCoveredMatchesNotified` and the pending metrics read only the current revision, and
+  `ExpireStaleSubscriptionMatches` retires unleased superseded rows. This covers a leased match
+  released or lapsing after an edit, which the edit's DELETE of unleased pending rows cannot.
+  It is a counter and not `updated_at` (a rename would strand valid matches) and not a clock
+  comparison (two in-flight statements cannot be ordered by timestamp).
 - **A match goes STALE, undelivered, after `Config.FreshnessWindow` (3 days) or once its
   job closes.** `ExpireStaleSubscriptionMatches` runs first in every delivery stage, in
   bounded batches until one comes back short, and stamps `expired_at` (migration 0193) —

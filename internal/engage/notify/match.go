@@ -340,6 +340,7 @@ func (r *Runner) recordHits(ctx context.Context, hits []search.JobDocument, subs
 	// a popular query with many subscribers no longer costs one sequential INSERT per
 	// (hit, subscription) pair.
 	var subIDs, jobIDs []int64
+	var revisions []int32
 	for _, hit := range hits {
 		created, ok := hitCreatedAt(hit)
 		if !ok {
@@ -370,6 +371,7 @@ func (r *Runner) recordHits(ctx context.Context, hits []search.JobDocument, subs
 			}
 			subIDs = append(subIDs, s.ID)
 			jobIDs = append(jobIDs, hit.ID)
+			revisions = append(revisions, s.QueryRevision)
 		}
 	}
 	if len(subIDs) == 0 {
@@ -378,6 +380,7 @@ func (r *Runner) recordHits(ctx context.Context, hits []search.JobDocument, subs
 	n, err := r.store.RecordSubscriptionMatches(ctx, db.RecordSubscriptionMatchesParams{
 		SubscriptionIds: subIDs,
 		JobIds:          jobIDs,
+		QueryRevisions:  revisions,
 	})
 	if err != nil {
 		return fmt.Errorf("record matches: %w", err)
