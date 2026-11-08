@@ -976,7 +976,7 @@
       {:else}
         <!-- Busy while held-over rows stand in for a reload underneath them (see
              `holdover`): the rows are real but about to be replaced. -->
-        <div class="flex flex-col gap-3" aria-busy={holdingOver}>
+        <div class="flex flex-col gap-2" aria-busy={holdingOver}>
           {#each visibleJobs as job (job.public_slug)}
             <JobRow {job} {onHide} hideCompany={!!scope.company_slug} />
           {/each}

@@ -366,7 +366,7 @@
   aria-describedby={summary ? summaryId : undefined}
   class={[
     'block hover:opacity-100',
-    compact ? 'p-3' : 'p-4',
+    compact ? 'p-3' : 'px-4 py-3.5',
   ]}
   class:opacity-90={isViewed}
 >
@@ -379,7 +379,7 @@
        card has moved it into the action row at its foot, leaving the corner free. -->
   <!-- Without the company there is nothing to the date's left, so it floats beside the
        title instead of holding a row of its own. -->
-  <div class={['flex items-center gap-2', compact ? 'pr-11' : onHide ? 'pr-28 max-sm:pr-20' : 'pr-20 max-sm:pr-11', !compact && (applyJob || directApply) && 'pointer-coarse:pr-48', hideCompany && 'float-right ml-3 mt-1.5']}>
+  <div class={['flex items-center gap-2', compact ? 'pr-11' : onHide ? 'pr-20' : 'pr-11', !compact && (applyJob || directApply) && 'pointer-coarse:pr-48', hideCompany && 'float-right ml-3 mt-1.5']}>
     <div class="flex min-w-0 items-center gap-2">
       {#if !hideCompany}
       <EntityLogo
@@ -491,9 +491,9 @@
              wrapper (rather than a span inside) also makes the badge's own padding
              hoverable — the same shape the job's own page uses. -->
         <span title={badge.tooltip} class="inline-flex shrink-0">
-          <!-- Plain accent text, not a pill: it says the least on the row, so it must not be
-               its loudest shape; the brand fill is kept for the page's one primary action. -->
-          <span class="text-xs font-semibold text-brand-strong">{badge.label}</span>
+          <!-- Plain text, not a pill and not the accent: it says the least on the row, so it
+               must not be its loudest shape, and the brand colour is kept for primary actions. -->
+          <span class="text-xs font-semibold text-foreground">{badge.label}</span>
         </span>
       {/each}
       <!-- The role's facets, then the pay and the cost of applying, as one line of quiet
@@ -632,7 +632,7 @@
 {:else}
   <!-- The card's controls ride its top-right corner, beside the date, rather than a row of
        their own at its foot: that row added ~40px to every card in a feed of dozens. Save
-       keeps its word (an unlabelled glyph asked people to guess what saving does); Apply and
+       is a bookmark glyph with its title and accessible name; Apply and
        Hide, where the card has them, hover-reveal beside it (over the date, which they cover
        only while the pointer is on the card). `pointer-coarse`
        keeps Hide visible on touch, which has no hover to reveal anything. The rail inside
@@ -703,16 +703,16 @@
       aria-label={saved ? 'Remove from saved' : 'Save to board'}
       title={saved ? 'On your board' : 'Save to board'}
       class={[
-        'flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
+        'grid size-8 shrink-0 place-items-center rounded-lg transition disabled:pointer-events-none disabled:opacity-50',
         saved
           ? 'bg-brand/10 text-brand hover:bg-brand/15'
           : 'text-muted-foreground hover:bg-background hover:text-foreground',
       ]}
     >
       <Bookmark class="size-4 {saved ? 'fill-current' : ''}" aria-hidden="true" />
-      <!-- The word only from sm: on a phone it took the width the company name needed. The
-           button's aria-label carries the action at every width. -->
-      <span class="max-sm:hidden">{saved ? 'Saved' : 'Save'}</span>
+      <!-- Icon only, with its title and aria-label carrying the action: twenty labelled Save
+           buttons down a feed were repeated chrome beside each title. -->
+      <span class="sr-only">{saved ? 'Saved' : 'Save'}</span>
     </button>
   </div>
 

@@ -817,10 +817,13 @@
     <a
       class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
+      title="Discussion"
       onclick={onDiscussionClick}
     >
       <MessageSquare class="size-4 shrink-0" aria-hidden="true" />
-      Discussion{threadCount ? ` · ${threadCount}` : ''}
+      <!-- Icon (and count) only from lg, beside the CTAs, like Report; the name stays for
+           screen readers. -->
+      <span class="lg:sr-only">Discussion</span>{threadCount ? ` · ${threadCount}` : ''}
     </a>
     {@render reportButton()}
     {@render saveButton()}
@@ -1042,8 +1045,8 @@
              variant/class/children, so a `title` passed to it would be dropped
              silently and the badge would state a claim with its evidence gone. -->
         <span title={badge.tooltip} class="inline-flex">
-          <!-- The same look as on every job card: accent text, no pill. -->
-          <span class="text-xs font-semibold text-brand-strong">{badge.label}</span>
+          <!-- The same look as on every job card: plain text, no pill. -->
+          <span class="text-xs font-semibold text-foreground">{badge.label}</span>
         </span>
       {/each}
     </div>

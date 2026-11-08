@@ -140,7 +140,7 @@
     <p class="mt-8 text-sm">
       <a
         href={resolve('/roles/[category]', { category: marketLink.slug })}
-        class="text-brand-strong hover:underline"
+        class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
       >
         {marketLink.label} jobs by country — openings, pay and top skills →
       </a>
