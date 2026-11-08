@@ -1,0 +1,8 @@
+**Recruitify traps** (`recruitify`, a Polish ATS used mostly by IT recruitment agencies and software houses, at `<portal>.recruitify.ai`; live-verified 2026-10-28 across 68 portal labels from Common Crawl and justjoin.it apply links — 49 with openings, 1,804 postings, the largest `linkgroup` at 257):
+
+- **One API host serves every portal and tells them apart by the `Origin` header alone**: `api.recruitify.ai/apply/config` (company name, locations, tags), `/apply/project?page=N` (25 postings a page, no total, an empty page ends the walk) and `/apply/project/<guid>` (one posting with its body). The same URL with another portal's Origin is that portal's answer, so the provider shares one pace (`recruitifyRequestInterval`).
+- **Every label resolves (wildcard DNS)**; an unknown portal is a 404 on the listing (`ErrBoardGone`), and so is a posting that is gone or belongs to another portal.
+- **The listing keeps postings whose `dateTo` has passed**: the portal still shows them and still takes applications, so they are read as open.
+- **`isRemote` beside a named city is "remote possible"**, not an arrangement; only a posting naming no place is read as remote. The platform's "Remote" pseudo-location and a French `, Pologne` suffix are dropped from the location.
+- **Country ids are the platform's own**; only `139` (Poland, every posting carrying it is in a Polish city) is mapped. `188` rides on "Remote" postings and is not guessed at.
+- **Salary has no period**: `salaryLow`/`salaryHigh` are hourly B2B rates on one posting (110–130 PLN) and monthly pay on the next (23,000–27,000), with nothing saying which, so the adapter reads none.

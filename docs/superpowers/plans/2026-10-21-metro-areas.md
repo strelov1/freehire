@@ -431,6 +431,7 @@ func swapProject(f func(lat, lon float64) (float64, float64)) func() {
 	return func() { project = old }
 }
 ```
+
 (`swapProject` lives in `assign_test.go`.)
 
 - [ ] **Step 2: Run** `go test ./cmd/gen-metros/` — FAIL (undefined: assign).
@@ -772,6 +773,7 @@ grep -E '^(khimki|podolsk)	ru	' internal/dict/location/metros.tsv
 grep -E '^(hortolândia|sumaré)	br	' internal/dict/location/metros.tsv
 grep -E '^san diego	us	' internal/dict/location/metros.tsv
 ```
+
 Expected: Folsom/Roseville CA/Elk Grove/Rancho Cordova/Sacramento → `Sacramento (US)`;
 Roseville MI → `Detroit (US)`; Khimki, Podolsk → `Moscow (RU)`; Hortolândia, Sumaré →
 `Campinas (BR)`; San Diego → `San Diego (US)` (not Tijuana).
@@ -939,12 +941,15 @@ var subdivisionCode = map[string]string{
 
 1. `Geo` gains `Metros []string // metro values ("Sacramento (US)"); dict-only, see metros.go`.
 2. Before the loop, add:
+
 ```go
 	// Subdivision codes the line states, and the cities it names, are collected over the
 	// whole line: the state usually FOLLOWS the city ("Roseville, CA").
 	statedSubdivisions := map[string]struct{}{}
 ```
+
 3. In the loop, right before `resolved := resolveGeoToken(tok, prevTok, tokCountry, tokRegion)`:
+
 ```go
 		if _, ok := resolveSubdivision(tok, prevTok); ok {
 			if code, ok := subdivisionCode[tok]; ok {
@@ -952,11 +957,13 @@ var subdivisionCode = map[string]string{
 			}
 		}
 ```
+
 (`resolveSubdivision` applies the colliding-code gate, so "Berlin (DE)" does not count as
 Delaware. It also matches "san francisco ca" multi-word forms through its last-field path;
 for those, look up the LAST field: use `subdivisionCode[lastField(tok)]` when `tok` itself
 is not a key. Implement `lastField` as `strings.Fields(tok)[len-1]`.)
 4. After the `cityFallbackCountries` block and before `countries := …`:
+
 ```go
 	var metros []string
 	if len(countrySet) == 1 && len(citySet) > 0 {
@@ -979,6 +986,7 @@ is not a key. Implement `lastField` as `strings.Fields(tok)[len-1]`.)
 		metros = stringset.Sorted(metroSet)
 	}
 ```
+
 5. Return `Metros: metros,`.
 
 Why a single stated country: a metro needs one; a line naming two countries cannot place a
@@ -1065,6 +1073,7 @@ func TestDeriveCarriesMetros(t *testing.T) {
 	}
 }
 ```
+
 Run — FAIL. Then add `Metros []string` to `Derived` and `Metros: geo.Metros,` in the return.
 (No `Input.Metros`: no adapter states a metro.) Run — PASS.
 
@@ -1101,16 +1110,19 @@ mutates `Input` fields; `Location` is hashed, so `Metros` is covered).
 **Interfaces:**
 - Consumes: `db.Job.Metros`, closure rows' `Metros`.
 - Produces:
+
   ```go
   // ClosureGeo is the geography union across a document's duplicate closure.
   type ClosureGeo struct{ Countries, Regions, Cities, Metros []string }
   func (d *JobDocument) MergeClosureGeography(g ClosureGeo)
   ```
+
   Search param `metros` / `metros_exclude`, Meili attribute `metros`.
 
 - [ ] **Step 1: Failing tests**
 
 `query_filter_test.go`:
+
 ```go
 func TestMetrosJoinTheLocationOrGroup(t *testing.T) {
 	v := url.Values{"metros": {"Sacramento (US)"}, "cities": {"Austin"}}
@@ -1128,10 +1140,12 @@ func TestMetrosExclude(t *testing.T) {
 	}
 }
 ```
+
 (Match the exact builder name and quoting style of the existing test at
 `query_filter_test.go:306-320`; copy its shape.)
 
 Closure test (next to existing `MergeClosureGeography` tests):
+
 ```go
 func TestMergeClosureGeographyWidensMetros(t *testing.T) {
 	d := JobDocument{}
@@ -1150,6 +1164,7 @@ func TestMergeClosureGeographyWidensMetros(t *testing.T) {
 - [ ] **Step 3: Implement**
 - `jobview.Job`: `// Metros is dict-only: the metro areas (GHS-FUA) the location line places the posting in, "Sacramento (US)".` then `Metros []string \`json:"metros"\``; in `FromDomain`: `Metros: normalizeSet(f.Metros),` — check `normalizeSet` does not lower-case; if it does, use `f.Metros` as-is (values are already canonical).
 - `document.go`: add `ClosureGeo`, change the method:
+
   ```go
   func (d *JobDocument) MergeClosureGeography(g ClosureGeo) {
   	d.Countries = unionSorted(d.Countries, g.Countries)
@@ -1158,6 +1173,7 @@ func TestMergeClosureGeographyWidensMetros(t *testing.T) {
   	d.Metros = unionSorted(d.Metros, g.Metros)
   }
   ```
+
   Update its doc comment ("multi-city/multi-country" → also metros).
 - Callers: `search-drain/indexer.go:134` and `linkimport.go:340` →
   `doc.MergeClosureGeography(search.ClosureGeo{Countries: g.Countries, Regions: g.Regions, Cities: g.Cities, Metros: g.Metros})`.
@@ -1171,6 +1187,7 @@ func TestMergeClosureGeographyWidensMetros(t *testing.T) {
 - `facets.go:215`: `{"regions", "countries", "cities", "metros"}`.
 - `make gen-contracts`.
 - `openapi.yaml`:
+
   ```yaml
     Metros:
       name: metros
@@ -1186,6 +1203,7 @@ func TestMergeClosureGeographyWidensMetros(t *testing.T) {
         A posting is in a metro when its location names a city inside it. Joins the
         geography OR-group.
   ```
+
   plus `- $ref: "#/components/parameters/Metros"` beside each `Cities` ref, `metros` in
   the OR-group prose, and a `metros: {type: array, items: {type: string}}` property beside
   `cities` in the Job schema.
@@ -1249,6 +1267,7 @@ export function metroLabel(value: string): string {
 - [ ] **Step 4: Run** — PASS.
 
 - [ ] **Step 5: `FACETS`** — after the `cities` entry:
+
 ```ts
   { param: 'metros', label: 'Metro area', control: 'select', dynamic: true, excludable: true, placeholder: 'Search metro areas' },
 ```
@@ -1256,6 +1275,7 @@ export function metroLabel(value: string): string {
 - [ ] **Step 6: `LocationPane.svelte`** — mirror the cities group, placed ABOVE it:
 
 Script additions next to the cities ones:
+
 ```ts
   import { metroLabel } from '$lib/metro';
   const metroCounts = $derived(counts?.facets?.metros ?? {});
@@ -1270,15 +1290,19 @@ Script additions next to the cities ones:
   const metroMatches = $derived(allMetros.filter(matchMetro));
   const metrosShown = $derived(q ? metroMatches : metroMatches.slice(0, METRO_LIMIT));
 ```
+
 Chips (next to `push('cities', …)` :106-112):
+
 ```ts
     push('metros', metroF.include, metroLabel, false);
     ...
     push('metros', metroF.exclude, metroLabel, true);
 ```
+
 `hasGeo` adds `metroSel.length`; `clearGeo` adds `store.clearFacet('metros');`.
 
 Markup, immediately before `{#if citiesShown.length}`:
+
 ```svelte
 {#if metrosShown.length}
   <div class="border-t border-border pt-3">
@@ -1300,6 +1324,7 @@ Markup, immediately before `{#if citiesShown.length}`:
   </div>
 {/if}
 ```
+
 (Keep the exact attribute formatting the cities block uses; `{#each}` keyed by the value,
 which is unique — see the memory note on duplicate each-keys.)
 

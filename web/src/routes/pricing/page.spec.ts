@@ -112,6 +112,6 @@ describe('/pricing — the API plans', () => {
     edgePlaces(null);
     renderPricing();
     await Promise.resolve();
-    expect(screen.queryByRole('heading', { name: 'API', level: 2 })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Jobs API', level: 2 })).toBeNull();
   });
 });

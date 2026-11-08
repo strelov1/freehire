@@ -157,7 +157,7 @@
        résumé, /my/cvs being the per-vacancy builder. `scroll-mt-20` clears the sticky
        `h-14` TopBar. -->
   <div id="account-cv" class="flex scroll-mt-20 flex-col gap-1.5">
-    <span class="text-sm font-medium">{s.cv}</span>
+    <span class="text-base font-semibold">{s.cv}</span>
     <input
       type="file"
       accept="application/pdf,.pdf"

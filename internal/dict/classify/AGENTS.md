@@ -263,8 +263,8 @@ move to `it_support`, ~1,500 to the profession their title names, ~18,100 stay.
 
 ## German compound heads
 
-German names a role in a compound whose LAST morpheme is the role — Kranken|pfleger,
-Stapler|fahrer — so whole-word aliases cannot keep up with the long tail. `german.go`
+German names a role in a compound whose LAST morpheme is the role — Kranken\|pfleger,
+Stapler\|fahrer — so whole-word aliases cannot keep up with the long tail. `german.go`
 holds two tables, `germanCategoryTable` and `germanSeniorityTable`, where an alias
 written `-pfleger` matches any word ending in it and an alias without the dash is a
 whole-word phrase. They run only when the main table resolved NOTHING, so they never

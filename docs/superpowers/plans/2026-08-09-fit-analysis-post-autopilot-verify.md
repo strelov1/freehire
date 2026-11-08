@@ -5,7 +5,7 @@
 > `design.md`/`tasks.md` are the current record, including a context-cancellation fix (Decision 2)
 > found during review that this plan's Task 2 snippet does not show. Kept here for the original
 > task-by-task rationale, not as the up-to-date implementation reference.
-
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the Tailor autopilot run a self-check loop against the free deterministic

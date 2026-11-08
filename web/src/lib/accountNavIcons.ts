@@ -16,7 +16,7 @@ import {
   Link2,
   Handshake,
   GraduationCap,
-  Coins,
+  Gauge,
   Settings,
   TrendingUp,
   Plug,
@@ -62,7 +62,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/integrations': Plug,
   '/my/contributions': Link2,
   '/my/employer': Building2,
-  '/my/plan': Coins,
+  '/my/plan': Gauge, // daily allowances; a coin stack read like the chain icon beside it
   '/my/account': Settings,
 };
 
