@@ -710,7 +710,7 @@ func Register(app *fiber.App, cfg Config) {
 	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cvPDF, cfg.TracerLinkSalt, cfg.FrontendOrigin, resumeStore, photoStore, plans, matchH, bankGate{bank: bank}, trackingJobs, letterDeps, !cfg.CVEditAllowBulletTruncation)
 
 	cvH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
-	referralMessageH := newReferralMessageHandlers(queries, bank, resumeStore, fitSvc, letterDeps.chain, llmBinding{client: cfg.LLM, keys: llmKeys})
+	referralMessageH := newReferralMessageHandlers(queries, bank, resumeStore, fitSvc, letterDeps.chain, llmBinding{client: cfg.LLM, keys: llmKeys}, plans)
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	discordH := newDiscordHandlers(cfg.DiscordLinker, cfg.DiscordClientID, cfg.FrontendOrigin, cfg.CookieSecure)
