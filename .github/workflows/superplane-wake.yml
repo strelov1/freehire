@@ -1,0 +1,90 @@
+name: Wake SuperPlane on stuck PRs
+
+# Nothing else notices a pull request that went stale. SuperPlane's "Fix pull request
+# checks" fires only on a push to the PR (opened/reopened/synchronize) and gives up after
+# three attempts; nothing at all reacts to a conflict, because main moving on sends the
+# PR no event. So a PR with a red check or a conflict sits until a person looks.
+#
+# This posts a comment starting with `@superplaneagent` on such a PR, which wakes the
+# "Address PR feedback" canvas on the same PR. The comment is authored by
+# github-actions[bot], so that canvas's `On PR Comment` trigger must list it in
+# `allowedBots`, or the comment is dropped silently. A new task is deliberately NOT
+# opened: a task takes the PR over, and the original task then never closes.
+#
+# Stuck = a conflict (merge state DIRTY) or a failing check, on a same-repo, non-draft,
+# non-Dependabot PR (dependabot-stuck.yml owns those) whose last commit is 6h+ old, so
+# a branch somebody is still pushing to is left alone. At most one wake a day and three
+# per PR ever: after that it needs a person, and waking again only spends a run.
+#
+# Never checks out or runs PR code; it reads metadata through the API only.
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: superplane-wake
+  cancel-in-progress: false
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+      issues: write
+      checks: read
+      statuses: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Comment on each stuck PR
+        run: |
+          set -euo pipefail
+          marker='<!-- superplane-wake -->'
+          quiet=$(date -u -d '6 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          day=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+
+          gh pr list --state open --limit 30 \
+            --json number,isDraft,isCrossRepository,author,mergeStateStatus,statusCheckRollup,commits,comments \
+            --jq ".[]
+              | select(.isDraft | not) | select(.isCrossRepository | not)
+              | select(.author.login != \"app/dependabot\" and .author.login != \"dependabot\")
+              | select(.commits[-1].committedDate < \"$quiet\")
+              | .failing = ([.statusCheckRollup[]
+                  | select((.conclusion // .state) as \$s | [\"FAILURE\",\"ERROR\",\"TIMED_OUT\"] | index(\$s))
+                  | (.name // .context)] | unique)
+              | select(.mergeStateStatus == \"DIRTY\" or (.failing | length > 0))
+              | .wakes = [.comments[] | select(.body | contains(\"$marker\")) | .createdAt]
+              | select((.wakes | length) < 3)
+              | select((.wakes | max // \"\") < \"$day\")
+              | {number, conflict: (.mergeStateStatus == \"DIRTY\"), failing}" > stuck.jsonl
+
+          failed=0
+          while IFS= read -r pr; do
+            number=$(jq -r .number <<<"$pr")
+            {
+              echo "@superplaneagent this pull request is stuck; get it mergeable."
+              echo
+              if [ "$(jq -r .conflict <<<"$pr")" = true ]; then
+                echo "- It conflicts with main. Run \`git fetch origin main\` (unshallow first if the clone is shallow), merge \`origin/main\` into this branch, resolve the conflicts keeping both sides' intent, commit the merge and push. Merge, do not rebase: a rebase needs a force push."
+              fi
+              failing=$(jq -r '.failing | join(", ")' <<<"$pr")
+              if [ -n "$failing" ]; then
+                echo "- Failing checks: $failing. Read their logs (\`gh run view --log-failed\`), fix the cause, push. A flake gets \`gh run rerun --failed\`, never a weakened check."
+              fi
+              echo
+              echo "Keep the PR's scope. If it cannot be fixed without a decision from a person, say so in one comment and stop."
+              echo
+              echo "$marker"
+            } > body.md
+            if ! gh pr comment "$number" --body-file body.md; then
+              echo "::warning::wake of #$number failed"
+              failed=1
+            fi
+          done < stuck.jsonl
+          exit "$failed"
