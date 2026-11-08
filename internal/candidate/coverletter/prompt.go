@@ -65,6 +65,8 @@ func draftSystemPrompt(band Band, bounds Bounds) string {
 	return b.String()
 }
 
+// draftUserPrompt gives both cover letters and referral messages the bounded job,
+// candidate projection, and offered evidence; referral profiles remain quoted data.
 func draftUserPrompt(in Input, atoms []experience.Atom, language string) (string, error) {
 	var b strings.Builder
 	if in.Referral != nil {

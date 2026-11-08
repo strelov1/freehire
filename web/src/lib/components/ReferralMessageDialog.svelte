@@ -22,7 +22,7 @@
   });
   $effect(() => () => controller?.abort());
 
-  // Read only the final message and error events from the response stream.
+  /** Read only the final message and error events from the response stream. */
   function handleFrame(frame: string) {
     const event = /^event: (.+)$/m.exec(frame)?.[1];
     const raw = /^data: (.+)$/m.exec(frame)?.[1];
@@ -40,7 +40,7 @@
     }
   }
 
-  // Send the pasted profile for one draft and keep the result in this dialog.
+  /** Send the pasted profile for one draft and keep the result in this dialog. */
   async function generate() {
     if (drafting || !profile.trim() || [...profile].length > 4000) return;
     drafting = true;
@@ -86,7 +86,7 @@
     }
   }
 
-  // Copy only after the seeker presses the button; FreeHire never sends the message.
+  /** Copy only after the seeker presses the button; FreeHire never sends the message. */
   async function copy() {
     try {
       await navigator.clipboard.writeText(message);

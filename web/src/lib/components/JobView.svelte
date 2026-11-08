@@ -136,7 +136,7 @@
   let loadingReferralMessage = $state(false);
   let referralMessageLoadError = $state(false);
 
-  // Load the drafting dialog only when a signed-in seeker opens it.
+  /** Load the drafting dialog only when a signed-in seeker opens it. */
   async function openReferralMessage() {
     if (!isAuthenticated()) {
       promptSignIn();
@@ -330,6 +330,7 @@
     justApplied = false;
     showSignInPrompt = false;
     showDirectApply = false;
+    showReferralMessage = false;
     directApplied = false;
     if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
     untrack(ensureAppliedCompaniesLoaded);
@@ -843,10 +844,13 @@
     <a
       class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
+      title="Discussion"
       onclick={onDiscussionClick}
     >
       <MessageSquare class="size-4 shrink-0" aria-hidden="true" />
-      Discussion{threadCount ? ` · ${threadCount}` : ''}
+      <!-- Icon (and count) only from lg, beside the CTAs, like Report; the name stays for
+           screen readers. -->
+      <span class="lg:sr-only">Discussion</span>{threadCount ? ` · ${threadCount}` : ''}
     </a>
     {@render reportButton()}
     {@render saveButton()}
@@ -1068,7 +1072,8 @@
              variant/class/children, so a `title` passed to it would be dropped
              silently and the badge would state a claim with its evidence gone. -->
         <span title={badge.tooltip} class="inline-flex">
-          <Chip class="font-semibold">{badge.label}</Chip>
+          <!-- The same look as on every job card: plain text, no pill. -->
+          <span class="text-xs font-semibold text-foreground">{badge.label}</span>
         </span>
       {/each}
     </div>
@@ -1194,7 +1199,7 @@
         href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
         target="_blank"
         rel="nofollow noopener noreferrer"
-        class="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline"
+        class="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
       >
         Find people at {job.company.trim()} on LinkedIn
         <ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />
@@ -1279,12 +1284,11 @@
         </dl>
       {/if}
 
-      <!-- Where the posting came from, and the control to stop seeing that source. One row
-           since the engagement counters left it for the provenance line up beside the title. -->
-      <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
-
-      <div class="border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <div class="flex justify-center">
+      <!-- One quiet footer line: where the posting came from (with the control to stop seeing
+           that source) and the votes. They were two divided bands, each holding one control. -->
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0">
+        <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
+        <div class="flex shrink-0">
           <!-- Keyed on the slug so a client-side navigation to another job remounts
                the control and re-seeds its counts/highlight (JobView itself is not
                remounted on param change). -->

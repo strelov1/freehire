@@ -4,7 +4,7 @@ export const messages = defineMessages(
   {
     title: 'CVs',
     description: 'Your base CVs, the CVs you tailored for specific roles, and the appearance a new one starts with.',
-    tailorForJob: 'Tailor for a job',
+    tailorForJob: 'Tailor to a job',
     sections: {
       list: 'List',
       template: 'Template',

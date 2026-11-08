@@ -80,11 +80,14 @@
    *  into a link by the same `planForSuggestion` the dropdown applies — so which facet
    *  a craft means is answered in one place, not two. */
   const crafts = $derived<Chip[]>(
-    starterSuggestions(counts, CHIP_LIMIT).map((s) => ({
-      href: planHref(planForSuggestion(s)),
-      label: s.label,
-      count: s.count,
-    })),
+    starterSuggestions(counts, CHIP_LIMIT)
+      .map((s) => ({
+        href: planHref(planForSuggestion(s)),
+        label: s.label,
+        count: s.count,
+      }))
+      // Biggest first, as the row's own label promises.
+      .sort((a, b) => (b.count ?? 0) - (a.count ?? 0)),
   );
 
   /** Where, rather than what. Remote leads because it is the answer that is not a place;
@@ -337,7 +340,9 @@
       </div>
 
       <!-- The same preview as /features/extension, drawn smaller: `zoom` shrinks the layout box too, unlike a transform. -->
-      <div class="[zoom:0.7]"><ExtensionPanelPreview /></div>
+      <!-- Centred in whatever height the taller card beside it leaves, so the spare room
+           sits around the preview instead of as one empty band above the buttons. -->
+      <div class="flex flex-1 items-center"><div class="w-full [zoom:0.7]"><ExtensionPanelPreview /></div></div>
 
       <div class="mt-auto flex flex-wrap items-center justify-end gap-3">
         <Button href={EXTENSION_STORE_URL} target="_blank" variant="primary" size="md">

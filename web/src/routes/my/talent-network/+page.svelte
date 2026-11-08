@@ -76,9 +76,9 @@
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex.
      Full column width, like every other section, so card edges do not move between pages. -->
 <div class="flex flex-col gap-4">
-  <div class="flex flex-col gap-1 max-lg:sr-only">
-    <h1 class="text-2xl font-semibold tracking-tight">Talent Network</h1>
-    <p class="text-sm text-muted-foreground">
+  <div class="flex flex-col gap-1">
+    <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">Talent Network</h1>
+    <p class="text-sm text-muted-foreground max-lg:sr-only">
       Get discovered without applying anywhere: appear in a public catalogue recruiters
       browse, without your name on it.
     </p>
