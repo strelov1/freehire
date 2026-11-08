@@ -26,6 +26,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 	"github.com/strelov1/freehire/internal/search/facetsnapshot"
@@ -89,9 +90,11 @@ func run() int {
 	log.Printf("rollup-facets: rebuilt insights_facet_stats (%d rows across %d facets)", len(rows), len(facetsnapshot.Facets))
 
 	// Second pass, its own swap: each skill's neighbours, for the glossary pages. One
-	// engine query per skill in the distribution above, so it runs after the first
-	// snapshot is committed — a failure here costs only this table's refresh.
-	skills := slices.Collect(maps.Keys(res.Facets[search.StringFacets["skills"]]))
+	// engine query per DESCRIBED skill — exactly the skills that have a page, read from
+	// the dictionary rather than from the distribution above, which the engine caps at
+	// maxValuesPerFacet. It runs after the first snapshot is committed, so a failure
+	// here costs only this table's refresh.
+	skills := slices.Sorted(maps.Keys(skilltag.Descriptions()))
 	pairs, err := facetsnapshot.Neighbours(ctx, client, skills, facetsnapshot.NeighbourLimit)
 	if err != nil {
 		log.Printf("skill neighbours: %v", err)
