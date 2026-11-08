@@ -15,9 +15,12 @@
     onremove,
     removing = [],
     dragDisabled = false,
+    emptyHint = '',
   }: {
     id: BoardColumnId;
     label: string;
+    // Shown in an empty column, so it reads as a drop target rather than a missing render.
+    emptyHint?: string;
     items: BoardItem[];
     // Set while the board is filtered — by search text or the "needs attention" toggle.
     // The zone is handed the matching rows only, and svelte-dnd-action answers a drop
@@ -94,6 +97,9 @@
     <h2 id={titleId}>{label}</h2>
     <span class="text-xs tabular-nums text-muted-foreground">{items.length}</span>
   </header>
+  {#if items.length === 0 && emptyHint && !dragDisabled}
+    <p class="px-1 text-xs text-muted-foreground">{emptyHint}</p>
+  {/if}
   <!-- Each column's card list is its own bounded scroll container. svelte-dnd-action
        auto-scrolls a scrollable *container* correctly during a drag, but mis-places
        the drop once the *window* auto-scrolls (a card dropped low in a long column

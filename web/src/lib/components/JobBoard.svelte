@@ -691,6 +691,7 @@
         <BoardColumn
           id={col.id}
           label={columnLabel(col)}
+          emptyHint={s.columnEmpty}
           items={shown[col.id]}
           dragDisabled={filtering || sort !== 'default'}
           {onconsider}
