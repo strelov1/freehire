@@ -13,7 +13,7 @@ name: Wake SuperPlane on stuck PRs
 #
 # Stuck = a conflict (merge state DIRTY) or a failing check, on a same-repo, non-draft,
 # non-Dependabot PR (dependabot-stuck.yml owns those) whose last commit is 6h+ old, so
-# a branch somebody is still pushing to is left alone. At most one wake a day and three
+# a branch somebody is still pushing to is left alone. At most one wake per 12h and three
 # per PR ever: after that it needs a person, and waking again only spends a run.
 #
 # Never checks out or runs PR code; it reads metadata through the API only.
@@ -47,7 +47,7 @@ jobs:
           set -euo pipefail
           marker='<!-- superplane-wake -->'
           quiet=$(date -u -d '6 hours ago' +%Y-%m-%dT%H:%M:%SZ)
-          day=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          recent=$(date -u -d '12 hours ago' +%Y-%m-%dT%H:%M:%SZ)
 
           # Commits and comments are read per candidate: asking for them in the list
           # trips GitHub's GraphQL node limit well before every open PR is listed.
@@ -68,7 +68,7 @@ jobs:
             due=$(gh pr view "$number" --json commits,comments --jq "
               (.commits[-1].committedDate < \"$quiet\")
               and ([.comments[] | select(.body | contains(\"$marker\")) | .createdAt] as \$w
-                   | (\$w | length) < 3 and (\$w | max // \"\") < \"$day\")")
+                   | (\$w | length) < 3 and (\$w | max // \"\") < \"$recent\")")
             if [ "$due" != true ]; then
               echo "#$number is busy or already woken"
               continue
