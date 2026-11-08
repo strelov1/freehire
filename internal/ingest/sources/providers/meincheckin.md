@@ -1,0 +1,8 @@
+**CHECK-IN traps** (`meincheckin`, mein-check-in.de; live-verified 2026-10-25 across the 160 tenants named by links in the German board harvest — 157 with openings, 2,338 menu entries of which ~7% are open applications, ~7% technical by title; savings banks, cooperative banks, insurers, councils):
+
+- **Three branded hosts, and only two of them talk to each other.** www serves its own tenants (mostly councils) and redirects the sparkasse. ones to `sparkasse.mein-check-in.de/<tenant>`; the vr. tenants (cooperative banks, 25 of 40 keyed by their bank code, 85095004) are a 404 on www and on sparkasse. No slug was measured on two hosts, so the board is the bare slug and the start page is asked of www, then of vr.
+- **Position ids are numbered per HOST and the ranges overlap** (sparkasse 120473 beside vr 120315), so the external id is `<tenant>/<id>`.
+- **The posting is MICRODATA** (`itemtype="http://schema.org/JobPosting"`), not ld+json, and `name` occurs in the identifier, the organisation and the place — each property is read inside its own scope. The microdata `title` `<h2>` also holds the "Jetzt hier bewerben" button, so the title comes from `og:title` minus " | <tenant> Onlinebewerbung".
+- **`employmentType` is the tenant's menu SECTION** ("stellenangebote", "ausbildung", "praktika"), not an employment type; only "praktika" maps (internship). `addressRegion` is a key ("baden_württemberg") and is not read; some tenants put soft hyphens in `addressLocality`.
+- **The open application ("Initiativbewerbung") is listed among the positions** by most tenants and is skipped at the menu, costing no request. A closed position is a 404.
+- `<name>-karriereportal.mein-check-in.de/detail/<uuid>` is a DIFFERENT CHECK-IN product and is not read.
