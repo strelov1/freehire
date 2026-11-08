@@ -26,15 +26,29 @@ const BLOCKING_IMPACTS = new Set(['serious', 'critical']);
 const LABEL_IN_NAME = 'label-content-name-mismatch';
 
 // `heading` is what proves the page rendered its content rather than an error page: axe
-// passes an empty document just as happily.
-const PAGES = [
+// passes an empty document just as happily. `hasJobCards` pages must also show a card, or the
+// scan would pass over an empty list.
+const PAGES: {
+  name: string;
+  path: string;
+  heading: string;
+  hasJobCards?: boolean;
+  disabledRules: string[];
+}[] = [
   { name: 'home', path: '/', heading: 'Every tech job', disabledRules: [] },
-  { name: 'job list', path: '/jobs', heading: 'Tech jobs', disabledRules: [LABEL_IN_NAME] },
+  {
+    name: 'job list',
+    path: '/jobs',
+    heading: 'Tech jobs',
+    hasJobCards: true,
+    disabledRules: [LABEL_IN_NAME],
+  },
   { name: 'job page', path: `/jobs/${JOB_SLUG}`, heading: 'Senior Go Engineer', disabledRules: [] },
   {
     name: 'company page',
     path: `/companies/${COMPANY_SLUG}`,
     heading: 'Acme',
+    hasJobCards: true,
     disabledRules: [LABEL_IN_NAME],
   },
   { name: 'sign in', path: '/signin', heading: 'Create your account', disabledRules: [] },
@@ -67,13 +81,16 @@ async function isolate(page: Page, origin: string) {
   });
 }
 
-for (const { name, path, heading, disabledRules } of PAGES) {
+for (const { name, path, heading, hasJobCards, disabledRules } of PAGES) {
   test(`${name} has no serious or critical accessibility violations`, async ({ page, baseURL }) => {
     if (!baseURL) throw new Error('baseURL is not configured');
     await isolate(page, new URL(baseURL).origin);
 
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 }).first()).toContainText(heading);
+    if (hasJobCards) {
+      await expect(page.getByTestId('job-card').first()).toBeVisible();
+    }
     await page.waitForLoadState('networkidle');
 
     const { violations } = await new AxeBuilder({ page })
