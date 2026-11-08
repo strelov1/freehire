@@ -1,6 +1,7 @@
 # Worker commands
 
 ## Scope
+
 What each `cmd/<name>` worker does, when it runs, what it needs, and the trap behind it. Run one with `go run ./cmd/<name>`; every worker needs `DATABASE_URL`, and `ls cmd/` is the full list. The schedules themselves live in the private `freehire-ops` (`provision/host2/AGENTS.md`).
 
 ## Workers

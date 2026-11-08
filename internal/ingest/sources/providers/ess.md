@@ -1,4 +1,4 @@
-**ESS traps** (`ess`, the Employment Service of Slovenia's job search, www.ess.gov.si; live-verified 2026-10-29):
+**ESS traps** (`ess`, the Employment Service of Slovenia's job search, <https://www.ess.gov.si>; live-verified 2026-10-29):
 
 - **EURES does not cover it.** The `eures` adapter's `si` board is scoped to the ICT occupation groups, so it held 94 open Slovenian postings against ESS's 3,621; the general catalogue is only here.
 - **The search page is an Angular app over a public JSON API** at `apigateway-prod-www-prod.apps.ess.gov.si/iskalnik-po-pdm/v1/delovno-mesto/`, behind a 3scale gateway that wants `user_key` on every request. The key is the one the page's own script carries (`ue_dataFor3ScaleApi_userKey`), not a credential issued to us; if it rotates every request fails and so does the crawl. No cookie, no special User-Agent.

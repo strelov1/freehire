@@ -1,3 +1,4 @@
+<!-- agnix-disable CDX-AG-009 -->
 # AGENTS.md
 
 Guidance for AI agents working in this repository.
@@ -24,7 +25,7 @@ sharing a layer may not see each other in either direction. The substantial pack
 their own AGENTS.md (see the table below), and each block carries one saying what it is and
 what it may reach for.
 
-```
+```text
 8. api           handlers, middleware, realtime, OG images
 7. engage        notifications, digests, onboarding, referrals
    ingest        source adapters, crawl pipeline, link import, manual intake

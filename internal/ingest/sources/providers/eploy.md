@@ -1,4 +1,4 @@
-**Eploy traps** (`eploy`; live-verified 2026-10-15, on jobs.ocs.com, careers.pei.group, www.homeservejobs.co.uk, jobs.manchester.gov.uk, jobs.le.ac.uk, careers.allpay.net):
+**Eploy traps** (`eploy`; live-verified 2026-10-15, on jobs.ocs.com, careers.pei.group, <https://www.homeservejobs.co.uk>, jobs.manchester.gov.uk, jobs.le.ac.uk, careers.allpay.net):
 
 - **A board is a careers HOST.** It can be the employer's branded domain or its `<tenant>.eploy.net` host (often `<name>web.eploy.net`); both serve the same site. Only the eploy.net form can be derived from a URL, so `atsboard` recognises that one. A branded domain is invisible to it, like every vanity host.
 - **The list is `/live-jobs.xml`**: a sitemap of every live vacancy in one unpaginated document. That avoids the results pager, which is an ASP.NET Web Forms postback. A branded site's sitemap commonly names the tenant's eploy.net page (careers.pei.group lists `peigroupweb.eploy.net/vacancies/...`). That is the same vacancy, so a `<loc>` on the board host or any `*.eploy.net` host is read, and nothing else is. The external id is the number in `/vacancies/<id>/<slug>.html`.
