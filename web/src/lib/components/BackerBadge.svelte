@@ -25,7 +25,7 @@
     collections?: string[] | null;
     withLabel?: boolean;
     size?: string;
-    /** Show at most this many; the rest fold into one "+N" chip naming them on hover. */
+    /** Show at most this many; the rest fold into one "+N" disclosure listing them as links. */
     max?: number;
     class?: string;
   } = $props();
@@ -63,11 +63,27 @@
   {/if}
 {/each}
 {#if rest.length}
-  <span
-    class="inline-flex items-center rounded-md border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground"
-    title={rest.map((b) => b.label).join(', ')}
-  >
-    +{rest.length}
-    <span class="sr-only">: {rest.map((b) => b.alt).join('; ')}</span>
-  </span>
+  <!-- A disclosure, not a hover title: keyboard and touch readers reach the folded
+       backers too, links included. -->
+  <details class="relative inline-block">
+    <summary
+      class="inline-flex cursor-pointer list-none items-center rounded-md border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted [&::-webkit-details-marker]:hidden"
+    >
+      +{rest.length}<span class="sr-only"> more backers</span>
+    </summary>
+    <div
+      class="absolute left-0 z-10 mt-1 flex w-max flex-col gap-1 rounded-md border border-border bg-popover p-1.5 shadow-md"
+    >
+      {#each rest as badge (badge.slug)}
+        <a
+          href={resolve('/collections/[slug]', { slug: badge.slug })}
+          class="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-foreground hover:bg-muted"
+        >
+          <img src={badge.mark} alt="" loading="lazy" decoding="async" class="size-4 shrink-0 rounded-sm object-contain" />
+          {badge.label}
+          <span class="sr-only">— {badge.alt}</span>
+        </a>
+      {/each}
+    </div>
+  </details>
 {/if}
