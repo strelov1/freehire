@@ -499,6 +499,12 @@ type CompanyVote struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CompanyWatchlist struct {
+	UserID      int64              `json:"user_id"`
+	CompanySlug string             `json:"company_slug"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type Conversation struct {
 	ID         int64              `json:"id"`
 	Kind       string             `json:"kind"`

@@ -217,6 +217,9 @@ type Store interface {
 	// trip regardless of batch size. A user id with no profile row simply has no row in the
 	// result; the caller treats absence as empty sets.
 	ListUserProfileSkillSets(ctx context.Context, userIDs []int64) ([]db.ListUserProfileSkillSetsRow, error)
+	// ListWatchlistSlugsForUsers returns the companies each given user watches, one row per
+	// (user, company), in one round trip. A user with an empty watchlist has no rows.
+	ListWatchlistSlugsForUsers(ctx context.Context, userIDs []int64) ([]db.ListWatchlistSlugsForUsersRow, error)
 	RecordSubscriptionMatches(ctx context.Context, arg db.RecordSubscriptionMatchesParams) (int64, error)
 	// MarkSubscriptionsSearched stamps when the matching stage last searched these
 	// subscriptions; searchDue and matchQuery's paging read it back.

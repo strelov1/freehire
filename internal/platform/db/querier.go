@@ -21,6 +21,15 @@ type Querier interface {
 	// than a silent re-stamp of verified_at. An unconfirmed work email is the same miss: a
 	// moderator must never be able to activate a claim on an address nobody proved they read.
 	ActivateCompanyAccount(ctx context.Context, userID int64) (CompanyAccount, error)
+	// Add a batch all-or-nothing: when the new slugs would take the list past the limit nothing
+	// is written. Slugs already stored are skipped and do not count toward it. `fresh` is how
+	// many were new and `inserted` how many were written, so fresh > 0 with inserted = 0 is the
+	// limit refusing the batch.
+	AddManyToWatchlist(ctx context.Context, arg AddManyToWatchlistParams) (AddManyToWatchlistRow, error)
+	// Add one company, or find it already there, and return when it was added. No row means the
+	// list is at the limit and this company is not on it: the limit never refuses a company
+	// already stored, so adding it again stays idempotent on a full list.
+	AddToWatchlist(ctx context.Context, arg AddToWatchlistParams) (pgtype.Timestamptz, error)
 	// Move the narrated-event cursor, but only from the value the caller read: two syncs racing
 	// over the same events both narrate, and only the first to finish moves the cursor, so the
 	// second neither rewinds it nor skips past an event it never saw.
@@ -3643,6 +3652,9 @@ type Querier interface {
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
+	// Whether the person watches this company, by the slug a company page carries. A stored
+	// alias of it counts: the person added the company under its old spelling.
+	IsWatchingCompany(ctx context.Context, arg IsWatchingCompanyParams) (bool, error)
 	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
 	// this board, and which board does a pasted job id belong to. Named after
 	// link_contributions for historical reasons — that table is gone (migration 0131), and
@@ -5467,6 +5479,30 @@ type Querier interface {
 	// Closed jobs are included: dimming a closed posting that still shows in a
 	// history surface is correct, and the browse list filters closed jobs itself.
 	ListViewedJobSlugs(ctx context.Context, userID int64) ([]string, error)
+	// The companies — hiring or not — whose slug folds to one of the keys or IS one of the
+	// slugs: the candidates a typed company name is resolved among. Unlike
+	// ListHiringCompaniesByFoldedSlug it keeps a company with nothing open, since that is the one
+	// a watchlist most wants; job_count is returned so the caller can prefer a hiring namesake.
+	// The keys are joined through unnest for the same reason as there: one probe of
+	// companies_folded_slug_idx each.
+	ListWatchableCompaniesByFoldedSlug(ctx context.Context, arg ListWatchableCompaniesByFoldedSlugParams) ([]ListWatchableCompaniesByFoldedSlugRow, error)
+	// A person's company watchlist (migration 0248). company_slug carries no foreign key, so a
+	// stored slug may belong to a company a merge has since retired. Every read below follows it
+	// to the canonical slug through company_slug_aliases — but only while no company row still
+	// holds the slug, the same order GET /companies/:slug uses, so a company that came back is
+	// never shadowed by the alias that once retired it. Two stored slugs that resolve to one
+	// company collapse into a single entry, the older date winning.
+	// One page of the person's watchlist, newest first, with each company's display name
+	// (the slug itself when no company row carries it any more) and the number of entries the
+	// name filter leaves. The filter is a substring test on the folded name, not LIKE, so a
+	// `%` or `_` typed into it means itself.
+	ListWatchlist(ctx context.Context, arg ListWatchlistParams) ([]ListWatchlistRow, error)
+	// Every company the person watches, resolved as ListWatchlist resolves them: what the
+	// alert's search is narrowed to.
+	ListWatchlistSlugs(ctx context.Context, userID int64) ([]string, error)
+	// ListWatchlistSlugs for a batch of people in one round trip: the notify worker resolves
+	// every watchlist alert's owner at once.
+	ListWatchlistSlugsForUsers(ctx context.Context, userIds []int64) ([]ListWatchlistSlugsForUsersRow, error)
 	// Candidate readers for the founder signup sequence (internal/engage/onboarding).
 	//
 	// Three rules hold across all of them, and each is load-bearing:
@@ -6722,6 +6758,8 @@ type Querier interface {
 	// Give a claim back after every channel failed, so the next run retries. Guarded on the
 	// stamp being the claim's own: a participant re-notified since keeps its newer one.
 	ReleaseUnread(ctx context.Context, arg ReleaseUnreadParams) error
+	// Remove a company by the slug a page carries, together with any stored alias of it.
+	RemoveFromWatchlist(ctx context.Context, arg RemoveFromWatchlistParams) error
 	// Apply a resolved display name to every stored job of ONE board whose company is still that
 	// board's placeholder (see ListPlaceholderCompanyBoards). board_pattern is
 	// externalid.BoardPattern(board), the board's external_id namespace, so only this board's rows
@@ -6900,6 +6938,10 @@ type Querier interface {
 	// `present_jobs` tool uses it for the same absence: a slug the model invented is
 	// missing here, and is dropped from the deck rather than shown to the user.
 	ResolveSlugsToJobIDs(ctx context.Context, slugs []string) ([]ResolveSlugsToJobIDsRow, error)
+	// The company a slug names, following a retired slug to its canonical one. No row means no
+	// such company, which is what a typo in a request looks like. A company with no open job
+	// still resolves — it is the one a watchlist is for.
+	ResolveWatchableCompany(ctx context.Context, slug string) (ResolveWatchableCompanyRow, error)
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)

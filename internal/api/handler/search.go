@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/api/ojcp"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/dict/skillvec"
+	"github.com/strelov1/freehire/internal/engage/companywatch"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/job/formeremployer"
@@ -62,6 +63,9 @@ type searchHandlers struct {
 	// "Hiring again" filter narrows to. Nil leaves former_employers unread, so it is
 	// reported in meta.ignored_params like any other param nothing reads.
 	formerEmployers formerEmployerLookup
+	// watchlist reads a signed-in caller's company watchlist, which `watchlist=true`
+	// narrows to. Nil leaves the param unread, and reported in meta.ignored_params.
+	watchlist watchlistLookup
 	// seen reads the jobs a signed-in caller has already opened, for /jobs/search's
 	// hide_seen. Nil leaves the param unhonoured, and reported as such.
 	seen seenJobs
@@ -95,6 +99,12 @@ type formerEmployerLookup interface {
 	Slugs(ctx context.Context, userID int64) ([]string, error)
 }
 
+// watchlistLookup reads a person's watchlist as company slugs. *companywatch.Service
+// satisfies it; tests inject a fake.
+type watchlistLookup interface {
+	Slugs(ctx context.Context, userID int64) ([]string, error)
+}
+
 // formerEmployersParam is the "Hiring again" filter: only postings at companies the
 // signed-in caller has worked at and left, per their experience bank. It is not part of
 // the search package's vocabulary because it is not a facet of the posting — it is a fact
@@ -118,6 +128,7 @@ func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries
 	if queries != nil {
 		h.companyNames = queries
 		h.formerEmployers = formeremployer.NewStore(queries)
+		h.watchlist = companywatch.New(queries)
 	}
 	return h
 }
@@ -407,17 +418,23 @@ type jobSearchOutcome struct {
 	// formerEmployers reports that the "Hiring again" filter was applied, which makes
 	// former_employers one of the endpoint's own params rather than an ignored one.
 	formerEmployers bool
+	// watchlist is the same for `watchlist=true`.
+	watchlist bool
 }
 
-// own is the endpoint's own params for this request: base, plus former_employers when the
-// filter read it. Anonymous, it was not read, and the report must say so — the answer then
-// is the whole catalogue, which a caller who asked for their former employers must not
-// mistake for them.
+// own is the endpoint's own params for this request: base, plus former_employers and
+// watchlist when the filter read them. Anonymous, they were not read, and the report must
+// say so — the answer then is the whole catalogue, which a caller who asked for their former
+// employers or their watchlist must not mistake for them.
 func (o jobSearchOutcome) own(base []string) []string {
-	if !o.formerEmployers {
-		return base
+	out := slices.Clip(base)
+	if o.formerEmployers {
+		out = append(out, formerEmployersParam)
 	}
-	return append(slices.Clip(base), formerEmployersParam)
+	if o.watchlist {
+		out = append(out, search.WatchlistParam)
+	}
+	return out
 }
 
 // formerEmployerSlugs resolves the "Hiring again" filter for this request. applied is false
@@ -453,6 +470,49 @@ func (h *searchHandlers) formerEmployerSlugsFor(ctx context.Context, userID int6
 	return slugs, true, nil
 }
 
+// watchlistSlugs resolves `watchlist=true` for this request, with formerEmployerSlugs's
+// contract: applied is false when the param is absent, anonymous or unreadable, and applied
+// with no slugs is a real answer — an empty list — that narrows to nothing.
+func (h *searchHandlers) watchlistSlugs(c *fiber.Ctx) (slugs []string, applied bool, err error) {
+	userID, _ := auth.UserID(c)
+	vals := queryValues(c)
+	if c.QueryBool(search.WatchlistParam) {
+		vals.Set(search.WatchlistParam, "true")
+	}
+	slugs, applied, err = h.watchlistSlugsFor(c.Context(), userID, vals)
+	if applied {
+		c.Set(fiber.HeaderCacheControl, "private, no-store")
+	}
+	return
+}
+
+func (h *searchHandlers) watchlistSlugsFor(ctx context.Context, userID int64, vals url.Values) (slugs []string, applied bool, err error) {
+	if h.watchlist == nil || !search.WantsWatchlist(vals) || userID == 0 {
+		return nil, false, nil
+	}
+	slugs, err = h.watchlist.Slugs(ctx, userID)
+	if err != nil {
+		return nil, false, err
+	}
+	return slugs, true, nil
+}
+
+// personalCompanies combines the two per-caller company sets a search can be narrowed to:
+// the companies the caller left ("Hiring again") and the ones they watch. Asked for both,
+// a posting must satisfy both, so the set is their intersection. applied is false when
+// neither was asked for.
+func personalCompanies(former []string, hasFormer bool, watch []string, hasWatch bool) (slugs []string, applied bool) {
+	switch {
+	case hasFormer && hasWatch:
+		return slices.DeleteFunc(slices.Clone(former), func(s string) bool { return !slices.Contains(watch, s) }), true
+	case hasFormer:
+		return former, true
+	case hasWatch:
+		return watch, true
+	}
+	return nil, false
+}
+
 // runJobSearch performs the request handling shared by both job-search endpoints:
 // the availability check, the pagination-window guard, and the index query. It is
 // the single place the query is built, so the public and agent search endpoints
@@ -481,13 +541,19 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude [
 	if err != nil {
 		return jobSearchOutcome{}, err
 	}
-	return h.executeJobSearch(c.Context(), queryValues(c), jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: formerApplied, vector: h.matchVector(c), exclude: exclude, personal: personal, wantSemantic: wantSemantic, match: match})
+	watch, watchApplied, err := h.watchlistSlugs(c)
+	if err != nil {
+		return jobSearchOutcome{}, err
+	}
+	return h.executeJobSearch(c.Context(), queryValues(c), jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: formerApplied, watch: watch, hasWatch: watchApplied, vector: h.matchVector(c), exclude: exclude, personal: personal, wantSemantic: wantSemantic, match: match})
 }
 
 type jobSearchInput struct {
 	limit, offset        int
 	former               []string
 	hasFormer            bool
+	watch                []string
+	hasWatch             bool
 	vector               []float32
 	exclude              []int64
 	personal             string
@@ -496,22 +562,23 @@ type jobSearchInput struct {
 }
 
 func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, in jobSearchInput) (jobSearchOutcome, error) {
-	limit, offset, former, formerApplied := in.limit, in.offset, in.former, in.hasFormer
+	limit, offset := in.limit, in.offset
 	vector, exclude, personal, wantSemantic, strict := in.vector, in.exclude, in.personal, in.wantSemantic, in.strict
 
-	if formerApplied && len(former) == 0 {
+	companies, companiesApplied := personalCompanies(in.former, in.hasFormer, in.watch, in.hasWatch)
+	if companiesApplied && len(companies) == 0 {
 		// Narrow to nothing rather than drop the filter: the set the caller asked for is
 		// empty, and searching without it would answer with strangers.
-		return jobSearchOutcome{limit: limit, offset: offset, formerEmployers: true}, nil
+		return jobSearchOutcome{limit: limit, offset: offset, formerEmployers: in.hasFormer, watchlist: in.hasWatch}, nil
 	}
 
 	sort := searchSortValues(vals, vector != nil)
 	base := search.FilterFromValues(vals)
-	// formerFilter is the "Hiring again" group alone, kept for the degrade below.
-	filter, formerFilter := base, any(nil)
-	if formerApplied {
-		filter = search.AndInStrings(base, "company_slug", former)
-		formerFilter = search.AndInStrings(nil, "company_slug", former)
+	// companyFilter is the personal company group alone, kept for the degrade below.
+	filter, companyFilter := base, any(nil)
+	if companiesApplied {
+		filter = search.AndInStrings(base, "company_slug", companies)
+		companyFilter = search.AndInStrings(nil, "company_slug", companies)
 	}
 	qFields, qFieldsIgnored := search.QFieldsFromValues(vals)
 	params := search.SearchParams{
@@ -550,7 +617,7 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		// (every facet/scalar value is already escaped before it reaches a filter
 		// expression — see search.quote). base == nil means there is nothing to
 		// blame — retrying an unchanged query would just fail again identically.
-		// The "Hiring again" group is not blamed and survives the retry: company_slug
+		// The personal company group ("Hiring again", the watchlist) is not blamed and survives the retry: company_slug
 		// has been filterable since the index existed, and dropping it would answer a
 		// request for former employers with the whole catalogue.
 		if strict || base == nil || !errors.Is(err, search.ErrBadQuery) {
@@ -562,7 +629,7 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		// Both personal exclusions survive the retry: id and company_slug have always
 		// been filterable, so an undeclared facet cannot justify dropping either.
 		retry := search.SearchParams{
-			Query: vals.Get("q"), Filter: withExcludedIDs(withFilterGroup(formerFilter, personal), exclude),
+			Query: vals.Get("q"), Filter: withExcludedIDs(withFilterGroup(companyFilter, personal), exclude),
 			Sort: sort, Vector: vector, QFields: qFields, Limit: limit, Offset: offset,
 		}
 		if in.match != nil {
@@ -587,7 +654,8 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 	return jobSearchOutcome{
 		res: res, limit: limit, offset: offset, dropped: dropped,
 		semantic:        outcome.wire(ojcp.SemanticApplied, ojcp.SemanticUnavailable),
-		formerEmployers: formerApplied,
+		formerEmployers: in.hasFormer,
+		watchlist:       in.hasWatch,
 	}, nil
 }
 

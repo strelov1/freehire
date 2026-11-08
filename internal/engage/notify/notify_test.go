@@ -100,6 +100,8 @@ type fakeStore struct {
 	excludedSkills map[int64][]string
 	// heldSkills maps a user id to their profile skills, under the same absence rule.
 	heldSkills map[int64][]string
+	// watchlists maps a user id to the companies they watch; absent is an empty list.
+	watchlists map[int64][]string
 
 	notified   []db.MarkMatchesNotifiedParams
 	failures   []db.RecordMatchDeliveryFailureParams
@@ -179,6 +181,16 @@ func (s *fakeStore) ListUserProfileSkillSets(_ context.Context, userIDs []int64)
 			continue
 		}
 		out = append(out, db.ListUserProfileSkillSetsRow{UserID: id, Skills: held, ExcludedSkills: excluded})
+	}
+	return out, nil
+}
+
+func (s *fakeStore) ListWatchlistSlugsForUsers(_ context.Context, userIDs []int64) ([]db.ListWatchlistSlugsForUsersRow, error) {
+	var out []db.ListWatchlistSlugsForUsersRow
+	for _, id := range userIDs {
+		for _, slug := range s.watchlists[id] {
+			out = append(out, db.ListWatchlistSlugsForUsersRow{UserID: id, Slug: slug})
+		}
 	}
 	return out, nil
 }
