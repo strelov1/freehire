@@ -93,9 +93,12 @@ func TestMixedAnonymousPersonalCallStatus(t *testing.T) {
 		name, agent, tool string
 		want              int
 	}{
-		{"grok personal", "Grok", "my_jobs", http.StatusUnauthorized},
+		{"other host personal", "codex-mcp-client/0.167.0", "my_jobs", http.StatusUnauthorized},
 		{"chatgpt personal", "openai-mcp/1.0.0", "my_jobs", http.StatusOK},
-		{"grok public", "Grok", "search_jobs", http.StatusOK},
+		{"other host public", "codex-mcp-client/0.167.0", "search_jobs", http.StatusOK},
+		// These hosts offer sign-in only while a connector is added, so even a public call asks.
+		{"grok public", "grok-connectors-manager/0.1.0", "search_jobs", http.StatusUnauthorized},
+		{"claude.ai public", "Claude-User", "search_jobs", http.StatusUnauthorized},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

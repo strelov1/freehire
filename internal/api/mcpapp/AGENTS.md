@@ -7,7 +7,10 @@ ChatGPT (User-Agent `openai-mcp`) gets an error result carrying `mcp/www_authent
 the in-band challenge its Apps SDK opens sign-in from. Every other host gets HTTP 401 with
 `WWW-Authenticate`, because Grok and Claude.ai ignore the in-band challenge and open sign-in
 only on the specification's 401 — an anonymous connection there otherwise never sees a way to
-sign in. `search_jobs`/`get_job` results carry `_meta["freehire.me/account"].signed_in` so the
+sign in. Grok (`grok-connectors-manager`) and Claude.ai (`Claude-User`) go further: they offer
+sign-in only while a connector is added, and a 401 later in a conversation opens nothing, so
+an anonymous request from them is refused outright (`signsInOnlyAtConnect`) and those two
+hosts have no anonymous search. `search_jobs`/`get_job` results carry `_meta["freehire.me/account"].signed_in` so the
 widget shows one Connect panel instead of per-card buttons that would fail.
 Per-tool `_meta.securitySchemes` declares access.
 
