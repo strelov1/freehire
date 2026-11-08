@@ -30,8 +30,9 @@ export default {
   // Scripts invoked from the CI workflow and from this package's own scripts, which knip
   // reads and cannot resolve: each CI job sets its own working-directory, and `check:dead`
   // reaches svelte-kit through `pnpm --dir web`, so neither binary belongs to the workspace
-  // knip is looking in.
-  ignoreBinaries: ['build', 'check', 'build-storybook', 'svelte-kit'],
+  // knip is looking in. `playwright` is the same shape: the web job installs its browser
+  // with `pnpm exec playwright install`, and the package is web's, not the root's.
+  ignoreBinaries: ['build', 'check', 'build-storybook', 'svelte-kit', 'playwright'],
 
   workspaces: {
     // scripts/*.py is the harvest tooling — Python, invisible to knip either way.

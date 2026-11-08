@@ -2,6 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
 	testDir: 'e2e',
+	// Runs under playwright.a11y.config.ts, which brings its own app and API stand-in.
+	testIgnore: 'a11y.spec.ts',
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,

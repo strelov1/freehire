@@ -986,6 +986,25 @@ jobs:
       - name: Bundle size budgets
         run: pnpm run size
 
+      # axe over the public pages (web/e2e/a11y.spec.ts), at WCAG 2.1 A/AA, failing on
+      # serious and critical findings. It runs the build the steps above just made, against
+      # a stand-in for the API (web/e2e/support/mock-api.ts), so it needs no backend. Only
+      # this spec: the rest of web/e2e talks to a real stack (Postgres, Meilisearch, the Go
+      # server) that this job does not start.
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Accessibility check
+        run: pnpm run test:a11y
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: a11y-test-results
+          path: web/test-results
+          if-no-files-found: ignore
+
   # Always report the required check, including an intentional skip of web work.
   web:
     needs: [changes, web-work]

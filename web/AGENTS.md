@@ -91,6 +91,14 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 
 ## Worth knowing
 
+- **Accessibility is gated by axe in CI.** `e2e/a11y.spec.ts` opens home, the job list, a job
+  page, a company page and sign-in and fails on `serious`/`critical` violations at WCAG 2.1
+  A/AA. Run it with `pnpm build && pnpm test:a11y`: `playwright.a11y.config.ts` starts the
+  production build against `e2e/support/mock-api.ts`, a stand-in for the Go API (server-side
+  rendering reads the API from Node, where `page.route` cannot reach), so a page that needs a
+  new endpoint needs a fixture there. It is the only e2e spec CI runs — the others need a real
+  stack. A rule that needs design work is disabled for the pages that need it, in `PAGES`,
+  with a comment and an issue; there is no baseline file.
 - **Job-fit analysis**: the standalone `/match/[slug]/` page is gone — its
   `+page.server.ts` is only a 308 redirect to `/tailor/[slug]`, and the Tailor workspace
   is the sole surface for viewing and triggering the analysis. The analysis UI is
