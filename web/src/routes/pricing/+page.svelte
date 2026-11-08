@@ -245,7 +245,7 @@
           aria-selected={interval === 'month'}
           aria-controls="pricing-plans"
           class="rounded-md px-4 py-1.5 text-sm font-medium {interval === 'month'
-            ? 'bg-primary text-primary-foreground'
+            ? 'bg-secondary text-foreground shadow-xs'
             : 'text-muted-foreground'}"
           onclick={() => (interval = 'month')}
         >
@@ -258,7 +258,7 @@
           aria-selected={interval === 'year'}
           aria-controls="pricing-plans"
           class="rounded-md px-4 py-1.5 text-sm font-medium {interval === 'year'
-            ? 'bg-primary text-primary-foreground'
+            ? 'bg-secondary text-foreground shadow-xs'
             : 'text-muted-foreground'}"
           onclick={() => (interval = 'year')}
         >
