@@ -8,7 +8,7 @@
 </script>
 
 <Seo
-  title="freehire MCP — search IT jobs inside Claude, ChatGPT, Codex and Cursor"
+  title="freehire MCP — search tech jobs inside Claude, ChatGPT, Codex and Cursor"
   description={`${MCP_CATALOG_PITCH} Find roles with AI, then connect your account to save jobs, track applications and manage alerts.`}
   {canonical}
 />

@@ -11,7 +11,7 @@
 
   const { price }: { price: PublicPrice | null } = $props();
 
-  const facts = ['3.3M+ live jobs', 'ATS-readable PDF', '9 templates', 'Open source · 3.2k★'];
+  const facts = ['4.9M+ live jobs', 'ATS-readable PDF', '9 templates', 'Open source · 3.2k★'];
 
   const split = [
     {

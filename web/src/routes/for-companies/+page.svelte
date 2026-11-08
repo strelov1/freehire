@@ -22,7 +22,7 @@
 
 <Seo
   title="List your job board — freehire for companies"
-  description="Get your company's whole ATS board indexed by freehire, the free, open-source IT job aggregator. Add a supported board with one line, or contribute an adapter — we crawl it regularly and close roles you take down."
+  description="Get your company's whole ATS board indexed by freehire, the free, open-source tech job aggregator. Add a supported board with one line, or contribute an adapter — we crawl it regularly and close roles you take down."
   {canonical}
 />
 
