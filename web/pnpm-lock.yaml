@@ -10,7 +10,7 @@ overrides:
   postcss@<8.5.23: 8.5.23
   nanoid@<3.3.18: 3.3.18
   dompurify@<3.4.17: 3.4.17
-  undici@<8.12.2: 8.12.2
+  undici@<8.12.4: 8.12.4
   fflate@<0.7.5: 0.7.5
   ai@<6.0.203: 6.0.203
   '@ai-sdk/provider-utils@<4.0.33': 4.0.33
@@ -3500,12 +3500,8 @@ packages:
   undici-types@8.9.0:
     resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
 
-  undici@8.12.2:
-    resolution: {integrity: sha512-XtuDWVdqTLr3NAxm2ly9/hU6kUsJOgGh1RASzMBbsw6aWCOaQzHdW+QQDfdERjfJ2V5vL5pRPa4RetO9UfivDg==}
-    engines: {node: '>=22.19.0'}
-
-  undici@8.12.3:
-    resolution: {integrity: sha512-+fdndUTwBP86cVjihTp21hZHo7d6oj1c/47XPA3lL8mM0XHs+C4EkcjmgRsFnFk2f/UONGDy9ItBItmXsLOQHw==}
+  undici@8.12.4:
+    resolution: {integrity: sha512-8Mx+uNKKER2bA4AdtedkqRbwUCIJFr2nJckXRe5yrDqzePqwLP7VNcctN8/XdmDSbF7mS+jJKIszlL+vbam1VA==}
     engines: {node: '>=22.19.0'}
 
   unhead@3.4.3:
@@ -3832,7 +3828,7 @@ snapshots:
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
-      undici: 8.12.2
+      undici: 8.12.4
       zod: 4.6.7
 
   '@ai-sdk/provider@4.0.28':
@@ -4951,7 +4947,7 @@ snapshots:
     dependencies:
       '@scalar/helpers': 0.16.4
       pathe: 2.0.3
-      undici: 8.12.3
+      undici: 8.12.4
       yaml: 2.9.1
 
   '@scalar/localization@0.2.9(typescript@6.0.3)':
@@ -6317,7 +6313,7 @@ snapshots:
       saxes: 6.0.0
       symbol-tree: 3.2.4
       tough-cookie: 6.0.2
-      undici: 8.12.2
+      undici: 8.12.4
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -6342,7 +6338,7 @@ snapshots:
       parse5: 8.0.1
       saxes: 6.0.0
       tough-cookie: 6.0.2
-      undici: 8.12.2
+      undici: 8.12.4
       w3c-xmlserializer: 6.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -7493,9 +7489,7 @@ snapshots:
 
   undici-types@8.9.0: {}
 
-  undici@8.12.2: {}
-
-  undici@8.12.3: {}
+  undici@8.12.4: {}
 
   unhead@3.4.3(rolldown@1.2.14)(rollup@4.62.2)(vite@8.3.4(@types/node@26.6.5)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)):
     dependencies:
