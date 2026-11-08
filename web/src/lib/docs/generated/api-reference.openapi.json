@@ -202,6 +202,16 @@
             "example": "true"
           },
           {
+            "name": "min_skill_match",
+            "in": "query",
+            "required": false,
+            "description": "Keeps only postings whose skills your profile covers by at least this percent (1–100), across the whole ranking. Applies only with `sort=match`, to a signed-in caller with profile skills; the read stops once no later posting can qualify or at a depth bound, and then `meta.total` is a minimum with `meta.total_is_lower_bound: true`. A per-person preference: a saved search ignores it. Otherwise it is not applied and is listed in `meta.ignored_params`.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "70"
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,

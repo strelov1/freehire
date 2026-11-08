@@ -10,6 +10,7 @@ import {
   toneText,
 } from './jobMatch';
 import { must } from './utils';
+import sharedCases from './fixtures/skillMatchPercent.json';
 
 describe('resolveMatchState', () => {
   const base = { jobSkills: ['go'], authenticated: true, profileLoaded: true, profileSkills: ['go'] };
@@ -55,6 +56,11 @@ describe('matchBarSegments', () => {
 });
 
 describe('computeClientMatch', () => {
+  // internal/dict/skillvec's TestMatchPercent reads the same file for the server's arithmetic.
+  it.each(sharedCases)('agrees with the shared cases: $name', ({ job, held, percent }) => {
+    expect(computeClientMatch(job, held).percent).toBe(percent);
+  });
+
   it('counts the exact (case-insensitive) overlap of job skills the user has', () => {
     // 2 of 4 job skills are in the profile → 50%.
     expect(computeClientMatch(['go', 'kafka', 'aws', 'spark'], ['go', 'aws', 'react'])).toEqual({

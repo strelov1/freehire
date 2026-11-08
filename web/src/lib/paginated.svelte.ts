@@ -63,6 +63,8 @@ export class Paginator<T> {
   // Total items matching the current query (the search engine's estimate); shown as
   // the result count and refreshed each page since the estimate can drift.
   total = $state(0);
+  // The total is a minimum ("at least"): the server stopped reading before the end.
+  totalIsLowerBound = $state(false);
 
   #fetch: FetchSlice<T>;
   #limit: number;
@@ -99,6 +101,7 @@ export class Paginator<T> {
     this.#baseOffset = offset;
     this.items = this.#dedupe(slice.items);
     this.total = slice.total ?? 0;
+    this.totalIsLowerBound = slice.totalIsLowerBound ?? false;
     this.hasMore = slice.hasMore;
     this.status = 'ready';
   }
@@ -120,6 +123,7 @@ export class Paginator<T> {
       this.#baseOffset = offset;
       this.items = this.#dedupe(slice.items);
       this.total = slice.total ?? 0;
+      this.totalIsLowerBound = slice.totalIsLowerBound ?? false;
       this.hasMore = slice.hasMore;
       this.status = 'ready';
     } catch {
@@ -136,6 +140,7 @@ export class Paginator<T> {
       const slice = await this.#fetch(this.#limit, this.#baseOffset + this.items.length);
       this.items = [...this.items, ...this.#dedupe(slice.items)];
       this.total = slice.total ?? 0;
+      this.totalIsLowerBound = slice.totalIsLowerBound ?? false;
       this.hasMore = slice.hasMore;
     } catch {
       this.loadMoreError = true;
