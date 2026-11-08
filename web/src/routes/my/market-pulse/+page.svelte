@@ -63,6 +63,13 @@
     return `/jobs?${params}`;
   }
 
+  // Add a skill the verdict lists as missing to the saved profile, then recompute the
+  // verdict, which the server scores against that profile.
+  async function addSkill(skill: string) {
+    await profileStore.addSkill(skill);
+    await reload();
+  }
+
   // (Re)load the profile once the session resolves.
   $effect(() => {
     if (isAuthenticated()) void profileStore.ensureLoaded();
@@ -147,7 +154,7 @@
         {:else if verdict === null}
           <States state="loading" />
         {:else}
-          <VerdictView {verdict} {gapHref} />
+          <VerdictView {verdict} {gapHref} onAdd={addSkill} />
         {/if}
       </div>
     </main>

@@ -7,6 +7,10 @@ export default {
   // Without this a title like `Revert "fix: x"` is skipped by commitlint's built-in ignores.
   defaultIgnores: false,
   rules: {
+    // The format is `type(scope)?: summary` and nothing more: the preset's case rule would
+    // reject `fix: Close empty boards`, and its 100-character cap a long but valid title.
+    'subject-case': [0],
+    'header-max-length': [0],
     'type-enum': [
       2,
       'always',
