@@ -34,7 +34,7 @@ func toNotificationSettingsResponse(s reminder.Settings) notificationSettingsRes
 	}
 	freq := s.DigestFrequency
 	if freq == "" {
-		freq = notify.FrequencyInterval
+		freq = notify.FrequencyDaily
 	}
 	return notificationSettingsResponse{
 		Enabled:             s.Enabled,

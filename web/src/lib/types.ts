@@ -1014,7 +1014,7 @@ export interface BankedAnswer {
 export interface NotificationSettings {
   enabled: boolean;
   channels: string[];
-  /** 'interval' (default), 'instant' or 'daily' — governs only saved-search
+  /** 'daily' (default, at 09:00), 'instant' or 'interval' — governs only saved-search
    *  digests, not reminders/nudges. */
   digest_frequency: string;
   /** "HH:MM" local time, meaningful only when digest_frequency is 'daily'. */

@@ -45,15 +45,15 @@ WITH claimable AS (
         FOR UPDATE SKIP LOCKED
     ) m
     WHERE s.active
-      -- An 'interval' subscription (the default: no settings row reads as one, at one
-      -- hour) is claimed only once its interval has elapsed since the last digest. The
+      -- An 'interval' subscription (no settings row reads as 'daily' since migration
+      -- 0246; the interval default is one hour) is claimed only once its interval has elapsed since the last digest. The
       -- gate lives HERE rather than beside the quiet-hours check in deliverMessage because a
       -- subscription that is not due would otherwise be claimed and released on every
       -- five-minute pass: measured on prod 2026-11-04 at ~23k matches an hour, that is
       -- ~12 lease-and-release writes per pending match for nothing. This predicate is the
       -- only definition of "interval elapsed" — the Go side does not repeat it. The
       -- defaults must agree with GetSubscriptionForDelivery's COALESCE and the column
-      -- defaults (migration 0233).
+      -- defaults (migrations 0233, 0246).
       --
       -- The interval is the PERSON's, per channel, not each subscription's: the caller
       -- sends one message per (user, channel) carrying every due subscription, and
@@ -64,7 +64,7 @@ WITH claimable AS (
       -- subscription (no stamp yet) from firing on its own between the hourly mails.
       -- A webhook is sent one subscription at a time (its receiver is a program reading
       -- one saved search), so it keeps its own stamp.
-      AND (COALESCE(ns.digest_frequency, 'interval') <> 'interval'
+      AND (COALESCE(ns.digest_frequency, 'daily') <> 'interval'
            OR COALESCE(pl.last_sent, '-infinity')
               <= now() - make_interval(hours => COALESCE(ns.digest_interval_hours, 1)::int))
     -- A backstop, not the working bound: per_subscription x active subscriptions is what
@@ -455,8 +455,8 @@ SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_dige
        EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id) AS has_push_device,
        wc.url AS webhook_url,
        COALESCE(wc.enabled, false) AS webhook_enabled,
-       COALESCE(ns.digest_frequency, 'interval')::text AS digest_frequency,
-       ns.digest_time AS digest_time,
+       COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
+       COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end
 FROM subscriptions s
@@ -560,9 +560,9 @@ const listActiveSubscriptions = `-- name: ListActiveSubscriptions :many
 SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query,
        s.last_digest_sent_at, s.last_searched_at,
        u.timezone AS timezone,
-       COALESCE(ns.digest_frequency, 'interval')::text AS digest_frequency,
+       COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
        COALESCE(ns.digest_interval_hours, 1)::int AS digest_interval_hours,
-       ns.digest_time AS digest_time,
+       COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end
 FROM subscriptions s

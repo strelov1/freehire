@@ -61,9 +61,9 @@ func ValidChannel(c string) bool {
 //   - FrequencyDaily sends once a local day, at the account's digest time.
 //   - FrequencyInterval sends at most once every digest_interval_hours hours.
 //
-// FrequencyInterval at DefaultIntervalHours is the default — an account with no
-// settings row reads as it, and so does any unknown stored value — because instant
-// was too many messages for most people (migration 0233 has the measurement).
+// FrequencyDaily at DefaultDigestTime is the default for an account with no settings
+// row (migration 0246): hourly digests were most of the mail volume when SES shut the
+// account for complaints. An unknown stored value still reads as FrequencyInterval.
 const (
 	FrequencyInstant  = "instant"
 	FrequencyDaily    = "daily"
@@ -78,6 +78,11 @@ const (
 	MaxIntervalHours     = 23
 	DefaultIntervalHours = 1
 )
+
+// DefaultDigestTime is the local time a default daily digest goes out. Without a
+// time a daily digest is never due (deliverywindow.DigestDue), so the default
+// frequency must carry one. Migration 0246 and the queries' COALESCE hold the same.
+const DefaultDigestTime = 9 * time.Hour
 
 // ListLimit is how many jobs a channel message itemizes. It is a constant rather
 // than a Config field because the channel notifiers take only a base URL and a
