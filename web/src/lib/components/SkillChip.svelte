@@ -70,7 +70,7 @@
          chip's own link and a near miss would navigate instead. -->
     <button
       type="button"
-      class="ml-0.5 inline-flex size-6 items-center justify-center opacity-0 transition hover:opacity-100 focus-visible:opacity-100 group-hover/chip:opacity-50 pointer-coarse:opacity-50"
+      class="-my-1 -mr-1.5 ml-0.5 inline-flex size-6 items-center justify-center opacity-40 transition hover:opacity-100 focus-visible:opacity-100 group-hover/chip:opacity-70"
       aria-label="Show what {label} is"
     >
       <span
