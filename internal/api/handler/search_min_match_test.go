@@ -150,6 +150,7 @@ func TestMinSkillMatch_IsPrivateWhenApplied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 	if got := resp.Header.Get(fiber.HeaderCacheControl); got != "private, no-store" {
 		t.Errorf("Cache-Control = %q, want private", got)
 	}
