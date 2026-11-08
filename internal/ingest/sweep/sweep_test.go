@@ -259,6 +259,14 @@ func TestSweepableBoards(t *testing.T) {
 			want:  refs("zeta-inc"),
 		},
 		{
+			// Workday's own answer for an emptied site is a 200 with jobPostings: [], so the
+			// ordinary board scope closes it once its postings are past the grace window.
+			name:  "an emptied workday board is swept",
+			scope: boardScopeFor(t, "workday"),
+			stats: pipeline.Stats{EmptyBoards: refs("acme.wd1.myworkdayjobs.com/Careers")},
+			want:  refs("acme.wd1.myworkdayjobs.com/Careers"),
+		},
+		{
 			name:  "an empty board needs a complete listing, not a slice",
 			scope: BoardScope{HasGrace: true, SliceBoardListing: true, EmptyBoardListing: true},
 			stats: pipeline.Stats{EmptyBoards: refs("data engineer")},
@@ -422,5 +430,14 @@ func TestDetailFieldAddedNamesRealHydratingProviders(t *testing.T) {
 		if _, ok := src.(sources.HydratingSource); !ok {
 			t.Errorf("%q is not a HydratingSource, so withholding its rows changes nothing", provider)
 		}
+	}
+}
+
+func boardScopeFor(t *testing.T, provider string) BoardScope {
+	t.Helper()
+	reg := sources.All(nil)
+	return BoardScope{
+		FullBoardListing:  sources.FullBoardListingProviders(reg)[provider],
+		EmptyBoardListing: sources.EmptyBoardListingProviders(reg)[provider],
 	}
 }
