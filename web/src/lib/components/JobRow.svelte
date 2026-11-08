@@ -13,7 +13,7 @@
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { track } from '#lib/analytics.js';
-  import { cardTags, cardTagsFromCard, formatSalary } from '#lib/enrichment.js';
+  import { cardTags, cardTagsFromCard, formatSalary, regionLabel } from '#lib/enrichment.js';
   import { computeClientMatch, resolveMatchState } from '#lib/jobMatch.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { foreignContentLang, metaDescription } from '#lib/seo.js';
@@ -165,7 +165,12 @@
   const freshness = $derived(cardFreshnessBadges(job.posted_at, reality, job.closed_at));
 
   const MAX_SKILLS = 5;
-  const metaFacts = $derived([...tags, equity, questions].filter((f): f is string => Boolean(f)));
+  // The region is dropped when the flags already name the country ("UK · 🇬🇧 United
+  // Kingdom" said one place twice); with no country it is the only geography and stays.
+  const regionTag = $derived(job.countries?.length ? regionLabel({ regions: job.regions ?? [] }) : null);
+  const metaFacts = $derived(
+    [...tags.filter((t) => t !== regionTag), equity, questions].filter((f): f is string => Boolean(f)),
+  );
   const shownSkills = $derived(skills.slice(0, MAX_SKILLS));
   const extraSkills = $derived(skills.length - MAX_SKILLS);
 
