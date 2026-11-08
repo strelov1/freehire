@@ -59,7 +59,8 @@ Transcription is billed per minute of audio, and a turn is not metered
 (`internal/ai/plan` meters it: one dictation allowance per accepted recording, returned when nothing usable comes back). Three things stand in for that,
 none of which depends on metering landing first:
 
-- a per-**caller** rate limit (`transcriptionsPerHour`), keyed on the user rather than
+- a per-**caller** HTTP quota, enforced by the operations gateway in the private
+  `freehire-ops` since #4160 (it was `transcriptionsPerHour` here), keyed on the user rather than
   the address, because an IP key is lifted by any rotating proxy pool;
 - a 2 MiB body cap enforced on the bytes read, not on the size the client declares;
 - a client-side recording ceiling (`MAX_RECORDING_MS`) well under that cap, so the cap

@@ -122,9 +122,9 @@ now `Dialog` call sites — `ReportDialog`, `RequestReferralModal`, `DeleteAccou
 other six are not stragglers; they are two gaps, and forcing either onto `Dialog` means
 re-adding by hand what it deliberately does not do.
 
-- **A sheet.** `JobDrawer` is a full-height drawer, `FilterModalShell` and
-  `OnboardingWizard` stretch on mobile and centre above `sm`, `CookieConsent` is a bottom
-  banner. `Dialog` is a centred modal and offers no positioning. Three of the four want the
+- **A sheet.** `JobDrawer` is a full-height drawer, `FilterModalShell` stretches on mobile
+  and centres above `sm`, `CookieConsent` is a bottom banner. `Dialog` is a centred modal
+  and offers no positioning. All three want the
   same thing — a **Sheet** primitive the system does not have.
 - **A structured dialog.** `GmailConnectDialog` and `FollowUpDialog` both want a bordered
   header with an icon, a scrolling body and a bordered footer. `Dialog` renders its own

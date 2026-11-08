@@ -69,8 +69,8 @@ The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
   run's verdict and nothing else**: every stamped OPEN posting a run does not re-stamp —
   present, skipped or gated — is cleared (a closed one carries no signal and is not re-read), so a rule tightened after a stamp was written stops
   accusing on the next run. A posting already unstamped and not stamped now produces no write.
-- **Outcome judgement reuses `internal/application/userjob`'s silence ladder** (evidence.go:49-52,
-  68-77). An application counts as silent only when `userjob.SilenceStateFor` returns
+- **Outcome judgement reuses the silence ladder in `internal/job/silence`** (evidence.go:49-52,
+  68-77). An application counts as silent only when `silence.StateFor` (`internal/job/silence`) returns
   outright `silent`; a user report counts only after the reported apply date clears the
   `applied` stage's own threshold. Restating thresholds here would let the same application
   be judged by two ladders with nothing binding them.

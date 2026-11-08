@@ -258,9 +258,9 @@ presets sharing a tool set is new here, and it is the prompt — not the tools �
 allowed to differ; a tool added to one and forgotten in the other would be a debrief that
 cannot read the interview it is reviewing.
 
-The stage governs where the client offers it (`offersDebrief` in `web/src/lib/stages.ts`:
-`interview`, `offer`, `accepted`, `rejected`), never what the endpoint accepts. Somebody
-who sat an interview and never moved their application's stage is exactly who it is for.
+The endpoint accepts a debrief at any stage. Somebody who sat an interview and never moved
+their application's stage is exactly who it is for. (The tracker's stage-gated entry point,
+`offersDebrief`, went with the tracker layout rework, so the SPA no longer offers it anywhere.)
 
 **The application chat** (`apply`, openspec/changes/auto-apply-chat) is held against one
 automatic application, minted from `POST /assistant/sessions?preset=apply&job=<slug>` — and

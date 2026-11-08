@@ -14,10 +14,8 @@ Country, city (when known) and specialization are mandatory constraints; when on
 country is known it remains the location constraint, and region is used only without
 country/city. Unknown location or specialization yields no related postings. Results
 are re-read from Postgres to exclude currently closed, private, duplicate and unseen jobs.
-There is no precomputed similarity list or similarity backfill worker. The contraction
-SQL is staged in
-`migrations/pending-similarity-cleanup/` for sqlc only; promote it to the top-level
-migrations in a second release after all old binaries and the old timer are retired.
+There is no precomputed similarity list or similarity backfill worker; its columns and
+HNSW index were dropped by migrations `0228` and `0229` (#4088).
 
 ## Always true
 

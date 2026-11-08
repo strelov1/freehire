@@ -42,7 +42,7 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   reused by every CV. `GET /api/v1/me/photo` is metadata — the bytes are the `/image`
   sub-resource, and the URL carries `?v=<uploaded_at>` because it is otherwise stable. The
   control renders nothing when `enabled` is false (object storage unconfigured).
-- `ResumeStructuredView.svelte` is read-only; the backend serves the structured CV from
+- The profile tabs read the structured CV through one store, `src/lib/resume.svelte.ts`, from
   `GET /api/v1/me/resume` (`structured` field, null when absent/stale/unconfigured).
 - Environment variables reach the app only through `src/env.ts`. SvelteKit 3 exposes
   nothing undeclared — not even through the deprecated `$env/*` modules — so a variable

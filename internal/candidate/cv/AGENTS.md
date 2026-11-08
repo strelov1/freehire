@@ -23,7 +23,7 @@ generation.
    (`(18 / 9.5) * 1em`, not `18pt`) or a raised base size will leave your headings behind and
    flatten the hierarchy. Ratios are written as a division so the old absolute value stays
    legible. **Keep the font-size/leading fallback at 9.5pt / 0.5em unless the template needs a
-   different face's metrics** — `web/src/lib/tailor/geometry.ts` (`TEMPLATE_FONT_SIZE_PT`,
+   different face's metrics** — `web/src/lib/cvGeometry.ts` (`TEMPLATE_FONT_SIZE_PT`,
    `PREVIEW_FONT_SIZE_PX`, `PREVIEW_LINE_HEIGHT`) hardcodes that base for every template's live
    HTML preview, so a `.typ` file that defaults to something else silently desyncs the preview's
    pagination from the rendered PDF's. Reach for density through spacing between blocks instead
