@@ -729,7 +729,7 @@
     <Flag class="size-4 shrink-0" aria-hidden="true" />
     <!-- Icon only from lg, where it sits beside the CTAs: a rare action, it should not
          weigh as much as Apply. The accessible name stays on the button. -->
-    <span class="lg:sr-only">Report</span>
+    <span class="sr-only">Report</span>
   </Button>
 {/snippet}
 
@@ -821,9 +821,9 @@
       onclick={onDiscussionClick}
     >
       <MessageSquare class="size-4 shrink-0" aria-hidden="true" />
-      <!-- Icon (and count) only from lg, beside the CTAs, like Report; the name stays for
-           screen readers. -->
-      <span class="lg:sr-only">Discussion</span>{threadCount ? ` · ${threadCount}` : ''}
+      <!-- Icon (and count) only, like Report; the title names it on hover and the name
+           stays for screen readers. -->
+      <span class="sr-only">Discussion</span>{threadCount ? ` · ${threadCount}` : ''}
     </a>
     {@render reportButton()}
     {@render saveButton()}
@@ -1127,7 +1127,6 @@
     <!-- Below lg the provenance line already spends its width on the company name and its
          badges, so the dates read here instead — a caption under the title rather than
          right-aligned, which on one phone-width column would only look adrift. -->
-    {@render postingMeta('flex lg:hidden')}
 
     <!-- Below lg the strip rides here rather than on the tab row: the sidebar stacks
          between the title and the description on a phone, so a strip left down there
@@ -1141,9 +1140,12 @@
          does not (the link out), and five labels do not fit one phone-width line — without
          it the row simply overflowed its left edge and ate "Discussion". The lg copy shares
          a line with the TabStrip and must not wrap. -->
-    {@render actionStrip(
-      '-mr-2 flex w-full flex-wrap justify-end border-b border-border pb-2 lg:hidden',
-    )}
+    <!-- On a phone the dates and the strip share one left-aligned line, wrapping when it
+         must: right-aligned, the strip floated under a short date with nothing to its left. -->
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2 lg:hidden">
+      {@render postingMeta('flex flex-wrap')}
+      {@render actionStrip('-ml-2 flex flex-wrap')}
+    </div>
 
     <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
          once for the whole page: a gauge and the hedged wording here, the criteria and
@@ -1172,10 +1174,13 @@
         href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
         target="_blank"
         rel="nofollow noopener noreferrer"
-        class="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        class="w-fit text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
       >
-        Find people at {job.company.trim()} on LinkedIn
-        <ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />
+        <!-- Inline, not flex: a long company name wraps the text, and the icon then follows
+             its last word (held together by nowrap) instead of standing alone. -->
+        Find people at {job.company.trim()} on <span class="whitespace-nowrap"
+          >LinkedIn<ExternalLink class="ml-1 inline size-3.5 align-text-bottom" aria-hidden="true" /></span
+        >
       </a>
     {/if}
 
