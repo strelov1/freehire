@@ -1009,7 +1009,7 @@ jobs:
           if [ -n "$(git status --porcelain -- ../docs/API.md ../docs/API.internal.md)" ]; then
             git --no-pager diff -- ../docs/API.md ../docs/API.internal.md
             echo
-            echo 'docs/API.md or docs/API.internal.md is stale. Run "pnpm run gen:api-docs" in web/ and commit the result.'
+            echo 'docs/API.md or docs/API.internal.md is stale. Run "pnpm run gen:api-docs" in web/ and commit the result. This is not a bug in the code: regenerating fixes it (the api-docs-drift pre-commit hook does it for you).'
             exit 1
           fi
           echo 'docs/API.md and docs/API.internal.md match web/src/lib/docs/api-spec.ts.'
@@ -1032,7 +1032,7 @@ jobs:
           if [ -n "$(git status --porcelain -- src/lib/docs/generated/api-reference.openapi.json src/lib/docs/generated/api-reference.internal.openapi.json)" ]; then
             git --no-pager diff -- src/lib/docs/generated/api-reference.openapi.json src/lib/docs/generated/api-reference.internal.openapi.json
             echo
-            echo 'web/src/lib/docs/generated/api-reference.openapi.json or api-reference.internal.openapi.json is stale. Run "pnpm run gen:openapi" in web/ and commit the result.'
+            echo 'web/src/lib/docs/generated/api-reference.openapi.json or api-reference.internal.openapi.json is stale. Run "pnpm run gen:openapi" in web/ and commit the result. This is not a bug in the code: regenerating fixes it (the api-docs-drift pre-commit hook does it for you).'
             exit 1
           fi
           echo 'Both generated OpenAPI references match web/src/lib/docs/api-spec.ts.'
