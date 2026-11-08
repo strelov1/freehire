@@ -1162,15 +1162,16 @@
     {/if}
 
     {#if job.company?.trim()}
-      <!-- Resolve the stored company page only on click, keeping crawler visits cheap. -->
+      <!-- A muted text link, not a button: it shows on every posting. The company page is
+           resolved only on click, keeping crawler visits cheap. -->
       <a
         href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
         target="_blank"
         rel="nofollow noopener noreferrer"
-        class="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+        class="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline"
       >
-        Find someone to refer you on LinkedIn
-        <ExternalLink class="size-4 shrink-0" aria-hidden="true" />
+        Find people at {job.company.trim()} on LinkedIn
+        <ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />
       </a>
     {/if}
 
