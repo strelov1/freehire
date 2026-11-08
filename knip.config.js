@@ -48,8 +48,11 @@ export default {
     'design-system': {
       entry: ['src/*.stories.ts', 'scripts/*.mjs'],
       project: ['src/**', 'scripts/**'],
-      // Loaded by name from eslint.config.js, never imported.
-      ignoreDependencies: ['svelte-eslint-parser'],
+      // svelte-eslint-parser: loaded by name from eslint.config.js, never imported.
+      // tailwindcss: reached only through CSS (`@import "tailwindcss"` in
+      // .storybook/preview.css) and as @tailwindcss/vite's peer, neither of which knip
+      // follows. tailwind-variants 3 listed it as a peer and hid this; 4 does not.
+      ignoreDependencies: ['svelte-eslint-parser', 'tailwindcss'],
     },
 
     // WXT builds the extension from entrypoints/, so those are the roots — nothing imports
