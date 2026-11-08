@@ -219,7 +219,16 @@ it('waits for saved state before toggling a card while its initial load is pendi
 
 it("keeps a card's deadline visible on the employer's own page", () => {
   const view = render(JobRow, { job: { ...job, application_deadline: '2026-11-11' }, hideCompany: true });
-  const deadline = view.container.querySelector('time[datetime="2026-11-11"]');
-  expect(deadline?.closest('.hidden')).toBeNull();
-  expect(deadline?.parentElement?.textContent).toContain('Apply by');
+  const visible = [...view.container.querySelectorAll('span')].filter(
+    (s) => s.children.length === 0 && s.textContent?.trim() === 'Apply by 2026-11-11' && !s.id && !s.closest('.hidden, .sr-only'),
+  );
+  expect(visible).toHaveLength(1);
+});
+
+it('moves the date from the rail to the meta line on touch when the card carries Apply', () => {
+  const posted_at = new Date(Date.now() - 5 * 60_000).toISOString();
+  const view = render(JobRow, { job: { ...job, url: 'https://example.com/apply', closed_at: undefined, posted_at } });
+  const dates = [...view.container.querySelectorAll('span')].filter((s) => /min/.test(s.textContent ?? '') && s.children.length === 0);
+  expect(dates.map((d) => d.className.includes('pointer-coarse:hidden'))).toContain(true);
+  expect(dates.map((d) => d.className.includes('pointer-coarse:inline'))).toContain(true);
 });

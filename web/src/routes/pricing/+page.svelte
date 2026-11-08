@@ -8,7 +8,7 @@
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { PRO_PERKS } from '#lib/proPerks.js';
   import Seo from '#lib/components/Seo.svelte';
-  import { ProviderIcon, buttonVariants, cn } from '#lib/ui/index.js';
+  import { ProviderIcon, SectionLabel, buttonVariants, cn } from '#lib/ui/index.js';
   import type { PlanTierAllowance, PlansMatrix, PublicPrice } from '#lib/types.js';
   import { Check } from '@lucide/svelte';
   import type { PageData } from './$types';
@@ -217,7 +217,7 @@
 
 <Seo
   title="Pricing — freehire"
-  description="Search, alerts, tracking, the inbox and agent access over MCP are free. Pro adds CV tailoring, the AI assistant, the browser extension that fills applications, and background auto-apply. $5 a month, cancel any time."
+  description="For job seekers: search, alerts, tracking, the inbox and agent access over MCP are free; Pro adds CV tailoring, the AI assistant, the extension that fills applications and background auto-apply for $5 a month. For builders: the Jobs API licenses the catalogue for your product at a flat monthly price."
   canonical={`${origin}/pricing`}
 />
 
@@ -225,10 +225,13 @@
   <header class="flex flex-col items-center gap-3 text-center">
     <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Simple plans</h1>
     <p class="max-w-2xl text-balance text-muted-foreground">
-      Finding and tracking jobs is free, for good. Pro adds the AI that does the applying
-      with you.
+      Finding and tracking jobs is free, for good — on the site, in your AI agent and from the
+      CLI. Pro adds the AI that does the applying with you; the Jobs API is for building on the
+      catalogue.
     </p>
   </header>
+
+  <SectionLabel text="for job seekers" class="-mb-6 text-center" />
 
   {#if monthly && annual}
     <div class="flex justify-center">
@@ -489,6 +492,9 @@
   </div>
 
   {#if plans}
+    {#if plans.prices.some((p) => p.tier === 'api' || p.tier === 'api_data')}
+      <SectionLabel text="for builders" class="-mb-6 text-center" />
+    {/if}
     <ApiPlans prices={plans.prices} buttonVariant="outline" />
   {/if}
 

@@ -413,11 +413,12 @@ function salaryBound(raw: string | null): number | null {
   return raw !== null && ATOI.test(raw) ? Number(raw) : null;
 }
 
-/** A non-negative whole number, or null for anything else. For the bounds where zero
- *  is a real answer (`experience_years_max=0`, `apply_questions_max=0`). The syntax is
- *  Go's Atoi (ATOI), not `Number`, which also reads `0x0`, `1e1` and a blank string —
- *  `?experience_years_max=%20` would otherwise become the entry-level filter, and
- *  `apply_questions_max=0x0` a bound the server never applies. */
+/** A non-negative whole number, or null for anything else, read the way the server
+ *  reads the params that TRIM first: `apply_questions_max` and `min_skill_match`. A
+ *  param the server reads untrimmed (`experience_years_max`) must not use this — see
+ *  `salaryBound`. The syntax is Go's Atoi (ATOI), not `Number`, which also reads `0x0`,
+ *  `1e1` and a blank string — `apply_questions_max=0x0` would otherwise become a bound
+ *  the server never applies. */
 function nonNegativeInt(raw: string | null): number | null {
   const trimmed = raw?.trim() ?? '';
   if (!ATOI.test(trimmed)) return null;
@@ -461,7 +462,10 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.openWithinDays = positiveDays(p.get('open_within_days'));
   // Zero IS a bound here — it selects the postings stating no prior experience is
   // required — so the guard admits it and rejects only what cannot be a year count.
-  f.experienceYearsMax = nonNegativeInt(p.get('experience_years_max'));
+  // The server does NOT trim this one (a bare atoiOK), so neither may we: `%203` is no
+  // bound there, and a trimmed read would show a chip over an unbounded list.
+  const experienceYearsMax = salaryBound(p.get('experience_years_max'));
+  f.experienceYearsMax = experienceYearsMax != null && experienceYearsMax >= 0 ? experienceYearsMax : null;
   f.experienceIncludeUnspecified = p.get('experience_include_unspecified') === 'true';
   f.experienceOnlySeniorityUnspecified = p.get('experience_only_seniority_unspecified') === 'true';
   f.seniorityIncludeUnspecified = p.get('seniority_include_unspecified') === 'true';

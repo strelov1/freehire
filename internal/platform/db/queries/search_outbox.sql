@@ -120,7 +120,11 @@ WHERE id IN (
     FROM search_outbox o
     LEFT JOIN jobs j ON j.id = o.job_id
     WHERE o.failed_at IS NULL
-      AND (j.id IS NULL OR j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL)
+      -- The exact complement of ClaimSearchOutboxBatch's EXISTS (open, canonical, NOT
+      -- is_private). A private posting (a user's pasted JD) is never indexed, so its
+      -- entry can never be claimed; without OR j.is_private it stayed queued forever,
+      -- counted in depth and pinned the oldest-age gauge to its own age.
+      AND (j.id IS NULL OR j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL OR j.is_private)
     LIMIT sqlc.arg(max_rows)
 );
 

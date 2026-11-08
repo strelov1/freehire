@@ -6,7 +6,7 @@ how they compose and where the traps are.
 
 ## The pipeline
 
-```
+```text
                  ┌── Gmail OAuth ──→ internal/application/gmailsync ──┐
 inbound mail ────┤                                        ├──→ emails table
                  └── SES→S3→SQS ──→ internal/application/mailingest ──┘    (source = gmail|hosted)
@@ -61,7 +61,7 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   it omitted, under the SAME filters — a hidden count computed separately would describe a
   different mailbox the moment any filter is on. Two rules keep it honest: unclassified mail
   is NEVER hidden (nothing has judged it), and asking FOR the label overrides the default
-  (`inbox.Query.showsOther`), or `?status=other` and the hide rule cancel and the filter
+  (`inbox.Query.ShowsOther`), or `?status=other` and the hide rule cancel and the filter
   answers nothing about its own subject.
   **Why display and not fetch:** the sync carries a watermark, so mail not fetched today is
   never fetched. A fetch-time filter loses silently and permanently, and fixing the rule

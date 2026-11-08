@@ -11,7 +11,7 @@ export const HOME_FAQ: FaqItem[] = [
   {
     question: 'What is freehire?',
     answer:
-      'freehire is a free, open-source IT job aggregator. It pulls tech job postings straight from company career boards — Greenhouse, Lever, Ashby, Teamtailor and more — removes duplicates, and tags each role with its stack, seniority, salary and location, so you search jobs, not job boards.',
+      'freehire is a free, open-source tech job aggregator. It pulls tech job postings straight from company career boards — Greenhouse, Lever, Ashby, Teamtailor and more — removes duplicates, and tags each role with its stack, seniority, salary and location, so you search jobs, not job boards.',
   },
   {
     question: 'Is freehire free to use?',

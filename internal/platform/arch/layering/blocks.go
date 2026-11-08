@@ -240,6 +240,11 @@ var blocks = map[string][]string{
 		// internal/ai/plan.Store directly into plan_limit_hits, so this package never
 		// imports ai/plan at all — only its own candidate query over that table and users.
 		"limitnudge",
+		// maildaily is the one-optional-letter-a-day claim the four optional senders share
+		// (onboarding, limitnudge, broadcast, cvlifecycle); cvlifecycle is the CV letters
+		// sequence. Both are engage: they exist to reach the user, and read candidate,
+		// identity and search the way the other engage senders do.
+		"maildaily", "cvlifecycle",
 		"linkedinauth", "mailpreview", "mentorship", "messaging",
 		// mentorship/busysync is named in full, per the auth/oauth convention: it is a
 		// sub-package of mentorship and takes its parent's block, but the sync worker

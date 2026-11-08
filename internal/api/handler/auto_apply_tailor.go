@@ -135,8 +135,10 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 	// The paid gate, here rather than as the route's middleware: the user this run spends
 	// for is the entry's OWNER, which the orchestrator's shared secret does not name — it is
 	// known only once the entry is read. A candidate whose subscription lapsed after they
-	// queued the entry gets no unattended tailoring for it.
-	if ok, err := authorizePaidAI(c, entitlementOf(h.plans), userID, plan.FeatureTailor); !ok {
+	// queued the entry gets no unattended tailoring for it. The refusal is deliberately NOT
+	// recorded as a paywall hit: the orchestrator acts for a queue owner, and nobody pressed
+	// a paid button.
+	if ok, err := authorizePaidAIUnrecorded(c, entitlementOf(h.plans), userID, plan.FeatureTailor); !ok {
 		return err
 	}
 

@@ -9,13 +9,14 @@
   import { messagingDock } from '#lib/messagingDock.svelte.js';
   import { totalUnread } from '#lib/messagingDock.js';
   import type { BuddyStatus } from '#lib/types.js';
-  import { Button, ConfirmDialog, cn } from '#lib/ui/index.js';
+  import { ConfirmDialog, cn } from '#lib/ui/index.js';
   import States from '#lib/components/States.svelte';
+  import BuddiesLandingView from '#lib/components/BuddiesLandingView.svelte';
 
   // The interview buddies space: its own navigation on the left and the page beside it,
   // full width because the /my shell's sidebar left no room for a feed and a rail.
   // Membership is read here once, so a page never renders for an account that has not
-  // joined — the join screen takes its place on every address in the space.
+  // joined — the landing, whose button joins, takes its place on every address in the space.
   let { children }: { children: Snippet } = $props();
 
   const status = new AsyncData<BuddyStatus | null>(null);
@@ -52,12 +53,7 @@
   {#if status.status === 'loading'}<States state="loading" />
   {:else if status.status === 'error'}<States state="error" onRetry={() => void status.run(() => api.buddyStatus())} />
   {:else if !status.value?.member}
-    <section class="mx-auto max-w-2xl rounded-xl border border-border bg-card p-6">
-      <h1 class="text-2xl font-semibold">Interview buddies</h1>
-      <p class="mt-3 text-sm">Join an anonymous peer network to find people with similar job searches and talk after they accept your invitation.</p>
-      <p class="mt-3 text-sm">Other members will see your anonymous card (role, seniority, skills, country), the companies and job titles you apply to, and when you move to the interview or offer stage, including applications you made before joining. They never see your name or employer. You can hide any application, and you can leave any time.</p>
-      <Button class="mt-5" variant="primary" onclick={join}>Join interview buddies</Button>
-    </section>
+    <BuddiesLandingView onJoin={join} />
   {:else}
     <div class="flex flex-col gap-4 lg:flex-row lg:gap-6">
       <aside class="lg:sticky lg:top-20 lg:w-52 lg:shrink-0 lg:self-start">

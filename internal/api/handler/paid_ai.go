@@ -2,20 +2,26 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 )
 
 // paidEntitlement is what the paid-AI gate asks of the plan: whether the caller is on a paid
 // tier at all, and — only to word a refusal — where they stand on the feature they asked
-// for. *plan.Store in production.
+// for — and to remember a refusal, which is the one write it makes. *plan.Store in production.
 type paidEntitlement interface {
 	RequirePaid(ctx context.Context, userID int64) (plan.Tier, error)
 	Standing(ctx context.Context, userID int64, f plan.Feature) (plan.Standing, error)
+	RecordPaywallHit(ctx context.Context, userID int64, feature string, job plan.PaywallJob) error
 }
 
 // entitlementOf adapts a plan store to the gate, keeping a nil store nil. A nil *plan.Store
@@ -60,9 +66,8 @@ func paidAIGate(plans paidEntitlement) func(plan.Feature) fiber.Handler {
 	}
 }
 
-// authorizePaidAI is the gate's check for one user, for the handler that cannot use the
-// middleware because the user it acts for is not the authenticated caller — the auto-apply
-// orchestrator acts for whichever candidate owns a queue entry.
+// authorizePaidAI is the gate's check for one user, for a handler that cannot use the
+// middleware. A refusal is recorded as a paywall hit (see recordPaywallHit).
 //
 // ok is false when the request has been answered: a 402 written to c (with a nil error, since
 // `c.Status(402).JSON(...)` returns nil — which is why there is a bool beside it), or a 503
@@ -73,6 +78,18 @@ func paidAIGate(plans paidEntitlement) func(plan.Feature) fiber.Handler {
 // user-call binding reads before it hands out a model client. Handlers pass c.UserContext()
 // — or a context derived from it — to the binding for exactly that reason.
 func authorizePaidAI(c *fiber.Ctx, plans paidEntitlement, userID int64, feature plan.Feature) (bool, error) {
+	return checkPaidAI(c, plans, userID, feature, true)
+}
+
+// authorizePaidAIUnrecorded is authorizePaidAI for the handler whose user is not the
+// authenticated caller — the auto-apply orchestrator acts for whichever candidate owns a queue
+// entry. Nobody pressed a paid button there, so a refusal is not a buying signal and is not
+// recorded.
+func authorizePaidAIUnrecorded(c *fiber.Ctx, plans paidEntitlement, userID int64, feature plan.Feature) (bool, error) {
+	return checkPaidAI(c, plans, userID, feature, false)
+}
+
+func checkPaidAI(c *fiber.Ctx, plans paidEntitlement, userID int64, feature plan.Feature, record bool) (bool, error) {
 	if plans == nil {
 		// A deployment wired without a plan store has no way to know who paid, and the
 		// answer to "we could not tell" is the same as for a failed read.
@@ -80,6 +97,9 @@ func authorizePaidAI(c *fiber.Ctx, plans paidEntitlement, userID int64, feature 
 	}
 	tier, err := plans.RequirePaid(c.Context(), userID)
 	if errors.Is(err, plan.ErrPaymentRequired) {
+		if record {
+			recordPaywallHit(c, plans, userID, feature)
+		}
 		return false, refusePaidAI(c, plans, userID, tier, feature)
 	}
 	if err != nil {
@@ -110,4 +130,80 @@ func refusePaidAI(c *fiber.Ctx, plans paidEntitlement, userID int64, tier plan.T
 		body["upgrade_url"] = upgradePath
 	}
 	return c.Status(fiber.StatusPaymentRequired).JSON(body)
+}
+
+// paywallWriteTimeout bounds the detached write of a paywall hit.
+const paywallWriteTimeout = 5 * time.Second
+
+// paywallWrites counts the paywall-hit writes in flight, so a test can wait for the detached
+// goroutine instead of sleeping.
+var paywallWrites sync.WaitGroup
+
+// unmeteredFeatureNames labels the paid routes that draw on no allowance, by route template —
+// never by the raw URL, which carries slugs and ids.
+var unmeteredFeatureNames = map[string]string{
+	"/api/v1/me/profile/ats-report":         "ats_review",
+	"/api/v1/me/tracking/:slug/mail-recall": "mail_recall",
+	"/api/v1/me/autofill/run":               "autofill",
+}
+
+// unknownPaywallFeature labels a refusal on an unmetered route missing from the table above.
+const unknownPaywallFeature = "ai_other"
+
+// recordPaywallHit remembers that an unpaid signed-in user was refused, for the paywall
+// report and the letter that answers it.
+//
+// It reads everything it needs from the request now — fiber recycles the context once the
+// handler returns — and writes from a goroutine on a context detached from the request, so
+// the 402 neither waits for the database nor depends on it. The goroutine recovers its own
+// panic, which the server's recover middleware cannot reach; a failed write is logged and
+// dropped.
+func recordPaywallHit(c *fiber.Ctx, plans paidEntitlement, userID int64, feature plan.Feature) {
+	label := string(feature)
+	if feature == unmeteredAI {
+		var ok bool
+		if label, ok = unmeteredFeatureNames[c.Route().Path]; !ok {
+			label = unknownPaywallFeature
+		}
+	}
+	job := paywallJob(c)
+	ctx := context.WithoutCancel(c.UserContext())
+
+	paywallWrites.Add(1)
+	go func() {
+		defer paywallWrites.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("plan: paywall hit for user %d on %s panicked: %v", userID, label, r)
+			}
+		}()
+		ctx, cancel := context.WithTimeout(ctx, paywallWriteTimeout)
+		defer cancel()
+		if err := plans.RecordPaywallHit(ctx, userID, label, job); err != nil {
+			log.Printf("plan: record paywall hit for user %d on %s: %v", userID, label, err)
+		}
+	}()
+}
+
+// paywallJob names the vacancy the refused route concerns, chosen from the route TEMPLATE:
+// a job slug in the path or, for starting a tailoring, in the body; or the CV or assistant
+// session the path names, which the insert resolves through the caller's own rows. A value
+// that does not parse is no reference.
+func paywallJob(c *fiber.Ctx) plan.PaywallJob {
+	path := c.Route().Path
+	switch {
+	case strings.HasSuffix(path, "/me/cvs/tailor"):
+		var body struct {
+			JobSlug string `json:"job_slug"`
+		}
+		_ = json.Unmarshal(c.Body(), &body)
+		return plan.PaywallJob{Slug: body.JobSlug}
+	case strings.Contains(path, "/me/cvs/:id"):
+		id, _ := uuid.Parse(c.Params("id"))
+		return plan.PaywallJob{CVID: id}
+	case strings.Contains(path, "/assistant/sessions/:id"):
+		id, _ := uuid.Parse(c.Params("id"))
+		return plan.PaywallJob{SessionID: id}
+	}
+	return plan.PaywallJob{Slug: c.Params("slug")}
 }

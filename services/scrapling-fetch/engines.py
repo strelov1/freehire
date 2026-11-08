@@ -2,8 +2,8 @@
 Scrapling is imported lazily, so the rest of the service (and its tests) loads without it."""
 
 import itertools
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Mapping, Optional
 from urllib.parse import urlsplit
 
 from app import FetchError, FetchRequest, FetchResult
@@ -11,7 +11,9 @@ from pool import SessionPool
 
 # Headers a caller may not pass through. User-Agent would undo the fetcher's browser
 # impersonation (the Go client identifies itself as freehire); the rest are the transport's.
-_DROPPED = frozenset({"user-agent", "host", "content-length", "accept-encoding", "connection"})
+_DROPPED = frozenset(
+    {"user-agent", "host", "content-length", "accept-encoding", "connection"}
+)
 
 # Response headers that frame the upstream's bytes. The fetcher returns the body decoded and
 # whole, so these would describe bytes the caller never receives.
@@ -51,7 +53,7 @@ class ProxyConfig:
     With only SOURCES_PROXY_URL set, that one proxy serves both — the behaviour before rotation.
     """
 
-    rotating: Optional[str]
+    rotating: str | None
     sticky: list
     _cycle: object = field(default=None, repr=False)
 
@@ -62,7 +64,7 @@ class ProxyConfig:
     def available(self) -> bool:
         return bool(self.rotating or self.sticky)
 
-    def next_sticky(self) -> Optional[str]:
+    def next_sticky(self) -> str | None:
         return next(self._cycle) if self._cycle else self.rotating
 
     @classmethod
@@ -74,7 +76,9 @@ class ProxyConfig:
         if template:
             raw = env.get("SCRAPLING_PROXY_STICKY_COUNT", "").strip()
             if not raw.isdigit() or int(raw) < 1 or "{n}" not in template:
-                raise ValueError("SCRAPLING_PROXY_STICKY needs a {n} placeholder and a positive SCRAPLING_PROXY_STICKY_COUNT")
+                raise ValueError(
+                    "SCRAPLING_PROXY_STICKY needs a {n} placeholder and a positive SCRAPLING_PROXY_STICKY_COUNT"
+                )
             sticky = [template.replace("{n}", str(n)) for n in range(1, int(raw) + 1)]
         return cls(rotating=rotating, sticky=sticky)
 
@@ -88,7 +92,11 @@ def _result(page) -> FetchResult:
     return FetchResult(
         status=int(page.status),
         url=str(page.url),
-        headers={str(k): str(v) for k, v in dict(headers).items() if str(k).lower() not in _FRAMING},
+        headers={
+            str(k): str(v)
+            for k, v in dict(headers).items()
+            if str(k).lower() not in _FRAMING
+        },
         body=bytes(page.body),
     )
 
@@ -96,7 +104,12 @@ def _result(page) -> FetchResult:
 def _scrapling_send(method: str):
     from scrapling.fetchers import AsyncFetcher
 
-    return {"GET": AsyncFetcher.get, "POST": AsyncFetcher.post, "PUT": AsyncFetcher.put, "DELETE": AsyncFetcher.delete}[method]
+    return {
+        "GET": AsyncFetcher.get,
+        "POST": AsyncFetcher.post,
+        "PUT": AsyncFetcher.put,
+        "DELETE": AsyncFetcher.delete,
+    }[method]
 
 
 def http_fetcher(proxies: ProxyConfig, send=_scrapling_send):
@@ -123,7 +136,9 @@ def http_fetcher(proxies: ProxyConfig, send=_scrapling_send):
             except Exception as e:
                 if attempt < attempts:
                     continue  # a slow or dead exit IP; the next attempt leaves from another
-                raise FetchError(f"http fetch {req.url}: {type(e).__name__}: {e}") from e
+                raise FetchError(
+                    f"http fetch {req.url}: {type(e).__name__}: {e}"
+                ) from e
             if result.status not in _REFUSED or attempt == attempts:
                 return result
         raise AssertionError("unreachable: the last attempt always returns or raises")
@@ -161,11 +176,17 @@ def browser_fetcher(pool: SessionPool):
     return fetch
 
 
-async def _open_stealth(key, proxy: Optional[str], tabs: int = 1):
+async def _open_stealth(key, proxy: str | None, tabs: int = 1):
     from scrapling.fetchers import AsyncStealthySession
 
     # max_pages is how many tabs the session runs at once; the pool sends it no more uses.
-    kwargs = dict(headless=True, solve_cloudflare=True, timeout=BROWSER_TIMEOUT_MS, retries=1, max_pages=tabs)
+    kwargs = dict(
+        headless=True,
+        solve_cloudflare=True,
+        timeout=BROWSER_TIMEOUT_MS,
+        retries=1,
+        max_pages=tabs,
+    )
     if proxy:
         kwargs["proxy"] = proxy
     session = AsyncStealthySession(**kwargs)
@@ -173,12 +194,16 @@ async def _open_stealth(key, proxy: Optional[str], tabs: int = 1):
     return session
 
 
-def stealth_session_factory(proxies: ProxyConfig, open_session=_open_stealth, tabs: int = 1):
+def stealth_session_factory(
+    proxies: ProxyConfig, open_session=_open_stealth, tabs: int = 1
+):
     """The pool's factory. A proxied session takes the next sticky exit IP; a direct one none.
     Each session opens with `tabs` tabs, the pool's per_session."""
 
     async def factory(key):
         _, use_proxy = key
-        return await open_session(key, proxies.next_sticky() if use_proxy else None, tabs)
+        return await open_session(
+            key, proxies.next_sticky() if use_proxy else None, tabs
+        )
 
     return factory

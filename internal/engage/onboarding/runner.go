@@ -7,12 +7,14 @@ import (
 	"log"
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
+	"github.com/strelov1/freehire/internal/engage/maildaily"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // Store is the slice of the database this feature reads and writes. Declared here
 // rather than taking *db.Queries so the runner can be tested without Postgres.
 type Store interface {
+	maildaily.Store
 	ListWelcomeCandidates(ctx context.Context, arg db.ListWelcomeCandidatesParams) ([]db.ListWelcomeCandidatesRow, error)
 	ListAdvancedSearchCandidates(ctx context.Context, arg db.ListAdvancedSearchCandidatesParams) ([]db.ListAdvancedSearchCandidatesRow, error)
 	ListNoAlertCandidates(ctx context.Context, arg db.ListNoAlertCandidatesParams) ([]db.ListNoAlertCandidatesRow, error)
@@ -75,18 +77,22 @@ func DefaultConfig() Config {
 type Runner struct {
 	store  Store
 	mailer *Mailer
+	claims *maildaily.Claimer
 	cfg    Config
 }
 
 // New builds a Runner.
 func New(store Store, mailer *Mailer, cfg Config) *Runner {
-	return &Runner{store: store, mailer: mailer, cfg: cfg}
+	return &Runner{store: store, mailer: mailer, claims: maildaily.New(store, maildaily.SourceOnboarding), cfg: cfg}
 }
 
 // Stats is what one pass did, per step.
 type Stats struct {
 	Sent   map[Step]int
 	Failed map[Step]int
+	// Deferred counts the letters left pending because another sender already took the
+	// account's mail for the day. Not a failure: the step is found again on a later pass.
+	Deferred map[Step]int
 }
 
 // Run sends every eligible mail in every step.
@@ -96,7 +102,7 @@ type Stats struct {
 // single failed *send*, by contrast, is recorded and stepped over: one bad address
 // must not stop the other 199 people in the batch.
 func (r *Runner) Run(ctx context.Context) (Stats, error) {
-	stats := Stats{Sent: map[Step]int{}, Failed: map[Step]int{}}
+	stats := Stats{Sent: map[Step]int{}, Failed: map[Step]int{}, Deferred: map[Step]int{}}
 
 	for _, step := range []Step{StepWelcome, StepAdvancedSearch, StepNoAlert, StepExtension, StepOpenSource, StepTailor, StepBuddies} {
 		recipients, err := r.candidates(ctx, step)
@@ -104,13 +110,15 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 			return stats, fmt.Errorf("onboarding: listing %s candidates: %w", step, err)
 		}
 		for _, rec := range recipients {
-			sent, paused := r.deliver(ctx, step, rec)
-			if sent {
+			switch r.deliver(ctx, step, rec) {
+			case outcomeSent:
 				stats.Sent[step]++
-				continue
-			}
-			stats.Failed[step]++
-			if paused {
+			case outcomeDeferred:
+				stats.Deferred[step]++
+			case outcomeFailed:
+				stats.Failed[step]++
+			case outcomePaused:
+				stats.Failed[step]++
 				log.Printf("onboarding: ses is not sending for the account, ending the pass at %s; nothing was recorded for the rest", step)
 				return stats, nil
 			}
@@ -234,27 +242,58 @@ func (r *Runner) candidates(ctx context.Context, step Step) ([]recipient, error)
 	return nil, fmt.Errorf("unknown step %q", step)
 }
 
-// deliver sends one mail and closes out the ledger row. It reports whether the send
-// succeeded, and whether SES refused the whole account (the caller ends the pass).
+// outcome is what happened to one recipient in one pass.
+type outcome int
+
+const (
+	outcomeSent outcome = iota
+	// outcomeDeferred: the account's day was taken by another sender, so the step is left
+	// pending and no ledger row is written.
+	outcomeDeferred
+	outcomeFailed
+	// outcomePaused: SES refused the whole account; the caller ends the pass.
+	outcomePaused
+)
+
+// deliver claims the account's mail for the day, sends one mail and closes out the
+// ledger row.
+//
+// The claim comes first (maildaily): an account that already got another optional letter
+// today is deferred — nothing is sent and nothing is recorded, so the step is simply a
+// candidate again tomorrow. A claim that cannot be recorded counts as a failure and sends
+// nothing, since an unrecorded claim cannot bound anything.
 //
 // A failure of one address burns the (user, step) pair: the ledger is written with
 // the error. Retrying an address that SES just rejected is how a sending domain
 // accumulates bounces, and the sequence is a courtesy — not worth risking
 // deliverability for every other mail the product sends. Re-arming is a manual DELETE.
+// The daily claim is released all the same, so the failed attempt does not cost the
+// account another sender's letter today.
 //
 // An account-level refusal (emailnotify.ErrSendingPaused) is the opposite case and
 // writes no row: nothing was judged about this address, so burning its slot would
 // lose the mail for good just because SES was paused. The next pass finds it again.
-func (r *Runner) deliver(ctx context.Context, step Step, rec recipient) (sent, paused bool) {
+func (r *Runner) deliver(ctx context.Context, step Step, rec recipient) outcome {
+	claim, ok, err := r.claims.Take(ctx, rec.userID)
+	if err != nil {
+		log.Printf("onboarding: %s to user %d: %v", step, rec.userID, err)
+		return outcomeFailed
+	}
+	if !ok {
+		return outcomeDeferred
+	}
+
 	sendErr := r.mailer.Send(ctx, step, rec.userID, rec.email)
 	if errors.Is(sendErr, emailnotify.ErrSendingPaused) {
-		return false, true
+		r.release(ctx, claim)
+		return outcomePaused
 	}
 
 	var errText string
 	if sendErr != nil {
 		errText = sendErr.Error()
 		log.Printf("onboarding: %s to user %d failed: %v", step, rec.userID, sendErr)
+		r.release(ctx, claim)
 	}
 
 	if err := r.store.RecordOnboardingEmail(ctx, db.RecordOnboardingEmailParams{
@@ -267,5 +306,14 @@ func (r *Runner) deliver(ctx context.Context, step Step, rec recipient) (sent, p
 		// symptom this feature can produce.
 		log.Printf("onboarding: recording %s for user %d failed (mail may repeat): %v", step, rec.userID, err)
 	}
-	return sendErr == nil, false
+	if sendErr != nil {
+		return outcomeFailed
+	}
+	return outcomeSent
+}
+
+func (r *Runner) release(ctx context.Context, claim maildaily.Claim) {
+	if err := r.claims.Release(ctx, claim); err != nil {
+		log.Printf("onboarding: %v", err)
+	}
 }
