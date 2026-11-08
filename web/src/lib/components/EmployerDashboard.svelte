@@ -214,7 +214,9 @@
         // A re-Create under the same URL (this account's own reopen path) replaces the
         // existing row rather than duplicating it — mirror that here too.
         const exists = vacanciesData.value.some((j) => j.public_slug === created.public_slug);
-        vacanciesData.value = exists ? vacanciesData.value.map((j) => (j.public_slug === created.public_slug ? created : j)) : [created, ...vacanciesData.value];
+        vacanciesData.value = exists
+          ? vacanciesData.value.map((j) => (j.public_slug === created.public_slug ? created : j))
+          : [created, ...vacanciesData.value];
       }
       formOpen = false;
       resetForm();
@@ -278,7 +280,10 @@
       </label>
       <label class="flex flex-col gap-1">
         <span class="text-sm font-medium">{s.profileDescriptionLabel}</span>
-        <textarea bind:value={description} rows="4" class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
+        <textarea
+          bind:value={description}
+          rows="4"
+          class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
         ></textarea>
       </label>
       <label class="flex flex-col gap-1">
@@ -290,7 +295,12 @@
       </label>
       <label class="flex flex-col gap-1">
         <span class="text-sm font-medium">{s.profileIndustriesLabel}</span>
-        <TokenInput label={s.profileIndustriesLabel} tokens={industries} onAdd={(v) => (industries = [...industries, v])} onRemove={(v) => (industries = industries.filter((x) => x !== v))} />
+        <TokenInput
+          label={s.profileIndustriesLabel}
+          tokens={industries}
+          onAdd={(v) => (industries = [...industries, v])}
+          onRemove={(v) => (industries = industries.filter((x) => x !== v))}
+        />
       </label>
       <div class="flex flex-col gap-4 sm:flex-row">
         <label class="flex flex-1 flex-col gap-1">
@@ -350,7 +360,13 @@
               <legend class="text-sm font-medium">{s.applyModeLabel}</legend>
               {#each [['freehire', s.applyModeFreehire, s.applyModeFreehireHint], ['external', s.applyModeExternal, s.applyModeExternalHint]] as [mode, label, hint] (mode)}
                 <label class="flex items-start gap-2 text-sm">
-                  <input type="radio" name="apply-mode" value={mode} bind:group={applyMode} class="mt-1 accent-current" />
+                  <input
+                    type="radio"
+                    name="apply-mode"
+                    value={mode}
+                    bind:group={applyMode}
+                    class="mt-1 accent-current"
+                  />
                   <span class="flex flex-col">
                     <span class="font-medium">{label}</span>
                     <span class="text-xs text-muted-foreground">{hint}</span>
@@ -416,7 +432,10 @@
           <label class="flex flex-col gap-1">
             <span class="text-sm font-medium">{s.fieldDescription}</span>
             <span class="text-xs text-muted-foreground">{s.fieldDescriptionHint}</span>
-            <textarea bind:value={descriptionMd} rows="6" class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
+            <textarea
+              bind:value={descriptionMd}
+              rows="6"
+              class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
             ></textarea>
           </label>
           {#if !editingSlug}
@@ -439,7 +458,14 @@
                 {saving ? s.publishing : s.publish}
               {/if}
             </Button>
-            <Button type="button" variant="ghost" onclick={() => { formOpen = false; resetForm(); }}>
+            <Button
+              type="button"
+              variant="ghost"
+              onclick={() => {
+                formOpen = false;
+                resetForm();
+              }}
+            >
               {s.cancel}
             </Button>
           </div>

@@ -35,7 +35,7 @@ export interface SignalExplainer {
 const EXPLAINERS: Record<string, { fact: string; gist: string; why: string }> = {
   evergreen_posting: {
     fact: 'Open 240 days · reposted 13× · 7 copies open at once',
-    gist: "The same job posted over and over, often with several copies live at once. Age on its own never triggers it — hard senior roles stay open a long time.",
+    gist: 'The same job posted over and over, often with several copies live at once. Age on its own never triggers it — hard senior roles stay open a long time.',
     why: 'One role advertised over and over, often with several copies live at the same time. It never fires on age alone — a genuinely hard senior role stays open a long time. Age is measured from when freehire first saw the posting, not from the date the source prints, so refreshing that date does not reset it.',
   },
   ats_absent: {
@@ -50,7 +50,7 @@ const EXPLAINERS: Record<string, { fact: string; gist: string; why: string }> = 
   },
   user_reports: {
     fact: 'People reported applying with no response',
-    gist: "Someone says they applied on a given date and heard nothing back. It carries no weight until enough time has passed, and it can be taken back.",
+    gist: 'Someone says they applied on a given date and heard nothing back. It carries no weight until enough time has passed, and it can be taken back.',
     why: 'Someone states they applied on a given date and heard nothing. It carries no weight until the same span has passed that a tracked application gets, and it can be withdrawn — an employer who answers late costs the posting its evidence.',
   },
 };

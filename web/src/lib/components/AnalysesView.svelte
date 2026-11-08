@@ -68,10 +68,16 @@
             <span class="flex items-center gap-2">
               <span class="truncate font-medium">{it.title}</span>
               {#if it.closed}
-                <span class="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-muted-foreground">{s.closed}</span>
+                <span
+                  class="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-muted-foreground"
+                  >{s.closed}</span
+                >
               {/if}
               {#if it.stale}
-                <span class="shrink-0 rounded-full border border-warning/40 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-warning-strong">{s.stale}</span>
+                <span
+                  class="shrink-0 rounded-full border border-warning/40 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-warning-strong"
+                  >{s.stale}</span
+                >
               {/if}
             </span>
             <span class="flex items-center gap-1.5 text-xs text-muted-foreground">

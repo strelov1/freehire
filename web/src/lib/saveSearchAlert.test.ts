@@ -145,11 +145,7 @@ const sub = (id: number, savedSearchId: number, channel: string): Subscription =
 
 // A SubscriptionsPort double. `held` is what the caller currently has; `server` is what
 // a refresh() would read back. Seeding them differently is how a stale list is staged.
-function makeSubs(opts: {
-  held?: Subscription[];
-  server?: Subscription[];
-  addImpl?: () => Promise<void>;
-}): {
+function makeSubs(opts: { held?: Subscription[]; server?: Subscription[]; addImpl?: () => Promise<void> }): {
   port: SubscriptionsPort;
   held: Subscription[];
   calls: { ensureLoaded: number; add: number; refresh: number };

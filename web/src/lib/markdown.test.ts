@@ -50,14 +50,11 @@ describe('renderMarkdown — request-triggering markup', () => {
 });
 
 describe('renderMarkdown — URI schemes', () => {
-  it.each(['javascript:alert(1)', 'data:text/html,<script>alert(1)</script>'])(
-    'refuses the %s scheme',
-    (uri) => {
-      const html = renderMarkdown(`[click](${uri})`);
-      expect(html).not.toContain('href="' + uri);
-      expect(html).toContain('click');
-    },
-  );
+  it.each(['javascript:alert(1)', 'data:text/html,<script>alert(1)</script>'])('refuses the %s scheme', (uri) => {
+    const html = renderMarkdown(`[click](${uri})`);
+    expect(html).not.toContain('href="' + uri);
+    expect(html).toContain('click');
+  });
 });
 
 // The policy has to leave the assistant able to write a readable answer — the prompt

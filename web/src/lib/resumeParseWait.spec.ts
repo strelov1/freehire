@@ -73,9 +73,7 @@ describe('resumeStore.waitForParse', () => {
 
   it('keeps the newer of two overlapping reads, whichever lands last', async () => {
     let answerOld!: (value: unknown) => void;
-    getResume
-      .mockReturnValueOnce(new Promise((resolve) => (answerOld = resolve)))
-      .mockResolvedValueOnce(meta('ok'));
+    getResume.mockReturnValueOnce(new Promise((resolve) => (answerOld = resolve))).mockResolvedValueOnce(meta('ok'));
 
     const older = resumeStore.refresh();
     await resumeStore.refresh();

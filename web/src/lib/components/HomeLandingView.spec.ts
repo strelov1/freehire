@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CatalogScale } from '#lib/types.js';
 
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn(), afterNavigate: vi.fn(), beforeNavigate: vi.fn(), onNavigate: vi.fn() }));
+vi.mock('$app/navigation', () => ({
+  goto: vi.fn(),
+  afterNavigate: vi.fn(),
+  beforeNavigate: vi.fn(),
+  onNavigate: vi.fn(),
+}));
 vi.mock('#lib/api.js', () => ({
   api: {
     facetCounts: vi.fn(() => new Promise(() => {})),
@@ -13,7 +18,14 @@ vi.mock('#lib/api.js', () => ({
 }));
 // The live feed opens an SSE stream; it is not what these tests are about.
 vi.mock('./RecentJobsFeed.svelte', () => ({ default: () => {} }));
-vi.stubGlobal('IntersectionObserver', class { observe() {} unobserve() {} disconnect() {} });
+vi.stubGlobal(
+  'IntersectionObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
 
 import HomeLandingView from './HomeLandingView.svelte';
 

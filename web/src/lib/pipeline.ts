@@ -38,8 +38,7 @@ export const PIPELINE_BANDS: PipelineBand[] = STAGE_GROUPS.map((g) => ({
   color: BAND_COLORS[g.id] ?? '#cbd5e1',
 }));
 
-const countAt = (s: PipelineStats, stage: string): number =>
-  s.stages[stage as keyof typeof s.stages] ?? 0;
+const countAt = (s: PipelineStats, stage: string): number => s.stages[stage as keyof typeof s.stages] ?? 0;
 
 /** The total at a band: the sum of the stages it holds. */
 export function bandTotal(s: PipelineStats, band: PipelineBand): number {
@@ -47,10 +46,7 @@ export function bandTotal(s: PipelineStats, band: PipelineBand): number {
 }
 
 /** The per-stage breakdown of a band, in pipeline order, for the line beneath it. */
-export function bandBreakdown(
-  s: PipelineStats,
-  band: PipelineBand,
-): { stage: string; count: number }[] {
+export function bandBreakdown(s: PipelineStats, band: PipelineBand): { stage: string; count: number }[] {
   return band.stages.map((stage) => ({ stage, count: countAt(s, stage) }));
 }
 

@@ -14,26 +14,51 @@ vi.mock('#lib/auth.svelte.js', () => ({
   currentUser: () => ({ id: 7 }),
 }));
 const { listMyJobs, listSavedSlugs, unsaveJob } = vi.hoisted(() => ({
-  listMyJobs: vi.fn(), listSavedSlugs: vi.fn(), unsaveJob: vi.fn(),
+  listMyJobs: vi.fn(),
+  listSavedSlugs: vi.fn(),
+  unsaveJob: vi.fn(),
 }));
 vi.mock('#lib/api.js', async (original) => {
   const actual = await original<typeof import('#lib/api.js')>();
-  return { ...actual, api: {
-    ...actual.api, listMyJobs, listSavedSlugs, unsaveJob,
-    getProfile: vi.fn().mockResolvedValue(null),
-  } };
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      listMyJobs,
+      listSavedSlugs,
+      unsaveJob,
+      getProfile: vi.fn().mockResolvedValue(null),
+    },
+  };
 });
 
 function item(id: number): MyJob {
   const job = {
-    public_slug: 'job-' + id, title: 'Role ' + id, company: 'Company ' + id,
-    source: 'greenhouse', location: '', skills: [], countries: [], collections: [],
+    public_slug: 'job-' + id,
+    title: 'Role ' + id,
+    company: 'Company ' + id,
+    source: 'greenhouse',
+    location: '',
+    skills: [],
+    countries: [],
+    collections: [],
   } as JobCard;
   return {
-    id: String(id), job, company_slug: 'company-' + id, role_title: 'Role ' + id,
-    viewed_at: '', saved_at: '2026-11-01T00:00:00Z', applied_at: null, stage: null, notes: null,
-    email_count: 0, last_activity_at: null, days_silent: null, silence_state: null,
-    followed_up_at: null, cv_opened_at: null,
+    id: String(id),
+    job,
+    company_slug: 'company-' + id,
+    role_title: 'Role ' + id,
+    viewed_at: '',
+    saved_at: '2026-11-01T00:00:00Z',
+    applied_at: null,
+    stage: null,
+    notes: null,
+    email_count: 0,
+    last_activity_at: null,
+    days_silent: null,
+    silence_state: null,
+    followed_up_at: null,
+    cv_opened_at: null,
   };
 }
 const first = item(1);
@@ -48,7 +73,8 @@ beforeEach(() => {
 
 describe('SavedJobs removal', () => {
   it('loads remaining jobs after removing the last loaded card', async () => {
-    listMyJobs.mockResolvedValueOnce({ items: [first], total: 2, hasMore: true })
+    listMyJobs
+      .mockResolvedValueOnce({ items: [first], total: 2, hasMore: true })
       .mockResolvedValueOnce({ items: [second], total: 1, hasMore: false });
     render(SavedJobs);
     await fireEvent.click(await screen.findByRole('button', { name: 'Remove from saved' }));
@@ -60,8 +86,7 @@ describe('SavedJobs removal', () => {
 
   it('finishes pagination before deleting so its offset cannot become stale', async () => {
     const next = Promise.withResolvers<{ items: MyJob[]; total: number; hasMore: boolean }>();
-    listMyJobs.mockResolvedValueOnce({ items: [first], total: 2, hasMore: true })
-      .mockReturnValueOnce(next.promise);
+    listMyJobs.mockResolvedValueOnce({ items: [first], total: 2, hasMore: true }).mockReturnValueOnce(next.promise);
     render(SavedJobs);
     const remove = await screen.findByRole('button', { name: 'Remove from saved' });
     await fireEvent.click(screen.getByRole('button', { name: 'Load more' }));

@@ -38,9 +38,7 @@
   /** An education entry's chip text: "Bachelor's degree · 2019", or just the level
    *  when no year resolved. Never the institution — the card never carries one. */
   function educationLabel(entry: NonNullable<CandidateCard['education']>[number]): string {
-    const level = entry.level
-      ? (EDUCATION_LEVEL_LABELS[entry.level] ?? titleCase(entry.level))
-      : '';
+    const level = entry.level ? (EDUCATION_LEVEL_LABELS[entry.level] ?? titleCase(entry.level)) : '';
     return entry.year ? `${level} · ${entry.year.year}` : level;
   }
 </script>

@@ -1,11 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  withSkill,
-  withSkills,
-  withoutSkill,
-  withAvoidedSkill,
-  withoutAvoidedSkill,
-} from './profileSkills';
+import { withSkill, withSkills, withoutSkill, withAvoidedSkill, withoutAvoidedSkill } from './profileSkills';
 
 describe('withSkill', () => {
   it('appends the claimed skill', () => {
@@ -38,15 +32,17 @@ describe('withSkill', () => {
 
 describe('withSkills', () => {
   it('claims every skill in the list', () => {
-    expect(withSkills({ skills: ['docker'], excluded_skills: [] }, ['go', 'postgresql'])).toEqual(
-      { skills: ['docker', 'go', 'postgresql'], excluded_skills: [] },
-    );
+    expect(withSkills({ skills: ['docker'], excluded_skills: [] }, ['go', 'postgresql'])).toEqual({
+      skills: ['docker', 'go', 'postgresql'],
+      excluded_skills: [],
+    });
   });
 
   it('drops each claimed skill from the excluded set, whatever its case', () => {
-    expect(
-      withSkills({ skills: [], excluded_skills: ['Go', 'php'] }, ['go', 'postgresql']),
-    ).toEqual({ skills: ['go', 'postgresql'], excluded_skills: ['php'] });
+    expect(withSkills({ skills: [], excluded_skills: ['Go', 'php'] }, ['go', 'postgresql'])).toEqual({
+      skills: ['go', 'postgresql'],
+      excluded_skills: ['php'],
+    });
   });
 
   it('adds nothing already held, whatever its case', () => {
@@ -65,9 +61,10 @@ describe('withSkills', () => {
 
 describe('withoutSkill', () => {
   it('removes only the named skill, keeping one claimed after it', () => {
-    expect(
-      withoutSkill({ skills: ['docker', 'bash', 'powershell'], excluded_skills: [] }, 'bash'),
-    ).toEqual({ skills: ['docker', 'powershell'], excluded_skills: [] });
+    expect(withoutSkill({ skills: ['docker', 'bash', 'powershell'], excluded_skills: [] }, 'bash')).toEqual({
+      skills: ['docker', 'powershell'],
+      excluded_skills: [],
+    });
   });
 
   it('matches the held skill whatever its case', () => {
@@ -122,9 +119,10 @@ describe('withAvoidedSkill', () => {
 
 describe('withoutAvoidedSkill', () => {
   it('lifts the avoid, leaving another one standing', () => {
-    expect(
-      withoutAvoidedSkill({ skills: ['go'], excluded_skills: ['php', 'wordpress'] }, 'php'),
-    ).toEqual({ skills: ['go'], excluded_skills: ['wordpress'] });
+    expect(withoutAvoidedSkill({ skills: ['go'], excluded_skills: ['php', 'wordpress'] }, 'php')).toEqual({
+      skills: ['go'],
+      excluded_skills: ['wordpress'],
+    });
   });
 
   it('matches the avoided skill whatever its case', () => {

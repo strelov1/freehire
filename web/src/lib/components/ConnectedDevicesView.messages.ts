@@ -35,7 +35,8 @@ export const messages = defineMessages(
   {
     ru: {
       title: 'Подключённые устройства',
-      intro: 'MCP-клиенты — например, Claude, Cursor или ChatGPT — которым вы разрешили действовать от имени вашего аккаунта freehire.',
+      intro:
+        'MCP-клиенты — например, Claude, Cursor или ChatGPT — которым вы разрешили действовать от имени вашего аккаунта freehire.',
       agentsMayApply: {
         label: 'Разрешить подключённым агентам откликаться за меня',
         detail:

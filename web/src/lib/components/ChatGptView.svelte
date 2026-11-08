@@ -12,13 +12,25 @@
   // What the app answers, one line each. Every row is a tool the published app's
   // server (`/api/v1/mcp`, internal/api/mcpapp) actually has.
   const answers = [
-    { title: 'Search with real filters', body: 'Region, work mode, stack, seniority, salary — ChatGPT searches the live freehire catalogue, not the open web.' },
-    { title: 'Jobs as cards', body: 'Results and postings render as cards right in the chat, each linking to its freehire page and the employer.' },
-    { title: 'Is it still open?', body: 'Paste a shortlist and ChatGPT checks which postings are still open and which have closed.' },
+    {
+      title: 'Search with real filters',
+      body: 'Region, work mode, stack, seniority, salary — ChatGPT searches the live freehire catalogue, not the open web.',
+    },
+    {
+      title: 'Jobs as cards',
+      body: 'Results and postings render as cards right in the chat, each linking to its freehire page and the employer.',
+    },
+    {
+      title: 'Is it still open?',
+      body: 'Paste a shortlist and ChatGPT checks which postings are still open and which have closed.',
+    },
     { title: 'Similar roles', body: 'Ask for more like the one you picked — the same neighbours the job page shows.' },
     { title: 'Salary ranges', body: 'What a role pays by seniority, from postings that state a salary.' },
     { title: 'Market breakdowns', body: 'Which skills, countries and work modes a search turns up most.' },
-    { title: 'Your search progress', body: 'Connect with OAuth to read your profile, save jobs, update tracking and manage alerts.' },
+    {
+      title: 'Your search progress',
+      body: 'Connect with OAuth to read your profile, save jobs, update tracking and manage alerts.',
+    },
   ];
 </script>
 
@@ -39,9 +51,9 @@
         </h1>
 
         <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
-          {MCP_CATALOG_PITCH} Ask ChatGPT for roles that match your stack, location and salary expectations,
-          and explore the results as job cards. Search without a freehire account, then connect with OAuth
-          to save your shortlist and keep track of your applications.
+          {MCP_CATALOG_PITCH} Ask ChatGPT for roles that match your stack, location and salary expectations, and explore the
+          results as job cards. Search without a freehire account, then connect with OAuth to save your shortlist and keep
+          track of your applications.
         </p>
 
         <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:240ms">
@@ -68,9 +80,7 @@
         class="reveal overflow-hidden rounded-xl border border-border bg-secondary/60 text-sm shadow-sm"
         style="--d:320ms"
       >
-        <figcaption
-          class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
-        >
+        <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
           <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
           ChatGPT · freehire
         </figcaption>
@@ -131,10 +141,12 @@
     <h2 class="mt-10 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Save and track</h2>
     <p class="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
       Use the same freehire connection to save jobs and update your
-      <a href={resolve('/my/tracking')} class="font-medium text-foreground underline-offset-4 hover:underline">Tracking</a>
-      board. When ChatGPT asks for access, sign in with freehire and approve the connection.
-      Public search works without an account. Personal tools use OAuth and do not need an API key.
-      The <a href={resolve('/mcp')} class="font-medium text-foreground underline-offset-4 hover:underline">setup guide</a>
+      <a href={resolve('/my/tracking')} class="font-medium text-foreground underline-offset-4 hover:underline"
+        >Tracking</a
+      >
+      board. When ChatGPT asks for access, sign in with freehire and approve the connection. Public search works without an
+      account. Personal tools use OAuth and do not need an API key. The
+      <a href={resolve('/mcp')} class="font-medium text-foreground underline-offset-4 hover:underline">setup guide</a>
       also covers custom connections to the same MCP address.
     </p>
     <p class="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">

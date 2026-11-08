@@ -105,11 +105,9 @@ async function readTopFrameJobPostingMarkup(): Promise<RuntimeMessage> {
   const tabId = await activeTabId();
   if (tabId == null) return absent;
   try {
-    const reply = (await browser.tabs.sendMessage(
-      tabId,
-      { kind: 'GET_JOB_POSTING_MARKUP' } satisfies RuntimeMessage,
-      { frameId: TOP_FRAME },
-    )) as RuntimeMessage | undefined;
+    const reply = (await browser.tabs.sendMessage(tabId, { kind: 'GET_JOB_POSTING_MARKUP' } satisfies RuntimeMessage, {
+      frameId: TOP_FRAME,
+    })) as RuntimeMessage | undefined;
     return reply?.kind === 'JOB_POSTING_MARKUP' ? reply : absent;
   } catch {
     return absent;
@@ -274,9 +272,7 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
     case 'unreachable':
       return fail("can't reach this embedded form yet — it's inside a frame this action cannot address");
     case 'ambiguous':
-      return fail(
-        `found ${pick.count} file fields on this page and cannot tell which one to use — attach it by hand`,
-      );
+      return fail(`found ${pick.count} file fields on this page and cannot tell which one to use — attach it by hand`);
   }
   const upload = pick.upload;
 

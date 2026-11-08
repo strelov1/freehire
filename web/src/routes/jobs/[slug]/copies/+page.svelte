@@ -59,9 +59,7 @@
       <span class="text-muted-foreground">{from}–{to} of {data.total}</span>
       {#if hasNext}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- copiesHref is already resolve()'d; only a query-string offset is appended, which the linter can't trace through the variable -->
-        <a href={nextHref} class="font-medium text-brand-strong hover:underline" data-sveltekit-reset="false"
-          >Next →</a
-        >
+        <a href={nextHref} class="font-medium text-brand-strong hover:underline" data-sveltekit-reset="false">Next →</a>
       {:else}
         <span></span>
       {/if}

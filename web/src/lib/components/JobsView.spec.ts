@@ -17,7 +17,7 @@ vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }
 vi.mock('$app/navigation', () => ({ afterNavigate() {}, goto: vi.fn(), replaceState: vi.fn() }));
 vi.mock('#lib/auth.svelte.js', () => ({
   isAuthenticated: () => session.get('id') != null,
-  currentUser: () => session.get('id') == null ? null : { id: session.get('id') },
+  currentUser: () => (session.get('id') == null ? null : { id: session.get('id') }),
 }));
 vi.mock('#lib/analytics.js', () => ({ track() {} }));
 const { searchJobs, saved, profileStore } = vi.hoisted(() => ({
@@ -53,7 +53,10 @@ beforeEach(() => {
 
 function mountList(params: string, scope = {}) {
   return render(JobsView, {
-    initial: { items: [], total: 0, hasMore: false }, initialParams: params, currentPage: 1, scope,
+    initial: { items: [], total: 0, hasMore: false },
+    initialParams: params,
+    currentPage: 1,
+    scope,
   });
 }
 
@@ -75,16 +78,22 @@ describe('minimum skill match from the URL or a saved search', () => {
     expect(screen.queryByRole('button', { name: hint })).toBeNull();
   });
 
-  const lowJob = (n: number) => ({
-    public_slug: `low-${n}`, title: `Low match ${n}`, company: 'Acme', skills: ['go', 'kafka', 'aws', 'spark'],
-  }) as unknown as Job;
+  const lowJob = (n: number) =>
+    ({
+      public_slug: `low-${n}`,
+      title: `Low match ${n}`,
+      company: 'Acme',
+      skills: ['go', 'kafka', 'aws', 'spark'],
+    }) as unknown as Job;
 
   it('shows the server page as served under best match, with a lower-bound total', () => {
     session.set('id', 7);
     profileStore.profile = { skills: ['go'] };
     render(JobsView, {
       initial: { items: [lowJob(1)], total: 41, hasMore: true, totalIsLowerBound: true },
-      initialParams: 'min_skill_match=70&sort=match', currentPage: 1, scope: {},
+      initialParams: 'min_skill_match=70&sort=match',
+      currentPage: 1,
+      scope: {},
     });
     expect(screen.getByText(/Low match 1/)).toBeTruthy();
     expect(screen.getAllByTitle('At least 41 jobs').length).toBeGreaterThan(0);
@@ -95,7 +104,9 @@ describe('minimum skill match from the URL or a saved search', () => {
     profileStore.profile = { skills: ['go'] };
     render(JobsView, {
       initial: { items: [lowJob(1)], total: 41, hasMore: true },
-      initialParams: 'min_skill_match=70', currentPage: 1, scope: {},
+      initialParams: 'min_skill_match=70',
+      currentPage: 1,
+      scope: {},
     });
     expect(screen.queryByText(/Low match 1/)).toBeNull();
   });
@@ -128,7 +139,11 @@ describe('personal job filters', () => {
     mountList(`${param}=true`);
     await tick();
     expect(searchJobs).not.toHaveBeenCalled();
-    for (const [id, calls] of [[7, 1], [8, 2], [null, 3]] as const) {
+    for (const [id, calls] of [
+      [7, 1],
+      [8, 2],
+      [null, 3],
+    ] as const) {
       session.set('id', id);
       await waitFor(() => expect(searchJobs).toHaveBeenCalledTimes(calls));
       expect(searchJobs.mock.lastCall?.[0].get(param)).toBe('true');
@@ -138,7 +153,8 @@ describe('personal job filters', () => {
   it('starts a new reader on page one instead of retaining a deep offset', async () => {
     render(JobsView, {
       initial: { items: [], total: 100, hasMore: false },
-      initialParams: 'former_employers=true', currentPage: 4,
+      initialParams: 'former_employers=true',
+      currentPage: 4,
     });
     await tick();
     session.set('id', 7);

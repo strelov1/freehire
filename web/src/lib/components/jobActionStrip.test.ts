@@ -167,9 +167,7 @@ describe('the job page call-to-action row', () => {
     ['the pinned header', () => pinnedHeader],
   ])('renders tailorCta last in %s', (_where, region) => {
     const source = region();
-    const order = ['autoApplyCta', 'applyCta', 'tailorCta'].map((s) =>
-      source.indexOf(`@render ${s}(`),
-    );
+    const order = ['autoApplyCta', 'applyCta', 'tailorCta'].map((s) => source.indexOf(`@render ${s}(`));
     expect(order.every((i) => i !== -1)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });

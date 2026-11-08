@@ -24,7 +24,9 @@
       }
       const match = items.find((cv) => cv.id === id);
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to both paths; the rule can't see through the appended ?cv= query
-      await goto(match ? `${resolve('/tailor/[slug]', { slug: match.job_slug })}?cv=${id}` : resolve('/my/cvs'), { replaceState: true });
+      await goto(match ? `${resolve('/tailor/[slug]', { slug: match.job_slug })}?cv=${id}` : resolve('/my/cvs'), {
+        replaceState: true,
+      });
     } catch {
       await goto(resolve('/my/cvs'), { replaceState: true });
     }

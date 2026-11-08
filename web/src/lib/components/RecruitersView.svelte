@@ -21,8 +21,16 @@
 
   const steps = [
     { n: '01', title: 'Submit', body: 'Paste the job URL and a few details. Sign in first — it takes a moment.' },
-    { n: '02', title: 'Review', body: 'A moderator checks the posting. You can follow its status under “My submissions”.' },
-    { n: '03', title: 'Live', body: 'Once approved, the role joins the public catalogue and search — enriched and deduplicated like every other source.' },
+    {
+      n: '02',
+      title: 'Review',
+      body: 'A moderator checks the posting. You can follow its status under “My submissions”.',
+    },
+    {
+      n: '03',
+      title: 'Live',
+      body: 'Once approved, the role joins the public catalogue and search — enriched and deduplicated like every other source.',
+    },
   ];
 </script>
 
@@ -36,8 +44,8 @@
       Put your role in front of developers.
     </h1>
     <p class="max-w-xl text-lg leading-relaxed text-muted-foreground">
-      Submit a vacancy to freehire and, once a moderator approves it, it joins one clean, searchable
-      feed of tech jobs — free, open-source, no fees.
+      Submit a vacancy to freehire and, once a moderator approves it, it joins one clean, searchable feed of tech jobs —
+      free, open-source, no fees.
     </p>
     <div class="flex flex-wrap items-center gap-3">
       <Button href="/submit" variant="primary" size="lg">Submit a job</Button>

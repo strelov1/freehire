@@ -24,5 +24,7 @@
     <UnreadBadge count={conversation.unread} />
   </span>
   <!-- Indented under the avatar a reachable counterpart is drawn with. -->
-  <span class="mt-1 block text-xs text-muted-foreground {conversation.counterpart.reachable ? 'pl-11' : ''}">{conversationStatusLabel(conversation.status_for_me)}</span>
+  <span class="mt-1 block text-xs text-muted-foreground {conversation.counterpart.reachable ? 'pl-11' : ''}"
+    >{conversationStatusLabel(conversation.status_for_me)}</span
+  >
 </button>

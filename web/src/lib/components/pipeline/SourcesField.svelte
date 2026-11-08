@@ -14,10 +14,7 @@
   // and the real numbers render as plain HTML underneath the canvas regardless of
   // whether WebGL, motion, or JavaScript itself is available. The canvas is a pure
   // enhancement layered on top; losing it loses nothing true about the page.
-  let {
-    sources,
-    companies,
-  }: { sources: number | null; companies: number | null } = $props();
+  let { sources, companies }: { sources: number | null; companies: number | null } = $props();
 
   const compactNf = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
   const companiesLabel = $derived(companies != null ? compactNf.format(companies) : null);
@@ -385,10 +382,7 @@
   });
 </script>
 
-<div
-  bind:this={container}
-  class="relative h-72 overflow-hidden sm:h-80 lg:h-96"
->
+<div bind:this={container} class="relative h-72 overflow-hidden sm:h-80 lg:h-96">
   <canvas
     bind:this={canvas}
     class="absolute inset-0 h-full w-full"
@@ -402,8 +396,8 @@
       <span class="text-muted-foreground">companies</span>
     </p>
     <p class="max-w-sm text-sm leading-relaxed text-muted-foreground">
-      Every open role traces back to one of them — crawled straight from where they
-      actually posted it, not a copy of a copy.
+      Every open role traces back to one of them — crawled straight from where they actually posted it, not a copy of a
+      copy.
     </p>
   </div>
 </div>

@@ -7,7 +7,12 @@
 </script>
 
 <ConfirmDialog
-  bind:open={() => cvRefreshDialog.open, (v) => { if (!v) settleCvRefreshDialog(false); }}
+  bind:open={
+    () => cvRefreshDialog.open,
+    (v) => {
+      if (!v) settleCvRefreshDialog(false);
+    }
+  }
   title={cvRefreshDialog.message}
   confirmLabel="Update"
   onConfirm={() => settleCvRefreshDialog(true)}

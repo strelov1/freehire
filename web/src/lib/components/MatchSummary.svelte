@@ -19,10 +19,7 @@
   // This component fetches nothing. The page reads the match analysis once and hands it
   // down, because the CTA row needs the same response to know whether to offer the button
   // at all, and moving that button must not buy a second call to the same endpoint.
-  let {
-    slug,
-    matchAnalysis,
-  }: { slug: string; matchAnalysis: MatchAnalysisResponse | null } = $props();
+  let { slug, matchAnalysis }: { slug: string; matchAnalysis: MatchAnalysisResponse | null } = $props();
 
   const analysis = $derived(matchAnalysis?.analysis ?? null);
   const topGap = $derived(analysis?.gaps?.[0] ?? null);
@@ -48,12 +45,17 @@
   <section class="flex flex-col gap-3 border-t border-border pt-4" aria-label="Fit analysis">
     {#if noCv}
       <div class="flex items-center justify-between gap-2">
-        <span class="flex items-center gap-1.5 text-xs text-muted-foreground"><FileText class="size-3.5 shrink-0" />Upload a CV to analyse</span>
+        <span class="flex items-center gap-1.5 text-xs text-muted-foreground"
+          ><FileText class="size-3.5 shrink-0" />Upload a CV to analyse</span
+        >
         <Button variant="primary" size="sm" href={resolve('/my/profile')}>Upload CV</Button>
       </div>
     {:else if analysis}
       {@const tone = verdictTone(analysis.overall_score)}
-      <a href={resolve('/tailor/[slug]', { slug })} class="group flex flex-col gap-2 rounded-lg border border-border p-3 transition-colors hover:border-brand/40 hover:bg-accent/40">
+      <a
+        href={resolve('/tailor/[slug]', { slug })}
+        class="group flex flex-col gap-2 rounded-lg border border-border p-3 transition-colors hover:border-brand/40 hover:bg-accent/40"
+      >
         <div class="flex items-baseline justify-between gap-2">
           <span class="text-2xl font-bold tabular-nums leading-none {toneText[tone]}">{analysis.overall_score}%</span>
           <span class="text-sm font-medium {toneText[tone]}">{analysis.verdict}</span>

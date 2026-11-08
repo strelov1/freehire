@@ -1,6 +1,12 @@
 <script lang="ts">
   import { dynamicLabel, FACETS } from '#lib/facets.js';
-  import { type FilterStore, savedSearchQuery, displayQuery, appliesWorkModeRemoteAnywhere, workModeRemoteLabel } from '#lib/filters.js';
+  import {
+    type FilterStore,
+    savedSearchQuery,
+    displayQuery,
+    appliesWorkModeRemoteAnywhere,
+    workModeRemoteLabel,
+  } from '#lib/filters.js';
   import { experienceLabel, freshnessLabel, salaryLabel } from '#lib/filterControls.js';
   import { unsummarized } from '#lib/filterSummary.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -14,7 +20,21 @@
   // save-then-alert control (Save filter → get it in Telegram) sits under the
   // All-filters button on the standalone list (`canSave`); the modal's "My filters"
   // tab drives the same control.
-  let { store, exclude = [], onOpen, canSave = false, description, matchAvailable = false }: { store: FilterStore; exclude?: string[]; onOpen: () => void; canSave?: boolean; description?: string; matchAvailable?: boolean } = $props();
+  let {
+    store,
+    exclude = [],
+    onOpen,
+    canSave = false,
+    description,
+    matchAvailable = false,
+  }: {
+    store: FilterStore;
+    exclude?: string[];
+    onOpen: () => void;
+    canSave?: boolean;
+    description?: string;
+    matchAvailable?: boolean;
+  } = $props();
 
   // The current filters as the saved-search / alert target. The ordering is view-only
   // and savedSearchQuery drops it, so reordering the feed never marks this dirty.
@@ -43,8 +63,20 @@
       const st = f.facets[param];
       if (!st) return [];
       return [
-        ...st.include.map((v) => ({ key: `${param}:${v}`, text: valueLabel(param, v), exclude: false, remove: () => store.remove(param, v), slug: withIcon ? v : undefined })),
-        ...st.exclude.map((v) => ({ key: `${param}:${v}`, text: valueLabel(param, v), exclude: true, remove: () => store.remove(param, v), slug: withIcon ? v : undefined })),
+        ...st.include.map((v) => ({
+          key: `${param}:${v}`,
+          text: valueLabel(param, v),
+          exclude: false,
+          remove: () => store.remove(param, v),
+          slug: withIcon ? v : undefined,
+        })),
+        ...st.exclude.map((v) => ({
+          key: `${param}:${v}`,
+          text: valueLabel(param, v),
+          exclude: true,
+          remove: () => store.remove(param, v),
+          slug: withIcon ? v : undefined,
+        })),
       ];
     };
     const facetGroup = (param: string, label: string, withIcon = false) => {
@@ -54,17 +86,30 @@
 
     // The text query (from the header search on the standalone list) as a removable
     // chip, so the sidebar shows what you searched, not just the facet filters.
-    push('Search', f.q.trim() ? [{ key: 'q', text: displayQuery(f.q), exclude: false, remove: () => store.setQuery('') }] : []);
+    push(
+      'Search',
+      f.q.trim() ? [{ key: 'q', text: displayQuery(f.q), exclude: false, remove: () => store.setQuery('') }] : [],
+    );
 
     facetGroup('category', 'Specialization');
     facetGroup('ai_archetype', 'AI Specialization');
     // Location: regions + countries + metros + cities under one heading.
-    push('Location', [...facetChips('regions'), ...facetChips('countries'), ...facetChips('metros'), ...facetChips('cities')]);
+    push('Location', [
+      ...facetChips('regions'),
+      ...facetChips('countries'),
+      ...facetChips('metros'),
+      ...facetChips('cities'),
+    ]);
 
     if (!exclude.includes('seniority')) {
       const seniority = facetChips('seniority');
       if (f.seniorityIncludeUnspecified && (f.facets.seniority?.include.length ?? 0) > 0)
-        seniority.push({ key: 'seniority_include_unspecified', text: 'No level stated', exclude: false, remove: () => store.setSeniorityIncludeUnspecified(false) });
+        seniority.push({
+          key: 'seniority_include_unspecified',
+          text: 'No level stated',
+          exclude: false,
+          remove: () => store.setSeniorityIncludeUnspecified(false),
+        });
       push('Seniority', seniority);
     }
     facetGroup('role_type', 'Role type');
@@ -72,14 +117,24 @@
     // A chip for the modifier whenever it is actually in force, so a filter set that
     // arrived from a shared link or a saved search reads its effect and can drop it.
     if (f.workModeRemoteAnywhere && appliesWorkModeRemoteAnywhere(f))
-      workFormat.push({ key: 'work_mode_remote_anywhere', text: workModeRemoteLabel(f), exclude: false, remove: () => store.setWorkModeRemoteAnywhere(false) });
+      workFormat.push({
+        key: 'work_mode_remote_anywhere',
+        text: workModeRemoteLabel(f),
+        exclude: false,
+        remove: () => store.setWorkModeRemoteAnywhere(false),
+      });
     push('Work format', workFormat);
     facetGroup('skills', 'Skills', true);
     // Only where it applies: without skills on the profile the threshold narrows nothing,
     // and a chip would claim it did.
     if (f.minSkillMatch != null && matchAvailable)
       push('Skill match', [
-        { key: 'min_skill_match', text: `${f.minSkillMatch}%+`, exclude: false, remove: () => store.setMinSkillMatch(null) },
+        {
+          key: 'min_skill_match',
+          text: `${f.minSkillMatch}%+`,
+          exclude: false,
+          remove: () => store.setMinSkillMatch(null),
+        },
       ]);
     facetGroup('domains', 'Industry');
     facetGroup('company_type', 'Company type');
@@ -90,7 +145,12 @@
     // Signed out the server ignores it, so a chip would claim a narrowing that did not happen.
     if (f.formerEmployers && isAuthenticated())
       push('Hiring again', [
-        { key: 'former_employers', text: 'Your former employers', exclude: false, remove: () => store.setFormerEmployers(false) },
+        {
+          key: 'former_employers',
+          text: 'Your former employers',
+          exclude: false,
+          remove: () => store.setFormerEmployers(false),
+        },
       ]);
     // Same server-side rule as above. Without a chip the sidebar reads "No filters yet"
     // while viewed jobs are being left out, and there is nothing to click to bring them back.
@@ -104,14 +164,25 @@
     // Salary: currency + one chip for the range, however many ends are set.
     const salary: SummaryChip[] = facetChips('salary_currency');
     if (f.salaryMin != null || f.salaryMax != null)
-      salary.push({ key: 'salary_range', text: salaryLabel(f.salaryMin, f.salaryMax), exclude: false, remove: () => store.clearSalary() });
+      salary.push({
+        key: 'salary_range',
+        text: salaryLabel(f.salaryMin, f.salaryMax),
+        exclude: false,
+        remove: () => store.clearSalary(),
+      });
     push('Salary', salary);
     facetGroup('equity', 'Equity');
 
-    if (f.visa) push('Visa', [{ key: 'visa', text: 'Sponsorship', exclude: false, remove: () => store.setVisa(false) }]);
+    if (f.visa)
+      push('Visa', [{ key: 'visa', text: 'Sponsorship', exclude: false, remove: () => store.setVisa(false) }]);
     if (f.autoApplyAvailable)
       push('Auto-apply', [
-        { key: 'auto_apply_available', text: 'Available', exclude: false, remove: () => store.setAutoApplyAvailable(false) },
+        {
+          key: 'auto_apply_available',
+          text: 'Available',
+          exclude: false,
+          remove: () => store.setAutoApplyAvailable(false),
+        },
       ]);
     if (f.applyQuestionsMax != null)
       push('Application', [
@@ -132,15 +203,38 @@
     // feature flag — a bound arriving from a shared link applies whether or not the
     // control that writes it is revealed, and a filter narrowing the list with no chip
     // to remove it is the untruth this summary exists to prevent.
-    if (f.openWithinDays != null) push('Open', [{ key: 'open_within_days', text: freshnessLabel(f.openWithinDays), exclude: false, remove: () => store.setOpenWithinDays(null) }]);
-    if (f.postedWithinDays != null) push('Posted', [{ key: 'posted_within_days', text: freshnessLabel(f.postedWithinDays), exclude: false, remove: () => store.setPostedWithinDays(null) }]);
+    if (f.openWithinDays != null)
+      push('Open', [
+        {
+          key: 'open_within_days',
+          text: freshnessLabel(f.openWithinDays),
+          exclude: false,
+          remove: () => store.setOpenWithinDays(null),
+        },
+      ]);
+    if (f.postedWithinDays != null)
+      push('Posted', [
+        {
+          key: 'posted_within_days',
+          text: freshnessLabel(f.postedWithinDays),
+          exclude: false,
+          remove: () => store.setPostedWithinDays(null),
+        },
+      ]);
     // `!= null`, not truthiness: a zero bound is the entry-level filter, and hiding
     // its chip would leave the narrowest experience filter with no way to remove it.
     if (f.experienceYearsMax != null) {
       const text = experienceLabel(f.experienceYearsMax) + (f.experienceIncludeUnspecified ? ' or not stated' : '');
-      const chips: SummaryChip[] = [{ key: 'experience_years_max', text, exclude: false, remove: () => store.setExperienceYearsMax(null) }];
+      const chips: SummaryChip[] = [
+        { key: 'experience_years_max', text, exclude: false, remove: () => store.setExperienceYearsMax(null) },
+      ];
       if (f.experienceOnlySeniorityUnspecified)
-        chips.push({ key: 'experience_only_seniority_unspecified', text: 'Only when no level stated', exclude: false, remove: () => store.setExperienceOnlySeniorityUnspecified(false) });
+        chips.push({
+          key: 'experience_only_seniority_unspecified',
+          text: 'Only when no level stated',
+          exclude: false,
+          remove: () => store.setExperienceOnlySeniorityUnspecified(false),
+        });
       push('Experience', chips);
     }
 

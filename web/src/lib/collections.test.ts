@@ -161,24 +161,18 @@ describe('relatedCollectionSlugs', () => {
     // exercised as a side effect of another test.
     expect(relatedCollectionSlugs(jobFacets({ category: 'backend' }))).toContain('backend');
     expect(relatedCollectionSlugs(jobFacets({ seniority: 'senior' }))).toContain('senior');
-    expect(
-      relatedCollectionSlugs(jobFacets({ workMode: 'remote', regions: ['global'] }))
-    ).toContain('remote-worldwide');
+    expect(relatedCollectionSlugs(jobFacets({ workMode: 'remote', regions: ['global'] }))).toContain(
+      'remote-worldwide',
+    );
   });
 
   it('requires every param on a multi-key entry (AND across keys, not OR)', () => {
     // remote-brasil = { work_mode: 'remote', countries: 'br' }. Satisfying only
     // one of its two keys must not match — this is the property that would
     // silently break if collectionMatchesJob's `.every()` became `.some()`.
-    expect(relatedCollectionSlugs(jobFacets({ workMode: 'remote' }))).not.toContain(
-      'remote-brasil'
-    );
-    expect(relatedCollectionSlugs(jobFacets({ countries: ['br'] }))).not.toContain(
-      'remote-brasil'
-    );
-    expect(
-      relatedCollectionSlugs(jobFacets({ workMode: 'remote', countries: ['br'] }))
-    ).toContain('remote-brasil');
+    expect(relatedCollectionSlugs(jobFacets({ workMode: 'remote' }))).not.toContain('remote-brasil');
+    expect(relatedCollectionSlugs(jobFacets({ countries: ['br'] }))).not.toContain('remote-brasil');
+    expect(relatedCollectionSlugs(jobFacets({ workMode: 'remote', countries: ['br'] }))).toContain('remote-brasil');
   });
 
   it('orders facet matches (Source A) before collection matches (Source B)', () => {
@@ -205,7 +199,7 @@ describe('relatedCollectionSlugs', () => {
   it('never renders more than the requested target size', () => {
     const slugs = relatedCollectionSlugs(
       jobFacets({ category: 'backend', seniority: 'senior', skills: ['react', 'python', 'aws'] }),
-      3
+      3,
     );
     expect(slugs.length).toBeLessThanOrEqual(3);
   });
@@ -319,9 +313,7 @@ describe('collectionForCategory', () => {
   it('ignores a collection that pins the category ALONGSIDE something else', () => {
     // Such a feed is not "all <category> jobs" — linking to it as if it were would
     // send the reader somewhere narrower than the label promises.
-    const multi = FILTER_COLLECTIONS.filter(
-      (c) => c.params.category && Object.keys(c.params).length > 1
-    );
+    const multi = FILTER_COLLECTIONS.filter((c) => c.params.category && Object.keys(c.params).length > 1);
     for (const c of multi) {
       expect(collectionForCategory(c.params.category as string)?.slug).not.toBe(c.slug);
     }
@@ -350,13 +342,11 @@ describe('collectionForSkill', () => {
     (slug) => {
       expect(collectionBySlug(slug)).toBeDefined();
       expect(collectionForSkill(slug)).toBeUndefined();
-    }
+    },
   );
 
   it('ignores a collection that pins the skill ALONGSIDE something else', () => {
-    const multi = FILTER_COLLECTIONS.filter(
-      (c) => c.params.skills && Object.keys(c.params).length > 1
-    );
+    const multi = FILTER_COLLECTIONS.filter((c) => c.params.skills && Object.keys(c.params).length > 1);
     for (const c of multi) {
       expect(collectionForSkill(c.params.skills as string)?.slug).not.toBe(c.slug);
     }

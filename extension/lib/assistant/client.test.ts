@@ -20,7 +20,9 @@ function hangingStream(signal: AbortSignal): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
-      controller.enqueue(encoder.encode('event: assistant_text\ndata: {"type":"assistant_text","text":"thinking"}\n\n'));
+      controller.enqueue(
+        encoder.encode('event: assistant_text\ndata: {"type":"assistant_text","text":"thinking"}\n\n'),
+      );
       signal.addEventListener('abort', () => controller.error(new DOMException('aborted', 'AbortError')));
     },
   });
@@ -84,10 +86,15 @@ describe('sendTurn', () => {
   // Stop renders as soon as a turn starts, so it is reachable before the response
   // headers arrive. There the abort rejects the fetch, not the stream read.
   it('reports cancelling before the response arrives as cancelled too', async () => {
-    vi.stubGlobal('fetch', (_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
-      (init.signal as AbortSignal).addEventListener('abort', () =>
-        reject(new DOMException('aborted', 'AbortError')));
-    }));
+    vi.stubGlobal(
+      'fetch',
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          (init.signal as AbortSignal).addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          );
+        }),
+    );
 
     const seen: TurnEvent[] = [];
     const turn = sendTurn('s1', 'hi', 'tok', (e) => seen.push(e));

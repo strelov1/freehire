@@ -5,11 +5,7 @@
   // One facet's distribution as a horizontal bar chart. `dist` is the value→count
   // map for this facet (from the analytics endpoint); clicking a bar toggles that
   // value in the shared filter store, which drives the drill-down.
-  let {
-    def,
-    dist,
-    store,
-  }: { def: FacetDef; dist: Record<string, number> | undefined; store: FilterStore } = $props();
+  let { def, dist, store }: { def: FacetDef; dist: Record<string, number> | undefined; store: FilterStore } = $props();
 
   // Cap the rows shown per facet — high-cardinality facets (skills, countries)
   // can carry hundreds of values; the rest are summarized as "+N more".

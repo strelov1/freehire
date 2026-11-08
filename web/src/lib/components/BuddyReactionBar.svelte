@@ -9,7 +9,8 @@
   // an offer, luck for an interview); hovering — or the arrow, for a keyboard or a touch
   // screen — opens all five. Choosing your current one again takes it back. The screen
   // moves first and the server's answer settles it; a failure puts it back.
-  let { eventId, type, reactions }: { eventId: number; type: BuddyFeedItem['type']; reactions: BuddyReactions } = $props();
+  let { eventId, type, reactions }: { eventId: number; type: BuddyFeedItem['type']; reactions: BuddyReactions } =
+    $props();
 
   // Each kind's mark and colour, from the palette's tokens: the warmer the news, the warmer it reads.
   const LOOK: Record<ReactionKind, { icon: typeof PartyPopper; tone: string }> = {
@@ -105,7 +106,13 @@
       <span class="flex" aria-hidden="true">
         {#each summary.top as kind, i (kind)}
           {@const Icon = LOOK[kind].icon}
-          <span class={cn('grid size-5 place-items-center rounded-full ring-2 ring-card', LOOK[kind].tone, i > 0 && '-ml-1.5')}>
+          <span
+            class={cn(
+              'grid size-5 place-items-center rounded-full ring-2 ring-card',
+              LOOK[kind].tone,
+              i > 0 && '-ml-1.5',
+            )}
+          >
             <Icon class="size-3" />
           </span>
         {/each}

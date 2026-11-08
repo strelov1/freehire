@@ -24,9 +24,7 @@
 
   // The same filter this block asked with, so the directory it opens shows exactly the
   // people it counted — built once rather than spelled twice.
-  const companyFilter = $derived(
-    mentorFiltersToQuery({ ...emptyMentorFilters(), company: companySlug }),
-  );
+  const companyFilter = $derived(mentorFiltersToQuery({ ...emptyMentorFilters(), company: companySlug }));
   const directoryHref = $derived(`${resolve('/mentors')}?${companyFilter}`);
 
   // The same beta gate the routes hold, on the entry point: a block that leads somewhere
@@ -53,8 +51,11 @@
 </script>
 
 {#if inBeta && mentors.length > 0}
-  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the /mentors path; the rule can't see through the appended query -->
-  <a href={directoryHref} class="border-border hover:bg-muted/50 flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors">
+  <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() applied to the /mentors path; the rule can't see through the appended query -->
+  <a
+    href={directoryHref}
+    class="border-border hover:bg-muted/50 flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors"
+  >
     <GraduationCap class="text-muted-foreground size-5 shrink-0" />
     <span>
       <span class="font-medium">
@@ -62,9 +63,7 @@
           ? `Talk to someone at ${companyName}`
           : `Talk to one of ${mentors.length} people at ${companyName}`}
       </span>
-      <span class="text-muted-foreground block">
-        Book half an hour before you apply.
-      </span>
+      <span class="text-muted-foreground block"> Book half an hour before you apply. </span>
     </span>
-  </a>
+  </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
 {/if}

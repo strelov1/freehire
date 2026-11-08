@@ -24,7 +24,9 @@
     "gen:collection-stacks": "svelte-kit sync && node scripts/build-collection-stacks.mjs",
     "size": "size-limit",
     "lint": "oxlint && eslint .",
-    "lint:fix": "oxlint --fix && eslint . --fix"
+    "lint:fix": "oxlint --fix && eslint . --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
@@ -48,6 +50,7 @@
     "globals": "^17.8.0",
     "jsdom": "^30.0.1",
     "mdsvex": "^0.12.8",
+    "oxfmt": "0.77.0",
     "oxlint": "^1.77.0",
     "size-limit": "^14.3.0",
     "svelte": "^5.57.2",

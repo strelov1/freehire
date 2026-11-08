@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$app/paths', () => ({ resolve: (route: string, params: Record<string, string>) => route.replace('[slug]', params.slug ?? '') }));
+vi.mock('$app/paths', () => ({
+  resolve: (route: string, params: Record<string, string>) => route.replace('[slug]', params.slug ?? ''),
+}));
 
 import { tailorHref } from './tailorHref';
 

@@ -52,14 +52,15 @@
         {#each submissions as sub (sub.id)}
           <li class="flex items-start justify-between gap-3 px-4 py-3">
             <div class="flex min-w-0 flex-col gap-0.5">
-              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external posting URL, opened in a new tab; not an internal route -->
-              <a href={sub.url}
+              <!-- eslint-disable svelte/no-navigation-without-resolve -- external posting URL, opened in a new tab; not an internal route -->
+              <a
+                href={sub.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="truncate text-sm font-medium hover:underline"
               >
                 {sub.title}
-              </a>
+              </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
               <span class="truncate text-xs text-muted-foreground">
                 {sub.company}{sub.location ? ` · ${sub.location}` : ''} · {s.submittedPrefix}
                 {timeAgo(sub.created_at, locale())}

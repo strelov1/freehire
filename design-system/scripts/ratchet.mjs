@@ -13,9 +13,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 export function ratchet({ counts, baselinePath, direction, update = false }) {
-  const baseline = existsSync(baselinePath)
-    ? JSON.parse(readFileSync(baselinePath, 'utf-8'))
-    : {};
+  const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf-8')) : {};
 
   if (update) {
     const sorted = Object.fromEntries(byKey(Object.entries(counts)));

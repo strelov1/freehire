@@ -26,9 +26,7 @@
           <div class="flex w-full items-center justify-between gap-2">
             <CollectionMark mark={card.mark} />
             {#if card.count !== null}
-              <span
-                class="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs tabular-nums text-muted-foreground"
-              >
+              <span class="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
                 {card.count.toLocaleString()} jobs
               </span>
             {/if}

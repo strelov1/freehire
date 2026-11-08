@@ -4,7 +4,12 @@ import type { BuddySimilar } from './types';
 
 const summary = { category: 'backend', seniority: 'mid', country: 'de' };
 function member(handle: string, companies: string[]): BuddySimilar {
-  return { handle, card_summary: summary, score: 1, shared_companies: companies.map((n) => ({ slug: n.toLowerCase(), name: n })) };
+  return {
+    handle,
+    card_summary: summary,
+    score: 1,
+    shared_companies: companies.map((n) => ({ slug: n.toLowerCase(), name: n })),
+  };
 }
 
 describe('buddiesByCompany', () => {

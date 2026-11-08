@@ -17,9 +17,7 @@
   // is how "· freehire" ended up inside the <h1>.
   const heading = $derived(`${data.label} Salaries`);
   const title = $derived(`${heading} · freehire`);
-  const updated = $derived(
-    new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-  );
+  const updated = $derived(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
   const jsonLd = $derived(
     jsonLdScript([
       datasetJsonLd(`${data.label} salaries`, data.intro, canonical, origin),

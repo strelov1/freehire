@@ -41,9 +41,7 @@
       return;
     }
     specError = null;
-    const next = has
-      ? profile.specializations.filter((s) => s !== value)
-      : [...profile.specializations, value];
+    const next = has ? profile.specializations.filter((s) => s !== value) : [...profile.specializations, value];
     await specStatus.run(async () => {
       await profileStore.updateSpecializations(next);
       onProfileChanged?.();

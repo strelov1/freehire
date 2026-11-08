@@ -63,10 +63,7 @@ function selected(store: Pick<FacetStore, 'facet'>, param: string): string[] {
  *  "Remote · Worldwide +3" draws as a house lapped by a globe, then "+3" — the words
  *  survive only in `label`, which the button wears as its accessible name and title.
  */
-export function summarizeScope(
-  store: Pick<FacetStore, 'facet'>,
-  spec: ScopeSpec = JOBS_SCOPE,
-): ScopeSummary {
+export function summarizeScope(store: Pick<FacetStore, 'facet'>, spec: ScopeSpec = JOBS_SCOPE): ScopeSummary {
   const modes = spec.format ? selected(store, spec.format) : [];
   const firstMode = WORK_MODE_VALUES.find((m) => modes.includes(m));
 
@@ -76,7 +73,11 @@ export function summarizeScope(
   // Only a region-shaped param carries the worldwide code; a city or a country
   // literally named "global" would still be a place, not everywhere.
   const headIsWorldwide =
-    head !== undefined && head.param !== 'countries' && head.param !== 'metros' && head.param !== 'cities' && head.value === WORLDWIDE;
+    head !== undefined &&
+    head.param !== 'countries' &&
+    head.param !== 'metros' &&
+    head.param !== 'cities' &&
+    head.value === WORLDWIDE;
 
   const icons: ScopeIcon[] = [];
   if (firstMode) icons.push(firstMode);

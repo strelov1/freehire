@@ -620,12 +620,7 @@ describe('sort options', () => {
   // matchSortNeedsSkills).
   it('offers relevance only under a query, and match always', () => {
     expect(sortOptionsFor('').map((o) => o.value)).toEqual(['newest', 'views', 'match']);
-    expect(sortOptionsFor('go').map((o) => o.value)).toEqual([
-      'relevance',
-      'newest',
-      'views',
-      'match',
-    ]);
+    expect(sortOptionsFor('go').map((o) => o.value)).toEqual(['relevance', 'newest', 'views', 'match']);
   });
 
   // `views` ranks by a stored figure, so unlike `relevance` it needs no query text.
@@ -854,12 +849,21 @@ describe('workModeRemoteAnywhere', () => {
     const p = filtersToParams({ ...emptyFilters(), workModeRemoteAnywhere: true });
     expect(p.get('work_mode_remote_anywhere')).toBe('true');
     expect(filtersFromParams(p).workModeRemoteAnywhere).toBe(true);
-    expect(filtersFromParams(new URLSearchParams('work_mode_remote_anywhere=false')).workModeRemoteAnywhere).toBe(false);
-    expect(filtersFromParams(new URLSearchParams('work_mode_remote_anywhere=%20TRUE')).workModeRemoteAnywhere).toBe(true);
+    expect(filtersFromParams(new URLSearchParams('work_mode_remote_anywhere=false')).workModeRemoteAnywhere).toBe(
+      false,
+    );
+    expect(filtersFromParams(new URLSearchParams('work_mode_remote_anywhere=%20TRUE')).workModeRemoteAnywhere).toBe(
+      true,
+    );
   });
 
   it('carries the remote reach only with the modifier, and labels it', () => {
-    const on = { ...emptyFilters(), workModeRemoteAnywhere: true, workModeRemoteRegions: ['eu'], workModeRemoteCountries: ['us'] };
+    const on = {
+      ...emptyFilters(),
+      workModeRemoteAnywhere: true,
+      workModeRemoteRegions: ['eu'],
+      workModeRemoteCountries: ['us'],
+    };
     const p = filtersToParams(on);
     expect(p.get('work_mode_remote_regions')).toBe('eu');
     expect(p.get('work_mode_remote_countries')).toBe('us');
@@ -885,8 +889,14 @@ describe('workModeRemoteAnywhere', () => {
 
   it('applies only for remote plus a physical mode plus a location facet', () => {
     const base = emptyFilters();
-    const modes = (include: string[]) => ({ ...base, facets: { ...base.facets, work_mode: { include, exclude: [], matchAll: false } } });
-    const withCountry = (f: typeof base) => ({ ...f, facets: { ...f.facets, countries: { include: ['de'], exclude: [], matchAll: false } } });
+    const modes = (include: string[]) => ({
+      ...base,
+      facets: { ...base.facets, work_mode: { include, exclude: [], matchAll: false } },
+    });
+    const withCountry = (f: typeof base) => ({
+      ...f,
+      facets: { ...f.facets, countries: { include: ['de'], exclude: [], matchAll: false } },
+    });
 
     expect(appliesWorkModeRemoteAnywhere(modes(['remote', 'hybrid']))).toBe(false); // no location
     expect(appliesWorkModeRemoteAnywhere(modes(['remote']))).toBe(false); // no physical mode
@@ -896,11 +906,17 @@ describe('workModeRemoteAnywhere', () => {
     expect(appliesWorkModeRemoteAnywhere(withCountry(modes(['remote', 'hybrid'])))).toBe(true);
     expect(appliesWorkModeRemoteAnywhere(withCountry(modes(['remote', 'onsite'])))).toBe(true);
     expect(appliesWorkModeRemoteAnywhere(withCountry(modes(['Remote', 'Hybrid'])))).toBe(true); // folded like the server
-    const withRegion = (r: string) => ({ ...modes(['remote', 'hybrid']), facets: { ...modes(['remote', 'hybrid']).facets, regions: { include: [r], exclude: [], matchAll: false } } });
+    const withRegion = (r: string) => ({
+      ...modes(['remote', 'hybrid']),
+      facets: { ...modes(['remote', 'hybrid']).facets, regions: { include: [r], exclude: [], matchAll: false } },
+    });
     expect(appliesWorkModeRemoteAnywhere(withRegion('eu'))).toBe(true);
     expect(appliesWorkModeRemoteAnywhere(withRegion('not-a-region'))).toBe(false); // the server ignores it too
     const andMode = withCountry(modes(['remote', 'hybrid']));
-    const andModeFilters = { ...andMode, facets: { ...andMode.facets, work_mode: { include: ['remote', 'hybrid'], exclude: [], matchAll: true } } };
+    const andModeFilters = {
+      ...andMode,
+      facets: { ...andMode.facets, work_mode: { include: ['remote', 'hybrid'], exclude: [], matchAll: true } },
+    };
     expect(appliesWorkModeRemoteAnywhere(andModeFilters)).toBe(false); // the server ignores it under _mode=and
   });
 
@@ -911,7 +927,11 @@ describe('workModeRemoteAnywhere', () => {
   it('counts as an active filter only when it changes the answer', () => {
     const modes = (include: string[]) => (f: ReturnType<typeof emptyFilters>) => ({
       ...f,
-      facets: { ...f.facets, work_mode: { include, exclude: [], matchAll: false }, countries: { include: ['de'], exclude: [], matchAll: false } },
+      facets: {
+        ...f.facets,
+        work_mode: { include, exclude: [], matchAll: false },
+        countries: { include: ['de'], exclude: [], matchAll: false },
+      },
     });
     const inert = modes(['hybrid', 'onsite'])({ ...emptyFilters(), workModeRemoteAnywhere: true });
     const live = modes(['remote', 'hybrid'])({ ...emptyFilters(), workModeRemoteAnywhere: true });

@@ -33,7 +33,13 @@
   import { freshnessOptions } from '#lib/filterControls.js';
   import { geoScopeOffered, loadJobFilters, markGeoScopeOffered } from '#lib/filterStorage.js';
   import { geoScopeQuery, shouldOfferGeoScope, WORLDWIDE_REGION } from '#lib/geoScope.js';
-  import { bannerVisible, loadOnboardingState, markSeen, narrowestFacet, type OnboardingLifecycle } from '#lib/onboarding.js';
+  import {
+    bannerVisible,
+    loadOnboardingState,
+    markSeen,
+    narrowestFacet,
+    type OnboardingLifecycle,
+  } from '#lib/onboarding.js';
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { consumePendingAlert } from '#lib/saveSearchAlert.js';
   import OnboardingBanner from './onboarding/OnboardingBanner.svelte';
@@ -104,7 +110,10 @@
   const seedParams = untrack(() =>
     initialParams != null ? new URLSearchParams(initialParams) : new URLSearchParams(page.url.search),
   );
-  const filters = new FilterStore(seedParams, untrack(() => standalone));
+  const filters = new FilterStore(
+    seedParams,
+    untrack(() => standalone),
+  );
 
   // The user's (debounced) facet filters plus the fixed `scope` params
   // (company_slug, …). Reads `applied` so typing doesn't fetch per keystroke.
@@ -170,9 +179,7 @@
   // connection the useful one needed. One scope, measured once.
   //
   // Never true on the server, where `browser` short-circuits before `location` is read.
-  let geoGuessPending = $state(
-    untrack(() => browser && standalone && shouldOfferGeoScope(geoScopeGuards())),
-  );
+  let geoGuessPending = $state(untrack(() => browser && standalone && shouldOfferGeoScope(geoScopeGuards())));
 
   // The live facet distribution (value → count per facet), feeding the dynamic
   // selects (skills, countries) so the user sees which values exist and how many
@@ -239,9 +246,7 @@
   // later. `loaded` exists for exactly this (see userResource.svelte.ts). Signed out
   // there is nothing to wait for: no account means no profile, and that is known at once.
   const skillsSettled = $derived(!isAuthenticated() || profileStore.loaded);
-  const matchNeedsSkills = $derived(
-    skillsSettled && matchSortNeedsSkills(filters.value, matchFilterAvailable),
-  );
+  const matchNeedsSkills = $derived(skillsSettled && matchSortNeedsSkills(filters.value, matchFilterAvailable));
 
   // Under best match the server applies the threshold across the whole ranking, so the
   // page is used as served; under any other ordering the browser still trims the page.
@@ -264,7 +269,6 @@
   // logged a search they had not performed. It went unnoticed while scrolling was
   // how anyone paged; the page links made it visible.
   let lastSearchKey = untrack(() => filtersToParams(filters.applied).toString());
-
 
   // Onboarding: the one-time nudge banner + wizard, standalone-only. The lifecycle
   // lives in localStorage (client-only); seed it at init on the client so a returning
@@ -293,8 +297,7 @@
   // the mobile home page at CLS 0.28. It is server-rendered now, and hidden before
   // first paint by app.css for a visitor who has already seen it.
   const showBanner = $derived(
-    standalone &&
-      bannerVisible(onboardingState, filters.active > 0 || filters.value.q.trim() !== ''),
+    standalone && bannerVisible(onboardingState, filters.active > 0 || filters.value.q.trim() !== ''),
   );
 
   function dismissBanner() {
@@ -517,7 +520,9 @@
 
   // Personal feed preferences must be re-applied when the reader changes in-tab.
   const searchUserID = $derived(
-    standalone && (filters.applied.hideSeen || filters.applied.formerEmployers || serverMatch) ? currentUser()?.id ?? null : null,
+    standalone && (filters.applied.hideSeen || filters.applied.formerEmployers || serverMatch)
+      ? (currentUser()?.id ?? null)
+      : null,
   );
 
   let lastSearchUserID = untrack(() => searchUserID);
@@ -810,7 +815,14 @@
        edge it sat half outside the content column, aligned with nothing. Phones keep
        their own entry in the inline toolbar. -->
   {#if standalone}
-    <Button variant="outline" size="sm" onclick={openSwipe} aria-label="Swipe mode" title="Swipe mode" class="hidden md:inline-flex">
+    <Button
+      variant="outline"
+      size="sm"
+      onclick={openSwipe}
+      aria-label="Swipe mode"
+      title="Swipe mode"
+      class="hidden md:inline-flex"
+    >
       <Layers class="size-4" />
       <span class="hidden lg:inline">Swipe</span>
     </Button>
@@ -837,7 +849,13 @@
       <!-- Card chrome only once there are filters to list: around one "All filters" button it
            was a framed box holding nothing. -->
       <div class={filters.active > 0 ? 'rounded-xl border border-border bg-card p-4' : 'px-1'}>
-        <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} matchAvailable={matchFilterAvailable} />
+        <FilterSummary
+          store={filters}
+          exclude={excludeFacets}
+          onOpen={() => (modalOpen = true)}
+          canSave={standalone}
+          matchAvailable={matchFilterAvailable}
+        />
       </div>
     </div>
   </aside>
@@ -880,9 +898,16 @@
     {#if matchSortHint}
       <!-- The threshold trims each fetched page, so under any other ordering the jobs that
            clear it are scattered across pages. Best match brings them to the front. -->
-      <div role="status" class="my-4 flex flex-col gap-3 rounded-xl border border-border bg-muted/40 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-        <p class="text-muted-foreground">Your {minMatch}%+ skill match filters one page at a time. Sort by best match to see those jobs first.</p>
-        <Button variant="secondary" size="sm" onclick={() => filters.setSort('match')} class="shrink-0">Sort by best match</Button>
+      <div
+        role="status"
+        class="my-4 flex flex-col gap-3 rounded-xl border border-border bg-muted/40 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+      >
+        <p class="text-muted-foreground">
+          Your {minMatch}%+ skill match filters one page at a time. Sort by best match to see those jobs first.
+        </p>
+        <Button variant="secondary" size="sm" onclick={() => filters.setSort('match')} class="shrink-0"
+          >Sort by best match</Button
+        >
       </div>
     {/if}
     {#if matchNeedsSkills}
@@ -899,14 +924,17 @@
         class="my-4 flex flex-col gap-4 rounded-xl border border-brand/30 bg-brand/5 p-4 sm:flex-row sm:items-center sm:p-5"
       >
         <div class="flex min-w-0 flex-1 items-start gap-3">
-          <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-muted text-brand-strong" aria-hidden="true">
+          <span
+            class="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-muted text-brand-strong"
+            aria-hidden="true"
+          >
             <Target class="size-5" />
           </span>
           <div class="min-w-0">
             <p class="font-semibold text-foreground">See your best matches first</p>
             <p class="mt-1 text-sm text-muted-foreground">
-              Add your skills or CV and every job is ranked by how well it fits you. Until
-              then, the newest jobs come first.
+              Add your skills or CV and every job is ranked by how well it fits you. Until then, the newest jobs come
+              first.
             </p>
           </div>
         </div>
@@ -944,8 +972,9 @@
       <States state="empty" message="No jobs at your former employers match the current filters." />
       <p class="mt-2 text-center text-sm text-muted-foreground">
         We match the companies in
-        <a href={resolve('/my/profile/experience')} class="font-medium text-foreground underline underline-offset-2">your experience</a>,
-        and leave out any name that could be more than one company.
+        <a href={resolve('/my/profile/experience')} class="font-medium text-foreground underline underline-offset-2"
+          >your experience</a
+        >, and leave out any name that could be more than one company.
       </p>
     {:else if displayItems.length === 0}
       <States state="empty" message="No matching jobs." />
@@ -980,7 +1009,10 @@
              `holdover`): the rows are real but about to be replaced. -->
         <!-- One list surface with hairline dividers rather than a stack of separately framed
              cards: twenty bordered boxes read as a wall. -->
-        <div class="flex flex-col divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70 bg-card" aria-busy={holdingOver}>
+        <div
+          class="flex flex-col divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70 bg-card"
+          aria-busy={holdingOver}
+        >
           {#each visibleJobs as job (job.public_slug)}
             <JobRow {job} {onHide} hideCompany={!!scope.company_slug} flat />
           {/each}
@@ -1001,7 +1033,6 @@
     {/if}
   </div>
 </div>
-
 
 {#if standalone && mapLoaded && !filters.value.formerEmployers}
   {#await import('./map/JobsMapDialog.svelte') then { default: JobsMapDialog }}

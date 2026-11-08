@@ -17,12 +17,14 @@ import { resolve } from '$app/paths';
  *  server-rendered HTML would show the wrong screen until client JS corrects it
  *  after hydration. /signin promotes it into the hash on arrival (its own
  *  `syncHash` canonicalization), so the address bar still ends up on #login. */
-export function signinUrl(opts: {
-  returnTo?: string;
-  cancelTo?: string;
-  error?: string;
-  mode?: 'login';
-} = {}): string {
+export function signinUrl(
+  opts: {
+    returnTo?: string;
+    cancelTo?: string;
+    error?: string;
+    mode?: 'login';
+  } = {},
+): string {
   const params = new URLSearchParams();
   if (opts.returnTo) params.set('returnTo', opts.returnTo);
   if (opts.cancelTo) params.set('cancelTo', opts.cancelTo);

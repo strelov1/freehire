@@ -23,11 +23,7 @@
   import type { Snippet } from 'svelte';
   import { cn } from './cn.js';
 
-  let {
-    class: className,
-    header,
-    children,
-  }: { class?: string; header?: Snippet; children: Snippet } = $props();
+  let { class: className, header, children }: { class?: string; header?: Snippet; children: Snippet } = $props();
 
   const slots = tableVariants();
 </script>

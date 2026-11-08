@@ -103,8 +103,7 @@
   // page showing one date and about to book another.
   const pickDay = (day: string) => setParams({ date: day, slot: null });
   const pickSlot = (slot: MentorSlot) => setParams({ slot: slot.starts_at });
-  const stepMonth = (delta: number) =>
-    setParams({ month: addMonths(month, delta), date: null, slot: null });
+  const stepMonth = (delta: number) => setParams({ month: addMonths(month, delta), date: null, slot: null });
 
   // Browser back/forward over our own shallow entries. Read the address bar rather than
   // `page.url`, which lags exactly here — the same reason urlSynced.svelte.ts does.

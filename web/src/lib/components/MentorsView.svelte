@@ -12,11 +12,8 @@
   } from '#lib/mentorship.js';
   import type { Mentor } from '#lib/types.js';
 
-  let {
-    mentors,
-    options,
-    filters,
-  }: { mentors: Mentor[]; options: MentorFilterOptions; filters: MentorFilters } = $props();
+  let { mentors, options, filters }: { mentors: Mentor[]; options: MentorFilterOptions; filters: MentorFilters } =
+    $props();
 
   // The URL is the state. Each control writes the whole filter set back to the address bar
   // and lets the route's `load` fetch again — the directory is small and hand-onboarded, so
@@ -34,12 +31,7 @@
 
   const active = $derived(
     Boolean(
-      filters.company ||
-        filters.topic ||
-        filters.language ||
-        filters.seniority ||
-        filters.q ||
-        filters.noReviews,
+      filters.company || filters.topic || filters.language || filters.seniority || filters.q || filters.noReviews,
     ),
   );
 

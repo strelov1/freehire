@@ -79,7 +79,13 @@
           href={resolve('/collections/[slug]', { slug: badge.slug })}
           class="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-foreground hover:bg-muted"
         >
-          <img src={badge.mark} alt="" loading="lazy" decoding="async" class="size-4 shrink-0 rounded-sm object-contain" />
+          <img
+            src={badge.mark}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            class="size-4 shrink-0 rounded-sm object-contain"
+          />
           {badge.label}
           <span class="sr-only">— {badge.alt}</span>
         </a>

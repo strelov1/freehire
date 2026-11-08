@@ -102,7 +102,9 @@
     <span class="text-base font-semibold">{s.photo}</span>
     {#if loadFailed}
       <p class="text-sm text-muted-foreground" role="status">{s.photoLoadError}</p>
-      <button type="button" onclick={() => void load()} class="self-start text-sm underline underline-offset-4">{s.retry}</button>
+      <button type="button" onclick={() => void load()} class="self-start text-sm underline underline-offset-4"
+        >{s.retry}</button
+      >
     {:else}
       <p class="text-xs text-muted-foreground" role="status">{s.working}</p>
     {/if}
@@ -111,13 +113,7 @@
   <div class="flex flex-col gap-1.5">
     <span class="text-base font-semibold">{s.photo}</span>
     <div class="flex items-center gap-4">
-      <input
-        type="file"
-        accept={PHOTO_ACCEPT}
-        class="hidden"
-        bind:this={fileInput}
-        onchange={onFile}
-      />
+      <input type="file" accept={PHOTO_ACCEPT} class="hidden" bind:this={fileInput} onchange={onFile} />
       <button
         type="button"
         disabled={busy}

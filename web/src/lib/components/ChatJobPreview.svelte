@@ -16,12 +16,15 @@
 
   // Watches the empty slot until it comes within a screen of view, then lets the read start.
   function whenNear(node: HTMLElement) {
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) {
-        near = true;
-        io.disconnect();
-      }
-    }, { rootMargin: '400px' });
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          near = true;
+          io.disconnect();
+        }
+      },
+      { rootMargin: '400px' },
+    );
     io.observe(node);
     return () => io.disconnect();
   }
@@ -32,21 +35,32 @@
     let cancelled = false;
     job = null;
     api.getJob(current).then(
-      (j) => { if (!cancelled) job = j; },
+      (j) => {
+        if (!cancelled) job = j;
+      },
       () => {},
     );
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   });
 </script>
 
 {#if !near}
   <span class="block h-px" {@attach whenNear}></span>
 {:else if job}
-  <a href={resolve('/jobs/[slug]', { slug: job.public_slug })} class="group mt-2 flex items-center gap-2.5 rounded-lg bg-card px-2.5 py-2 text-foreground ring-1 ring-border hover:ring-foreground/30">
+  <a
+    href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+    class="group mt-2 flex items-center gap-2.5 rounded-lg bg-card px-2.5 py-2 text-foreground ring-1 ring-border hover:ring-foreground/30"
+  >
     <BuddyCompanyLogo name={job.company} size="md" />
     <span class="flex min-w-0 flex-1 flex-col">
-      <span class="truncate text-sm font-semibold group-hover:underline group-hover:underline-offset-2">{job.title}</span>
-      <span class="truncate text-xs text-muted-foreground">{[job.company, job.location].filter(Boolean).join(' · ')}</span>
+      <span class="truncate text-sm font-semibold group-hover:underline group-hover:underline-offset-2"
+        >{job.title}</span
+      >
+      <span class="truncate text-xs text-muted-foreground"
+        >{[job.company, job.location].filter(Boolean).join(' · ')}</span
+      >
     </span>
     <ArrowUpRight class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
   </a>

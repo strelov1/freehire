@@ -5,14 +5,26 @@ import { createErrorTelemetry, installErrorListeners } from './errorTelemetry';
 describe('error telemetry', () => {
   it('delivers sanitized exceptions with service identity', async () => {
     const exporter = new InMemoryLogRecordExporter();
-    const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', environment: 'test', version: 'abc', exporter });
-    const error = new TypeError('failed https://alice:secret@host.test/path?token=secret#private alice@example.com Bearer abc123');
+    const telemetry = createErrorTelemetry({
+      endpoint: 'http://localhost/v1/logs',
+      service: 'freehire-web',
+      environment: 'test',
+      version: 'abc',
+      exporter,
+    });
+    const error = new TypeError(
+      'failed https://alice:secret@host.test/path?token=secret#private alice@example.com Bearer abc123',
+    );
     error.stack = `${error.message}\n at https://host.test/app.js?token=secret:1:2`;
     telemetry?.capture(error);
     await telemetry?.flush();
     const [record] = exporter.getFinishedLogRecords();
     if (!record) throw new Error('Expected one exported exception');
-    expect(record.resource.attributes).toMatchObject({ 'service.name': 'freehire-web', 'service.version': 'abc', 'deployment.environment.name': 'test' });
+    expect(record.resource.attributes).toMatchObject({
+      'service.name': 'freehire-web',
+      'service.version': 'abc',
+      'deployment.environment.name': 'test',
+    });
     expect(record.severityText).toBe('ERROR');
     expect(record.attributes).toMatchObject({ 'exception.type': 'TypeError', 'event.name': 'exception' });
     expect(JSON.stringify(record.attributes)).not.toMatch(/alice|secret|abc123|private/);
@@ -37,12 +49,20 @@ describe('error telemetry', () => {
   });
 });
 
-
 it('captures error and rejection events only when their provenance belongs to this app', async () => {
   const exporter = new InMemoryLogRecordExporter();
-  const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-extension', exporter });
+  const telemetry = createErrorTelemetry({
+    endpoint: 'http://localhost/v1/logs',
+    service: 'freehire-extension',
+    exporter,
+  });
   const target = new EventTarget();
-  installErrorListeners(target, telemetry, (error, filename) => filename.startsWith('chrome-extension://ours/') || Boolean(error.stack?.includes('chrome-extension://ours/')));
+  installErrorListeners(
+    target,
+    telemetry,
+    (error, filename) =>
+      filename.startsWith('chrome-extension://ours/') || Boolean(error.stack?.includes('chrome-extension://ours/')),
+  );
   const host = new Event('error');
   Object.assign(host, { error: new Error('host-page-defect'), filename: 'https://host.test/app.js' });
   target.dispatchEvent(host);
@@ -56,7 +76,10 @@ it('captures error and rejection events only when their provenance belongs to th
   target.dispatchEvent(rejection);
   await telemetry?.flush();
   const records = exporter.getFinishedLogRecords();
-  expect(records.map((record) => record.attributes['exception.message'])).toEqual(['extension-defect', 'extension-rejection']);
+  expect(records.map((record) => record.attributes['exception.message'])).toEqual([
+    'extension-defect',
+    'extension-rejection',
+  ]);
   await telemetry?.shutdown();
 });
 
@@ -76,17 +99,19 @@ it('records primitive rejections and opaque thrown objects without serializing p
   await telemetry?.shutdown();
 });
 
-
 it('redacts prefixed, quoted and Basic credential values before export', async () => {
   const exporter = new InMemoryLogRecordExporter();
   const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', exporter });
-  const error = new Error('access_token=access-private refresh_token:refresh-private client_secret=client-private {"token":"json-private"} authorization: Basic dXNlcjpwYXNz');
+  const error = new Error(
+    'access_token=access-private refresh_token:refresh-private client_secret=client-private {"token":"json-private"} authorization: Basic dXNlcjpwYXNz',
+  );
   error.stack = error.message;
   telemetry?.capture(error);
   await telemetry?.flush();
   const records = exporter.getFinishedLogRecords();
   expect(records).toHaveLength(1);
   const payload = JSON.stringify(records[0]?.attributes);
-  for (const secret of ['access-private', 'refresh-private', 'client-private', 'json-private', 'dXNlcjpwYXNz']) expect(payload).not.toContain(secret);
+  for (const secret of ['access-private', 'refresh-private', 'client-private', 'json-private', 'dXNlcjpwYXNz'])
+    expect(payload).not.toContain(secret);
   await telemetry?.shutdown();
 });

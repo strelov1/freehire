@@ -72,17 +72,9 @@ describe('dedupeByKey', () => {
 
   it('models the real bug: a job reshuffled into the next offset window is dropped, not double-keyed', () => {
     const seen = new Set<unknown>();
-    const page1 = dedupeByKey(
-      [{ public_slug: 'job-1' }, { public_slug: 'job-2' }],
-      (j) => j.public_slug,
-      seen,
-    );
+    const page1 = dedupeByKey([{ public_slug: 'job-1' }, { public_slug: 'job-2' }], (j) => j.public_slug, seen);
     // Between requests the ranking shifted job-1 into the next offset window.
-    const page2 = dedupeByKey(
-      [{ public_slug: 'job-1' }, { public_slug: 'job-3' }],
-      (j) => j.public_slug,
-      seen,
-    );
+    const page2 = dedupeByKey([{ public_slug: 'job-1' }, { public_slug: 'job-3' }], (j) => j.public_slug, seen);
     expect(page1).toEqual([{ public_slug: 'job-1' }, { public_slug: 'job-2' }]);
     expect(page2).toEqual([{ public_slug: 'job-3' }]);
   });

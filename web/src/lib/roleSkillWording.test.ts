@@ -39,9 +39,7 @@ const MARKET_CLAIM = /the market for|market rate|across the market/i;
 function sources(dir: string): { path: string; text: string }[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const p = join(dir, e.name);
-    return e.isDirectory()
-      ? sources(p)
-      : [{ path: p, text: visibleText(readFileSync(p, 'utf8')) }];
+    return e.isDirectory() ? sources(p) : [{ path: p, text: visibleText(readFileSync(p, 'utf8')) }];
   });
 }
 
@@ -65,7 +63,7 @@ describe('role leaf page wording', () => {
     }
   });
 
-  it('never claims the figures describe the role\'s market', () => {
+  it("never claims the figures describe the role's market", () => {
     // Only 39% of open technical postings state a seniority, so this slice is the
     // postings that SAY a level, not the market for it.
     for (const f of files) {

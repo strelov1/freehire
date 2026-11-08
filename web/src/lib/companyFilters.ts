@@ -19,12 +19,7 @@ import {
 } from './companyFacetModel';
 import { UrlSyncedState } from './urlSynced.svelte';
 
-export {
-  companyFiltersFromParams,
-  companyFiltersToParams,
-  type CompanyFilters,
-  type CompanySortField,
-};
+export { companyFiltersFromParams, companyFiltersToParams, type CompanyFilters, type CompanySortField };
 
 /** Reactive company filters mirrored into the URL — a thin wrapper over the shared
  *  UrlSyncedState primitive, satisfying the FacetStore contract so the same

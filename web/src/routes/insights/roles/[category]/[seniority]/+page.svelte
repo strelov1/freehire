@@ -13,9 +13,7 @@
   const canonical = $derived(`${origin}/insights/roles/${data.category}/${data.seniority}`);
   const heading = $derived(`What ${data.roleName} Jobs Ask For`);
   const title = $derived(`${heading} · freehire`);
-  const updated = $derived(
-    new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-  );
+  const updated = $derived(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
 
   const skills = $derived(data.role.skills ?? []);
   const sample = $derived(data.role.sample_size ?? 0);
@@ -27,9 +25,7 @@
   const via = $derived(new Map((coverage?.adjacent ?? []).map((a) => [a.name, a.via])));
 
   // The filter that reproduces this page's population in the feed.
-  const jobsQuery = $derived(
-    new URLSearchParams({ category: data.category, seniority: data.seniority }).toString(),
-  );
+  const jobsQuery = $derived(new URLSearchParams({ category: data.category, seniority: data.seniority }).toString());
 
   const jsonLd = $derived(
     jsonLdScript([
@@ -51,12 +47,7 @@
 <!-- A role below the demand floor is served (the job page links here from any posting
      carrying both facets, and a link into a 404 is the failure the gate exists to avoid)
      but not indexed — a thin page in the index is the other failure. -->
-<Seo
-  {title}
-  description={data.intro}
-  {canonical}
-  robots={data.thin ? 'noindex, follow' : undefined}
-/>
+<Seo {title} description={data.intro} {canonical} robots={data.thin ? 'noindex, follow' : undefined} />
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD from jsonLdScript, which escapes `<` -->
   {@html jsonLd}
@@ -74,15 +65,12 @@
   <p class="mb-4 text-sm text-muted-foreground">
     {data.role.open_count.toLocaleString('en-US')} open {data.roleName} postings.
     {#if sample > 0}
-      The percentages below are measured over the {sample.toLocaleString('en-US')} of them
-      that list skills at all.
+      The percentages below are measured over the {sample.toLocaleString('en-US')} of them that list skills at all.
     {/if}
   </p>
 
   {#if skills.length === 0}
-    <p class="text-muted-foreground">
-      Not enough of these postings list skills yet to rank what they ask for.
-    </p>
+    <p class="text-muted-foreground">Not enough of these postings list skills yet to rank what they ask for.</p>
   {:else}
     <Table>
       {#snippet header()}
@@ -120,8 +108,8 @@
          a posting, including in a nice-to-have list or a stack blurb, so every share here
          is an upper bound on what the role actually requires. -->
     <p class="mt-3 text-xs text-muted-foreground">
-      "Mentioned in" counts postings that name the skill anywhere — including as a
-      nice-to-have — so treat it as the ceiling, not the bar.
+      "Mentioned in" counts postings that name the skill anywhere — including as a nice-to-have — so treat it as the
+      ceiling, not the bar.
     </p>
   {/if}
 

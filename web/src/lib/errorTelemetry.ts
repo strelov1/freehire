@@ -1,12 +1,8 @@
-import { SeverityNumber } from "@opentelemetry/api";
-import { resourceFromAttributes } from "@opentelemetry/resources";
-import {
-  BatchLogRecordProcessor,
-  LoggerProvider,
-  type LogRecordExporter,
-} from "@opentelemetry/sdk-logs";
-import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
-import { isTransientNoise } from "./transientNoise.js";
+import { SeverityNumber } from '@opentelemetry/api';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import { BatchLogRecordProcessor, LoggerProvider, type LogRecordExporter } from '@opentelemetry/sdk-logs';
+import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-proto';
+import { isTransientNoise } from './transientNoise.js';
 
 interface ErrorTelemetryOptions {
   endpoint?: string;
@@ -22,27 +18,21 @@ interface ErrorTelemetryOptions {
 function sanitize(value: string, limit: number): string {
   return value
     .slice(0, limit * 2)
-    .replace(
-      /(?:https?|file|chrome-extension|moz-extension):\/\/[^\s)"'<>]+/gi,
-      (raw) => {
-        try {
-          const url = new URL(raw);
-          return `${url.protocol}//${url.host}${url.pathname}`;
-        } catch {
-          return "[url]";
-        }
-      },
-    )
-    .replace(/\bBearer\s+\S+/gi, "Bearer [redacted]")
-    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]")
+    .replace(/(?:https?|file|chrome-extension|moz-extension):\/\/[^\s)"'<>]+/gi, (raw) => {
+      try {
+        const url = new URL(raw);
+        return `${url.protocol}//${url.host}${url.pathname}`;
+      } catch {
+        return '[url]';
+      }
+    })
+    .replace(/\bBearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]')
     .replace(
       /\b[a-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key|authorization|credentials?)["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|(?:(?:basic|bearer)\s+)?[^\s,;"']+)/gi,
-      "[redacted]",
+      '[redacted]',
     )
-    .replace(
-      /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
-      "[token]",
-    )
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[token]')
     .slice(0, limit);
 }
 
@@ -52,9 +42,9 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
   try {
     provider = new LoggerProvider({
       resource: resourceFromAttributes({
-        "service.name": options.service,
-        "service.version": options.version || "unknown",
-        "deployment.environment.name": options.environment || "development",
+        'service.name': options.service,
+        'service.version': options.version || 'unknown',
+        'deployment.environment.name': options.environment || 'development',
       }),
       logRecordLimits: {
         attributeCountLimit: 8,
@@ -79,50 +69,37 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
   } catch {
     return undefined;
   }
-  const logger = provider.getLogger("freehire.errors");
+  const logger = provider.getLogger('freehire.errors');
   const seen = new Set<string>();
   let windowStart = Date.now();
   return {
     // `kitError`: the caller vouches this is SvelteKit's { status, message } and not an
     // arbitrary object (a rejection reason may look the same and carry personal data).
-    capture(
-      error: unknown,
-      context: { route?: string | null; method?: string; kitError?: boolean } = {},
-    ) {
+    capture(error: unknown, context: { route?: string | null; method?: string; kitError?: boolean } = {}) {
       try {
         if (isTransientNoise(error)) return;
-        if (
-          error instanceof Error &&
-          /\[['"]@context['"]\]\.toLowerCase/.test(error.message)
-        )
-          return;
-        let rawMessage = "Non-Error exception";
+        if (error instanceof Error && /\[['"]@context['"]\]\.toLowerCase/.test(error.message)) return;
+        let rawMessage = 'Non-Error exception';
         let type: string = typeof error;
         if (error instanceof Error) {
           rawMessage = error.message;
           type = error.name;
-        } else if (
-          ["string", "number", "boolean", "bigint"].includes(typeof error)
-        )
-          rawMessage = String(error);
+        } else if (['string', 'number', 'boolean', 'bigint'].includes(typeof error)) rawMessage = String(error);
         else if (context.kitError && isHttpError(error)) {
           // SvelteKit hands handleError an App.Error ({ status, message }), not an Error;
           // its message is the literal a load passed to error(), so it is safe to report.
           const detail = error.message;
-          rawMessage = `HTTP ${error.status}${typeof detail === "string" ? `: ${detail}` : ""}`;
-          type = "HttpError";
+          rawMessage = `HTTP ${error.status}${typeof detail === 'string' ? `: ${detail}` : ''}`;
+          type = 'HttpError';
         }
-        const route = context.route ? sanitize(context.route, 256) : "";
-        const method = context.method ? sanitize(context.method, 16) : "";
+        const route = context.route ? sanitize(context.route, 256) : '';
+        const method = context.method ? sanitize(context.method, 16) : '';
         const message = sanitize(rawMessage, 1024);
-        const stack = sanitize(
-          error instanceof Error ? error.stack || "" : "",
-          8192,
-        );
+        const stack = sanitize(error instanceof Error ? error.stack || '' : '', 8192);
         // Preserve a sanitized local copy before delivery bounds can drop an event.
         if (options.logToConsole) {
           try {
-            const where = method || route ? ` [${[method, route].filter(Boolean).join(" ")}]` : "";
+            const where = method || route ? ` [${[method, route].filter(Boolean).join(' ')}]` : '';
             console.error(`${stack || `${sanitize(type, 128)}: ${message}`}${where}`);
           } catch {
             /* Continue exporting if local logging fails. */
@@ -138,15 +115,15 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         seen.add(key);
         logger.emit({
           severityNumber: SeverityNumber.ERROR,
-          severityText: "ERROR",
-          body: "Unhandled exception",
+          severityText: 'ERROR',
+          body: 'Unhandled exception',
           attributes: {
-            "event.name": "exception",
-            "exception.type": sanitize(type, 128),
-            "exception.message": message,
-            "exception.stacktrace": stack,
-            ...(route && { "http.route": route }),
-            ...(method && { "http.request.method": method }),
+            'event.name': 'exception',
+            'exception.type': sanitize(type, 128),
+            'exception.message': message,
+            'exception.stacktrace': stack,
+            ...(route && { 'http.route': route }),
+            ...(method && { 'http.request.method': method }),
           },
         });
       } catch {
@@ -170,14 +147,8 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
   };
 }
 
-function isHttpError(
-  error: unknown,
-): error is { status: number; message?: unknown } {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    typeof (error as { status?: unknown }).status === "number"
-  );
+function isHttpError(error: unknown): error is { status: number; message?: unknown } {
+  return typeof error === 'object' && error !== null && typeof (error as { status?: unknown }).status === 'number';
 }
 
 type ErrorTelemetry = ReturnType<typeof createErrorTelemetry>;
@@ -186,18 +157,24 @@ type ErrorTelemetry = ReturnType<typeof createErrorTelemetry>;
 // V8 uses "at fn (url)"; Firefox and Safari use "fn@url".
 const EXTENSION_FRAME = /^(?:chrome|moz|safari|safari-web|edge)-extension:\/\//i;
 function fromExtensionOnly(error: unknown): boolean {
-  if (!(error instanceof Error) || typeof error.stack !== "string") return false;
-  const frames = error.stack.split("\n").filter((line) => /^\s*at\s+|@\S+:\d+/.test(line));
-  return frames.length > 0 && frames.every((line) => {
-    const location = line.trim().replace(/^at\s+(?:.*?\s+\()?/, "").replace(/^.*?@/, "");
-    return EXTENSION_FRAME.test(location);
-  });
+  if (!(error instanceof Error) || typeof error.stack !== 'string') return false;
+  const frames = error.stack.split('\n').filter((line) => /^\s*at\s+|@\S+:\d+/.test(line));
+  return (
+    frames.length > 0 &&
+    frames.every((line) => {
+      const location = line
+        .trim()
+        .replace(/^at\s+(?:.*?\s+\()?/, '')
+        .replace(/^.*?@/, '');
+      return EXTENSION_FRAME.test(location);
+    })
+  );
 }
 
 /** A provenance predicate is required in content scripts sharing a host page. */
 export function installErrorListeners(
   target: EventTarget,
-  telemetry: Pick<NonNullable<ErrorTelemetry>, "capture"> | undefined,
+  telemetry: Pick<NonNullable<ErrorTelemetry>, 'capture'> | undefined,
   owns?: (error: Error, filename: string) => boolean,
 ) {
   // The extension-only filter serves the caller with no predicate of its own (the web
@@ -205,20 +182,16 @@ export function installErrorListeners(
   // already answers provenance — for a browser extension the extension's own frames ARE
   // its code — so its answer stands alone.
   const foreign = owns ? undefined : fromExtensionOnly;
-  target.addEventListener("error", (event) => {
+  target.addEventListener('error', (event) => {
     const failure = event as ErrorEvent;
     if (failure.error == null) return;
     if (foreign?.(failure.error)) return;
-    if (
-      !owns ||
-      (failure.error instanceof Error &&
-        owns(failure.error, failure.filename || ""))
-    )
+    if (!owns || (failure.error instanceof Error && owns(failure.error, failure.filename || '')))
       telemetry?.capture(failure.error);
   });
-  target.addEventListener("unhandledrejection", (event) => {
+  target.addEventListener('unhandledrejection', (event) => {
     const reason: unknown = (event as PromiseRejectionEvent).reason;
     if (foreign?.(reason)) return;
-    if (!owns || (reason instanceof Error && owns(reason, ""))) telemetry?.capture(reason);
+    if (!owns || (reason instanceof Error && owns(reason, ''))) telemetry?.capture(reason);
   });
 }

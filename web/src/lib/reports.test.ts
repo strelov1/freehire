@@ -106,12 +106,9 @@ describe('reportRoute', () => {
 
   // The moderation queue's only verdict is closing the job. A reason routed there
   // by mistake reaches a reviewer who cannot express "noted, counted".
-  it.each<ReportReason>(['not_relevant', 'spam', 'fraud', 'other'])(
-    'keeps %s on the moderation path',
-    (reason) => {
-      expect(reportRoute(reason)).toBe('moderation');
-    },
-  );
+  it.each<ReportReason>(['not_relevant', 'spam', 'fraud', 'other'])('keeps %s on the moderation path', (reason) => {
+    expect(reportRoute(reason)).toBe('moderation');
+  });
 
   it('sends exactly one entry down each non-moderation lane', () => {
     const lanes = reportReasons.map((r) => reportRoute(r.value));

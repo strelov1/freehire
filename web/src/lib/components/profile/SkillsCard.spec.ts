@@ -105,7 +105,7 @@ describe('SkillsCard', () => {
 });
 
 describe('SkillsCard — Russian locale', () => {
-  it('renders SkillsPicker\'s heading and search placeholder in Russian', () => {
+  it("renders SkillsPicker's heading and search placeholder in Russian", () => {
     localeRef.current = 'ru';
     render(SkillsCard, { props: {} });
 

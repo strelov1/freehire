@@ -80,9 +80,7 @@ describe('account page — password change', () => {
 
     await fillAndSubmit();
 
-    await waitFor(() =>
-      expect(screen.getByText('That current password is not right.')).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText('That current password is not right.')).toBeTruthy());
     expect(changePassword).not.toHaveBeenCalled();
   });
 

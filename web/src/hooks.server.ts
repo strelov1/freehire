@@ -8,10 +8,21 @@ import { cachePolicy, variesOnCookie } from '#lib/httpCache.js';
 import { isTranslatedLocale, LOCALE_COOKIE } from '#lib/i18n/locale.js';
 import { CAPTURE_MAX_AGE_SECONDS, REF_COOKIE, captureRef, capturePromo } from '#lib/referral.js';
 
-const otelEndpoint = OTEL_EXPORTER_OTLP_LOGS_ENDPOINT || (OTEL_EXPORTER_OTLP_ENDPOINT ? `${OTEL_EXPORTER_OTLP_ENDPOINT.replace(/\/$/, '')}/v1/logs` : undefined);
-const telemetry = createErrorTelemetry({ endpoint: otelEndpoint, service: 'freehire-web-ssr', environment: PUBLIC_OTEL_ENVIRONMENT, version: PUBLIC_OTEL_SERVICE_VERSION, logToConsole: true });
+const otelEndpoint =
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT ||
+  (OTEL_EXPORTER_OTLP_ENDPOINT ? `${OTEL_EXPORTER_OTLP_ENDPOINT.replace(/\/$/, '')}/v1/logs` : undefined);
+const telemetry = createErrorTelemetry({
+  endpoint: otelEndpoint,
+  service: 'freehire-web-ssr',
+  environment: PUBLIC_OTEL_ENVIRONMENT,
+  version: PUBLIC_OTEL_SERVICE_VERSION,
+  logToConsole: true,
+});
 // adapter-node emits this before graceful shutdown; each export has a 3s timeout.
-if (telemetry) process.once('sveltekit:shutdown', () => { void telemetry.shutdown(); });
+if (telemetry)
+  process.once('sveltekit:shutdown', () => {
+    void telemetry.shutdown();
+  });
 
 // Resolves the account-section locale for `<html lang>` before the response
 // streams. Path-gated: only `/my/**` may render non-English — every other route
@@ -37,8 +48,7 @@ if (telemetry) process.once('sveltekit:shutdown', () => { void telemetry.shutdow
 const locale: Handle = async ({ event, resolve }) => {
   const onAccountSection = event.url.pathname === '/my' || event.url.pathname.startsWith('/my/');
   const cookieLocale = event.cookies.get(LOCALE_COOKIE);
-  event.locals.locale =
-    onAccountSection && isTranslatedLocale(cookieLocale) ? cookieLocale : 'en';
+  event.locals.locale = onAccountSection && isTranslatedLocale(cookieLocale) ? cookieLocale : 'en';
   return resolve(event, {
     transformPageChunk: ({ html }) => html.replace('%lang%', event.locals.locale),
   });
@@ -177,13 +187,7 @@ const permissionsPolicy: Handle = async ({ event, resolve }) => {
   return response;
 };
 
-export const handle = sequence(
-  permissionsPolicy,
-  preloadPolicy,
-  locale,
-  cacheControl,
-  attribution,
-);
+export const handle = sequence(permissionsPolicy, preloadPolicy, locale, cacheControl, attribution);
 
 // Reports uncaught SSR errors to the OTLP endpoint, or logs them without one.
 // SvelteKit's default handler logged every 4xx's stack — scanners probing for

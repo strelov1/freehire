@@ -15,7 +15,15 @@ const { load } = await import('./+page.server.js');
 type LoadEvent = Parameters<typeof load>[0];
 
 // Just enough of a Job for the see-also builder: no facets, so no collection matches.
-const job = { public_slug: 'a-1', title: 'Dev', enrichment: {}, skills: [], countries: [], regions: [], collections: [] };
+const job = {
+  public_slug: 'a-1',
+  title: 'Dev',
+  enrichment: {},
+  skills: [],
+  countries: [],
+  regions: [],
+  collections: [],
+};
 
 function run(slug: string) {
   return load({ params: { slug }, fetch, url: new URL(`https://x/jobs/${slug}`) } as unknown as LoadEvent);

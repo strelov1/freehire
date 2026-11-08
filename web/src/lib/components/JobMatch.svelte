@@ -28,10 +28,7 @@
   // `matchAnalysis` is read by the PAGE, not here — the CTA row's `Tailor my CV` button
   // needs the same response to know whether to offer itself, so JobView reads it once and
   // hands it down through this block to `MatchSummary`. This component does not look at it.
-  let {
-    job,
-    matchAnalysis,
-  }: { job: Job; matchAnalysis: MatchAnalysisResponse | null } = $props();
+  let { job, matchAnalysis }: { job: Job; matchAnalysis: MatchAnalysisResponse | null } = $props();
 
   // The fetched match — set only in the `ready` state. Read by the template/segments
   // but never by `state`, so setting it can't re-trigger the fetch effect below.
@@ -73,9 +70,7 @@
   // The skills the viewer has said they want to avoid. Read straight off the profile the
   // block already holds, so an avoided chip is marked on every job that asks for it without
   // a request, and the mark updates the moment a write applies.
-  const avoided = $derived(
-    new Set((profileStore.profile?.excluded_skills ?? []).map((s) => s.toLowerCase())),
-  );
+  const avoided = $derived(new Set((profileStore.profile?.excluded_skills ?? []).map((s) => s.toLowerCase())));
   const isAvoided = (skill: string) => avoided.has(skill.toLowerCase());
 
   // Fetch the real match only when ready; re-fetch on navigation to another job.
@@ -87,7 +82,8 @@
     done = null;
     failed = null;
     if (blockState !== 'ready') return;
-    api.getJobMatch(slug)
+    api
+      .getJobMatch(slug)
       .then((m) => {
         if (job.public_slug === slug) match = m;
       })
@@ -277,10 +273,7 @@
   }}
 />
 
-<section
-  class="flex flex-col gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0"
-  aria-label="Profile match"
->
+<section class="flex flex-col gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0" aria-label="Profile match">
   <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profile match</p>
 
   {#if blockState === 'no-skills'}
@@ -294,7 +287,11 @@
           <Lock class="size-3.5 shrink-0" />Sign in to see your match
         </span>
         <!-- Outline: Tailor my CV is the page's one filled button. -->
-        <Button variant="outline" size="sm" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</Button>
+        <Button
+          variant="outline"
+          size="sm"
+          href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</Button
+        >
       {:else}
         <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
           <FileText class="size-3.5 shrink-0" />Add your skills or upload a CV
@@ -322,7 +319,9 @@
           <span class="size-1.5 rounded-full bg-brand"></span>You have
         </span>
         <div class="flex flex-wrap gap-1.5">
-          {#each view.matched as skill (skill)}<span class={haveChip}><SkillIcon slug={skill} />{skillLabel(skill)}</span>{/each}
+          {#each view.matched as skill (skill)}<span class={haveChip}
+              ><SkillIcon slug={skill} />{skillLabel(skill)}</span
+            >{/each}
         </div>
       </div>
     {/if}
