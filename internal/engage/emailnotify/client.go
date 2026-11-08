@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
+	"net/mail"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -89,8 +92,25 @@ func (m Message) validate() error {
 		return fmt.Errorf("emailnotify: %s mail to %s: %w", m.Group, m.To, ErrNoWayOut)
 	case !emailprefs.Silenceable(m.Group) && m.UnsubscribeURL != "":
 		return fmt.Errorf("emailnotify: %s mail to %s carries an unsubscribe URL it cannot honour", m.Group, m.To)
+	// The footer saying who wrote and why, with the way out, must reach the reader in
+	// both parts: SES Trust & Safety refused our appeal partly because the mail was hard
+	// to attribute, and a sender building its own body can drop it without noticing.
+	case emailprefs.Silenceable(m.Group) && !strings.Contains(m.Text, emailprefs.TextFooter(m.UnsubscribeURL)):
+		return fmt.Errorf("emailnotify: %s mail to %s: text part lacks emailprefs.TextFooter: %w", m.Group, m.To, ErrNoWayOut)
+	case emailprefs.Silenceable(m.Group) && !strings.Contains(m.HTML, html.EscapeString(m.UnsubscribeURL)):
+		return fmt.Errorf("emailnotify: %s mail to %s: HTML part lacks the unsubscribe link: %w", m.Group, m.To, ErrNoWayOut)
 	}
 	return nil
+}
+
+// withSenderName gives a bare From address the product's name, so no mail shows up in
+// a message list as just "notifications". A From that already names someone (the
+// founder sequence's "Ilya from freehire") is kept.
+func withSenderName(from string) string {
+	if a, err := mail.ParseAddress(from); err == nil && a.Name == "" {
+		return From(productName, from)
+	}
+	return from
 }
 
 // unsubscribeHeaders is the RFC 8058 pair, or nothing for mail that cannot be
@@ -180,6 +200,7 @@ func NewClient(ctx context.Context, region string) (*Client, error) {
 // Send delivers one message. A send error is returned so the caller (a delivery
 // loop) retries and eventually dead-letters rather than dropping the notification.
 func (c *Client) Send(ctx context.Context, m Message) error {
+	m.From = withSenderName(m.From)
 	if err := m.validate(); err != nil {
 		return err
 	}

@@ -234,7 +234,7 @@ func TestNudgeClaimAndDelivery(t *testing.T) {
 	ctx := context.Background()
 	resetNudgeTables(t, pool)
 
-	uid := insertUser(t, pool, "deliver@example.test")
+	uid := insertVerifiedUser(t, pool, "deliver@example.test")
 	jid := insertJob(t, pool, "deliver-job")
 	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, DigestFrequency: "instant", DigestIntervalHours: 1, Channels: []string{"email"}}); err != nil {
 		t.Fatalf("upsert settings: %v", err)

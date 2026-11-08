@@ -49,8 +49,8 @@ func TestClient_SendBuildsSimpleEmail(t *testing.T) {
 	if fake.in == nil {
 		t.Fatal("SendEmail was not called")
 	}
-	if got := deref(fake.in.FromEmailAddress); got != "from@freehire.me" {
-		t.Errorf("from = %q, want from@freehire.me", got)
+	if got := deref(fake.in.FromEmailAddress); got != `"freehire" <from@freehire.me>` {
+		t.Errorf("from = %q, want the bare address named freehire", got)
 	}
 	if len(fake.in.Destination.ToAddresses) != 1 || fake.in.Destination.ToAddresses[0] != "to@acme.com" {
 		t.Errorf("to = %v, want [to@acme.com]", fake.in.Destination.ToAddresses)
@@ -129,7 +129,7 @@ func TestClient_SendsTheOneClickHeaders(t *testing.T) {
 	const url = "https://freehire.me/unsubscribe?t=abc"
 
 	err := c.Send(context.Background(), Message{
-		From: "f", To: "t", Subject: "s", HTML: "h", Text: "x",
+		From: "f", To: "t", Subject: "s", HTML: "<a href=\"" + url + "\">u</a>", Text: "x" + emailprefs.TextFooter(url),
 		Group: emailprefs.GroupAlerts, UnsubscribeURL: url,
 	})
 	if err != nil {

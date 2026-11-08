@@ -314,7 +314,7 @@ WHERE subscription_id = sqlc.arg(subscription_id)
 SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_digest_sent_at,
        ss.name AS saved_search_name,
        ss.query AS saved_search_query,
-       u.email AS account_email,
+       mail_recipient(u.email, u.email_verified, u.last_active_at)::text AS account_email,
        u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,
        EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id) AS has_push_device,

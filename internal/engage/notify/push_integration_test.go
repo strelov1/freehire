@@ -39,7 +39,7 @@ func insertNotifyIntegrationUser(t *testing.T, pool *pgxpool.Pool, email string)
 	t.Helper()
 	var id int64
 	if err := pool.QueryRow(context.Background(),
-		`INSERT INTO users (email) VALUES ($1) RETURNING id`, email).Scan(&id); err != nil {
+		`INSERT INTO users (email, email_verified) VALUES ($1, true) RETURNING id`, email).Scan(&id); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
 	// Pin the hourly interval: the no-row default is daily at 09:00 local (migration

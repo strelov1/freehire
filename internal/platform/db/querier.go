@@ -3300,6 +3300,10 @@ type Querier interface {
 	// The account's current session generation, read on every authenticated request to
 	// decide whether a correctly-signed token was revoked. One primary-key lookup; this
 	// is the price of making a stateless JWT revocable at all.
+	//
+	// The same statement stamps last_active_at, at most once a day, because this is the
+	// one place every signed-in request passes; mail_recipient (migration 0247) reads it
+	// to stop optional mail to people who have not used freehire in 180 days.
 	GetUserTokenVersion(ctx context.Context, id int64) (int32, error)
 	// The account's own username (NULL until claimed/allocated) and, when set, the
 	// time of its last EXPLICIT change via SetUsername — NULL for a lazily
@@ -3866,8 +3870,8 @@ type Querier interface {
 	// description vectors. A job with no captured form simply has no row.
 	ListApplyFormsForJobs(ctx context.Context, jobIds []int64) ([]ListApplyFormsForJobsRow, error)
 	// The notify fan-out targets: every approved referrer of a company with their email and
-	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
-	// optional Telegram ping.
+	// linked Telegram chat (NULL when unlinked). Email is '' when mail_recipient (0247) says
+	// the address may not be mailed; chat_id drives the optional Telegram ping.
 	ListApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]ListApprovedReferrerRecipientsRow, error)
 	// The caller's session rail: their unbound conversations, most recently active first.
 	// Owner-scoped by construction — another user's sessions can never appear.

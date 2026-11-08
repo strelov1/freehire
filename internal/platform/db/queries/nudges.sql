@@ -193,7 +193,7 @@ SELECT n.id, n.user_id, n.job_id, n.kind,
        (a.user_id IS NOT NULL)::bool AS application_exists,
        GREATEST(a.applied_at, mail.newest_mail_at)::timestamptz AS last_activity_at,
        COALESCE(mail.suggestion_pending, false)::boolean AS has_pending_suggestion,
-       u.email AS account_email,
+       mail_recipient(u.email, u.email_verified, u.last_active_at)::text AS account_email,
        u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,
        EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = n.user_id) AS has_push_device

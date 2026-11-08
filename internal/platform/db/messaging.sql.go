@@ -555,7 +555,7 @@ SELECT p.conversation_id,
        p.notified_at AS prev_notified_at,
        coalesce(p.last_read_message_id, 0)::bigint AS last_read,
        u.oldest_id,
-       us.email,
+       mail_recipient(us.email, us.email_verified, us.last_active_at)::text AS email,
        tl.chat_id
 FROM conversation_participants p
 JOIN conversations c ON c.id = p.conversation_id AND c.status IN ('open', 'pending')

@@ -108,7 +108,7 @@ func TestGetSubscriptionForDelivery_ResolvesAccountEmail(t *testing.T) {
 	ctx := context.Background()
 
 	truncateSubs(t, pool)
-	uid := insertUser(t, pool, "digest@example.test")
+	uid := insertVerifiedUser(t, pool, "digest@example.test")
 	ssID := insertSavedSearch(t, pool, uid, "Go remote", "q=go")
 	sub, err := q.CreateSubscription(ctx, CreateSubscriptionParams{
 		Channel: "email", SavedSearchID: ssID, UserID: uid,
