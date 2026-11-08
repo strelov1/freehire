@@ -52,7 +52,7 @@
 
 ---
 
-# Part A — `hire`: publish the map
+## Part A — `hire`: publish the map
 
 ## Task A1: The pure `logodomain` package
 
@@ -957,7 +957,7 @@ so it yields to everything."
 
 ---
 
-# Part B — `freehire-logo`: consult the map
+## Part B — `freehire-logo`: consult the map
 
 All paths in Part B are relative to `~/Projects/freehire-logo`. Work on a branch:
 
@@ -1536,7 +1536,7 @@ changes, which is the rollback."
 
 After the "Status" section in `README.md`:
 
-```markdown
+````markdown
 ## The domain map
 
 Resolving a logo by name sometimes answers with a different company — `g2i` returns an
@@ -1544,9 +1544,7 @@ unrelated leadership-training firm's mark, at HTTP 200, which no caller can dete
 `?domain=` removes the ambiguity, and `../hire` now publishes the domains it knows:
 
 ```
-
 LOGO_DOMAIN_MAP=/var/lib/freehire-logo-map/domains.json
-
 ```
 
 The file is written daily by `../hire`'s `cmd/publish-logo-domains` and holds normalized
@@ -1557,7 +1555,7 @@ one declaring a `version`/`normalization` this build does not implement, and the
 resolves exactly as it did before the map existed. That is the rollback.
 
 An explicit `?domain=` from a caller always wins over the map.
-```
+````
 
 - [ ] **Step 2: Commit**
 
@@ -1569,7 +1567,7 @@ git commit -m "Document the domain map and its rollback"
 
 ---
 
-# Part C — Verify against production
+## Part C — Verify against production
 
 ## Task C1: Prove the fix on real data
 
