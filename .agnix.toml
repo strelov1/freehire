@@ -5,21 +5,26 @@
 # inline suppression beside that line instead.
 
 [rules]
-# The Codex rules (CDX-*). Nobody works on this repository with Codex, and what they
-# reported is either about Codex alone or duplicated by a sharper check here:
+# The Codex rules (CDX-*) are on for ONE of them, the size cap. Nobody works on this
+# repository with Codex, but the cap is the only check that notices an instruction file
+# growing past what an agent reads well: CDX-AG-009 warns on any AGENTS.md over 32 KiB
+# (Codex's project_doc_max_bytes, fixed in the rule). internal/ingest/sources/AGENTS.md
+# reached 527 KiB before anything said so. A file still over the cap carries a file-level
+# `<!-- agnix-disable CDX-AG-009 -->` on its first line; remove it once the file fits.
 #
-#   - The size rules are TRUE: the root AGENTS.md is ~280 KiB and Codex reads 32 KiB of an
-#     instruction chain, so it would see about a tenth of it. Splitting the root file is
-#     its own decision. Whoever starts using Codex here should turn this back on first.
-#   - "References missing file" reads every backticked path-shaped token as a file — Go
-#     identifiers (`internal/search.FromJob`), URLs, the private ops repo's paths: 19 of
-#     its 20 findings. The links an agent FOLLOWS are Markdown links, and
+# The other Codex rules stay off, each for a stated reason:
+#
+#   - "References missing file" (CDX-AG-005) reads every backticked path-shaped token as a
+#     file — Go identifiers (`internal/search.FromJob`), URLs, the private ops repo's
+#     paths: 19 of its 20 findings. The links an agent FOLLOWS are Markdown links, and
 #     `pnpm check:links` already resolves every one and fails on a miss.
-#   - "Potential secret": all five hits were placeholders (`LLM_API_KEY=…`). gitleaks
-#     scans these files on every commit and the whole history in CI.
-codex = false
+#   - "Potential secret" (CDX-AG-002): all five hits were placeholders (`LLM_API_KEY=…`).
+#     gitleaks scans these files on every commit and the whole history in CI.
+codex = true
 
 disabled_rules = [
+  "CDX-AG-002",
+  "CDX-AG-005",
   # "Ambiguous term" — `often`, `usually`, `regularly` in sentences that describe measured
   # behaviour ("a crawl usually returns"), not instructions. A style opinion, not a defect.
   "PE-004",

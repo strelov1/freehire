@@ -1,3 +1,4 @@
+<!-- agnix-disable CDX-AG-009 -->
 # Source ingest conventions
 
 ## Scope

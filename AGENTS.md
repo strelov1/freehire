@@ -1,3 +1,4 @@
+<!-- agnix-disable CDX-AG-009 -->
 # AGENTS.md
 
 Guidance for AI agents working in this repository.

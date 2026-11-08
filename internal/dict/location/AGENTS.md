@@ -4,476 +4,352 @@
 Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and a work-mode hint from a free-text ATS location string.
 
 ## Always true
-- **Two entry points, and the split is the point.** `Parse` answers "where is the WORK" (a
-  job's location line); `ParseResidence` answers "where is the PERSON" (a CV's). They are
-  distinct types, not a flag, because the same string means opposite things on the two
-  sides and a flag can be defaulted wrong at a call site. Candidate text goes through
-  `ParseResidence` and never through `Parse`.
+- **Two entry points, by design.** `Parse` answers "where is the WORK" (a job's location
+  line); `ParseResidence` answers "where is the PERSON" (a CV's). They are distinct types,
+  not a flag, because the same string means opposite things on the two sides and a flag can
+  be defaulted wrong at a call site. Candidate text goes through `ParseResidence`, never
+  `Parse`.
 - **A person is never located globally.** `ParseResidence` is `Parse` minus the `global`
-  region and minus the work-mode hint. `global` reaches the result only through the
-  dictionary's own `worldwide`/`anywhere`/`international` entries (`nameToRegion`) — a
-  bare `Remote` with no other signal now yields empty geography (the "region not
-  specified" bucket, `regions=none`), never a guessed `global`; the rule is still phrased
-  against the value rather than the mechanism, since `Residence` should never carry
-  `global` even from the one remaining path. Work mode is a preference and lives on the
-  profile (`location_preferences.work_modes`), not in geography.
-- **A bare `Remote` with no other signal is NOT global.** Removed the old blanket
-  `work_mode=="remote" && no geography` → `global` default: it collapsed "genuinely open
-  anywhere" and "we have no idea" into the same claim, and moderator reports
-  (`/moderation?tab=reports`, freehire job_reports 29-34) showed real region-restricted
-  postings (a title suffix like `[Remote-US]`, or description prose like "hiring in the
-  US, Canada, Argentina, or Brazil only") being served as globally open because of it. Two
-  more sources now rescue a bare-remote posting before it's allowed to fall through to
-  "unspecified": `RestrictionFromTitle` (an anchor-gated bracket/parenthetical suffix scan,
-  `title_restriction.go`) and `RegionScopeFromDescription` (an anchor-gated "candidates
-  based in X" / "hiring in X" / "restricted to X" clause scan, `region_scope.go`), both
-  additive to and consulted after `EligibilityFromDescription`'s existing citizenship-phrase
-  rescue, wired into `jobderive.Derive`'s precedence chain. Both anchor lists are
-  deliberately narrow and role/candidate-qualified, not bare prepositions — a bare
-  `"based in"`/`"located in"` anchor was tried and dropped: it matched a company-HQ "About
-  Us" mention ("Our company is based in Berlin, but this role is remote and open
-  worldwide") as if it were the role's own restriction, found in code review. Last in that
-  chain, below every rescue, is an adapter's `FallbackCountries` (Greenhouse's offices — see
-  `internal/ingest/sources/AGENTS.md`), which fills only a posting that stated no geography
-  at all, never an explicit open-anywhere one.
+  region and minus the work-mode hint; `Residence` never carries `global`, even from the
+  dictionary's own `worldwide`/`anywhere`/`international` entries (`nameToRegion`). Work
+  mode is a preference on the profile (`location_preferences.work_modes`), not geography.
+- **A bare `Remote` with no other signal is NOT global**: it yields empty geography (the
+  "region not specified" bucket, `regions=none`); `global` comes only from
+  `nameToRegion`'s open-anywhere words. Do not reintroduce a "remote and no geography →
+  `global`" default: moderator reports (job_reports 29-34) showed region-restricted
+  postings (`[Remote-US]` title suffix, "hiring in the US … only") served as worldwide. `jobderive.Derive`'s
+  precedence chain rescues a bare-remote posting, in order: `EligibilityFromDescription`
+  (citizenship phrases), `RestrictionFromTitle` (anchor-gated bracket/parenthetical suffix,
+  `title_restriction.go`), `RegionScopeFromDescription` (anchor-gated "candidates based in
+  X" / "hiring in X" / "restricted to X", `region_scope.go`), and last an adapter's
+  `FallbackCountries` (Greenhouse's offices — see `internal/ingest/sources/AGENTS.md`),
+  which fills only a posting that stated no geography at all, never an explicit
+  open-anywhere one. The anchors are role/candidate-qualified on purpose: a bare
+  `"based in"`/`"located in"` matched a company-HQ mention ("Our company is based in Berlin, but
+  this role is remote").
 - **Every code that carries a region must also have a NAME** (`TestEveryPlaceableCountryHasAName`).
-  The two maps had drifted apart for 25 codes, so "Honduras" and "Rwanda" resolved to
-  nothing. The failure is silent — an unresolvable country and an out-of-scope one both
-  emit nothing — which is why it is a test rather than a review item.
+  The two maps had drifted for 25 codes ("Honduras", "Rwanda" resolved to nothing). The
+  failure is silent — unresolvable and out-of-scope both emit nothing — hence a test.
 - **Add country NAMES, never country CODES.** `resolveSubdivision` runs before the bare-code
   branch, so a code would collide with the US/Canada subdivision table (`LA`→Louisiana,
-  `MN`→Minnesota, `MO`→Missouri). Names are full words and cannot.
+  `MN`→Minnesota). Names are full words and cannot.
 - **Non-US/CA region names live in `foreignSubdivisionNames`** (`foreign_subdivisions.go`),
-  merged into `nameToCountry` at init — Russian federal subjects, the UK nations and
-  unambiguous counties, Australian states, German Länder, Indian states. Names only; a name
-  with a second reading this catalogue meets (`Punjab`, `Victoria`, `Berkshire`) is withheld,
-  and the contested territories (Crimea, Sevastopol, Donetsk, Luhansk, Zaporizhzhia, Kherson)
-  are left out on purpose. A duplicate of a `nameToCountry` key panics at load.
-- **Australian state CODES are the one exception, and only after a place.** SEEK writes
-  "Perth WA" and "Sydney NSW" as one token with no comma, and the trailing code used to be
-  read against the US/CA table alone, so WA became Washington and NT the Northwest
-  Territories. `australianStateCodes` is read only after a place name, never as a bare token.
-  NSW/VIC/QLD/TAS are Australia's alone and resolve after any place. WA/SA/NT/ACT are shared,
-  so they resolve to Australia only when the place is a city the dictionary already puts
-  there: "Seattle, WA" stays Washington. The code is cut off the token so the place keeps its
-  city and metro, and it is never recorded as a stated subdivision, because the metro table
-  keys those to US/CA codes.
+  merged into `nameToCountry` at init. Names only; a name with a second reading
+  (`Punjab`, `Victoria`, `Berkshire`) is withheld, and the contested territories (Crimea,
+  Sevastopol, Donetsk, Luhansk, Zaporizhzhia, Kherson) are left out on purpose. A
+  duplicate of a `nameToCountry` key panics at load.
+- **Australian state CODES are the one exception, and only after a place**
+  (`australianStateCodes`; SEEK writes "Perth WA", "Sydney NSW" as one token, and WA used to
+  become Washington, NT the Northwest Territories). Never read as a bare token.
+  NSW/VIC/QLD/TAS resolve after any place; the shared WA/SA/NT/ACT only after a city the
+  dictionary puts in Australia ("Seattle, WA" stays Washington). The code is cut off
+  the token so the place keeps its city and metro, and is never recorded as a stated
+  subdivision (the metro table keys those to US/CA codes).
 - **A US/CA or Australian code before a DIFFERENT country that closes the location is
   that country's subdivision** (`foreignSubdivisionCode`): "Breda, NB, Netherlands" is
-  Noord-Brabant, not New Brunswick; "Barcelona, CT, Spain" Catalonia; "Tijuana, BC, Mexico"
-  Baja California. The town's own reading (curated name or main city table, never
-  small places — most European cities have a US namesake there) must be the closing
-  country and not the code's, so "Austin, TX, Canada" keeps Texas and an unknown town
-  changes nothing. The country must be the LAST token of its location ("Naples, FL,
-  Naples, FL, US" repeats a US place). Measured 2026-10-28: 252 distinct lines, 4,290
-  open rows carried the spurious `us`/`ca`, all removals.
+  Noord-Brabant, "Tijuana, BC, Mexico" Baja California.
+  The town's own reading (curated name or main city table, never small places — most
+  European cities have a US namesake there) must be the closing country, not the code's:
+  "Austin, TX, Canada" keeps Texas; an unknown town changes nothing. The country must be
+  the LAST token ("Naples, FL, Naples, FL, US" repeats a US place). Measured 2026-10-28:
+  252 distinct lines, 4,290 open rows lost a spurious `us`/`ca`.
 - **A country, city or region after a preposition is read** (`stripPlacePreposition`):
-  "Remote within Canada", "Based in Germany", "Anywhere in the U.S.", "Remote across
-  LATAM". The preposition used to stay glued to the name, so the token resolved to nothing
-  — "…, or Remote within Canada or United States" lost Canada for an API customer
-  filtering `countries=ca`. Only `in`/`within`/`from`/`across`/`throughout`, only after
-  lead-in words (`placeLeadWords`: a work mode, "anywhere", "based", "work from"…), and
-  only when the rest is a country, region or city name — a main-table city under its own
-  name only, never a GeoNames alias ("market" is Marquette's). A town before the
-  preposition ("Kirchheim in Schwaben") or an unknown name keeps the token whole. A bare
-  "IN" opening a line is also Indiana's code, so after it only a curated name the US has
-  no town of counts ("IN Lebanon", "IN Munster" read nothing); a state or province name is
-  left to `resolveSubdivision`, which already reads one closing a token. Measured
-  2026-10-28 over every stored location: 309 distinct lines, 901 open rows gained a
-  country or region, none lost one.
+  "Remote within Canada", "Based in Germany" (the glued preposition used to lose Canada for
+  an API customer filtering `countries=ca`). Only `in`/`within`/`from`/`across`/`throughout`,
+  only after `placeLeadWords` (a work mode, "anywhere", "based", "work from"…), and only when the rest
+  is a country, region or main-table city under its own name, not an alias ("market" is
+  Marquette's). A town before the preposition ("Kirchheim in Schwaben") or an
+  unknown name keeps the token whole. A line-opening "IN" is also Indiana, so after it only
+  a curated name the US has no town of counts ("IN Lebanon", "IN Munster" read nothing);
+  state/province names are left to `resolveSubdivision`. Measured 2026-10-28: 309 distinct
+  lines, 901 open rows gained a country or region, none lost one.
 - **A code that is both a US/CA subdivision and an ISO country is the COUNTRY when it
-  closes a location of three or more tokens** (`countryCodeClosingCity`): "Toronto, ON,
-  CA" and "Toronto, CA, CA" are Canada, not California; "Tel Aviv-Yafo, Tel Aviv District,
-  IL" Israel; "Casablanca, Casablanca-Settat, MA" Morocco. After one of that country's own
-  provinces it is the country whatever the town ("London, ON, CA"); otherwise the
-  location's first place must be a curated or main-table city of that country and not of
-  the US/CA, so "San Jose, CA, CA" stays Californian. The two-token "City, CA" is untouched.
-- **A US state and the US remove a foreign namesake of the town**, like a bare state does
-  ("Paris, TX"): "Valencia, CA, US", "Dublin, CA, US", "Paris, IL, US", "Lebanon, PA, US"
-  name no Spain, Ireland, France or Lebanon. Two paths used to skip the withdrawal — the
-  code read as the closing country's subdivision (`subdivisionBeforeCountry`) and a
-  colliding code beside a named US — and both now withdraw, the second only when the US
-  has a place of that name ("Jakarta, ID, United States" keeps Indonesia; "CL, CO, MX,
-  US" is a list of codes, not a town). Measured 2026-10-28 over every stored location:
-  4,271 distinct lines, 42,933 open rows changed country or region, all corrections
-  (~34.9k Canadian rows lost a spurious `us`); a further 18.3k open rows ("Fresno, CA,
-  US") gained the metro the now-recorded state lets `metroFor` resolve.
-- **A Japanese address states `jp`** (`location_ja.go`): a token that is one of the 47
+  closes a location of three or more tokens** (`countryCodeClosingCity`): "Toronto, ON, CA"
+  and "Toronto, CA, CA" are Canada; "Tel Aviv-Yafo, Tel Aviv District, IL" Israel. After
+  one of that country's own provinces it is the country whatever the town ("London, ON,
+  CA"); otherwise the first place must be a curated or main-table city of that country and
+  not of the US/CA ("San Jose, CA, CA" stays Californian). Two-token "City, CA" is untouched.
+- **A US state and the US remove a foreign namesake of the town**, as a bare state does
+  ("Paris, TX"): "Valencia, CA, US", "Dublin, CA, US", "Lebanon, PA, US" name no Spain,
+  Ireland or Lebanon. Also when the code is read as the closing country's subdivision
+  (`subdivisionBeforeCountry`), and for a colliding code beside a named US when the US has a
+  place of that name ("Jakarta, ID, United States" keeps Indonesia). Measured 2026-10-28: 4,271
+  distinct lines, 42,933 open rows corrected (~34.9k Canadian rows lost a spurious `us`);
+  18.3k more ("Fresno, CA, US") gained a metro via the now-recorded state (`metroFor`).
+- **A Japanese address states `jp`** (`location_ja.go`) when a token is one of the 47
   prefectures in Japanese script WITH its 都/道/府/県 suffix ("港区, 東京都"), opens with one
-  and goes on to a municipality (市/区/郡/町/村: "東京都渋谷区渋谷2-24-12", not the Hong Kong
-  restaurant "北海道牧場餐廳"), or carries the 〒 postal mark. Bare "東京"/"大阪" and a ward
-  or city alone ("大阪市北区") state nothing, nor does a prefecture mid-token behind a shop
-  name. No city or metro: the city tables are Latin-script. Measured 2026-10-30: all ~43.8k
-  open HRMOS postings and ~20k of HERP's had no country.
+  and continues to a municipality (市/区/郡/町/村; not a Hong Kong shop "北海道牧場餐廳"), or
+  carries 〒. Bare "東京", a ward/city alone or a prefecture mid-token state nothing. No
+  city or metro (the city tables are Latin-script). Measured 2026-10-30: all ~43.8k open HRMOS postings and ~20k of
+  HERP's had no country.
 - **A small place names a city, never a country** (`smallplaces.go`, `smallplaces.tsv`,
   written by `cmd/gen-cities` beside `cities1000.tsv`). The main table stops at 15,000
-  people; the German crawl names towns of a few thousand beside their Land ("Billerbeck,
-  Nordrhein-Westfalen"). A token neither table resolves is held as a per-country candidate
-  and named only once the rest of the line has stated that country — so "Hasbergen" alone
-  states nothing. The same pending path reads "Rottenburg am Neckar" (the town before
-  am/an der/im/in der/bei) and "Köln-Niehl" (a main-table city opening a dash, longest
-  prefix first). A token that opened a parenthesis is never a small place ("Schönebeck
-  (Elbe)"). Loaded lazily: the server rarely needs it. Measured 2026-10-25 over the German
-  crawl: postings with a city 76.1% → 94.0%. The residue is mostly German municipalities
-  GeoNames carries only as administrative units (ADM4), absent from `cities1000` entirely
-  (Borchen, Weinstadt, Spremberg, Wedemark).
-- **A site is not a town.** A K-12 board (applitrack) writes the SITE where a town would
-  go, and two readings took a town out of it. The "City-District" dash read the first name
-  of an institution ("Harrison-Morton Middle School" was Scranton, through its old name
-  Harrison; "Lincoln-Way ... District 843" was Lincoln), so a token carrying `school`,
-  `academy` or `district` is not one (`namesInstitution`). And cutting a site word
-  ("San Francisco Office") left its descriptor behind to be read as a town ("Central
-  Office" was Central, Louisiana), so a `siteDescriptors` word goes with the site word.
-  Measured 2026-10-30 over the 600 most common applitrack sites with their state appended:
-  rows with a city 640 → 344, every one dropped wrong; over the 40,000 most common other
-  location strings (7.7M open rows) the only changes were five lines gaining a correct
-  city ("Corp - Toronto Corporate Office") and one bare "Central Office" losing Central.
-  A site that names its town still reads it ("Lincoln School, Palatine, IL").
+  people; the German crawl names smaller towns ("Billerbeck, Nordrhein-Westfalen"). A token
+  neither table resolves is held as a per-country candidate and named only once the line
+  states that country ("Hasbergen" alone states nothing). The same pending path reads
+  "Rottenburg am Neckar" (town before am/an der/bei…) and "Köln-Niehl" (main-table
+  city opening a dash, longest prefix first). A token that opened a parenthesis is never a
+  small place ("Schönebeck (Elbe)"). Loaded lazily. Measured 2026-10-25, German crawl: city
+  76.1% → 94.0%; the residue is mostly ADM4-only municipalities absent from `cities1000`.
+- **A site is not a town.** K-12 boards (applitrack) write the SITE where a town goes. A
+  token carrying `school`, `academy` or `district` is not a "City-District" dash
+  (`namesInstitution`; "Harrison-Morton Middle School" was Scranton), and a
+  `siteDescriptors` word is cut with the site word ("Central Office" was Central,
+  Louisiana). A site that names its town still reads it ("Lincoln School, Palatine, IL").
+  Measured 2026-10-30: 600 applitrack sites, rows with a city 640 → 344, every drop wrong;
+  the top 40,000 other strings (7.7M rows) changed in six lines, all correct.
 - **A city read through another place's ALIAS answers to the line's country and state**
-  (`alias_place.go`, `addAliasCity`). GeoNames lists old, foreign and colloquial names as
-  aliases and `cityDict` hands each to the most populous carrier, so "Harrison" (Scranton's
-  name until 1851) was Scranton, "Morton" Mandan, "Frisco" San Francisco, "Missouri"
-  Bozeman — even in "Harrison, NJ". cities1000 carries no historical/colloquial flag, and
-  "own name beats a bigger place's alias" is wrong for the exonyms people still write
-  (Calcutta, Bombay, New Delhi), so the rule reads the LINE instead: an alias city whose
-  country the line does not state is not named; one whose country it states but whose
-  metro-table admin1 is none of the stated US/CA subdivisions is replaced by the place
-  whose OWN name the token is in a stated subdivision (`townIn`, punctuation and
-  St/Saint folded: "St Petersburg, FL"), or by nothing. Never by another alias there:
-  "Newton, NC" would become Wilmington, whose old name it is. A bare alias with no stated
-  geography still reads as before ("Calcutta", bare "Morton"). Measured 2026-10-31 over
-  the 40,000 most common open location strings (7.68M rows): 1,158 strings / 126k rows
-  changed city, no country changed; 438 strings (55k rows) swapped to the town the line
-  names, 206 (27k) gained one ("Salem, OR", "Canton, OH" named none), 514 (44k) lost a
-  wrong one. About 226 rows lost a right city, each behind a pre-existing country misread
-  ("St. Gallen, SG" is Singapore, "Apodaca, NL" the Netherlands, a Mexico City postcode a
-  US ZIP) or "Reston, VA / Washington D.C." (D.C. is not recorded as a subdivision).
-- **A curated city override renames the PLACE** (`loadCityDict`), not only its own alias,
-  and `metroFor` maps the curated name back to the GeoNames one the metro table is keyed
-  by. Renaming one alias split Frankfurt across "Frankfurt" and "Frankfurt am Main" and
-  left "Frankfurt"/"Cologne"/"Zurich" with no metro.
+  (`alias_place.go`, `addAliasCity`). `cityDict` hands each GeoNames alias (old, foreign,
+  colloquial) to the most populous carrier, so "Harrison" was Scranton, "Frisco" San
+  Francisco, even in "Harrison, NJ". cities1000 has no historical flag, and "own name beats
+  alias" is wrong for live exonyms (Calcutta, Bombay), so the rule reads the LINE: an alias
+  city whose country the line does not state is not named; one whose metro-table admin1 is
+  none of the stated US/CA subdivisions is replaced by the place whose OWN name the token
+  is there (`townIn`, punctuation and St/Saint folded: "St Petersburg, FL"), or by nothing
+  — never by another alias ("Newton, NC" would become Wilmington). A bare alias with no
+  stated geography still reads ("Calcutta"). Measured 2026-10-31, top 40,000 strings (7.68M
+  rows): 126k rows changed city, no country; ~226 lost a right city, each behind a
+  pre-existing country misread ("St. Gallen, SG" is Singapore) or D.C. not being recorded
+  as a subdivision.
+- **A curated city override renames the PLACE** (`loadCityDict`), not only its alias, and
+  `metroFor` maps the curated name back to the GeoNames key of the metro table. Renaming
+  only the alias split Frankfurt across two names and left it with no metro.
 - **A subdivision name that is also ANOTHER city's alias states no city**
-  (`regionNotCity`): the Land Brandenburg is an alternate name of Brandenburg an der Havel.
+  (`regionNotCity`: the Land Brandenburg vs Brandenburg an der Havel).
   `TestSubdivisionCityAliasesAreDecided` makes every new overlap a decision.
-- **Area words and postal prefixes are cut before lookup**: "Großraum/Region/Raum/Umkreis/
-  Standort/Kanton X", "X und Umgebung", and a continental postal code before its town
-  ("85462 Eitting", "CH-3400 Burgdorf"). The code states no country — four and five digits
-  are half of Europe's formats.
+- **Area words and postal prefixes are cut before lookup** (`areaPrefixes`/`areaSuffixes`,
+  `postalPrefixRE`): "Großraum/Region/Raum/Umkreis/Standort/Kanton X", "X und Umgebung", a
+  continental postcode before its town ("85462 Eitting", "CH-3400 Burgdorf"). The code
+  states no country — four and five digits are half of Europe's formats.
 - **Metros are dict-only and need one stated country.** `Geo.Metros` comes from
-  `metros.tsv` (generated by `cmd/gen-metros` from GeoNames + GHS-FUA). A city with a stated
-  US/CA subdivision is looked up exactly; a bare city only when every same-named place in
-  that country, in a FUA or not, shares one metro. The table therefore lists every place
-  the city dictionary can read, with an empty metro for one in no FUA, and "no metro"
-  counts as a value of its own: bare "Jackson" is Jackson NJ (Philadelphia) and Jackson MS
-  (none), so it gets nothing. An exact key the table repeats under two values is dropped
-  the same way, and "no metro" is never returned as a metro. Regenerating the table needs `backfill-derive` + `reindex` like any
-  dictionary change.
+  `metros.tsv` (`cmd/gen-metros`, GeoNames + GHS-FUA). A city with a stated US/CA
+  subdivision is looked up exactly; a bare city only when every same-named place in that
+  country shares one metro. The table lists every place the city dictionary can read, with
+  an empty metro for one in no FUA, and "no metro" counts as a value: bare "Jackson" is
+  Jackson NJ (Philadelphia) and Jackson MS (none), so nothing. An exact key repeated under
+  two values is dropped the same way; "no metro" is never returned. Regenerating needs
+  `backfill-derive` + `reindex`.
 - **A colliding state code defaults per code, by measurement.** `IL`, `MA`, `PA`… are both
-  a US state and a country. The default reading is the country unless the preceding city is
-  a known US/CA place — except for `stateFirstSubdivisions` (pa, ma, md, il, mn, al, mo, la,
-  me), where the US-state reading dominates the catalogue: after any city the dictionary does
-  not place in that country, the code is the state. Without it ~29k US postings sat under
-  Morocco, Panama, Moldova and Albania ("Cambridge, MA": GeoNames calls Cambridge British).
-  A code joins the set on a `cmd/report-geo-gaps` measurement, never on intuition.
+  a US state and a country; the default is the country unless the preceding city is a known
+  US/CA place. For `stateFirstSubdivisions` (pa, ma, md, il, mn, al, mo, la, me) the state
+  wins after any city not placed in that country — without it ~29k US postings sat under
+  Morocco, Panama, Moldova, Albania ("Cambridge, MA"). A code joins the set only on a
+  `cmd/report-geo-gaps` measurement.
 - **A full UK postcode states `gb`, like a US ZIP states `us`** (`stripUKPostcode`), and is
-  cut from its token so the place before it still resolves ("London SW1A 2HB"). Only the
-  full outward + inward form, under a real postcode area, counts; an inward code that reads
-  as an ordinal ("B2 2nd floor") does not, and GY/JE/IM are Crown dependencies, not `gb`.
-  Found through Civil Service Jobs, whose "Durham, North East England, DH1 3HU" resolved to
-  the US — which is also why `durham` left the curated city map and England's ITL 1 region
-  names joined `foreignSubdivisionNames`.
-- **A country name that is also a US city/state is deliberately withheld.** `georgia` is
-  absent (the state); `palestine` is absent (Palestine, Texas) in favour of the unambiguous
-  long forms. `Tbilisi, Georgia` still resolves to `ge` — through the city, not the country
-  name. Precision over recall, the same rule the eligibility phrases follow.
-- **Indian location shapes are read in `india.go`**, per comma-token, before lookup:
-  country-state-city exports ("IN-KA-Bangalore", "India-Karnataka-Bangalore",
-  "IN.TN.Chennai") become their city; a city's revenue division or municipal form
-  ("Bangalore North", "Pune City", "Mumbai Suburban") becomes the city, but only when what
-  remains is an INDIAN city of the table, and never "Rural" (Bangalore Rural is another
-  district); an office line opening with a curated Indian city ("Chennai DLF") is that city.
-  "Delhi NCR"/"NCR"/"Greater Delhi Area" state the country and the Delhi metro and NO city —
-  naming Delhi, Gurugram or Noida would be a guess. "Pan India"/"Anywhere in India" state
-  the country, and their "anywhere" is not a remote marker. Indian display names drop
-  GeoNames' transliteration marks ("Thāne" → "Thane") in the city table, the search index
-  and the metro table alike (`foldIndianName`); two aliases GeoNames hands to a neighbour
-  are pinned without renaming it (`cityAliasPins`: Visakhapatnam, Secunderabad). A line that
-  names the United States reads a colliding code beside it as the state ("Hobart, IN, US"
-  is Indiana). Measured 2026-10-25 over 63,305 Indian postings: city 78.3% → 84.4%. The
-  residue is mostly localities (Malad, Baner, Andheri, Gachibowli), employer office codes
-  ("TPIN Malad", "INT Thane") and states alone, which correctly state no city.
-- It is a curated dictionary, not a geocoder — it resolves high-frequency names/shorthands and emits nothing for what it can't resolve (never guesses).
-- Region and work-mode values are drawn from the shared controlled vocabulary (`vocab.RegionValues`/`vocab.WorkModeValues`), so the parser, the enrichment payload, and the search facet all speak one set of values.
-- Geography is exposed as a Meilisearch facet (`regions`/`countries`/`work_mode` are filterable attributes), not a Postgres column filter.
-- A dictionary change needs a re-derive (`cmd/backfill-derive`) and a `cmd/reindex` to reach existing jobs.
-- **German work-arrangement prose is a second phrase list** (`workmode_de.go`), read only
-  when no English phrase matched. German lists home working as a BENEFIT ("Homeoffice
-  möglich", "2 Tage Homeoffice", "mobiles Arbeiten"), which is hybrid, and states remote only
-  with an explicit totality ("100% Homeoffice", "vollständig remote"). A remote phrase
-  therefore contains a hybrid one, so the German list checks remote FIRST — the reverse of the
-  English order. Matched on folded markup with a word boundary at the end ("mobile
-  Arbeitsmaschinen" is a trade) and a short negation window before ("kein Homeoffice
-  möglich"). Bare `remote`/`hybrid`, `vor Ort` and `deutschlandweit` are deliberately absent.
-- **Dutch work-arrangement prose is a third list** (`workmode_nl.go`), read only when neither
-  the English nor the German one matched, with the German ordering and for the same reason:
-  "hybride werken", "2 dagen thuiswerken" and "thuiswerkvergoeding" are benefits (hybrid);
-  remote needs "volledig remote" / "100% thuiswerken". A phrase in the same sentence as
-  "buitenland" or "per jaar" is a bounded perk ("twee weken per jaar remote werken vanuit het
-  buitenland") and is passed over. Bare `hybride` (cloud, infrastructure), `op afstand` and
-  `niet remote` (remote support) are deliberately absent. Measured 2026-10-25 over 42k open
-  Dutch postings: work mode 3.5% → 16.4%.
-- **Dutch and Flemish location lines** (`location_nl.go`, the Dutch block of `nameToCountry`
-  and of `foreignSubdivisionNames`). Recruitee writes the country in the posting's language,
-  and "Nederland" was read as the Colorado town: 10,801 open rows had no country (2026-10-25).
-  The provinces state the country and no city; `limburg` is in `regionNotCity` and states no
-  country either (Dutch AND Belgian, and a German town). A province named after its capital
-  (`provinceCapitals`: Utrecht, Groningen, Antwerpen…) is the province when a town precedes
-  it. eures writes a province code after the town ("Hengelo OV", "Hoorn NH");
-  `stripDutchProvince` cuts it, and a code shared with a US state or an ISO country (NH, NB,
-  UT, FR…) only when the town is Dutch. Also: the "1012 AB" postcode, "regio X", "X en
-  omgeving", and Recruitee's translated remote label ("Werken op afstand", "Homeoffice",
-  "Poste à distance") as a remote marker, matched only as the whole line.
-- **Spanish work-arrangement prose** (`workmode_es.go`) is read after the Dutch list, on the
-  folded text with its accents dropped, and in the German order (remote, hybrid, onsite):
-  "100% remoto"/"100% teletrabajo" is remote; "modalidad híbrida", "3 días presenciales",
-  "2 días de home office" and "teletrabajo" in a perks list are hybrid; "modalidad
-  presencial", "100% presencial" and "sin teletrabajo" are onsite. The Dutch matcher is
-  shared (`guardedPhraseMatches`): negations ("sin", "no", and the hedge "evaluar"),
+  cut so the place before it resolves ("London SW1A 2HB"). Only full outward + inward form
+  under a real postcode area; an inward code that reads as an ordinal ("B2 2nd floor")
+  does not count, and GY/JE/IM are Crown dependencies, not `gb`. Found via Civil Service
+  Jobs ("Durham, North East England, DH1 3HU" was US) — also why `durham` left the curated
+  city map and England's ITL 1 region names are in `foreignSubdivisionNames`.
+- **A country name that is also a US city/state is withheld.** `georgia` (the state) and
+  `palestine` (Palestine, Texas) are absent; "Tbilisi, Georgia" still resolves to `ge`
+  through the city.
+- **Indian location shapes** (`india.go`), per comma-token before lookup:
+  country-state-city exports ("IN-KA-Bangalore") become the city; a
+  revenue division or municipal form ("Bangalore North", "Pune City") becomes the city only
+  when the rest is an INDIAN table city, never "Rural" (Bangalore Rural is another
+  district); an office line opening with a curated Indian city ("Chennai DLF") is that
+  city. "Delhi NCR"/"NCR"/"Greater Delhi Area" state the country and the Delhi metro, NO
+  city (it would be a guess). "Pan India"/"Anywhere in India" state
+  the country; their "anywhere" is not a remote marker. Indian names drop GeoNames'
+  transliteration marks ("Thāne" → "Thane") in city table, search index and metro table
+  alike (`foldIndianName`); `cityAliasPins` pins two aliases GeoNames hands to a neighbour
+  (Visakhapatnam, Secunderabad). A line naming the US reads a colliding code as the state
+  ("Hobart, IN, US" is Indiana). Measured 2026-10-25, 63,305 Indian postings: city 78.3% →
+  84.4%; the residue (localities, office codes like "TPIN Malad", states alone) correctly
+  states no city.
+- It is a curated dictionary, not a geocoder: it resolves high-frequency names/shorthands and emits nothing for what it cannot resolve (never guesses).
+- Region and work-mode values come from `vocab.RegionValues`/`vocab.WorkModeValues`, so parser, enrichment payload and search facet share one set.
+- Geography is a Meilisearch facet (`regions`/`countries`/`work_mode` filterable), not a Postgres column filter.
+- `work_mode` is dict-only: `jobview` serves the `jobs` column alone; the LLM's `enrichment.work_mode` is never merged (it stays raw in the JSONB).
+- `countries`/`regions` are a dict-then-LLM hybrid (`jobview.geoFacet`), the one deliberate exception to dict-only: the dictionary wins when it pins a place; the LLM's `enrichment.countries`/`regions` fill only the unpinned (global/unspecified) bucket.
+
+### Work-arrangement prose (description)
+`WorkModeFromDescription` reads phrase lists in order English → German → Dutch → Spanish →
+Portuguese → French → Croatian/Serbian (`workmode_bcs.go`) → Polish → Indian; a later list
+runs only when no earlier one matched. German through Polish check remote FIRST (the
+reverse of English): these languages state remote only as a totality that contains the
+hybrid phrase. Dutch through Polish share `guardedPhraseMatches` (negation before,
+perk/refusal guards after).
+- **German** (`workmode_de.go`): home working is a BENEFIT, hence hybrid ("Homeoffice
+  möglich", "2 Tage Homeoffice", "mobiles Arbeiten"); remote needs a totality ("100%
+  Homeoffice", "vollständig remote"). Folded markup, word boundary at the end ("mobile
+  Arbeitsmaschinen"), negation window before ("kein Homeoffice möglich"). Absent:
+  bare `remote`/`hybrid`, `vor Ort`, `deutschlandweit`.
+- **Dutch** (`workmode_nl.go`): "hybride werken", "2 dagen thuiswerken",
+  "thuiswerkvergoeding" are hybrid; remote needs "volledig remote" / "100% thuiswerken". A
+  phrase in the same sentence as "buitenland" or "per jaar" is a bounded perk and passed
+  over. Absent: bare `hybride` (cloud), `op afstand`, `niet remote` (remote support).
+  Measured 2026-10-25, 42k Dutch postings: work mode 3.5% → 16.4%.
+- **Spanish** (`workmode_es.go`), on accent-folded text, order remote, hybrid, onsite:
+  "100% remoto"/"100% teletrabajo" remote; "modalidad híbrida", "3 días presenciales",
+  "2 días de home office", perks-list "teletrabajo" hybrid; "modalidad presencial", "100%
+  presencial", "sin teletrabajo" onsite. Negations ("sin", "no", the hedge "evaluar"),
   refusals after ("no corresponde") and seasonal perks ("teletrabajo completo en verano")
-  withdraw a phrase. Bare `remoto` (remote support), `híbrido` (hybrid stacks), `presencial`
-  (a tutoring platform's "clases presenciales o en línea" on ~5k rows) and `home office`
-  (German and English prose reach this list) are deliberately absent. Portuguese shares the
-  phrasing and benefits ("100% presencial", "modelo híbrido"). Measured 2026-10-27 over 39k
-  Spanish-language postings: work mode from any source 48.7% → 56.8%; the description list
-  agrees with the adapter's structured value on 86% of the rows that carry both, and most of
-  the rest are the adapter's value contradicting the posting's own text.
-  Argentina (2026-10-27, 6,145 postings) states the model as an "esquema" ("esquema de
-  empleo: presencial", "esquema remoto") or a "jornada laboral", writes "Modalidad : híbrida"
-  with a space before the colon, and gives a share ("40% presencial", "80% remoto"), which
-  is hybrid, as are weekly office visits ("1/2 asistencias semanales") — read before the
-  phrase list and under its guards (`spanishSplitWeek`), so "remoto, 40% presencial" is hybrid.
-  "Ubicación: Remoto" is absent: Torre's template writes it above hybrid postings.
-  Description-derived work mode 35.2% → 40.3%.
-- **Portuguese work-arrangement prose** (`workmode_pt.go`) is read after the Spanish list,
-  which already reads the shared phrases ("100% remoto", "modelo híbrido", "100%
-  presencial"). Brazilian postings state the model in a labelled line ("Modelo de
-  trabalho: híbrido", "Modalidade: presencial", "Atuação: 100% remota"; a spaced colon is
-  read too). "home office" is REMOTE when it is the model ("Modelo de trabalho: home
-  office", "local de trabalho: home office") and nothing as a benefit ("auxílio home
-  office" is listed by remote, hybrid and onsite postings alike); counted office days ("2x
-  por semana presencial", "3 dias presenciais e 2 dias home office") are hybrid. Absent: bare
-  `remoto`/`trabalho remoto` (support, equipment requirements), bare `teletrabalho` and
-  `sistema híbrido` (an internship boilerplate on ~200 empregos postings that says the
-  opposite), bare `presencial` and `modalidade presencial` (a course's modality in an
-  education requirement). The location-line markers read `remoto`, `híbrido` and
-  `presencial` ("Remoto, Remoto, BR"). Two fixes to the shared guard came with it: a
-  negation must START a word ("entorno", "bono", "humano", "polígono" end in "no " and had
-  hidden stated Spanish hybrids) and governs only its own clause ("não é 100% remota;
-  modelo híbrido" is hybrid); the Spanish negations also read "não"/"sem", since
-  Portuguese prose meets that list first. Measured 2026-10-27 over 30,677 Brazilian and
-  6,931 Portuguese postings, location plus description: work mode 4.9% → 14.7% (BR) and
-  15.8% → 18.6% (PT); 24 of 17,500 control rows changed, all correct.
-- **French work-arrangement prose** (`workmode_fr.go`) is read after the Portuguese list.
-  French lists home working as a BENEFIT, as German does ("télétravail partiel possible",
-  "2 jours de télétravail par semaine", "accord/charte/politique de télétravail",
-  "subvention télétravail") — all hybrid; remote needs a stated totality ("100 %
-  télétravail", "télétravail total", "entièrement en télétravail", "full-remote"); onsite
-  is a stated refusal or totality ("pas de télétravail", "Télétravail : non", "100 % en
-  présentiel", Indeed's "Lieu du poste : En présentiel"). Absent: bare `télétravail`
-  (software that sells it), bare `à distance`, `100 % à distance` and `distanciel` (an
-  apprenticeship's school days — "formation à distance" sits on ~900 postings), bare
-  `présentiel` (the interview and the training), bare `hybride`, `mode hybride` and
-  `modèle hybride` (hybrid vehicles and clouds, a training format, a business model),
-  `télétravail : 100` ("prime télétravail : 100 € / mois"). Negations ("pas", "sans",
-  "aucun") reach 24 bytes back ("pas de possibilité de télétravail"); "-friendly" after a
-  remote phrase withdraws it ("100 % remote-friendly"); "les fêtes" bounds a perk.
-  Measured 2026-10-28 over 24,609 French-language postings: the description reader 0.4% →
-  12.3%; with the structured signal, 31.1% → 34.8%. Every changed control row was French.
-- **Polish work-arrangement prose** (`workmode_pl.go`) is read after the French list, on
-  text folded with its diacritics dropped and "ł" written "l". Polish states the model in a
-  labelled line ("Tryb pracy: zdalny", "Model pracy: hybrydowy", "Lokalizacja: 100%
-  zdalnie"), and solidjobs' template writes "Praca zdalna: w całości / hybrydowo / możliwa
-  częściowo / brak" (remote / hybrid / hybrid / onsite). "Możliwość pracy zdalnej" and "N
-  dni w biurze" are a benefit beside an office, hybrid; remote needs a totality ("100%
-  zdalnie", "w pełni zdalna"). A choice of models ("możliwość pracy stacjonarnej, zdalnej
-  lub hybrydowej") and a share below 100% ("80% zdalnie") are hybrid, read before the
-  list. Absent: bare `praca zdalna`/`zdalnie` ("Praca zdalna: brak", "rekrutacja zdalna",
-  "zdalne wsparcie"), bare `stacjonarnie` (a tutoring platform's "lekcje online lub
-  stacjonarnie", "sprzedaż stacjonarna" in shops), bare `hybrydowy` (clouds, cars). The
-  hiring process ("Rekrutacja: 100% zdalna", "proces rekrutacyjny", "rozmowa") and a
-  platform or cloud ("platformy w modelu hybrydowym oraz multi-cloud") withdraw a phrase
-  like a negation; "dni w roku" bounds a perk. Measured 2026-10-29 over 9,835
-  Polish-language postings: the description reader 0.8% → 36.2%; with the structured
-  signal and the location marker, 24.4% → 46.4%. Where the posting also carries a
-  structured mode the two agree in 1,205 of 1,323; most of the rest offer a choice the
-  structured flag records as remote.
-- **Polish location lines** (`location_pl.go`, the Polish block of
-  `foreignSubdivisionNames`, measured 2026-10-29 over 15,488 postings placed in Poland).
-  The country was already read on 99.6% and a city on ~97% of lines naming more than
-  "Poland" (4.5k nofluffjobs/whatjobs-pl lines say only that). eures writes a street
-  address with the postcode before the town ("Klimczaka 2, 02-797 Warszawa, Polska"), which
-  `postalPrefixRE` now cuts. "Trójmiasto"/"Tricity" and "Śląsk"/"GZM" are metros with no
-  city (`polishMetroRegions`, the Delhi NCR shape; the bare English "Silesia" is Czech
-  too). A voivodeship alone ("Mazowieckie", "Lesser Poland Voivodeship") states Poland.
-  "Lódz"/"Łodź" are Łódź. No location line in the sample carried a locative ("w
-  Warszawie"), so none is read. "Lublin, US" and "Warsaw, IN" already resolved to the US.
-- **French location lines** (`location_fr.go`, the French block of
-  `foreignSubdivisionNames`, measured 2026-10-28 over 33k postings placed in France). A
-  compound town written with spaces for its hyphens ("Issy les Moulineaux", "Aix en
-  Provence") reads through `hyphenFolded`, which only rewrites a token no table knows as
-  written. An arrondissement ("Lyon 3e", "Paris 19e Arrondissement", "9th arrondissement
-  of Paris") is the city; "Paris La Défense" is La Défense. A five-digit token is a postcode
-  of the country the line names, not a US ZIP, when the line names no part of the US or
-  the caller's countries exclude it (`foreignPostcodeLine`; "Paris, 75009, France" was
-  France AND the US). A small town's own hyphens are not a dash export ("Meslay-du-Maine"
-  named Maine, "Porto-Vecchio" Portugal). The regions (current and pre-2016) and the
-  departments state France and no city; withheld: Vienne, Jura, Manche, Nord, Ardennes,
-  Meuse (each has a second reading). Martinique, Guadeloupe, Guyane, Réunion and French
-  Polynesia keep their own ISO codes (placed in latam, africa and apac); New Caledonia and
-  Mayotte are absent, their codes being North Carolina's and Yukon's. Two catalogue-wide
-  fixes came with it: a US state or Canadian province after a town the curated tables
-  placed abroad names its namesake and withdraws the other country ("Paris, TX", "London,
-  ON", "Naples, FL" were France, Britain, Italy too — unless the town is itself a province,
-  "Saint-Laurent, Quebec, CA"); and a held-back contested alias names the line's own
-  country's place of the name when that country has exactly one, literally so called
-  (`contestedCityIn`: "Valence, France", "León, ES", "Baden, CH"; not "Conceição", not
-  Argentina's several San Martíns). A flag emoji is its country ("Lyon 🇫🇷"). FR-placed
-  lines: country 90.2% → 94.4%, a wrong second country 0.4% → 0.2%, city 78.4% → 84.2% (the
-  3.6k bare "France" lines can name none). werecruit writes "Provence-Alpes-Côte d'Azur" as
-  the region of nearly every posting whatever the town; the town still resolves.
-- **Spanish and Latin-American location lines** (`location_es.go`, the Spanish, Mexican,
-  Colombian, Argentine and Chilean blocks of `foreignSubdivisionNames`, measured 2026-10-27
-  over 39k Spanish-language postings). The autonomous communities, Basque provinces and
-  islands state Spain and no city; the Mexican states OCC writes after the town state Mexico.
-  A province named after its capital is the province, not a second city, when a place came
-  before it: between two commas for Spain ("Oliva, Valencia, España"), also in Factorial's
-  "ESPAÑA/Province/Community" export, and also in the LAST slot for Mexico ("León,
-  Guanajuato") — `provinceAfterCity` now asks whether a place came first, not whether a city
-  did, so an unresolved town before the province still counts. Country names GeoNames gives
-  the capital ("Mexico", "Panama", "Puerto Rico", "Guatemala") and "D.C." are
-  `regionNotCity`: "Monterrey, Mexico" used to name Mexico City too. **A contested alias whose
+  withdraw a phrase. Absent: bare `remoto`, `híbrido`, `presencial` (tutoring "clases
+  presenciales", ~5k rows), `home office` (German and English prose reach this list).
+  Phrases shared with Portuguese ("modelo híbrido") are read here. Argentina writes "esquema"/"jornada laboral", "Modalidad : híbrida" (spaced
+  colon), and shares ("40% presencial", "80% remoto") or weekly visits ("1/2 asistencias
+  semanales"), which are hybrid — read before the list under its guards
+  (`spanishSplitWeek`). "Ubicación: Remoto" is absent (Torre's template, above hybrids). Measured 2026-10-27, 39k Spanish
+  postings: work mode from any source 48.7% → 56.8%; agrees with the adapter's structured
+  value on 86% of rows carrying both. Argentina (6,145 postings): 35.2% → 40.3%.
+- **Portuguese** (`workmode_pt.go`): labelled lines ("Modelo de trabalho: híbrido",
+  "Atuação: 100% remota", spaced colon too). "home office" is
+  REMOTE as the model ("Modelo de trabalho: home office") and nothing as a benefit
+  ("auxílio home office"); counted office days ("2x por semana presencial") are hybrid.
+  Absent: bare `remoto`/`trabalho remoto`, `teletrabalho`, `sistema híbrido` (internship
+  boilerplate on ~200 empregos postings), bare `presencial`/`modalidade presencial` (a course's modality). Location-line
+  markers do read `remoto`, `híbrido`, `presencial` ("Remoto, Remoto, BR"). Shared-guard
+  rules: a negation must START a word ("entorno", "bono", "humano" end in "no " and hid
+  Spanish hybrids) and governs only its own clause ("não é 100% remota; modelo híbrido" is
+  hybrid); the Spanish list also reads "não"/"sem", since Portuguese prose meets it first.
+  Measured 2026-10-27, 30,677 BR + 6,931 PT postings: 4.9% → 14.7% (BR), 15.8% → 18.6% (PT);
+  24 of 17,500 control rows changed, all correct.
+- **French** (`workmode_fr.go`): home working is a BENEFIT, hybrid ("télétravail partiel
+  possible", "2 jours de télétravail par semaine", "charte de télétravail"); remote needs a totality ("100 % télétravail", "télétravail
+  total", "full-remote"); onsite is a refusal or totality ("pas de télétravail",
+  "Télétravail : non", "100 % en présentiel").
+  Absent: bare `télétravail`, `à distance`/`distanciel` (apprenticeship school days, ~900
+  postings), `présentiel`, `hybride`/`modèle hybride` (vehicles, clouds), `télétravail : 100`
+  ("prime télétravail : 100 € / mois"). Negations ("pas", "sans", "aucun") reach 24 bytes
+  back; "-friendly" after a remote phrase withdraws it; "les fêtes" bounds a perk.
+  Measured 2026-10-28, 24,609 French postings: 0.4% → 12.3% (with structured 31.1% → 34.8%).
+- **Polish** (`workmode_pl.go`), diacritics folded, "ł" → "l": labelled lines ("Tryb pracy:
+  zdalny", "Model pracy: hybrydowy"); solidjobs' "Praca zdalna: w całości / hybrydowo /
+  możliwa częściowo / brak" = remote / hybrid / hybrid / onsite. "Możliwość pracy zdalnej"
+  and "N dni w biurze" are hybrid; remote needs a totality ("100% zdalnie", "w pełni
+  zdalna"). A choice of models and a share below 100% ("80% zdalnie") are hybrid, read
+  before the list. Absent: bare `praca zdalna`/`zdalnie`, `stacjonarnie` (tutoring, shops),
+  `hybrydowy` (clouds, cars). Hiring-process words ("Rekrutacja: 100% zdalna",
+  "rozmowa") and platform/cloud context withdraw a phrase; "dni w roku" bounds a perk.
+  Measured 2026-10-29, 9,835 Polish postings: 0.8% → 36.2% (with structured signal and
+  location marker 24.4% → 46.4%); agrees with the structured mode in 1,205 of 1,323.
+- **Indian** (`workmode_in.go`), last: "WFO"/"work from office" is onsite; counted days
+  decide the rest ("3 days WFO", "Hybrid (3 days office)", "2 days WFH" → hybrid; "5 days
+  work from office" → onsite); "hybrid" just before an office marker keeps it hybrid. Bare
+  "WFH" is NOT remote (a benefit, a shift, HR's staff); only anchored forms ("permanent
+  WFH", "WFH / Remote", "Location: WFH") are. Measured 2026-10-25: 8.6% → 10.7%.
+
+### Per-country location lines
+- **Dutch and Flemish** (`location_nl.go`, Dutch blocks of `nameToCountry` and
+  `foreignSubdivisionNames`). Recruitee writes the country in the posting's language;
+  "Nederland" was the Colorado town (10,801 open rows with no country, 2026-10-25).
+  Provinces state the country and no city; `limburg` is in `regionNotCity` and states no
+  country (Dutch, Belgian, and a German town). A province named after its capital
+  (`provinceCapitals`) is the province when a town precedes it. `stripDutchProvince` cuts
+  eures' province code after the town ("Hengelo OV"), a code shared with a US state or ISO
+  country (NH, NB, UT, FR…) only when the town is Dutch. Also: "1012 AB" postcodes,
+  "regio X", "X en omgeving", and Recruitee's translated remote label ("Werken op afstand")
+  as a remote marker, whole line only.
+- **Polish** (`location_pl.go`, Polish block of `foreignSubdivisionNames`; measured
+  2026-10-29 over 15,488 PL postings: country already 99.6%, city ~97% of lines naming more
+  than "Poland"). `postalPrefixRE` cuts eures' "02-797 Warszawa". "Trójmiasto"/"Tricity" and
+  "Śląsk"/"GZM" are metros with no city (`polishMetroRegions`, the Delhi NCR shape; bare
+  English "Silesia" is Czech too). A voivodeship alone states Poland. "Lódz"/"Łodź" are Łódź.
+  Locatives ("w Warszawie") are not read: none in the sample.
+- **French** (`location_fr.go`, French block of `foreignSubdivisionNames`; measured
+  2026-10-28 over 33k FR postings). `hyphenFolded` reads a compound town written with spaces
+  ("Issy les Moulineaux"), rewriting only a token no table knows as written. An
+  arrondissement ("Lyon 3e") is the city; "Paris La Défense"
+  is La Défense. A five-digit token is the named country's postcode, not a US ZIP, when the
+  line names no part of the US or the caller's countries exclude it (`foreignPostcodeLine`).
+  A small town's own hyphens are not a dash export ("Meslay-du-Maine" named Maine). Regions
+  (current and pre-2016) and departments state France, no city; withheld: Vienne, Jura,
+  Manche, Nord, Ardennes, Meuse. Overseas departments keep their own ISO codes; New
+  Caledonia and Mayotte are absent (their codes are North Carolina's and Yukon's). Catalogue-wide: a US state or Canadian province after a
+  town the curated tables place abroad names the namesake and withdraws the other country
+  ("Paris, TX", "London, ON"), unless the town is itself a province ("Saint-Laurent,
+  Quebec, CA"); a held-back contested alias names the line's country's place when that
+  country has exactly one so called (`contestedCityIn`: "Valence, France", "León, ES"; not
+  Argentina's several San Martíns). A flag emoji is its country ("Lyon 🇫🇷"). FR lines:
+  country 90.2% → 94.4%, wrong second country 0.4% → 0.2%, city 78.4% → 84.2%.
+- **Spanish and Latin-American** (`location_es.go`, es/mx/co/ar/cl blocks of
+  `foreignSubdivisionNames`; measured 2026-10-27 over 39k postings). Autonomous
+  communities and provinces state Spain, no city; OCC's Mexican states
+  state Mexico. A province named after its capital is the province when a place came
+  before it (`provinceAfterCity` asks for a place, not a city, so an unresolved town
+  counts): between two commas for Spain ("Oliva, Valencia, España"), in Factorial's
+  "ESPAÑA/Province/Community", and also in the LAST slot for Mexico ("León, Guanajuato").
+  Country names GeoNames gives a capital ("Mexico", "Panama", "Guatemala") and "D.C." are
+  `regionNotCity` ("Monterrey, Mexico" named Mexico City too). **A contested alias whose
   city is named differently from the line is held back until the line states that city's
-  country** (`addAliasCity`): "León, ES" was León de los Aldama, "Canton, Ohio" Guangzhou,
-  "Salem, MA" Jerusalem, "Annapolis" a Brazilian town — ~6.7k wrong city names over the
-  Spanish sample, ~550 lines in an 18k-line control. Valencia and Zaragoza are city overrides:
-  the curated es country used to suppress their city. infojobs and occ carry
-  `FallbackCountries` es/mx (28% and 16% of their open postings stated no country).
-- **Brazilian state codes and Portuguese districts** (`location_br.go`, measured 2026-10-27
-  over 30,677 Brazilian and 6,931 Portuguese postings). Every Brazilian ATS writes the
-  state code after the town ("Curitiba, PR", "Belo Horizonte/MG", "São Paulo - SP",
-  "Campinas SP"), and most codes spell a country or a US state: PR Puerto Rico, SC South
-  Carolina, BA Bosnia, ES Spain, PE Peru, MT Malta, RS Serbia, MA Massachusetts. 20.1% of
-  the Brazilian lines carried a wrong second country, and "Fortaleza, CE" none. A code is
-  now the Brazilian state when the line names Brazil or the town before it has a
-  Brazilian reading in any table — including a namesake the city table gives to another
-  country first, whose country is withdrawn and whose name becomes the Brazilian one
-  ("Colombo, PR", "Concordia, SC" → Concórdia, not El Paso). Not when the line names the
-  US, and not after the country the code spells ("Juan Díaz, Panamá, PA"). A code with no
-  town before it is the state only when the next place is the WORD "Brasil"/"Brazil" ("RS,
-  Brasil", what gupy and solides write for a posting with no city); two bare codes ("PE,
-  BR") stay a list of countries. Rows stored before the fix keep the wrong country, since
-  backfill-derive keeps a stored one (the one-off that re-derived them has been removed). Lines with a
-  wrong country 20.1% → 1.1%; exactly Brazil 76.6% → 97.9%. The state names that have no
-  second reading state Brazil and no city (`foreignSubdivisionNames` + `regionNotCity`:
-  "Rio Grande do Sul" named Rio Grande, "Ceará" Fortaleza, "Bahia" Salvador); Paraná,
-  Santa Catarina, Amazonas, Acre and Distrito Federal are left out (an Argentine city, a
-  Mexican city, a Venezuelan region, an Israeli city, Mexico City). An Indian state code
-  between an Indian city and the country is the state ("Patna, BR, in" was Brazil too).
-  Portugal: "Porto" was an alias of Bordeaux, so "Porto, PT" named no city (550 lines in
-  the sample) — now a city override; a district named after its capital is the district
-  between two commas ("Matosinhos, Porto, PT"; `portugueseDistrictCapitals`); Madeira and
-  the Azores state Portugal. Portuguese city coverage 60.2% → 68.2%, two-city lines 4.1% →
-  1.2%. Not seen in the sample, so not built: "Grande São Paulo", "ABC Paulista",
-  "Região Metropolitana de …", "Grande Lisboa", a CEP before the town.
-- **Argentina** (`location_ar.go`, measured 2026-10-27 over ~12.3k open postings placed in
-  Argentina). Buenos Aires is rarely written "Buenos Aires": the autonomous city is "CABA",
-  "C.A.B.A.", "Capital Federal", "Ciudad de Buenos Aires" (city overrides; "CABA" was
-  GeoNames' alias of Chamba), pandapelatam writes a barrio ALONE ("Palermo", "San Nicolás",
-  "Recoleta") and the country only in its structured data, and the conurbation's towns are
-  under GeoNames' floor or under a namesake ("Martínez" was California's, "Florida" the US
-  state). A barrio is the city of Buenos Aires and a town of Greater Buenos Aires is itself,
-  both in the metro "Buenos Aires (AR)", and only in a line that names nothing but Buenos
-  Aires context (`lineInBuenosAires`), so "Palermo, Italia" and "San Cristóbal, Santa Fe"
-  keep their own reading; a name another Argentine place shares (Pilar, San Miguel, San
-  Martín, Avellaneda, `sharedArgentineNames`) needs Buenos Aires itself in the line, not just
-  the country. GBA/AMBA/Gran Buenos Aires state the country and the metro, no
-  city. A province named after its capital is the province between two commas of a line
-  ending in Argentina ("Rosario, Santa Fe, Argentina"). GHS-FUA labels Greater Mendoza and
-  San Juan by a suburb; `metroLabelOverrides` renames them.
-  **`ParseIn(line, countries)`** is how the adapter's country reaches the parser: when the
-  line states none, it names a barrio, a contested or small town (in a one-place line only,
-  so "Hermosillo, Sonora" does not name the town GeoNames calls Sonora) and the metro;
-  it never adds a country. `jobderive.Derive` passes `Countries`, and `FallbackCountries`
-  only once the fallback is what places the posting (a title's "[Remote-US]" outranks it).
-  Two country-code fixes came out of the same sample and are not Argentine: a colliding
-  code after a US town only the small-places table knows is the state ("Atkins, AR" was
-  Argentina — 195 lines in the sample), and a code between a town and a DIFFERENT country
-  the town belongs to is that country's subdivision ("Zaragoza, AR, España" Aragón,
-  "Madrid, MD, Spain", "Jena, TH, Germany"). AR-placed lines: city 65.9% → 75.6%, metro
-  48.9% → 69.1%, "Buenos Aires (AR)" 31.7% → 44.2%.
-- **Indian work-arrangement prose is a fourth phrase list** (`workmode_in.go`), read only
-  when none of the English, German, Dutch, Spanish, Portuguese and French ones matched. "WFO"/"work from office" is onsite;
-  counted office days decide the rest ("3 days WFO", "Hybrid (3 days office)" → hybrid;
-  "5 days work from office" → onsite; "2 days WFH" → hybrid); a "hybrid" just before an
-  office marker keeps it hybrid. Bare "WFH" is NOT remote — it names a benefit ("occasional
-  WFH"), a shift or the staff an HR role manages as often as the arrangement — so only
-  anchored forms ("permanent WFH", "WFH / Remote", "Location: WFH") are. Measured
-  2026-10-25: description-derived work mode on Indian postings 8.6% → 10.7%.
-- **Croatian, Serbian, Bosnian and Montenegrin location lines** (`location_bcs.go`, merged
-  into `nameToCountry` at init): the country names in both standards, with and without
-  diacritics and in Serbian Cyrillic ("Srbija", "Njemačka"/"Nemačka", "Crna Gora", "BiH"),
-  so a Serbian or Croatian board's posting abroad is not filed under its fallback country;
-  Workday's ISO-3 "SRB"/"HRV"/"BIH"/"MNE"; the twenty Croatian counties with and without
-  "županija"; Vojvodina, Republika Srpska and the Croatian regions (not "Istra", a Russian
-  town too). "Kosovo" is
-  `regionNotCity` (it was Kosovo Polje). `cityOverrides` pins Pula, Dubrovnik, Leskovac and
-  Sombor (GeoNames gives each alias a hamlet abroad, so they stated no country), the
-  locative ("u Beogradu", "Novom Sadu") and Cyrillic "Панчево". "SAD" (USA) and "Island"
-  (Iceland) are absent: English words. Sólides writes "Town, ST", and a small town's "BA"
-  or "RS" read as Bosnia or Serbia, so the adapter appends "Brasil" after the state.
-- **Slovenian location lines** (`location_si.go`, measured 2026-10-29 over 2,900 open
-  MojeDelo postings and 3,621 ESS vacancies). Both boards write the town alone and pass
-  Slovenia as the structured country, so `ParseIn` already named most towns through the
-  small-places table. What read nothing: the twelve statistical regions and the
-  traditional ones ("Osrednjeslovenska", "Gorenjska regija", "Jugovzhodna Slovenija",
-  "Posavje"), which now state Slovenia and no city; "Celotna Slovenija" and the countries
-  abroad in Slovenian ("Francija", "Slovaška"; "Avstrija", "Nemčija", "Hrvaška" and
-  "Madžarska" came with the Optius adapter); the whole-line remote labels "Delo od doma"
-  and "Delo na daljavo" (`remoteLabels`; "hibridno" already read as hybrid); the area around a town ("Ljubljana in
-  okolica", "Celje z okolico", "okolica Celja" with the town in the genitive —
-  `areaPrefixes`/`areaSuffixes` and the genitive forms); a Ljubljana district after the
-  city ("Ljubljana Črnuče"); ESS's administrative unit "Šentjur pri Celju"; and the
-  municipality seats and villages GeoNames' cities1000 lacks ("Hoče", "Kozina", "Boštanj",
-  "Brnik", "Lenart"), added to the small places (`slovenianSmallPlaces`: they still name a
-  city only beside Slovenia). "Ribnica" is Rîbnița in Moldova first, so a line placed in
-  Slovenia names the Slovenian town through `contestedSmallPlaces` — a hand list, because
-  the small-places table keeps one row per name and country and cannot tell a town from
-  its namesake villages ("Salem, MA"). The towns with TOWN STATUS below the main table's
-  floor (`slovenianTowns`, 51 of them: Kamnik, Krško, Škofja Loka…) are pinned as cities
-  that state Slovenia when nothing else in the line states a country, as a main-table
-  city does — except the nine another country also has a populated place of in GeoNames'
-  full dumps of the neighbours and cities500 (Jesenice, Ruše, Ribnica, Brežice, Žalec,
-  Tržič, Piran, Laško, Železniki). Withheld: bare "Koroška" and "Štajerska" (also Austrian
-  Carinthia and Styria in Slovenian), "Primorska", "Kras", "ZDA" and the plain "Svica"
-  (places elsewhere). MojeDelo lines placed (a city, or a stated country or region): 78.2%
-  → 91.3%, city 77.3% → 84.8%; with no structured country, country 45.3% → 73.2%. ESS:
-  placed 98.2% → 100%.
-- `work_mode` is dict-only — `jobview` serves the `jobs` column alone, the LLM's `enrichment.work_mode` is never merged in (it stays raw in the JSONB).
-- `countries`/`regions` are a dict-then-LLM hybrid (`jobview.geoFacet`): the dictionary wins when it pins a place, and the LLM's `enrichment.countries`/`regions` fill only the unpinned (global/unspecified) bucket, so a dictionary-silent remote role still gets a geographic reach rather than none. This is the one deliberate exception to dict-only among the facets.
+  country** (`addAliasCity`): "León, ES" was León de los Aldama, "Canton, Ohio" Guangzhou —
+  ~6.7k wrong city names in the sample. Valencia and Zaragoza are city overrides. infojobs
+  and occ carry `FallbackCountries` es/mx (28% and 16% of their postings stated no country).
+- **Brazilian state codes and Portuguese districts** (`location_br.go`; measured 2026-10-27
+  over 30,677 BR and 6,931 PT postings). Brazilian ATSs write the state code after the town
+  ("Curitiba, PR", "Campinas SP"), and most codes spell a country or US
+  state (PR Puerto Rico, BA Bosnia…). A code is the Brazilian state when the line names Brazil or the town has a Brazilian reading in any table —
+  including a namesake another country gets first, whose country is withdrawn ("Colombo,
+  PR", "Concordia, SC" → Concórdia). Not when the line names the US, nor after the country
+  the code spells ("Juan Díaz, Panamá, PA"). With no town before it, a code is the state
+  only when the next place is the WORD "Brasil"/"Brazil" ("RS, Brasil", gupy/solides with no
+  city); "PE, BR" stays a list of countries. Rows stored before the fix keep their wrong
+  country: `backfill-derive` keeps a stored one. Wrong country 20.1% → 1.1%; exactly
+  Brazil 76.6% → 97.9%. Unambiguous state names state Brazil, no city
+  (`foreignSubdivisionNames` + `regionNotCity`: "Ceará" named Fortaleza); names with a
+  second reading (Paraná, Acre…) are left out. An Indian state
+  code between an Indian city and the country is the state ("Patna, BR, in"). Portugal:
+  "Porto" is a city override (it was Bordeaux's alias); a district named after its capital
+  is the district between two commas (`portugueseDistrictCapitals`); Madeira and the Azores
+  state Portugal. PT city 60.2% → 68.2%. Not built (not seen in the sample): metro-area
+  names ("Grande São Paulo", "Grande Lisboa") and a CEP before the town.
+- **Argentina** (`location_ar.go`; measured 2026-10-27 over ~12.3k AR postings). The
+  autonomous city is "CABA", "Capital Federal"… (city overrides; "CABA" was Chamba's
+  alias); pandapelatam writes a barrio ALONE ("Palermo"); conurbation towns sit under
+  GeoNames' floor or a namesake ("Martínez" California). A barrio is the city of Buenos
+  Aires, a Greater Buenos Aires town is itself, both in metro "Buenos Aires (AR)", only in a line with nothing but Buenos Aires
+  context (`lineInBuenosAires`: "Palermo, Italia" keeps Italy); a name another Argentine
+  place shares (`sharedArgentineNames`: Pilar, San Martín…) needs Buenos Aires itself in
+  the line. GBA/AMBA state the country and metro, no city. A province named after its
+  capital is the province between two commas of a line ending in Argentina.
+  `metroLabelOverrides` renames GHS-FUA's suburb labels for Mendoza and San Juan.
+  **`ParseIn`** carries the adapter's countries: when the line states none, it names a
+  barrio, a contested or small town (one-place line only, so "Hermosillo, Sonora" does not
+  name the town GeoNames calls Sonora) and the metro; it never adds a country.
+  `FallbackCountries` is passed only once the fallback places the posting (a title's
+  "[Remote-US]" outranks it). Catalogue-wide fixes from
+  this sample: a colliding code after a US town only small places knows is the state
+  ("Atkins, AR" was Argentina, 195 lines); a code between a town and a DIFFERENT country the
+  town belongs to is that country's subdivision ("Zaragoza, AR, España" Aragón, "Jena, TH,
+  Germany"). AR lines: city 65.9% → 75.6%, metro 48.9% → 69.1%, "Buenos Aires (AR)" 31.7% →
+  44.2%.
+- **Croatian, Serbian, Bosnian, Montenegrin** (`location_bcs.go`, merged into
+  `nameToCountry`): country names in both standards, with/without diacritics and in Serbian
+  Cyrillic ("Nemačka", "BiH"), so a posting abroad is not filed under the board's fallback; Workday's ISO-3 codes ("SRB"); the Croatian counties
+  with and without "županija"; Vojvodina, Republika Srpska and Croatian regions (not
+  "Istra", a Russian town too). "Kosovo" is `regionNotCity` (was Kosovo Polje).
+  `cityOverrides` pins Pula, Dubrovnik, Leskovac, Sombor (GeoNames gave each alias to a
+  hamlet abroad), locatives ("u Beogradu") and Cyrillic city names. "SAD" and "Island" are
+  absent (English words). Sólides' "Town, ST" read "BA"/"RS" as Bosnia/Serbia, so the
+  adapter appends "Brasil".
+- **Slovenian** (`location_si.go`; measured 2026-10-29 over 2,900 MojeDelo postings and
+  3,621 ESS vacancies). Both boards write the town alone with Slovenia as the structured
+  country, so `ParseIn` names most towns via small places. Added: statistical and
+  traditional regions, stating Slovenia, no city; "Celotna Slovenija" and countries in
+  Slovenian; whole-line remote labels "Delo od doma"/"Delo na daljavo" (`remoteLabels`); area forms
+  ("Ljubljana in okolica", "okolica Celja") via `areaPrefixes`/`areaSuffixes`; a Ljubljana
+  district after the city; and
+  seats/villages missing from cities1000 (`slovenianSmallPlaces`, city only beside
+  Slovenia). "Ribnica" is Moldovan first, so a Slovenia-placed line names the Slovenian
+  town through `contestedSmallPlaces` — a hand list, since small places keeps one row per
+  name and country. Towns with TOWN STATUS below the main table's floor (`slovenianTowns`,
+  51) are cities that state Slovenia when nothing else does, except nine another country
+  also has (Jesenice, Piran…). Withheld (second readings): "Koroška", "Štajerska",
+  "Primorska", "Kras", "ZDA", "Svica". MojeDelo placed 78.2% → 91.3%, city 77.3% →
+  84.8%; ESS placed 98.2% → 100%.
 
 ## How it works
-`internal/dict/location` parses the free-text location string from an ATS posting (e.g. "Berlin, Germany" or "Remote - US") and derives structured geography from it. The dictionary is curated for high-frequency names and shorthands; anything it cannot resolve is left empty rather than guessed. Because geography lives as Meilisearch facets (not Postgres column filters), the dictionary output flows through the search index, not through SQL WHERE clauses. This means a dictionary update is a two-step propagation: re-derive the facet columns on existing jobs (`cmd/backfill-derive`), then rebuild the search index (`cmd/reindex`). The production facets follow a deliberate split: `work_mode` is purely dict-driven (the LLM's work-mode guess is never served), while `countries`/`regions` are a hybrid where the dictionary pins what it can and the LLM fills the gaps for remote/unspecified roles.
+`jobderive.Derive` calls `ParseIn` with the adapter's countries; output reaches users through Meilisearch facets, so a dictionary change needs `cmd/backfill-derive` then `cmd/reindex`.
 
 ## Limitations
-- **The country dictionary is far from complete: 133 of 252 ISO countries carry a region.**
-  111 resolve to nothing (Afghanistan, Cuba, Haiti, Jamaica, Syria, Madagascar, DR Congo,
-  Namibia, plus a long tail of dependencies). Generating them is only half-possible:
-  GeoNames `countryInfo.txt` supplies names, but this project's regions are a business
-  taxonomy (`uk` split from `eu`, `cis` spanning the Caucasus and Central Asia, `mena`
-  cutting across Africa and Asia), so a continent→region mapping would misplace Turkey,
-  Egypt, Kazakhstan, the UK and Russia. The valuable half of that work is human.
-- **The next coverage gain is in tokenization, not in the country list.** Measured over 100
-  production CV locations: 38 distinct countries, all covered; the unresolved strings fail
-  on `·` not being a separator, on the LinkedIn `Greater X` prefix, and on non-US
-  subdivisions (`subdivisionToCountry` covers only the US and Canada, so Indian states do
-  not resolve).
+- **The country dictionary is incomplete: 138 of 252 ISO countries carry a region**
+  (2026-11-08); the rest (Cuba, Syria, DR Congo, many dependencies) resolve to nothing. GeoNames `countryInfo.txt` supplies names, but regions
+  are a business taxonomy (`uk` split from `eu`, `cis` spanning the Caucasus and Central
+  Asia, `mena` across Africa and Asia), so a continent→region mapping would misplace
+  Turkey, Egypt, Kazakhstan, the UK and Russia. Placing them is human work.
+- **The next coverage gain is in tokenization, not the country list.** Over 100 production
+  CV locations, all 38 countries were covered; unresolved strings failed on `·` not being a
+  separator (`separatorReplacer`) and the LinkedIn `Greater X` prefix (deliberately not an
+  area prefix: "Greater London" and "Greater Manchester" are subdivision names).
