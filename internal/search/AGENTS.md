@@ -37,6 +37,24 @@ applying the rule to whatever they push. See
 [docs/agents/job-lifecycle.md](../../docs/agents/job-lifecycle.md) for which sources are
 exempt and why.
 
+## A dropped filter says so (`meta.ignored_params`, `meta.ignored_values`)
+
+Any endpoint whose answer WIDENS when it does not understand a query param reports the
+params it did not read in `meta.ignored_params` (omitted when there are none). Refusing them
+would break saved searches and shared links that still carry a retired facet; staying silent
+is what let a mistyped `country=it` pass for a search of Italy. `search.UnknownParams` owns
+the SEARCH filter's vocabulary and only that, so an endpoint reading a different one says so
+itself — `/companies` through `UnknownCompanyParams`, `/jobs` (which reads no filter at all)
+through its own two-param list.
+
+Its value-level twin is `meta.ignored_values`: a closed-vocabulary facet value outside
+`internal/dict/vocab` (`work_mode=foo`) still narrows — to nothing — and
+`search.IgnoredValues` names it rather than letting `total: 0` pass for an empty market.
+
+The same rule decides what may be SUBSCRIBED to: `search.Narrows` asks whether a saved search
+selects less than the catalogue, and a subscription to one that does not is refused rather
+than reported, because nobody reads a digest's meta.
+
 ## The suggestions dictionary (`suggest`)
 
 The search box's completions, in a SEPARATE Meilisearch index (`suggestions`) built

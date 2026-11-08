@@ -1,0 +1,3 @@
+**SuccessFactors traps** (`successfactors`):
+
+- **It hydrates since 2026-10-28.** Its sitemap names a posting and carries nothing else, so it had re-read every stored page on every run, and every run for at least ten days hit its deadline after ~350 of each shard's ~850 boards — the large boards (capgemini, tractorsupply, wipro, lidl) never finished, saved nothing, and 24.7k of their open postings aged past 14 days unseen. A seen posting's `SeenRefresh` carries no title (the sitemap has none); `BODY_REFRESH_DAYS` is what re-reads an edited page. Its unseen postings still get the `unreadableDetail` marker.

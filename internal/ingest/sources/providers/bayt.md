@@ -1,0 +1,5 @@
+**Bayt traps** (`bayt`):
+
+- **The listing walk is hand-rolled and earns `fullBoardListing`.** A later-page failure, or reaching its page cap without a genuinely empty page, fails `Fetch`; the empty-page proof is the RAW per-page item count, read before cross-page dedup. `detail()` returns the `unreadableDetail` marker on a failed-but-not-gone fetch, since bayt has no `HydratingSource` fallback and every crawl re-fetches every listed posting's detail.
+- **The throttling risk is in the detail fan-out, not the listing.** `bayt` was initially excluded from the first `fullBoardListing` wave over a documented throttling risk, but that risk is tied specifically to the CONCURRENT detail fan-out (`baytDetailWorkers`, already narrowed for exactly this reason) — the listing walk itself is sequential, one request at a time, and carries no evidence of the same risk (`openspec/changes/bayt-fullboardlisting-fix`).
+- **Measure before widening.** `bayt`'s IT category passed **0 of 33** titles through `classify.IsTech` (2026-09-07).

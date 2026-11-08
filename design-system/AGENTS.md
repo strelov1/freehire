@@ -28,6 +28,21 @@ rather than here — their census of `web/` was already off by a third.
   dependencies** — `tailwind-variants`, `clsx`, `tailwind-merge` and `@lucide/svelte` resolve
   from `design-system/node_modules`, so **install here before building `web/`** or the build
   dies with `MODULE_NOT_FOUND`. Loud, which is the trade.
+- **A type the design system imports must resolve to ONE copy on disk.** `web/` links this
+  package with pnpm's `link:` and `extension/` with npm's `file:` (also a symlink), so each of
+  the three installs its OWN `node_modules` and a package all of them depend on sits on disk
+  more than once — free for a value, fatal for a TYPE, since TypeScript identifies a type by
+  where it was declared and two copies of `LucideIcon` are two unrelated types sharing a
+  name. `pnpm check:deps` (`scripts/check-shared-deps.mjs`, the `shared-deps` CI job) holds
+  the three manifests to the same version for exactly the packages this package imports as
+  types — a set it DERIVES from `design-system/src` rather than listing, so a new type import
+  joins the rule by existing. It reads no lockfile and compares the declared range
+  literally: `^1.25.0` and `^1.45.0` overlap and are the two ranges that put `@lucide/svelte`
+  on disk twice (freehire#2836), so "the ranges are compatible" is the wrong question.
+  `peerDependencies` is exempt — a library's peer range is deliberately wider than what it
+  develops against. Dependabot reads the three `package.json` files as unrelated projects, so
+  it keeps proposing a bump to one of them; that PR is correct once the other two move with
+  it.
 - **`src/theme.css` is the package's CSS contract, and every consumer imports it.** It holds
   the token imports, the `@source` scan, and the `@theme inline` bridge. `web/src/app.css`
   and `.storybook/preview.css` each `@import` it and add only what is theirs (the typography

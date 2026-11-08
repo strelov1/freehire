@@ -1,0 +1,5 @@
+**hh.ru traps** (`hh`, `hhru.go`):
+
+- **Any page that fails to fetch or decode fails the crawl** (`crawl` in `hhru.go`, pages from 0); only reaching `hhMaxPages` ends the walk softly.
+- **`hh` does NOT earn `fullBoardListing`.** hh.ru's own search UI caps a query's reachable depth at ~2000 results independent of a role's true count, confirmed live against a currently-configured board (`hhru.go`'s `crawl` carries the measurement) — treating that cap as a Fetch failure would fail a busy board's crawl on every run, not surface a genuine truncation.
+- **Only detail hydration goes through the Scrapling tier.** Its listing works on the plain direct IP while its detail pages redirect through the proxy to a DDoS-Guard captcha, so its build hands `NewHHWithDetailGetter` a fresh, always-unproxied `NewClient()` for listing — deliberately NOT the `direct` parameter, which is the PROXIED client whenever `SOURCES_PROXY_URL` is set for any other provider.
