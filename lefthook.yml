@@ -56,6 +56,21 @@ pre-commit:
           exit 0
         fi
         rumdl check {staged_files}
+    # Python lint and format over the staged files; ruff.toml decides the rules, and
+    # --force-exclude makes it honour its exclusions for files named explicitly. Both checks
+    # run so one pass reports everything. Steps aside when the binary is missing: the
+    # python-lint CI job is the gate.
+    ruff:
+      glob: "*.py"
+      run: |
+        if ! command -v ruff >/dev/null 2>&1; then
+          echo "ruff not installed (mise install) - skipping"
+          exit 0
+        fi
+        status=0
+        ruff check --force-exclude {staged_files} || status=1
+        ruff format --check --force-exclude {staged_files} || status=1
+        exit $status
     # internal/platform/db is generated and committed, so a query edited without
     # regenerating ships the OLD Go with every check green — nothing else here reads
     # both halves. Same shape of check as design-system's check:dist, except that an

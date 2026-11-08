@@ -22,6 +22,7 @@ shellcheck = "latest"
 "github:agent-sh/agnix" = "0.59.3"
 "github:crate-ci/typos" = "1.52.0"
 "github:rvben/rumdl" = "0.3.2"
+"github:astral-sh/ruff" = "0.17.4"
 "go:golang.org/x/tools/cmd/deadcode" = "0.52.0"
 # psql only: the integration tests' harness migrates through it (internal/platform/testdb).
 # The server itself is docker-compose's pgvector image.
