@@ -7,7 +7,7 @@ Deterministic seniority/category tagging from job title, feeding enrichment face
 - Parses the **job title** at ingest into canonical `jobs.seniority`/`jobs.category` columns.
 - Values from `vocab.SeniorityValues`/`vocab.CategoryValues` — EN+RU aliases, whole-word matched. Russian forms are full surface forms (not stems): the matcher requires word boundaries. **Never guesses**.
 - Same alias→canonical dictionary design as `internal/dict/location` and `internal/dict/skilltag`.
-- The main table resolves in declaration order, not title order. When it resolves nothing, the fallbacks run in this order (see `classify.go`): German, Dutch, Danish, Spanish, Portuguese (skipped if Spanish vetoed), French, Polish, BCS, Slovenian. Seniority reads `indianSeniorityTable` first, then the same chain. A fallback never changes a title an earlier table resolved.
+- The main table resolves in declaration order, not title order. When it resolves nothing, the fallbacks run in this order (see `classify.go`): German, Dutch, Danish, Spanish, Portuguese, French, Polish, BCS, Slovenian. A `categoryNone` veto at any step ends the chain. Seniority reads `indianSeniorityTable` first, then the same chain. A fallback never changes a title an earlier table resolved.
 
 ## Grade-blind phrases
 
@@ -131,7 +131,7 @@ Measured 2026-10-27 over 25,017 Spanish postings (whatjobs excluded): category 1
 
 `portuguese.go`'s `portugueseCategoryTable` uses the Spanish shape, folding and bands, for words Spanish does not already read ("vendedor", "comercial", "logística" are Spanish-table hits). It runs after Spanish, so no Spanish answer changes and a Spanish veto ("Programador de Manutenção") still blinds the title. Both standards are listed where they differ (equipe/equipa, empilhadeira/empilhador). Field-less heads (analista, auxiliar, técnico, operador, engenheiro, ...) resolve nothing — "analista" heads 1 in 12 Brazilian titles.
 
-Placements: "fiscal" is the tax desk only after a desk head ("Fiscal de Loja/Obras" guard/inspect); the sales field outranks shop and service desk ("Consultor de Vendas - Loja"); "DP" counts only as "de DP" (DP World, dynamic positioning); "auxiliar de sala" absent (Spanish waiting); "desenvolvedor" alone is software, after business/product/property developer.
+Placements: the lawyer outranks the tax field ("Advogado Tributário" is legal); "fiscal" is the tax desk only after a desk head ("Fiscal de Loja/Obras" guard/inspect); the sales field outranks shop and service desk ("Consultor de Vendas - Loja"); "DP" counts only as "de DP" (DP World, dynamic positioning); "auxiliar de sala" absent (Spanish waiting); "desenvolvedor" alone is software, after business/product/property developer.
 
 Grades (`portugueseSeniorityTable`): accented "Sênior"/"Júnior", `pleno` below `sênior` ("Pleno/Sênior" keeps its upper bound), `coordenador`/`chefe` lead, general/executive/president/financial directors c_level; `supervisor` states no grade. `brazilianGradeLadder` reads "PL" and Roman rungs (I junior, II middle, III senior) only after a Portuguese desk head in the same clause, so "PL/SQL", "Warsaw, PL" and a product's "II" state nothing.
 
@@ -203,6 +203,6 @@ Two 2026-09-15 changes reach only postings written after them; neither backfill 
 
 So ~**6,300 stored postings wrongly read `is_tech = true`**.
 
-An open posting corrects itself on its next crawl: `job.New` runs `jobderive.Derive`, and `is_tech` is in `RefreshUnchangedJob`'s match key, so a moved row goes through `UpsertJob`. The backfill is for rows never crawled again — **closed postings above all**, and boards/providers no longer crawled. Meanwhile `cmd/search-ping` spends some of Google's 200/day allowance on them (2026-09-15: 14 of 398 announcements, 3.5%).
+An open posting corrects itself on its next crawl: `job.New` runs `jobderive.Derive`, and `is_tech` is in `RefreshUnchangedJob`'s match key, so a moved row goes through `UpsertJob`. The backfill is for rows never crawled again — **closed postings above all**, and boards/providers no longer crawled. Until then those stay in technical search, and `cmd/search-ping` spends some of Google's 200/day allowance on the open ones it reaches first (2026-09-15: 14 of 398 announcements, 3.5%).
 
 Fix: `cmd/backfill-derive` (~15h; `BACKFILL_CONCURRENCY` 2-3, 6 degraded prod) then a full `make reindex` — `is_tech` is not in `content_hash`, so an incremental push never reaches these rows.

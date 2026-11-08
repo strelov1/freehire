@@ -20,9 +20,9 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   `nameToRegion`'s open-anywhere words. Do not reintroduce a "remote and no geography →
   `global`" default: moderator reports (job_reports 29-34) showed region-restricted
   postings (`[Remote-US]` title suffix, "hiring in the US … only") served as worldwide. `jobderive.Derive`'s
-  precedence chain rescues a bare-remote posting, in order: `EligibilityFromDescription`
-  (citizenship phrases), `RestrictionFromTitle` (anchor-gated bracket/parenthetical suffix,
-  `title_restriction.go`), `RegionScopeFromDescription` (anchor-gated "candidates based in
+  precedence chain rescues a bare-remote posting, in order: `RestrictionFromTitle`
+  (anchor-gated bracket/parenthetical suffix, `title_restriction.go`),
+  `EligibilityFromDescription` (citizenship phrases), `RegionScopeFromDescription` (anchor-gated "candidates based in
   X" / "hiring in X" / "restricted to X", `region_scope.go`), and last an adapter's
   `FallbackCountries` (Greenhouse's offices — see `internal/ingest/sources/AGENTS.md`),
   which fills only a posting that stated no geography at all, never an explicit
@@ -214,8 +214,9 @@ perk/refusal guards after).
   possible", "2 jours de télétravail par semaine", "charte de télétravail"); remote needs a totality ("100 % télétravail", "télétravail
   total", "full-remote"); onsite is a refusal or totality ("pas de télétravail",
   "Télétravail : non", "100 % en présentiel").
-  Absent: bare `télétravail`, `à distance`/`distanciel` (apprenticeship school days, ~900
-  postings), `présentiel`, `hybride`/`modèle hybride` (vehicles, clouds), `télétravail : 100`
+  Absent: bare `télétravail`, bare `à distance`, `100 % à distance` and `distanciel`
+  (apprenticeship school days, ~900 postings), `présentiel`, bare `hybride`, `mode hybride`
+  and `modèle hybride` (vehicles, clouds), `télétravail : 100`
   ("prime télétravail : 100 € / mois"). Negations ("pas", "sans", "aucun") reach 24 bytes
   back; "-friendly" after a remote phrase withdraws it; "les fêtes" bounds a perk.
   Measured 2026-10-28, 24,609 French postings: 0.4% → 12.3% (with structured 31.1% → 34.8%).
@@ -261,7 +262,8 @@ perk/refusal guards after).
   line names no part of the US or the caller's countries exclude it (`foreignPostcodeLine`).
   A small town's own hyphens are not a dash export ("Meslay-du-Maine" named Maine). Regions
   (current and pre-2016) and departments state France, no city; withheld: Vienne, Jura,
-  Manche, Nord, Ardennes, Meuse. Overseas departments keep their own ISO codes; New
+  Manche, Nord, Ardennes, Meuse. Martinique, Guadeloupe, Guyane, Réunion and French
+  Polynesia keep their own ISO codes (placed in latam, africa and apac); New
   Caledonia and Mayotte are absent (their codes are North Carolina's and Yukon's). Catalogue-wide: a US state or Canadian province after a
   town the curated tables place abroad names the namesake and withdraws the other country
   ("Paris, TX", "London, ON"), unless the town is itself a province ("Saint-Laurent,
@@ -271,7 +273,7 @@ perk/refusal guards after).
   country 90.2% → 94.4%, wrong second country 0.4% → 0.2%, city 78.4% → 84.2%.
 - **Spanish and Latin-American** (`location_es.go`, es/mx/co/ar/cl blocks of
   `foreignSubdivisionNames`; measured 2026-10-27 over 39k postings). Autonomous
-  communities and provinces state Spain, no city; OCC's Mexican states
+  communities, the Basque provinces and the islands state Spain, no city; OCC's Mexican states
   state Mexico. A province named after its capital is the province when a place came
   before it (`provinceAfterCity` asks for a place, not a city, so an unresolved town
   counts): between two commas for Spain ("Oliva, Valencia, España"), in Factorial's
