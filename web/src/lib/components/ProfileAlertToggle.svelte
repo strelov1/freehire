@@ -14,7 +14,7 @@
   // index is the actual invariant), and subscribes it over email — always deliverable
   // with no linking step, unlike telegram/push (which the account's notification
   // settings may list as a preferred channel without the user ever having connected
-  // them — see ReminderSettings.svelte/CompanyFollowButton.svelte's `linked` gate).
+  // them — see ReminderSettings.svelte's `linked` gate).
   // The user can add another channel from the Search alerts tab afterward. Flipping
   // the toggle off deletes the saved search, and its subscriptions go with it.
   //

@@ -10,7 +10,6 @@
   import { EntityLogo } from '#lib/ui/index.js';
   import CredentialBadge from './CredentialBadge.svelte';
   import BackerBadge from './BackerBadge.svelte';
-  import CompanyFollowButton from './CompanyFollowButton.svelte';
   import WatchCompanyButton from './WatchCompanyButton.svelte';
   import VoteControl from './VoteControl.svelte';
 
@@ -128,7 +127,6 @@
          top-right and never shrinks (it collapses to an icon on mobile itself). -->
     <div class="flex shrink-0 items-start gap-2">
       <WatchCompanyButton {slug} companyName={company.name} />
-      <CompanyFollowButton {slug} companyName={company.name} />
     </div>
   </div>
   <!-- Feedback + votes ride the end of the industries/links row below, so the card has no

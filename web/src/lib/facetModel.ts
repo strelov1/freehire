@@ -576,7 +576,7 @@ export function canonicalQuery(query: string): string {
 
 /** The saved-search / alert target: the filters as a canonical query string, WITHOUT
  *  the ordering. A named wrapper over filtersToParams so the saved-search call sites
- *  (SavedSearches, FilterSummary, CompanyFollowButton) express intent ("the comparable
+ *  (SavedSearches, FilterSummary) express intent ("the comparable
  *  query for this filter set") rather than reaching for the raw serializer.
  *
  *  The ordering is dropped because a saved search is about WHICH jobs are in the set,
