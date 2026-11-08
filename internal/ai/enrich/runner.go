@@ -130,6 +130,8 @@ type upstreamBackoff struct {
 	lastUpstreamFailed int64
 }
 
+// next returns the pause before the next wave, given the run's cumulative writes and
+// upstream failures after the wave that just finished.
 func (b *upstreamBackoff) next(succeeded int, upstreamFailed int64) time.Duration {
 	wrote := succeeded > b.lastSucceeded
 	refused := upstreamFailed > b.lastUpstreamFailed
@@ -142,6 +144,7 @@ func (b *upstreamBackoff) next(succeeded int, upstreamFailed int64) time.Duratio
 	return b.cur
 }
 
+// sleepCtx waits d, or less if ctx ends first.
 func sleepCtx(ctx context.Context, d time.Duration) {
 	t := time.NewTimer(d)
 	defer t.Stop()
