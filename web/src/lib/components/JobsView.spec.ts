@@ -135,20 +135,23 @@ describe('personal job filters', () => {
     expect(screen.queryByRole('button', { name: 'Hiring again: only companies you have worked at' })).toBeNull();
   });
 
-  it.each(['former_employers', 'hide_seen'])('reloads %s on sign-in, account switch and sign-out', async (param) => {
-    mountList(`${param}=true`);
-    await tick();
-    expect(searchJobs).not.toHaveBeenCalled();
-    for (const [id, calls] of [
-      [7, 1],
-      [8, 2],
-      [null, 3],
-    ] as const) {
-      session.set('id', id);
-      await waitFor(() => expect(searchJobs).toHaveBeenCalledTimes(calls));
-      expect(searchJobs.mock.lastCall?.[0].get(param)).toBe('true');
-    }
-  });
+  it.each(['former_employers', 'hide_seen', 'watchlist'])(
+    'reloads %s on sign-in, account switch and sign-out',
+    async (param) => {
+      mountList(`${param}=true`);
+      await tick();
+      expect(searchJobs).not.toHaveBeenCalled();
+      for (const [id, calls] of [
+        [7, 1],
+        [8, 2],
+        [null, 3],
+      ] as const) {
+        session.set('id', id);
+        await waitFor(() => expect(searchJobs).toHaveBeenCalledTimes(calls));
+        expect(searchJobs.mock.lastCall?.[0].get(param)).toBe('true');
+      }
+    },
+  );
 
   it('starts a new reader on page one instead of retaining a deep offset', async () => {
     render(JobsView, {
@@ -163,7 +166,7 @@ describe('personal job filters', () => {
   });
 
   it('ignores feed-only filters in scoped searches', async () => {
-    mountList('hide_seen=true&former_employers=true', { company_slug: 'acme' });
+    mountList('hide_seen=true&former_employers=true&watchlist=true', { company_slug: 'acme' });
     const sort = screen.getAllByRole('combobox', { name: 'Sort jobs' })[0];
     if (!sort) throw new Error('Expected a sort control');
     await fireEvent.change(sort, { target: { value: 'views' } });
@@ -172,7 +175,24 @@ describe('personal job filters', () => {
       expect(params.get('company_slug')).toBe('acme');
       expect(params.has('hide_seen')).toBe(false);
       expect(params.has('former_employers')).toBe(false);
+      expect(params.has('watchlist')).toBe(false);
     }
+  });
+
+  it('says an empty watchlist result is about the watchlist, and links to it', () => {
+    session.set('id', 7);
+    mountList('watchlist=true');
+    expect(screen.getByText('No jobs at the companies on your watchlist match the current filters.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'your watchlist' }).getAttribute('href')).toBe('/my/watchlist');
+  });
+
+  it('keeps a watchlist search saveable, since that saved search is the alert', () => {
+    session.set('id', 7);
+    const store = new StagedFilters();
+    store.seed({ ...emptyFilters(), watchlist: true });
+    render(SavedSearches, { store });
+    expect(screen.queryByText(/Turn off .* to save this search/)).toBeNull();
+    expect(screen.getAllByRole('button', { name: /Save (this search|filter)/ }).length).toBeGreaterThan(0);
   });
 
   it('explains why the sidebar cannot save a former-employer search', () => {

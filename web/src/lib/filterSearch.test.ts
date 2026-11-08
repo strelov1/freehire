@@ -51,6 +51,16 @@ describe('jobFilterSearchItems', () => {
     );
   });
 
+  it('offers Your watchlist only when the personal filters are available', () => {
+    expect(
+      matchFilterSearch(jobFilterSearchItems({ watchlist: true }), 'watchlist').some((h) => h.action === 'watchlist'),
+    ).toBe(true);
+    expect(jobFilterSearchItems().some((h) => h.action === 'watchlist')).toBe(false);
+    expect(
+      jobFilterSearchItems({ watchlist: true, exclude: ['company_slug'] }).some((h) => h.action === 'watchlist'),
+    ).toBe(false);
+  });
+
   it('offers Hiring again only in an eligible Company pane, including former-employer aliases', () => {
     const enabled = jobFilterSearchItems({ formerEmployers: true });
     expect(matchFilterSearch(enabled, 'former employers').some((h) => h.action === 'former-employers')).toBe(true);

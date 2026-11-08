@@ -301,13 +301,16 @@ func FilterFromValues(v url.Values) any {
 // SearchParams.Filter), so a query it calls narrowing is one that will actually
 // come back narrowed.
 //
+// The watchlist is the one narrowing FilterFromValues does not express (see WatchlistParam):
+// the company set it names is the caller's, so it is resolved by whoever runs the search.
+//
 // It exists because the raw query STRING answers a different question. A saved
 // search of `remote=remote_unspecified` (a retired facet) or `country=it` (a typo
 // for `countries`) is a non-empty string that no filter reads, so anything gating
 // on emptiness lets it through as a real filter — and a subscription to one asks
 // to be notified about every posting in the catalogue.
 func Narrows(v url.Values) bool {
-	return strings.TrimSpace(v.Get("q")) != "" || FilterFromValues(v) != nil
+	return strings.TrimSpace(v.Get("q")) != "" || FilterFromValues(v) != nil || WantsWatchlist(v)
 }
 
 // maxWithinDays is the largest day count the two date bounds honour — a century, which

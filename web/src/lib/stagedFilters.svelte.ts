@@ -96,6 +96,10 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, formerEmployers: on };
   }
 
+  setWatchlist(on: boolean): void {
+    this.#f = { ...this.#f, watchlist: on };
+  }
+
   setHideSeen(on: boolean): void {
     this.#f = { ...this.#f, hideSeen: on };
   }

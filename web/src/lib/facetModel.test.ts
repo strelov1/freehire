@@ -9,6 +9,7 @@ import {
   activeFilterCount,
   canonicalQuery,
   savedSearchQuery,
+  queryNarrows,
   signOf,
   facetSetSign,
   facetCycle,
@@ -838,6 +839,33 @@ describe('formerEmployers ("Hiring again")', () => {
     const q = savedSearchQuery({ ...emptyFilters(), q: 'go', formerEmployers: true });
     expect(new URLSearchParams(q).has('former_employers')).toBe(false);
     expect(new URLSearchParams(q).get('q')).toBe('go');
+  });
+});
+
+describe('watchlist', () => {
+  it('round-trips as watchlist=true and is absent when off', () => {
+    expect(filtersToParams(emptyFilters()).has('watchlist')).toBe(false);
+    const p = filtersToParams({ ...emptyFilters(), watchlist: true });
+    expect(p.get('watchlist')).toBe('true');
+    expect(filtersFromParams(p).watchlist).toBe(true);
+    expect(filtersFromParams(new URLSearchParams('watchlist=false')).watchlist).toBe(false);
+  });
+
+  it('counts as an active filter', () => {
+    expect(activeFilterCount({ ...emptyFilters(), watchlist: true })).toBe(1);
+  });
+
+  // The saved search `watchlist=true` is the alert itself, so unlike the personal
+  // former-employers filter it has to survive into the stored query.
+  it('is kept in a saved search, beside the other filters', () => {
+    const q = savedSearchQuery({ ...emptyFilters(), q: 'go', watchlist: true, formerEmployers: true });
+    expect(new URLSearchParams(q).get('watchlist')).toBe('true');
+    expect(new URLSearchParams(q).has('former_employers')).toBe(false);
+    expect(canonicalQuery('watchlist=true&sort=newest')).toBe('watchlist=true');
+  });
+
+  it('lets an alert on the watchlist alone carry subscriptions', () => {
+    expect(queryNarrows('watchlist=true')).toBe(true);
   });
 });
 

@@ -10,8 +10,8 @@ import {
 } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the twenty-three account sections', () => {
-    expect(accountNav).toHaveLength(23);
+  it('lists the twenty-four account sections', () => {
+    expect(accountNav).toHaveLength(24);
   });
 
   // Submissions and the invite link are tabs of Contributions and Plan now; their old
@@ -225,7 +225,16 @@ describe('workspaceNav', () => {
     expect(groups('seeker')).toEqual([
       [
         'main',
-        ['/my/profile', '/my/activity', '/my/tracking', '/my/inbox', '/my/market-pulse', '/my/assistant', '/my/cvs'],
+        [
+          '/my/profile',
+          '/my/activity',
+          '/my/tracking',
+          '/my/inbox',
+          '/my/watchlist',
+          '/my/market-pulse',
+          '/my/assistant',
+          '/my/cvs',
+        ],
       ],
       ['network', ['/my/talent-network', '/my/referrals', '/my/mentorship']],
       ['settings', SETTINGS],

@@ -123,6 +123,7 @@
     if (!standalone) {
       p.delete('hide_seen');
       p.delete('former_employers');
+      p.delete('watchlist');
     }
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
     return p;
@@ -188,7 +189,7 @@
   // latestOnly stops a slow earlier response overwriting a newer one.
   let catalogCounts = $state.raw<FacetCounts | null>(null);
   // Facet counts cannot apply the former-employer constraint.
-  const counts = $derived(filters.value.formerEmployers ? null : catalogCounts);
+  const counts = $derived(filters.value.formerEmployers || filters.value.watchlist ? null : catalogCounts);
   // The map dialog reads and writes `filters` itself, so a click on the map narrows the
   // list behind it. Its module (the land outline among it) loads on the first open only.
   let mapOpen = $state(false);
@@ -219,6 +220,7 @@
   // The server reads former_employers only for a signed-in caller, so only then does it
   // explain an empty list.
   const formerEmployersApplied = $derived(standalone && isAuthenticated() && filters.applied.formerEmployers);
+  const watchlistApplied = $derived(standalone && isAuthenticated() && filters.applied.watchlist);
   const matchFilterAvailable = $derived(isAuthenticated() && profileStore.loaded && profileSkills.length > 0);
   // Ignored the moment the slider would disappear (sign-out, profile cleared, or a
   // shared link opened by someone without a profile) so it can't silently keep hiding
@@ -520,7 +522,8 @@
 
   // Personal feed preferences must be re-applied when the reader changes in-tab.
   const searchUserID = $derived(
-    standalone && (filters.applied.hideSeen || filters.applied.formerEmployers || serverMatch)
+    standalone &&
+      (filters.applied.hideSeen || filters.applied.formerEmployers || filters.applied.watchlist || serverMatch)
       ? (currentUser()?.id ?? null)
       : null,
   );
@@ -800,8 +803,12 @@
   <Button
     variant="outline"
     size="sm"
-    disabled={filters.value.formerEmployers}
-    title={filters.value.formerEmployers ? 'Turn off Hiring again to explore the map' : undefined}
+    disabled={filters.value.formerEmployers || filters.value.watchlist}
+    title={filters.value.formerEmployers
+      ? 'Turn off Hiring again to explore the map'
+      : filters.value.watchlist
+        ? 'Turn off Your watchlist to explore the map'
+        : undefined}
     aria-label="Map"
     onclick={() => {
       mapLoaded = true;
@@ -976,6 +983,14 @@
           >your experience</a
         >, and leave out any name that could be more than one company.
       </p>
+    {:else if displayItems.length === 0 && watchlistApplied}
+      <States state="empty" message="No jobs at the companies on your watchlist match the current filters." />
+      <p class="mt-2 text-center text-sm text-muted-foreground">
+        Add more companies on
+        <a href={resolve('/my/watchlist')} class="font-medium text-foreground underline underline-offset-2"
+          >your watchlist</a
+        >.
+      </p>
     {:else if displayItems.length === 0}
       <States state="empty" message="No matching jobs." />
       {#if standalone && relaxTarget}
@@ -1034,7 +1049,7 @@
   </div>
 </div>
 
-{#if standalone && mapLoaded && !filters.value.formerEmployers}
+{#if standalone && mapLoaded && !filters.value.formerEmployers && !filters.value.watchlist}
   {#await import('./map/JobsMapDialog.svelte') then { default: JobsMapDialog }}
     <JobsMapDialog bind:open={mapOpen} store={filters} />
   {/await}
@@ -1055,6 +1070,7 @@
   exclude={excludeFacets}
   savedSearches={standalone}
   formerEmployersAvailable={standalone}
+  watchlistAvailable={standalone}
   hideSeenAvailable={standalone}
   open={modalOpen}
   onClose={() => (modalOpen = false)}

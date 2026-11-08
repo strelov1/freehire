@@ -95,6 +95,12 @@ export const FILTER_EXTRAS: FilterRow[] = [
       'true — signed in only, read from your experience bank; a name that does not resolve to exactly one company is left out. Anonymous, it is reported in meta.ignored_params. `/jobs/facets` never applies this filter, so its counts ignore it even for signed-in callers',
   },
   {
+    param: 'watchlist',
+    label: 'Your watchlist: companies you follow',
+    values:
+      'true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it',
+  },
+  {
     param: 'salary_min',
     label: 'Minimum salary',
     values: 'integer — jobs whose minimum salary is at least this (pair with salary_currency)',

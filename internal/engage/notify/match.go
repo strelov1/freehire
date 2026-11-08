@@ -28,10 +28,20 @@ const matchLag = time.Hour
 // ~4,000 in a day — so it only cuts a query that matches most of the catalogue.
 const maxMatchPages = 50
 
+// matchGroup is the set of subscriptions one search serves: those sharing a query. A
+// query that reads the subscriber's own company list (`watchlist=true`) means a different
+// set of companies to each person, so it is grouped per person as well and userID names
+// them; for every other query userID is 0 and the group is shared.
+type matchGroup struct {
+	query  string
+	userID int64
+}
+
 // match re-runs each distinct saved-search query against the index and records
 // the matching jobs for every subscription on that query. Subscriptions are
 // grouped by their (already-canonical, SPA-serialized) query string, so a query
-// shared by many subscribers costs one search. A job is gated against each
+// shared by many subscribers costs one search — except a watchlist query, which is
+// one search per subscriber because it resolves to that subscriber's companies. A job is gated against each
 // subscription's start_at, against the subscriber's live excluded_skills (avoid-skills)
 // preference, and against the query's minimum skill match over their live skills, so a
 // subscription never receives a job older than it, carrying a skill its subscriber
@@ -68,18 +78,28 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 		return err
 	}
 
-	groups := make(map[string][]db.ListActiveSubscriptionsRow)
+	groups := make(map[matchGroup][]db.ListActiveSubscriptionsRow)
+	var watchers []int64
 	for _, s := range subs {
-		groups[s.Query] = append(groups[s.Query], s)
+		key := matchGroup{query: s.Query}
+		if vals, _ := url.ParseQuery(s.Query); search.WantsWatchlist(vals) {
+			key.userID = s.UserID
+			watchers = append(watchers, s.UserID)
+		}
+		groups[key] = append(groups[key], s)
+	}
+	watched, err := r.watchlists(ctx, watchers)
+	if err != nil {
+		return err
 	}
 
 	r.pauseUnrunnable(ctx, groups, stats)
 
 	// Only the groups with a due subscription are searched; the rest wait for a
 	// pass whose result could be sent.
-	for query, gsubs := range groups {
+	for key, gsubs := range groups {
 		if !slices.ContainsFunc(gsubs, func(s db.ListActiveSubscriptionsRow) bool { return due[s.ID] }) {
-			delete(groups, query)
+			delete(groups, key)
 			stats.SkippedQueries++
 		}
 	}
@@ -101,8 +121,8 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 			log.Printf("notify: stamp %d searched subscriptions: %v", len(searched), err)
 		}
 	}()
-	for query, gsubs := range groups {
-		if err := r.matchQuery(ctx, query, gsubs, skillsByUser, stats); err != nil {
+	for key, gsubs := range groups {
+		if err := r.matchQuery(ctx, key, gsubs, skillsByUser, watched[key.userID], stats); err != nil {
 			// `done`, not the failure count: what a cancellation has to report is how
 			// far the stage got, and this branch runs before the failure is counted.
 			//
@@ -116,7 +136,7 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 				return nil
 			}
 			stats.FailedQueries++
-			log.Printf("notify: match query %q failed: %v", query, err)
+			log.Printf("notify: match query %q failed: %v", key.query, err)
 			continue
 		}
 		done++
@@ -136,13 +156,14 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 // rule later invalidates. Paused rather than deleted: the owner can fix the search
 // and resume it. A failed pause is logged and retried next pass; the query is not
 // searched either way, since it would only fail.
-func (r *Runner) pauseUnrunnable(ctx context.Context, groups map[string][]db.ListActiveSubscriptionsRow, stats *Stats) {
-	for query, gsubs := range groups {
+func (r *Runner) pauseUnrunnable(ctx context.Context, groups map[matchGroup][]db.ListActiveSubscriptionsRow, stats *Stats) {
+	for key, gsubs := range groups {
+		query := key.query
 		vals, _ := url.ParseQuery(query)
 		if _, err := search.ParseQuery(vals.Get("q")); err == nil {
 			continue
 		}
-		delete(groups, query)
+		delete(groups, key)
 		ids := make([]int64, len(gsubs))
 		for i, sub := range gsubs {
 			ids[i] = sub.ID
@@ -292,22 +313,49 @@ func (r *Runner) skillSetsByUser(ctx context.Context, subs []db.ListActiveSubscr
 	return skillsByUser, nil
 }
 
+// watchlists reads the companies each watchlist-alert owner watches, keyed by user id. A
+// user with an empty list is simply absent.
+func (r *Runner) watchlists(ctx context.Context, userIDs []int64) (map[int64][]string, error) {
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+	slices.Sort(userIDs)
+	rows, err := r.store.ListWatchlistSlugsForUsers(ctx, slices.Compact(userIDs))
+	if err != nil {
+		return nil, fmt.Errorf("read watchlists: %w", err)
+	}
+	out := make(map[int64][]string)
+	for _, row := range rows {
+		out[row.UserID] = append(out[row.UserID], row.Slug)
+	}
+	return out, nil
+}
+
 // matchQuery runs one query and records its matches across the subscriptions that
-// share it.
+// share it. For a watchlist group, slugs is its owner's companies and narrows the search to
+// them; with none, nothing can match and no search runs — dropping the filter instead would
+// widen the alert to the whole catalogue.
 //
 // It reads the newest MatchLimit hits, as it always did, and keeps paging while a
 // full page still reaches back past the group's previous search (less matchLag):
 // a group searched once an hour can match more than one page in that hour.
-func (r *Runner) matchQuery(ctx context.Context, query string, subs []db.ListActiveSubscriptionsRow, skillsByUser map[int64]subscriberSkills, stats *Stats) error {
+func (r *Runner) matchQuery(ctx context.Context, key matchGroup, subs []db.ListActiveSubscriptionsRow, skillsByUser map[int64]subscriberSkills, slugs []string, stats *Stats) error {
 	// A group with a never-searched subscription reads one page, as a first search
 	// always did.
 	since := oldestSearch(subs)
-	vals, _ := url.ParseQuery(query)
+	vals, _ := url.ParseQuery(key.query)
 	minMatch := minSkillMatch(vals)
+	filter := search.FilterFromValues(vals)
+	if key.userID != 0 {
+		if len(slugs) == 0 {
+			return nil
+		}
+		filter = search.AndInStrings(filter, "company_slug", slugs)
+	}
 	for page := 0; page < maxMatchPages; page++ {
 		res, err := r.searcher.Search(ctx, search.SearchParams{
 			Query:  vals.Get("q"),
-			Filter: search.FilterFromValues(vals),
+			Filter: filter,
 			// Freshest first so the bounded window holds the newest matches; the
 			// ledger dedups, so re-scanning the same recent jobs each pass is free.
 			Sort:   []string{"created_at:desc"},
