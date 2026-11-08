@@ -978,9 +978,11 @@
       {:else}
         <!-- Busy while held-over rows stand in for a reload underneath them (see
              `holdover`): the rows are real but about to be replaced. -->
-        <div class="flex flex-col gap-2" aria-busy={holdingOver}>
+        <!-- One list surface with hairline dividers rather than a stack of separately framed
+             cards: twenty bordered boxes read as a wall. -->
+        <div class="flex flex-col divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70 bg-card" aria-busy={holdingOver}>
           {#each visibleJobs as job (job.public_slug)}
-            <JobRow {job} {onHide} hideCompany={!!scope.company_slug} />
+            <JobRow {job} {onHide} hideCompany={!!scope.company_slug} flat />
           {/each}
         </div>
       {/if}

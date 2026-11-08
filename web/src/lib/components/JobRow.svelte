@@ -74,6 +74,7 @@
     newTab = false,
     compact = false,
     hideCompany = false,
+    flat = false,
     footer,
     onHide,
     unsave = api.unsaveJob,
@@ -88,6 +89,8 @@
     compact?: boolean;
     // On the employer's own page every card would repeat its logo, name and backers.
     hideCompany?: boolean;
+    // A row in a divided list (the feed draws the frame and the dividers), not a framed card.
+    flat?: boolean;
     footer?: Snippet;
     onHide?: (slug: string) => void;
     /** Allows a saved list to serialize removal with pagination. */
@@ -356,7 +359,10 @@
      `group` lets the hover-revealed hide control fade in on card hover. -->
 <div
   data-testid="job-card"
-  class="group relative rounded-xl border border-border/70 bg-card transition hover:border-brand hover:bg-accent"
+  class={[
+    'group relative transition hover:bg-accent',
+    !flat && 'rounded-xl border border-border/70 bg-card hover:border-brand',
+  ]}
 >
 <a
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
@@ -502,6 +508,7 @@
            Indexed keys: a tag's text could equal one of the trailing facts. -->
       {#if metaFacts.length || salary}
         <span class="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-muted-foreground">
+          {#if freshness.length}<span aria-hidden="true">·</span>{/if}
           {#each metaFacts as fact, i (i)}
             {#if i > 0}<span aria-hidden="true">·</span>{/if}
             <span>{fact}</span>
