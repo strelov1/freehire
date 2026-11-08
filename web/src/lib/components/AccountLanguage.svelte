@@ -167,7 +167,7 @@
   <div class="flex items-center gap-3">
     <div class="min-w-0 flex-1">
       <h2 id={headingId} class="text-sm font-semibold leading-tight">{s.heading}</h2>
-      <p class="text-xs text-muted-foreground">
+      <p class="mt-0.5 text-sm text-muted-foreground">
         {s.description}
       </p>
     </div>
