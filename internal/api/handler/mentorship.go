@@ -372,14 +372,14 @@ func slotWindow(c *fiber.Ctx) (from, to time.Time, err error) {
 	return from, to, nil
 }
 
-// slotWindowBounds fills an unset end of the window (from now, to 30 days on) and clamps
+// slotWindowBounds fills an unset end of the window (from now, to 30 days after from) and clamps
 // it to maxSlotWindowDays, for the routes and the MCP tools alike.
 func slotWindowBounds(fromAt, toAt *time.Time) (from, to time.Time) {
-	now := time.Now().UTC()
-	from, to = now, now.AddDate(0, 0, 30)
+	from = time.Now().UTC()
 	if fromAt != nil {
 		from = *fromAt
 	}
+	to = from.AddDate(0, 0, 30)
 	if toAt != nil {
 		to = *toAt
 	}

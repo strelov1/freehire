@@ -48,6 +48,11 @@ func TestBuddyMCPHostAndGuestBookAndCancel(t *testing.T) {
 	for day := 0; day < 7; day++ {
 		rules = append(rules, map[string]any{"weekday": day, "start": "00:00", "end": "24:00"})
 	}
+	// A missing argument must not decode to a destructive zero value.
+	host.failsWith("buddy_mock_settings_set", map[string]any{
+		"timezone": "UTC", "meeting_url": link, "topics": []string{"coding"},
+	}, "paused is required")
+	host.failsWith("buddy_mock_schedule_set_weekly", map[string]any{}, "rules is required")
 	host.ok("buddy_mock_schedule_set_weekly", map[string]any{"rules": rules})
 	host.failsWith("buddy_mock_schedule_set_weekly", map[string]any{"rules": []map[string]any{
 		{"date": "2030-01-07", "start": "10:00", "end": "12:00"},

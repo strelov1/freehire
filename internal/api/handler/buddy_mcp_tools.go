@@ -12,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/engage/buddy"
 	"github.com/strelov1/freehire/internal/engage/slots"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 // The interview-buddy and mock-interview tools of the signed-in MCP server: an agent
@@ -36,8 +37,9 @@ func (h *buddyHandlers) mcpTools() []assistant.Tool {
 // mockToolError is mockError for a tool. The route turns a broken host schedule into a
 // generic 500 and reports the wrapped detail; a tool hands its error text to the agent
 // verbatim, and that detail names the host's account id, which a member never sees.
-func mockToolError(err error) error {
+func mockToolError(ctx context.Context, err error) error {
 	if errors.Is(err, slots.ErrNoOwnerZone) {
+		observability.RequestLogger(ctx).ErrorContext(ctx, "buddy mock: host schedule misconfigured", "error", err)
 		return fiber.NewError(fiber.StatusInternalServerError, "this member's schedule is unavailable right now")
 	}
 	return mockError(err)
@@ -145,7 +147,7 @@ func (h *buddyHandlers) mockHostsTool() assistant.Tool {
 			}
 			res, err := h.mocks.Hosts(ctx, userID, in.Topic, in.Timezone)
 			if err != nil {
-				return nil, mockToolError(err)
+				return nil, mockToolError(ctx, err)
 			}
 			return map[string]any{"hosts": toBuddyMockHostResponses(res), "timezone": res.Zone}, nil
 		},
@@ -185,7 +187,7 @@ func (h *buddyHandlers) mockSlotsTool() assistant.Tool {
 			from, to := slotWindowBounds(in.From, in.To)
 			res, err := h.mocks.OpenSlots(ctx, userID, in.Handle, from, to, in.Timezone)
 			if err != nil {
-				return nil, mockToolError(err)
+				return nil, mockToolError(ctx, err)
 			}
 			return map[string]any{"slots": slotResponses(res.Slots), "timezone": res.Zone, "topics": res.Topics}, nil
 		},
@@ -229,7 +231,7 @@ func (h *buddyHandlers) mockBookTool() assistant.Tool {
 				Topic: in.Topic, GuestZone: in.Timezone,
 			})
 			if err != nil {
-				return nil, mockToolError(err)
+				return nil, mockToolError(ctx, err)
 			}
 			return toBuddyMockResponse(m.EntryFor(userID, time.Now())), nil
 		},
@@ -246,7 +248,7 @@ func (h *buddyHandlers) mockListTool() assistant.Tool {
 		Run: noArgs(func(ctx context.Context, userID int64) (any, error) {
 			list, err := h.mocks.List(ctx, userID)
 			if err != nil {
-				return nil, mockToolError(err)
+				return nil, mockToolError(ctx, err)
 			}
 			return map[string]any{
 				"upcoming": toBuddyMockResponses(list.Upcoming),
@@ -280,7 +282,7 @@ func (h *buddyHandlers) mockCancelTool() assistant.Tool {
 				return nil, fiber.NewError(fiber.StatusNotFound, "mock interview not found")
 			}
 			if err := h.mocks.Cancel(ctx, userID, id); err != nil {
-				return nil, mockToolError(err)
+				return nil, mockToolError(ctx, err)
 			}
 			return map[string]any{"cancelled": true}, nil
 		},
@@ -305,11 +307,11 @@ func (h *buddyHandlers) mockScheduleGetTool() assistant.Tool {
 		Run: noArgs(func(ctx context.Context, userID int64) (any, error) {
 			s, ok, err := h.mocks.Settings(ctx, userID)
 			if err != nil {
-				return nil, mockToolError(err)
+				return nil, mockToolError(ctx, err)
 			}
 			rules, err := h.mocks.Availability(ctx, userID)
 			if err != nil {
-				return nil, mockToolError(err)
+				return nil, mockToolError(ctx, err)
 			}
 			var settings *buddyMockSettingsBody
 			if ok {
@@ -335,19 +337,27 @@ func (h *buddyHandlers) mockSettingsSetTool() assistant.Tool {
 				"topics":      map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": buddy.MockTopics}, "description": "Topics the person offers to interview on, at least one."},
 				"paused":      map[string]any{"type": "boolean", "description": "True stops new bookings; existing mocks stay."},
 			},
-			"required":             []string{"timezone", "meeting_url", "topics"},
+			"required":             []string{"timezone", "meeting_url", "topics", "paused"},
 			"additionalProperties": false,
 		},
 		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
-			var in buddyMockSettingsBody
+			// The arguments are not validated against the schema, and a missing paused would
+			// decode as false: a settings edit would silently resume a paused host.
+			var in struct {
+				buddyMockSettingsBody
+				Paused *bool `json:"paused"`
+			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
+			if in.Paused == nil {
+				return nil, fiber.NewError(fiber.StatusBadRequest, "paused is required")
+			}
 			s, err := h.mocks.SaveSettings(ctx, userID, buddy.MockSettings{
-				Timezone: in.Timezone, MeetingURL: in.MeetingURL, Topics: in.Topics, Paused: in.Paused,
+				Timezone: in.Timezone, MeetingURL: in.MeetingURL, Topics: in.Topics, Paused: *in.Paused,
 			})
 			if err != nil {
-				return nil, mockToolError(err)
+				return nil, mockToolError(ctx, err)
 			}
 			return toBuddyMockSettingsBody(s), nil
 		},
@@ -381,6 +391,10 @@ func (h *buddyHandlers) mockScheduleSetWeeklyTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
+			// A missing rules would decode as an empty week and wipe the schedule.
+			if in.Rules == nil {
+				return nil, fiber.NewError(fiber.StatusBadRequest, "rules is required; pass an empty list to clear the weekly schedule")
+			}
 			rules := make([]slots.Rule, 0, len(in.Rules))
 			for _, r := range in.Rules {
 				if r.Date != nil {
@@ -394,7 +408,7 @@ func (h *buddyHandlers) mockScheduleSetWeeklyTool() assistant.Tool {
 				rules = append(rules, rule)
 			}
 			if err := h.mocks.ReplaceWeekly(ctx, userID, rules); err != nil {
-				return nil, mockToolError(err)
+				return nil, mockToolError(ctx, err)
 			}
 			return map[string]any{"saved": true, "rules": len(rules)}, nil
 		},
@@ -430,7 +444,7 @@ func (h *buddyHandlers) mockScheduleAddOverrideTool() assistant.Tool {
 			}
 			stored, err := h.mocks.AddOverride(ctx, userID, rule)
 			if err != nil {
-				return nil, mockToolError(err)
+				return nil, mockToolError(ctx, err)
 			}
 			return toAvailabilityResponse(stored), nil
 		},
@@ -458,7 +472,7 @@ func (h *buddyHandlers) mockScheduleDeleteTool() assistant.Tool {
 				return nil, fiber.NewError(fiber.StatusBadRequest, "rule_id is required")
 			}
 			if err := h.mocks.DeleteRule(ctx, userID, in.RuleID); err != nil {
-				return nil, mockToolError(err)
+				return nil, mockToolError(ctx, err)
 			}
 			return map[string]any{"deleted": true}, nil
 		},
