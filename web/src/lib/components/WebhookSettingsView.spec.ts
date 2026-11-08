@@ -8,18 +8,16 @@ vi.mock('$app/state', () => ({
   page: { data: { locale: 'ru' }, url: new URL('http://localhost/') },
 }));
 
-const { getWebhook, createOrUpdateWebhook, setWebhookEnabled, deleteWebhook, testWebhook } = vi.hoisted(
-  () => ({
-    getWebhook: vi.fn(),
-    createOrUpdateWebhook: vi.fn(),
-    setWebhookEnabled: vi.fn(),
-    deleteWebhook: vi.fn(),
-    testWebhook: vi.fn(),
-  }),
-);
+const { getWebhook, createOrUpdateWebhook, setWebhookEnabled, deleteWebhook, testWebhook } = vi.hoisted(() => ({
+  getWebhook: vi.fn(),
+  createOrUpdateWebhook: vi.fn(),
+  setWebhookEnabled: vi.fn(),
+  deleteWebhook: vi.fn(),
+  testWebhook: vi.fn(),
+}));
 
 const { StubApiError } = vi.hoisted(() => ({
-  StubApiError: class StubApiError extends Error {
+  StubApiError: class extends Error {
     constructor(
       public status: number,
       message = 'failed',
@@ -92,9 +90,7 @@ describe('WebhookSettingsView — Russian locale', () => {
     createOrUpdateWebhook.mockRejectedValue(new StubApiError(400));
     render(WebhookSettingsView);
 
-    const input = await vi.waitFor(() =>
-      screen.getByPlaceholderText('https://example.com/freehire-hook'),
-    );
+    const input = await vi.waitFor(() => screen.getByPlaceholderText('https://example.com/freehire-hook'));
     // Syntactically valid (so the native `type="url"` constraint lets the form
     // submit) — the mocked API is what rejects it, exactly as the server-side
     // 400 this branch actually handles would.
@@ -108,21 +104,15 @@ describe('WebhookSettingsView — Russian locale', () => {
 
   it('shows what the destination answered when saving fails the test delivery', async () => {
     getWebhook.mockResolvedValue(null);
-    createOrUpdateWebhook.mockRejectedValue(
-      new StubApiError(422, 'webhook test failed: destination responded 404'),
-    );
+    createOrUpdateWebhook.mockRejectedValue(new StubApiError(422, 'webhook test failed: destination responded 404'));
     render(WebhookSettingsView);
 
-    const input = await vi.waitFor(() =>
-      screen.getByPlaceholderText('https://example.com/freehire-hook'),
-    );
+    const input = await vi.waitFor(() => screen.getByPlaceholderText('https://example.com/freehire-hook'));
     await fireEvent.input(input, { target: { value: 'https://example.com/hook' } });
     await fireEvent.click(screen.getByText('Создать вебхук'));
 
     await vi.waitFor(() =>
-      expect(
-        screen.getByText('Адрес не принял тестовый запрос: destination responded 404'),
-      ).toBeTruthy(),
+      expect(screen.getByText('Адрес не принял тестовый запрос: destination responded 404')).toBeTruthy(),
     );
   });
 
@@ -135,14 +125,10 @@ describe('WebhookSettingsView — Russian locale', () => {
     await vi.waitFor(() => expect(screen.getByText('Тестовый запрос доставлен.')).toBeTruthy());
     expect(testWebhook).toHaveBeenCalledTimes(1);
 
-    testWebhook.mockRejectedValueOnce(
-      new StubApiError(422, 'webhook test failed: destination responded 400'),
-    );
+    testWebhook.mockRejectedValueOnce(new StubApiError(422, 'webhook test failed: destination responded 400'));
     await fireEvent.click(screen.getByText('Проверить'));
     await vi.waitFor(() =>
-      expect(
-        screen.getByText('Адрес не принял тестовый запрос: destination responded 400'),
-      ).toBeTruthy(),
+      expect(screen.getByText('Адрес не принял тестовый запрос: destination responded 400')).toBeTruthy(),
     );
     expect(screen.queryByText('Тестовый запрос доставлен.')).toBeNull();
   });

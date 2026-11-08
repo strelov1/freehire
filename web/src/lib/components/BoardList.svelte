@@ -61,9 +61,7 @@
   // takes the button away; then focus moves, or it falls to <body> all the same. Before
   // that it stays on the button, which the reader has not pressed.
   const showMoreFromSentinel = () =>
-    fallback?.contains(document.activeElement) && limit + PAGE >= items.length
-      ? showMoreFromKeyboard()
-      : showMore();
+    fallback?.contains(document.activeElement) && limit + PAGE >= items.length ? showMoreFromKeyboard() : showMore();
 </script>
 
 {#if items.length === 0}
@@ -71,22 +69,29 @@
 {:else}
   <ul bind:this={list} class="flex flex-col divide-y divide-border rounded-xl border border-border">
     {#each visible as item (item.id)}
-      <li class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 transition-colors hover:bg-accent/50 sm:flex-nowrap sm:gap-4">
+      <li
+        class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 transition-colors hover:bg-accent/50 sm:flex-nowrap sm:gap-4"
+      >
         <!-- The employer and role open the application; the stage control beside them
              does not, so it is a sibling rather than a child. -->
         <BoardPreview {item} class="min-w-0 flex-1">
-        <button
-          type="button"
-          onclick={() => onopen(item)}
-          class="flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          <EntityLogo name={company(item)} src={companyLogoUrl(company(item)) ?? undefined} shape="square" size="xs" />
-          <span class="min-w-0 flex-1">
-            <span class="block line-clamp-2 text-sm font-medium sm:truncate">{title(item)}</span>
-            <span class="block truncate text-xs text-muted-foreground">{company(item) || s.unknownCompany}</span>
-            <BoardPostingStatus job={item.job} />
-          </span>
-        </button>
+          <button
+            type="button"
+            onclick={() => onopen(item)}
+            class="flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <EntityLogo
+              name={company(item)}
+              src={companyLogoUrl(company(item)) ?? undefined}
+              shape="square"
+              size="xs"
+            />
+            <span class="min-w-0 flex-1">
+              <span class="block line-clamp-2 text-sm font-medium sm:truncate">{title(item)}</span>
+              <span class="block truncate text-xs text-muted-foreground">{company(item) || s.unknownCompany}</span>
+              <BoardPostingStatus job={item.job} />
+            </span>
+          </button>
         </BoardPreview>
 
         {#if onremove}
@@ -117,7 +122,9 @@
           {#if item.silence_state === 'silent'}
             <span
               class="flex items-center gap-0.5 text-xs tabular-nums text-warning-strong"
-              title={format(plural(locale(), item.days_silent ?? 0, s.noReplyTooltip), { days: String(item.days_silent ?? 0) })}
+              title={format(plural(locale(), item.days_silent ?? 0, s.noReplyTooltip), {
+                days: String(item.days_silent ?? 0),
+              })}
             >
               <Clock class="size-3 shrink-0" aria-hidden="true" />
               {item.days_silent}d
@@ -133,7 +140,9 @@
             </span>
           {/if}
           {#if item.last_activity_at}
-            <span class="ml-auto shrink-0 text-xs text-muted-foreground sm:ml-0 sm:w-24 sm:text-right">{timeAgo(item.last_activity_at, locale())}</span>
+            <span class="ml-auto shrink-0 text-xs text-muted-foreground sm:ml-0 sm:w-24 sm:text-right"
+              >{timeAgo(item.last_activity_at, locale())}</span
+            >
           {/if}
         </div>
       </li>

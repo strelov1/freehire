@@ -31,8 +31,7 @@ describe('HeadshotField', () => {
   });
 
   it('offers recovery after a failed metadata request and restores upload on retry', async () => {
-    getPhoto.mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce({ enabled: true, present: false });
+    getPhoto.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ enabled: true, present: false });
     render(HeadshotField);
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));

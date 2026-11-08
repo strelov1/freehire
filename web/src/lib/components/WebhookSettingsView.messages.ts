@@ -29,8 +29,7 @@ export const messages = defineMessages(
     enable: 'Enable',
     delete: 'Delete',
     deleteDialogTitle: 'Delete webhook?',
-    deleteDialogDescription:
-      'Saved searches subscribed to this channel stop delivering immediately.',
+    deleteDialogDescription: 'Saved searches subscribed to this channel stop delivering immediately.',
   },
   {
     ru: {
@@ -61,8 +60,7 @@ export const messages = defineMessages(
       enable: 'Включить',
       delete: 'Удалить',
       deleteDialogTitle: 'Удалить вебхук?',
-      deleteDialogDescription:
-        'Сохранённые поиски, подписанные на этот канал, сразу перестанут получать уведомления.',
+      deleteDialogDescription: 'Сохранённые поиски, подписанные на этот канал, сразу перестанут получать уведомления.',
     },
   },
 );

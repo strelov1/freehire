@@ -30,7 +30,7 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   after `key`/`cookie`), and `paidAI(feature)` — the paid-entitlement gate every route that
   makes a model call for its caller mounts AFTER its authentication gate (`paid_ai.go`: 402
   for an unpaid caller in the ordinary plan-refusal body, 503 when the plan cannot be read,
-  otherwise it marks `c.UserContext()`). The binding (`user_llm.go`) refuses a model client
+  otherwise it marks `c.UserContext()`; a 402 also records a paywall hit — user, feature, job — through a detached, panic-recovered goroutine that never delays or alters the refusal, see internal/ai/plan/AGENTS.md; the auto-apply orchestrator's tailor refusal calls `authorizePaidAIUnrecorded` and records nothing). The binding (`user_llm.go`) refuses a model client
   for an unmarked context, so handlers pass `c.UserContext()` (or a context detached from
   it, as the assistant turn and the fit stream do) to `bind`/`caller`. Tests that are not
   about the gate mount `markPaidAI` in its place..

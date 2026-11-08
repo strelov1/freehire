@@ -5,10 +5,7 @@
 //
 // Returns a zero-arg runner so call sites read like a plain `refresh()`; the fetch and
 // the apply are captured once at construction.
-export function latestOnly<T>(
-  fetch: () => Promise<T>,
-  apply: (value: T) => void,
-): () => Promise<void> {
+export function latestOnly<T>(fetch: () => Promise<T>, apply: (value: T) => void): () => Promise<void> {
   let generation = 0;
   return () => {
     const gen = ++generation;

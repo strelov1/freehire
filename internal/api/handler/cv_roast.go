@@ -92,7 +92,7 @@ func (h *resumeHandlers) RoastCV(c *fiber.Ctx) error {
 	// figure can never disagree about what this role demands.
 	roleFacet, ferr := h.roleFacet(c, roleFilter)
 
-	report := atscheck.Score(up.Text, profile.Skills, topRoleSkills(roleFacet.Facets["skills"], atsRoleTopN))
+	report := atscheck.Score(up.Text, profile.Skills, atscheck.TopRoleSkills(roleFacet.Facets["skills"], atscheck.RoleTopN))
 	out := roastResponse{
 		Report:       &report,
 		Role:         role,

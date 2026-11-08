@@ -39,7 +39,9 @@
     const words = feature.split(/[-_]+/).filter(Boolean).join(' ');
     return words.charAt(0).toUpperCase() + words.slice(1);
   };
-  const unlimitedFeatures = $derived((plan?.allowances ?? []).filter((a) => a.unlimited).map((a) => featureLabel(a.feature)));
+  const unlimitedFeatures = $derived(
+    (plan?.allowances ?? []).filter((a) => a.unlimited).map((a) => featureLabel(a.feature)),
+  );
   let history = $state<UsageHistoryEntry[]>([]);
   let status = $state<'loading' | 'error' | 'ready'>('loading');
 
@@ -174,8 +176,7 @@
     new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   // When today's allowance starts over, in the reader's own clock rather than in UTC — the
   // day is keyed in UTC, but "resets at 3am" is what actually happens to them.
-  const fmtTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 </script>
 
 {#if !isAuthenticated()}
@@ -217,9 +218,7 @@
             <!-- To /pricing rather than straight to checkout: the choice between monthly and
                  annual belongs on a page that can explain it, and sending someone to a payment
                  form without it silently sells them the monthly one. -->
-            <a
-              class={buttonVariants({ variant: 'cta', size: 'sm' })}
-              href={resolve('/pricing')}
+            <a class={buttonVariants({ variant: 'cta', size: 'sm' })} href={resolve('/pricing')}
               >{plan.plan === 'free' ? s.planStrip.upgrade : s.planStrip.upgradeUltra}</a
             >
           {/if}
@@ -242,7 +241,10 @@
           <div class="flex flex-col gap-3 rounded-lg border border-border px-4 py-3">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <span class="text-sm font-medium">
-                {money(billing.amount_cents, billing.currency)} / {tokenLabel(s.subscription.interval, billing.interval)}
+                {money(billing.amount_cents, billing.currency)} / {tokenLabel(
+                  s.subscription.interval,
+                  billing.interval,
+                )}
               </span>
               <span class="text-xs text-muted-foreground">
                 {tokenLabel(s.subscription.status, billing.status)}
@@ -272,19 +274,14 @@
                   <li class="flex items-center justify-between gap-3 py-2 text-sm">
                     <span class="text-muted-foreground">{fmtDate(inv.date)}</span>
                     <span class="flex items-center gap-3">
-                      <span class="tabular-nums"
-                        >{money(inv.amount_cents, inv.currency)}</span
-                      >
+                      <span class="tabular-nums">{money(inv.amount_cents, inv.currency)}</span>
                       {#if inv.status !== 'paid'}
                         <span class="text-xs text-destructive">{inv.status}</span>
                       {/if}
                       {#if inv.receipt_url}
                         <!-- eslint-disable svelte/no-navigation-without-resolve -- the payment provider's hosted invoice, not a SvelteKit route -->
-                        <a
-                          class="text-xs underline"
-                          href={inv.receipt_url}
-                          target="_blank"
-                          rel="noopener noreferrer">{s.subscription.receipt}</a
+                        <a class="text-xs underline" href={inv.receipt_url} target="_blank" rel="noopener noreferrer"
+                          >{s.subscription.receipt}</a
                         ><!-- eslint-enable svelte/no-navigation-without-resolve -->
                       {/if}
                     </span>
@@ -317,11 +314,7 @@
                   {format(s.today.notOnPlan, { plan: planLabel(plan.plan) })}
                 </span>
               {:else}
-                <span
-                  class="shrink-0 text-sm tabular-nums {a.used >= a.limit
-                    ? 'text-muted-foreground'
-                    : ''}"
-                >
+                <span class="shrink-0 text-sm tabular-nums {a.used >= a.limit ? 'text-muted-foreground' : ''}">
                   {a.used} / {a.limit}
                 </span>
               {/if}
@@ -373,7 +366,7 @@
             <!-- One line per entry, the date right-aligned: a log, not a list of cards. -->
             <li class="flex items-center justify-between gap-3 px-4 py-2 text-sm">
               <span class="min-w-0 truncate">
-                <span class="font-medium">{entry.label}</span>
+                <span>{entry.label}</span>
                 {#if entry.subtitle}<span class="text-muted-foreground"> · {entry.subtitle}</span>{/if}
               </span>
               <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{fmtDate(entry.created_at)}</span>

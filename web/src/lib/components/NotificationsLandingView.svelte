@@ -41,9 +41,9 @@
         You don't refresh the feed. It comes to you.
       </h1>
       <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-        Save a search once and freehire watches it for you — instantly, or as a daily digest. The
-        same settings also carry your tracking nudges, so a new match and a stalled application
-        both reach you the same way: email, Telegram, or push.
+        Save a search once and freehire watches it for you — instantly, or as a daily digest. The same settings also
+        carry your tracking nudges, so a new match and a stalled application both reach you the same way: email,
+        Telegram, or push.
       </p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
         <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
@@ -67,11 +67,10 @@
           All filters
           <span
             class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-brand-foreground"
-          >3</span>
+            >3</span
+          >
         </span>
-        <span
-          class="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-secondary text-sm font-semibold"
-        >
+        <span class="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-secondary text-sm font-semibold">
           <Bell class="size-4" aria-hidden="true" />
           Get new-job alerts
           <ChevronRight class="size-4 text-muted-foreground" aria-hidden="true" />
@@ -110,8 +109,8 @@
       <div class="bg-background p-6 sm:p-7">
         <h3 class="text-lg font-semibold tracking-tight">A job that just appeared</h3>
         <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Save a search — stack, seniority, region, salary — and freehire matches new postings
-          against it as they're added. Get told instantly, or once a day at a time you pick.
+          Save a search — stack, seniority, region, salary — and freehire matches new postings against it as they're
+          added. Get told instantly, or once a day at a time you pick.
         </p>
         <a
           href={resolve('/my/notifications/searches')}
@@ -123,8 +122,8 @@
       <div class="bg-background p-6 sm:p-7">
         <h3 class="text-lg font-semibold tracking-tight">Your own board, going quiet</h3>
         <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-          The same channels also carry your tracking nudges — a saved job you haven't applied to,
-          an application gone silent, an interview coming up.
+          The same channels also carry your tracking nudges — a saved job you haven't applied to, an application gone
+          silent, an interview coming up.
         </p>
         <a
           href={resolve('/features/tracking')}
@@ -142,8 +141,7 @@
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Two kinds of email, one settings page.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
-        Both mirror the real template — the same card, the same brand button, the same opt-out
-        line at the bottom.
+        Both mirror the real template — the same card, the same brand button, the same opt-out line at the bottom.
       </p>
     </div>
     <div class="mt-10 grid gap-6 lg:grid-cols-2">
@@ -193,17 +191,19 @@
       </div>
       <div>
         <p class="max-w-md leading-relaxed text-muted-foreground">
-          Pick the channel — any combination sends, and one you never connect is simply skipped —
-          and set quiet hours; nothing arrives while they're on. A daily digest is exempt, since
-          it already fires once at a time you chose.
+          Pick the channel — any combination sends, and one you never connect is simply skipped — and set quiet hours;
+          nothing arrives while they're on. A daily digest is exempt, since it already fires once at a time you chose.
         </p>
         <div class="mt-6 flex flex-wrap items-center gap-4 text-muted-foreground">
           <span class="flex items-center gap-1.5 text-sm"><Mail class="size-4" aria-hidden="true" /> Email</span>
-          <span class="flex items-center gap-1.5 text-sm"><ProviderIcon provider="telegram" class="size-4" /> Telegram</span>
+          <span class="flex items-center gap-1.5 text-sm"
+            ><ProviderIcon provider="telegram" class="size-4" /> Telegram</span
+          >
           <span class="flex items-center gap-1.5 text-sm"><Smartphone class="size-4" aria-hidden="true" /> Push</span>
         </div>
         <div class="mt-8">
-          <Button href={resolve('/my/notifications/settings')} variant="primary" size="lg">Notification settings</Button>
+          <Button href={resolve('/my/notifications/settings')} variant="primary" size="lg">Notification settings</Button
+          >
         </div>
       </div>
     </div>
@@ -233,8 +233,7 @@
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
       <h2 class="text-2xl font-semibold tracking-tight">Stop checking back to find out.</h2>
       <p class="max-w-xl leading-relaxed text-muted-foreground">
-        Save the next search worth watching and freehire tells you the moment — or the day — it
-        matters.
+        Save the next search worth watching and freehire tells you the moment — or the day — it matters.
       </p>
       <div class="flex flex-wrap gap-3">
         <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>

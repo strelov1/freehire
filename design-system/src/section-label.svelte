@@ -16,6 +16,10 @@
   }: { text: string; as?: 'p' | 'h2' | 'h3'; class?: string; style?: string } = $props();
 </script>
 
-<svelte:element this={as} class={cn('text-xs font-medium uppercase tracking-wider text-muted-foreground', className)} {style}>
+<svelte:element
+  this={as}
+  class={cn('text-xs font-medium uppercase tracking-wider text-muted-foreground', className)}
+  {style}
+>
   {text}
 </svelte:element>

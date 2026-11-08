@@ -43,9 +43,7 @@
   // search. The raw Bearer-header call still works (noted in the page intro),
   // but the CLI is the intended client — see /cli.
   const cliExample = $derived(
-    revealed
-      ? `freehire auth login --token ${revealed.token}\nfreehire search "golang" --remote`
-      : '',
+    revealed ? `freehire auth login --token ${revealed.token}\nfreehire search "golang" --remote` : '',
   );
 
   // Load once the session is confirmed (the boot-time /me resolution may still be
@@ -172,9 +170,14 @@
         <h2 class="text-lg font-semibold tracking-tight">{s.title}</h2>
         <p class="text-sm text-muted-foreground">
           {s.intro.lead}
-          <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline">{s.intro.cliLink}</a>{s.intro.orSendDirectly}
-          <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs">Authorization: Bearer &lt;key&gt;</code>{s.intro.seeThe}
-          <a href={resolve('/docs/api')} class="font-medium text-foreground underline-offset-4 hover:underline">{s.intro.apiReferenceLink}</a>
+          <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline"
+            >{s.intro.cliLink}</a
+          >{s.intro.orSendDirectly}
+          <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs">Authorization: Bearer &lt;key&gt;</code>{s.intro
+            .seeThe}
+          <a href={resolve('/docs/api')} class="font-medium text-foreground underline-offset-4 hover:underline"
+            >{s.intro.apiReferenceLink}</a
+          >
           {s.intro.apiReferenceTail}
         </p>
       </div>
@@ -242,7 +245,9 @@
           class="overflow-x-auto rounded bg-background px-3 py-2 font-mono text-xs text-muted-foreground">{cliExample}</pre>
         <p class="text-xs text-muted-foreground">
           {s.reveal.newToCli}
-          <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline">{s.reveal.commandReferenceLink}</a>.
+          <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline"
+            >{s.reveal.commandReferenceLink}</a
+          >.
         </p>
       </div>
     {/if}

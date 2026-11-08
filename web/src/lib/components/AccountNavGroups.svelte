@@ -32,17 +32,22 @@
   const groups = $derived(
     workspaceNav(workspaceId, currentUser()?.role === 'moderator', currentUser()?.beta_tester ?? false),
   );
-  const activeHref = $derived(activeSection(path, groups.flatMap((g) => g.items))?.href);
+  const activeHref = $derived(
+    activeSection(
+      path,
+      groups.flatMap((g) => g.items),
+    )?.href,
+  );
 
   const rowClass = (active: boolean) =>
     cn(
       'flex items-center rounded-md transition-colors',
-      variant === 'rail' ? 'justify-center p-2' : 'px-3 py-2 text-sm',
+      variant === 'rail' ? 'justify-center p-2' : variant === 'sidebar' ? 'px-3 py-1.5 text-sm' : 'px-3 py-2 text-sm',
       variant === 'sidebar' && 'gap-2',
       variant === 'drawer' && 'gap-3 any-pointer-coarse:min-h-11',
       iconOnly && 'justify-center',
       active
-        ? 'bg-brand/10 font-medium text-brand-strong'
+        ? 'bg-accent font-medium text-brand-strong'
         : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
     );
 </script>
@@ -51,7 +56,9 @@
      since its sidebar no longer carries the sections you might be looking for. -->
 {#if workspaceId !== 'seeker' && !compact}
   {@const Icon = workspaceIcons[workspaceId]}
-  <div class="mb-2 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground">
+  <div
+    class="mb-2 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground"
+  >
     <Icon class="size-4 shrink-0" aria-hidden="true" />
     {s.workspaces[workspaceId]}
   </div>

@@ -34,9 +34,7 @@ const REGIONS: { code: string; short: string }[] = [
   { code: 'cis', short: 'CIS' },
 ];
 
-const REGION_LABELS: Record<string, string> = Object.fromEntries(
-  REGIONS.map((r) => [r.code, r.short]),
-);
+const REGION_LABELS: Record<string, string> = Object.fromEntries(REGIONS.map((r) => [r.code, r.short]));
 
 export function regionLabel(code: string): string {
   return label(REGION_LABELS, code);

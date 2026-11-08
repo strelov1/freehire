@@ -234,6 +234,7 @@ paths:
         - $ref: "#/components/parameters/SourceTypeExclude"
         - $ref: "#/components/parameters/CompanySlugExclude"
         - $ref: "#/components/parameters/FormerEmployers"
+        - $ref: "#/components/parameters/Watchlist"
       responses:
         "200":
           description: Matching jobs with pagination metadata.
@@ -523,8 +524,8 @@ paths:
         Return facet values, counts, canonical skill slugs, and numeric ranges
         for the postings matching the same filter grammar the search endpoints
         take. Call this before applying any uncertain filter.
-        `former_employers` is ignored, so facet counts do not narrow to past
-        employers even for signed-in callers.
+        `former_employers` and `watchlist` are ignored, so facet counts do not
+        narrow to past employers or to the watchlist even for signed-in callers.
 
         A distribution is counted per facet and the wide-valued ones (`cities`,
         `skills`) dominate, so narrow with `facets=` whenever you read only a few.
@@ -1453,6 +1454,23 @@ components:
         Read only for a signed-in caller (session cookie or API key). Anonymous, it filters
         nothing and is reported in `meta.ignored_params`. `false` filters
         nothing.
+    Watchlist:
+      name: watchlist
+      in: query
+      schema:
+        type: boolean
+      description: |
+        Only postings at the companies on the signed-in caller's own watchlist
+        (up to 5,000 companies, managed in the web app). Combines with every
+        other filter, `former_employers` included (the intersection);
+        `meta.total` counts the narrowed result. A saved search carrying
+        `watchlist=true` is the watchlist alert: it is resolved per subscriber
+        to their own companies each time it runs.
+
+        An empty watchlist answers empty, never the whole catalogue. Read only
+        for a signed-in caller (session cookie or API key). Anonymous, it
+        filters nothing and is reported in `meta.ignored_params`. `false`
+        filters nothing.
     ViaRecruiter:
       name: via_recruiter
       in: query

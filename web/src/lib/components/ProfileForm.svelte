@@ -38,7 +38,9 @@
     uploadedAt
       ? format(s.uploaded, {
           date: new Date(uploadedAt).toLocaleDateString(locale(), {
-            year: 'numeric', month: 'short', day: 'numeric',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
           }),
         })
       : s.onFile,
@@ -79,8 +81,7 @@
         onSaved?.();
         resumeNote = format(s.added, { skills: String(addedSkills), roles: String(addedSpecs) });
         if (addedSkills > 0) resumeNote += ' ' + s.seeSkills;
-      } else if (cappedSpecs > 0)
-        resumeNote = format(s.limitReached, { max: String(MAX_SPECIALIZATIONS) });
+      } else if (cappedSpecs > 0) resumeNote = format(s.limitReached, { max: String(MAX_SPECIALIZATIONS) });
       else if (cv.skills.length === 0 && cv.categories.length === 0) resumeNote = s.noSkills;
       else resumeNote = s.alreadyListed;
     } catch (err) {
@@ -157,14 +158,8 @@
        résumé, /my/cvs being the per-vacancy builder. `scroll-mt-20` clears the sticky
        `h-14` TopBar. -->
   <div id="account-cv" class="flex scroll-mt-20 flex-col gap-1.5">
-    <span class="text-sm font-medium">{s.cv}</span>
-    <input
-      type="file"
-      accept="application/pdf,.pdf"
-      class="hidden"
-      bind:this={fileInput}
-      onchange={onResumeFile}
-    />
+    <span class="text-base font-semibold">{s.cv}</span>
+    <input type="file" accept="application/pdf,.pdf" class="hidden" bind:this={fileInput} onchange={onResumeFile} />
     <!-- A drop-target enhancement over controls (the buttons below) that are already
          fully keyboard-accessible on their own. -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -238,8 +233,6 @@
       <p class="text-xs text-muted-foreground">{resumeNote}</p>
     {/if}
   </div>
-
-
 </div>
 
 <ConfirmDialog

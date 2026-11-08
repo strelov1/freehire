@@ -11,10 +11,7 @@ function familyMark(icon: FamilyIconName): SeeAlsoMark {
 // carries no facet params) and any brand image a backer lookup already found.
 // Precedence: backer image > curated tech logo > country flag > family icon —
 // see design.md's "Resolution order in buildSeeAlso()".
-export function resolveSeeAlsoMark(
-  params: Record<string, string> | null,
-  backerImageSrc: string | null
-): SeeAlsoMark {
+export function resolveSeeAlsoMark(params: Record<string, string> | null, backerImageSrc: string | null): SeeAlsoMark {
   if (backerImageSrc) return { kind: 'image', src: backerImageSrc };
   if (!params) return familyMark('tech');
 

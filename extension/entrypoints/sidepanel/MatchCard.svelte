@@ -161,9 +161,7 @@
   });
   // Firefox has no chrome.debugger, the only way background can place a file into
   // an upload field — so the action is not offered there at all.
-  let showAttach = $derived(
-    !import.meta.env.FIREFOX && isCatalogJob && hasUploadField && tailoredCV !== null,
-  );
+  let showAttach = $derived(!import.meta.env.FIREFOX && isCatalogJob && hasUploadField && tailoredCV !== null);
 
   async function attachTailoredCV() {
     if (attaching || !tailoredCV) return;
@@ -238,9 +236,7 @@
       {#if analysisData && !analysisData.has_cv}
         <div class="upload-row">
           <span class="upload-hint"><FileText class="icon-sm" />Upload a CV to analyse</span>
-          <Button variant="primary" size="sm" href={profileUrl} target="_blank" rel="noreferrer">
-            Upload CV
-          </Button>
+          <Button variant="primary" size="sm" href={profileUrl} target="_blank" rel="noreferrer">Upload CV</Button>
         </div>
       {:else if analysis}
         <a class="analysis-card" href={tailorUrl} target="_blank" rel="noreferrer">
@@ -276,13 +272,7 @@
 
     {#if showAttach}
       <div class="attach">
-        <Button
-          class="attach-btn"
-          variant="outline"
-          size="sm"
-          disabled={attaching}
-          onclick={attachTailoredCV}
-        >
+        <Button class="attach-btn" variant="outline" size="sm" disabled={attaching} onclick={attachTailoredCV}>
           <Paperclip class="icon-sm" />
           {attaching ? 'Attaching…' : 'Attach tailored CV'}
         </Button>
@@ -294,14 +284,7 @@
       </div>
     {/if}
 
-    <Button
-      class="save"
-      variant="outline"
-      size="sm"
-      aria-pressed={saved}
-      disabled={savePending}
-      onclick={toggleSave}
-    >
+    <Button class="save" variant="outline" size="sm" aria-pressed={saved} disabled={savePending} onclick={toggleSave}>
       <Bookmark class={saved ? 'icon-sm filled' : 'icon-sm'} />
       {saved ? 'Saved' : 'Save'}
     </Button>
@@ -335,34 +318,34 @@
     window.open(tailorUrl, '_blank', 'noopener,noreferrer');
   }}
 >
-    <div class="confirm-body">
-      <div class="confirm-section">
-        <div class="confirm-label">Skills coverage</div>
-        <div class="confirm-row">
-          <span class="confirm-count">{match.matched.length} of {match.total} required skills</span>
-          <span class="confirm-pct {tone}">{pct}%</span>
-        </div>
-        <div class="bar"><div class="fill {tone}" style="width:{pct}%"></div></div>
-        <div class="chips">
-          {#each match.matched as s (s)}<span class="chip good" aria-label="{s} — you have this skill">{s}</span>{/each}
-          {#each match.missing as s (s)}<span class="chip miss" aria-label="{s} — missing">{s}</span>{/each}
-        </div>
+  <div class="confirm-body">
+    <div class="confirm-section">
+      <div class="confirm-label">Skills coverage</div>
+      <div class="confirm-row">
+        <span class="confirm-count">{match.matched.length} of {match.total} required skills</span>
+        <span class="confirm-pct {tone}">{pct}%</span>
       </div>
-
-      {#if blockers.unmet.length > 0 || blockers.met.length > 0}
-        <div class="confirm-section">
-          <div class="confirm-label">Requirements</div>
-          <ul class="confirm-checklist">
-            {#each blockers.unmet as b (b.category + b.reason)}
-              <li class="confirm-check warn"><TriangleAlert class="icon-sm" /><span>{b.reason}</span></li>
-            {/each}
-            {#each blockers.met as b (b.category + b.reason)}
-              <li class="confirm-check good"><Check class="icon-sm" /><span>{b.reason}</span></li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
+      <div class="bar"><div class="fill {tone}" style="width:{pct}%"></div></div>
+      <div class="chips">
+        {#each match.matched as s (s)}<span class="chip good" aria-label="{s} — you have this skill">{s}</span>{/each}
+        {#each match.missing as s (s)}<span class="chip miss" aria-label="{s} — missing">{s}</span>{/each}
+      </div>
     </div>
+
+    {#if blockers.unmet.length > 0 || blockers.met.length > 0}
+      <div class="confirm-section">
+        <div class="confirm-label">Requirements</div>
+        <ul class="confirm-checklist">
+          {#each blockers.unmet as b (b.category + b.reason)}
+            <li class="confirm-check warn"><TriangleAlert class="icon-sm" /><span>{b.reason}</span></li>
+          {/each}
+          {#each blockers.met as b (b.category + b.reason)}
+            <li class="confirm-check good"><Check class="icon-sm" /><span>{b.reason}</span></li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+  </div>
 </ConfirmDialog>
 
 <style>

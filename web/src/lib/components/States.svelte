@@ -22,9 +22,7 @@
     onRetry?: () => void;
   } = $props();
 
-  const fallback = $derived(
-    message ?? (state === 'error' ? 'Something went wrong.' : 'Nothing here yet.'),
-  );
+  const fallback = $derived(message ?? (state === 'error' ? 'Something went wrong.' : 'Nothing here yet.'));
 </script>
 
 {#if state === 'loading'}

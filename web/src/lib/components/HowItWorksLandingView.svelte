@@ -22,8 +22,8 @@
       Five steps before a posting reaches you.
     </h1>
     <p class="max-w-xl text-base leading-relaxed text-muted-foreground">
-      Crawled, tagged, checked for duplicates, and rebuilt into the index you search —
-      automatically, with no person touching an individual listing.
+      Crawled, tagged, checked for duplicates, and rebuilt into the index you search — automatically, with no person
+      touching an individual listing.
     </p>
     <div class="flex flex-wrap gap-3">
       <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>

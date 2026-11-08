@@ -7,8 +7,7 @@
   let { data }: { data: PageData } = $props();
 
   const canonical = $derived(`${page.url.origin}/mentors`);
-  const description =
-    'Book half an hour with someone who actually works there, before you apply.';
+  const description = 'Book half an hour with someone who actually works there, before you apply.';
 </script>
 
 <Seo title="Mentors · freehire" {description} {canonical} />

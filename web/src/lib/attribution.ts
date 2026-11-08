@@ -96,10 +96,7 @@ export function gaSessionId(cookie: string, measurementId: string): string | und
  *  the server confirmed it, or the request went out and no answer could be read (it
  *  may well have been processed). Only a definite failure - the request could not be
  *  built, or the server refused it - returns false. */
-export async function reportSignupAttribution(
-  method: 'oauth' | 'password',
-  measurementId: string,
-): Promise<boolean> {
+export async function reportSignupAttribution(method: 'oauth' | 'password', measurementId: string): Promise<boolean> {
   let init: RequestInit;
   try {
     const cookie = document.cookie;

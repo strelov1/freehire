@@ -78,7 +78,7 @@ const ALLOWED = [
     kind: 'Tailwind arbitrary value',
     reason:
       "the xs tile (size-5, promoted from CompanyLogo's smallest call sites) is too small " +
-      "for any stock text size — 9px is a deliberate one-off, not a value worth a token",
+      'for any stock text size — 9px is a deliberate one-off, not a value worth a token',
   },
   {
     file: 'provider-icon.svelte',
@@ -118,7 +118,9 @@ function fail(message) {
 // The package radius: zero, and it stays zero.
 function checkPackage() {
   const used = new Set();
-  const files = readdirSync(packageSrc).filter((f) => f.endsWith('.svelte')).sort();
+  const files = readdirSync(packageSrc)
+    .filter((f) => f.endsWith('.svelte'))
+    .toSorted();
 
   for (const file of files) {
     for (const hit of hitsIn(readFileSync(join(packageSrc, file), 'utf-8'), RADII.package)) {

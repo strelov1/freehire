@@ -114,11 +114,7 @@
   });
 
   const canSubmit = $derived(
-    url.trim() !== '' &&
-      title.trim() !== '' &&
-      company.trim() !== '' &&
-      existingSlug === null &&
-      !submitting,
+    url.trim() !== '' && title.trim() !== '' && company.trim() !== '' && existingSlug === null && !submitting,
   );
 
   // Shared surface for the native selects so they match the Input primitive.
@@ -220,8 +216,7 @@
     } catch (err) {
       // 409 means the URL is already awaiting review or already in the catalogue;
       // surface the backend message.
-      formError =
-        err instanceof ApiError ? err.message : 'Could not submit the job. Please try again.';
+      formError = err instanceof ApiError ? err.message : 'Could not submit the job. Please try again.';
     } finally {
       submitting = false;
     }
@@ -238,21 +233,18 @@
       </p>
       <h1 class="text-3xl font-semibold tracking-tight">Post your opening</h1>
       <p class="max-w-2xl text-sm text-muted-foreground">
-        Add the skills, location, work format and salary — the right candidates find it faster.
-        A moderator reviews every submission before it goes live in the catalogue.
+        Add the skills, location, work format and salary — the right candidates find it faster. A moderator reviews
+        every submission before it goes live in the catalogue.
       </p>
     </header>
 
     {#if submitted}
-      <div
-        class="flex items-start gap-3 rounded-lg border border-border bg-secondary/40 p-4 text-sm"
-        role="status"
-      >
+      <div class="flex items-start gap-3 rounded-lg border border-border bg-secondary/40 p-4 text-sm" role="status">
         <CheckCircle2 class="mt-0.5 size-5 shrink-0 text-brand-strong" />
         <div>
           Thanks — <span class="font-medium">{submitted.title}</span> at
-          <span class="font-medium">{submitted.company}</span> was submitted and is awaiting review.
-          You can track it under
+          <span class="font-medium">{submitted.company}</span> was submitted and is awaiting review. You can track it
+          under
           <a href={resolve('/my/contributions/vacancies')} class="underline">My submissions</a>.
         </div>
       </div>
@@ -298,15 +290,10 @@
         />
       {/if}
 
-      <form
-        onsubmit={submit}
-        class={cn('flex flex-col divide-y divide-border', activeTab !== 'details' && 'hidden')}
-      >
+      <form onsubmit={submit} class={cn('flex flex-col divide-y divide-border', activeTab !== 'details' && 'hidden')}>
         <!-- Basics: the required identity of the posting. -->
         <fieldset class="flex flex-col gap-4 py-6">
-          <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Basics
-          </legend>
+          <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"> Basics </legend>
           <div class="flex flex-col gap-1">
             <span class="flex items-center gap-1.5 text-sm font-medium">
               <Link2 class="size-3.5 text-muted-foreground" />
@@ -335,14 +322,12 @@
                 This job is already on freehire —
                 <a
                   href={resolve('/jobs/[slug]', { slug: existingSlug })}
-                  class="font-medium text-foreground underline underline-offset-4 hover:no-underline"
-                  >open it</a
+                  class="font-medium text-foreground underline underline-offset-4 hover:no-underline">open it</a
                 >. There is no need to submit it again.
               </p>
             {:else if prefillMiss}
               <p class="text-xs text-muted-foreground">
-                Couldn't find anything to fill in from that link — no problem, just fill in the
-                rest below.
+                Couldn't find anything to fill in from that link — no problem, just fill in the rest below.
               </p>
             {/if}
           </div>
@@ -366,9 +351,7 @@
 
         <!-- Details: the structured facets that make the vacancy searchable. -->
         <fieldset class="flex flex-col gap-4 py-6">
-          <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Details
-          </legend>
+          <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"> Details </legend>
           <div class="flex flex-col gap-4 sm:flex-row">
             <label class="flex flex-1 flex-col gap-1">
               <span class="flex items-center gap-1.5 text-sm font-medium">
@@ -476,8 +459,7 @@
                 placeholder="Min"
                 aria-label="Minimum salary"
                 value={salaryMin != null ? String(salaryMin) : ''}
-                oninput={(e) =>
-                  (salaryMin = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+                oninput={(e) => (salaryMin = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
                 class="w-24"
               />
               <span class="text-muted-foreground">–</span>
@@ -487,8 +469,7 @@
                 placeholder="Max"
                 aria-label="Maximum salary"
                 value={salaryMax != null ? String(salaryMax) : ''}
-                oninput={(e) =>
-                  (salaryMax = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+                oninput={(e) => (salaryMax = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
                 class="w-24"
               />
               <select bind:value={currency} class={selectClass} aria-label="Currency">

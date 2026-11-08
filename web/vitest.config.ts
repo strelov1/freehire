@@ -38,12 +38,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'clover', 'json', 'lcov'],
       include: ['src/**/*.{ts,js,svelte}'],
-      exclude: [
-        'src/**/*.{test,spec}.ts',
-        'src/**/*.d.ts',
-        'src/**/generated/**',
-        'src/**/fixtures/**',
-      ],
+      exclude: ['src/**/*.{test,spec}.ts', 'src/**/*.d.ts', 'src/**/generated/**', 'src/**/fixtures/**'],
     },
     projects: [
       {

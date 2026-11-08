@@ -59,7 +59,11 @@ export function notificationTarget(
   }
   // A buddy mock notice carries no slug; it opens the member's own mock interviews, which
   // is where its email links too.
-  if (item.kind === 'buddy_mock_booked' || item.kind === 'buddy_mock_cancelled' || item.kind === 'buddy_mock_reminder') {
+  if (
+    item.kind === 'buddy_mock_booked' ||
+    item.kind === 'buddy_mock_cancelled' ||
+    item.kind === 'buddy_mock_reminder'
+  ) {
     return { kind: 'mocks' };
   }
   // A reaction opens the feed it was given in; a message or an invitation, the chats.

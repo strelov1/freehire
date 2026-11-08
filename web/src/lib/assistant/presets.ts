@@ -43,10 +43,7 @@ const PROFILE_KICKOFF =
 /** Server-minted atom ids only — never treat free text in `atoms` as kickoff prose. */
 // Built from a fragment so the source never contains `-[…]` (token-coverage false positive).
 const HEX = '[0-9a-f]';
-const ATOM_ID_RE = new RegExp(
-  `^${HEX}{8}-${HEX}{4}-${HEX}{4}-${HEX}{4}-${HEX}{12}$`,
-  'i',
-);
+const ATOM_ID_RE = new RegExp(`^${HEX}{8}-${HEX}{4}-${HEX}{4}-${HEX}{4}-${HEX}{12}$`, 'i');
 
 /**
  * The opening message for the experience interview, optionally aimed at specific
@@ -105,10 +102,7 @@ export function opensInRail(preset: string): boolean {
  * redirect to where the caller belongs, so it replaces the entry rather than becoming a
  * step they can press Back into; choosing another chat is a real move and pushes one.
  */
-export function historyModeFor(
-  currentId: string | undefined,
-  nextId: string,
-): 'replace' | 'push' | 'none' {
+export function historyModeFor(currentId: string | undefined, nextId: string): 'replace' | 'push' | 'none' {
   if (currentId === nextId) return 'none';
   return currentId ? 'push' : 'replace';
 }

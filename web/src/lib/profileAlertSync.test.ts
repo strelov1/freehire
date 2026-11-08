@@ -121,7 +121,6 @@ describe('syncProfileAlert', () => {
   });
 });
 
-
 it('removes the derived alert when the last effective profile preference is cleared', async () => {
   const { syncProfileAlert } = await import('./profileAlertSync');
   profileStoreMock.profile = { ...staleProfile, skills: [], specializations: [] };

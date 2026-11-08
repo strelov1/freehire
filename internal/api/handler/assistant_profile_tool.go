@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
@@ -52,7 +53,7 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 			// guards cvH itself). Without this the absence is a nil dereference inside the
 			// SSE stream's goroutine, which the candidate reads as a turn that died.
 			if h.profile == nil || h.profile.userProfile == nil {
-				return nil, errors.New("the saved profile is not available")
+				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "the saved profile is not available")
 			}
 			profile, err := h.profile.userProfile.Get(ctx, userID)
 			if errors.Is(err, userprofile.ErrNotFound) {

@@ -31,9 +31,7 @@ function company(over: Partial<Company> = {}, info?: CompanyInfo): Company {
 
 describe('companyDescription', () => {
   test('is the trimmed company-info description', () => {
-    expect(companyDescription(company({}, { description: '  Acme builds tools.  ' }))).toBe(
-      'Acme builds tools.'
-    );
+    expect(companyDescription(company({}, { description: '  Acme builds tools.  ' }))).toBe('Acme builds tools.');
   });
 
   test('is empty when the company has no company-info at all', () => {
@@ -47,9 +45,11 @@ describe('companyDescription', () => {
 
 describe('companyBadges', () => {
   test('names the three curated YC flags in a fixed order', () => {
-    expect(
-      companyBadges(company({}, { top_company: true, is_hiring: true, stage: 'Seed' }))
-    ).toEqual(['YC Top Company', 'Hiring', 'Seed-stage']);
+    expect(companyBadges(company({}, { top_company: true, is_hiring: true, stage: 'Seed' }))).toEqual([
+      'YC Top Company',
+      'Hiring',
+      'Seed-stage',
+    ]);
   });
 
   test('omits the flags that are absent or false', () => {
@@ -73,7 +73,7 @@ describe('companyFacts', () => {
         employee_count: 1200,
         hq_country: 'US',
         organization_type: 'Private',
-      })
+      }),
     );
     expect(facts).toEqual([
       { term: 'Founded', value: '2015' },
@@ -84,15 +84,11 @@ describe('companyFacts', () => {
   });
 
   test('shows a headquarters that is not a country code as text, without a flag', () => {
-    expect(companyFacts(company({ hq_country: 'Stockholm' }))).toEqual([
-      { term: 'Headquarters', value: 'Stockholm' },
-    ]);
+    expect(companyFacts(company({ hq_country: 'Stockholm' }))).toEqual([{ term: 'Headquarters', value: 'Stockholm' }]);
   });
 
   test('places the CEO between headquarters and organisation type', () => {
-    expect(
-      companyFacts(company({ hq_country: 'US', organization_type: 'Private' }, { ceo: 'Ada Lovelace' }))
-    ).toEqual([
+    expect(companyFacts(company({ hq_country: 'US', organization_type: 'Private' }, { ceo: 'Ada Lovelace' }))).toEqual([
       { term: 'Headquarters', value: 'United States', flag: 'US' },
       { term: 'CEO', value: 'Ada Lovelace' },
       { term: 'Type', value: 'Private' },
@@ -106,9 +102,7 @@ describe('companyFacts', () => {
   });
 
   test('falls back to the bare symbol when the exchange is unknown', () => {
-    expect(companyFacts(company({}, { stock: { symbol: 'ACME' } }))).toEqual([
-      { term: 'Listed', value: 'ACME' },
-    ]);
+    expect(companyFacts(company({}, { stock: { symbol: 'ACME' } }))).toEqual([{ term: 'Listed', value: 'ACME' }]);
   });
 
   test('drops a stock entry that carries no symbol', () => {
@@ -116,17 +110,14 @@ describe('companyFacts', () => {
   });
 
   test('composes a funding line from the present parts only', () => {
-    expect(
-      companyFacts(company({}, { funding: { type: 'Series C', amount: 250_000_000, year: 2021 } }))
-    ).toEqual([{ term: 'Funding', value: 'Series C · $250M · 2021' }]);
-    expect(companyFacts(company({}, { funding: { type: 'Seed' } }))).toEqual([
-      { term: 'Funding', value: 'Seed' },
+    expect(companyFacts(company({}, { funding: { type: 'Series C', amount: 250_000_000, year: 2021 } }))).toEqual([
+      { term: 'Funding', value: 'Series C · $250M · 2021' },
     ]);
+    expect(companyFacts(company({}, { funding: { type: 'Seed' } }))).toEqual([{ term: 'Funding', value: 'Seed' }]);
   });
 
   test('scales a funding amount to K, M and B', () => {
-    const amountOf = (amount: number) =>
-      companyFacts(company({}, { funding: { amount } }))[0]?.value;
+    const amountOf = (amount: number) => companyFacts(company({}, { funding: { amount } }))[0]?.value;
     expect(amountOf(500_000)).toBe('$500K');
     expect(amountOf(250_000_000)).toBe('$250M');
     expect(amountOf(1_200_000_000)).toBe('$1.2B');
@@ -135,9 +126,7 @@ describe('companyFacts', () => {
   });
 
   test('lists the parent company and joins the subsidiaries', () => {
-    expect(
-      companyFacts(company({}, { parent: 'Globex', subsidiaries: ['Initech', 'Umbrella'] }))
-    ).toEqual([
+    expect(companyFacts(company({}, { parent: 'Globex', subsidiaries: ['Initech', 'Umbrella'] }))).toEqual([
       { term: 'Parent', value: 'Globex' },
       { term: 'Subsidiaries', value: 'Initech, Umbrella' },
     ]);
@@ -159,16 +148,10 @@ describe('companySocials', () => {
           facebook: 'https://facebook.com/acme',
           linkedin: 'https://linkedin.com/company/acme',
           twitter: 'https://twitter.com/acme',
-        }
-      )
+        },
+      ),
     );
-    expect(socials.map((s) => s.key)).toEqual([
-      'website',
-      'linkedin',
-      'twitter',
-      'facebook',
-      'instagram',
-    ]);
+    expect(socials.map((s) => s.key)).toEqual(['website', 'linkedin', 'twitter', 'facebook', 'instagram']);
   });
 
   test('names each link for a screen reader', () => {
@@ -186,9 +169,7 @@ describe('companySocials', () => {
   });
 
   test('trims surrounding whitespace off a link', () => {
-    expect(companySocials(company({}, { website: '  https://acme.com  ' }))[0]?.href).toBe(
-      'https://acme.com'
-    );
+    expect(companySocials(company({}, { website: '  https://acme.com  ' }))[0]?.href).toBe('https://acme.com');
   });
 
   // company_info comes from an external importer, and these values land in an href.
@@ -205,9 +186,9 @@ describe('companySocials', () => {
             twitter: 'file:///etc/passwd',
             facebook: '//evil.example.com',
             instagram: 'https://instagram.com/acme',
-          }
-        )
-      ).map((s) => s.key)
+          },
+        ),
+      ).map((s) => s.key),
     ).toEqual(['instagram']);
   });
 
@@ -223,28 +204,25 @@ describe('companySocials', () => {
 describe('companyLocations', () => {
   test('is the ISO codes of the offices, upper-cased', () => {
     expect(
-      companyLocations(
-        company({}, { locations: [{ code: 'us', name: 'United States' }, { code: 'JP' }] })
-      )
+      companyLocations(company({}, { locations: [{ code: 'us', name: 'United States' }, { code: 'JP' }] })),
     ).toEqual(['US', 'JP']);
   });
 
   test('drops duplicates while keeping the first position', () => {
-    expect(
-      companyLocations(company({}, { locations: [{ code: 'US' }, { code: 'DE' }, { code: 'us' }] }))
-    ).toEqual(['US', 'DE']);
-  });
-
-  test('ignores entries with no code', () => {
-    expect(companyLocations(company({}, { locations: [{ name: 'Nowhere' }, { code: 'FR' }] }))).toEqual([
-      'FR',
+    expect(companyLocations(company({}, { locations: [{ code: 'US' }, { code: 'DE' }, { code: 'us' }] }))).toEqual([
+      'US',
+      'DE',
     ]);
   });
 
+  test('ignores entries with no code', () => {
+    expect(companyLocations(company({}, { locations: [{ name: 'Nowhere' }, { code: 'FR' }] }))).toEqual(['FR']);
+  });
+
   test('ignores anything that is not a two-letter code', () => {
-    expect(
-      companyLocations(company({}, { locations: [{ code: 'USA' }, { code: 'X' }, { code: 'GB' }] }))
-    ).toEqual(['GB']);
+    expect(companyLocations(company({}, { locations: [{ code: 'USA' }, { code: 'X' }, { code: 'GB' }] }))).toEqual([
+      'GB',
+    ]);
   });
 
   test('is empty when the company lists no offices', () => {

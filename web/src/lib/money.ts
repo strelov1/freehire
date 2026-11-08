@@ -33,12 +33,15 @@ export function formatMinorUnits(
 ): string {
   const code = (currency || 'usd').toUpperCase();
   const fmt = new Intl.NumberFormat(locale, { style: 'currency', currency: code });
-  const exponent = STRIPE_HUNDREDFOLD.has(code)
-    ? 2
-    : (fmt.resolvedOptions().maximumFractionDigits ?? 2);
+  const exponent = STRIPE_HUNDREDFOLD.has(code) ? 2 : (fmt.resolvedOptions().maximumFractionDigits ?? 2);
   const value = minor / 10 ** exponent;
   if (trimWhole && Number.isInteger(value)) {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency: code, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: code,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
   }
   return fmt.format(value);
 }

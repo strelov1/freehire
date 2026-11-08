@@ -33,7 +33,6 @@ export const NarrowTriggerLongContent: Story = {
   args: {
     side: 'bottom',
     narrowTrigger: true,
-    label:
-      'Click a filter once to include it, again to exclude it, again to clear it. See how filters work.',
+    label: 'Click a filter once to include it, again to exclude it, again to clear it. See how filters work.',
   },
 };

@@ -41,9 +41,7 @@
       return;
     }
     specError = null;
-    const next = has
-      ? profile.specializations.filter((s) => s !== value)
-      : [...profile.specializations, value];
+    const next = has ? profile.specializations.filter((v) => v !== value) : [...profile.specializations, value];
     await specStatus.run(async () => {
       await profileStore.updateSpecializations(next);
       onProfileChanged?.();
@@ -58,7 +56,7 @@
   async function toggleSeniority(value: string) {
     if (levelStatus.saving) return;
     const next = profile.seniorities.includes(value)
-      ? profile.seniorities.filter((s) => s !== value)
+      ? profile.seniorities.filter((v) => v !== value)
       : [...profile.seniorities, value];
     await levelStatus.run(async () => {
       await profileStore.updateSeniorities(next);

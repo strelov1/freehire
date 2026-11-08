@@ -27,9 +27,7 @@
   let {
     prefetched,
   }: {
-    prefetched:
-      | { events: TimelineEvent[]; interviews: ScheduledInterview[]; year: number; month: number }
-      | undefined;
+    prefetched: { events: TimelineEvent[]; interviews: ScheduledInterview[]; year: number; month: number } | undefined;
   } = $props();
 
   const s = $derived(t(messages, locale()));
@@ -118,9 +116,11 @@
     void show(new Date(date.getFullYear(), date.getMonth(), date.getDate() + by * 7));
   }
 
-  const weekRange = $derived(days.length
-    ? `${days[0]?.date.toLocaleDateString(locale(), { month: 'short', day: 'numeric' })} – ${days[6]?.date.toLocaleDateString(locale(), { month: 'short', day: 'numeric' })}`
-    : '');
+  const weekRange = $derived(
+    days.length
+      ? `${days[0]?.date.toLocaleDateString(locale(), { month: 'short', day: 'numeric' })} – ${days[6]?.date.toLocaleDateString(locale(), { month: 'short', day: 'numeric' })}`
+      : '',
+  );
 
   // The mark colours carry the kind; filled versus hollow carries whether anybody but the
   // candidate set the date. Both the label and the tone come from #lib/events, shared with
@@ -183,15 +183,30 @@
     <div class="grid grid-cols-7 gap-1 border-b border-border pb-3" role="group" aria-label={s.weekLabel}>
       {#each days as day, index (day.key)}
         {@const marks = splitDayEvents(day.events, CELL_MARKS)}
-        <button type="button" onclick={() => selectDay(day.key)} aria-pressed={selectedKey === day.key}
-          aria-controls="calendar-day-panel" aria-label={cellLabel(day)}
-          class="flex min-h-20 min-w-0 flex-col items-center gap-1.5 rounded-lg py-2 text-center transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+        <button
+          type="button"
+          onclick={() => selectDay(day.key)}
+          aria-pressed={selectedKey === day.key}
+          aria-controls="calendar-day-panel"
+          aria-label={cellLabel(day)}
+          class="flex min-h-20 min-w-0 flex-col items-center gap-1.5 rounded-lg py-2 text-center transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+        >
           <span class="text-xs text-muted-foreground">{weekdays[index]}</span>
-          <span class="flex size-8 items-center justify-center rounded-full text-sm font-medium
-            {selectedKey === day.key ? 'bg-brand text-brand-foreground' : day.isToday ? 'bg-brand-muted text-brand-strong' : 'text-foreground'}">{day.dayOfMonth}</span>
+          <span
+            class="flex size-8 items-center justify-center rounded-full text-sm font-medium
+            {selectedKey === day.key
+              ? 'bg-brand text-brand-foreground'
+              : day.isToday
+                ? 'bg-brand-muted text-brand-strong'
+                : 'text-foreground'}">{day.dayOfMonth}</span
+          >
           <span class="flex h-2 items-center justify-center gap-0.5" aria-hidden="true">
             {#if day.interviews.length}<span class="size-1.5 bg-brand" title={s.interview}></span>{/if}
-            {#each marks.shown as e (e.id)}<span class="size-1.5 rounded-full {tone(e.kind)}" class:bg-current={e.observed} style="border: 1px solid currentColor"></span>{/each}
+            {#each marks.shown as e (e.id)}<span
+                class="size-1.5 rounded-full {tone(e.kind)}"
+                class:bg-current={e.observed}
+                style="border: 1px solid currentColor"
+              ></span>{/each}
             {#if marks.remaining}<span class="text-xs text-muted-foreground">+</span>{/if}
           </span>
         </button>
@@ -230,9 +245,9 @@
                     {clockOf(iv.starts_at)}
                     {#if iv.application_id}
                       · <a
-                          class="underline hover:no-underline"
-                          href={resolve('/my/tracking/[id]', { id: boardRefFor(iv) ?? '' })}>{s.applicationLink}</a
-                        >
+                        class="underline hover:no-underline"
+                        href={resolve('/my/tracking/[id]', { id: boardRefFor(iv) ?? '' })}>{s.applicationLink}</a
+                      >
                     {/if}
                     {#if iv.join_url && iv.status !== 'cancelled'}
                       ·
@@ -271,6 +286,5 @@
         </Button>
       </div>
     {/if}
-
   {/if}
 </div>

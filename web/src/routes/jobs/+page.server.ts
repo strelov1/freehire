@@ -32,6 +32,7 @@ export const load: PageServerLoad = async ({ url, fetch, request }) => {
   // keeps requests carrying a session private (see #lib/httpCache).
   const personal =
     params.get('former_employers') === 'true' ||
+    params.get('watchlist') === 'true' ||
     params.get('hide_seen') === 'true' ||
     (params.get('min_skill_match') !== null && params.get('sort') === 'match');
   const cookie = personal ? request.headers.get('cookie') : null;

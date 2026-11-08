@@ -10,7 +10,7 @@
   import { EntityLogo } from '#lib/ui/index.js';
   import CredentialBadge from './CredentialBadge.svelte';
   import BackerBadge from './BackerBadge.svelte';
-  import CompanyFollowButton from './CompanyFollowButton.svelte';
+  import WatchCompanyButton from './WatchCompanyButton.svelte';
   import VoteControl from './VoteControl.svelte';
 
   // The company's header card: identity (logo + name + tagline + follow CTA) with the
@@ -101,7 +101,9 @@
 {/snippet}
 
 <section class="rounded-2xl border border-border bg-card p-5">
-  <div class="flex items-start gap-3">
+  <!-- flex-wrap: Watch's hint and error take a row of their own under this one (basis-full),
+       so a sentence under the button never narrows the name column. -->
+  <div class="flex flex-wrap items-start gap-3">
     <EntityLogo name={company.name} src={companyLogoUrl(company.name) ?? undefined} shape="square" size="lg" />
     <div class="min-w-0 flex-1">
       <!-- break-words: a long single word ("International") is wider than the phone
@@ -117,16 +119,15 @@
            licence is not a promise about any given role. -->
       {#if company.collections?.length}
         <div class="mt-2 flex flex-wrap items-center gap-1.5">
-          <BackerBadge collections={company.collections} withLabel />
+          <!-- Three backers, then "+N": six in a row wrapped the header onto a second line. -->
+          <BackerBadge collections={company.collections} withLabel max={3} />
           <CredentialBadge collections={company.collections} />
         </div>
       {/if}
     </div>
-    <!-- flex-1 above lets the name/tagline use the full width; the follow CTA stays
+    <!-- flex-1 above lets the name/tagline use the full width; the Watch button stays
          top-right and never shrinks (it collapses to an icon on mobile itself). -->
-    <div class="shrink-0">
-      <CompanyFollowButton {slug} companyName={company.name} />
-    </div>
+    <WatchCompanyButton {slug} companyName={company.name} />
   </div>
   <!-- Feedback + votes ride the end of the industries/links row below, so the card has no
        row holding only them; with no such row they keep one of their own. -->

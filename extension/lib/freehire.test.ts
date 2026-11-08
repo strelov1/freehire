@@ -19,9 +19,7 @@ describe('freehireSlugFromUrl', () => {
   });
 
   it('works on the dev host', () => {
-    expect(freehireSlugFromUrl('http://localhost:5173/jobs/go-dev-acme-t35nijto')).toBe(
-      'go-dev-acme-t35nijto',
-    );
+    expect(freehireSlugFromUrl('http://localhost:5173/jobs/go-dev-acme-t35nijto')).toBe('go-dev-acme-t35nijto');
   });
 
   it('ignores sub-paths under a job', () => {
@@ -45,9 +43,9 @@ describe('apiErrorMessage', () => {
   it("carries the server's own sentence, which is the whole diagnosis", () => {
     // /me/autofill/run answers 409 for three unrelated states; only this
     // sentence says which one.
-    expect(
-      apiErrorMessage('/api/v1/me/autofill/run', 409, '{"error":"the browser extension is not connected"}'),
-    ).toBe('the browser extension is not connected (HTTP 409)');
+    expect(apiErrorMessage('/api/v1/me/autofill/run', 409, '{"error":"the browser extension is not connected"}')).toBe(
+      'the browser extension is not connected (HTTP 409)',
+    );
   });
 
   it('distinguishes the other states behind the same status', () => {
@@ -57,15 +55,11 @@ describe('apiErrorMessage', () => {
   });
 
   it('falls back to the path when the body says nothing', () => {
-    expect(apiErrorMessage('/api/v1/me/autofill-profile', 500, '')).toBe(
-      '/api/v1/me/autofill-profile → HTTP 500',
-    );
+    expect(apiErrorMessage('/api/v1/me/autofill-profile', 500, '')).toBe('/api/v1/me/autofill-profile → HTTP 500');
   });
 
   it('falls back when a proxy answers with something that is not our JSON', () => {
-    expect(apiErrorMessage('/api/v1/jobs/find', 502, '<html>Bad Gateway</html>')).toBe(
-      '/api/v1/jobs/find → HTTP 502',
-    );
+    expect(apiErrorMessage('/api/v1/jobs/find', 502, '<html>Bad Gateway</html>')).toBe('/api/v1/jobs/find → HTTP 502');
   });
 
   it('falls back when the JSON carries no error field', () => {

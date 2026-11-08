@@ -10,10 +10,7 @@ const msg = (seq: number, role: StoredMessage['role'], content: unknown): Stored
 
 describe('eventsFromTranscript', () => {
   it('replays a plain exchange as a prompt, an answer and a close', () => {
-    const events = eventsFromTranscript([
-      msg(1, 'user', { text: 'hi' }),
-      msg(2, 'assistant', { text: 'hello' }),
-    ]);
+    const events = eventsFromTranscript([msg(1, 'user', { text: 'hi' }), msg(2, 'assistant', { text: 'hello' })]);
     expect(events.map((e) => e.type)).toEqual(['user_prompt', 'assistant_text', 'result']);
   });
 
@@ -26,13 +23,7 @@ describe('eventsFromTranscript', () => {
       msg(3, 'tool', { tool_call_id: 'c1', name: 'search_jobs', result: '{"total":2}' }),
       msg(4, 'assistant', { text: 'Found two.' }),
     ]);
-    expect(events.map((e) => e.type)).toEqual([
-      'user_prompt',
-      'tool_use',
-      'tool_result',
-      'assistant_text',
-      'result',
-    ]);
+    expect(events.map((e) => e.type)).toEqual(['user_prompt', 'tool_use', 'tool_result', 'assistant_text', 'result']);
     const use = events[1];
     expect(use?.type === 'tool_use' ? use.input : null).toEqual({ query: 'go' });
   });

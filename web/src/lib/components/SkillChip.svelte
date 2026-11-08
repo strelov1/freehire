@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Tooltip, badgeVariants } from '#lib/ui/index.js';
+  import { Tooltip, badgeVariants, cn } from '#lib/ui/index.js';
   import { filterHref } from '#lib/enrichment.js';
   import { skillLabel } from '#lib/facets.js';
   import { skillDescription } from '#lib/skillDescriptions.js';
@@ -51,13 +51,17 @@
 <Tooltip side="top">
   <!-- Outline, the site's one chip for a skill: brand-filled here, it was a second chip style
        louder than the same skills on the cards beside it. -->
-  <span class={badgeVariants({ variant: 'outline' })}>
+  <span class={cn(badgeVariants({ variant: 'outline' }), 'group/chip')}>
     {#if linked}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
-      <a href={filterHref('skills', slug)} class="inline-flex items-center gap-1 transition hover:opacity-80" onpointerdown={keepTapOnTheLink}>
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
+      <a
+        href={filterHref('skills', slug)}
+        class="inline-flex items-center gap-1 transition hover:opacity-80"
+        onpointerdown={keepTapOnTheLink}
+      >
         <SkillIcon {slug} />
         {label}
-      </a>
+      </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
     {:else}
       <span class="inline-flex items-center gap-1">
         <SkillIcon {slug} />
@@ -70,7 +74,7 @@
          chip's own link and a near miss would navigate instead. -->
     <button
       type="button"
-      class="ml-0.5 inline-flex size-6 items-center justify-center opacity-50 transition hover:opacity-100"
+      class="-my-1 -mr-1.5 ml-0.5 inline-flex size-6 items-center justify-center opacity-40 transition hover:opacity-100 focus-visible:opacity-100 group-hover/chip:opacity-70"
       aria-label="Show what {label} is"
     >
       <span
@@ -90,10 +94,7 @@
     {:then text}
       {#if text}
         <span class="block text-left">{text}</span>
-        <a
-          href={resolve('/skills/[slug]', { slug })}
-          class="mt-1 block text-left font-medium underline"
-        >
+        <a href={resolve('/skills/[slug]', { slug })} class="mt-1 block text-left font-medium underline">
           What is {label}? →
         </a>
       {:else}

@@ -14,7 +14,7 @@ import (
 // board's client id and to externally-visible postings, and carries each posting's whole body —
 // no per-posting detail request is needed.
 //
-// See internal/ingest/sources/AGENTS.md's "jobappnetwork traps" section for what was verified
+// See internal/ingest/sources/providers/jobappnetwork.md for what was verified
 // live: the real API host (named "internal" but publicly reachable), the query shape, and why
 // the internalOrExternal filter is mandatory rather than a post-hoc drop.
 type jobappnetwork struct {

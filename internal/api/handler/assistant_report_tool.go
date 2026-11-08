@@ -59,10 +59,10 @@ func (h *assistantHandlers) reportMCPTools() []assistant.Tool {
 				return nil, err
 			}
 			if in.Slug == "" {
-				return nil, errors.New("slug is required")
+				return nil, fiber.NewError(fiber.StatusBadRequest, "slug is required")
 			}
 			if h.reports == nil {
-				return nil, errors.New("job reports are not available")
+				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "job reports are not available")
 			}
 			jobID, err := h.reports.queries.GetJobIDBySlug(ctx, in.Slug)
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -84,7 +84,9 @@ func (h *assistantHandlers) reportMCPTools() []assistant.Tool {
 func reportToolError(err error) error {
 	switch {
 	case errors.Is(err, report.ErrDuplicateOpen):
-		return errors.New("the user already has an open report for this job; a moderator has not decided it yet")
+		return fiber.NewError(fiber.StatusConflict, "the user already has an open report for this job; a moderator has not decided it yet")
+	case errors.Is(err, report.ErrInvalid):
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	default:
 		return err
 	}

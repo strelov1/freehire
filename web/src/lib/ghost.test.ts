@@ -69,18 +69,13 @@ describe('ghostChecklist', () => {
 
   it('marks which criteria fired', () => {
     const rows = ghostChecklist(possible, 'en');
-    expect(rows.filter((r) => r.fired).map((r) => r.code)).toEqual([
-      'evergreen_posting',
-      'ats_absent',
-    ]);
+    expect(rows.filter((r) => r.fired).map((r) => r.code)).toEqual(['evergreen_posting', 'ats_absent']);
   });
 
   // The tick beside the row already says "yes". Repeating it on its own line was a
   // second line of type carrying nothing.
   it('adds no detail to a criterion whose firing is the whole fact', () => {
-    const evergreen = must(
-      ghostChecklist(possible, 'en').find((r) => r.code === 'evergreen_posting'),
-    );
+    const evergreen = must(ghostChecklist(possible, 'en').find((r) => r.code === 'evergreen_posting'));
     expect(evergreen.fired).toBe(true);
     expect(evergreen.detail).toBe('');
   });
@@ -199,9 +194,7 @@ describe('ghostGauge', () => {
   });
 
   it('escalates the tone as more criteria fire', () => {
-    const tones = [1, 2, 3, 4].map(
-      (n) => must(ghostGauge({ ...possible, criteria: CODES.slice(0, n) }, 'en')).tone,
-    );
+    const tones = [1, 2, 3, 4].map((n) => must(ghostGauge({ ...possible, criteria: CODES.slice(0, n) }, 'en')).tone);
     expect(new Set(tones).size).toBe(4);
     expect(tones.at(-1)).toBe('severe');
   });
@@ -210,9 +203,7 @@ describe('ghostGauge', () => {
   // gains a fifth criterion: three of five is not three of four.
   it('tones on the share that fired, not the raw count', () => {
     const threeOfFour = must(ghostGauge({ ...possible, criteria: CODES.slice(0, 3) }, 'en'));
-    const threeOfSix = must(
-      ghostGauge({ ...possible, criteria: CODES.slice(0, 3), criteria_total: 6 }, 'en'),
-    );
+    const threeOfSix = must(ghostGauge({ ...possible, criteria: CODES.slice(0, 3), criteria_total: 6 }, 'en'));
     expect(threeOfSix.tone).not.toBe(threeOfFour.tone);
   });
 

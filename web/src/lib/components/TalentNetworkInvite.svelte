@@ -97,13 +97,11 @@
                  statement belongs on the page where the decision is made
                  (/my/talent-network); what this teaser must not do is promise more than
                  that page delivers. -->
-            Appear in a public catalogue — your skills and experience, never your name or
-            contacts.
+            Appear in a public catalogue — your skills and experience, never your name or contacts.
           {:else if listed}
             Your anonymous profile is in the public catalogue.
           {:else}
-            You're in, but not shown yet — your profile needs a CV we have finished
-            reading.
+            You're in, but not shown yet — your profile needs a CV we have finished reading.
           {/if}
         </span>
       </div>

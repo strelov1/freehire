@@ -14,7 +14,7 @@
   // index is the actual invariant), and subscribes it over email — always deliverable
   // with no linking step, unlike telegram/push (which the account's notification
   // settings may list as a preferred channel without the user ever having connected
-  // them — see ReminderSettings.svelte/CompanyFollowButton.svelte's `linked` gate).
+  // them — see ReminderSettings.svelte's `linked` gate).
   // The user can add another channel from the Search alerts tab afterward. Flipping
   // the toggle off deletes the saved search, and its subscriptions go with it.
   //
@@ -95,12 +95,19 @@
     {#if saveState === 'saving'}
       <span class="text-xs text-muted-foreground">Saving…</span>
     {:else if saveState === 'saved'}
-      <span class="flex items-center gap-1 text-xs text-brand-strong"><Check class="size-3.5" aria-hidden="true" /> Saved</span>
+      <span class="flex items-center gap-1 text-xs text-brand-strong"
+        ><Check class="size-3.5" aria-hidden="true" /> Saved</span
+      >
     {:else if saveState === 'error'}
       <span class="text-xs text-destructive">{saveError}</span>
     {/if}
 
-    {@render toggleSwitch(enabled, 'Notify me about jobs matching my profile', toggle, saveState === 'saving' || !ready || (!enabled && !canEnable))}
+    {@render toggleSwitch(
+      enabled,
+      'Notify me about jobs matching my profile',
+      toggle,
+      saveState === 'saving' || !ready || (!enabled && !canEnable),
+    )}
   </div>
   {#if !enabled && !canEnable}
     <p class="mt-3 text-xs text-muted-foreground">Add a role, skill or work preference to enable profile alerts.</p>

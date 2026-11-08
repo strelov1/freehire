@@ -29,6 +29,7 @@ function labelFor(param: string, value: string): string {
 export function alertName(query: string): string {
   const f = filtersFromParams(new URLSearchParams(query));
   const parts: string[] = [];
+  if (f.watchlist) parts.push('Companies I follow');
   if (f.q.trim()) parts.push(f.q.trim());
   for (const param of NAME_FACETS) {
     if (parts.length >= 3) break;
@@ -96,11 +97,7 @@ export interface SubscriptionsPort {
  *  this reached a user as a raw "already subscribed to this saved search on this
  *  channel". The load is awaited first for the same reason: a write racing an in-flight
  *  load is discarded by the snapshot that lands after it. */
-export async function ensureSubscribed(
-  savedSearchId: number,
-  channel: string,
-  subs: SubscriptionsPort,
-): Promise<void> {
+export async function ensureSubscribed(savedSearchId: number, channel: string, subs: SubscriptionsPort): Promise<void> {
   await subs.ensureLoaded();
   if (subs.find(savedSearchId, channel)) return;
   try {

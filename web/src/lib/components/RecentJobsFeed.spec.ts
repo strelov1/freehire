@@ -3,7 +3,9 @@ import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RecentJobsFeed from './RecentJobsFeed.svelte';
 
-vi.mock('$app/paths', () => ({ resolve: (path: string, params?: { slug: string }) => (params ? path.replace('[slug]', params.slug) : path) }));
+vi.mock('$app/paths', () => ({
+  resolve: (path: string, params?: { slug: string }) => (params ? path.replace('[slug]', params.slug) : path),
+}));
 vi.mock('#lib/i18n/currentLocale.svelte.js', () => ({ locale: () => 'en' }));
 vi.mock('#lib/api.js', () => ({ api: { recentJobsFeedUrl: () => '/feed' } }));
 
@@ -15,7 +17,15 @@ class FakeEventSource {
   }
   addEventListener(_type: string, fn: (e: MessageEvent) => void) {
     emit = (title) =>
-      fn({ data: JSON.stringify({ kind: 'single', title, company_name: 'Acme', job_slug: title, produced_at: new Date().toISOString() }) } as MessageEvent);
+      fn({
+        data: JSON.stringify({
+          kind: 'single',
+          title,
+          company_name: 'Acme',
+          job_slug: title,
+          produced_at: new Date().toISOString(),
+        }),
+      } as MessageEvent);
   }
   close() {}
 }

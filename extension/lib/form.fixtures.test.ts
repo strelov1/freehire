@@ -1,13 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import {
-  extractForm,
-  extractUploads,
-  fillByLabel,
-  looksLikeApplication,
-  matchFieldKey,
-} from './form';
+import { extractForm, extractUploads, fillByLabel, looksLikeApplication, matchFieldKey } from './form';
 import type { LabelFill } from './protocol';
 import { must } from './test-utils';
 
@@ -96,9 +90,7 @@ describe.each([
   });
 
   it('fills matched fields through fillByLabel and leaves the rest alone', () => {
-    const before = Object.fromEntries(
-      untouched.map((id) => [id, (input(id) as HTMLInputElement).value]),
-    );
+    const before = Object.fromEntries(untouched.map((id) => [id, (input(id) as HTMLInputElement).value]));
     const fills: LabelFill[] = Object.keys(matched).map((label) => ({
       label,
       value: `v-${matched[label]}`,
@@ -106,12 +98,9 @@ describe.each([
     const outcomes = fillByLabel(document, fills);
 
     expect(outcomes).toEqual(fills.map(({ label }) => ({ label, status: 'filled' })));
-    for (const label of Object.keys(matched))
-      expect(input(must(ids[label], label)).value).toBe(`v-${matched[label]}`);
+    for (const label of Object.keys(matched)) expect(input(must(ids[label], label)).value).toBe(`v-${matched[label]}`);
     for (const id of untouched) expect(input(id).value).toBe(before[id]);
-    for (const upload of Array.from(
-      document.querySelectorAll<HTMLInputElement>('input[type=file]'),
-    )) {
+    for (const upload of Array.from(document.querySelectorAll<HTMLInputElement>('input[type=file]'))) {
       expect(upload.files?.length ?? 0).toBe(0);
     }
   });

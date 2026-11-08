@@ -14,9 +14,10 @@ function thrownByUpstream(value: unknown): unknown {
 
 describe('rethrowUpstream', () => {
   it('renders a timed-out SSR API request as 504 without exposing its internal URL', async () => {
-    const fetch: typeof globalThis.fetch = (_input, init) => new Promise((_resolve, reject) => {
-      init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
-    });
+    const fetch: typeof globalThis.fetch = (_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+      });
     const api = createApi(fetch, 'http://internal-api', {}, 10);
     const result = await api.getJob('example-job').catch(thrownByUpstream);
 

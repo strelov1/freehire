@@ -77,7 +77,7 @@
 {#if showCard}
   <div class="flex flex-col gap-4" onfocusout={() => autosave.commit()}>
     <div class="flex items-center justify-between gap-3">
-      <h2 class="text-sm font-semibold">{s.heading}</h2>
+      <h2 class="text-base font-semibold">{s.heading}</h2>
       <SaveStatusLine {status} />
     </div>
 
@@ -98,8 +98,7 @@
         oninput={() => autosave.edited()}
         rows="4"
         class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        placeholder={s.summaryPlaceholder}
-      ></textarea>
+        placeholder={s.summaryPlaceholder}></textarea>
     </label>
 
     {#if structured?.location}

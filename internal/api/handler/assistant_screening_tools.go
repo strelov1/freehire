@@ -3,6 +3,9 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
+
+	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/dict/vocab"
@@ -104,11 +107,16 @@ func (h *assistantHandlers) screeningAnswersSetTool() assistant.Tool {
 			for _, name := range in.Clear {
 				f, err := screeninganswers.ParseField(name)
 				if err != nil {
-					return nil, err
+					return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 				}
 				cleared = append(cleared, f)
 			}
-			return h.screeningAnswers.Update(ctx, userID, in.Answers, cleared...)
+			answers, err := h.screeningAnswers.Update(ctx, userID, in.Answers, cleared...)
+			var invalid *screeninganswers.ValidationError
+			if errors.As(err, &invalid) {
+				return nil, fiber.NewError(fiber.StatusBadRequest, invalid.Error())
+			}
+			return answers, err
 		},
 	}
 }

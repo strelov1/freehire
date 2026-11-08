@@ -85,7 +85,10 @@
         aria-expanded={!isCollapsed}
         onclick={() => (collapsed.has(g.name) ? collapsed.delete(g.name) : collapsed.add(g.name))}
       >
-        <ChevronDown class={['size-4 text-muted-foreground transition-transform', isCollapsed && '-rotate-90']} aria-hidden="true" />
+        <ChevronDown
+          class={['size-4 text-muted-foreground transition-transform', isCollapsed && '-rotate-90']}
+          aria-hidden="true"
+        />
         {g.name}
       </button>
     </h3>

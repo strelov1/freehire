@@ -11,11 +11,7 @@
 
 /** True on the agent chat and the CV tailoring workspace, the two full-viewport surfaces. */
 export function isFullBleedRoute(pathname: string): boolean {
-  return (
-    pathname === '/my/assistant' ||
-    pathname.startsWith('/my/assistant/') ||
-    pathname.startsWith('/tailor/')
-  );
+  return pathname === '/my/assistant' || pathname.startsWith('/my/assistant/') || pathname.startsWith('/tailor/');
 }
 
 // Routes whose header should span the full width instead of centering inside

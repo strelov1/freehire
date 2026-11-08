@@ -56,22 +56,29 @@ async function start(t, workers = 2) {
   });
   let output = '';
   let errors = '';
-  child.stdout.on('data', (data) => { output += data; });
-  child.stderr.on('data', (data) => { errors += data; });
+  child.stdout.on('data', (data) => {
+    output += data;
+  });
+  child.stderr.on('data', (data) => {
+    errors += data;
+  });
   const exited = once(child, 'close');
   async function waitFor(predicate) {
     while (!predicate(output)) {
       assert.equal(child.exitCode, null, `primary exited early: ${errors}`);
-      // oxlint-disable-next-line no-await-in-loop -- Readiness depends on the next event.
       await Promise.race([
         once(child.stdout, 'data'),
-        exited.then(() => { throw new Error(`primary exited early: ${errors}`); }),
+        exited.then(() => {
+          throw new Error(`primary exited early: ${errors}`);
+        }),
       ]);
     }
   }
   await waitFor((text) => (text.match(/ready /g) || []).length === workers);
   return {
-    child, exited, waitFor,
+    child,
+    exited,
+    waitFor,
     port: Number(output.match(/ready (\d+)/)[1]),
     output: () => output,
     errors: () => errors,
@@ -82,7 +89,9 @@ function request(port, route = '/') {
   return new Promise((resolve, reject) => {
     const req = http.get({ host: '127.0.0.1', port, path: route, agent: false }, (res) => {
       let body = '';
-      res.on('data', (chunk) => { body += chunk; });
+      res.on('data', (chunk) => {
+        body += chunk;
+      });
       res.on('end', () => resolve(body));
       res.on('error', reject);
     });
@@ -92,19 +101,23 @@ function request(port, route = '/') {
 
 for (const signal of ['SIGTERM', 'SIGINT']) {
   for (const group of [false, true]) {
-    test(`${signal} to ${group ? 'the process group' : 'the primary'} drains requests`, { timeout: 5000 }, async (t) => {
-      const app = await start(t);
-      const response = request(app.port);
-      // Attach the assertion before signaling so a reset is never unhandled.
-      const drained = assert.doesNotReject(async () => assert.equal(await response, 'drained'));
-      await app.waitFor((text) => text.includes('request started'));
-      process.kill(group ? -app.child.pid : app.child.pid, signal);
-      await drained;
-      assert.deepEqual(await app.exited, [0, null]);
-      assert.equal((app.output().match(/cleanup finished/g) || []).length, 2);
-      assert.equal(app.errors(), '');
-      assert.doesNotMatch(app.output(), /forking a replacement/);
-    });
+    test(
+      `${signal} to ${group ? 'the process group' : 'the primary'} drains requests`,
+      { timeout: 5000 },
+      async (t) => {
+        const app = await start(t);
+        const response = request(app.port);
+        // Attach the assertion before signaling so a reset is never unhandled.
+        const drained = assert.doesNotReject(async () => assert.equal(await response, 'drained'));
+        await app.waitFor((text) => text.includes('request started'));
+        process.kill(group ? -app.child.pid : app.child.pid, signal);
+        await drained;
+        assert.deepEqual(await app.exited, [0, null]);
+        assert.equal((app.output().match(/cleanup finished/g) || []).length, 2);
+        assert.equal(app.errors(), '');
+        assert.doesNotMatch(app.output(), /forking a replacement/);
+      },
+    );
   }
 }
 

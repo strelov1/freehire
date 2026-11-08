@@ -104,10 +104,7 @@ describe('ExperienceEmploymentCard edit form', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(onSaveEmployment).toHaveBeenCalledWith(
-      currentJobEmployment,
-      expect.objectContaining({ current: false }),
-    );
+    expect(onSaveEmployment).toHaveBeenCalledWith(currentJobEmployment, expect.objectContaining({ current: false }));
   });
 
   it('checking hides the End date and saves as current', async () => {
@@ -169,8 +166,6 @@ describe('ExperienceEmploymentCard focus', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Achievement')));
 
     await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    await waitFor(() =>
-      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit achievement' })),
-    );
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit achievement' })));
   });
 });

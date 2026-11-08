@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  MIN_SKILL_OPEN,
-  displayAliases,
-  showsPostings,
-  topNeighbours,
-} from './skillGlossary';
+import { MIN_SKILL_OPEN, displayAliases, showsPostings, topNeighbours } from './skillGlossary';
 
 describe('displayAliases', () => {
   it('keeps the spellings a reader would not have guessed', () => {
@@ -56,10 +51,7 @@ describe('topNeighbours', () => {
   const allDescribed = () => true;
 
   it('ranks the skills that share postings with this one', () => {
-    expect(topNeighbours(distribution, 'kubernetes', 2, allDescribed)).toEqual([
-      'docker',
-      'terraform',
-    ]);
+    expect(topNeighbours(distribution, 'kubernetes', 2, allDescribed)).toEqual(['docker', 'terraform']);
   });
 
   // The skill is on every posting in its own facet, so it would top its own list.
@@ -79,10 +71,7 @@ describe('topNeighbours', () => {
   // shorten the block from eight to two.
   it('fills the limit from what remains after filtering', () => {
     const described = (slug: string) => slug !== 'docker';
-    expect(topNeighbours(distribution, 'kubernetes', 2, described)).toEqual([
-      'terraform',
-      'helm',
-    ]);
+    expect(topNeighbours(distribution, 'kubernetes', 2, described)).toEqual(['terraform', 'helm']);
   });
 
   it('breaks ties by slug so the page does not reshuffle between renders', () => {

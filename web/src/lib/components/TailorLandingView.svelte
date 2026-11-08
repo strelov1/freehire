@@ -11,7 +11,7 @@
 
   const { price }: { price: PublicPrice | null } = $props();
 
-  const facts = ['3.3M+ live jobs', 'ATS-readable PDF', '9 templates', 'Open source · 3.2k★'];
+  const facts = ['4.9M+ live jobs', 'ATS-readable PDF', '9 templates', 'Open source · 3.2k★'];
 
   const split = [
     {
@@ -29,18 +29,44 @@
   ];
 
   const steps = [
-    { n: '01', title: 'Pick a job', body: 'Any live posting in the catalogue. Tailoring always works toward one real vacancy, not a pasted description.' },
-    { n: '02', title: 'See the match', body: 'The match analysis scores your CV against the job and names what is missing. That is what the agent works from.' },
-    { n: '03', title: 'Tailor with the agent, or by hand', body: 'It proposes one edit at a time and you watch the CV change. The editor is right there, so you can overrule anything.' },
-    { n: '04', title: 'Download the PDF', body: 'Pick a template and export. Your original CV stays untouched; this job gets its own copy.' },
+    {
+      n: '01',
+      title: 'Pick a job',
+      body: 'Any live posting in the catalogue. Tailoring always works toward one real vacancy, not a pasted description.',
+    },
+    {
+      n: '02',
+      title: 'See the match',
+      body: 'The match analysis scores your CV against the job and names what is missing. That is what the agent works from.',
+    },
+    {
+      n: '03',
+      title: 'Tailor with the agent, or by hand',
+      body: 'It proposes one edit at a time and you watch the CV change. The editor is right there, so you can overrule anything.',
+    },
+    {
+      n: '04',
+      title: 'Download the PDF',
+      body: 'Pick a template and export. Your original CV stays untouched; this job gets its own copy.',
+    },
   ];
 
   // Every cell must be true for every product in its column. "Varies" where a category
   // differs product to product; never a guess. No product is named.
   const priceCell = $derived(price ? `${priceLabel(price)} / month` : 'Pro plan');
   const compare = $derived([
-    { row: 'Works from a real, live job posting', us: 'Yes', chat: 'You paste it in', builder: 'Usually you paste it in' },
-    { row: "Won't add experience you don't have", us: 'Enforced in code', chat: 'Depends on your prompt', builder: 'Varies' },
+    {
+      row: 'Works from a real, live job posting',
+      us: 'Yes',
+      chat: 'You paste it in',
+      builder: 'Usually you paste it in',
+    },
+    {
+      row: "Won't add experience you don't have",
+      us: 'Enforced in code',
+      chat: 'Depends on your prompt',
+      builder: 'Varies',
+    },
     { row: 'Job match score, before and after', us: 'Yes', chat: 'Only if you ask', builder: 'Varies' },
     { row: 'ATS-readable PDF', us: 'Yes', chat: 'You format it', builder: 'Varies' },
     { row: 'Every edit visible and undoable', us: 'Yes', chat: 'Depends on how you ask', builder: 'Varies' },
@@ -57,14 +83,18 @@
         Your CV, rewritten for this job. Nothing made up.
       </h1>
       <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty">
-        freehire reads the vacancy, brings your relevant work forward in the job's own words, and
-        asks you about anything it can't find in your history.
+        freehire reads the vacancy, brings your relevant work forward in the job's own words, and asks you about
+        anything it can't find in your history.
       </p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
         <ProCheckoutButton {price} />
-        <a href="#how-it-works" class="text-sm font-medium text-muted-foreground hover:text-foreground">See how it works ↓</a>
+        <a href="#how-it-works" class="text-sm font-medium text-muted-foreground hover:text-foreground"
+          >See how it works ↓</a
+        >
       </div>
-      <p class="mt-3 text-xs text-muted-foreground">Cancel any time · 14-day refund · Your original CV is never touched.</p>
+      <p class="mt-3 text-xs text-muted-foreground">
+        Cancel any time · 14-day refund · Your original CV is never touched.
+      </p>
     </div>
     <TailorHeroDemo />
   </section>
@@ -83,7 +113,8 @@
       Same facts. Said for this job.
     </h2>
     <p class="mt-3 text-sm text-muted-foreground text-pretty">
-      Example, tailored for <span class="font-medium text-foreground">{DEMO_ROLE}</span>. Highlighted words come from the vacancy.
+      Example, tailored for <span class="font-medium text-foreground">{DEMO_ROLE}</span>. Highlighted words come from
+      the vacancy.
     </p>
     <ol class="mt-8 grid gap-4">
       {#each DEMO_BULLETS as b (b.req)}
@@ -96,7 +127,8 @@
             <p class="text-xs uppercase tracking-wide text-foreground">After</p>
             <p class="mt-1 text-sm text-pretty">
               {#each highlight(b.after, b.keywords) as part, i (i)}
-                {#if part.hit}<mark class="rounded bg-brand/15 px-0.5 text-foreground">{part.text}</mark>{:else}{part.text}{/if}
+                {#if part.hit}<mark class="rounded bg-brand/15 px-0.5 text-foreground">{part.text}</mark
+                  >{:else}{part.text}{/if}
               {/each}
             </p>
           </div>
@@ -118,7 +150,11 @@
           <p class="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">{s.body}</p>
           <div class="mt-4 flex flex-wrap gap-2">
             {#each s.sample as item (item)}
-              <span class="rounded-md border px-2 py-0.5 font-mono text-xs {s.key === 'have' ? 'border-success-strong/50 text-success-strong' : 'border-warning/50 text-warning-strong'}">{item}</span>
+              <span
+                class="rounded-md border px-2 py-0.5 font-mono text-xs {s.key === 'have'
+                  ? 'border-success-strong/50 text-success-strong'
+                  : 'border-warning/50 text-warning-strong'}">{item}</span
+              >
             {/each}
           </div>
         </div>
@@ -132,7 +168,9 @@
   <!-- How it works -->
   <section id="how-it-works" class="scroll-mt-20 border-t border-border py-16 sm:py-20">
     <SectionLabel text="how it works" />
-    <h2 class="mt-6 max-w-2xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">From a posting to a PDF.</h2>
+    <h2 class="mt-6 max-w-2xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+      From a posting to a PDF.
+    </h2>
     <NumberedGrid items={steps} class="mt-10 sm:grid-cols-2" />
   </section>
 
@@ -144,10 +182,14 @@
         <h2 class="text-balance max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
           Tailoring is part of Pro{price ? ` — ${priceLabel(price)} a month` : ''}.
         </h2>
-        <p class="mt-4 max-w-md text-muted-foreground text-pretty">Cancel any time. Search, alerts and tracking stay free.</p>
+        <p class="mt-4 max-w-md text-muted-foreground text-pretty">
+          Cancel any time. Search, alerts and tracking stay free.
+        </p>
         <div class="mt-8 flex flex-wrap items-center gap-3">
           <ProCheckoutButton {price} />
-          <a href={resolve('/pricing')} class="text-sm font-medium text-muted-foreground hover:text-foreground">Compare plans</a>
+          <a href={resolve('/pricing')} class="text-sm font-medium text-muted-foreground hover:text-foreground"
+            >Compare plans</a
+          >
         </div>
       </div>
       <ul class="grid gap-px overflow-hidden rounded-xl border border-border bg-border">
@@ -168,7 +210,9 @@
   <!-- Comparison -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="compared" />
-    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Why not just ask a chatbot?</h2>
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+      Why not just ask a chatbot?
+    </h2>
     <div class="mt-10 overflow-x-auto rounded-xl border border-border">
       <table class="w-full min-w-xl text-left text-sm">
         <thead class="bg-secondary/50 text-xs uppercase tracking-wide text-muted-foreground">
@@ -197,11 +241,10 @@
   <section class="border-t border-border py-16 sm:py-20">
     <figure class="mx-auto max-w-2xl">
       <blockquote class="text-xl leading-relaxed tracking-tight sm:text-2xl text-pretty">
-        It is easy for an AI to write that you led a Kubernetes migration you never touched.
-        It reads well right up to the first interview question about it. So the agent here works the
-        other way round: it only uses what you actually did, and when the job asks for something it
-        can't find in your history, it asks you instead of writing it. That rule lives in the code,
-        not in a prompt, and the code is open for you to check.
+        It is easy for an AI to write that you led a Kubernetes migration you never touched. It reads well right up to
+        the first interview question about it. So the agent here works the other way round: it only uses what you
+        actually did, and when the job asks for something it can't find in your history, it asks you instead of writing
+        it. That rule lives in the code, not in a prompt, and the code is open for you to check.
       </blockquote>
       <figcaption class="mt-6 text-sm text-muted-foreground">— Ilya Strelov, founder</figcaption>
     </figure>
@@ -210,7 +253,9 @@
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share TAILOR_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="faq" />
-    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Questions people ask before buying.</h2>
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+      Questions people ask before buying.
+    </h2>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each TAILOR_FAQ as item (item.question)}
         <div class="bg-background p-6 sm:odd:last:col-span-2 sm:p-7">
@@ -225,10 +270,14 @@
   <section class="border-t border-border py-16 sm:py-20">
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
       <h2 class="text-balance text-2xl font-semibold tracking-tight">Stop sending the same CV everywhere.</h2>
-      <p class="max-w-xl text-muted-foreground text-pretty">One job, one tailored CV, and nothing on it you didn't do.</p>
+      <p class="max-w-xl text-muted-foreground text-pretty">
+        One job, one tailored CV, and nothing on it you didn't do.
+      </p>
       <div class="flex flex-wrap items-center gap-3">
         <ProCheckoutButton {price} />
-        <a href={resolve('/jobs')} class="text-sm font-medium text-muted-foreground hover:text-foreground">Browse jobs first</a>
+        <a href={resolve('/jobs')} class="text-sm font-medium text-muted-foreground hover:text-foreground"
+          >Browse jobs first</a
+        >
       </div>
     </div>
   </section>

@@ -47,6 +47,13 @@ WITH claimable AS (
         FOR UPDATE SKIP LOCKED
     ) m
     WHERE s.active
+      -- The account-wide "job alerts by email" switch, the same gate ListActiveSubscriptions
+      -- applies when matches are recorded. Recording alone is not enough: matches recorded
+      -- BEFORE an opt-out (an RFC 8058 one-click unsubscribe) are still pending, and without
+      -- this predicate the next digest mails them to a user who has just unsubscribed. They
+      -- stay unclaimed and age out through ExpireStaleSubscriptionMatches. Email only: the
+      -- switch does not govern Telegram, push or webhook.
+      AND (s.channel <> 'email' OR COALESCE(ns.alerts_email_enabled, true))
       -- An 'interval' subscription (no settings row reads as 'daily' since migration
       -- 0246; the interval default is one hour) is claimed only once its interval has elapsed since the last digest. The
       -- gate lives HERE rather than beside the quiet-hours check in deliverMessage because a

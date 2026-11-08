@@ -41,11 +41,10 @@ const (
 //	              the sample has reached this stage; the single message ever
 //	              classified an offer is genuine but from a job search three
 //	              years earlier and informs nothing.
-//	preparing 21  never reached in practice — TrackedJob.Silence() short-circuits
-//	              on AppliedAt == nil, which is guaranteed for `preparing` (see
-//	              cv-tailoring's board placement). Present only because
-//	              TestSilenceThresholdsCoverExactlyTheActiveStages requires every
-//	              ranked stage to carry one; copies `applied`'s value as the
+//	preparing 21  rarely read: cv-tailoring places a card here with no AppliedAt,
+//	              so TrackedJob.Silence() short-circuits; but a card moved back to
+//	              `preparing` after applying keeps AppliedAt (TrackJob never clears
+//	              it) and is judged by this value. Copies `applied`'s value as the
 //	              nearest meaningful anchor rather than inventing a new one.
 //
 // The interpolated pair steps evenly by three days between 21 and 12 rather than

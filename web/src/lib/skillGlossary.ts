@@ -56,11 +56,7 @@ function fold(spelling: string): string {
  *  three is the thin-content failure this glossary set out to avoid.
  *
  *  Order is the dictionary's, which is sorted; nothing here re-ranks. */
-export function displayAliases(
-  aliases: readonly string[],
-  slug: string,
-  label: string
-): string[] {
+export function displayAliases(aliases: readonly string[], slug: string, label: string): string[] {
   const seen = new Set([fold(slug), fold(label)]);
   const out: string[] = [];
   for (const alias of aliases) {
@@ -88,7 +84,7 @@ export function topNeighbours(
   distribution: Readonly<Record<string, number>>,
   slug: string,
   limit: number,
-  isDescribed: (slug: string) => boolean
+  isDescribed: (slug: string) => boolean,
 ): string[] {
   return Object.entries(distribution)
     .filter(([neighbour]) => neighbour !== slug && isDescribed(neighbour))

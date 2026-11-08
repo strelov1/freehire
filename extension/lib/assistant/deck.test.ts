@@ -3,11 +3,7 @@ import { splitPresentingCalls, PRESENT_JOBS_TOOL } from './deck';
 import type { ToolCall } from './tool-formatters';
 
 /** A settled `present_jobs` call: the model's arguments plus the backend's receipt. */
-function presented(
-  input: unknown,
-  result: unknown,
-  extra: Partial<ToolCall> = {},
-): ToolCall {
+function presented(input: unknown, result: unknown, extra: Partial<ToolCall> = {}): ToolCall {
   return { name: PRESENT_JOBS_TOOL, input, result: JSON.stringify(result), ...extra };
 }
 
@@ -94,9 +90,7 @@ describe('splitPresentingCalls', () => {
   });
 
   it('holds a call still in flight as pending rather than rendering unvalidated slugs', () => {
-    const { decks, rest } = splitPresentingCalls([
-      { name: PRESENT_JOBS_TOOL, input: twoJobs },
-    ]);
+    const { decks, rest } = splitPresentingCalls([{ name: PRESENT_JOBS_TOOL, input: twoJobs }]);
 
     expect(rest).toHaveLength(0);
     // Two placeholders because the call names two vacancies — a count, not a

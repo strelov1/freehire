@@ -45,8 +45,7 @@
     <p class="mb-3 text-xs leading-snug text-muted-foreground">
       Scored on your tailored CV as it renders now, against this vacancy.
       {#if view.partial}
-        Some categories could not be checked and were left out of the score rather than
-        counted against you.
+        Some categories could not be checked and were left out of the score rather than counted against you.
       {/if}
     </p>
 
@@ -65,9 +64,7 @@
 
     {#if view.missingSkills.length}
       <div class="mt-3 rounded-lg bg-warning/10 px-2 py-1.5">
-        <p class="mb-1 text-xs font-medium text-warning-strong">
-          Skills this vacancy names that your CV does not
-        </p>
+        <p class="mb-1 text-xs font-medium text-warning-strong">Skills this vacancy names that your CV does not</p>
         <ul class="flex flex-wrap gap-1">
           {#each view.missingSkills as skill, i (i)}
             <li
@@ -102,9 +99,8 @@
     {#if view.requirements.unverifiable.length}
       <details class="mt-3">
         <summary class="cursor-pointer text-xs text-muted-foreground">
-          {view.requirements.unverifiable.length} requirement{view.requirements.unverifiable.length === 1
-            ? ''
-            : 's'} could not be checked automatically
+          {view.requirements.unverifiable.length} requirement{view.requirements.unverifiable.length === 1 ? '' : 's'} could
+          not be checked automatically
         </summary>
         <ul class="mt-1 space-y-1 text-xs text-muted-foreground">
           {#each view.requirements.unverifiable as req, i (i)}
@@ -113,7 +109,9 @@
               <span>
                 {req.text}
                 {#if req.cached_status}
-                  <span class="text-muted-foreground">— the earlier match analysis read this as {req.cached_status}</span>
+                  <span class="text-muted-foreground"
+                    >— the earlier match analysis read this as {req.cached_status}</span
+                  >
                 {/if}
               </span>
             </li>

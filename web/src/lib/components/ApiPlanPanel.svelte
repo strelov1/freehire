@@ -24,7 +24,6 @@
     const date = until.toLocaleDateString(locale(), { year: 'numeric', month: 'long', day: 'numeric' });
     return format(s.active, { ...params, date });
   };
-
 </script>
 
 {#if plan.value}

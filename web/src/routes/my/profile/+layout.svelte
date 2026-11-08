@@ -168,9 +168,9 @@
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. The
      heading sits above the gate so the section is titled while it is still loading and
      whether or not a profile exists yet, the way every other /my section titles itself. -->
-<div class="mb-6 flex flex-col gap-1 max-lg:sr-only">
-  <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
-  <p class="text-sm text-muted-foreground">{s.description}</p>
+<div class="mb-6 flex flex-col gap-1">
+  <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">{s.title}</h1>
+  <p class="text-sm text-muted-foreground max-lg:sr-only">{s.description}</p>
 </div>
 
 {#if status === 'loading'}
@@ -194,20 +194,9 @@
 
   <!-- No separate "n/m sections" count: the tab dots already mark the empty sections, and
        a third progress meter beside the setup checklist read as clutter. -->
-  <TabStrip
-    {tabs}
-    active={activeSectionId}
-    label="Profile sections"
-    panelId={PANEL_ID}
-    class="mb-6"
-  />
+  <TabStrip {tabs} active={activeSectionId} label="Profile sections" panelId={PANEL_ID} class="mb-6" />
 
-  <div
-    id={PANEL_ID}
-    role="tabpanel"
-    aria-labelledby={tabStripId(PANEL_ID, activeSectionId)}
-    tabindex="0"
-  >
+  <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, activeSectionId)} tabindex="0">
     {@render children()}
   </div>
 {/if}

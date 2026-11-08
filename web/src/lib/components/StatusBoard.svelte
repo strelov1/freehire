@@ -17,10 +17,7 @@
   // The route owns data loading + SEO.
   let { status }: { status: IngestStatus | null } = $props();
 
-  const STATUS_META: Record<
-    HealthStatus,
-    { label: string; dot: string; icon: string; Icon: typeof CircleCheck }
-  > = {
+  const STATUS_META: Record<HealthStatus, { label: string; dot: string; icon: string; Icon: typeof CircleCheck }> = {
     operational: { label: 'Operational', dot: 'bg-success', icon: 'text-success', Icon: CircleCheck },
     degraded: { label: 'Degraded', dot: 'bg-warning', icon: 'text-warning', Icon: CircleAlert },
     down: { label: 'Down', dot: 'bg-destructive', icon: 'text-destructive', Icon: CircleX },
@@ -178,23 +175,19 @@
     panelId={SECTION_PANEL_ID}
   />
 
-  <div
-    id={SECTION_PANEL_ID}
-    role="tabpanel"
-    aria-labelledby={tabStripId(SECTION_PANEL_ID, activeSection)}
-    class="mt-6"
-  >
+  <div id={SECTION_PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(SECTION_PANEL_ID, activeSection)} class="mt-6">
     {#if activeSection === 'site'}
       {@const siteMeta = STATUS_META[status.site.status]}
       <div class="overflow-hidden rounded-2xl border">
         <div class="flex items-center gap-3 px-4 py-3">
           {@render statusDot(siteMeta.dot)}
-            <div class="min-w-0 flex-1">
-              <p class="text-base leading-tight font-medium break-words">{SITE_HEADLINE[status.site.status]}</p>
-              <p class="mt-1 text-sm text-muted-foreground">
-                Database {status.site.database} · {nfPercent.format(status.site.error_rate)} error rate over the last {status.site.window_minutes} min
-              </p>
-              <!-- Reported beside the error rate, never conditionally. The two answer
+          <div class="min-w-0 flex-1">
+            <p class="text-base leading-tight font-medium break-words">{SITE_HEADLINE[status.site.status]}</p>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Database {status.site.database} · {nfPercent.format(status.site.error_rate)} error rate over the last {status
+                .site.window_minutes} min
+            </p>
+            <!-- Reported beside the error rate, never conditionally. The two answer
                    different questions — the error rate describes requests that FINISHED,
                    this describes how much of the connection pool is held at this instant,
                    which is why requests may not start. An earlier draft showed this line
@@ -202,27 +195,27 @@
                    in ordinary bursts, so that phrasing cried wolf on a healthy site. A
                    sustained reading is what matters, and judging that needs history the
                    page does not have (the Grafana rule averages it over five minutes). -->
-              <p class="text-sm text-muted-foreground">
-                Database connections in use: {nfPercent.format(status.site.pool_pressure)}
-              </p>
-            </div>
-            {#if uptime !== null}
-              <div class="shrink-0 text-right">
-                <p class="text-sm tabular-nums font-medium" title="Operational days among days with a recorded sample">
-                  {nfPercent.format(uptime)}
-                </p>
-                <p class="text-xs text-muted-foreground">uptime</p>
-              </div>
-            {/if}
+            <p class="text-sm text-muted-foreground">
+              Database connections in use: {nfPercent.format(status.site.pool_pressure)}
+            </p>
           </div>
-          <div class="flex flex-col gap-1 px-4 pb-3">
-            <StatusBarCalendar days={historyTiles} barHeight={22} radius={6} />
-            {#if historySpan}
-              <div class="flex min-w-0 justify-between gap-3">
-                <p class="min-w-0 truncate text-xs font-medium text-muted-foreground">{historySpan.from}</p>
-                <p class="min-w-0 truncate text-right text-xs font-medium text-muted-foreground">{historySpan.to}</p>
-              </div>
-            {/if}
+          {#if uptime !== null}
+            <div class="shrink-0 text-right">
+              <p class="text-sm tabular-nums font-medium" title="Operational days among days with a recorded sample">
+                {nfPercent.format(uptime)}
+              </p>
+              <p class="text-xs text-muted-foreground">uptime</p>
+            </div>
+          {/if}
+        </div>
+        <div class="flex flex-col gap-1 px-4 pb-3">
+          <StatusBarCalendar days={historyTiles} barHeight={22} radius={6} />
+          {#if historySpan}
+            <div class="flex min-w-0 justify-between gap-3">
+              <p class="min-w-0 truncate text-xs font-medium text-muted-foreground">{historySpan.from}</p>
+              <p class="min-w-0 truncate text-right text-xs font-medium text-muted-foreground">{historySpan.to}</p>
+            </div>
+          {/if}
         </div>
       </div>
     {:else}
@@ -242,10 +235,13 @@
           <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// providers</p>
           <!-- A raw JSON API endpoint, not a SvelteKit page route — there is nothing
                for resolve() to map, so the internal-navigation rule doesn't apply. -->
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-          <a href="/api/v1/status" class="font-mono text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+          <!-- eslint-disable svelte/no-navigation-without-resolve -->
+          <a
+            href="/api/v1/status"
+            class="font-mono text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
             /status ↗
-          </a>
+          </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
         </div>
 
         {#if providers.length === 0}

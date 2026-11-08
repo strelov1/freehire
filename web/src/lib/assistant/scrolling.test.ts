@@ -9,15 +9,11 @@ describe('atBottom', () => {
   it('is true within the tolerance, because the last line grows under the reader', () => {
     // A streaming answer appends to its final line: the pane gets taller while the
     // reader has not moved, so an exact test would stop following on its own content.
-    expect(
-      atBottom({ scrollHeight: 1000, scrollTop: 600 - BOTTOM_TOLERANCE_PX, clientHeight: 400 }),
-    ).toBe(true);
+    expect(atBottom({ scrollHeight: 1000, scrollTop: 600 - BOTTOM_TOLERANCE_PX, clientHeight: 400 })).toBe(true);
   });
 
   it('is false once the reader scrolls past the tolerance', () => {
-    expect(
-      atBottom({ scrollHeight: 1000, scrollTop: 600 - BOTTOM_TOLERANCE_PX - 1, clientHeight: 400 }),
-    ).toBe(false);
+    expect(atBottom({ scrollHeight: 1000, scrollTop: 600 - BOTTOM_TOLERANCE_PX - 1, clientHeight: 400 })).toBe(false);
   });
 
   it('is false when the reader is far up a long transcript', () => {

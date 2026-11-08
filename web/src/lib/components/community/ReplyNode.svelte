@@ -7,6 +7,7 @@
   import { Button } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { timeAgo } from '#lib/utils.js';
+  // oxlint-disable-next-line import/no-self-import -- Svelte 5 recurses by importing the component's own file; `<svelte:self>` is deprecated
   import Self from './ReplyNode.svelte';
 
   let {
@@ -81,7 +82,12 @@
 
   {#if replying}
     <form class="node__form" onsubmit={submit}>
-      <textarea bind:value={body} rows="2" placeholder="Reply…" aria-label="Reply to {reply.author}" class="node__form-body"></textarea>
+      <textarea
+        bind:value={body}
+        rows="2"
+        placeholder="Reply…"
+        aria-label="Reply to {reply.author}"
+        class="node__form-body"></textarea>
       {#if formError}<p class="node__error">{formError}</p>{/if}
       <div class="node__form-actions">
         <Button type="submit" disabled={!canSubmit}>{submitting ? 'Posting…' : 'Reply'}</Button>

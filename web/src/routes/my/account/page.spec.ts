@@ -15,7 +15,7 @@ const { changePassword, reauthenticatePassword, logoutEverywhere, user } = vi.ho
 }));
 
 const { StubApiError } = vi.hoisted(() => ({
-  StubApiError: class StubApiError extends Error {
+  StubApiError: class extends Error {
     constructor(
       public status: number,
       message = 'failed',
@@ -80,9 +80,7 @@ describe('account page — password change', () => {
 
     await fillAndSubmit();
 
-    await waitFor(() =>
-      expect(screen.getByText('That current password is not right.')).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText('That current password is not right.')).toBeTruthy());
     expect(changePassword).not.toHaveBeenCalled();
   });
 

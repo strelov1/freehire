@@ -85,10 +85,7 @@
           <span class="text-sm font-bold tabular-nums">{pct}%</span>
         </div>
         <div class="h-1.5 overflow-hidden rounded bg-secondary">
-          <div
-            class="h-full rounded {missing.length > 0 ? 'bg-warning' : 'bg-brand'}"
-            style="width: {pct}%"
-          ></div>
+          <div class="h-full rounded {missing.length > 0 ? 'bg-warning' : 'bg-brand'}" style="width: {pct}%"></div>
         </div>
         <div class="flex flex-wrap gap-1.5">
           {#each matched as skill (skill)}
@@ -148,9 +145,7 @@
          started today and the reset leaves it at zero, so the reset time is the one fact
          here that cannot help them. -->
     <p class="mt-4 text-sm font-medium">Your plan doesn't include CV editing sessions.</p>
-    <p class="text-xs text-muted-foreground">
-      Upgrade to rewrite your CV against this role, line by line.
-    </p>
+    <p class="text-xs text-muted-foreground">Upgrade to rewrite your CV against this role, line by line.</p>
     <div class="mt-1"><PlanLimitLink /></div>
   {:else if refused}
     <p class="mt-4 text-sm font-medium">You've used today's CV editing sessions.</p>

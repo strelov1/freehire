@@ -59,7 +59,11 @@
         Members with a free hour in the next 30 days, soonest first. Times in {shownZone}.
       </p>
     </div>
-    <div class={tabsListVariants({ class: 'max-w-full justify-start overflow-x-auto' })} role="group" aria-label="Topic">
+    <div
+      class={tabsListVariants({ class: 'max-w-full justify-start overflow-x-auto' })}
+      role="group"
+      aria-label="Topic"
+    >
       {#each filters as f (f.value)}
         <button
           type="button"
@@ -143,7 +147,12 @@
                 </span>
               {/if}
             </div>
-            <Button variant="outline" size="sm" href={bookHref(host.handle)} aria-label="Book a mock with {host.handle}">
+            <Button
+              variant="outline"
+              size="sm"
+              href={bookHref(host.handle)}
+              aria-label="Book a mock with {host.handle}"
+            >
               Book
             </Button>
           </div>

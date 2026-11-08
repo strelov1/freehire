@@ -100,15 +100,14 @@
       // Holds a proof or buys one with the typed password — the component decides which,
       // and says so itself when the member has supplied neither.
       if (!(await identity?.prove())) return;
-      const expiresAt =
-        days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : undefined;
+      const expiresAt = days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : undefined;
       onCreated(await api.createApiKey(trimmed, expiresAt, scope || undefined));
       reset();
       open = false;
-    } catch (e) {
+    } catch (err) {
       // Identity refusals are worded once, by the component that asked for the proof;
       // anything else is this dialog's own to explain.
-      fail(identity?.handleRefusal(e) ?? messageFor(e));
+      fail(identity?.handleRefusal(err) ?? messageFor(err));
     } finally {
       creating = false;
     }

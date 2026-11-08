@@ -22,7 +22,9 @@ from app import create_app
 from engines import ProxyConfig, browser_fetcher, http_fetcher, stealth_session_factory
 from pool import SessionPool
 
-MAX_REQUEST_BYTES = 1 << 20  # a crawler's request: a URL, a few headers, a small POST body
+MAX_REQUEST_BYTES = (
+    1 << 20
+)  # a crawler's request: a URL, a few headers, a small POST body
 MAX_RESPONSE_BYTES = 64 << 20  # the Go client's own cap (sources.maxResponseBody)
 REAP_INTERVAL_SECONDS = 30
 # How long a browser request may queue for a session. Below the Go transport's own timeout, so

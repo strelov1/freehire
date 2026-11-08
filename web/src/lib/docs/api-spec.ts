@@ -273,12 +273,48 @@ export const GROUPS: Group[] = [
           'since a dropped filter otherwise looks like a broad result.',
         filterable: true,
         query: [
-          { name: 'q', type: 'string', description: 'Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default engine matching: the first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one.', example: 'golang' },
-          { name: 'q_fields', type: 'string', description: 'Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying.', example: 'title' },
-          { name: 'hide_applied_companies', type: 'boolean', description: '`true` excludes every posting of employers represented in the newest 1,000 applications made by the signed-in caller. Employers represented only by older applications can remain in results. Applied inside the search, so `meta.total` and paging describe what is left. A per-person preference, not a filter: a saved search carrying it narrows nothing. Without a session or API key, or with a value that is not a boolean, the search runs unhidden and the param is reported in `meta.ignored_params`.', example: 'true' },
-          { name: 'hide_seen', type: 'boolean', description: '`true` leaves out the postings the signed-in caller has already opened (the 1000 most recently viewed, saved, applied to or hidden), inside the search, so `meta.total` and paging stay accurate. A per-person preference, not a filter: a saved search ignores it. Without a session or API key it is not applied and is listed in `meta.ignored_params`.', example: 'true' },
-          { name: 'min_skill_match', type: 'integer', description: 'Keeps only postings whose skills your profile covers by at least this percent (1–100), across the whole ranking. Applies only with `sort=match`, to a signed-in caller with profile skills; the read stops once no later posting can qualify or at a depth bound, and then `meta.total` is a minimum with `meta.total_is_lower_bound: true`. A per-person preference: a saved search ignores it. Otherwise it is not applied and is listed in `meta.ignored_params`.', example: '70' },
-          { name: 'sort', type: 'string', description: 'One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest.', example: 'posted_at' },
+          {
+            name: 'q',
+            type: 'string',
+            description:
+              'Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default engine matching: the first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one.',
+            example: 'golang',
+          },
+          {
+            name: 'q_fields',
+            type: 'string',
+            description:
+              'Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying.',
+            example: 'title',
+          },
+          {
+            name: 'hide_applied_companies',
+            type: 'boolean',
+            description:
+              '`true` excludes every posting of employers represented in the newest 1,000 applications made by the signed-in caller. Employers represented only by older applications can remain in results. Applied inside the search, so `meta.total` and paging describe what is left. A per-person preference, not a filter: a saved search carrying it narrows nothing. Without a session or API key, or with a value that is not a boolean, the search runs unhidden and the param is reported in `meta.ignored_params`.',
+            example: 'true',
+          },
+          {
+            name: 'hide_seen',
+            type: 'boolean',
+            description:
+              '`true` leaves out the postings the signed-in caller has already opened (the 1000 most recently viewed, saved, applied to or hidden), inside the search, so `meta.total` and paging stay accurate. A per-person preference, not a filter: a saved search ignores it. Without a session or API key it is not applied and is listed in `meta.ignored_params`.',
+            example: 'true',
+          },
+          {
+            name: 'min_skill_match',
+            type: 'integer',
+            description:
+              'Keeps only postings whose skills your profile covers by at least this percent (1–100), across the whole ranking. Applies only with `sort=match`, to a signed-in caller with profile skills; the read stops once no later posting can qualify or at a depth bound, and then `meta.total` is a minimum with `meta.total_is_lower_bound: true`. A per-person preference: a saved search ignores it. Otherwise it is not applied and is listed in `meta.ignored_params`.',
+            example: '70',
+          },
+          {
+            name: 'sort',
+            type: 'string',
+            description:
+              'One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest.',
+            example: 'posted_at',
+          },
           { name: 'order', type: 'string', description: '`asc` or `desc` (default `desc`).', example: 'desc' },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
           { name: 'offset', type: 'integer', description: 'Rows to skip; `offset + limit` ≤ 10000.', example: '0' },
@@ -300,10 +336,34 @@ export const GROUPS: Group[] = [
           'index preview. Use `description_format` to choose how it is rendered.',
         filterable: true,
         query: [
-          { name: 'q', type: 'string', description: 'Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default engine matching: the first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one.', example: 'golang' },
-          { name: 'q_fields', type: 'string', description: 'Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying.', example: 'title' },
-          { name: 'description_format', type: 'string', description: 'One of `html` (default, verbatim), `text` (tags stripped), `markdown` (HTML converted to Markdown). Unknown values fall back to `html`.', example: 'markdown' },
-          { name: 'sort', type: 'string', description: 'One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest.', example: 'posted_at' },
+          {
+            name: 'q',
+            type: 'string',
+            description:
+              'Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default engine matching: the first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one.',
+            example: 'golang',
+          },
+          {
+            name: 'q_fields',
+            type: 'string',
+            description:
+              'Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying.',
+            example: 'title',
+          },
+          {
+            name: 'description_format',
+            type: 'string',
+            description:
+              'One of `html` (default, verbatim), `text` (tags stripped), `markdown` (HTML converted to Markdown). Unknown values fall back to `html`.',
+            example: 'markdown',
+          },
+          {
+            name: 'sort',
+            type: 'string',
+            description:
+              'One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest.',
+            example: 'posted_at',
+          },
           { name: 'order', type: 'string', description: '`asc` or `desc` (default `desc`).', example: 'desc' },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
           { name: 'offset', type: 'integer', description: 'Rows to skip; `offset + limit` ≤ 10000.', example: '0' },
@@ -327,7 +387,12 @@ export const GROUPS: Group[] = [
           '`former_employers` is ignored even for signed-in callers.',
         query: [
           { name: 'q', type: 'string', description: 'Same full-text query as search.', example: 'golang' },
-          { name: '(any filter)', type: 'string', description: 'Any facet filter param narrows the counted set. `former_employers` is ignored.', example: 'work_mode=remote' },
+          {
+            name: '(any filter)',
+            type: 'string',
+            description: 'Any facet filter param narrows the counted set. `former_employers` is ignored.',
+            example: 'work_mode=remote',
+          },
         ],
         curl: `curl "${BASE_URL}/jobs/facets?work_mode=remote"`,
         responseExample: `{
@@ -348,7 +413,15 @@ export const GROUPS: Group[] = [
         path: '/jobs/{slug}',
         auth: 'none',
         summary: 'A single job by its public slug (serves closed jobs too).',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'senior-go-engineer-acme-1a2b' }],
+        pathParams: [
+          {
+            name: 'slug',
+            type: 'string',
+            required: true,
+            description: 'The job `public_slug`.',
+            example: 'senior-go-engineer-acme-1a2b',
+          },
+        ],
         curl: `curl "${BASE_URL}/jobs/senior-go-engineer-acme-1a2b"`,
         responseExample: `{ "data": { "public_slug": "senior-go-engineer-acme-1a2b", "title": "Senior Go Engineer", "closed_at": null, "...": "..." } }`,
       },
@@ -362,7 +435,15 @@ export const GROUPS: Group[] = [
           'specialization as mandatory filters. Uses stored-vector hybrid ranking when ' +
           'available, falling back to keyword search under the same filters. Returns an ' +
           'empty list when location or specialization is unknown or no visible matches remain.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'senior-go-engineer-acme-1a2b' }],
+        pathParams: [
+          {
+            name: 'slug',
+            type: 'string',
+            required: true,
+            description: 'The job `public_slug`.',
+            example: 'senior-go-engineer-acme-1a2b',
+          },
+        ],
         query: [{ name: 'limit', type: 'integer', description: 'Max similar jobs.', example: '10' }],
         curl: `curl "${BASE_URL}/jobs/senior-go-engineer-acme-1a2b/similar?limit=10"`,
         responseExample: `{ "data": [ { "public_slug": "...", "title": "...", "...": "..." } ] }`,
@@ -377,7 +458,15 @@ export const GROUPS: Group[] = [
           'each keeps its own `location` and `apply_url` so a seeker picks their city. ' +
           'The anchor job itself is included. `meta.total` is the whole cluster size, ' +
           'so it stays accurate when the list is a capped page.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'senior-go-engineer-acme-1a2b' }],
+        pathParams: [
+          {
+            name: 'slug',
+            type: 'string',
+            required: true,
+            description: 'The job `public_slug`.',
+            example: 'senior-go-engineer-acme-1a2b',
+          },
+        ],
         query: [
           { name: 'limit', type: 'integer', description: 'Page size, 1–200 (default 50).', example: '50' },
           { name: 'offset', type: 'integer', description: 'Rows to skip.', example: '0' },
@@ -406,7 +495,15 @@ export const GROUPS: Group[] = [
           'technical ATS platforms are readable at all) — no captured form is ' +
           'a `404`, distinguishable from an unknown slug (also `404`, but at ' +
           'the job lookup rather than the form lookup).',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'senior-go-engineer-acme-1a2b' }],
+        pathParams: [
+          {
+            name: 'slug',
+            type: 'string',
+            required: true,
+            description: 'The job `public_slug`.',
+            example: 'senior-go-engineer-acme-1a2b',
+          },
+        ],
         curl: `curl "${BASE_URL}/jobs/senior-go-engineer-acme-1a2b/apply-form"`,
         responseExample: `{
   "data": {
@@ -428,7 +525,15 @@ export const GROUPS: Group[] = [
           'answers to the same questions, and `cvs` — the CV you tailored for this vacancy and ' +
           'whether you uploaded one; an API key never sees those. `open` is false once the ' +
           'vacancy closed. `501` when this deployment cannot deliver applications.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'platform-engineer-acme-9f3c' }],
+        pathParams: [
+          {
+            name: 'slug',
+            type: 'string',
+            required: true,
+            description: 'The job `public_slug`.',
+            example: 'platform-engineer-acme-9f3c',
+          },
+        ],
         curl: `curl "${BASE_URL}/jobs/platform-engineer-acme-9f3c/direct-apply"`,
         responseExample: `{
   "data": {
@@ -455,12 +560,46 @@ export const GROUPS: Group[] = [
           'sent (or while it is being sent), `400` naming the first unanswered or invalid ' +
           'question, `403` unverified, `410` closed, `429` past the daily limit, `502` when ' +
           'delivery failed — applying again retries it.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'platform-engineer-acme-9f3c' }],
+        pathParams: [
+          {
+            name: 'slug',
+            type: 'string',
+            required: true,
+            description: 'The job `public_slug`.',
+            example: 'platform-engineer-acme-9f3c',
+          },
+        ],
         body: [
-          { name: 'resume', type: 'boolean', required: false, description: 'Send the CV file uploaded to your profile. Exactly one of `resume` and `cv_id`.', example: 'true' },
-          { name: 'cv_id', type: 'string', required: false, description: 'The CV you tailored for THIS vacancy (`cvs.tailored.id` from the form). Any other CV is a `404`.', example: '6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01' },
-          { name: 'answers', type: 'object', required: false, description: 'Question id → answer; a yes/no answer is `"true"` or `"false"`, a list answer one of its options.', example: '{"q1":"true"}' },
-          { name: 'note', type: 'string', required: false, description: 'Up to 2000 characters to the employer.', example: 'Happy to talk this week.' },
+          {
+            name: 'resume',
+            type: 'boolean',
+            required: false,
+            description: 'Send the CV file uploaded to your profile. Exactly one of `resume` and `cv_id`.',
+            example: 'true',
+          },
+          {
+            name: 'cv_id',
+            type: 'string',
+            required: false,
+            description:
+              'The CV you tailored for THIS vacancy (`cvs.tailored.id` from the form). Any other CV is a `404`.',
+            example: '6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01',
+          },
+          {
+            name: 'answers',
+            type: 'object',
+            required: false,
+            description:
+              'Question id → answer; a yes/no answer is `"true"` or `"false"`, a list answer one of its options.',
+            example: '{"q1":"true"}',
+          },
+          {
+            name: 'note',
+            type: 'string',
+            required: false,
+            description: 'Up to 2000 characters to the employer.',
+            example: 'Happy to talk this week.',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/jobs/platform-engineer-acme-9f3c/direct-apply" \\
   -b cookies.txt -H 'Content-Type: application/json' \\
@@ -585,10 +724,21 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
           'your skills cover and which missing skill unlocks the most. `400` on empty ' +
           'skills, `503` when search is unavailable.',
         query: [
-          { name: '(any search filter)', type: 'string', description: 'Any search facet param scopes the market (the `skills` facet is ignored here).', example: 'category=backend' },
+          {
+            name: '(any search filter)',
+            type: 'string',
+            description: 'Any search facet param scopes the market (the `skills` facet is ignored here).',
+            example: 'category=backend',
+          },
         ],
         body: [
-          { name: 'skills', type: 'string[]', required: true, description: 'The skill list to score (max 100).', example: '["go","postgresql"]' },
+          {
+            name: 'skills',
+            type: 'string[]',
+            required: true,
+            description: 'The skill list to score (max 100).',
+            example: '["go","postgresql"]',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/market/coverage?category=backend" \\
   -H "Authorization: Bearer $FREEHIRE_API_KEY" \\
@@ -625,20 +775,62 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
           'reports the count matching the full filter.',
         query: [
           { name: 'q', type: 'string', description: 'Case-insensitive name substring filter.', example: 'acme' },
-          { name: 'collections', type: 'string', description: 'Curated-collection slug (e.g. `yc`, `bigtech`). Repeatable.', example: 'yc' },
+          {
+            name: 'collections',
+            type: 'string',
+            description: 'Curated-collection slug (e.g. `yc`, `bigtech`). Repeatable.',
+            example: 'yc',
+          },
           { name: 'regions', type: 'string', description: 'Region the company hires in. Repeatable.', example: 'eu' },
           { name: 'countries', type: 'string', description: 'ISO 3166-1 alpha-2 country. Repeatable.', example: 'DE' },
-          { name: 'industries', type: 'string', description: 'Curated industry. Matches a company through its curated industries **or** the equivalent job-derived domain. Repeatable.', example: 'fintech' },
-          { name: 'domains', type: 'string', description: 'Raw job-derived domain, including values no industry names (`other`, `media`, `mobility`). Repeatable.', example: 'fintech' },
-          { name: 'company_type', type: 'string', description: 'Company type (e.g. `product`, `outstaff`). Repeatable.', example: 'product' },
-          { name: 'company_size', type: 'string', description: 'Size bucket (e.g. `51-200`). Repeatable.', example: '51-200' },
-          { name: 'remote_regions', type: 'string', description: 'Job-derived remote-hiring region. Repeatable.', example: 'eu' },
+          {
+            name: 'industries',
+            type: 'string',
+            description:
+              'Curated industry. Matches a company through its curated industries **or** the equivalent job-derived domain. Repeatable.',
+            example: 'fintech',
+          },
+          {
+            name: 'domains',
+            type: 'string',
+            description:
+              'Raw job-derived domain, including values no industry names (`other`, `media`, `mobility`). Repeatable.',
+            example: 'fintech',
+          },
+          {
+            name: 'company_type',
+            type: 'string',
+            description: 'Company type (e.g. `product`, `outstaff`). Repeatable.',
+            example: 'product',
+          },
+          {
+            name: 'company_size',
+            type: 'string',
+            description: 'Size bucket (e.g. `51-200`). Repeatable.',
+            example: '51-200',
+          },
+          {
+            name: 'remote_regions',
+            type: 'string',
+            description: 'Job-derived remote-hiring region. Repeatable.',
+            example: 'eu',
+          },
           { name: 'yc_batch', type: 'string', description: 'YC batch (e.g. `W21`). Repeatable.', example: 'W21' },
           { name: 'yc_status', type: 'string', description: 'YC company status. Repeatable.', example: 'active' },
           { name: 'yc_stage', type: 'string', description: 'YC funding stage. Repeatable.', example: 'series-a' },
-          { name: 'yc_flags', type: 'string', description: 'Curated YC highlight flag. Repeatable.', example: 'hiring' },
+          {
+            name: 'yc_flags',
+            type: 'string',
+            description: 'Curated YC highlight flag. Repeatable.',
+            example: 'hiring',
+          },
           { name: 'maturity', type: 'string', description: 'Company stage/maturity. Repeatable.', example: 'growth' },
-          { name: 'subindustries', type: 'string', description: 'YC subindustry leaf (see /companies/subindustries). Repeatable.', example: 'payments' },
+          {
+            name: 'subindustries',
+            type: 'string',
+            description: 'YC subindustry leaf (see /companies/subindustries). Repeatable.',
+            example: 'payments',
+          },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
           { name: 'offset', type: 'integer', description: 'Rows to skip.', example: '0' },
         ],
@@ -678,7 +870,9 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
         path: '/companies/{slug}',
         auth: 'none',
         summary: 'A company and a page of its open jobs.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' }],
+        pathParams: [
+          { name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' },
+        ],
         query: [
           { name: 'limit', type: 'integer', description: 'Page size for the jobs list.', example: '20' },
           { name: 'offset', type: 'integer', description: 'Rows to skip in the jobs list.', example: '0' },
@@ -725,10 +919,17 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
           '`meta.has_more` says whether another page follows. Paging reaches the first 2000 ' +
           'rows (`offset + limit` ≤ 2000); a deeper page is a `400`. An unknown slug is a ' +
           '`404`; a slug retired by a company merge redirects `301` to the canonical one.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' }],
+        pathParams: [
+          { name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' },
+        ],
         query: [
           { name: 'limit', type: 'integer', description: 'Page size (max 100).', example: '20' },
-          { name: 'offset', type: 'integer', description: 'Rows to skip; `offset + limit` may not exceed 2000.', example: '0' },
+          {
+            name: 'offset',
+            type: 'integer',
+            description: 'Rows to skip; `offset + limit` may not exceed 2000.',
+            example: '0',
+          },
         ],
         curl: `curl "${BASE_URL}/companies/acme/closed-jobs"`,
         responseExample: `{
@@ -750,11 +951,28 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
           'counted once per posting per day, crawlers excluded). `lifetime` is omitted below 5 ' +
           'such closures — absent, never 0. An unknown slug is a `404`; a slug retired ' +
           'by a company merge redirects `301` to the canonical one.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' }],
+        pathParams: [
+          { name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' },
+        ],
         query: [
-          { name: 'granularity', type: 'string', description: 'One of `day`, `week`, `month` (default `day`).', example: 'week' },
-          { name: 'from', type: 'string (YYYY-MM-DD)', description: 'Start date (UTC). Defaults to a per-granularity window before `to`.', example: '2026-01-01' },
-          { name: 'to', type: 'string (YYYY-MM-DD)', description: 'End date (UTC). Defaults to today.', example: '2026-06-30' },
+          {
+            name: 'granularity',
+            type: 'string',
+            description: 'One of `day`, `week`, `month` (default `day`).',
+            example: 'week',
+          },
+          {
+            name: 'from',
+            type: 'string (YYYY-MM-DD)',
+            description: 'Start date (UTC). Defaults to a per-granularity window before `to`.',
+            example: '2026-01-01',
+          },
+          {
+            name: 'to',
+            type: 'string (YYYY-MM-DD)',
+            description: 'End date (UTC). Defaults to today.',
+            example: '2026-06-30',
+          },
         ],
         curl: `curl "${BASE_URL}/companies/acme/hiring?granularity=week"`,
         responseExample: `{
@@ -819,7 +1037,9 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
         path: '/companies/{slug}/feedback',
         auth: 'none',
         summary: "List a company's feedback, newest first.",
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' }],
+        pathParams: [
+          { name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' },
+        ],
         query: [
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
           { name: 'offset', type: 'integer', description: 'Rows to skip.', example: '0' },
@@ -845,7 +1065,9 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
         path: '/companies/{slug}/feedback/mine',
         auth: 'cookie',
         summary: 'Your own feedback on this company, across every category (empty if none).',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' }],
+        pathParams: [
+          { name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' },
+        ],
         curl: `curl "${BASE_URL}/companies/acme/feedback/mine" -b cookies.txt`,
         responseExample: `{ "data": [ { "id": 5, "author": "quiet-falcon-42", "rating": 4, "feedback_type": "interview", "body": "...", "created_at": "...", "updated_at": "..." } ] }`,
       },
@@ -860,11 +1082,25 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
           "second one. The response's nested `company` field is the freshly " +
           'recomputed rating count/average, so you can update your own view of ' +
           'the company without a second fetch. `422` on an empty body.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' }],
+        pathParams: [
+          { name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' },
+        ],
         body: [
           { name: 'rating', type: 'integer', required: true, description: '1–5 stars.', example: '4' },
-          { name: 'feedback_type', type: 'string', required: true, description: 'Review category, e.g. `interview`, `culture`, `compensation`.', example: 'interview' },
-          { name: 'body', type: 'string', required: true, description: 'Free-text review.', example: 'Fast process, clear communication.' },
+          {
+            name: 'feedback_type',
+            type: 'string',
+            required: true,
+            description: 'Review category, e.g. `interview`, `culture`, `compensation`.',
+            example: 'interview',
+          },
+          {
+            name: 'body',
+            type: 'string',
+            required: true,
+            description: 'Free-text review.',
+            example: 'Fast process, clear communication.',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/companies/acme/feedback" \\
   -b cookies.txt -H 'Content-Type: application/json' \\
@@ -888,10 +1124,19 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
         auth: 'cookie',
         summary: 'Delete your feedback in one category (no-op if absent).',
         description:
-          "Returns the company's freshly recomputed counters, the same " +
-          'cast/clear shape as the vote endpoints.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' }],
-        query: [{ name: 'feedback_type', type: 'string', required: true, description: 'Which category to delete.', example: 'interview' }],
+          "Returns the company's freshly recomputed counters, the same cast/clear shape as the vote endpoints.",
+        pathParams: [
+          { name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' },
+        ],
+        query: [
+          {
+            name: 'feedback_type',
+            type: 'string',
+            required: true,
+            description: 'Which category to delete.',
+            example: 'interview',
+          },
+        ],
         curl: `curl -X DELETE "${BASE_URL}/companies/acme/feedback?feedback_type=interview" -b cookies.txt`,
         responseExample: `{ "data": { "feedback_count": 11, "feedback_rating_avg": 4.0 } }`,
       },
@@ -901,7 +1146,9 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
         auth: 'cookie',
         summary: 'Report a specific review.',
         description: 'A second report of the same review by you is a silent no-op.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The feedback entry id.', example: '5' }],
+        pathParams: [
+          { name: 'id', type: 'integer', required: true, description: 'The feedback entry id.', example: '5' },
+        ],
         body: [{ name: 'reason', type: 'string', required: true, description: 'Report reason code.', example: 'spam' }],
         curl: `curl -X POST "${BASE_URL}/company-feedback/5/report" \\
   -b cookies.txt -H 'Content-Type: application/json' \\
@@ -937,7 +1184,9 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
         auth: 'moderator',
         summary: "Hide a review, dropping it from the company's public list and average.",
         description: 'Idempotent. 404 for an unknown id.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The feedback entry id.', example: '5' }],
+        pathParams: [
+          { name: 'id', type: 'integer', required: true, description: 'The feedback entry id.', example: '5' },
+        ],
         curl: `curl -X POST "${BASE_URL}/company-feedback/5/hide" -b cookies.txt`,
         responseExample: `(204 No Content)`,
       },
@@ -956,7 +1205,13 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
         auth: 'none',
         summary: 'Create an account and start a session.',
         body: [
-          { name: 'email', type: 'string', required: true, description: 'Account email (canonical key).', example: 'me@example.com' },
+          {
+            name: 'email',
+            type: 'string',
+            required: true,
+            description: 'Account email (canonical key).',
+            example: 'me@example.com',
+          },
           { name: 'password', type: 'string', required: true, description: 'Account password.' },
         ],
         curl: `curl -X POST "${BASE_URL}/auth/register" \\
@@ -1013,7 +1268,15 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
           'Browser-only: redirects to the provider, then back to ' +
           '`/auth/oauth/{provider}/callback`, which sets the session cookie and ' +
           'redirects to the app. Not a JSON endpoint.',
-        pathParams: [{ name: 'provider', type: 'string', required: true, description: 'One of the enabled providers.', example: 'google' }],
+        pathParams: [
+          {
+            name: 'provider',
+            type: 'string',
+            required: true,
+            description: 'One of the enabled providers.',
+            example: 'google',
+          },
+        ],
         curl: `# open in a browser:
 ${BASE_URL}/auth/oauth/google/start`,
       },
@@ -1022,7 +1285,8 @@ ${BASE_URL}/auth/oauth/google/start`,
         path: '/auth/verify/request',
         auth: 'cookie',
         summary: 'Send (or resend) a six-digit email verification code.',
-        description: 'Mails a fresh code to the caller’s own address, never a body field. Returns `202 Accepted`. `409` if the address is already confirmed.',
+        description:
+          'Mails a fresh code to the caller’s own address, never a body field. Returns `202 Accepted`. `409` if the address is already confirmed.',
         curl: `curl -X POST "${BASE_URL}/auth/verify/request" -b cookies.txt`,
       },
       {
@@ -1030,7 +1294,15 @@ ${BASE_URL}/auth/oauth/google/start`,
         path: '/auth/verify/confirm',
         auth: 'cookie',
         summary: 'Confirm the address with the mailed code.',
-        body: [{ name: 'code', type: 'string', required: true, description: 'The six-digit code mailed to your address.', example: '123456' }],
+        body: [
+          {
+            name: 'code',
+            type: 'string',
+            required: true,
+            description: 'The six-digit code mailed to your address.',
+            example: '123456',
+          },
+        ],
         curl: `curl -X POST "${BASE_URL}/auth/verify/confirm" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
   -d '{"code":"123456"}'`,
@@ -1041,8 +1313,11 @@ ${BASE_URL}/auth/oauth/google/start`,
         path: '/auth/password/forgot',
         auth: 'none',
         summary: 'Request a password-reset code by email.',
-        description: 'Always answers `202`, whether or not the address has an account — this is deliberately not an email-enumeration oracle.',
-        body: [{ name: 'email', type: 'string', required: true, description: 'Account email.', example: 'me@example.com' }],
+        description:
+          'Always answers `202`, whether or not the address has an account — this is deliberately not an email-enumeration oracle.',
+        body: [
+          { name: 'email', type: 'string', required: true, description: 'Account email.', example: 'me@example.com' },
+        ],
         curl: `curl -X POST "${BASE_URL}/auth/password/forgot" \\
   -H 'Content-Type: application/json' \\
   -d '{"email":"me@example.com"}'`,
@@ -1052,7 +1327,8 @@ ${BASE_URL}/auth/oauth/google/start`,
         path: '/auth/password/reset',
         auth: 'none',
         summary: 'Set a new password against a mailed code.',
-        description: 'Public — the code is the credential. Success revokes every existing session, so sign in fresh with the new password afterward.',
+        description:
+          'Public — the code is the credential. Success revokes every existing session, so sign in fresh with the new password afterward.',
         body: [
           { name: 'email', type: 'string', required: true, description: 'Account email.', example: 'me@example.com' },
           { name: 'code', type: 'string', required: true, description: 'The mailed reset code.', example: '123456' },
@@ -1068,7 +1344,8 @@ ${BASE_URL}/auth/oauth/google/start`,
         path: '/auth/logout-all',
         auth: 'cookie',
         summary: 'Sign out every session on the account, including this one.',
-        description: 'Bumps the account’s session generation (stranding every issued token and API-key session state) then clears the caller’s cookie. Cookie-only — an API key must not be able to sign a human out of their browser. Returns `204 No Content`.',
+        description:
+          'Bumps the account’s session generation (stranding every issued token and API-key session state) then clears the caller’s cookie. Cookie-only — an API key must not be able to sign a human out of their browser. Returns `204 No Content`.',
         curl: `curl -X POST "${BASE_URL}/auth/logout-all" -b cookies.txt`,
       },
       {
@@ -1081,7 +1358,14 @@ ${BASE_URL}/auth/oauth/google/start`,
           'single-use code (not the session directly); this exchanges it for ' +
           'the session cookie, landing in the app’s own cookie jar. Public — the ' +
           'code is the credential, and a missing/expired/reused one is a `401`.',
-        body: [{ name: 'code', type: 'string', required: true, description: 'The one-time code from the mobile callback redirect.' }],
+        body: [
+          {
+            name: 'code',
+            type: 'string',
+            required: true,
+            description: 'The one-time code from the mobile callback redirect.',
+          },
+        ],
         curl: `curl -X POST "${BASE_URL}/auth/oauth/exchange" \\
   -H 'Content-Type: application/json' -c cookies.txt \\
   -d '{"code":"..."}'`,
@@ -1099,7 +1383,12 @@ ${BASE_URL}/auth/oauth/google/start`,
           'origin, or this is a `400`. A signed-out visitor is bounced through ' +
           'sign-in first, then back to this same consent step.',
         query: [
-          { name: 'redirect_uri', type: 'string', required: true, description: 'The allowlisted chromiumapp.org redirect the extension is listening on.' },
+          {
+            name: 'redirect_uri',
+            type: 'string',
+            required: true,
+            description: 'The allowlisted chromiumapp.org redirect the extension is listening on.',
+          },
           { name: 'state', type: 'string', description: 'Opaque value echoed back on completion.' },
         ],
         curl: `# opened by the extension, not called directly:
@@ -1117,7 +1406,12 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           'sent to a server); on anything else, redirects with `error=access_denied`. ' +
           'Not a JSON endpoint.',
         body: [
-          { name: 'redirect_uri', type: 'string', required: true, description: 'Must match the allowlisted redirect validated on the GET step.' },
+          {
+            name: 'redirect_uri',
+            type: 'string',
+            required: true,
+            description: 'Must match the allowlisted redirect validated on the GET step.',
+          },
           { name: 'state', type: 'string', description: 'Opaque value echoed back.' },
           { name: 'decision', type: 'string', required: true, description: '`allow` or `cancel`.', example: 'allow' },
         ],
@@ -1197,7 +1491,12 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           'outcome for an application nobody answered; nothing sets it for you.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         body: [
-          { name: 'stage', type: 'string', description: 'Application stage from the vocabulary above.', example: 'interview' },
+          {
+            name: 'stage',
+            type: 'string',
+            description: 'Application stage from the vocabulary above.',
+            example: 'interview',
+          },
           { name: 'notes', type: 'string', description: 'Free-text notes.' },
         ],
         curl: `curl -X PATCH "${BASE_URL}/jobs/<slug>/track" \\
@@ -1234,7 +1533,15 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           'tracking-board row id instead of the job slug — needed when a ' +
           'tracked application’s posting was later pruned and has no slug left ' +
           'to address it by. Same `stage` vocabulary and body shape.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The tracking row id (from `/me/tracking`).', example: '42' }],
+        pathParams: [
+          {
+            name: 'id',
+            type: 'integer',
+            required: true,
+            description: 'The tracking row id (from `/me/tracking`).',
+            example: '42',
+          },
+        ],
         body: [
           { name: 'stage', type: 'string', description: 'Application stage.', example: 'interview' },
           { name: 'notes', type: 'string', description: 'Free-text notes.' },
@@ -1250,7 +1557,9 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
         path: '/me/applications/{id}',
         auth: 'cookie-or-key',
         summary: 'Remove the interaction record entirely, addressed by row id.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The tracking row id.', example: '42' }],
+        pathParams: [
+          { name: 'id', type: 'integer', required: true, description: 'The tracking row id.', example: '42' },
+        ],
         curl: `curl -X DELETE "${BASE_URL}/me/applications/42" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{ "data": { "ok": true } }`,
       },
@@ -1259,7 +1568,9 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
         path: '/me/applications/{id}/stage',
         auth: 'cookie-or-key',
         summary: 'Clear the application stage, addressed by row id.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The tracking row id.', example: '42' }],
+        pathParams: [
+          { name: 'id', type: 'integer', required: true, description: 'The tracking row id.', example: '42' },
+        ],
         curl: `curl -X DELETE "${BASE_URL}/me/applications/42/stage" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{ "data": { "job_id": 42, "stage": null } }`,
       },
@@ -1297,7 +1608,13 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           '`meta.counts` gives the per-filter totals for tab badges. Closed jobs stay ' +
           'listed so your history never shrinks.',
         query: [
-          { name: 'filter', type: 'string', description: 'Subset to return: `all`, `viewed`, `saved`, `applied`, or `board` (default `all`; an unknown value is a 400).', example: 'applied' },
+          {
+            name: 'filter',
+            type: 'string',
+            description:
+              'Subset to return: `all`, `viewed`, `saved`, `applied`, or `board` (default `all`; an unknown value is a 400).',
+            example: 'applied',
+          },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
           { name: 'offset', type: 'integer', description: 'Rows to skip.', example: '0' },
         ],
@@ -1419,9 +1736,9 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
         summary: 'Company slugs of the employers you have applied to.',
         description:
           'Lets the SPA mark "you already applied to this company" on any posting of theirs ' +
-          'without authenticating the public job reads: compare a posting\'s `company_slug` ' +
+          "without authenticating the public job reads: compare a posting's `company_slug` " +
           'against this set. Counts applications actually made (not ones still being ' +
-          'prepared), keyed by the posting\'s current company slug and resolved through ' +
+          "prepared), keyed by the posting's current company slug and resolved through " +
           'company merges. Newest first, drawn from your 1000 most recent applications.',
         curl: `curl "${BASE_URL}/me/tracking/applied-companies" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{ "data": ["acme", "globex"] }`,
@@ -1439,7 +1756,7 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           'your own employer-reply rate against the rate across every candidate — both sides ' +
           'counted only from applications whose owner has a connected mailbox, so a reply ' +
           'would have been seen. It is present only once both your own count and the global ' +
-          "count reach a minimum sample size; absent otherwise, never a zero or an estimate.",
+          'count reach a minimum sample size; absent otherwise, never a zero or an estimate.',
         curl: `curl "${BASE_URL}/me/tracking/pipeline" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
   "data": {
@@ -1498,8 +1815,21 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           'the content and leaves the event standing. Both bounds are required and may ' +
           'span at most 366 days.',
         query: [
-          { name: 'from', type: 'string (RFC3339)', required: true, description: 'Lower bound, inclusive. Use `Z`, or percent-encode a numeric offset — a bare `+` decodes as a space in a query string and will be rejected.', example: '2026-08-01T00:00:00Z' },
-          { name: 'to', type: 'string (RFC3339)', required: true, description: 'Upper bound, inclusive.', example: '2026-08-31T23:59:59Z' },
+          {
+            name: 'from',
+            type: 'string (RFC3339)',
+            required: true,
+            description:
+              'Lower bound, inclusive. Use `Z`, or percent-encode a numeric offset — a bare `+` decodes as a space in a query string and will be rejected.',
+            example: '2026-08-01T00:00:00Z',
+          },
+          {
+            name: 'to',
+            type: 'string (RFC3339)',
+            required: true,
+            description: 'Upper bound, inclusive.',
+            example: '2026-08-31T23:59:59Z',
+          },
         ],
         curl: `curl "${BASE_URL}/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T23:59:59Z" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
@@ -1544,8 +1874,20 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           '`cancelled` — a cancelled meeting is still served, not withheld. Both ' +
           'bounds are required, RFC3339.',
         query: [
-          { name: 'from', type: 'string (RFC3339)', required: true, description: 'Lower bound, inclusive.', example: '2026-08-01T00:00:00Z' },
-          { name: 'to', type: 'string (RFC3339)', required: true, description: 'Upper bound, inclusive.', example: '2026-08-31T23:59:59Z' },
+          {
+            name: 'from',
+            type: 'string (RFC3339)',
+            required: true,
+            description: 'Lower bound, inclusive.',
+            example: '2026-08-01T00:00:00Z',
+          },
+          {
+            name: 'to',
+            type: 'string (RFC3339)',
+            required: true,
+            description: 'Upper bound, inclusive.',
+            example: '2026-08-31T23:59:59Z',
+          },
         ],
         curl: `curl "${BASE_URL}/me/interviews?from=2026-08-01T00:00:00Z&to=2026-08-31T23:59:59Z" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
@@ -1591,14 +1933,37 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
         path: '/assistant/sessions',
         auth: 'cookie-or-key',
         summary: 'Start a new conversation.',
-        description: 'For shortlisting the current jobs list, pass search_query (the complete serialized query; an empty string is valid) and a client-generated request_id UUID. Only chat sessions accept this binding. Reusing the UUID with the same owner and canonical query returns the same session; changing its query returns 409. Unknown search parameters return 400 at creation. A condition that cannot be enforced when a search runs (for example hide_seen without a readable history) fails that search instead, and the assistant reports it rather than widening the search. Search-bound responses include search_context: { query, brief }; the original query is immutable and the selection brief is local to the conversation.',
+        description:
+          'For shortlisting the current jobs list, pass search_query (the complete serialized query; an empty string is valid) and a client-generated request_id UUID. Only chat sessions accept this binding. Reusing the UUID with the same owner and canonical query returns the same session; changing its query returns 409. Unknown search parameters return 400 at creation. A condition that cannot be enforced when a search runs (for example hide_seen without a readable history) fails that search instead, and the assistant reports it rather than widening the search. Search-bound responses include search_context: { query, brief }; the original query is immutable and the selection brief is local to the conversation.',
         body: [
-          { name: 'search_query', type: 'string', description: 'Optional complete job-search query, at most 8000 bytes. Pagination and tracking parameters are removed.', example: 'skills=go&salary_min=80000&work_mode=remote' },
-          { name: 'request_id', type: 'string (UUID)', description: 'Required with search_query. Reuse the same UUID when retrying creation.', example: 'b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f' },
+          {
+            name: 'search_query',
+            type: 'string',
+            description:
+              'Optional complete job-search query, at most 8000 bytes. Pagination and tracking parameters are removed.',
+            example: 'skills=go&salary_min=80000&work_mode=remote',
+          },
+          {
+            name: 'request_id',
+            type: 'string (UUID)',
+            description: 'Required with search_query. Reuse the same UUID when retrying creation.',
+            example: 'b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f',
+          },
         ],
         query: [
-          { name: 'preset', type: 'string', description: 'One of `chat` (default), `profile`, `browse`, `interview`, `debrief`, `apply`.', example: 'chat' },
-          { name: 'job', type: 'string', description: 'Public slug of an application you hold. Required for `interview`/`debrief`/`apply`, ignored otherwise.', example: 'senior-go-engineer-acme-1a2b' },
+          {
+            name: 'preset',
+            type: 'string',
+            description: 'One of `chat` (default), `profile`, `browse`, `interview`, `debrief`, `apply`.',
+            example: 'chat',
+          },
+          {
+            name: 'job',
+            type: 'string',
+            description:
+              'Public slug of an application you hold. Required for `interview`/`debrief`/`apply`, ignored otherwise.',
+            example: 'senior-go-engineer-acme-1a2b',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/assistant/sessions?preset=chat" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{ "data": { "id": "b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f", "preset": "chat", "label": "" } }`,
@@ -1622,7 +1987,15 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
         path: '/assistant/sessions/{id}',
         auth: 'cookie-or-key',
         summary: 'One owned conversation with its full transcript.',
-        pathParams: [{ name: 'id', type: 'string (UUID)', required: true, description: 'The session id.', example: 'b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f' }],
+        pathParams: [
+          {
+            name: 'id',
+            type: 'string (UUID)',
+            required: true,
+            description: 'The session id.',
+            example: 'b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f',
+          },
+        ],
         curl: `curl "${BASE_URL}/assistant/sessions/<id>" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
   "data": {
@@ -1658,7 +2031,15 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
           '(`completed`, `cancelled`, or `error`). The turn keeps running even if you stop ' +
           'reading — stopping it is a separate call to `.../cancel`.',
         pathParams: [{ name: 'id', type: 'string (UUID)', required: true, description: 'The session id.' }],
-        body: [{ name: 'text', type: 'string', required: true, description: 'Your message.', example: 'Should I relocate for this role?' }],
+        body: [
+          {
+            name: 'text',
+            type: 'string',
+            required: true,
+            description: 'Your message.',
+            example: 'Should I relocate for this role?',
+          },
+        ],
         curl: `curl -N -X POST "${BASE_URL}/assistant/sessions/<id>/messages" \\
   -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \\
   -d '{"text":"Should I relocate for this role?"}'`,
@@ -1678,7 +2059,8 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/assistant/sessions/{id}/cancel',
         auth: 'cookie-or-key',
         summary: 'Stop the session’s running turn.',
-        description: 'A no-op (still `204`) when nothing is running — you cannot see whether a turn is live before asking.',
+        description:
+          'A no-op (still `204`) when nothing is running — you cannot see whether a turn is live before asking.',
         pathParams: [{ name: 'id', type: 'string (UUID)', required: true, description: 'The session id.' }],
         curl: `curl -X POST "${BASE_URL}/assistant/sessions/<id>/cancel" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
       },
@@ -1807,7 +2189,13 @@ data: {"type":"result","stop_reason":"completed"}
           'only by scheme, `www.`, tracking query or trailing slash counts as the same ' +
           'posting. That `409` names the existing job (`/jobs/<public_slug>`) in its error.',
         body: [
-          { name: 'url', type: 'string', required: true, description: 'Link to the original posting.', example: 'https://acme.com/careers/123' },
+          {
+            name: 'url',
+            type: 'string',
+            required: true,
+            description: 'Link to the original posting.',
+            example: 'https://acme.com/careers/123',
+          },
           { name: 'title', type: 'string', required: true, description: 'Job title.', example: 'Senior Go Engineer' },
           { name: 'company', type: 'string', required: true, description: 'Company name.', example: 'Acme' },
           { name: 'location', type: 'string', description: 'Free-text location.', example: 'Remote — EU' },
@@ -1891,7 +2279,13 @@ data: {"type":"result","stop_reason":"completed"}
         summary: 'Report a problem with a job.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         body: [
-          { name: 'reason', type: 'string', required: true, description: 'Short reason code/category.', example: 'expired' },
+          {
+            name: 'reason',
+            type: 'string',
+            required: true,
+            description: 'Short reason code/category.',
+            example: 'expired',
+          },
           { name: 'details', type: 'string', description: 'Free-text details.' },
           { name: 'contact_telegram', type: 'string', description: 'Optional contact handle.' },
         ],
@@ -1920,7 +2314,8 @@ data: {"type":"result","stop_reason":"completed"}
           {
             name: 'note',
             type: 'string',
-            description: 'What you did about the report. Emailed to the reporter verbatim when notify_reporter is set, and stored as the review reason either way.',
+            description:
+              'What you did about the report. Emailed to the reporter verbatim when notify_reporter is set, and stored as the review reason either way.',
             example: 'Fixed — the job is now marked hybrid',
           },
           {
@@ -1980,7 +2375,13 @@ data: {"type":"result","stop_reason":"completed"}
           'you already have on this job is a `409`.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         body: [
-          { name: 'applied_on', type: 'string', required: true, description: 'The day you applied (`YYYY-MM-DD`).', example: '2026-07-29' },
+          {
+            name: 'applied_on',
+            type: 'string',
+            required: true,
+            description: 'The day you applied (`YYYY-MM-DD`).',
+            example: '2026-07-29',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/jobs/<slug>/ghost-report" \\
   -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \\
@@ -2012,7 +2413,13 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'moderator',
         summary: 'Create a curated job.',
         body: [
-          { name: 'url', type: 'string', required: true, description: 'Link to the posting.', example: 'https://acme.com/careers/123' },
+          {
+            name: 'url',
+            type: 'string',
+            required: true,
+            description: 'Link to the posting.',
+            example: 'https://acme.com/careers/123',
+          },
           { name: 'source', type: 'string', description: 'Source label.', example: 'manual' },
           { name: 'title', type: 'string', required: true, description: 'Job title.', example: 'Senior Go Engineer' },
           { name: 'company', type: 'string', required: true, description: 'Company name.', example: 'Acme' },
@@ -2032,7 +2439,13 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'moderator',
         summary: 'Edit a curated job.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
-        body: [{ name: '(any job field)', type: 'varies', description: 'Same fields as create; provided fields are updated.' }],
+        body: [
+          {
+            name: '(any job field)',
+            type: 'varies',
+            description: 'Same fields as create; provided fields are updated.',
+          },
+        ],
         curl: `curl -X PATCH "${BASE_URL}/jobs/<slug>" \\
   -b cookies.txt -H 'Content-Type: application/json' \\
   -d '{"title":"Staff Go Engineer"}'`,
@@ -2075,10 +2488,33 @@ data: {"type":"result","stop_reason":"completed"}
           '(must be a job category), empty skills, or an out-of-vocabulary location ' +
           'value is a `400`.',
         body: [
-          { name: 'specializations', type: 'string[]', required: true, description: 'One or more job categories (max 5).', example: '["backend"]' },
-          { name: 'skills', type: 'string[]', required: true, description: 'Canonical skill tokens (non-empty).', example: '["go","postgresql"]' },
-          { name: 'job_languages', type: 'string[]', description: 'Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any language.', example: '["en","ru"]' },
-          { name: 'location_preferences', type: 'object', description: 'Optional location block (`work_modes`, `remote`, `base`, `relocation`); omit or null to clear.' },
+          {
+            name: 'specializations',
+            type: 'string[]',
+            required: true,
+            description: 'One or more job categories (max 5).',
+            example: '["backend"]',
+          },
+          {
+            name: 'skills',
+            type: 'string[]',
+            required: true,
+            description: 'Canonical skill tokens (non-empty).',
+            example: '["go","postgresql"]',
+          },
+          {
+            name: 'job_languages',
+            type: 'string[]',
+            description:
+              'Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any language.',
+            example: '["en","ru"]',
+          },
+          {
+            name: 'location_preferences',
+            type: 'object',
+            description:
+              'Optional location block (`work_modes`, `remote`, `base`, `relocation`); omit or null to clear.',
+          },
         ],
         curl: `curl -X PUT "${BASE_URL}/me/profile" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
@@ -2104,7 +2540,13 @@ data: {"type":"result","stop_reason":"completed"}
           'params (defaulting to your specializations). No profile is a `404`; `503` ' +
           'when search is unavailable.',
         query: [
-          { name: '(any search filter)', type: 'string', description: 'Any search facet param scopes the role (the `skills` facet is ignored; your profile skills are the measured set).', example: 'category=backend' },
+          {
+            name: '(any search filter)',
+            type: 'string',
+            description:
+              'Any search facet param scopes the role (the `skills` facet is ignored; your profile skills are the measured set).',
+            example: 'category=backend',
+          },
         ],
         curl: `curl "${BASE_URL}/me/profile/verdict" -b cookies.txt`,
         responseExample: `{
@@ -2166,7 +2608,11 @@ data: {"type":"result","stop_reason":"completed"}
           'categories it spans, and the resolved seniority (omitted when unresolved). ' +
           'When storage is configured it also stores the résumé once.',
         body: [
-          { name: 'text', type: 'string', description: 'Résumé plain text (JSON path); or send a PDF as multipart field `file`.' },
+          {
+            name: 'text',
+            type: 'string',
+            description: 'Résumé plain text (JSON path); or send a PDF as multipart field `file`.',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/me/resume/extract" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
@@ -2182,7 +2628,11 @@ data: {"type":"result","stop_reason":"completed"}
           'Accepts a PDF (multipart `file`) or JSON `{ "text": ... }`. Returns the ' +
           'résumé metadata. `501` when object storage is unconfigured.',
         body: [
-          { name: 'text', type: 'string', description: 'Résumé plain text (JSON path); or send a PDF as multipart field `file`.' },
+          {
+            name: 'text',
+            type: 'string',
+            description: 'Résumé plain text (JSON path); or send a PDF as multipart field `file`.',
+          },
         ],
         curl: `curl -X PUT "${BASE_URL}/me/resume" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
@@ -2288,16 +2738,42 @@ data: {"type":"result","stop_reason":"completed"}
           'negative notice period, an unknown name in `clear`, or a field both given and ' +
           'cleared is a `400` naming it.',
         body: [
-          { name: 'authorized_countries', type: 'string[]', description: 'ISO alpha-2 country codes you are authorized to work in.', example: '["DE","NL"]' },
+          {
+            name: 'authorized_countries',
+            type: 'string[]',
+            description: 'ISO alpha-2 country codes you are authorized to work in.',
+            example: '["DE","NL"]',
+          },
           { name: 'visa_sponsorship_needed', type: 'boolean', description: 'Whether you need visa sponsorship.' },
           { name: 'desired_salary_amount', type: 'integer', description: 'Desired salary figure.', example: '90000' },
-          { name: 'desired_salary_currency', type: 'string', description: 'Three-letter ISO 4217 currency code.', example: 'EUR' },
-          { name: 'desired_salary_period', type: 'string', description: 'Salary period, e.g. `year`, `month`.', example: 'year' },
+          {
+            name: 'desired_salary_currency',
+            type: 'string',
+            description: 'Three-letter ISO 4217 currency code.',
+            example: 'EUR',
+          },
+          {
+            name: 'desired_salary_period',
+            type: 'string',
+            description: 'Salary period, e.g. `year`, `month`.',
+            example: 'year',
+          },
           { name: 'notice_period_days', type: 'integer', description: 'Notice period in days.', example: '30' },
           { name: 'willing_to_relocate', type: 'boolean', description: 'Whether you are willing to relocate.' },
           { name: 'age_18_or_older', type: 'boolean', description: 'Whether you are 18 or older.' },
-          { name: 'privacy_consent', type: 'boolean', description: "Whether auto-apply may accept an employer's privacy / personal-data terms for you. Never covers marketing, SMS, future-openings or diversity opt-ins." },
-          { name: 'clear', type: 'string[]', description: 'Answers to withdraw back to unstated, by field name. Auto-apply then asks you instead of answering.', example: '["desired_salary_amount"]' },
+          {
+            name: 'privacy_consent',
+            type: 'boolean',
+            description:
+              "Whether auto-apply may accept an employer's privacy / personal-data terms for you. Never covers marketing, SMS, future-openings or diversity opt-ins.",
+          },
+          {
+            name: 'clear',
+            type: 'string[]',
+            description:
+              'Answers to withdraw back to unstated, by field name. Auto-apply then asks you instead of answering.',
+            example: '["desired_salary_amount"]',
+          },
         ],
         curl: `curl -X PUT "${BASE_URL}/me/screening-answers" \\
   -b cookies.txt -H 'Content-Type: application/json' \\
@@ -2358,12 +2834,42 @@ data: {"type":"result","stop_reason":"completed"}
           'that is not a three-letter ISO 4217 code, a period outside the vocabulary, ' +
           'or a non-positive income is a `400` naming the offending field.',
         body: [
-          { name: 'job_search_stage', type: 'string', description: 'One of `not_started`, `searching`, `employed_looking`, `exploring`.', example: 'searching' },
-          { name: 'biggest_challenges', type: 'string[]', description: 'Any of `recruiter_contact`, `job_fit`, `remote_flexible`, `working_abroad`, `visa_sponsorship`, `technical_interviews`, `english`, `first_job`, `just_starting`, `other`. `just_starting` stands alone. Replaces the stored list.', example: '["technical_interviews"]' },
-          { name: 'biggest_challenge_note', type: 'string', description: 'Free text. Accepted only while `biggest_challenges` includes `other`.' },
-          { name: 'current_income_amount', type: 'integer', description: 'What you earn today, in the currency and period below.', example: '5000' },
-          { name: 'current_income_currency', type: 'string', description: 'Three-letter ISO 4217 currency code.', example: 'USD' },
-          { name: 'current_income_period', type: 'string', description: 'Income period, e.g. `year`, `month`.', example: 'month' },
+          {
+            name: 'job_search_stage',
+            type: 'string',
+            description: 'One of `not_started`, `searching`, `employed_looking`, `exploring`.',
+            example: 'searching',
+          },
+          {
+            name: 'biggest_challenges',
+            type: 'string[]',
+            description:
+              'Any of `recruiter_contact`, `job_fit`, `remote_flexible`, `working_abroad`, `visa_sponsorship`, `technical_interviews`, `english`, `first_job`, `just_starting`, `other`. `just_starting` stands alone. Replaces the stored list.',
+            example: '["technical_interviews"]',
+          },
+          {
+            name: 'biggest_challenge_note',
+            type: 'string',
+            description: 'Free text. Accepted only while `biggest_challenges` includes `other`.',
+          },
+          {
+            name: 'current_income_amount',
+            type: 'integer',
+            description: 'What you earn today, in the currency and period below.',
+            example: '5000',
+          },
+          {
+            name: 'current_income_currency',
+            type: 'string',
+            description: 'Three-letter ISO 4217 currency code.',
+            example: 'USD',
+          },
+          {
+            name: 'current_income_period',
+            type: 'string',
+            description: 'Income period, e.g. `year`, `month`.',
+            example: 'month',
+          },
         ],
         curl: `curl -X PUT "${BASE_URL}/me/survey" \\
   -b cookies.txt -H 'Content-Type: application/json' \\
@@ -2403,9 +2909,24 @@ data: {"type":"result","stop_reason":"completed"}
           '`from` a per-granularity window before `to`. An unknown granularity or a ' +
           'range over 4000 days is a `400`.',
         query: [
-          { name: 'granularity', type: 'string', description: 'One of `day`, `week`, `month` (default `day`).', example: 'week' },
-          { name: 'from', type: 'string (YYYY-MM-DD)', description: 'Start date (UTC). Defaults to a per-granularity window before `to`.', example: '2026-01-01' },
-          { name: 'to', type: 'string (YYYY-MM-DD)', description: 'End date (UTC). Defaults to today.', example: '2026-06-30' },
+          {
+            name: 'granularity',
+            type: 'string',
+            description: 'One of `day`, `week`, `month` (default `day`).',
+            example: 'week',
+          },
+          {
+            name: 'from',
+            type: 'string (YYYY-MM-DD)',
+            description: 'Start date (UTC). Defaults to a per-granularity window before `to`.',
+            example: '2026-01-01',
+          },
+          {
+            name: 'to',
+            type: 'string (YYYY-MM-DD)',
+            description: 'End date (UTC). Defaults to today.',
+            example: '2026-06-30',
+          },
         ],
         curl: `curl "${BASE_URL}/stats/jobs-activity?granularity=week"`,
         responseExample: `{
@@ -2441,7 +2962,13 @@ data: {"type":"result","stop_reason":"completed"}
         summary: 'Save a search.',
         body: [
           { name: 'name', type: 'string', required: true, description: 'Display name.', example: 'Senior Go remote' },
-          { name: 'query', type: 'string', required: true, description: 'Canonical filter query string.', example: 'q=go&seniority=senior&work_mode=remote' },
+          {
+            name: 'query',
+            type: 'string',
+            required: true,
+            description: 'Canonical filter query string.',
+            example: 'q=go&seniority=senior&work_mode=remote',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/me/searches" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
@@ -2453,7 +2980,9 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/searches/{id}',
         auth: 'cookie',
         summary: 'Rename or re-query a saved search.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The saved-search id.', example: '2' }],
+        pathParams: [
+          { name: 'id', type: 'integer', required: true, description: 'The saved-search id.', example: '2' },
+        ],
         body: [
           { name: 'name', type: 'string', description: 'New name (optional).' },
           { name: 'query', type: 'string', description: 'New query (optional).' },
@@ -2468,7 +2997,9 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/searches/{id}',
         auth: 'cookie',
         summary: 'Delete a saved search.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The saved-search id.', example: '2' }],
+        pathParams: [
+          { name: 'id', type: 'integer', required: true, description: 'The saved-search id.', example: '2' },
+        ],
         curl: `curl -X DELETE "${BASE_URL}/me/searches/2" -b cookies.txt`,
         responseExample: `{ "data": { "ok": true } }`,
       },
@@ -2489,7 +3020,13 @@ data: {"type":"result","stop_reason":"completed"}
           'Channels: `telegram`, `email`, `push`, `webhook`. `push` needs a device the freehire mobile app has ' +
           'registered (`GET /me/push-tokens`) — without one the request is refused with 409.',
         body: [
-          { name: 'saved_search_id', type: 'integer', required: true, description: 'The saved search to subscribe.', example: '2' },
+          {
+            name: 'saved_search_id',
+            type: 'integer',
+            required: true,
+            description: 'The saved search to subscribe.',
+            example: '2',
+          },
           { name: 'channel', type: 'string', required: true, description: 'Delivery channel.', example: 'telegram' },
         ],
         curl: `curl -X POST "${BASE_URL}/me/subscriptions" \\
@@ -2502,8 +3039,18 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/subscriptions/{id}',
         auth: 'cookie',
         summary: 'Pause or resume a subscription.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The subscription id.', example: '1' }],
-        body: [{ name: 'active', type: 'boolean', required: true, description: 'Whether the subscription is active.', example: 'false' }],
+        pathParams: [
+          { name: 'id', type: 'integer', required: true, description: 'The subscription id.', example: '1' },
+        ],
+        body: [
+          {
+            name: 'active',
+            type: 'boolean',
+            required: true,
+            description: 'Whether the subscription is active.',
+            example: 'false',
+          },
+        ],
         curl: `curl -X PATCH "${BASE_URL}/me/subscriptions/1" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
   -d '{"active":false}'`,
@@ -2514,7 +3061,9 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/subscriptions/{id}',
         auth: 'cookie',
         summary: 'Delete a subscription.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The subscription id.', example: '1' }],
+        pathParams: [
+          { name: 'id', type: 'integer', required: true, description: 'The subscription id.', example: '1' },
+        ],
         curl: `curl -X DELETE "${BASE_URL}/me/subscriptions/1" -b cookies.txt`,
         responseExample: `{ "data": { "ok": true } }`,
       },
@@ -2580,7 +3129,13 @@ data: {"type":"result","stop_reason":"completed"}
           'Before the URL is stored it receives a test delivery (`saved_search_name` "freehire webhook test", an ' +
           'empty `jobs` list); a URL that does not answer it with a 2xx is refused with 422, naming what it answered.',
         body: [
-          { name: 'url', type: 'string', required: true, description: 'Destination URL — must be http or https.', example: 'https://example.com/hook' },
+          {
+            name: 'url',
+            type: 'string',
+            required: true,
+            description: 'Destination URL — must be http or https.',
+            example: 'https://example.com/hook',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/me/webhook" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
@@ -2592,7 +3147,15 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/webhook',
         auth: 'cookie',
         summary: 'Enable or disable your webhook destination without changing its URL.',
-        body: [{ name: 'enabled', type: 'boolean', required: true, description: 'Whether the destination is enabled.', example: 'false' }],
+        body: [
+          {
+            name: 'enabled',
+            type: 'boolean',
+            required: true,
+            description: 'Whether the destination is enabled.',
+            example: 'false',
+          },
+        ],
         curl: `curl -X PATCH "${BASE_URL}/me/webhook" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
   -d '{"enabled":false}'`,
@@ -2637,7 +3200,13 @@ data: {"type":"result","stop_reason":"completed"}
           'in on the same device, this reassigns the token to the new caller. ' +
           'Returns `204 No Content`.',
         body: [
-          { name: 'token', type: 'string', required: true, description: 'The Expo push token minted by the device.', example: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]' },
+          {
+            name: 'token',
+            type: 'string',
+            required: true,
+            description: 'The Expo push token minted by the device.',
+            example: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
+          },
           { name: 'platform', type: 'string', required: true, description: '`ios` or `android`.', example: 'ios' },
         ],
         curl: `curl -X POST "${BASE_URL}/me/push-tokens" \\
@@ -2671,7 +3240,8 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/push-tokens/test',
         auth: 'cookie',
         summary: 'Send a test push to all of your own registered devices.',
-        description: 'Never targets another user or a caller-supplied destination — only your own registered tokens. Each call fans out one outbound send per device.',
+        description:
+          'Never targets another user or a caller-supplied destination — only your own registered tokens. Each call fans out one outbound send per device.',
         curl: `curl -X POST "${BASE_URL}/me/push-tokens/test" -b cookies.txt`,
         responseExample: `{ "data": { "devices": 2, "sent": 1, "pruned": 1, "failed": 0 } }`,
       },
@@ -2695,7 +3265,9 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/notifications/{id}',
         auth: 'cookie',
         summary: 'One of your notifications, including its jobs snapshot.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The notification id.', example: '5' }],
+        pathParams: [
+          { name: 'id', type: 'integer', required: true, description: 'The notification id.', example: '5' },
+        ],
         curl: `curl "${BASE_URL}/me/notifications/5" -b cookies.txt`,
         responseExample: `{ "data": { "id": 5, "kind": "reminder", "title": "...", "body": "...", "public_slug": "senior-go-engineer-acme-1a2b", "created_at": "2026-06-19T10:00:00Z", "read_at": null } }`,
       },
@@ -2705,7 +3277,9 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'cookie',
         summary: 'Mark one notification read (idempotent).',
         description: 'Returns `204 No Content`.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The notification id.', example: '5' }],
+        pathParams: [
+          { name: 'id', type: 'integer', required: true, description: 'The notification id.', example: '5' },
+        ],
         curl: `curl -X POST "${BASE_URL}/me/notifications/5/read" -b cookies.txt`,
       },
       {
@@ -2754,7 +3328,8 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/plan/history',
         auth: 'cookie-or-key',
         summary: 'What you spent your allowances on, newest first.',
-        description: 'Each entry is labelled with what it bought — the job an analysis was run on, the vacancy a CV editing session was opened for — rather than an opaque reference. A `release` entry is one that was given back because the work produced nothing.',
+        description:
+          'Each entry is labelled with what it bought — the job an analysis was run on, the vacancy a CV editing session was opened for — rather than an opaque reference. A `release` entry is one that was given back because the work produced nothing.',
         curl: `curl "${BASE_URL}/me/plan/history" -H "Authorization: Bearer fhk_…"`,
         responseExample: `{ "data": [ { "feature": "match", "day": "2026-08-31", "kind": "consume", "label": "Job analysis", "subtitle": "Senior Backend Engineer at Acme", "created_at": "2026-08-31T09:00:00Z" } ] }`,
       },
@@ -2778,7 +3353,7 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'cookie-or-key',
         summary: 'One tracked application, with the mail linked to it and its history.',
         description:
-          '`events` is the application\'s ledger, newest first — the apply, employer ' +
+          "`events` is the application's ledger, newest first — the apply, employer " +
           'replies, follow-ups, stage changes, scheduled interviews — in the shape ' +
           '`GET /me/timeline` serves, bounded at 100 and empty when nothing has happened ' +
           'yet. This read also carries the full job view; the listing carries only a card. ' +
@@ -2830,7 +3405,8 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/autofill-profile',
         auth: 'cookie-or-key',
         summary: 'Your contact details in canonical autofill fields.',
-        description: "Projected from your CV header, with the account email as a fallback — what the extension writes into application forms.",
+        description:
+          'Projected from your CV header, with the account email as a fallback — what the extension writes into application forms.',
         curl: `curl "${BASE_URL}/me/autofill-profile" -H "Authorization: Bearer fhk_…"`,
         responseExample: `{ "data": { "first_name": "Ilya", "last_name": "Strelov", "email": "you@example.com", "phone": "+1…", "linkedin": "https://linkedin.com/in/you", "portfolio": "https://ilya.dev" } }`,
       },
@@ -2842,7 +3418,7 @@ data: {"type":"result","stop_reason":"completed"}
         description:
           'Runs the autofill agent over the browser-tool wire — your extension on ' +
           'one end, the agent on the other, routed strictly within your own channel. ' +
-          "Requires the extension to be connected, and authenticates only as the " +
+          'Requires the extension to be connected, and authenticates only as the ' +
           'extension itself — a session cookie or an API key gets a 403, since this ' +
           'call writes into whatever form your browser has open, not just reads it.',
         curl: `curl -X POST "${BASE_URL}/me/autofill/run" -H "Authorization: Bearer <extension session token>"`,
@@ -2854,8 +3430,19 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'cookie',
         summary: 'Set your account’s IANA timezone.',
         body: [
-          { name: 'timezone', type: 'string', required: true, description: 'IANA timezone name.', example: 'Europe/Berlin' },
-          { name: 'only_if_unset', type: 'boolean', description: 'Automatically adopt the zone only when no timezone is stored. Defaults to false; explicit edits replace the stored zone.' },
+          {
+            name: 'timezone',
+            type: 'string',
+            required: true,
+            description: 'IANA timezone name.',
+            example: 'Europe/Berlin',
+          },
+          {
+            name: 'only_if_unset',
+            type: 'boolean',
+            description:
+              'Automatically adopt the zone only when no timezone is stored. Defaults to false; explicit edits replace the stored zone.',
+          },
         ],
         curl: `curl -X PATCH "${BASE_URL}/me/timezone" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
@@ -2867,7 +3454,9 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/language',
         auth: 'cookie',
         summary: 'Set your preferred interface language.',
-        body: [{ name: 'language', type: 'string', required: true, description: 'Supported language code.', example: 'en' }],
+        body: [
+          { name: 'language', type: 'string', required: true, description: 'Supported language code.', example: 'en' },
+        ],
         curl: `curl -X PATCH "${BASE_URL}/me/language" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
   -d '{"language":"en"}'`,
@@ -2894,7 +3483,15 @@ data: {"type":"result","stop_reason":"completed"}
           'A miss also carries `meta.ats_board`: true when the URL sits on an ATS board ' +
           'freehire knows how to crawl, so a client can tell a posting worth adding ' +
           'from an arbitrary page.',
-        query: [{ name: 'url', type: 'string', required: true, description: "The posting's URL in the wild.", example: 'https://boards.greenhouse.io/acme/jobs/123' }],
+        query: [
+          {
+            name: 'url',
+            type: 'string',
+            required: true,
+            description: "The posting's URL in the wild.",
+            example: 'https://boards.greenhouse.io/acme/jobs/123',
+          },
+        ],
         curl: `curl "${BASE_URL}/jobs/find?url=https%3A%2F%2Fboards.greenhouse.io%2Facme%2Fjobs%2F123"`,
         responseExample: `{ "data": { "public_slug": "senior-backend-engineer-acme-1a2b" } }`,
       },
@@ -2918,7 +3515,12 @@ data: {"type":"result","stop_reason":"completed"}
           'source — independent of what became of the board. A URL that is not http(s) is a 422.',
         body: [
           { name: 'url', type: 'string', required: true, description: 'The job page to resolve.' },
-          { name: 'surface', type: 'string', description: 'Where the link came from (website, extension, cli, bot) — recorded, not validated against a whitelist.' },
+          {
+            name: 'surface',
+            type: 'string',
+            description:
+              'Where the link came from (website, extension, cli, bot) — recorded, not validated against a whitelist.',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/jobs/resolve" \\
   -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' \\
@@ -3193,7 +3795,8 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         path: '/insights/skills',
         auth: 'none',
         summary: 'Skills ranked by openings or growth.',
-        description: 'Scope by category or by country, but not both — the rollup behind it is single-dimensional, so asking for both is a 400.',
+        description:
+          'Scope by category or by country, but not both — the rollup behind it is single-dimensional, so asking for both is a 400.',
         query: [
           { name: 'category', type: 'string', description: 'Scope to one category.' },
           { name: 'country', type: 'string', description: 'Scope to one country.' },
@@ -3250,7 +3853,8 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         path: '/stats/facets',
         auth: 'none',
         summary: 'Facet distribution snapshot: countries, skills, seniority, work mode.',
-        description: 'Served from the facet rollup rather than a live Meilisearch facet count, so a page can show "what\'s inside" without paying search for it.',
+        description:
+          'Served from the facet rollup rather than a live Meilisearch facet count, so a page can show "what\'s inside" without paying search for it.',
         curl: `curl "${BASE_URL}/stats/facets"`,
         responseExample: `{ "data": { "countries": [ { "value": "de", "count": 18420 } ], "skills": [ { "value": "go", "count": 4210 } ], "seniority": [ … ], "work_mode": [ … ] } }`,
       },
@@ -3258,7 +3862,7 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         method: 'GET',
         path: '/stats/user-growth',
         auth: 'none',
-        summary: 'Cumulative member growth per UTC day, plus each day\'s own new-signup count.',
+        summary: "Cumulative member growth per UTC day, plus each day's own new-signup count.",
         description: 'Aggregate-only — no user identifier is exposed.',
         curl: `curl "${BASE_URL}/stats/user-growth"`,
         responseExample: `{ "data": [ { "date": "2026-07-27", "total": 12840, "new": 37 } ] }`,
@@ -3278,7 +3882,8 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         path: '/status',
         auth: 'none',
         summary: 'Ingest-fleet health, per provider.',
-        description: 'Sanitized: which boards are healthy, cooled or failing, without error text or internal identifiers.',
+        description:
+          'Sanitized: which boards are healthy, cooled or failing, without error text or internal identifiers.',
         curl: `curl "${BASE_URL}/status"`,
         responseExample: `{ "data": { "providers": [ { "source": "greenhouse", "boards": 812, "failing": 14, "last_run_at": "2026-07-28T18:00:00Z" } ] } }`,
       },
@@ -3325,7 +3930,7 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
     intro:
       'Two sides of the same marketplace: an employee offers to refer into the ' +
       'company they work at (proof required, moderated), and a candidate asks one ' +
-      'of that company\'s approved referrers for an intro. A candidate never sees ' +
+      "of that company's approved referrers for an intro. A candidate never sees " +
       "who the referrer is, and a referrer sees the candidate's CV only through a " +
       'short-lived view. Moderation of offers is moderator-gated.',
     endpoints: [
@@ -3339,8 +3944,17 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'stored privately and shown only to a moderator; its storage key is never ' +
           'exposed on the wire. The offer is pending until decided.',
         body: [
-          { name: 'company_slug', type: 'string (form field)', required: true, description: 'The company you can refer into.' },
-          { name: 'linkedin_url', type: 'string (form field)', description: 'Your profile, for the moderator to check against.' },
+          {
+            name: 'company_slug',
+            type: 'string (form field)',
+            required: true,
+            description: 'The company you can refer into.',
+          },
+          {
+            name: 'linkedin_url',
+            type: 'string (form field)',
+            description: 'Your profile, for the moderator to check against.',
+          },
           { name: 'proof', type: 'file (form field)', required: true, description: 'Evidence you work there.' },
         ],
         curl: `curl -X POST "${BASE_URL}/me/referrals/offers" \\
@@ -3368,15 +3982,29 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         method: 'POST',
         path: '/me/referrals/requests',
         auth: 'cookie-or-key',
-        summary: 'Ask a company\'s approved referrers for an intro.',
+        summary: "Ask a company's approved referrers for an intro.",
         description:
           'Validation failures answer 422; a company with no approved referrer ' +
           'answers 409; too many open requests answers 429.',
         body: [
           { name: 'company_slug', type: 'string', required: true, description: 'The company to ask.' },
-          { name: 'job_slug', type: 'string', description: 'The opening the request is made from, when there is one (`job_id` is still read for older clients).' },
-          { name: 'cv_kind', type: 'string', description: 'Which CV to attach: `original` (your uploaded one) or `built`.' },
-          { name: 'cv_id', type: 'string (uuid)', description: 'The built CV, when `cv_kind` is `built`: one you tailored for that opening, or — with no opening — for any opening at the company (see `cv-options`). Any other CV answers 422.' },
+          {
+            name: 'job_slug',
+            type: 'string',
+            description:
+              'The opening the request is made from, when there is one (`job_id` is still read for older clients).',
+          },
+          {
+            name: 'cv_kind',
+            type: 'string',
+            description: 'Which CV to attach: `original` (your uploaded one) or `built`.',
+          },
+          {
+            name: 'cv_id',
+            type: 'string (uuid)',
+            description:
+              'The built CV, when `cv_kind` is `built`: one you tailored for that opening, or — with no opening — for any opening at the company (see `cv-options`). Any other CV answers 422.',
+          },
           { name: 'linkedin_url', type: 'string', description: 'Your profile.' },
           { name: 'contact_telegram', type: 'string', description: 'How the referrer reaches you.' },
           { name: 'contact_email', type: 'string', description: 'How the referrer reaches you.' },
@@ -3432,7 +4060,15 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         auth: 'cookie-or-key',
         summary: 'Mark an incoming request contacted or declined.',
         pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The request id.' }],
-        body: [{ name: 'status', type: 'string', required: true, description: '`contacted` or `declined`.', example: 'contacted' }],
+        body: [
+          {
+            name: 'status',
+            type: 'string',
+            required: true,
+            description: '`contacted` or `declined`.',
+            example: 'contacted',
+          },
+        ],
         curl: `curl -X POST "${BASE_URL}/me/referrals/incoming/c92f…/resolve" \\
   -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' -d '{"status":"contacted"}'`,
         responseExample: `{ "data": { "id": "c92f…", "status": "contacted" } }`,
@@ -3459,7 +4095,14 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         auth: 'moderator',
         summary: 'Approve or reject an offer.',
         pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The offer id.' }],
-        body: [{ name: 'approve', type: 'boolean', required: true, description: 'True approves the referrer; false rejects the offer.' }],
+        body: [
+          {
+            name: 'approve',
+            type: 'boolean',
+            required: true,
+            description: 'True approves the referrer; false rejects the offer.',
+          },
+        ],
         curl: `curl -X POST "${BASE_URL}/referrals/offers/b71e…/decide" \\
   -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' -d '{"approve":true}'`,
         responseExample: `{ "data": { "id": "b71e…", "status": "approved", "decided_at": "2026-07-28T21:00:00Z" } }`,
@@ -3499,7 +4142,13 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'itself, and a request asking for it is a 400. Joining for the first ' +
           'time mints the handle the public catalogue addresses you by.',
         body: [
-          { name: 'visibility', type: 'string', required: true, description: 'Either `off` or `anonymous`.', example: 'anonymous' },
+          {
+            name: 'visibility',
+            type: 'string',
+            required: true,
+            description: 'Either `off` or `anonymous`.',
+            example: 'anonymous',
+          },
         ],
         curl: `curl -X PUT "${BASE_URL}/me/talent-network" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
@@ -3520,12 +4169,33 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'parse, like `min_years=lots` — is named in `meta.ignored_params` ' +
           'rather than silently widening the answer.',
         query: [
-          { name: 'categories', type: 'string', description: 'Comma-separated role categories.', example: 'backend,devops' },
+          {
+            name: 'categories',
+            type: 'string',
+            description: 'Comma-separated role categories.',
+            example: 'backend,devops',
+          },
           { name: 'seniorities', type: 'string', description: 'Comma-separated seniority levels.', example: 'senior' },
-          { name: 'skills', type: 'string', description: 'Comma-separated canonical skills.', example: 'go,postgresql' },
-          { name: 'tz', type: 'string', description: 'Comma-separated IANA timezone regions. A member with no timezone is excluded when this is set.', example: 'Europe' },
+          {
+            name: 'skills',
+            type: 'string',
+            description: 'Comma-separated canonical skills.',
+            example: 'go,postgresql',
+          },
+          {
+            name: 'tz',
+            type: 'string',
+            description:
+              'Comma-separated IANA timezone regions. A member with no timezone is excluded when this is set.',
+            example: 'Europe',
+          },
           { name: 'cities', type: 'string', description: 'Comma-separated normalised cities.', example: 'berlin' },
-          { name: 'specializations', type: 'string', description: 'Comma-separated curated specialisations.', example: 'platform' },
+          {
+            name: 'specializations',
+            type: 'string',
+            description: 'Comma-separated curated specialisations.',
+            example: 'platform',
+          },
           { name: 'min_years', type: 'integer', description: 'Least total years of experience.', example: '5' },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100. Defaults to 24.', example: '24' },
           { name: 'offset', type: 'integer', description: 'Rows to skip.', example: '0' },
@@ -3593,7 +4263,15 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'whether an account exists. An account’s `username` is not an address ' +
           'here. Membership is re-read from the database on every request, so ' +
           'leaving takes effect immediately rather than when a cache expires.',
-        pathParams: [{ name: 'handle', type: 'string', required: true, description: 'The member’s minted catalogue handle.', example: 'backend-7f2a' }],
+        pathParams: [
+          {
+            name: 'handle',
+            type: 'string',
+            required: true,
+            description: 'The member’s minted catalogue handle.',
+            example: 'backend-7f2a',
+          },
+        ],
         curl: `curl "${BASE_URL}/talent/backend-7f2a"`,
         responseExample: `{
   "data": {
@@ -3646,9 +4324,9 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         summary: 'Open the agent conversation for a base CV.',
         description:
           'Returns the assistant conversation bound to one of your base CVs, creating it on first use. ' +
-          'It is the tailoring workspace\'s agent without a vacancy: it edits this general CV through the ' +
+          "It is the tailoring workspace's agent without a vacancy: it edits this general CV through the " +
           'same evidence-gated tools. Opening it is free and needs no paid plan; each message still ' +
-          'passes the assistant\'s paid gate. 409 for a tailored copy (use the tailor session), 404 when ' +
+          "passes the assistant's paid gate. 409 for a tailored copy (use the tailor session), 404 when " +
           'the id is not yours.',
         pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The base CV id.' }],
         curl: `curl -X POST "${BASE_URL}/me/cvs/0f2c…/base-session" -b cookies.txt`,
@@ -3675,7 +4353,11 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         body: [
           { name: 'title', type: 'string', description: 'Label; up to 200 characters.' },
           { name: 'template_id', type: 'string', description: 'Which template to render with.', example: 'classic' },
-          { name: 'seed', type: 'boolean', description: 'Pre-fill from your parsed CV / experience bank instead of starting blank.' },
+          {
+            name: 'seed',
+            type: 'boolean',
+            description: 'Pre-fill from your parsed CV / experience bank instead of starting blank.',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/me/cvs" -b cookies.txt \\
   -H 'Content-Type: application/json' -d '{"title":"Backend engineer","seed":true}'`,
@@ -3715,14 +4397,26 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           '`summary`, `experience[2].bullets[1]`, `skills[0].items[3]`, `style.font_size`. ' +
           'Indices are 0-based. The whole batch applies or none of it does: an unknown path or ' +
           'an index past the end refuses the request without touching the CV. An API key edits ' +
-          'as the tailoring agent, so the candidate\'s own fields are refused and a claim about ' +
-          'them needs `evidence_id` from the experience bank. Every request lands in the CV\'s ' +
+          "as the tailoring agent, so the candidate's own fields are refused and a claim about " +
+          "them needs `evidence_id` from the experience bank. Every request lands in the CV's " +
           'history and can be undone on its own.',
         pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' }],
         body: [
           { name: 'ops', type: 'object[]', required: true, description: 'The edits, applied in order.' },
-          { name: 'ops[].kind', type: 'string', required: true, description: '`set`, `insert`, `remove` or `move`.', example: 'set' },
-          { name: 'ops[].path', type: 'string', required: true, description: 'Where to edit.', example: 'experience[0].bullets[1]' },
+          {
+            name: 'ops[].kind',
+            type: 'string',
+            required: true,
+            description: '`set`, `insert`, `remove` or `move`.',
+            example: 'set',
+          },
+          {
+            name: 'ops[].path',
+            type: 'string',
+            required: true,
+            description: 'Where to edit.',
+            example: 'experience[0].bullets[1]',
+          },
           { name: 'ops[].value', type: 'any', description: 'The new content, for `set` and `insert`.' },
           { name: 'ops[].to', type: 'integer', description: "The element's new position, for `move`." },
           { name: 'ops[].evidence_id', type: 'string', description: 'The banked achievement this rests on.' },
@@ -3740,7 +4434,9 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         auth: 'cookie',
         summary: 'Switch the template only.',
         pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' }],
-        body: [{ name: 'template_id', type: 'string', required: true, description: 'A template id from `/cv-templates`.' }],
+        body: [
+          { name: 'template_id', type: 'string', required: true, description: 'A template id from `/cv-templates`.' },
+        ],
         curl: `curl -X PUT "${BASE_URL}/me/cvs/0f2c…/template" -b cookies.txt \\
   -H 'Content-Type: application/json' -d '{"template_id":"compact"}'`,
         responseExample: `{ "data": { "id": "0f2c…", "template_id": "compact" } }`,
@@ -3776,7 +4472,7 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         auth: 'cookie',
         summary: 'The typefaces a CV may use.',
         description:
-          'Read this rather than hard-coding a list: an unregistered `document.style.font_family` is dropped on save and the CV renders in the template\'s own face. `note` names the familiar face the entry matches; `css` is a font stack for rendering a preview in a browser.',
+          "Read this rather than hard-coding a list: an unregistered `document.style.font_family` is dropped on save and the CV renders in the template's own face. `note` names the familiar face the entry matches; `css` is a font stack for rendering a preview in a browser.",
         curl: `curl "${BASE_URL}/cv-fonts" -b cookies.txt`,
         responseExample: `{ "data": [ { "id": "tinos", "label": "Tinos", "note": "Times New Roman metrics", "css": "Tinos, \\"Times New Roman\\", Times, serif" } ] }`,
       },
@@ -3824,7 +4520,7 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         summary: 'Rebuild your base CV from your current seed.',
         description:
           'Replaces the base (non-tailored) document from the current seed ' +
-          '(experience bank first, your résumé\'s own extract for what the bank doesn\'t ' +
+          "(experience bank first, your résumé's own extract for what the bank doesn't " +
           'track). Preserves template and typography. Does not rewrite tailored copies ' +
           'for specific jobs. 409 when there is no usable seed.',
         curl: `curl -X POST "${BASE_URL}/me/cvs/base/reseed" -b cookies.txt`,
@@ -3836,15 +4532,17 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         auth: 'cookie',
         summary: 'Rebuild one CV from your current seed.',
         description:
-          'Replaces this CV\'s content from the current seed ' +
-          '(experience bank first, your résumé\'s own extract for what the bank doesn\'t ' +
+          "Replaces this CV's content from the current seed " +
+          "(experience bank first, your résumé's own extract for what the bank doesn't " +
           'track). Works on a tailored copy or on a base, and touches only that CV: refreshing a ' +
-          'tailored copy no longer rewrites any base, and refreshing a base — the editor\'s ' +
+          "tailored copy no longer rewrites any base, and refreshing a base — the editor's " +
           '"Update from my CV", which replaces hand edits — leaves its copies alone. Keeps the same ' +
           'id and agent session; preserves template and typography. 409 when ' +
           'there is no usable seed. Upload alone does not do ' +
           'this — this is the explicit apply.',
-        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id (tailored or base).' }],
+        pathParams: [
+          { name: 'id', type: 'string (uuid)', required: true, description: 'The CV id (tailored or base).' },
+        ],
         curl: `curl -X POST "${BASE_URL}/me/cvs/7d1a…/reseed" -b cookies.txt`,
         responseExample: `{ "data": { "id": "7d1a…", "title": "Tailored for …", "template_id": "classic-ats", "document": { … } } }`,
       },
@@ -3974,7 +4672,12 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'already gone.',
         pathParams: [
           { name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' },
-          { name: 'rid', type: 'string (uuid)', required: true, description: 'The revision id, from the history feed.' },
+          {
+            name: 'rid',
+            type: 'string (uuid)',
+            required: true,
+            description: 'The revision id, from the history feed.',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/me/cvs/0f2c…/revisions/b1a2…/undo" -b cookies.txt`,
         responseExample: `{
@@ -3995,7 +4698,12 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'well-defined, since an already-reverted entry is simply skipped.',
         pathParams: [
           { name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' },
-          { name: 'bid', type: 'string (uuid)', required: true, description: 'The batch id shared by the revisions to undo.' },
+          {
+            name: 'bid',
+            type: 'string (uuid)',
+            required: true,
+            description: 'The batch id shared by the revisions to undo.',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/me/cvs/0f2c…/revisions/batch/f3c1…/undo" -b cookies.txt`,
         responseExample: `{ "data": { "id": "0f2c…", "title": "Backend engineer", "template_id": "classic", "created_at": "2026-07-01T10:00:00Z", "updated_at": "2026-07-28T20:16:00Z" } }`,
@@ -4178,7 +4886,12 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           '`company` accepted as a fallback), a job’s as `company`.',
         body: [
           { name: 'kind', type: 'string', required: true, description: '`job` or `project`.', example: 'job' },
-          { name: 'company', type: 'string', description: 'The employer (jobs) — or the project name via `name` (see description).', example: 'Acme' },
+          {
+            name: 'company',
+            type: 'string',
+            description: 'The employer (jobs) — or the project name via `name` (see description).',
+            example: 'Acme',
+          },
           { name: 'role', type: 'string', description: 'Your title.', example: 'Senior Backend Engineer' },
           { name: 'location', type: 'string', description: 'Where you worked.' },
           { name: 'start', type: 'string', description: 'Start date.', example: '2023-02' },
@@ -4186,7 +4899,11 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           { name: 'current', type: 'boolean', description: 'Still ongoing.' },
           { name: 'summary', type: 'string', description: 'A short description of the role.' },
           { name: 'link', type: 'string', description: 'Outbound URL, for a project.' },
-          { name: 'stack', type: 'string[]', description: 'Technologies used, printed on the CV’s per-role stack line.' },
+          {
+            name: 'stack',
+            type: 'string[]',
+            description: 'Technologies used, printed on the CV’s per-role stack line.',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/me/experience/employments" \\
   -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \\
@@ -4205,10 +4922,29 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'transcript behind it can only honestly be the owner’s own words. When ' +
           'the account has opted into requiring it, an empty `context` is a 400.',
         body: [
-          { name: 'claim', type: 'string', required: true, description: 'The sentence a CV bullet would carry.', example: 'Cut p99 checkout latency 40%' },
-          { name: 'employment_id', type: 'string (uuid)', description: 'The place this achievement belongs under; omit to leave it unplaced.' },
-          { name: 'context', type: 'string', description: 'How it was done — raw material for reframing toward a vacancy.' },
-          { name: 'metrics', type: 'string[]', description: 'Numbers backing the claim.', example: '["12k rps", "40%"]' },
+          {
+            name: 'claim',
+            type: 'string',
+            required: true,
+            description: 'The sentence a CV bullet would carry.',
+            example: 'Cut p99 checkout latency 40%',
+          },
+          {
+            name: 'employment_id',
+            type: 'string (uuid)',
+            description: 'The place this achievement belongs under; omit to leave it unplaced.',
+          },
+          {
+            name: 'context',
+            type: 'string',
+            description: 'How it was done — raw material for reframing toward a vacancy.',
+          },
+          {
+            name: 'metrics',
+            type: 'string[]',
+            description: 'Numbers backing the claim.',
+            example: '["12k rps", "40%"]',
+          },
           { name: 'skills', type: 'string[]', description: 'Skills this achievement demonstrates.' },
           { name: 'source_ref', type: 'string', description: 'Where this came from, for your own reference.' },
         ],
@@ -4228,7 +4964,15 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'the kept one’s own provenance stands, letting a `manual` atom absorb ' +
           'numbers a model had inferred, so it cannot be widened to a key the way ' +
           'the others were.',
-        body: [{ name: 'ids', type: 'string[] (2 uuids)', required: true, description: 'Exactly two atom ids; the first is kept.', example: '["88b1…","91c2…"]' }],
+        body: [
+          {
+            name: 'ids',
+            type: 'string[] (2 uuids)',
+            required: true,
+            description: 'Exactly two atom ids; the first is kept.',
+            example: '["88b1…","91c2…"]',
+          },
+        ],
         curl: `curl -X POST "${BASE_URL}/me/experience/atoms/merge" -b cookies.txt \\
   -H 'Content-Type: application/json' -d '{"ids":["88b1…","91c2…"]}'`,
         responseExample: `{ "data": { "id": "88b1…", "claim": "Cut p99 checkout latency 40% (12k rps)", "metrics": ["40%", "12k rps"], "provenance": "manual" } }`,
@@ -4240,7 +4984,7 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
     intro:
       'Your job mail, and the link between a message and the application it ' +
       'belongs to. Mail arrives three ways: a connected Gmail account, the hosted ' +
-      "freehire address, or a batch your own client pushed. Only the first two are " +
+      'freehire address, or a batch your own client pushed. Only the first two are ' +
       'classified by freehire — pushed mail is yours to triage, which is what makes ' +
       'that tier free. Everything here takes a full-scope API key, so a harness can ' +
       'drive the whole surface; the Gmail consent redirect is the one exception and ' +
@@ -4308,7 +5052,14 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'same import-then-link path a Gmail sync uses, so the response is the ' +
           'full message body, the same shape `POST /me/emails/{id}/link` returns.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
-        body: [{ name: 'provider_id', type: 'string', required: true, description: 'The message’s `provider_id`, from a mail-recall response.' }],
+        body: [
+          {
+            name: 'provider_id',
+            type: 'string',
+            required: true,
+            description: 'The message’s `provider_id`, from a mail-recall response.',
+          },
+        ],
         curl: `curl -X POST "${BASE_URL}/me/tracking/<slug>/mail-recall/link" \\
   -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \\
   -d '{"provider_id":"18f2a…"}'`,
@@ -4320,23 +5071,35 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         auth: 'cookie-or-key',
         summary: 'List your mail, newest first, excluding deleted.',
         description:
-          '`?body=1` returns each message\'s readable text inline and marks nothing ' +
+          "`?body=1` returns each message's readable text inline and marks nothing " +
           'read — that is the agent read path, so sweeping a backlog never zeroes ' +
           "the owner's unread count (`GET /me/emails/{id}` does mark read). Pages " +
           'carrying bodies are capped at 50. An unknown `source`, `status` or `link` ' +
           'value is a 400, never a silently empty page.',
         query: [
           { name: 'source', type: 'string', description: 'One account: `gmail`, `hosted`, or `external`.' },
-          { name: 'status', type: 'string', description: 'One classified label (see the triage vocabulary below).', example: 'rejection' },
-          { name: 'unclassified', type: 'boolean', description: "Only mail nothing has judged yet — the agent's work queue." },
+          {
+            name: 'status',
+            type: 'string',
+            description: 'One classified label (see the triage vocabulary below).',
+            example: 'rejection',
+          },
+          {
+            name: 'unclassified',
+            type: 'boolean',
+            description: "Only mail nothing has judged yet — the agent's work queue.",
+          },
           { name: 'unread', type: 'boolean', description: 'Only messages you have not opened.' },
-          { name: 'link', type: 'string', description: 'One link state: `linked`, `suggested` (awaiting your word), or `unlinked`.' },
+          {
+            name: 'link',
+            type: 'string',
+            description: 'One link state: `linked`, `suggested` (awaiting your word), or `unlinked`.',
+          },
           { name: 'q', type: 'string', description: 'Match subject, sender, or body.' },
           {
             name: 'include_other',
             type: 'boolean',
-            description:
-              'Also list the `other` label the default hides. Asking for it by `status=other` implies this.',
+            description: 'Also list the `other` label the default hides. Asking for it by `status=other` implies this.',
           },
           { name: 'body', type: 'boolean', description: 'Include each message body; caps the page at 50.' },
           { name: 'limit', type: 'integer', description: 'Page size.' },
@@ -4392,10 +5155,20 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'batch is refused, never truncated.',
         body: [
           { name: 'messages', type: 'array', required: true, description: 'Up to 100 messages.' },
-          { name: 'messages[].external_id', type: 'string', required: true, description: 'Dedup key; the Message-ID header.', example: '<CAF...@mail.gmail.com>' },
+          {
+            name: 'messages[].external_id',
+            type: 'string',
+            required: true,
+            description: 'Dedup key; the Message-ID header.',
+            example: '<CAF...@mail.gmail.com>',
+          },
           { name: 'messages[].thread_id', type: 'string', description: 'Provider thread id, if you have one.' },
           { name: 'messages[].from_addr', type: 'string', description: 'Sender address.' },
-          { name: 'messages[].from_name', type: 'string', description: 'Sender display name — the matcher reads the company name from here.' },
+          {
+            name: 'messages[].from_name',
+            type: 'string',
+            description: 'Sender display name — the matcher reads the company name from here.',
+          },
           { name: 'messages[].subject', type: 'string', description: 'Subject line.' },
           { name: 'messages[].body_text', type: 'string', description: 'Plain-text body.' },
           { name: 'messages[].body_html', type: 'string', description: 'HTML body; used when there is no text part.' },
@@ -4421,9 +5194,20 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'a rejection never advances anything by itself.',
         pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The message id.' }],
         body: [
-          { name: 'signal', type: 'string', required: true, description: 'One value from the vocabulary above.', example: 'interview_invitation' },
+          {
+            name: 'signal',
+            type: 'string',
+            required: true,
+            description: 'One value from the vocabulary above.',
+            example: 'interview_invitation',
+          },
           { name: 'slug', type: 'string', description: 'Link the message to this application at the same time.' },
-          { name: 'confidence', type: 'number', description: 'Your confidence in the verdict, 0–1. Below the stage threshold the message is classified but the card does not move.' },
+          {
+            name: 'confidence',
+            type: 'number',
+            description:
+              'Your confidence in the verdict, 0–1. Below the stage threshold the message is classified but the card does not move.',
+          },
         ],
         curl: `curl -X POST "${BASE_URL}/me/emails/4821/triage" \\
   -H "Authorization: Bearer fhk_…" \\
@@ -4484,7 +5268,14 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           "application is dated by the mail's `received_at`, not by now — the " +
           'application demonstrably existed by the time the employer wrote.',
         pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The message id.' }],
-        body: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug` to record an application for.' }],
+        body: [
+          {
+            name: 'slug',
+            type: 'string',
+            required: true,
+            description: 'The job `public_slug` to record an application for.',
+          },
+        ],
         curl: `curl -X POST "${BASE_URL}/me/emails/4821/application" \\
   -H "Authorization: Bearer fhk_…" \\
   -H 'Content-Type: application/json' -d '{"slug":"tech-lead-web-core-speechify-a1b2"}'`,
@@ -4532,7 +5323,8 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         path: '/me/mailbox',
         auth: 'cookie-or-key',
         summary: 'Your hosted freehire address, and whether the feature is configured.',
-        description: '`address` is null until you claim one; `available` is false when the instance runs without a mailbox domain.',
+        description:
+          '`address` is null until you claim one; `available` is false when the instance runs without a mailbox domain.',
         curl: `curl "${BASE_URL}/me/mailbox" -H "Authorization: Bearer fhk_…"`,
         responseExample: `{ "data": { "available": true, "address": "you@mail.freehire.me" } }`,
       },

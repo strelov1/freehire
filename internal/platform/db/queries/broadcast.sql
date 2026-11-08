@@ -20,6 +20,11 @@
 -- follow-up reminders, and an account with no settings row could not decline at
 -- all, because the only thing that creates the row is a page behind the login.
 -- Migration 0153 split the two.
+--
+-- An account that already holds today's mail_day_claims row is left out — one optional
+-- letter per account per UTC day across all senders — and stays a candidate for the next
+-- run. CountBroadcastCandidates does not carry that clause: it answers how much of the
+-- audience is still to be reached, and a person who got another letter today is.
 SELECT u.id, u.email
 FROM users u
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
@@ -30,6 +35,9 @@ WHERE mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
       WHERE be.user_id = u.id AND be.campaign = sqlc.arg(campaign)
   )
   AND sqlc.arg(half)::text IN ('', broadcast_half(sqlc.arg(campaign)::text, u.id))
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
+  )
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
 

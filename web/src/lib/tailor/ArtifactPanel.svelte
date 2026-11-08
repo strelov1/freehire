@@ -164,9 +164,7 @@
 {#if collapsed}
   <!-- The collapsed rail. Desktop-only, and it carries the one control that brings the panel
        back — a collapse with no visible way out is a lost panel. -->
-  <div
-    class="hidden shrink-0 flex-col items-center gap-2 border-l border-border bg-background px-1.5 py-2 lg:flex"
-  >
+  <div class="hidden shrink-0 flex-col items-center gap-2 border-l border-border bg-background px-1.5 py-2 lg:flex">
     <button
       type="button"
       onclick={() => (collapsed = false)}
@@ -209,29 +207,29 @@
        collapse control sits at its end, beside the edge the panel folds towards. -->
   <div class="hidden items-center gap-1 border-b border-border px-2 py-1.5 text-sm lg:flex">
     <div role="tablist" aria-label="Measure this CV" use:tablist={tab} class="flex min-w-0 items-center gap-1">
-    {#each tabs as [id, label] (id)}
-      <button
-        type="button"
-        role="tab"
-        id="tailor-right-tab-{id}"
-        aria-selected={tab === id}
-        aria-controls="tailor-right-panel"
-        onclick={() => (tab = id)}
-        class={[
-          'whitespace-nowrap rounded px-2 py-1 transition-colors',
-          tab === id
-            ? 'bg-brand-muted font-semibold text-brand-strong'
-            : 'text-muted-foreground hover:text-foreground',
-        ]}
-      >
-        {label}
-        {#if badges[id] !== undefined}
-          {@const value = badges[id] ?? 0}
-          <span class="ml-1 text-xs font-medium tabular-nums {badgeTone[scoreTone(value)]}">{value}</span>
-          <span class="sr-only">out of 100</span>
-        {/if}
-      </button>
-    {/each}
+      {#each tabs as [id, label] (id)}
+        <button
+          type="button"
+          role="tab"
+          id="tailor-right-tab-{id}"
+          aria-selected={tab === id}
+          aria-controls="tailor-right-panel"
+          onclick={() => (tab = id)}
+          class={[
+            'whitespace-nowrap rounded px-2 py-1 transition-colors',
+            tab === id
+              ? 'bg-brand-muted font-semibold text-brand-strong'
+              : 'text-muted-foreground hover:text-foreground',
+          ]}
+        >
+          {label}
+          {#if badges[id] !== undefined}
+            {@const value = badges[id] ?? 0}
+            <span class="ml-1 text-xs font-medium tabular-nums {badgeTone[scoreTone(value)]}">{value}</span>
+            <span class="sr-only">out of 100</span>
+          {/if}
+        </button>
+      {/each}
     </div>
     <button
       type="button"
@@ -248,25 +246,25 @@
        have to change tabs to see what they are being scored against. -->
   <div class="flex items-start gap-2.5 border-b border-border px-3 py-2.5">
     {#if job}
-    <EntityLogo
-      name={job.company || 'Unknown company'}
-      src={companyLogoUrl(job.company) ?? undefined}
-      shape="square"
-      size="sm"
-    />
-    <div class="min-w-0 flex-1">
-      <h2 class="truncate text-sm font-semibold leading-snug text-foreground" title={job.title}>
-        {job.title}
-      </h2>
-      <p class="truncate text-xs text-muted-foreground">{job.company}</p>
-    </div>
+      <EntityLogo
+        name={job.company || 'Unknown company'}
+        src={companyLogoUrl(job.company) ?? undefined}
+        shape="square"
+        size="sm"
+      />
+      <div class="min-w-0 flex-1">
+        <h2 class="truncate text-sm font-semibold leading-snug text-foreground" title={job.title}>
+          {job.title}
+        </h2>
+        <p class="truncate text-xs text-muted-foreground">{job.company}</p>
+      </div>
     {:else}
-    <div class="min-w-0 flex-1">
-      <h2 class="truncate text-sm font-semibold leading-snug text-foreground" title={baseTitle}>
-        {baseTitle || 'Base CV'}
-      </h2>
-      <p class="truncate text-xs text-muted-foreground">Base CV · not tied to a job</p>
-    </div>
+      <div class="min-w-0 flex-1">
+        <h2 class="truncate text-sm font-semibold leading-snug text-foreground" title={baseTitle}>
+          {baseTitle || 'Base CV'}
+        </h2>
+        <p class="truncate text-xs text-muted-foreground">Base CV · not tied to a job</p>
+      </div>
     {/if}
     {#if job?.public_slug}
       <a
@@ -280,20 +278,24 @@
     {/if}
   </div>
 
-  <div id="tailor-right-panel" role="tabpanel" aria-labelledby="tailor-right-tab-{tab}" class="min-h-0 flex-1 overflow-auto">
+  <div
+    id="tailor-right-panel"
+    role="tabpanel"
+    aria-labelledby="tailor-right-tab-{tab}"
+    class="min-h-0 flex-1 overflow-auto"
+  >
     {#if tab === 'history'}
       <div>
         {#if onReseed}
           <div class="border-b border-border px-4 py-3">
             <p class="text-xs leading-snug text-muted-foreground">
               {#if job}
-                Replace this CV’s content from your current seed (experience bank and résumé,
-                and refresh your base CV too). Template and typography stay; this is not “undo
-                last agent edit” alone — History undo covers that. Edits are undoable from the
-                history below.
+                Replace this CV’s content from your current seed (experience bank and résumé, and refresh your base CV
+                too). Template and typography stay; this is not “undo last agent edit” alone — History undo covers that.
+                Edits are undoable from the history below.
               {:else}
-                Replace this CV’s content from your current CV (experience bank and résumé).
-                Template and typography stay, and the edits are undoable from the history below.
+                Replace this CV’s content from your current CV (experience bank and résumé). Template and typography
+                stay, and the edits are undoable from the history below.
               {/if}
             </p>
             <button
@@ -309,7 +311,12 @@
             {/if}
           </div>
         {/if}
-        <RevisionHistory {revisions} onPreview={onPreviewRevision} onUndo={onUndoRevision} onUndoRun={onUndoRevisionRun} />
+        <RevisionHistory
+          {revisions}
+          onPreview={onPreviewRevision}
+          onUndo={onUndoRevision}
+          onUndoRun={onUndoRevisionRun}
+        />
       </div>
     {:else if tab === 'letter'}
       <!-- An artefact, not a measurement: this tab carries no score and no delta, because there

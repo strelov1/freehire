@@ -8,8 +8,12 @@
   // which follow the surrounding text color instead of a fixed brand color), every
   // mark here always renders in its own brand color — flat on the page, not on a
   // colored badge — since the call sites are compact chips, not standalone marks.
-  let { path, hex, title, class: className = 'size-4' }: { path: string; hex: string; title: string; class?: string } =
-    $props();
+  let {
+    path,
+    hex,
+    title,
+    class: className = 'size-4',
+  }: { path: string; hex: string; title: string; class?: string } = $props();
 </script>
 
 <svg viewBox="0 0 24 24" class={className} role="img" aria-label={title}>

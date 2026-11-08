@@ -13,8 +13,10 @@
     "zip:firefox": "WXT_RELEASE=1 wxt zip -b firefox",
     "test": "vitest run",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "lint": "oxlint && eslint .",
+    "lint": "oxlint --deny-warnings && eslint .",
     "lint:fix": "oxlint --fix && eslint . --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
@@ -39,6 +41,7 @@
     "eslint-plugin-svelte": "^3.22.0",
     "globals": "^17.8.0",
     "happy-dom": "^21.0.4",
+    "oxfmt": "0.77.0",
     "oxlint": "^1.77.0",
     "svelte-check": "^4.7.3",
     "svelte-eslint-parser": "^1.8.0",

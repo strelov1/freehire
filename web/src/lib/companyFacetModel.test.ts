@@ -37,6 +37,22 @@ describe('companyFacetModel serialization', () => {
     const f = companyFiltersFromParams(new URLSearchParams('regions=europe&regions=europe'));
     expect(f.facets.regions).toEqual(['europe']);
   });
+
+  test('fromParams splits a comma-joined value like the server does', () => {
+    const f = companyFiltersFromParams(new URLSearchParams('countries=de,br'));
+    expect(f.facets.countries).toEqual(['de', 'br']);
+    expect(activeCompanyFilterCount(f)).toBe(2);
+  });
+
+  test('fromParams collapses a value repeated across comma-joined and repeated keys', () => {
+    const f = companyFiltersFromParams(new URLSearchParams('countries=de,br&countries=de'));
+    expect(f.facets.countries).toEqual(['de', 'br']);
+  });
+
+  test('fromParams drops empty segments from stray commas', () => {
+    const f = companyFiltersFromParams(new URLSearchParams('countries=,de,,'));
+    expect(f.facets.countries).toEqual(['de']);
+  });
 });
 
 describe('companyFacetModel pure mutators', () => {

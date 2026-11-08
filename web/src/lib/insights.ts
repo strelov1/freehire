@@ -16,16 +16,7 @@ import { CATEGORY_LABELS, SENIORITY_LABELS, categoryLabel, titleCase } from './l
 export const MIN_CATEGORY_OPEN = 25;
 
 /** Seniority tokens in rank order. '' is the category-wide band. */
-const SENIORITY_ORDER = [
-  'intern',
-  'junior',
-  'middle',
-  'senior',
-  'lead',
-  'staff',
-  'principal',
-  'c_level',
-] as const;
+const SENIORITY_ORDER = ['intern', 'junior', 'middle', 'senior', 'lead', 'staff', 'principal', 'c_level'] as const;
 
 /** The seniority label for an /insights table row. Every real token resolves through
  *  the shared vocabulary; the empty string is this capability's own category-wide
@@ -98,17 +89,8 @@ export function roleAddressExists(category: string, seniority: string): boolean 
 /** Whether a role deserves its own leaf page: a real address carrying enough open
  *  postings that a distribution over them means something. Takes the role's OWN
  *  open-count, so it can be asked of a single-role read as readily as of a ranking. */
-export function roleQualifies(
-  roles: InsightRole[],
-  category: string,
-  seniority: string,
-  openCount: number,
-): boolean {
-  return (
-    roleAddressExists(category, seniority) &&
-    isCovered(roles, category) &&
-    openCount >= MIN_CATEGORY_OPEN
-  );
+export function roleQualifies(roles: InsightRole[], category: string, seniority: string, openCount: number): boolean {
+  return roleAddressExists(category, seniority) && isCovered(roles, category) && openCount >= MIN_CATEGORY_OPEN;
 }
 
 /** The qualifying roles WITHIN a ranking — what the sitemap lists.
@@ -190,7 +172,10 @@ export function salaryIntro(category: string, bands: InsightSalaryBand[]): strin
 export function skillsIntro(category: string, skills: InsightSkill[]): string {
   const label = categoryLabel(category);
   if (skills.length === 0) return `The most in-demand skills for ${label} roles on freehire.`;
-  const top = skills.slice(0, 3).map((s) => s.skill).join(', ');
+  const top = skills
+    .slice(0, 3)
+    .map((s) => s.skill)
+    .join(', ');
   return `The most in-demand skills for ${label} roles right now are ${top} — ranked across ${skills.reduce((n, s) => n + s.open_count, 0)} open postings.`;
 }
 

@@ -55,11 +55,7 @@ describe('coveredCategories', () => {
   });
 
   it('sorts by demand descending', () => {
-    const roles = [
-      role('frontend', 'senior', 100),
-      role('backend', 'senior', 300),
-      role('design', 'senior', 200),
-    ];
+    const roles = [role('frontend', 'senior', 100), role('backend', 'senior', 300), role('design', 'senior', 200)];
     expect(coveredCategories(roles).map((c) => c.category)).toEqual(['backend', 'design', 'frontend']);
   });
 
@@ -154,9 +150,7 @@ describe('roleQualifies / rankedQualifyingRoles', () => {
       role('qa', 'lead', MIN_CATEGORY_OPEN - 1),
     ];
 
-    expect(rankedQualifyingRoles(roles).map((r) => [r.category, r.seniority])).toEqual([
-      ['backend', 'senior'],
-    ]);
+    expect(rankedQualifyingRoles(roles).map((r) => [r.category, r.seniority])).toEqual([['backend', 'senior']]);
 
     // But the thin one is still a real ADDRESS, so the route serves it (noindex) rather
     // than refusing it — the job page links there without knowing the role's size.
@@ -184,7 +178,7 @@ describe('roleQualifies / rankedQualifyingRoles', () => {
     expect(rankedQualifyingRoles(ranking).map((r) => r.seniority)).toEqual(['senior']);
   });
 
-  it('answers whether an address exists without needing the role\'s size', () => {
+  it("answers whether an address exists without needing the role's size", () => {
     // Takes no ranking on purpose — the job page links here knowing only a posting's two
     // facets. It must also be answerable BEFORE the API is asked: the endpoint answers an
     // invented level with a 400 and a load turns that into a 500, so a mistyped URL would

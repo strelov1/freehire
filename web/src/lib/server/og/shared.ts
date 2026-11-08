@@ -18,11 +18,7 @@ const MARK_SVG =
 export const MARK_DATA_URI = `data:image/svg+xml;base64,${Buffer.from(MARK_SVG).toString('base64')}`;
 
 export function esc(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /** One or two uppercase initials from a name, for the logo fallback tile. */
@@ -41,12 +37,7 @@ function monogram(name: string): string {
  *  `shape` carries the same distinction the design system's Avatar makes: a rounded
  *  `tile` is an entity's mark, a `circle` is a person. A card about a person that
  *  squares them off reads as a company logo. */
-export function logoBox(
-  logo: string | null,
-  name: string,
-  size: number,
-  shape: 'tile' | 'circle' = 'tile',
-): string {
+export function logoBox(logo: string | null, name: string, size: number, shape: 'tile' | 'circle' = 'tile'): string {
   const radius = shape === 'circle' ? '50%' : `${Math.round(size / 5)}px`;
   if (logo) {
     // satori reads image dimensions from style, not the width/height HTML attributes.

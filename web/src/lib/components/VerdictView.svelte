@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Check, TrendingUp } from '@lucide/svelte';
+  import { Check, Plus, TrendingUp } from '@lucide/svelte';
   import type { Verdict } from '#lib/types.js';
-  import { Badge } from '#lib/ui/index.js';
+  import { Badge, Button } from '#lib/ui/index.js';
   import { messages } from './VerdictView.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, plural, t, tokenLabel } from '#lib/i18n/t.js';
@@ -10,13 +10,17 @@
   // how many of the role's open vacancies the profile's skills reach, which missing
   // skill unlocks the most new vacancies, and a breakdown of the role's top in-demand
   // skills scored against the CV. `gapHref`, when given, links a gap skill to the
-  // matching job search. The page owns the header/tabs; this renders the body.
+  // matching job search. `onAdd`, when given, puts a skill the CV lacks into the
+  // profile; the page writes it and reloads the verdict. The page owns the header/tabs;
+  // this renders the body.
   let {
     verdict,
     gapHref,
+    onAdd,
   }: {
     verdict: Verdict;
     gapHref?: (skill: string) => string;
+    onAdd?: (skill: string) => Promise<void>;
   } = $props();
 
   const gaps = $derived(verdict.gaps ?? []);
@@ -29,6 +33,24 @@
   // shows at a time — keeps the coverage view compact under the headline + stats.
   let sub = $state<'gaps' | 'skills'>('gaps');
 
+  // One add at a time (the profile store queues writes anyway); `failed` names the skill
+  // whose last add was refused so its row can say so.
+  let adding = $state<string | null>(null);
+  let failed = $state<string | null>(null);
+
+  async function add(skill: string) {
+    if (!onAdd || adding) return;
+    adding = skill;
+    failed = null;
+    try {
+      await onAdd(skill);
+    } catch {
+      failed = skill;
+    } finally {
+      adding = null;
+    }
+  }
+
   // Status → badge styling (STRONG green / HIDDEN warning / ADJACENT olive-on-grey / MISSING red).
   const statusStyle: Record<string, string> = {
     strong: 'bg-brand/10 text-primary',
@@ -38,9 +60,28 @@
   };
 </script>
 
+{#snippet addButton(skill: string)}
+  {#if onAdd}
+    {@const label = format(failed === skill ? s.addFailed : s.addToProfile, { skill })}
+    <Button
+      variant="ghost"
+      size="icon"
+      class="shrink-0 {failed === skill ? 'text-destructive-strong' : ''}"
+      disabled={adding !== null}
+      aria-label={label}
+      title={label}
+      onclick={() => add(skill)}
+    >
+      <Plus class="size-4 {adding === skill ? 'animate-pulse' : ''}" aria-hidden="true" />
+    </Button>
+  {/if}
+{/snippet}
+
 <div class="flex flex-col gap-8">
   <!-- Coverage headline -->
-  <div class="flex flex-col gap-4 rounded-xl border border-border bg-card p-6 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 duration-500">
+  <div
+    class="flex flex-col gap-4 rounded-xl border border-border bg-card p-6 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 duration-500"
+  >
     <div class="flex flex-wrap items-end justify-between gap-2">
       <div class="flex items-baseline gap-2">
         <span class="text-6xl font-semibold tabular-nums leading-none">{verdict.coverage_percent}%</span>
@@ -73,12 +114,7 @@
       {:else}
         <!-- No skill clears the must-have frequency threshold for this role, so the
              covered/total ratio is undefined — show a dash instead of a broken "0/0". -->
-        <span
-          class="text-3xl font-semibold leading-none text-muted-foreground"
-          title={s.mustHaveNone}
-        >
-          —
-        </span>
+        <span class="text-3xl font-semibold leading-none text-muted-foreground" title={s.mustHaveNone}> — </span>
       {/if}
       <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.mustHaveCovered}</span>
     </div>
@@ -118,7 +154,8 @@
       <button
         type="button"
         onclick={() => (sub = 'gaps')}
-        class="-mb-px flex items-center gap-1.5 border-b-2 px-1 pb-2 text-sm font-medium transition-colors {sub === 'gaps'
+        class="-mb-px flex items-center gap-1.5 border-b-2 px-1 pb-2 text-sm font-medium transition-colors {sub ===
+        'gaps'
           ? 'border-brand text-foreground'
           : 'border-transparent text-muted-foreground hover:text-foreground'}"
       >
@@ -158,13 +195,18 @@
                   <TrendingUp class="size-3.5" />
                   +{gap.new_vacancies.toLocaleString('en-US')}
                 </span>
-                <span class="text-xs text-muted-foreground">{format(s.unlockPercent, { pct: String(gap.unlock_percent) })}</span>
+                <span class="text-xs text-muted-foreground"
+                  >{format(s.unlockPercent, { pct: String(gap.unlock_percent) })}</span
+                >
               </div>
+              {@render addButton(gap.name)}
             </li>
           {/each}
         </ul>
       {:else}
-        <div class="flex items-center gap-2 rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground">
+        <div
+          class="flex items-center gap-2 rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground"
+        >
           <Check class="size-4 text-primary" />
           {s.noGaps}
         </div>
@@ -189,7 +231,9 @@
                     {s.mustHaveBadge}
                   </span>
                 {/if}
-                <span class="text-xs text-muted-foreground">{format(s.marketFrequency, { pct: String(skill.market_frequency) })}</span>
+                <span class="text-xs text-muted-foreground"
+                  >{format(s.marketFrequency, { pct: String(skill.market_frequency) })}</span
+                >
               </div>
               <span
                 class="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide {statusStyle[
@@ -198,6 +242,7 @@
               >
                 {tokenLabel(s.status, skill.status)}
               </span>
+              {#if skill.status !== 'strong'}{@render addButton(skill.name)}{/if}
             </div>
             {#if skill.advice}
               <p class="pl-9 text-xs leading-relaxed text-muted-foreground">{skill.advice}</p>

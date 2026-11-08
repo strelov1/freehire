@@ -161,9 +161,7 @@
       <div class="flex flex-col gap-3">
         <label class="flex flex-col gap-1.5 text-sm">
           <span class="font-medium">{s.searchLabel}</span>
-          <div
-            class="flex items-center gap-2 {fieldClass} focus-within:ring-2 focus-within:ring-ring"
-          >
+          <div class="flex items-center gap-2 {fieldClass} focus-within:ring-2 focus-within:ring-ring">
             <Search class="size-4 shrink-0 text-muted-foreground" />
             <input
               bind:value={query}
@@ -218,12 +216,7 @@
       <form class="flex flex-col gap-4" onsubmit={submitText}>
         <label class="flex flex-col gap-1.5 text-sm">
           <span class="font-medium">{s.textLabel}</span>
-          <textarea
-            bind:value={text}
-            required
-            rows="8"
-            placeholder={s.textPlaceholder}
-            class="resize-y {fieldClass}"
+          <textarea bind:value={text} required rows="8" placeholder={s.textPlaceholder} class="resize-y {fieldClass}"
           ></textarea>
         </label>
         <div class="grid grid-cols-2 gap-3">

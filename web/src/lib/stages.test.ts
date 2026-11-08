@@ -14,13 +14,7 @@ describe('groupedStages', () => {
   });
 
   it('keeps the generated pipeline order', () => {
-    expect(groupedStages().map((g) => g.id)).toEqual([
-      'preparing',
-      'applied',
-      'interview',
-      'offer',
-      'closed',
-    ]);
+    expect(groupedStages().map((g) => g.id)).toEqual(['preparing', 'applied', 'interview', 'offer', 'closed']);
   });
 
   it('labels each option from the generated table', () => {
@@ -31,9 +25,7 @@ describe('groupedStages', () => {
     // every time a stage is added — which is the same coupling it exists to forbid.
     const generated = must(STAGE_GROUPS.find((g) => g.id === 'closed'));
     expect(closed?.options.map((o) => o.value)).toEqual([...generated.stages]);
-    expect(closed?.options.map((o) => o.label)).toEqual(
-      generated.stages.map((s) => STAGE_LABELS[s]),
-    );
+    expect(closed?.options.map((o) => o.label)).toEqual(generated.stages.map((s) => STAGE_LABELS[s]));
   });
 });
 

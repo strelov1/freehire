@@ -288,7 +288,10 @@ export function dateRange(start?: PeriodDate, end?: PeriodDate, current?: boolea
 }
 
 const joinNonEmpty = (parts: (string | undefined)[], sep: string): string =>
-  parts.map((p) => (p ?? '').trim()).filter((p) => p !== '').join(sep);
+  parts
+    .map((p) => (p ?? '').trim())
+    .filter((p) => p !== '')
+    .join(sep);
 
 /** An experience role header: "Company | Location | Role (start – end)", blanks dropped. */
 export function experienceHeader(

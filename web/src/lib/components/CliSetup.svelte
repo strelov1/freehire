@@ -29,8 +29,8 @@ Once that is done, let me know it is ready.`;
 <section class="rounded-2xl border border-border bg-secondary/20 p-5 sm:p-8">
   <h2 class="text-xl font-semibold tracking-tight">Copy and send this to your agent</h2>
   <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-    Works with Codex, Claude Code, Gemini CLI and any agent that can run a terminal command. Sign-in opens your
-    browser, so there is no key to paste.
+    Works with Codex, Claude Code, Gemini CLI and any agent that can run a terminal command. Sign-in opens your browser,
+    so there is no key to paste.
   </p>
   <figure class="mt-5 max-w-2xl overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">
     <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">

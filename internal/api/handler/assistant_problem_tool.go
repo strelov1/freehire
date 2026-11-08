@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/engage/problemreport"
 )
@@ -40,9 +42,13 @@ func (h *assistantHandlers) problemMCPTools() []assistant.Tool {
 				return nil, err
 			}
 			if h.problems == nil {
-				return nil, errors.New("problem reporting is unavailable")
+				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "problem reporting is unavailable")
 			}
-			return h.problems.Record(ctx, userID, input)
+			receipt, err := h.problems.Record(ctx, userID, input)
+			if errors.Is(err, problemreport.ErrInvalid) {
+				return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
+			}
+			return receipt, err
 		},
 	}}
 }

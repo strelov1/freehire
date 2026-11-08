@@ -183,10 +183,7 @@ export function rangeForWeek(anchor: Date): { from: string; to: string } {
 /** splitDayEvents divides a cell's marks into the ones it shows and a count of the rest.
  *  A bulk-apply evening is ordinary behaviour, and a cell that silently dropped the tail
  *  would under-report the day. */
-export function splitDayEvents(
-  events: TimelineEvent[],
-  cap: number,
-): { shown: TimelineEvent[]; remaining: number } {
+export function splitDayEvents(events: TimelineEvent[], cap: number): { shown: TimelineEvent[]; remaining: number } {
   return { shown: events.slice(0, cap), remaining: Math.max(0, events.length - cap) };
 }
 

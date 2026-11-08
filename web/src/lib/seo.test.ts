@@ -77,9 +77,7 @@ describe('metaDescription', () => {
   });
 
   it('decodes character references the browser would, so a list card matches the job page', () => {
-    expect(metaDescription('<p>technology isn&#39;t about R&amp;D</p>')).toBe(
-      "technology isn't about R&D",
-    );
+    expect(metaDescription('<p>technology isn&#39;t about R&amp;D</p>')).toBe("technology isn't about R&D");
     expect(metaDescription('it&#x27;s')).toBe("it's");
     expect(metaDescription('Bachelor&amp;#39;s and &amp;#34;fit&amp;#34;')).toBe(`Bachelor's and "fit"`);
     expect(metaDescription('R&amp;amp;D')).toBe('R&amp;D');
@@ -125,21 +123,19 @@ describe('companyMetaDescription', () => {
           industries: ['Aerospace', 'Robotics', 'Defense'],
           employee_count: 250,
           hq_country: 'us',
-        })
-      )
+        }),
+      ),
     ).toBe('Rockets, on demand — Aerospace & Robotics, 250+ employees, United States. Open roles on freehire.');
   });
 
   it('prefers company_info.description over the tagline when no tagline is set', () => {
-    expect(
-      companyMetaDescription(company({ company_info: { description: 'Acme builds rockets.' } }))
-    ).toBe('Acme builds rockets. Open roles at Acme on freehire.');
+    expect(companyMetaDescription(company({ company_info: { description: 'Acme builds rockets.' } }))).toBe(
+      'Acme builds rockets. Open roles at Acme on freehire.',
+    );
   });
 
   it('uses only the facts when there is no tagline or description', () => {
-    expect(companyMetaDescription(company({ hq_country: 'de' }))).toBe(
-      'Acme: Germany. Open roles on freehire.'
-    );
+    expect(companyMetaDescription(company({ hq_country: 'de' }))).toBe('Acme: Germany. Open roles on freehire.');
   });
 
   it('truncates to max length with an ellipsis', () => {
@@ -163,7 +159,7 @@ describe('organizationJsonLd', () => {
           linkedin: 'https://linkedin.com/company/acme',
         },
       }),
-      ORIGIN
+      ORIGIN,
     );
 
     expect(ld['@type']).toBe('Organization');
@@ -171,10 +167,7 @@ describe('organizationJsonLd', () => {
     expect(ld.url).toBe('https://freehire.me/companies/acme');
     expect(ld.logo).toBe('https://logo.dev/acme.png');
     expect(ld.description).toBe('Acme builds rockets.');
-    expect(ld.sameAs).toEqual([
-      'https://acme.example',
-      'https://linkedin.com/company/acme',
-    ]);
+    expect(ld.sameAs).toEqual(['https://acme.example', 'https://linkedin.com/company/acme']);
     expect(ld.foundingDate).toBe('2015');
     expect(ld.numberOfEmployees).toEqual({
       '@type': 'QuantitativeValue',
@@ -198,10 +191,7 @@ describe('organizationJsonLd', () => {
   });
 
   it('includes only the links that are present in sameAs', () => {
-    const ld = organizationJsonLd(
-      company({ company_info: { website: 'https://acme.example' } }),
-      ORIGIN
-    );
+    const ld = organizationJsonLd(company({ company_info: { website: 'https://acme.example' } }), ORIGIN);
 
     expect(ld.sameAs).toEqual(['https://acme.example']);
   });
@@ -209,10 +199,7 @@ describe('organizationJsonLd', () => {
   it('falls back to the homepage field and normalizes a bare domain to https', () => {
     // The bulk company-info backfill stores the homepage under `homepage` (often a
     // bare domain), not `website` — sameAs must still emit a valid absolute URL.
-    const ld = organizationJsonLd(
-      company({ company_info: { homepage: 'acme.com' } }),
-      ORIGIN
-    );
+    const ld = organizationJsonLd(company({ company_info: { homepage: 'acme.com' } }), ORIGIN);
 
     expect(ld.sameAs).toEqual(['https://acme.com']);
   });
@@ -222,26 +209,20 @@ describe('organizationJsonLd', () => {
       company({
         company_info: { website: 'https://acme.io', homepage: 'https://old.acme.com' },
       }),
-      ORIGIN
+      ORIGIN,
     );
 
     expect(ld.sameAs).toEqual(['https://acme.io']);
   });
 
   it('omits sameAs entirely when no links are present', () => {
-    const ld = organizationJsonLd(
-      company({ company_info: { description: 'no links here' } }),
-      ORIGIN
-    );
+    const ld = organizationJsonLd(company({ company_info: { description: 'no links here' } }), ORIGIN);
 
     expect(ld).not.toHaveProperty('sameAs');
   });
 
   it('emits aggregateRating when the company has feedback', () => {
-    const ld = organizationJsonLd(
-      company({ feedback_count: 12, feedback_rating_avg: 4.5 }),
-      ORIGIN
-    );
+    const ld = organizationJsonLd(company({ feedback_count: 12, feedback_rating_avg: 4.5 }), ORIGIN);
 
     expect(ld.aggregateRating).toEqual({
       '@type': 'AggregateRating',
@@ -286,17 +267,13 @@ describe('foreignContentLang', () => {
 
   it('degrades rather than emitting a tag no consumer can resolve', () => {
     // Prose where a code belongs — the failure mode of an unenforced LLM field.
-    expect(
-      foreignContentLang(postingJob({ enrichment: { posting_language: 'russian' } }))
-    ).toBeUndefined();
+    expect(foreignContentLang(postingJob({ enrichment: { posting_language: 'russian' } }))).toBeUndefined();
     expect(foreignContentLang(postingJob({ enrichment: { posting_language: 'r u' } }))).toBeUndefined();
     // Real languages, wrong standard: ISO 639-3 and a regional subtag are not in
     // the contract today, so they degrade instead of corrupting. Widening the
     // pattern is what should flip these, not an accident.
     expect(foreignContentLang(postingJob({ enrichment: { posting_language: 'fil' } }))).toBeUndefined();
-    expect(
-      foreignContentLang(postingJob({ enrichment: { posting_language: 'pt-BR' } }))
-    ).toBeUndefined();
+    expect(foreignContentLang(postingJob({ enrichment: { posting_language: 'pt-BR' } }))).toBeUndefined();
   });
 
   it('degrades to silence on a Card, the projection that carries no enrichment', () => {
@@ -321,9 +298,9 @@ describe('jobPostingJsonLd', () => {
     expect(en.inLanguage).toBe('en');
 
     expect(jobPostingJsonLd(postingJob(), ORIGIN)).not.toHaveProperty('inLanguage');
-    expect(
-      jobPostingJsonLd(postingJob({ enrichment: { posting_language: 'russian' } }), ORIGIN)
-    ).not.toHaveProperty('inLanguage');
+    expect(jobPostingJsonLd(postingJob({ enrichment: { posting_language: 'russian' } }), ORIGIN)).not.toHaveProperty(
+      'inLanguage',
+    );
   });
 
   it('adds logo, skills, and experience/education requirements when present', () => {
@@ -333,7 +310,7 @@ describe('jobPostingJsonLd', () => {
         skills: ['Go', 'Kubernetes'],
         enrichment: { experience_years_min: 5, education_level: 'bachelor' },
       }),
-      ORIGIN
+      ORIGIN,
     );
 
     expect((ld.hiringOrganization as Record<string, unknown>).logo).toBe(companyLogoUrl('Acme'));
@@ -365,7 +342,7 @@ describe('jobPostingJsonLd', () => {
         skills: [],
         enrichment: { experience_years_min: 0, education_level: 'none' },
       }),
-      ORIGIN
+      ORIGIN,
     );
 
     expect(ld.hiringOrganization).not.toHaveProperty('logo');
@@ -389,7 +366,7 @@ describe('jobPostingJsonLd', () => {
   it('sets validThrough to the close time for a closed posting', () => {
     const ld = jobPostingJsonLd(
       postingJob({ closed_at: '2026-02-01T00:00:00Z', last_seen_at: '2026-01-30T00:00:00Z' }),
-      ORIGIN
+      ORIGIN,
     );
     expect(ld.validThrough).toBe('2026-02-01T00:00:00Z');
   });
@@ -412,7 +389,7 @@ describe('jobPostingJsonLd', () => {
   it('falls back to posted_at, then created_at, when last_seen_at is absent', () => {
     const byPosted = jobPostingJsonLd(
       postingJob({ posted_at: '2026-01-01T00:00:00Z', created_at: '2025-01-01T00:00:00Z' }),
-      ORIGIN
+      ORIGIN,
     );
     expect(byPosted.validThrough).toBe('2026-01-31T00:00:00.000Z');
 
@@ -436,10 +413,7 @@ describe('jobPostingJsonLd', () => {
   // "APAC" is a value it cannot resolve — which leaves TELECOMMUTE without the
   // companion it requires. Every emitted name must be a real country.
   it('states applicantLocationRequirements as countries, never a region bloc', () => {
-    const ld = jobPostingJsonLd(
-      postingJob({ work_mode: 'remote', regions: ['north_america'] }),
-      ORIGIN
-    );
+    const ld = jobPostingJsonLd(postingJob({ work_mode: 'remote', regions: ['north_america'] }), ORIGIN);
     // Sorted by name so the emitted order is stable across runs (the map this
     // expands is keyed by ISO code, whose iteration order is an implementation
     // detail we don't want a golden test to pin).
@@ -449,13 +423,13 @@ describe('jobPostingJsonLd', () => {
     ]);
   });
 
-  it('prefers the posting\'s own countries over expanding its region', () => {
+  it("prefers the posting's own countries over expanding its region", () => {
     // countries is the precise fact (this posting is US-only); the region is the
     // coarse facet it rolls up to. Expanding north_america would wrongly claim
     // Canada is in scope.
     const ld = jobPostingJsonLd(
       postingJob({ work_mode: 'remote', regions: ['north_america'], countries: ['us'] }),
-      ORIGIN
+      ORIGIN,
     );
     expect(ld.jobLocationType).toBe('TELECOMMUTE');
     expect(ld.applicantLocationRequirements).toEqual({ '@type': 'Country', name: 'United States' });
@@ -470,10 +444,7 @@ describe('jobPostingJsonLd', () => {
   });
 
   it('ignores a worldwide reach, which names no country to require', () => {
-    const ld = jobPostingJsonLd(
-      postingJob({ work_mode: 'remote', regions: ['global'], location: 'Anywhere' }),
-      ORIGIN
-    );
+    const ld = jobPostingJsonLd(postingJob({ work_mode: 'remote', regions: ['global'], location: 'Anywhere' }), ORIGIN);
     expect(ld).not.toHaveProperty('jobLocationType');
     expect(ld).not.toHaveProperty('applicantLocationRequirements');
     // And it does not answer "where is this job" with the word that means "nowhere
@@ -484,18 +455,13 @@ describe('jobPostingJsonLd', () => {
   // A worldwide posting's location text is a restatement of its work mode, not a
   // place. Emitting it made 8 of the 10 postings sampled from the Remote Worldwide
   // collection claim a city called "Remote", with no addressCountry to place it.
-  it.each([
-    'Remote',
-    'remote',
-    ' Worldwide ',
-    'Anywhere',
-    'Fully Remote',
-    'Remote - Worldwide',
-    'Work from home',
-  ])('never emits %j as a place', (location) => {
-    const ld = jobPostingJsonLd(postingJob({ work_mode: 'remote', regions: [], location }), ORIGIN);
-    expect(ld).not.toHaveProperty('jobLocation');
-  });
+  it.each(['Remote', 'remote', ' Worldwide ', 'Anywhere', 'Fully Remote', 'Remote - Worldwide', 'Work from home'])(
+    'never emits %j as a place',
+    (location) => {
+      const ld = jobPostingJsonLd(postingJob({ work_mode: 'remote', regions: [], location }), ORIGIN);
+      expect(ld).not.toHaveProperty('jobLocation');
+    },
+  );
 
   // The same text is just as meaningless on a posting whose work mode was never
   // classified, and that is where most of them arrive.
@@ -509,7 +475,7 @@ describe('jobPostingJsonLd', () => {
   it('keeps a location that only begins with a placeholder word', () => {
     const ld = jobPostingJsonLd(
       postingJob({ work_mode: 'remote', regions: [], location: 'Remote within the US' }),
-      ORIGIN
+      ORIGIN,
     );
     expect(ld.jobLocation).toEqual({
       '@type': 'Place',
@@ -523,7 +489,7 @@ describe('jobPostingJsonLd', () => {
     // invalid combination, worse than the plain-jobLocation fallback.
     const ld = jobPostingJsonLd(
       postingJob({ work_mode: 'remote', regions: [], location: 'Farnborough, Hampshire' }),
-      ORIGIN
+      ORIGIN,
     );
     expect(ld).not.toHaveProperty('jobLocationType');
     expect(ld).not.toHaveProperty('applicantLocationRequirements');
@@ -587,8 +553,8 @@ describe('collectionPageJsonLd', () => {
       URL,
       jobListItems(
         [job('Senior React Engineer', 'senior-react-engineer-abc'), job('React Native Dev', 'react-native-dev-xyz')],
-        ORIGIN
-      )
+        ORIGIN,
+      ),
     );
 
     expect(ld['@type']).toBe('CollectionPage');
@@ -632,8 +598,8 @@ describe('collectionPageJsonLd', () => {
           { name: 'Acme', slug: 'acme' },
           { name: 'Globex', slug: 'globex' },
         ],
-        ORIGIN
-      )
+        ORIGIN,
+      ),
     );
 
     expect(ld['@type']).toBe('CollectionPage');
@@ -691,8 +657,6 @@ function post(overrides: Partial<PostMeta> = {}): PostMeta {
 }
 
 describe('articleJsonLd', () => {
-  const ORIGIN = 'https://freehire.me';
-
   it('builds an Article with headline, description, date, url and keywords', () => {
     const ld = articleJsonLd(post(), ORIGIN);
     expect(ld['@type']).toBe('Article');

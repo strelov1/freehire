@@ -15,18 +15,46 @@
 
 import { metroLabel } from './metro';
 import {
-  WORK_MODE_VALUES, SENIORITY_VALUES, CATEGORY_VALUES,
-  EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
-  COMPANY_TYPE_VALUES, DOMAIN_VALUES, INDUSTRY_VALUES, FACET_ALIASES,
-  AI_ARCHETYPE_VALUES, SKILL_LABELS, INDUSTRY_LABELS, ROLE_TYPE_VALUES, SOURCE_TYPE_VALUES,
-  CLEARANCE_LEVEL_VALUES, PERK_VALUES, PERK_LABELS, EQUITY_VALUES, ENGAGEMENT_VALUES, ENGAGEMENT_LABELS, ENGAGEMENT_MARKETS,
+  WORK_MODE_VALUES,
+  SENIORITY_VALUES,
+  CATEGORY_VALUES,
+  EMPLOYMENT_TYPE_VALUES,
+  RELOCATION_VALUES,
+  ENGLISH_LEVEL_VALUES,
+  COMPANY_TYPE_VALUES,
+  DOMAIN_VALUES,
+  INDUSTRY_VALUES,
+  FACET_ALIASES,
+  AI_ARCHETYPE_VALUES,
+  SKILL_LABELS,
+  INDUSTRY_LABELS,
+  ROLE_TYPE_VALUES,
+  SOURCE_TYPE_VALUES,
+  CLEARANCE_LEVEL_VALUES,
+  PERK_VALUES,
+  PERK_LABELS,
+  EQUITY_VALUES,
+  ENGAGEMENT_VALUES,
+  ENGAGEMENT_LABELS,
+  ENGAGEMENT_MARKETS,
 } from './generated/contracts';
 import { fuzzyMatch } from './fuzzy';
 import {
-  REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
-  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
-  RELOCATION_LABELS, AI_ARCHETYPE_LABELS, ROLE_TYPE_LABELS, SOURCE_TYPE_LABELS,
-  CLEARANCE_LEVEL_LABELS, EQUITY_LABELS, titleCase,
+  REGION_LABELS,
+  SENIORITY_LABELS,
+  EMPLOYMENT_LABELS,
+  WORK_MODE_LABELS,
+  CATEGORY_LABELS,
+  DOMAIN_LABELS,
+  COMPANY_TYPE_LABELS,
+  ENGLISH_LEVEL_LABELS,
+  RELOCATION_LABELS,
+  AI_ARCHETYPE_LABELS,
+  ROLE_TYPE_LABELS,
+  SOURCE_TYPE_LABELS,
+  CLEARANCE_LEVEL_LABELS,
+  EQUITY_LABELS,
+  titleCase,
 } from './labels';
 import { COLLECTIONS } from './collections';
 import { TIMEZONE_REGIONS } from './talentFacetModel';
@@ -359,12 +387,12 @@ export function optionMatches(
  *  Without tiers a typo match outranks an exact alias whenever it is the busier option:
  *  "golang" sat one typo from Solana, and Solana carried more jobs than Go. */
 export function rankOptionMatches(
-  options: readonly FacetOption[],
+  candidates: readonly FacetOption[],
   query: string,
   searchAliases?: Record<string, readonly string[]>,
 ): FacetOption[] {
   const q = query.trim().toLowerCase();
-  if (q === '') return [...options];
+  if (q === '') return [...candidates];
   const tier = (o: FacetOption): number => {
     const names = [o.label.toLowerCase(), ...(searchAliases?.[o.value] ?? [])];
     if (names.includes(q)) return 0;
@@ -372,7 +400,7 @@ export function rankOptionMatches(
     if (names.some((n) => n.includes(q))) return 2;
     return optionMatches(o, q, searchAliases) ? 3 : -1;
   };
-  return options
+  return candidates
     .map((o) => ({ o, t: tier(o) }))
     .filter(({ t }) => t >= 0)
     .sort((a, b) => a.t - b.t)
@@ -392,27 +420,54 @@ function options(values: readonly string[], labels: Record<string, string> = {})
 // needs one. Used by sourceLabel for the dynamic (distribution-driven) source
 // select, so a source with a real job count renders with its proper name.
 export const SOURCE_LABELS: Record<string, string> = {
-  telegram: 'Telegram', greenhouse: 'Greenhouse', smartrecruiters: 'SmartRecruiters',
-  bamboohr: 'BambooHR', successfactors: 'SAP SuccessFactors',
-  workatastartup: 'Work at a Startup', remoteok: 'RemoteOK', arc: 'Arc',
-  jobstash: 'JobStash', globalpayments: 'Global Payments',
-  usajobs: 'USAJobs', whatjobs: 'WhatJobs', ukgready: 'UKG Ready',
+  telegram: 'Telegram',
+  greenhouse: 'Greenhouse',
+  smartrecruiters: 'SmartRecruiters',
+  bamboohr: 'BambooHR',
+  successfactors: 'SAP SuccessFactors',
+  workatastartup: 'Work at a Startup',
+  remoteok: 'RemoteOK',
+  arc: 'Arc',
+  jobstash: 'JobStash',
+  globalpayments: 'Global Payments',
+  usajobs: 'USAJobs',
+  whatjobs: 'WhatJobs',
+  ukgready: 'UKG Ready',
   devglobaljobs: 'Dev Global Jobs',
-  jettycloud: 'JettyCloud', '10ml': '10ML',
-  edjoin: 'EDJOIN', weworkremotely: 'We Work Remotely', hackernews: 'Hacker News',
-  cryptocurrencyjobs: 'Cryptocurrency Jobs', landingjobs: 'Landing.Jobs',
-  getonbrd: 'Get on Board', mycareersfuture: 'My Careers Future',
-  nofluffjobs: 'No Fluff Jobs', powertofly: 'PowerToFly',
+  jettycloud: 'JettyCloud',
+  '10ml': '10ML',
+  edjoin: 'EDJOIN',
+  weworkremotely: 'We Work Remotely',
+  hackernews: 'Hacker News',
+  cryptocurrencyjobs: 'Cryptocurrency Jobs',
+  landingjobs: 'Landing.Jobs',
+  getonbrd: 'Get on Board',
+  mycareersfuture: 'My Careers Future',
+  nofluffjobs: 'No Fluff Jobs',
+  powertofly: 'PowerToFly',
   // Vendor brands, spelled the way the vendor spells them. Title-casing a slug yields
   // "Jazzhr" and "Adpmyjobs", which are nobody's name — and the same string is what the
   // logo proxy is asked for, so a wrong name is a missing logo as well as a wrong label.
-  zohorecruit: 'Zoho Recruit', jazzhr: 'JazzHR', adpmyjobs: 'ADP MyJobs',
-  applicantpro: 'ApplicantPro', '4dayweek': '4 Day Week',
-  isolvedhire: 'isolved Hire', hrmdirect: 'HRM Direct', hireclick: 'HireClick', catsone: 'CATS',
-  alfabank: 'Alfa-Bank', aijobs: 'AI Jobs', remotedotcom: 'Remote.com',
+  zohorecruit: 'Zoho Recruit',
+  jazzhr: 'JazzHR',
+  adpmyjobs: 'ADP MyJobs',
+  applicantpro: 'ApplicantPro',
+  '4dayweek': '4 Day Week',
+  isolvedhire: 'isolved Hire',
+  hrmdirect: 'HRM Direct',
+  hireclick: 'HireClick',
+  catsone: 'CATS',
+  alfabank: 'Alfa-Bank',
+  aijobs: 'AI Jobs',
+  remotedotcom: 'Remote.com',
   sitemapldjson: 'Sitemap JSON-LD',
-  ptsecurity: 'Positive Technologies', tochka: 'Tochka Bank',
-  sber: 'Sber', uzum: 'Uzum', megafon: 'MegaFon', freshteam: 'Freshteam', startupjobs: 'startup.jobs',
+  ptsecurity: 'Positive Technologies',
+  tochka: 'Tochka Bank',
+  sber: 'Sber',
+  uzum: 'Uzum',
+  megafon: 'MegaFon',
+  freshteam: 'Freshteam',
+  startupjobs: 'startup.jobs',
   wttj: 'Welcome to the Jungle',
   lesta: 'Lesta Games',
   techinasia: 'Tech in Asia',
@@ -739,9 +794,10 @@ export const EMPLOYER_CREDENTIALS: FacetOption[] = COLLECTION.filter((o) => o.gr
 // a generated values array (it's a scalar enrichment field, not a search facet on
 // jobs), so the closed set is spelled out here like CURRENCY; the values are
 // already display-ready.
-const COMPANY_SIZE: FacetOption[] = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+'].map(
-  (value) => ({ value, label: value }),
-);
+const COMPANY_SIZE: FacetOption[] = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+'].map((value) => ({
+  value,
+  label: value,
+}));
 
 // The ISO 3166-1 alpha-2 code set — the country vocabulary the location dictionary
 // draws from — plus 'xk', Kosovo's user-assigned code: ISO has not assigned it, but
@@ -750,22 +806,256 @@ const COMPANY_SIZE: FacetOption[] = ['1-10', '11-50', '51-200', '201-500', '501-
 // (labelled via countryLabel), not a live distribution: the companies list is plain
 // SQL with no facet-count endpoint yet, so options carry no counts.
 const ISO_COUNTRY_CODES = [
-  'ad', 'ae', 'af', 'ag', 'ai', 'al', 'am', 'ao', 'aq', 'ar', 'as', 'at', 'au', 'aw', 'ax', 'az',
-  'ba', 'bb', 'bd', 'be', 'bf', 'bg', 'bh', 'bi', 'bj', 'bl', 'bm', 'bn', 'bo', 'bq', 'br', 'bs',
-  'bt', 'bv', 'bw', 'by', 'bz', 'ca', 'cc', 'cd', 'cf', 'cg', 'ch', 'ci', 'ck', 'cl', 'cm', 'cn',
-  'co', 'cr', 'cu', 'cv', 'cw', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dm', 'do', 'dz', 'ec', 'ee',
-  'eg', 'eh', 'er', 'es', 'et', 'fi', 'fj', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb', 'gd', 'ge', 'gf',
-  'gg', 'gh', 'gi', 'gl', 'gm', 'gn', 'gp', 'gq', 'gr', 'gs', 'gt', 'gu', 'gw', 'gy', 'hk', 'hm',
-  'hn', 'hr', 'ht', 'hu', 'id', 'ie', 'il', 'im', 'in', 'io', 'iq', 'ir', 'is', 'it', 'je', 'jm',
-  'jo', 'jp', 'ke', 'kg', 'kh', 'ki', 'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc',
-  'li', 'lk', 'lr', 'ls', 'lt', 'lu', 'lv', 'ly', 'ma', 'mc', 'md', 'me', 'mf', 'mg', 'mh', 'mk',
-  'ml', 'mm', 'mn', 'mo', 'mp', 'mq', 'mr', 'ms', 'mt', 'mu', 'mv', 'mw', 'mx', 'my', 'mz', 'na',
-  'nc', 'ne', 'nf', 'ng', 'ni', 'nl', 'no', 'np', 'nr', 'nu', 'nz', 'om', 'pa', 'pe', 'pf', 'pg',
-  'ph', 'pk', 'pl', 'pm', 'pn', 'pr', 'ps', 'pt', 'pw', 'py', 'qa', 're', 'ro', 'rs', 'ru', 'rw',
-  'sa', 'sb', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sm', 'sn', 'so', 'sr', 'ss',
-  'st', 'sv', 'sx', 'sy', 'sz', 'tc', 'td', 'tf', 'tg', 'th', 'tj', 'tk', 'tl', 'tm', 'tn', 'to',
-  'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'um', 'us', 'uy', 'uz', 'va', 'vc', 've', 'vg', 'vi',
-  'vn', 'vu', 'wf', 'ws', 'xk', 'ye', 'yt', 'za', 'zm', 'zw',
+  'ad',
+  'ae',
+  'af',
+  'ag',
+  'ai',
+  'al',
+  'am',
+  'ao',
+  'aq',
+  'ar',
+  'as',
+  'at',
+  'au',
+  'aw',
+  'ax',
+  'az',
+  'ba',
+  'bb',
+  'bd',
+  'be',
+  'bf',
+  'bg',
+  'bh',
+  'bi',
+  'bj',
+  'bl',
+  'bm',
+  'bn',
+  'bo',
+  'bq',
+  'br',
+  'bs',
+  'bt',
+  'bv',
+  'bw',
+  'by',
+  'bz',
+  'ca',
+  'cc',
+  'cd',
+  'cf',
+  'cg',
+  'ch',
+  'ci',
+  'ck',
+  'cl',
+  'cm',
+  'cn',
+  'co',
+  'cr',
+  'cu',
+  'cv',
+  'cw',
+  'cx',
+  'cy',
+  'cz',
+  'de',
+  'dj',
+  'dk',
+  'dm',
+  'do',
+  'dz',
+  'ec',
+  'ee',
+  'eg',
+  'eh',
+  'er',
+  'es',
+  'et',
+  'fi',
+  'fj',
+  'fk',
+  'fm',
+  'fo',
+  'fr',
+  'ga',
+  'gb',
+  'gd',
+  'ge',
+  'gf',
+  'gg',
+  'gh',
+  'gi',
+  'gl',
+  'gm',
+  'gn',
+  'gp',
+  'gq',
+  'gr',
+  'gs',
+  'gt',
+  'gu',
+  'gw',
+  'gy',
+  'hk',
+  'hm',
+  'hn',
+  'hr',
+  'ht',
+  'hu',
+  'id',
+  'ie',
+  'il',
+  'im',
+  'in',
+  'io',
+  'iq',
+  'ir',
+  'is',
+  'it',
+  'je',
+  'jm',
+  'jo',
+  'jp',
+  'ke',
+  'kg',
+  'kh',
+  'ki',
+  'km',
+  'kn',
+  'kp',
+  'kr',
+  'kw',
+  'ky',
+  'kz',
+  'la',
+  'lb',
+  'lc',
+  'li',
+  'lk',
+  'lr',
+  'ls',
+  'lt',
+  'lu',
+  'lv',
+  'ly',
+  'ma',
+  'mc',
+  'md',
+  'me',
+  'mf',
+  'mg',
+  'mh',
+  'mk',
+  'ml',
+  'mm',
+  'mn',
+  'mo',
+  'mp',
+  'mq',
+  'mr',
+  'ms',
+  'mt',
+  'mu',
+  'mv',
+  'mw',
+  'mx',
+  'my',
+  'mz',
+  'na',
+  'nc',
+  'ne',
+  'nf',
+  'ng',
+  'ni',
+  'nl',
+  'no',
+  'np',
+  'nr',
+  'nu',
+  'nz',
+  'om',
+  'pa',
+  'pe',
+  'pf',
+  'pg',
+  'ph',
+  'pk',
+  'pl',
+  'pm',
+  'pn',
+  'pr',
+  'ps',
+  'pt',
+  'pw',
+  'py',
+  'qa',
+  're',
+  'ro',
+  'rs',
+  'ru',
+  'rw',
+  'sa',
+  'sb',
+  'sc',
+  'sd',
+  'se',
+  'sg',
+  'sh',
+  'si',
+  'sj',
+  'sk',
+  'sl',
+  'sm',
+  'sn',
+  'so',
+  'sr',
+  'ss',
+  'st',
+  'sv',
+  'sx',
+  'sy',
+  'sz',
+  'tc',
+  'td',
+  'tf',
+  'tg',
+  'th',
+  'tj',
+  'tk',
+  'tl',
+  'tm',
+  'tn',
+  'to',
+  'tr',
+  'tt',
+  'tv',
+  'tw',
+  'tz',
+  'ua',
+  'ug',
+  'um',
+  'us',
+  'uy',
+  'uz',
+  'va',
+  'vc',
+  've',
+  'vg',
+  'vi',
+  'vn',
+  'vu',
+  'wf',
+  'ws',
+  'xk',
+  'ye',
+  'yt',
+  'za',
+  'zm',
+  'zw',
 ];
 /** Turn an English display name into a URL segment: strip diacritics, lowercase, and
  *  collapse every run of non-alphanumerics into one hyphen. Local to the country
@@ -799,30 +1089,29 @@ export interface SlugifiedCountry {
 //   - both members of any pair that slugify alike. Handing the slug to whichever
 //     came first in the list would be an arbitrary choice made silently, so the
 //     collision drops the whole group and the ambiguity stays visible as an absence.
-const COUNTRY_SLUGS: { byCode: Map<string, string>; bySlug: Map<string, string>; list: SlugifiedCountry[] } =
-  (() => {
-    const claims = new Map<string, string[]>();
-    for (const code of ISO_COUNTRY_CODES) {
-      const label = countryLabel(code);
-      if (label === code.toUpperCase()) continue;
-      const slug = slugifyName(label);
-      if (!slug) continue;
-      claims.set(slug, [...(claims.get(slug) ?? []), code]);
-    }
+const COUNTRY_SLUGS: { byCode: Map<string, string>; bySlug: Map<string, string>; list: SlugifiedCountry[] } = (() => {
+  const claims = new Map<string, string[]>();
+  for (const code of ISO_COUNTRY_CODES) {
+    const label = countryLabel(code);
+    if (label === code.toUpperCase()) continue;
+    const slug = slugifyName(label);
+    if (!slug) continue;
+    claims.set(slug, [...(claims.get(slug) ?? []), code]);
+  }
 
-    const byCode = new Map<string, string>();
-    const bySlug = new Map<string, string>();
-    const list: SlugifiedCountry[] = [];
-    for (const [slug, codes] of claims) {
-      const [code, ...rest] = codes;
-      if (!code || rest.length > 0) continue;
-      byCode.set(code, slug);
-      bySlug.set(slug, code);
-      list.push({ code, slug });
-    }
-    list.sort((a, b) => a.slug.localeCompare(b.slug));
-    return { byCode, bySlug, list };
-  })();
+  const byCode = new Map<string, string>();
+  const bySlug = new Map<string, string>();
+  const list: SlugifiedCountry[] = [];
+  for (const [slug, codes] of claims) {
+    const [code, ...rest] = codes;
+    if (!code || rest.length > 0) continue;
+    byCode.set(code, slug);
+    bySlug.set(slug, code);
+    list.push({ code, slug });
+  }
+  list.sort((a, b) => a.slug.localeCompare(b.slug));
+  return { byCode, bySlug, list };
+})();
 
 /** ISO alpha-2 → its URL slug, or undefined when the code earns no slug (see above). */
 export function countrySlug(code: string): string | undefined {
@@ -896,10 +1185,32 @@ const YC_BATCH: FacetOption[] = (() => {
  *  questions of it: what a candidate SAYS they want, and what their most recent title
  *  resolves to. Both are selects rather than pills because 48 values is a wall. */
 export const TALENT_FACETS: FacetDef[] = [
-  { param: 'specializations', label: 'Open to', control: 'select', options: CATEGORY, excludable: false, placeholder: 'Search disciplines' },
-  { param: 'categories', label: 'Has worked in', control: 'select', options: CATEGORY, excludable: false, placeholder: 'Search disciplines' },
+  {
+    param: 'specializations',
+    label: 'Open to',
+    control: 'select',
+    options: CATEGORY,
+    excludable: false,
+    placeholder: 'Search disciplines',
+  },
+  {
+    param: 'categories',
+    label: 'Has worked in',
+    control: 'select',
+    options: CATEGORY,
+    excludable: false,
+    placeholder: 'Search disciplines',
+  },
   { param: 'seniorities', label: 'Grade', control: 'pills', options: SENIORITY, excludable: false },
-  { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: false, placeholder: 'Search skills', techIcons: true },
+  {
+    param: 'skills',
+    label: 'Skills',
+    control: 'select',
+    dynamic: true,
+    excludable: false,
+    placeholder: 'Search skills',
+    techIcons: true,
+  },
   { param: 'tz', label: 'Timezone', control: 'pills', options: TIMEZONE_REGION, excludable: false },
   { param: 'cities', label: 'City', control: 'select', dynamic: true, excludable: false, placeholder: 'Search cities' },
 ];
@@ -908,51 +1219,147 @@ export const COMPANY_FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: REGION, excludable: false },
   { param: 'remote_regions', label: 'Remote hiring', control: 'pills', options: REGION, excludable: false },
-  { param: 'countries', label: 'Country', control: 'select', options: COUNTRY, excludable: false, placeholder: 'Search countries' },
+  {
+    param: 'countries',
+    label: 'Country',
+    control: 'select',
+    options: COUNTRY,
+    excludable: false,
+    placeholder: 'Search countries',
+  },
   // The catalogue's only industry control. The backend matches it against the curated
   // industries column AND the job-derived domains one (internal/industrytag maps
   // between the vocabularies), so the Domain facet that used to sit here asked the
   // same question of one of the same columns and is gone. `domains` remains a working
   // query parameter for a caller who wants the raw job-derived value.
-  { param: 'industries', label: 'Industry', control: 'select', options: INDUSTRIES, excludable: false, placeholder: 'Search industries' },
+  {
+    param: 'industries',
+    label: 'Industry',
+    control: 'select',
+    options: INDUSTRIES,
+    excludable: false,
+    placeholder: 'Search industries',
+  },
   { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: false },
   { param: 'company_size', label: 'Company size', control: 'pills', options: COMPANY_SIZE, excludable: false },
   { param: 'maturity', label: 'Company stage', control: 'pills', options: MATURITY, excludable: false },
   { param: 'yc_status', label: 'YC status', control: 'pills', options: YC_STATUS, excludable: false },
   { param: 'yc_stage', label: 'YC stage', control: 'pills', options: YC_STAGE, excludable: false },
   { param: 'yc_flags', label: 'YC highlights', control: 'pills', options: YC_FLAGS, excludable: false },
-  { param: 'yc_batch', label: 'YC batch', control: 'select', options: YC_BATCH, excludable: false, placeholder: 'Search YC batches' },
+  {
+    param: 'yc_batch',
+    label: 'YC batch',
+    control: 'select',
+    options: YC_BATCH,
+    excludable: false,
+    placeholder: 'Search YC batches',
+  },
 ];
 
 export const FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: JOB_REGION, excludable: true },
   { param: 'work_mode', label: 'Work format', control: 'pills', options: WORK_MODE, excludable: true },
-  { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations', searchAliases: FACET_ALIASES },
-  { param: 'ai_archetype', label: 'AI Specialization', control: 'select', options: AI_ARCHETYPE, excludable: true, placeholder: 'Search AI specializations' },
+  {
+    param: 'category',
+    label: 'Specialization',
+    control: 'select',
+    options: CATEGORY,
+    excludable: true,
+    placeholder: 'Search specializations',
+    searchAliases: FACET_ALIASES,
+  },
+  {
+    param: 'ai_archetype',
+    label: 'AI Specialization',
+    control: 'select',
+    options: AI_ARCHETYPE,
+    excludable: true,
+    placeholder: 'Search AI specializations',
+  },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },
   { param: 'role_type', label: 'Role type', control: 'pills', options: ROLE_TYPE, excludable: true },
-  { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search skills', techIcons: true },
-  { param: 'domains', label: 'Industry', control: 'select', options: DOMAINS, excludable: true, placeholder: 'Search industries' },
+  {
+    param: 'skills',
+    label: 'Skills',
+    control: 'select',
+    dynamic: true,
+    excludable: true,
+    hasAndOr: true,
+    placeholder: 'Search skills',
+    techIcons: true,
+  },
+  {
+    param: 'domains',
+    label: 'Industry',
+    control: 'select',
+    options: DOMAINS,
+    excludable: true,
+    placeholder: 'Search industries',
+  },
   { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: true },
-  { param: 'countries', label: 'Countries', control: 'select', dynamic: true, excludable: true, placeholder: 'Search countries' },
+  {
+    param: 'countries',
+    label: 'Countries',
+    control: 'select',
+    dynamic: true,
+    excludable: true,
+    placeholder: 'Search countries',
+  },
   { param: 'cities', label: 'City', control: 'select', dynamic: true, excludable: true, placeholder: 'Search cities' },
-  { param: 'metros', label: 'Metro area', control: 'select', dynamic: true, excludable: true, placeholder: 'Search metro areas' },
+  {
+    param: 'metros',
+    label: 'Metro area',
+    control: 'select',
+    dynamic: true,
+    excludable: true,
+    placeholder: 'Search metro areas',
+  },
   { param: 'relocation', label: 'Relocation', control: 'pills', options: RELOCATION, excludable: true },
   { param: 'employment_type', label: 'Employment', control: 'pills', options: EMPLOYMENT, excludable: true },
   // Excludable: both values are statements, so "hide Inside IR35" keeps the postings that
   // do not say — unlike perks, where an exclusion would hide jobs that never mentioned one.
   { param: 'engagement', label: 'Contract terms', control: 'pills', options: ENGAGEMENT, excludable: true },
   { param: 'english_level', label: 'English', control: 'pills', options: ENGLISH, excludable: true },
-  { param: 'posting_language', label: 'Job language', control: 'select', dynamic: true, excludable: true, placeholder: 'Search languages' },
+  {
+    param: 'posting_language',
+    label: 'Job language',
+    control: 'select',
+    dynamic: true,
+    excludable: true,
+    placeholder: 'Search languages',
+  },
   { param: 'reality', label: 'Posting reality', control: 'pills', options: REALITY, excludable: true },
   { param: 'salary_currency', label: 'Currency', control: 'pills', options: CURRENCY, excludable: true },
   // Include-only: a posting without a perk is one whose description does not MENTION it,
   // so "exclude 401(k) matching" would hide jobs that may well offer it.
-  { param: 'perks', label: 'Perks mentioned', control: 'pills', options: PERKS, excludable: false, hasAndOr: true, searchAliases: PERK_ALIASES },
+  {
+    param: 'perks',
+    label: 'Perks mentioned',
+    control: 'pills',
+    options: PERKS,
+    excludable: false,
+    hasAndOr: true,
+    searchAliases: PERK_ALIASES,
+  },
   { param: 'equity', label: 'Equity', control: 'pills', options: EQUITY, excludable: true },
-  { param: 'company_slug', label: 'Company', control: 'remote', excludable: true, placeholder: 'Search companies', remote: companySearch },
+  {
+    param: 'company_slug',
+    label: 'Company',
+    control: 'remote',
+    excludable: true,
+    placeholder: 'Search companies',
+    remote: companySearch,
+  },
   { param: 'source_type', label: 'Source type', control: 'pills', options: SOURCE_TYPE, excludable: true },
   { param: 'clearance_levels', label: 'Clearance level', control: 'pills', options: CLEARANCE_LEVEL, excludable: true },
-  { param: 'source', label: 'Source', control: 'select', dynamic: true, excludable: true, placeholder: 'Search sources', entityLogos: true },
+  {
+    param: 'source',
+    label: 'Source',
+    control: 'select',
+    dynamic: true,
+    excludable: true,
+    placeholder: 'Search sources',
+    entityLogos: true,
+  },
 ];
