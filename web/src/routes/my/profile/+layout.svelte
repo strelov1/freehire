@@ -15,6 +15,7 @@
   import { experienceBankStore } from '#lib/experienceBank.svelte.js';
   import { screeningStore } from '#lib/screening.svelte.js';
   import AccountSetupCard from '#lib/components/AccountSetupCard.svelte';
+  import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import States from '#lib/components/States.svelte';
   import { profileStore } from '#lib/profile.svelte.js';
   import { messages } from './messages';
@@ -179,12 +180,13 @@
 {:else}
   <!-- Above the tab strip: what is left to set up belongs to the account rather than to
        whichever section happens to be open — a card inside a section would be
-       re-announced on every tab switch. The Talent Network invitation used to sit beside
-       it and has moved further out still, to the account shell (`my/+layout`), which puts
-       it above every section rather than only above Profile's. -->
+       re-announced on every tab switch. The Talent Network invitation follows it: the
+       skills and experience it would publish are edited on this page, and under the title
+       it no longer pushes the page's own heading down. -->
   <div class="mb-6">
     <AccountSetupCard />
   </div>
+  <TalentNetworkInvite />
 
   <!-- The overall count reads the same helper the tab dots do, so the two cannot
        disagree. Shown only while something is missing — a finished profile needs no

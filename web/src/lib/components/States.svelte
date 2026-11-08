@@ -38,8 +38,11 @@
     {/each}
   </div>
 {:else}
+  <!-- A soft well, so an empty list reads as a place that is empty rather than one grey
+       line floating in a blank pane. -->
   <EmptyState
     title={fallback}
+    class="rounded-xl bg-secondary/40"
     variant={state === 'error' ? 'destructive' : 'muted'}
     action={state === 'error' && onRetry ? retry : undefined}
   />

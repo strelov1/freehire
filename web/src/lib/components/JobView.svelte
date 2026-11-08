@@ -860,7 +860,7 @@
      apply control the plan did not pick. -->
 {#snippet ctaGroup()}
   {#if !closed}
-    <div class="hidden shrink-0 items-center justify-end gap-2 lg:flex">
+    <div class="hidden shrink-0 items-center gap-2 lg:flex">
       {@render autoApplyCta('md', 'shrink-0')}
       {@render applyCta('md', 'shrink-0', cta.external)}
       {@render tailorCta('md', 'shrink-0')}
@@ -1107,8 +1107,9 @@
     <!-- The CTAs take a row of their own under the title rather than riding its right
          edge: the title is the longest string on the page and the buttons are the widest
          fixed thing beside it, so sharing a line meant a two-word title left them adrift in
-         the middle of the page and a long one pushed them down anyway. Right-aligned, so
-         they land above the quiet strip's own right edge on the tab row below. -->
+         the middle of the page and a long one pushed them down anyway. Left-aligned under
+         the title they read as its next step; right-aligned they floated with nothing to
+         their left. -->
     {@render ctaGroup()}
 
     <!-- Below lg the provenance line already spends its width on the company name and its

@@ -68,10 +68,37 @@
   // whichever is present so the link renders regardless of which importer filled it.
   const website = $derived(info.website ?? info.homepage);
   const websiteHref = $derived(website ? (website.startsWith('http') ? website : `https://${website}`) : '');
+  // Shown as the bare host ("stripe.com"), the way people say it; the link keeps the URL.
+  const websiteLabel = $derived(website ? website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : '');
   const linkedin = $derived(info.linkedin);
 
   const hasMeta = $derived(industries.length > 0 || !!website || !!linkedin);
 </script>
+
+{#snippet feedback(cls: string)}
+  <div class={cls}>
+    <button
+      type="button"
+      class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+      onclick={openFeedbackEntry}
+    >
+      {#if feedbackCount > 0}
+        <Star class="size-4" fill="currentColor" aria-hidden="true" />
+        {(feedbackRatingAvg ?? 0).toFixed(1)} · {feedbackCount}
+      {:else}
+        <Star class="size-4" aria-hidden="true" />
+        Leave feedback
+      {/if}
+    </button>
+    <VoteControl
+      target="company"
+      {slug}
+      upvoteCount={company.upvote_count ?? 0}
+      downvoteCount={company.downvote_count ?? 0}
+      myVote={company.my_vote ?? 0}
+    />
+  </div>
+{/snippet}
 
 <section class="rounded-2xl border border-border bg-card p-5">
   <div class="flex items-start gap-3">
@@ -101,32 +128,11 @@
       <CompanyFollowButton {slug} companyName={company.name} />
     </div>
   </div>
-  <!-- Feedback + votes get their own right-aligned row instead of sharing the identity
-       row: together they are ~220px of non-shrinking width, which on a phone would leave
-       the name/tagline column too narrow to hold a word. The discussion is a tab now
-       (CompanyTabs), not a link here. -->
-  <div class="mt-3 flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
-    <button
-      type="button"
-      class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-      onclick={openFeedbackEntry}
-    >
-      {#if feedbackCount > 0}
-        <Star class="size-4" fill="currentColor" aria-hidden="true" />
-        {(feedbackRatingAvg ?? 0).toFixed(1)} · {feedbackCount}
-      {:else}
-        <Star class="size-4" aria-hidden="true" />
-        Leave feedback
-      {/if}
-    </button>
-    <VoteControl
-      target="company"
-      {slug}
-      upvoteCount={company.upvote_count ?? 0}
-      downvoteCount={company.downvote_count ?? 0}
-      myVote={company.my_vote ?? 0}
-    />
-  </div>
+  <!-- Feedback + votes ride the end of the industries/links row below, so the card has no
+       row holding only them; with no such row they keep one of their own. -->
+  {#if !hasMeta}
+    {@render feedback('mt-3 flex flex-wrap items-center justify-end gap-x-4 gap-y-2')}
+  {/if}
   <!-- The employer-level fact, where it belongs: an AI interviewer is a property of
        how this company hires, not of any one posting. Renders nothing until somebody
        reports it. -->
@@ -151,7 +157,7 @@
               class="min-w-0 break-all text-sm font-medium text-primary hover:underline"
               href={websiteHref}
               target="_blank"
-              rel="noopener noreferrer">{website} ↗</a
+              rel="noopener noreferrer">{websiteLabel} ↗</a
             >
             <!-- eslint-enable svelte/no-navigation-without-resolve -->
           {/if}
@@ -167,6 +173,7 @@
           {/if}
         </div>
       {/if}
+      {@render feedback('ml-auto flex flex-wrap items-center gap-x-4 gap-y-2')}
     </div>
   {/if}
 </section>

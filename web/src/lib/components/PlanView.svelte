@@ -190,7 +190,7 @@
       <!-- The plan strip. On Pro it states when the subscription runs to; on Free it offers
            the upgrade — but only once we know there is somewhere to send them. -->
       <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-secondary/40 px-4 py-3"
+        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand/30 bg-brand/[0.03] px-4 py-3"
       >
         <div class="flex flex-col gap-0.5">
           <span class="text-base font-semibold">
@@ -237,7 +237,7 @@
 
       {#if billing}
         <div class="flex flex-col gap-3">
-          <h2 class="text-sm font-medium text-muted-foreground">{s.subscription.heading}</h2>
+          <h2 class="text-sm font-semibold">{s.subscription.heading}</h2>
           <div class="flex flex-col gap-3 rounded-lg border border-border px-4 py-3">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <span class="text-sm font-medium">
@@ -297,7 +297,7 @@
 
       <div class="flex flex-col gap-3">
         <div class="flex items-baseline justify-between gap-3">
-          <h2 class="text-sm font-medium text-muted-foreground">{s.today.heading}</h2>
+          <h2 class="text-sm font-semibold">{s.today.heading}</h2>
           <span class="text-xs text-muted-foreground">
             {s.today.resetsAtPrefix}
             {fmtTime(plan.resets_at)}
@@ -332,7 +332,7 @@
 
     {#if showUsage && usage}
       <div class="flex flex-col gap-2">
-        <h2 class="text-sm font-medium text-muted-foreground">{s.usage.heading}</h2>
+        <h2 class="text-sm font-semibold">{s.usage.heading}</h2>
         <div class="rounded-lg border border-border px-5 py-4">
           <div class="flex items-baseline gap-2">
             <span class="text-2xl font-semibold tabular-nums">{usage.requests}</span>
@@ -353,7 +353,7 @@
     {/if}
 
     <div class="flex flex-col gap-3">
-      <h2 class="text-sm font-medium text-muted-foreground">{s.history.heading}</h2>
+      <h2 class="text-sm font-semibold">{s.history.heading}</h2>
       {#if status === 'loading'}
         <States state="loading" />
       {:else if status === 'error'}

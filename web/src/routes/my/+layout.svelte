@@ -8,9 +8,8 @@
   import { messages, navLabel } from '#lib/i18n/shell.js';
   import { t } from '#lib/i18n/t.js';
   import { cn } from '#lib/ui/index.js';
-  import { accountNav, activeSection, isSectionActive } from '#lib/accountNav.js';
+  import { accountNav, activeSection } from '#lib/accountNav.js';
   import { accountNavIcons } from '#lib/accountNavIcons.js';
-  import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import AccountNavDrawer from '#lib/components/AccountNavDrawer.svelte';
   import AccountNavGroups from '#lib/components/AccountNavGroups.svelte';
   import { messages as supportMessages } from '#lib/components/SupportPanel.messages.js';
@@ -142,7 +141,23 @@
              side panel uses; at top-6 the collapse toggle sat behind it. Capped to the
              window and scrollable, so on a short window the last links stay reachable. -->
         <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-1 overflow-y-auto">
-          <div class={cn('mb-1 flex items-center', collapsed ? 'flex-col gap-1' : 'justify-between')}>
+          <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
+            <AccountNavGroups variant="sidebar" iconOnly={collapsed} />
+          </nav>
+          <!-- Help and the collapse toggle close the column, so the nav's first item lines up
+               with the section heading instead of under a row of utilities. -->
+          <div class={cn('mt-2 flex items-center border-t border-border pt-2', collapsed ? 'flex-col gap-1' : 'justify-between')}>
+          <button
+            type="button"
+            onclick={() => (helpOpen = !helpOpen)}
+            aria-haspopup="dialog"
+            aria-expanded={helpOpen}
+            title={helpLabel}
+            class="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
+            <span class={collapsed ? 'sr-only' : undefined}>{helpLabel}</span>
+          </button>
           <button
             type="button"
             onclick={toggleNav}
@@ -156,33 +171,11 @@
               <PanelLeftClose class="size-4" />
             {/if}
           </button>
-          <button
-            type="button"
-            onclick={() => (helpOpen = !helpOpen)}
-            aria-haspopup="dialog"
-            aria-expanded={helpOpen}
-            title={helpLabel}
-            class="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
-            <span class={collapsed ? 'sr-only' : undefined}>{helpLabel}</span>
-          </button>
           </div>
-          <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
-            <AccountNavGroups variant="sidebar" iconOnly={collapsed} />
-          </nav>
         </div>
       </div>
 
       <div class="min-w-0 flex-1">
-        <!-- Above the Profile section's heading only: on every section it was a promo
-             stacked over each page's own work (with the email confirmation strip above it).
-             Profile is where the skills and experience it would publish are edited.
-             Dismissal is the card's own business. -->
-        {#if isSectionActive(path, '/my/profile')}
-          <TalentNetworkInvite />
-        {/if}
-
         {@render children()}
       </div>
     </div>
