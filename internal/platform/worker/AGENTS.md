@@ -92,7 +92,7 @@ wait:
 |---|---|---|
 | transactional | `freehire:pause:mail:transactional` | `pro-welcome-mail` |
 | engagement | `freehire:pause:mail:engagement` | `notify`, `message-notify`, `mentorship-remind` |
-| lifecycle | `freehire:pause:mail:lifecycle` | `onboarding`, `nudge`, `remind`, `limit-nudge-mail` |
+| lifecycle | `freehire:pause:mail:lifecycle` | `onboarding`, `nudge`, `remind`, `limit-nudge-mail`, `cv-lifecycle-mail` |
 | all mail | `freehire:pause:mail:all` | every worker above |
 
 ```bash
@@ -103,7 +103,7 @@ redis-cli DEL freehire:pause:mail:lifecycle              # resume one class
 
 `freehire:pause:<binary>` and `freehire:pause:all` keep working unchanged.
 
-- **Whole-run holds**: `pro-welcome-mail`, `onboarding`, `limit-nudge-mail`, `mentorship-remind`
+- **Whole-run holds**: `pro-welcome-mail`, `onboarding`, `limit-nudge-mail`, `cv-lifecycle-mail`, `mentorship-remind`
   and `message-notify` pass `emailnotify.HoldKeys(<binary>)` to `Main`, so a class hold takes the
   per-binary path: exit 0, `freehire_worker_paused=1`, no `last_run_*` series.
   `message-notify` is whole-run because one channel succeeding marks a notice as sent;
@@ -129,7 +129,7 @@ a long-lived process would outlive the outage). The first `SendingPausedExceptio
 `AccountSuspendedException`, or `MessageRejected` saying sending is paused trips it, and every
 later `Send` in the run returns `emailnotify.ErrSendingPaused` without calling SES. Any other
 `MessageRejected` (bad address, unverified identity) is not account-level and does not trip it.
-`onboarding` ends its pass on it and writes no ledger row, so no slot is burned; per-address
+`onboarding` and `cv-lifecycle-mail` end their pass on it and write no ledger row (the latter also gives back its step row), so no slot is burned; per-address
 failures still burn theirs. `notify`, `nudge` and `remind` map it to their channel soft-skip, so
 no attempt is counted. `message-notify`, `pro-welcome-mail`, `limit-nudge-mail` and
 `mentorship-remind` already leave the item retryable on any failed send. The breaker never

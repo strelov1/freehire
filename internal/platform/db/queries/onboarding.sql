@@ -17,6 +17,10 @@
 --     reminders — and an account with no settings row could not decline either
 --     one, because the page that creates the row is behind the login. Migration
 --     0153 split them; the unsubscribe link writes this column without a session.
+--
+-- And every List below leaves out an account that already holds today's mail_day_claims
+-- row: one optional letter per account per UTC day across all senders (migration 0248).
+-- Leaving it out keeps the step pending — the ledger row is written only once it is sent.
 
 -- name: ListWelcomeCandidates :many
 -- Verified accounts inside the window that have not been greeted yet. This is the
@@ -30,6 +34,9 @@ WHERE u.email_verified
   AND NOT EXISTS (
       SELECT 1 FROM onboarding_emails oe
       WHERE oe.user_id = u.id AND oe.step = 'welcome'
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
   )
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
@@ -50,6 +57,9 @@ WHERE u.email_verified
   AND NOT EXISTS (
       SELECT 1 FROM onboarding_emails oe
       WHERE oe.user_id = u.id AND oe.step = 'advanced_search'
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
   )
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
@@ -78,6 +88,9 @@ WHERE u.email_verified
       SELECT 1 FROM onboarding_emails oe
       WHERE oe.user_id = u.id AND oe.step = 'no_alert'
   )
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
+  )
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
 
@@ -97,6 +110,9 @@ WHERE u.email_verified
   AND NOT EXISTS (
       SELECT 1 FROM onboarding_emails oe
       WHERE oe.user_id = u.id AND oe.step = 'extension'
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
   )
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
@@ -120,6 +136,9 @@ WHERE u.email_verified
       SELECT 1 FROM onboarding_emails oe
       WHERE oe.user_id = u.id AND oe.step = 'open_source'
   )
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
+  )
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
 
@@ -128,6 +147,10 @@ LIMIT sqlc.arg(max_rows)::int;
 -- Pro feature. An account with a live Pro or Ultra tier already has it, and a letter
 -- selling it what it bought reads as nobody looking. pro_until/ultra_until rather than
 -- the per-provider sources, for the reason ListProWelcomeCandidates gives.
+--
+-- An account whose CV has parsed is left to the CV lifecycle letters (internal/engage/
+-- cvlifecycle), which say the same thing with the account's own score in them; mailing
+-- both would be the tailoring pitch twice in a week.
 SELECT u.id, u.email
 FROM users u
 JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
@@ -137,9 +160,13 @@ WHERE u.email_verified
   AND w.sent_at < now() - make_interval(days => sqlc.arg(after_days)::int)
   AND COALESCE(ns.news_email_enabled, true)
   AND NOT (COALESCE(u.pro_until > now(), false) OR COALESCE(u.ultra_until > now(), false))
+  AND NOT cv_parsed(u.resume_extract_status, u.resume_structured_uploaded_at, u.resume_uploaded_at)
   AND NOT EXISTS (
       SELECT 1 FROM onboarding_emails oe
       WHERE oe.user_id = u.id AND oe.step = 'tailor'
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
   )
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
@@ -176,6 +203,9 @@ WHERE u.email_verified
   AND NOT EXISTS (
       SELECT 1 FROM onboarding_emails oe
       WHERE oe.user_id = u.id AND oe.step = 'buddies'
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
   )
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
