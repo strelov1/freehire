@@ -113,7 +113,7 @@
         // Flush against the viewport edge now, so it is a wall rather than a card: one
         // border on the side that meets the page, and no rounding on edges that touch
         // nothing.
-        docked && 'border-l border-border',
+        docked && 'border-l border-border shadow-xl shadow-foreground/5',
         !docked && 'bg-background',
       ]}
     >
