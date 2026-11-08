@@ -834,7 +834,9 @@
          is then what is left of the viewport, less the same 24px at the bottom. -->
     <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-4 overflow-y-auto">
       {@render sidebarTop?.()}
-      <div class="rounded-xl border border-border bg-card p-4">
+      <!-- Card chrome only once there are filters to list: around one "All filters" button it
+           was a framed box holding nothing. -->
+      <div class={filters.active > 0 ? 'rounded-xl border border-border bg-card p-4' : 'px-1'}>
         <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} matchAvailable={matchFilterAvailable} />
       </div>
     </div>
