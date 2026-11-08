@@ -1,7 +1,12 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 declare global {
   namespace App {
-    // interface Error {}
+    interface Error {
+      message: string;
+      // Short code the client error page shows and telemetry records as `error.id`
+      // (hooks.client.ts); absent on server-rendered errors.
+      id?: string;
+    }
     interface Locals {
       // The resolved account-section locale for this request (see
       // hooks.server.ts) — 'en' outside /my/** regardless of the user's

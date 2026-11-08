@@ -36,6 +36,13 @@
  *    arrives here on a real response through `toApiError`. */
 const TRANSIENT_API_STATUS = new Set([499, 504]);
 
+/** The module-load wording of TRANSIENT_MESSAGES: each browser's words for "a JS chunk did
+ *  not load". It stays noise for the window listeners (a tab left open across a deploy), but
+ *  when SvelteKit's handleError sees it the visitor is already looking at the error page, so
+ *  hooks.client.ts reports it and reloads once (see moduleReload.ts). Dropping it there left
+ *  an iPhone stuck on a 500 for /jobs/swipe on 2026-11-08 with nothing in telemetry. */
+const MODULE_LOAD_MESSAGES = ['dynamically imported module', 'importing a module script failed'] as const;
+
 /** Message fragments, matched lowercased. Most are one browser's or runtime's wording for a
  *  condition another browser words differently — that variety is why this is a list rather
  *  than a predicate. The abort fragments are the exception and are there for a different
@@ -54,9 +61,9 @@ const TRANSIENT_MESSAGES = [
   // A tab open across a deploy still names `_app/immutable` chunks the release has
   // deleted. `+layout.svelte` already turns the next navigation into a full page load once
   // the version poll notices (see the `updated.current` guard there); what reaches here is
-  // the residue that raced the poll, and no further code change can catch it.
-  'dynamically imported module',
-  'importing a module script failed',
+  // the residue that raced the poll. When it breaks the page itself, hooks.client.ts
+  // reports it anyway (isModuleLoadFailure below).
+  ...MODULE_LOAD_MESSAGES,
   // Cancellation. The suggestion box aborts its own in-flight requests on every settled
   // keystroke by design (FREEHIRE-WEB-1R), and a visitor leaving a page aborts the rest.
   //
@@ -107,4 +114,12 @@ export function isTransientNoise(err: unknown): boolean {
   if (typeof e.message !== 'string') return false;
   const message = e.message.toLowerCase();
   return TRANSIENT_MESSAGES.some((fragment) => message.includes(fragment));
+}
+
+export function isModuleLoadFailure(err: unknown): boolean {
+  if (err == null || typeof err !== 'object') return false;
+  const message = (err as { message?: unknown }).message;
+  if (typeof message !== 'string') return false;
+  const lower = message.toLowerCase();
+  return MODULE_LOAD_MESSAGES.some((fragment) => lower.includes(fragment));
 }
