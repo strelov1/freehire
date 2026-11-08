@@ -104,14 +104,14 @@ func (h *webhookHandlers) CreateOrUpdateWebhook(c *fiber.Ctx) error {
 		return err
 	}
 
-	row, err := h.queries.UpsertWebhookConfig(c.Context(), db.UpsertWebhookConfigParams{
+	if _, err := h.queries.UpsertWebhookConfig(c.Context(), db.UpsertWebhookConfigParams{
 		UserID: userID,
 		URL:    in.URL,
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
-	if row, err = h.recordProbeSuccess(c.Context(), userID); err != nil {
+	row, err := h.recordProbeSuccess(c.Context(), userID)
+	if err != nil {
 		return err
 	}
 

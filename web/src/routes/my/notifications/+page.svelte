@@ -4,8 +4,9 @@
   import { notificationCenter } from '#lib/notificationCenter.svelte.js';
   import { Paginator } from '#lib/paginated.svelte.js';
   import NotificationCard from '#lib/components/NotificationCard.svelte';
-  import { LoadMore } from '#lib/ui/index.js';
   import States from '#lib/components/States.svelte';
+  import { resolve } from '$app/paths';
+  import { Button, EmptyState, LoadMore } from '#lib/ui/index.js';
   import type { NotificationItem } from '#lib/types.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
@@ -78,7 +79,12 @@
   {:else if pager.status === 'error'}
     <States state="error" />
   {:else if pager.items.length === 0}
-    <States state="empty" message={s.empty} />
+    <!-- An empty history says what will arrive here and how to start it, not one grey line. -->
+    <EmptyState title={s.empty} description={s.emptyHint} class="rounded-xl border border-dashed border-border">
+      {#snippet action()}
+        <Button variant="secondary" size="sm" href={resolve('/my/notifications/searches')}>{s.emptyAction}</Button>
+      {/snippet}
+    </EmptyState>
   {:else}
     <ul class="overflow-hidden rounded-md border border-border">
       {#each pager.items as item (item.id)}

@@ -21,6 +21,16 @@ describe('BuddiesLandingView', () => {
     for (const a of joins) expect(a.getAttribute('href')).toBe('/buddies');
   });
 
+  it('joins in place when given onJoin, for a signed-in non-member at /buddies', async () => {
+    const onJoin = vi.fn();
+    render(BuddiesLandingView, { onJoin });
+    expect(screen.queryByRole('link', { name: 'Join interview buddies' })).toBeNull();
+    const joins = screen.getAllByRole('button', { name: 'Join interview buddies' });
+    expect(joins.length).toBeGreaterThan(0);
+    for (const b of joins) b.click();
+    expect(onJoin).toHaveBeenCalledTimes(joins.length);
+  });
+
   it('renders every FAQ question', () => {
     render(BuddiesLandingView);
     for (const f of BUDDIES_FAQ) expect(screen.getByText(f.question)).toBeTruthy();

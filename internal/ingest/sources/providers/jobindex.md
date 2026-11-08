@@ -1,0 +1,8 @@
+**Jobindex traps** (`jobindex`; live-verified 2026-10-25 from a residential IP, fsn and host2):
+
+- **No API; the search page's `var Stash = {...}` object is the feed.** `/jobsoegning.json` answers 204. The object carries every posting's id, title, employer, area and date, plus the rendered card.
+- **A query reaches 50 pages of 20 — 1000 postings — against a ~17.6k catalogue.** The crawl walks the ~78 subcategories (`subid`) the page itself lists, so a new one is crawled without a release. Three (Pædagog, Pleje og omsorg, Detailhandel, 1.1k-1.5k each, none technical) are larger than the window; they are walked newest-first so what is out of reach is always their oldest tail.
+- **Boardless on purpose, although the subcategories look like boards.** A posting is filed under several (the seven IT subcategories sum to ~1.5k for ~975 distinct IT postings) and the pipeline namespaces `external_id` by board, so per-subcategory boards would store most postings twice. One crawl that de-duplicates by posting id stores each once.
+- **The description is a ~340-character teaser and nothing longer exists on Jobindex.** `/vis-job/<id>` renders the same card; the body lives on the employer's site behind "Se jobbet", on hosts that carried no schema.org JobPosting in a sample. So the adapter spends no detail request.
+- **Any failed page fails the crawl.** The sweep closes what a run did not see, and ~1.2k pages a crawl make a quietly-missing subcategory likely; the crawl hosts answered every request in ~1s with no refusals.
+- **Overlap with the other Danish feeds is partial.** Of 790 distinct IT postings, at most 285 (36%) share an exact title with an open `jobnet`/`jobdanmark` row; 153 apply through hr-manager, which nothing else crawls.

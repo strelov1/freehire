@@ -4,7 +4,7 @@ import type { FaqItem } from './seo';
 export const AGENTS_FAQ: FaqItem[] = [
   {
     question: 'Which option should I choose?',
-    answer: 'Choose freehire Assistant to work directly on the site with Pro. Choose MCP to connect an assistant you already use, such as Claude, ChatGPT, Codex or Cursor. Choose CLI to work from your terminal or give a local agent access to freehire alongside your files.',
+    answer: 'Choose freehire Assistant to work directly on the site with Pro. Choose MCP to connect an assistant you already use, such as Claude, ChatGPT, Codex or Cursor. Choose CLI to work from your terminal or give a local agent access to freehire alongside your files. Choose API to build on the catalogue: the read API is free for personal and non-commercial use, and a Jobs API plan licenses the data for your product.',
   },
   {
     question: 'Do I need Pro or an account to get started?',

@@ -37,9 +37,9 @@
   <!-- The section's title belongs to the layout, above the strip, the way /my/activity
        and /my/tracking title theirs — in the History pane it was the only one of the
        three routes that had a heading at all. -->
-  <div class="flex flex-col gap-1 max-lg:sr-only">
-    <h1 class="text-2xl font-semibold tracking-tight">Notifications</h1>
-    <p class="text-sm text-muted-foreground">
+  <div class="flex flex-col gap-1">
+    <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">Notifications</h1>
+    <p class="text-sm text-muted-foreground max-lg:sr-only">
       Every new-job match, reminder and application nudge you've been sent — and what you
       get next.
     </p>

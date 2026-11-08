@@ -19,6 +19,7 @@
   import McpSetup from './McpSetup.svelte';
   import ChatExample from './ChatExample.svelte';
   import type { CatalogScale, FacetCounts } from '#lib/types.js';
+  import { formatCount } from '#lib/utils.js';
 
   // The homepage. One search box on an otherwise empty screen, and under it — for the
   // visitor who came to look rather than to search — how big the catalogue is and the
@@ -80,11 +81,14 @@
    *  into a link by the same `planForSuggestion` the dropdown applies — so which facet
    *  a craft means is answered in one place, not two. */
   const crafts = $derived<Chip[]>(
-    starterSuggestions(counts, CHIP_LIMIT).map((s) => ({
-      href: planHref(planForSuggestion(s)),
-      label: s.label,
-      count: s.count,
-    })),
+    starterSuggestions(counts, CHIP_LIMIT)
+      .map((s) => ({
+        href: planHref(planForSuggestion(s)),
+        label: s.label,
+        count: s.count,
+      }))
+      // Biggest first, as the row's own label promises.
+      .sort((a, b) => (b.count ?? 0) - (a.count ?? 0)),
   );
 
   /** Where, rather than what. Remote leads because it is the answer that is not a place;
@@ -116,6 +120,13 @@
     if (!value) return null;
     return { value: value.toLocaleString('en-US'), label };
   }
+
+  /** The hero's one number, live from the same snapshot as the figures below and
+   *  floored to a tenth of a million (4,968,000 → "4.9M+", never "5M+"): a "+" figure
+   *  must not overstate the catalogue. The fallback is the last measured floor. */
+  const jobsFigure = $derived(
+    scale?.unique_open_jobs ? `${formatCount(Math.floor(scale.unique_open_jobs / 1e5) * 1e5)}+` : '4.9M+',
+  );
 
   const figures = $derived(
     [
@@ -223,9 +234,14 @@
       <h1 class="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
         Every tech job, straight from the source.
       </h1>
+      <!-- The developer doors live in this one sentence rather than in a row of buttons
+           under the box: the box stays the page's only task, and the hero stays two lines. -->
       <p class="text-balance text-base leading-relaxed text-muted-foreground">
-        Indexed from company career boards, deduplicated, and tagged by stack, seniority
-        and location. Free, open source, no walls.
+        {jobsFigure} live postings. Search them here, from
+        <a href={resolve('/agents')} class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">your AI agent</a>
+        or through
+        <a href={resolve('/jobs-api')} class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">the API</a>.
+        Free and open source.
       </p>
     </div>
 
@@ -296,14 +312,12 @@
   </section>
 {/if}
 
-<RecentJobsFeed />
-
 <!-- The two places freehire runs that are not a web page. Side by side because they
      are the same offer twice — the catalogue where you already work — and stacking
      them would make the second read as an afterthought. Each card carries its own
      evidence: the CLI its install line, the extension what the panel actually does. -->
 <section class="border-t border-border py-12 sm:py-16">
-  <SectionLabel as="h2" text="take it with you" />
+  <SectionLabel as="h2" text="for your agent and your browser" />
   <!-- `grid-cols-1` is load-bearing, not the default written out: with no column template
        the single track below `lg` is `auto`, which sizes to its widest content — the
        install line in the `pre`, which does not wrap. That took the track to 416px on a
@@ -337,7 +351,9 @@
       </div>
 
       <!-- The same preview as /features/extension, drawn smaller: `zoom` shrinks the layout box too, unlike a transform. -->
-      <div class="[zoom:0.7]"><ExtensionPanelPreview /></div>
+      <!-- Centred in whatever height the taller card beside it leaves, so the spare room
+           sits around the preview instead of as one empty band above the buttons. -->
+      <div class="flex flex-1 items-center"><div class="w-full [zoom:0.7]"><ExtensionPanelPreview /></div></div>
 
       <div class="mt-auto flex flex-wrap items-center justify-end gap-3">
         <Button href={EXTENSION_STORE_URL} target="_blank" variant="primary" size="md">
@@ -352,6 +368,8 @@
     </div>
   </div>
 </section>
+
+<RecentJobsFeed />
 
 <!-- Seeded empty and applied by navigating: see `searchWithFilters`. `savedSearches`
      is off — that tab manages the alerts a signed-in visitor saved from a list, and

@@ -26,8 +26,8 @@
   // view says so on the page rather than leaving it to be discovered.
   //
   // `/my/activity` is a different section entirely (saved jobs, history, matches,
-  // hidden) and keeps that name; the two are told apart by their place in the
-  // navigation, the way every other repeated label in the account shell is.
+  // hidden) and keeps that name, so this tab is "Streak": two places in one shell
+  // both called Activity read as a duplicate.
   //
   // The strip is the same underline `TabStrip` every other account section navigates
   // with, icons included.
@@ -50,7 +50,7 @@
 </svelte:head>
 
 <div class="flex flex-col gap-4 pt-4 lg:pt-0">
-  <h1 class="text-2xl font-semibold tracking-tight max-lg:sr-only">{s.title}</h1>
+  <h1 class="text-2xl max-lg:text-xl font-semibold tracking-tight">{s.title}</h1>
 
   <TabStrip {tabs} {active} label={s.tabStripLabel} panelId={PANEL_ID} />
 

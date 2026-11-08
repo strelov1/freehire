@@ -23,7 +23,7 @@
   // resolve without a non-null assertion.
   const SLIDES: readonly [Slide, Slide] = [
     {
-      headline: 'Every IT job in one place — deduplicated, enriched, and searchable in seconds.',
+      headline: 'Every tech job in one place — deduplicated, enriched, and searchable in seconds.',
       bullets: [
         'Advanced search across every source',
         "CV tailoring for the role you're applying to",

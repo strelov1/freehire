@@ -1,0 +1,9 @@
+**Meituan traps** (`meituan`; live-verified 2026-10-15):
+
+- **Keyless JSON POST, any User-Agent**: `POST https://zhaopin.meituan.com/api/official/job/getJobList`; `robots.txt` 302s away (no file). A row is the whole posting — `jobDuty`, `jobRequirement`, `highLight` as plain text — so there is no hydration.
+- **Pagination is NESTED**: `{"page": {"pageNo": N, "pageSize": 500}}`. A flat `pageNo` is ignored and always answers page 1 (career-ops, confirmed). `pageSize: 500` is served.
+- **Three hire types, all real postings**: `jobType` `3` experienced (2,577 on the day), `1` campus graduate (197), `2` intern (364); the three sum to the unfiltered 3,138. One walk per type, so a posting's type is stated (`junior`; `intern`/`internship`).
+- **The tech scope is the job family**: `jfJgList: [{"code": "11001", "subCode": []}]` is 技术类 in `GET /api/official/job/search/enum?enumType=JF` — 351 + 121 + 193 = 665 postings. An unknown code answers 0, and each row states its `jobFamily` and `jobType`, so a filter the search stopped honouring fails the crawl. `classify` over the 665 titles: category 3, `IsTech` 2, `ConfirmedNonTech` 0; over the other 2,473: 81 / 0 / 7 — the family sets `IsTechHint`.
+- **Cities are Chinese names with the 市 suffix** ("北京市"), plus a few abroad (旧金山, 西雅图, 香港特别行政区) — read through `cncity.go`. The non-technical families carry Keeta's Gulf and Hong Kong delivery operations (科威特城, 吉达, 多哈), which is why an unmapped name never defaults to China.
+- **A third party saw the site answer a mid-walk page with an empty list** (career-ops, read as rate limiting). Here a page that comes back empty before the count is read FAILS the crawl rather than ending it. Nothing was refused across ~20 requests; a crawl is three requests, ~3 s.
+- The posting page `web/position/detail?jobUnionId=<id>` is a client-rendered shell (HTTP 200 for any id).

@@ -106,6 +106,11 @@ describe('filtersFromParams', () => {
     expect(sk(f).include).toEqual(['go']);
   });
 
+  it('de-duplicates repeated exclude values', () => {
+    const f = filtersFromParams(new URLSearchParams('skills_exclude=go&skills_exclude=go'));
+    expect(sk(f).exclude).toEqual(['go']);
+  });
+
   it('splits a comma-joined value into multiple included values', () => {
     const f = filtersFromParams(new URLSearchParams('skills=go,react'));
     expect(sk(f).include).toEqual(['go', 'react']);
@@ -215,6 +220,21 @@ describe('experienceYearsMax', () => {
       const back = filtersFromParams(new URLSearchParams(`experience_years_max=${raw}`));
       expect(back.experienceYearsMax, `experience_years_max=${raw}`).toBeNull();
     }
+  });
+
+  // The server reads this param untrimmed, so ` 3` is no bound there. Trimming here
+  // would show an "Up to 3 years" chip over a list the server never narrowed.
+  it('reads a value with surrounding whitespace as no bound, like the server', () => {
+    for (const raw of ['%203', '3%20', '%203%20']) {
+      const f = filtersFromParams(new URLSearchParams(`experience_years_max=${raw}`));
+      expect(f.experienceYearsMax, `experience_years_max=${raw}`).toBeNull();
+      expect(activeFilterCount(f), `experience_years_max=${raw}`).toBe(0);
+    }
+  });
+
+  it('still reads plain 0 and 3 as bounds', () => {
+    expect(filtersFromParams(new URLSearchParams('experience_years_max=0')).experienceYearsMax).toBe(0);
+    expect(filtersFromParams(new URLSearchParams('experience_years_max=3')).experienceYearsMax).toBe(3);
   });
 
   it('counts as one active filter, including at zero', () => {

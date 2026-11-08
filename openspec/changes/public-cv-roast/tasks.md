@@ -930,10 +930,12 @@ git add internal/api/handler/ && git commit -m "feat(api): expose the public CV 
 - [ ] **Step 1: Read the existing surfaces before writing anything**
 
 Run:
+
 ```bash
 sed -n '1,80p' web/src/routes/my/profile/cv-readiness/+page@my.svelte
 grep -n "atsReport\|ats-report\|marketCoverage" web/src/lib/api.ts
 ```
+
 The signed-in ATS page already renders `atscheck.Report`'s categories and line items. Reuse
 its components rather than writing a second renderer — `LineItem`/`Status` is the shared
 wire shape `cmd/gen-contracts` excludes cvmatch's `lineitem.go` for, precisely so one
@@ -1004,11 +1006,13 @@ Constraints from this repo's own traps, all of which have bitten before:
 - [ ] **Step 5: Run tests and lint**
 
 Run:
+
 ```bash
 pnpm --dir web test -- roast
 pnpm --dir web lint
 pnpm --dir web check
 ```
+
 Expected: PASS on all three. `pnpm --dir web lint` is the one to run rather than relying on
 the pre-commit hook — CI additionally runs oxlint.
 

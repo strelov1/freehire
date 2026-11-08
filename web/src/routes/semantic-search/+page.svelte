@@ -14,7 +14,7 @@
 
 <Seo
   title="Semantic search — freehire"
-  description="Search IT jobs by meaning, not just keywords. Live progress of semantic embeddings across the freehire catalogue, and how AI agents use semantic search to find better matches."
+  description="Search tech jobs by meaning, not just keywords. Live progress of semantic embeddings across the freehire catalogue, and how AI agents use semantic search to find better matches."
   {canonical}
 />
 

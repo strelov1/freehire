@@ -729,7 +729,7 @@
     <Flag class="size-4 shrink-0" aria-hidden="true" />
     <!-- Icon only from lg, where it sits beside the CTAs: a rare action, it should not
          weigh as much as Apply. The accessible name stays on the button. -->
-    <span class="lg:sr-only">Report</span>
+    <span class="sr-only">Report</span>
   </Button>
 {/snippet}
 
@@ -817,10 +817,13 @@
     <a
       class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
+      title="Discussion"
       onclick={onDiscussionClick}
     >
       <MessageSquare class="size-4 shrink-0" aria-hidden="true" />
-      Discussion{threadCount ? ` · ${threadCount}` : ''}
+      <!-- Icon (and count) only, like Report; the title names it on hover and the name
+           stays for screen readers. -->
+      <span class="sr-only">Discussion</span>{threadCount ? ` · ${threadCount}` : ''}
     </a>
     {@render reportButton()}
     {@render saveButton()}
@@ -1042,7 +1045,8 @@
              variant/class/children, so a `title` passed to it would be dropped
              silently and the badge would state a claim with its evidence gone. -->
         <span title={badge.tooltip} class="inline-flex">
-          <Chip class="font-semibold">{badge.label}</Chip>
+          <!-- The same look as on every job card: plain text, no pill. -->
+          <span class="text-xs font-semibold text-foreground">{badge.label}</span>
         </span>
       {/each}
     </div>
@@ -1123,7 +1127,6 @@
     <!-- Below lg the provenance line already spends its width on the company name and its
          badges, so the dates read here instead — a caption under the title rather than
          right-aligned, which on one phone-width column would only look adrift. -->
-    {@render postingMeta('flex lg:hidden')}
 
     <!-- Below lg the strip rides here rather than on the tab row: the sidebar stacks
          between the title and the description on a phone, so a strip left down there
@@ -1137,9 +1140,12 @@
          does not (the link out), and five labels do not fit one phone-width line — without
          it the row simply overflowed its left edge and ate "Discussion". The lg copy shares
          a line with the TabStrip and must not wrap. -->
-    {@render actionStrip(
-      '-mr-2 flex w-full flex-wrap justify-end border-b border-border pb-2 lg:hidden',
-    )}
+    <!-- On a phone the dates and the strip share one left-aligned line, wrapping when it
+         must: right-aligned, the strip floated under a short date with nothing to its left. -->
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2 lg:hidden">
+      {@render postingMeta('flex flex-wrap')}
+      {@render actionStrip('-ml-2 flex max-w-full flex-wrap')}
+    </div>
 
     <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
          once for the whole page: a gauge and the hedged wording here, the criteria and
@@ -1161,19 +1167,6 @@
       />
     {/if}
 
-    {#if job.company?.trim()}
-      <!-- A muted text link, not a button: it shows on every posting. The company page is
-           resolved only on click, keeping crawler visits cheap. -->
-      <a
-        href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
-        target="_blank"
-        rel="nofollow noopener noreferrer"
-        class="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline"
-      >
-        Find people at {job.company.trim()} on LinkedIn
-        <ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />
-      </a>
-    {/if}
 
     <!-- Mentorship is a separate way to get help from someone at this company. -->
     {#if job.company_slug}
@@ -1240,12 +1233,11 @@
         </dl>
       {/if}
 
-      <!-- Where the posting came from, and the control to stop seeing that source. One row
-           since the engagement counters left it for the provenance line up beside the title. -->
-      <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
-
-      <div class="border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <div class="flex justify-center">
+      <!-- One quiet footer line: where the posting came from (with the control to stop seeing
+           that source) and the votes. They were two divided bands, each holding one control. -->
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0">
+        <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
+        <div class="flex shrink-0">
           <!-- Keyed on the slug so a client-side navigation to another job remounts
                the control and re-seeds its counts/highlight (JobView itself is not
                remounted on param change). -->
@@ -1345,6 +1337,23 @@
         />
       {:else}
         <div class="min-w-0 flex-1 border-b border-border" aria-hidden="true"></div>
+      {/if}
+      {#if job.company?.trim()}
+        <!-- At the tab row's end, where it reads as one more thing to look at about this job,
+             rather than a sentence of its own under the CTAs. The full wording is the link's
+             name; the visible label stays short so it fits beside the tabs. The company page
+             is resolved only on click, keeping crawler visits cheap. -->
+        <a
+          href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          aria-label="Find people at {job.company.trim()} on LinkedIn"
+          title="Find people at {job.company.trim()} on LinkedIn"
+          class="inline-flex shrink-0 items-center gap-1.5 self-stretch border-b border-border pl-3 text-sm text-muted-foreground hover:text-foreground"
+        >
+          Find people
+          <ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />
+        </a>
       {/if}
     </div>
 

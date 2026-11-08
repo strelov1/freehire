@@ -96,6 +96,7 @@ and `ingest/screeninganswers`, all below or beside it. Mail goes through a port,
 Added to `internal/platform/arch/layering/blocks.go`.
 
 ### 4. `direct_applications`: record first, stamp sent after
+
 ```
 id bigserial PK, job_id → jobs ON DELETE CASCADE, user_id → users ON DELETE CASCADE,
 cv_id uuid NOT NULL, note text NOT NULL DEFAULT '', answers jsonb NOT NULL,
@@ -103,6 +104,7 @@ created_at timestamptz NOT NULL DEFAULT now(), sending_at timestamptz NULL,
 sent_at timestamptz NULL,
 UNIQUE (job_id, user_id)
 ```
+
 `answers` is a snapshot `[{id, label, type, answer}]`, so the record still reads correctly
 after the employer edits the questions. Flow of `Apply`:
 1. Load the vacancy; `IsDirectApply` and open, else not found / closed. Its own employer

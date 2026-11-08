@@ -13,6 +13,6 @@
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
 <div>
-  <h1 class="mb-4 text-2xl max-lg:sr-only font-semibold tracking-tight">{s.tabs.requests}</h1>
+  <h1 class="mb-4 text-2xl max-lg:text-xl font-semibold tracking-tight">{s.tabs.requests}</h1>
   <ReferralsView tab="requests" />
 </div>

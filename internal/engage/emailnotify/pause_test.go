@@ -33,7 +33,7 @@ func TestClassKeysHoldExactlyTheirMembers(t *testing.T) {
 	want := map[Class][]string{
 		ClassTransactional: {"pro-welcome-mail"},
 		ClassEngagement:    {"notify", "message-notify", "mentorship-remind"},
-		ClassLifecycle:     {"onboarding", "nudge", "remind", "limit-nudge-mail"},
+		ClassLifecycle:     {"onboarding", "nudge", "remind", "limit-nudge-mail", "cv-lifecycle-mail"},
 	}
 	for class, members := range want {
 		mr, url := redisURL(t)

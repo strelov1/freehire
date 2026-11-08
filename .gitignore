@@ -54,6 +54,7 @@ hire
 /ingest
 /ingest-scheduler
 /limit-nudge-mail
+/cv-lifecycle-mail
 /liveness
 /llm-probe
 /mail-ingest

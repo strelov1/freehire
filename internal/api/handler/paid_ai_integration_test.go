@@ -102,6 +102,7 @@ func TestPaidAIFitStreamRefusesFree(t *testing.T) {
 	})
 
 	userID, token := assistantUser(t, pool, iss, "paid-gate-fit@example.test", false)
+	insertAutoApplyJob(t, pool, "any-job")
 	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/jobs/any-job/fit/stream", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	// The SPA's EventSource shape: a same-origin cookie request stamps Fetch Metadata,
@@ -121,6 +122,17 @@ func TestPaidAIFitStreamRefusesFree(t *testing.T) {
 	}
 	if got := usedToday(t, pool, userID, plan.FeatureFit); got != 0 {
 		t.Errorf("a refused free caller was charged %d analyses", got)
+	}
+
+	paywallWrites.Wait()
+	var feature, slug string
+	if err := pool.QueryRow(context.Background(),
+		`SELECT h.feature, j.public_slug FROM paywall_hits h JOIN jobs j ON j.id = h.job_id WHERE h.user_id = $1`,
+		userID).Scan(&feature, &slug); err != nil {
+		t.Fatalf("the refusal left no paywall hit naming its job: %v", err)
+	}
+	if feature != string(plan.FeatureFit) || slug != "any-job" {
+		t.Errorf("paywall hit = %s on %s, want %s on any-job", feature, slug, plan.FeatureFit)
 	}
 }
 
@@ -148,6 +160,15 @@ func TestPaidAIAutoApplyTailorIsGatedByTheEntryOwner(t *testing.T) {
 	}
 	if n := model.calls.Load(); n != 0 {
 		t.Errorf("the model was called %d times for a free entry owner", n)
+	}
+	paywallWrites.Wait()
+	var hits int
+	if err := pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM paywall_hits WHERE user_id = $1", userID).Scan(&hits); err != nil {
+		t.Fatalf("count paywall hits: %v", err)
+	}
+	if hits != 0 {
+		t.Errorf("the orchestrator's refusal recorded %d paywall hits, want 0 — nobody pressed a button", hits)
 	}
 	var tailored *string
 	if err := pool.QueryRow(context.Background(),

@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -156,6 +157,38 @@ func (s *Store) recordLimitHit(ctx context.Context, userID int64, feature Featur
 		log.Printf("plan: record limit hit for user %d on %s: %v", userID, feature, err)
 	}
 }
+
+// PaywallJob names the vacancy a refused action concerned, by whichever identifier the route
+// carries; the zero value means none. At most one field is set. They are bound parameters of
+// the insert and resolved there, so an unknown or foreign identifier records no job rather
+// than failing, and no request text is stored.
+type PaywallJob struct {
+	// Slug is a job's public slug.
+	Slug string
+	// CVID is a CV of the caller, resolved through the vacancy it was tailored for.
+	CVID uuid.UUID
+	// SessionID is an assistant session of the caller, resolved through its vacancy.
+	SessionID uuid.UUID
+}
+
+// RecordPaywallHit records that the paid-AI gate refused this user on this feature today,
+// once per (user, feature, job, day). feature is a plan feature name for a metered route and
+// a fixed name for the ones without an allowance, so it is a string rather than a Feature.
+//
+// The caller decides what a failure means; the gate drops it, because the 402 must go out
+// whether or not this write lands.
+func (s *Store) RecordPaywallHit(ctx context.Context, userID int64, feature string, job PaywallJob) error {
+	return s.q.RecordPaywallHit(ctx, db.RecordPaywallHitParams{
+		UserID:    userID,
+		Feature:   feature,
+		JobSlug:   pgtype.Text{String: job.Slug, Valid: job.Slug != ""},
+		CvID:      pgUUID(job.CVID),
+		SessionID: pgUUID(job.SessionID),
+		Day:       pgDay(s.now()),
+	})
+}
+
+func pgUUID(id uuid.UUID) pgtype.UUID { return pgtype.UUID{Bytes: id, Valid: id != uuid.Nil} }
 
 // Release gives back a reservation for work that produced nothing the user can use, so
 // the reference becomes chargeable again and a retry is charged exactly once rather than

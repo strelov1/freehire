@@ -1,0 +1,5 @@
+**Refline traps** (`refline`; live-verified 2026-10-29):
+
+- **A Swiss ATS strong in the public sector** (cantons, municipalities, hospitals, Empa/PSI/WSL, ZKB), all on `apply.refline.ch`: a customer portal is `/<customer>/search.html`, a posting `/<customer>/<job>/pub/<publication>/index.html`. **One job is published several times** — per channel (`pub/1`, `pub/6`) and per language (`pub/de`, `pub/it`, `pub/rm`) — so the identity is `<customer>/<job>` and the adapter keeps the lowest numeric publication, else the lowest language code.
+- **Boardless, from the sitemaps robots.txt names** (`rec01/0` … `rec02/9`; robots disallows `rec01/1` and `rec03/1` and lists neither). 1,735 jobs across 120 customers on 2026-10-29; Common Crawl saw 149 customer ids, so a few customers keep their portal out of the sitemaps. There is no job API or feed.
+- **The title arrives HTML-escaped** (`REST &amp; AbaReport`). An unknown job id answers **200 with an empty page**, not a 404, so a page without a JobPosting is no answer rather than a removal.

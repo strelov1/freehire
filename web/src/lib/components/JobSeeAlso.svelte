@@ -15,23 +15,25 @@
 {#if cards.length > 0}
   <section class="mt-8">
     <h2 class="mb-3 text-sm font-semibold text-muted-foreground">See also</h2>
-    <div class="no-scrollbar flex gap-3 overflow-x-auto pb-1">
+    <!-- Wraps rather than scrolling sideways: a hidden-scrollbar row cut its last card mid-word
+         ("Data A…") with nothing to say there was more. -->
+    <div class="flex flex-wrap gap-2">
       {#each cards as card (card.slug)}
         <a
           href={resolve('/collections/[slug]', { slug: card.slug })}
-          class="flex w-max shrink-0 flex-col items-start gap-1.5 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-muted"
+          class="flex max-w-full flex-col items-start gap-1.5 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-muted"
         >
           <div class="flex w-full items-center justify-between gap-2">
             <CollectionMark mark={card.mark} />
             {#if card.count !== null}
               <span
-                class="shrink-0 rounded-full bg-secondary px-2 py-0.5 font-mono text-xs text-muted-foreground"
+                class="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs tabular-nums text-muted-foreground"
               >
                 {card.count.toLocaleString()} jobs
               </span>
             {/if}
           </div>
-          <span class="whitespace-nowrap text-sm font-medium text-foreground">{card.title} jobs</span>
+          <span class="break-words text-sm font-medium text-foreground">{card.title} jobs</span>
         </a>
       {/each}
     </div>

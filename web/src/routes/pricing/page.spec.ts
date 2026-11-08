@@ -106,12 +106,14 @@ describe('/pricing — the API plans', () => {
     expect(await screen.findByRole('heading', { name: 'API', level: 3 })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Data', level: 3 })).toBeTruthy();
     expect(screen.getByText(/An API plan licenses the data for use in your product/)).toBeTruthy();
+    expect(screen.getByText('for builders')).toBeTruthy();
   });
 
   it('shows no API section when the product is not sold', async () => {
     edgePlaces(null);
     renderPricing();
     await Promise.resolve();
-    expect(screen.queryByRole('heading', { name: 'API', level: 2 })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Jobs API', level: 2 })).toBeNull();
+    expect(screen.queryByText('for builders')).toBeNull();
   });
 });

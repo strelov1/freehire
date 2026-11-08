@@ -18,7 +18,7 @@ import (
 // tenant's own /graphql endpoint with that token as a Bearer credential. The default, unfiltered
 // search already returns only what a public visitor sees — open, externally-visible postings —
 // so unlike jobappnetwork's shared search proxy, no extra visibility filter is needed. See
-// internal/ingest/sources/AGENTS.md's "gr8people traps" section for what was verified live.
+// internal/ingest/sources/providers/gr8people.md for what was verified live.
 type gr8peopleHTTP interface {
 	TextGetter
 	HeaderJSONPoster

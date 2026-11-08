@@ -74,6 +74,7 @@
     newTab = false,
     compact = false,
     hideCompany = false,
+    flat = false,
     footer,
     onHide,
     unsave = api.unsaveJob,
@@ -88,6 +89,8 @@
     compact?: boolean;
     // On the employer's own page every card would repeat its logo, name and backers.
     hideCompany?: boolean;
+    // A row in a divided list (the feed draws the frame and the dividers), not a framed card.
+    flat?: boolean;
     footer?: Snippet;
     onHide?: (slug: string) => void;
     /** Allows a saved list to serialize removal with pagination. */
@@ -168,8 +171,28 @@
   // The region is dropped when the flags already name the country ("UK · 🇬🇧 United
   // Kingdom" said one place twice); with no country it is the only geography and stays.
   const regionTag = $derived(job.countries?.length ? regionLabel({ regions: job.regions ?? [] }) : null);
+  // On the employer's own page the rail (logo, name, date) is not drawn, so the date leads
+  // the meta line instead — the same place a reader finds it relative to the title elsewhere.
+  // On touch, Apply and Hide never hide, so the corner cluster is wide; the date then
+  // moves from the rail to the meta line so the company name keeps its room.
+  const touchActions = $derived(!compact && Boolean(applyJob || directApply));
+  const touchPosted = $derived(touchActions && !hideCompany ? posted : null);
   const metaFacts = $derived(
-    [...tags.filter((t) => t !== regionTag), equity, questions].filter((f): f is string => Boolean(f)),
+    [
+      // With no rail on the employer's own page, its date, views and deadline lead this line.
+      ...(hideCompany
+        ? [
+            posted,
+            views > 0 ? `${formatCount(views)} views` : null,
+            job.application_deadline ? `Apply by ${job.application_deadline}` : null,
+          ]
+        : []),
+      ...tags.filter((t) => t !== regionTag),
+      equity,
+      questions,
+    ].filter(
+      (f): f is string => Boolean(f),
+    ),
   );
   const shownSkills = $derived(skills.slice(0, MAX_SKILLS));
   const extraSkills = $derived(skills.length - MAX_SKILLS);
@@ -356,7 +379,10 @@
      `group` lets the hover-revealed hide control fade in on card hover. -->
 <div
   data-testid="job-card"
-  class="group relative rounded-xl border border-border bg-card transition hover:border-brand hover:bg-accent"
+  class={[
+    'group relative transition hover:bg-accent',
+    !flat && 'rounded-xl border border-border/70 bg-card hover:border-brand',
+  ]}
 >
 <a
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
@@ -366,7 +392,7 @@
   aria-describedby={summary ? summaryId : undefined}
   class={[
     'block hover:opacity-100',
-    compact ? 'p-3' : 'p-4',
+    compact ? 'p-3' : 'px-4 py-3.5',
   ]}
   class:opacity-90={isViewed}
 >
@@ -377,9 +403,9 @@
   <!-- Reserves the top-right corner for the Save overlay outside this link, so the
        timestamp never slides under it. Only a compact card keeps Save up here; a normal
        card has moved it into the action row at its foot, leaving the corner free. -->
-  <!-- Without the company there is nothing to the date's left, so it floats beside the
-       title instead of holding a row of its own. -->
-  <div class={['flex items-center gap-2', compact ? 'pr-11' : onHide ? 'pr-28' : 'pr-20', !compact && (applyJob || directApply) && 'pointer-coarse:pr-48', hideCompany && 'float-right ml-3 mt-1.5']}>
+  <!-- Not drawn on the employer's own page (`hideCompany`): with no company the rail would
+       hold only small facts floating above the title, so they lead the meta line instead. -->
+  <div class={['flex items-center gap-2', !compact && onHide ? 'pr-20' : 'pr-11', touchActions && 'pointer-coarse:pr-30', hideCompany && 'hidden']}>
     <div class="flex min-w-0 items-center gap-2">
       {#if !hideCompany}
       <EntityLogo
@@ -401,7 +427,7 @@
     <!-- The date reads with the company ("Stripe · 2 hours ago"), not pinned to the far
          edge where it floated alone beside the corner controls. -->
     {#if !hideCompany && (posted || views > 0 || isViewed || job.application_deadline)}
-      <span class="text-muted-foreground" aria-hidden="true">·</span>
+      <span class={['text-muted-foreground', touchActions && 'pointer-coarse:hidden']} aria-hidden="true">·</span>
     {/if}
     <div class="flex shrink-0 items-center gap-1.5 text-muted-foreground">
       {#if isViewed}
@@ -424,8 +450,8 @@
           <span class="sr-only">{views} views</span>
         </span>
       {/if}
-      {#if posted}
-        <span class="text-xs tabular-nums">{posted}</span>
+      {#if posted && !hideCompany}
+        <span class={['text-xs tabular-nums', touchActions && 'pointer-coarse:hidden']}>{posted}</span>
       {/if}
       {#if job.application_deadline}
         <span class="whitespace-nowrap text-xs tabular-nums">
@@ -444,8 +470,9 @@
     lang={foreignContentLang(job)}
     class={[
       'font-semibold leading-snug tracking-tight',
-      compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-lg sm:text-xl',
+      compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-base sm:text-lg',
       !compact && !hideCompany && 'mt-1.5',
+      hideCompany && 'pr-10',
     ]}
   >
     {job.title}
@@ -456,7 +483,7 @@
   <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary}
+  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && (posted || views > 0 || job.application_deadline)) || touchPosted}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
@@ -473,7 +500,7 @@
       {#if supersedesReality(ghost, locale())}
         <GhostBadge {ghost} />
       {:else}
-        <RealityBadge {reality} />
+        <RealityBadge {reality} plain />
       {/if}
       <!-- A separate fact from the two above: those describe the POSTING's reality, this
            describes how the EMPLOYER screens. It is neutral and joins them rather than
@@ -491,17 +518,22 @@
              wrapper (rather than a span inside) also makes the badge's own padding
              hoverable — the same shape the job's own page uses. -->
         <span title={badge.tooltip} class="inline-flex shrink-0">
-          <!-- Plain accent text, not a pill: it says the least on the row, so it must not be
-               its loudest shape; the brand fill is kept for the page's one primary action. -->
-          <span class="text-xs font-semibold text-brand-strong">{badge.label}</span>
+          <!-- Plain text, not a pill and not the accent: it says the least on the row, so it
+               must not be its loudest shape, and the brand colour is kept for primary actions. -->
+          <span class="text-xs font-semibold text-foreground">{badge.label}</span>
         </span>
       {/each}
       <!-- The role's facets, then the pay and the cost of applying, as one line of quiet
            text joined by dots rather than a row of outlined chips: the skills below are
            chips already, and two rows of identical outlines made every card noisy.
            Indexed keys: a tag's text could equal one of the trailing facts. -->
-      {#if metaFacts.length || salary}
+      {#if metaFacts.length || salary || touchPosted}
         <span class="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-muted-foreground">
+          {#if freshness.length}<span aria-hidden="true">·</span>{/if}
+          {#if touchPosted}
+            <span class="hidden tabular-nums pointer-coarse:inline">{touchPosted}</span>
+            {#if metaFacts.length || salary}<span class="hidden pointer-coarse:inline" aria-hidden="true">·</span>{/if}
+          {/if}
           {#each metaFacts as fact, i (i)}
             {#if i > 0}<span aria-hidden="true">·</span>{/if}
             <span>{fact}</span>
@@ -517,7 +549,8 @@
       <!-- Register-backed employer credentials (visa-sponsor licences). A fact about
            the employer, so it sits with the metadata chips and carries its own
            disclaimer rather than reading as a promise about this role. -->
-      <CredentialBadge collections={job.collections} />
+      <!-- Not on the employer's own page, whose header already states it for every row. -->
+      {#if !hideCompany}<CredentialBadge collections={job.collections} plain />{/if}
       <!-- Eligible countries as an overlapping flag cluster. Display-only here: the
            whole card is a link, so the flags carry no nested filter links. -->
       {#if job.countries?.length}
@@ -632,12 +665,13 @@
 {:else}
   <!-- The card's controls ride its top-right corner, beside the date, rather than a row of
        their own at its foot: that row added ~40px to every card in a feed of dozens. Save
-       keeps its word (an unlabelled glyph asked people to guess what saving does); Apply and
+       is a bookmark glyph with its title and accessible name; Apply and
        Hide, where the card has them, hover-reveal beside it (over the date, which they cover
        only while the pointer is on the card). `pointer-coarse`
-       keeps Hide visible on touch, which has no hover to reveal anything. The rail inside
-       the link reserves the corner (see its `pr-*`; wider on touch, where Apply and Hide are
-       always shown), so the date never slides under it. -->
+       keeps Hide visible on touch, which has no hover to reveal anything; there Apply shrinks
+       to its icon and the date moves to the meta line, so the company name is not cut to
+       two letters. The rail inside the link reserves the corner (see its `pr-*`), so the
+       date never slides under it. -->
   <div class="absolute right-3 top-3 flex items-center gap-1">
     <!-- Direct-apply shortcut (freehire#2755): a way out to the posting's own site
          without opening the job page first. Outline, never the brand-green primary —
@@ -657,9 +691,10 @@
         variant="outline"
         href={resolve('/jobs/[slug]', { slug: job.public_slug })}
         aria-label="Apply to {job.title}"
-        class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+        class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:w-8 pointer-coarse:px-0 pointer-coarse:opacity-100"
       >
-        Apply
+        <FileText class="hidden size-4 pointer-coarse:block" aria-hidden="true" />
+        <span class="pointer-coarse:sr-only">Apply</span>
       </Button>
     {/if}
     {#if applyJob}
@@ -672,10 +707,10 @@
         aria-label={isAuthenticated()
           ? `Apply to ${job.title} on the employer's site (opens in a new tab)`
           : `Choose how to apply to ${job.title}`}
-        class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+        class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:w-8 pointer-coarse:px-0 pointer-coarse:opacity-100"
       >
         <ExternalLink class="size-4" aria-hidden="true" />
-        Apply
+        <span class="pointer-coarse:sr-only">Apply</span>
       </Button>
     {/if}
 
@@ -703,14 +738,16 @@
       aria-label={saved ? 'Remove from saved' : 'Save to board'}
       title={saved ? 'On your board' : 'Save to board'}
       class={[
-        'flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
+        'grid size-8 shrink-0 place-items-center rounded-lg transition disabled:pointer-events-none disabled:opacity-50',
         saved
           ? 'bg-brand/10 text-brand hover:bg-brand/15'
           : 'text-muted-foreground hover:bg-background hover:text-foreground',
       ]}
     >
       <Bookmark class="size-4 {saved ? 'fill-current' : ''}" aria-hidden="true" />
-      {saved ? 'Saved' : 'Save'}
+      <!-- Icon only, with its title and aria-label carrying the action: twenty labelled Save
+           buttons down a feed were repeated chrome beside each title. -->
+      <span class="sr-only">{saved ? 'Saved' : 'Save'}</span>
     </button>
   </div>
 
