@@ -337,7 +337,9 @@
       </div>
 
       <!-- The same preview as /features/extension, drawn smaller: `zoom` shrinks the layout box too, unlike a transform. -->
-      <div class="[zoom:0.7]"><ExtensionPanelPreview /></div>
+      <!-- Centred in whatever height the taller card beside it leaves, so the spare room
+           sits around the preview instead of as one empty band above the buttons. -->
+      <div class="flex flex-1 items-center"><div class="w-full [zoom:0.7]"><ExtensionPanelPreview /></div></div>
 
       <div class="mt-auto flex flex-wrap items-center justify-end gap-3">
         <Button href={EXTENSION_STORE_URL} target="_blank" variant="primary" size="md">

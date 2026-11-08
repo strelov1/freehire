@@ -19,15 +19,20 @@
     collections,
     withLabel = false,
     size = 'size-4',
+    max = Infinity,
     class: className,
   }: {
     collections?: string[] | null;
     withLabel?: boolean;
     size?: string;
+    /** Show at most this many; the rest fold into one "+N" chip naming them on hover. */
+    max?: number;
     class?: string;
   } = $props();
 
-  const badges = $derived(backerBadges(collections));
+  const all = $derived(backerBadges(collections));
+  const badges = $derived(all.slice(0, max));
+  const rest = $derived(all.slice(max));
 </script>
 
 {#each badges as badge (badge.slug)}
@@ -57,3 +62,12 @@
     />
   {/if}
 {/each}
+{#if rest.length}
+  <span
+    class="inline-flex items-center rounded-md border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground"
+    title={rest.map((b) => b.label).join(', ')}
+  >
+    +{rest.length}
+    <span class="sr-only">: {rest.map((b) => b.alt).join('; ')}</span>
+  </span>
+{/if}

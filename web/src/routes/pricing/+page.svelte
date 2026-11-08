@@ -342,8 +342,9 @@
   aria-labelledby={monthly && annual ? `pricing-tab-${interval}` : undefined}
   class="grid gap-4 sm:grid-cols-2 {ultraChosen ? 'lg:grid-cols-3' : ''}"
 >
-    <!-- Free -->
-    <section class="flex flex-col gap-4 rounded-xl border border-border p-6">
+    <!-- Free. As tall as its own content (`self-start`): stretched to Pro's height it opened a
+         hollow band between its list and its button. -->
+    <section class="flex flex-col gap-4 self-start rounded-xl border border-border p-6">
       <div class="flex flex-col gap-1">
         <h2 class="text-lg font-semibold">Free</h2>
         <p class="text-3xl font-semibold tracking-tight">$0</p>

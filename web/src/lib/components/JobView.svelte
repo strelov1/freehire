@@ -1239,12 +1239,11 @@
         </dl>
       {/if}
 
-      <!-- Where the posting came from, and the control to stop seeing that source. One row
-           since the engagement counters left it for the provenance line up beside the title. -->
-      <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
-
-      <div class="border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <div class="flex justify-center">
+      <!-- One quiet footer line: where the posting came from (with the control to stop seeing
+           that source) and the votes. They were two divided bands, each holding one control. -->
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0">
+        <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
+        <div class="flex shrink-0">
           <!-- Keyed on the slug so a client-side navigation to another job remounts
                the control and re-seeds its counts/highlight (JobView itself is not
                remounted on param change). -->
