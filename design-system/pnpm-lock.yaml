@@ -30,8 +30,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.13.0(jiti@2.7.0))
       '@storybook/addon-themes':
-        specifier: 10.6.3
-        version: 10.6.3(storybook@10.6.5(prettier@3.9.9)(react@19.2.8))
+        specifier: 10.6.5
+        version: 10.6.5(storybook@10.6.5(prettier@3.9.9)(react@19.2.8))
       '@storybook/svelte':
         specifier: 10.6.3
         version: 10.6.3(storybook@10.6.5(prettier@3.9.9)(react@19.2.8))(svelte@5.57.2(@typescript-eslint/types@8.72.1))
@@ -1042,10 +1042,10 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
-  '@storybook/addon-themes@10.6.3':
-    resolution: {integrity: sha512-6LGpeMMg06qpynKhOiCR10l7tkLL/LpBdJxf+9JEjfMohbgGZj1ukR8hVDgMNJAx2RN45Ovz78/HlwMM5PCa4g==}
+  '@storybook/addon-themes@10.6.5':
+    resolution: {integrity: sha512-2x6M1vWafp/cDUJzGRkGpVpB6sF4VIuVgpPTyCfEOLtF3S7HaIBalnWqDJ0JvQ/t2e7qtUXKCHZ1C7gREdYOsw==}
     peerDependencies:
-      storybook: ^10.6.3
+      storybook: ^10.6.5
 
   '@storybook/builder-vite@10.6.3':
     resolution: {integrity: sha512-1+WCZZg/fPxxyHDB5sFKniFt9/4RFUIzoNqMujv+BLRROM+gQeyUHvdvoyZOZ51+P8ee+/PgnNKHjsTupV+nOA==}
@@ -3414,7 +3414,7 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@storybook/addon-themes@10.6.3(storybook@10.6.5(prettier@3.9.9)(react@19.2.8))':
+  '@storybook/addon-themes@10.6.5(storybook@10.6.5(prettier@3.9.9)(react@19.2.8))':
     dependencies:
       storybook: 10.6.5(prettier@3.9.9)(react@19.2.8)
       ts-dedent: 2.3.0
