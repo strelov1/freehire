@@ -674,8 +674,8 @@
       class={cn(
         'no-scrollbar flex gap-3 overflow-x-auto pb-2',
         !dragging && 'snap-x snap-mandatory',
-        !rowEdges.atStart && 'mask-l-from-90%',
-        !rowEdges.atEnd && 'mask-r-from-90%',
+        !rowEdges.atStart && 'mask-l-from-97%',
+        !rowEdges.atEnd && 'mask-r-from-97%',
       )}
     >
       {#each BOARD_COLUMNS as col (col.id)}

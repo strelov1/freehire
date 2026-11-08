@@ -42,7 +42,7 @@
       variant === 'drawer' && 'gap-3 any-pointer-coarse:min-h-11',
       iconOnly && 'justify-center',
       active
-        ? cn('bg-secondary text-secondary-foreground', variant === 'sidebar' && 'font-medium')
+        ? cn('bg-secondary font-medium text-foreground', variant === 'sidebar' && 'shadow-xs ring-1 ring-border')
         : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
     );
 </script>

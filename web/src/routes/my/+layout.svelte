@@ -8,7 +8,7 @@
   import { messages, navLabel } from '#lib/i18n/shell.js';
   import { t } from '#lib/i18n/t.js';
   import { cn } from '#lib/ui/index.js';
-  import { accountNav, activeSection, isSectionActive, workspaceFor } from '#lib/accountNav.js';
+  import { accountNav, activeSection, isSectionActive } from '#lib/accountNav.js';
   import { accountNavIcons } from '#lib/accountNavIcons.js';
   import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import AccountNavDrawer from '#lib/components/AccountNavDrawer.svelte';
@@ -94,7 +94,8 @@
          It is also the section's visible title below lg: each section's own heading and
          description carry `max-lg:sr-only`, since repeating the name this button already
          shows only pushed the content down on a phone. -->
-    <div class="-mr-3 mb-3 flex items-center justify-end gap-1">
+    <!-- lg and up, Help lives in the sidebar's top row; this row held nothing else there. -->
+    <div class="-mr-3 mb-3 flex items-center justify-end gap-1 lg:hidden">
       <button
         type="button"
         onclick={() => (helpOpen = !helpOpen)}
@@ -141,15 +142,13 @@
              side panel uses; at top-6 the collapse toggle sat behind it. Capped to the
              window and scrollable, so on a short window the last links stay reachable. -->
         <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-1 overflow-y-auto">
+          <div class={cn('mb-1 flex items-center', collapsed ? 'flex-col gap-1' : 'justify-between')}>
           <button
             type="button"
             onclick={toggleNav}
             title={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
             aria-label={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
-            class={cn(
-              'mb-1 flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
-              collapsed && 'justify-center',
-            )}
+            class="flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
             {#if collapsed}
               <PanelLeft class="size-4" />
@@ -157,6 +156,18 @@
               <PanelLeftClose class="size-4" />
             {/if}
           </button>
+          <button
+            type="button"
+            onclick={() => (helpOpen = !helpOpen)}
+            aria-haspopup="dialog"
+            aria-expanded={helpOpen}
+            title={helpLabel}
+            class="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
+            <span class={collapsed ? 'sr-only' : undefined}>{helpLabel}</span>
+          </button>
+          </div>
           <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
             <AccountNavGroups variant="sidebar" iconOnly={collapsed} />
           </nav>
@@ -164,12 +175,11 @@
       </div>
 
       <div class="min-w-0 flex-1">
-        <!-- Above the section's own heading, and above every section rather than only
-             Profile's — the card itself argues why, and collapses to a single row on a
-             phone so it does not push that heading down. All this layer decides is the
-             one page it must not appear on: a banner pointing at the page you are reading
-             is noise. Dismissal is the card's own business. -->
-        {#if workspaceFor(path) === 'seeker' && !isSectionActive(path, '/my/talent-network')}
+        <!-- Above the Profile section's heading only: on every section it was a promo
+             stacked over each page's own work (with the email confirmation strip above it).
+             Profile is where the skills and experience it would publish are edited.
+             Dismissal is the card's own business. -->
+        {#if isSectionActive(path, '/my/profile')}
           <TalentNetworkInvite />
         {/if}
 

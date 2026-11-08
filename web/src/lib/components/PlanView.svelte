@@ -190,10 +190,10 @@
       <!-- The plan strip. On Pro it states when the subscription runs to; on Free it offers
            the upgrade — but only once we know there is somewhere to send them. -->
       <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3"
+        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-secondary/40 px-4 py-3"
       >
         <div class="flex flex-col gap-0.5">
-          <span class="text-sm font-semibold">
+          <span class="text-base font-semibold">
             {planLabel(plan.plan)}
           </span>
           {#if plan.plan !== 'free' && plan.pro_until}
@@ -317,7 +317,7 @@
                 </span>
               {:else}
                 <span
-                  class="shrink-0 text-sm font-semibold tabular-nums {a.used >= a.limit
+                  class="shrink-0 text-sm tabular-nums {a.used >= a.limit
                     ? 'text-muted-foreground'
                     : ''}"
                 >
