@@ -183,7 +183,7 @@
       ...(hideCompany
         ? [
             posted,
-            views > 0 ? `${formatCount(views)} views` : null,
+            views > 0 ? `${formatCount(views)} ${views === 1 ? 'view' : 'views'}` : null,
             job.application_deadline ? `Apply by ${job.application_deadline}` : null,
           ]
         : []),
@@ -483,7 +483,7 @@
   <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && (posted || views > 0 || job.application_deadline)) || touchPosted}
+  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && (posted || views > 0 || isViewed || job.application_deadline)) || touchPosted}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
@@ -527,9 +527,11 @@
            text joined by dots rather than a row of outlined chips: the skills below are
            chips already, and two rows of identical outlines made every card noisy.
            Indexed keys: a tag's text could equal one of the trailing facts. -->
-      {#if metaFacts.length || salary || touchPosted}
+      {#if metaFacts.length || salary || touchPosted || (hideCompany && isViewed)}
         <span class="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-muted-foreground">
           {#if freshness.length}<span aria-hidden="true">·</span>{/if}
+          <!-- The rail's viewed mark, for the employer's page where the rail is not drawn. -->
+          {#if hideCompany && isViewed}<Check class="size-3.5" aria-label="You have viewed this" />{/if}
           {#if touchPosted}
             <span class="hidden tabular-nums pointer-coarse:inline">{touchPosted}</span>
             {#if metaFacts.length || salary}<span class="hidden pointer-coarse:inline" aria-hidden="true">·</span>{/if}
