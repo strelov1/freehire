@@ -116,6 +116,7 @@ export function isTransientNoise(err: unknown): boolean {
   return TRANSIENT_MESSAGES.some((fragment) => message.includes(fragment));
 }
 
+/** True when this failure is a browser's report that a JS module (chunk) did not load. */
 export function isModuleLoadFailure(err: unknown): boolean {
   if (err == null || typeof err !== 'object') return false;
   const message = (err as { message?: unknown }).message;

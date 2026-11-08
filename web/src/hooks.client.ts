@@ -26,10 +26,11 @@ if (telemetry) {
     void telemetry.flush();
   });
 }
-// Every call here ends on the error page, so the visitor gets a code to quote (shown by
-// +error.svelte, sent as `error.id`) and a failed module load is reported even though it
-// reads as transient noise. That failure usually means stale cached markup or chunks, so
-// the page reloads once (claimModuleReload stops a loop) after the report is flushed.
+/** Reports a client error. Every call here ends on the error page, so the visitor gets a
+ *  code to quote (shown by +error.svelte, sent as `error.id`) and a failed module load is
+ *  reported even though it reads as transient noise. That failure usually means stale
+ *  cached markup or chunks, so the page reloads once (claimModuleReload stops a loop)
+ *  after the report is flushed. */
 export const handleError: HandleClientError = ({ error }) => {
   const id = Math.random().toString(36).slice(2, 10); // a lookup code, not a secret
   const moduleLoad = isModuleLoadFailure(error);
@@ -40,6 +41,7 @@ export const handleError: HandleClientError = ({ error }) => {
   return { id };
 };
 
+/** This tab's sessionStorage, or undefined where merely reading it throws. */
 function sessionStorageOrUndefined(): Storage | undefined {
   try {
     return window.sessionStorage;

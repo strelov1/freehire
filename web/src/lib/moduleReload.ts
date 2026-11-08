@@ -26,6 +26,7 @@ export function claimModuleReload(store: Store | undefined, href: string, now: n
   }
 }
 
+/** The last recorded auto-reload, or null when there is none or it cannot be parsed. */
 function readLast(store: Store): LastReload {
   try {
     return JSON.parse(store.getItem(KEY) ?? 'null') as LastReload;
