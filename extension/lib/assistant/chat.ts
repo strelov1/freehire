@@ -75,10 +75,7 @@ export function reduceTurnEvent(prev: ChatState, event: TurnEvent): ChatState {
  *  Keying by name rather than by call id keeps the reducer free of id
  *  bookkeeping; a result for a call we never saw is dropped rather than
  *  fabricating a card. */
-function attachResult(
-  tools: ToolCall[],
-  event: { name: string; result?: string; is_error?: boolean },
-): ToolCall[] {
+function attachResult(tools: ToolCall[], event: { name: string; result?: string; is_error?: boolean }): ToolCall[] {
   for (let i = 0; i < tools.length; i++) {
     const tool = tools[i];
     if (!tool || tool.name !== event.name || tool.result !== undefined) continue;

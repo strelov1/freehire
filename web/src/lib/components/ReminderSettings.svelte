@@ -63,7 +63,10 @@
     if (!channels.includes('push') || pushAvailable) return;
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
-      api.hasPushDevice().then((v) => (pushAvailable = v), () => {});
+      api.hasPushDevice().then(
+        (v) => (pushAvailable = v),
+        () => {},
+      );
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
@@ -172,7 +175,8 @@
     <div class="min-w-0 flex-1">
       <h2 class="text-sm font-semibold leading-tight">Notifications</h2>
       <p class="text-xs text-muted-foreground">
-        Come back to a saved job before it goes stale, follow up when an application goes quiet, prepare before an interview, and hear about it if a listing you're tracking closes.
+        Come back to a saved job before it goes stale, follow up when an application goes quiet, prepare before an
+        interview, and hear about it if a listing you're tracking closes.
       </p>
     </div>
 
@@ -180,17 +184,14 @@
     {#if saveState === 'saving'}
       <span class="text-xs text-muted-foreground">Saving…</span>
     {:else if saveState === 'saved'}
-      <span class="flex items-center gap-1 text-xs text-brand-strong"><Check class="size-3.5" aria-hidden="true" /> Saved</span>
+      <span class="flex items-center gap-1 text-xs text-brand-strong"
+        ><Check class="size-3.5" aria-hidden="true" /> Saved</span
+      >
     {:else if saveState === 'error'}
       <span class="text-xs text-destructive">{saveError}</span>
     {/if}
 
-    <ToggleSwitch
-      on={enabled}
-      label="Enable notifications"
-      disabled={status !== 'ready'}
-      onToggle={toggleEnabled}
-    />
+    <ToggleSwitch on={enabled} label="Enable notifications" disabled={status !== 'ready'} onToggle={toggleEnabled} />
   </div>
 
   {#if status === 'error'}
@@ -201,7 +202,12 @@
         <span class={sectionLabel}>Deliver over</span>
         <div class="flex flex-wrap items-center gap-2">
           {#if telegramAvailable}
-            <button type="button" onclick={() => toggleChannel('telegram')} aria-pressed={channels.includes('telegram')} class={pill(channels.includes('telegram'))}>
+            <button
+              type="button"
+              onclick={() => toggleChannel('telegram')}
+              aria-pressed={channels.includes('telegram')}
+              class={pill(channels.includes('telegram'))}
+            >
               {#if channels.includes('telegram')}
                 <Check class="size-3.5" aria-hidden="true" />
               {:else}
@@ -210,7 +216,12 @@
               Telegram
             </button>
           {/if}
-          <button type="button" onclick={() => toggleChannel('email')} aria-pressed={channels.includes('email')} class={pill(channels.includes('email'))}>
+          <button
+            type="button"
+            onclick={() => toggleChannel('email')}
+            aria-pressed={channels.includes('email')}
+            class={pill(channels.includes('email'))}
+          >
             {#if channels.includes('email')}
               <Check class="size-3.5" aria-hidden="true" />
             {:else}
@@ -219,7 +230,12 @@
             Email
           </button>
           {#if pushAvailable || channels.includes('push')}
-            <button type="button" onclick={() => toggleChannel('push')} aria-pressed={channels.includes('push')} class={pill(channels.includes('push'))}>
+            <button
+              type="button"
+              onclick={() => toggleChannel('push')}
+              aria-pressed={channels.includes('push')}
+              class={pill(channels.includes('push'))}
+            >
               {#if channels.includes('push')}
                 <Check class="size-3.5" aria-hidden="true" />
               {:else}
@@ -233,7 +249,12 @@
           <PushNoDeviceNote />
         {/if}
         {#if channels.includes('telegram')}
-          <p class="text-xs text-muted-foreground">Telegram notifications need the bot connected on the <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/integrations')}>Integrations</a> tab.</p>
+          <p class="text-xs text-muted-foreground">
+            Telegram notifications need the bot connected on the <a
+              class="font-medium text-foreground underline underline-offset-2 hover:opacity-80"
+              href={resolve('/my/integrations')}>Integrations</a
+            > tab.
+          </p>
         {/if}
       </div>
 
@@ -246,7 +267,10 @@
           </div>
           <div class="flex gap-1.5">
             <dt class="shrink-0 font-medium text-foreground">Follow-up —</dt>
-            <dd>once an application goes quiet: 21 days after applying, 18 in screening, 15 after a reply, 12 once interviewing, 5 with an offer out.</dd>
+            <dd>
+              once an application goes quiet: 21 days after applying, 18 in screening, 15 after a reply, 12 once
+              interviewing, 5 with an offer out.
+            </dd>
           </div>
           <div class="flex gap-1.5">
             <dt class="shrink-0 font-medium text-foreground">Interview prep —</dt>
@@ -254,7 +278,9 @@
           </div>
           <div class="flex gap-1.5">
             <dt class="shrink-0 font-medium text-foreground">Listing closed —</dt>
-            <dd>right when a job you're still actively tracking closes — the card also moves to Expired on your board.</dd>
+            <dd>
+              right when a job you're still actively tracking closes — the card also moves to Expired on your board.
+            </dd>
           </div>
         </dl>
       </div>
@@ -323,13 +349,17 @@
         {/if}
       </div>
       <p class="text-xs text-muted-foreground">
-        Instant sends new matches as soon as we find them; Batched collects them into one message per alert at most that often.
-        Applies only to saved-search alerts — reminders and application nudges above always deliver as they happen.
+        Instant sends new matches as soon as we find them; Batched collects them into one message per alert at most that
+        often. Applies only to saved-search alerts — reminders and application nudges above always deliver as they
+        happen.
       </p>
       {#if digestFrequency === 'daily' && !hasTimezone}
         <p class="text-xs text-muted-foreground">
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
-          Set your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}>timezone</a> so the digest time means your own local time — until then it's read as UTC.
+          Set your
+          <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}
+            >timezone</a
+          > so the digest time means your own local time — until then it's read as UTC.
         </p>
       {/if}
     </div>
@@ -342,14 +372,11 @@
         <div class="min-w-0 flex-1">
           <span class={sectionLabel}>Quiet hours</span>
           <p class="text-xs text-muted-foreground">
-            Delay reminders, nudges, and instant search alerts until this window ends. A daily digest still arrives at its own time.
+            Delay reminders, nudges, and instant search alerts until this window ends. A daily digest still arrives at
+            its own time.
           </p>
         </div>
-        <ToggleSwitch
-          on={quietHoursOn}
-          label="Enable quiet hours"
-          onToggle={toggleQuietHours}
-        />
+        <ToggleSwitch on={quietHoursOn} label="Enable quiet hours" onToggle={toggleQuietHours} />
       </div>
       {#if quietHoursOn}
         <div class="flex items-center gap-2 pl-12">
@@ -372,11 +399,13 @@
         {#if !hasTimezone}
           <p class="pl-12 text-xs text-muted-foreground">
             <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
-            Set your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}>timezone</a> so this means your own local time — until then it's read as UTC.
+            Set your
+            <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}
+              >timezone</a
+            > so this means your own local time — until then it's read as UTC.
           </p>
         {/if}
       {/if}
     </div>
   </section>
 {/if}
-

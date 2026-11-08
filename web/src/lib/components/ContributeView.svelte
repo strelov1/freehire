@@ -39,9 +39,7 @@
   // Where a row came from, appended to its line. Rows recorded before surfaces were tracked
   // (or by a client that sends no tag) read "unknown" and are better left unlabelled.
   function surfaceLabel(surface: string): string {
-    return !surface || surface === 'unknown' || surface === 'web'
-      ? ''
-      : ` · ${s.viaPrefix} ${surface}`;
+    return !surface || surface === 'unknown' || surface === 'web' ? '' : ` · ${s.viaPrefix} ${surface}`;
   }
 
   // A review row carries no board — show the link's host as its label instead.
@@ -120,7 +118,8 @@
             <li class="flex items-start justify-between gap-3 px-4 py-3">
               <div class="flex min-w-0 flex-col gap-0.5">
                 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external board URL, opened in a new tab; not an internal route -->
-                <a href={c.url}
+                <a
+                  href={c.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   class="truncate text-sm font-medium hover:underline"

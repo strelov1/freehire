@@ -17,7 +17,8 @@ export const messages = defineMessages(
     unsentMessageConfirm: 'You have an unsent message waiting in this chat. Switch chats and discard it?',
     switchAndDiscard: 'Switch and discard',
     newChatFailed: 'Could not start a new chat.',
-    supportInterrupted: 'The connection dropped, so this answer may be cut off. Ask again, or start a new conversation.',
+    supportInterrupted:
+      'The connection dropped, so this answer may be cut off. Ask again, or start a new conversation.',
     deleteChatFailed: 'Could not delete the chat.',
     openAChatFailed: 'Could not open a chat.',
     messageNotSent: 'That message was not sent: the chat was still busy. Try again.',

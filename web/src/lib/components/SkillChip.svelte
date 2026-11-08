@@ -54,7 +54,11 @@
   <span class={cn(badgeVariants({ variant: 'outline' }), 'group/chip')}>
     {#if linked}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
-      <a href={filterHref('skills', slug)} class="inline-flex items-center gap-1 transition hover:opacity-80" onpointerdown={keepTapOnTheLink}>
+      <a
+        href={filterHref('skills', slug)}
+        class="inline-flex items-center gap-1 transition hover:opacity-80"
+        onpointerdown={keepTapOnTheLink}
+      >
         <SkillIcon {slug} />
         {label}
       </a>
@@ -90,10 +94,7 @@
     {:then text}
       {#if text}
         <span class="block text-left">{text}</span>
-        <a
-          href={resolve('/skills/[slug]', { slug })}
-          class="mt-1 block text-left font-medium underline"
-        >
+        <a href={resolve('/skills/[slug]', { slug })} class="mt-1 block text-left font-medium underline">
           What is {label}? →
         </a>
       {:else}

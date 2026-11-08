@@ -81,8 +81,8 @@
     </span>
   </figcaption>
   <p class="sr-only">
-    An example feed: {FEED_LEN} anonymous members applying to and interviewing at the same companies
-    as you, then a message to {DEMO_INVITE.to} asking how their interview went, and their reply.
+    An example feed: {FEED_LEN} anonymous members applying to and interviewing at the same companies as you, then a message
+    to {DEMO_INVITE.to} asking how their interview went, and their reply.
   </p>
   <div aria-hidden="true" class="bg-background p-4">
     <p class="text-xs uppercase tracking-wide text-muted-foreground">Feed · similar to you</p>

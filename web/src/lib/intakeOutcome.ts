@@ -19,10 +19,8 @@ import type { ResolvedLink } from './types';
 const messages = defineMessages(
   {
     found: 'We already have this one.',
-    tracked:
-      'Added — and we already track this company, so the rest of its roles will follow on the next crawl.',
-    importedKnownCompany:
-      "Added — we already carry this company, and now we'll crawl this board of theirs too.",
+    tracked: 'Added — and we already track this company, so the rest of its roles will follow on the next crawl.',
+    importedKnownCompany: "Added — we already carry this company, and now we'll crawl this board of theirs too.",
     importedNewCompany: "Added, and this company is new to us — we'll start crawling its board.",
     review:
       "Added. Its careers site isn't one we can crawl yet, so we'll check by hand whether we can pull the rest of its jobs.",
@@ -33,14 +31,11 @@ const messages = defineMessages(
       found: 'Эта вакансия у нас уже есть.',
       tracked:
         'Добавлено — эту компанию мы уже отслеживаем, так что остальные её вакансии подтянутся при следующем обходе.',
-      importedKnownCompany:
-        'Добавлено — эта компания у нас уже есть, теперь будем обходить и этот её борд.',
-      importedNewCompany:
-        'Добавлено, и эта компания для нас новая — начнём обходить её борд.',
+      importedKnownCompany: 'Добавлено — эта компания у нас уже есть, теперь будем обходить и этот её борд.',
+      importedNewCompany: 'Добавлено, и эта компания для нас новая — начнём обходить её борд.',
       review:
         'Добавлено. Её карьерный сайт мы пока обходить не умеем, поэтому проверим вручную, сможем ли забрать остальные вакансии.',
-      queued:
-        'Не удалось прочитать страницу. Проверим вручную, сможем ли забрать её вакансии.',
+      queued: 'Не удалось прочитать страницу. Проверим вручную, сможем ли забрать её вакансии.',
     },
   },
 );

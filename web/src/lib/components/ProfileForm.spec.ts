@@ -29,7 +29,9 @@ function uploadResume(file: File) {
 
 beforeEach(() => {
   getPhoto.mockReset().mockRejectedValue(new Error('no photo'));
-  mergeResumeExtraction.mockReset().mockResolvedValue({ addedSkills: 1, addedSpecializations: 0, droppedSpecializations: 0 });
+  mergeResumeExtraction
+    .mockReset()
+    .mockResolvedValue({ addedSkills: 1, addedSpecializations: 0, droppedSpecializations: 0 });
 });
 
 describe('ProfileForm', () => {

@@ -168,9 +168,7 @@
               {#each group.links as link (link.href)}
                 <li>
                   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal route already passed through resolve() when building `groups`; the linter can't trace it via the variable -->
-                  <a href={link.href}
-                    class="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                  >
+                  <a href={link.href} class="text-sm text-muted-foreground transition-colors hover:text-foreground">
                     {link.label}
                   </a>
                 </li>
@@ -188,7 +186,8 @@
         <ul class="mt-3 flex flex-wrap gap-x-4 gap-y-2">
           {#each popular as collection (collection.slug)}
             <li>
-              <a href={resolve('/collections/[slug]', { slug: collection.slug })}
+              <a
+                href={resolve('/collections/[slug]', { slug: collection.slug })}
                 class="text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 {collection.title}
@@ -208,7 +207,12 @@
       >
         <!-- Greyed until hovered: in full colour the red badge was the loudest thing in the footer. -->
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
-        <a href={productHunt.href} target="_blank" rel="noopener noreferrer" class="h-14 w-64 shrink-0 snap-start opacity-70 grayscale transition hover:opacity-100 hover:grayscale-0 focus-visible:opacity-100 focus-visible:grayscale-0">
+        <a
+          href={productHunt.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="h-14 w-64 shrink-0 snap-start opacity-70 grayscale transition hover:opacity-100 hover:grayscale-0 focus-visible:opacity-100 focus-visible:grayscale-0"
+        >
           <img
             src={productHunt.light}
             alt={productHunt.alt}
@@ -229,7 +233,8 @@
 
         {#each stores as store (store.href)}
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external store listing opened in a new tab; not an internal route -->
-          <a href={store.href}
+          <a
+            href={store.href}
             target="_blank"
             rel="noopener noreferrer"
             class="inline-flex h-14 w-64 shrink-0 snap-start items-center gap-3 rounded-lg border border-border px-4 text-foreground transition-colors hover:bg-muted"
@@ -258,17 +263,14 @@
         <p>© {year}</p>
         <!-- Re-opens the consent banner so a prior cookie choice can be changed —
              withdrawal as easy as granting (GDPR). -->
-        <button
-          type="button"
-          onclick={reopen}
-          class="text-muted-foreground transition-colors hover:text-foreground"
-        >
+        <button type="button" onclick={reopen} class="text-muted-foreground transition-colors hover:text-foreground">
           Cookie settings
         </button>
         <div class="flex items-center gap-3">
           {#each SOCIAL_LINKS as social (social.provider)}
             <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
-            <a href={social.href}
+            <a
+              href={social.href}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={social.label}
@@ -282,7 +284,8 @@
       <p>
         Free &amp; open-source.
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external repository URL opened in a new tab; not an internal route -->
-        <a href="https://github.com/strelov1/freehire"
+        <a
+          href="https://github.com/strelov1/freehire"
           target="_blank"
           rel="noopener noreferrer"
           class="font-medium text-foreground transition-colors hover:text-muted-foreground"

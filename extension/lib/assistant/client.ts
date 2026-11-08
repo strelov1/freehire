@@ -28,12 +28,7 @@ export interface Turn {
  * ends — including when it was cancelled, which is a normal outcome rather than an
  * error the user must act on.
  */
-export function sendTurn(
-  sessionId: string,
-  text: string,
-  token: string,
-  onEvent: (e: TurnEvent) => void,
-): Turn {
+export function sendTurn(sessionId: string, text: string, token: string, onEvent: (e: TurnEvent) => void): Turn {
   const controller = new AbortController();
 
   const done = (async () => {

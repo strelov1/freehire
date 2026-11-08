@@ -161,7 +161,8 @@
           disabled={busy}
           class="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {s.base.empty.cta} <ArrowRight class="size-4" />
+          {s.base.empty.cta}
+          <ArrowRight class="size-4" />
         </button>
       </div>
     {:else if basesLoaded}
@@ -171,7 +172,11 @@
             class="group relative flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-muted/30"
           >
             <!-- The whole card opens the workspace in base mode; the actions below sit above it. -->
-            <a href={resolve('/tailor/base/[id]', { id: base.id })} class="absolute inset-0" aria-label={format(s.openAria, { title: base.title })}></a>
+            <a
+              href={resolve('/tailor/base/[id]', { id: base.id })}
+              class="absolute inset-0"
+              aria-label={format(s.openAria, { title: base.title })}
+            ></a>
             <img
               src={`/cv-previews/${base.template_id}.svg`}
               alt=""
@@ -182,14 +187,21 @@
               <p class="flex items-center gap-2">
                 <span class="truncate font-medium">{base.title}</span>
                 {#if base.is_default}
-                  <span class="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{s.base.defaultBadge}</span>
+                  <span class="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                    >{s.base.defaultBadge}</span
+                  >
                 {/if}
               </p>
-              <p class="truncate text-sm text-muted-foreground">{format(s.base.templateLine, { template: templateLabel(base.template_id) })}</p>
+              <p class="truncate text-sm text-muted-foreground">
+                {format(s.base.templateLine, { template: templateLabel(base.template_id) })}
+              </p>
               <p class="mt-0.5 text-xs text-muted-foreground/80">{format(s.updated, { date: fmt(base.updated_at) })}</p>
             </div>
             <div class="relative z-10 flex flex-wrap items-center justify-end gap-1">
-              <a href={resolve('/tailor/base/[id]', { id: base.id })} class="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+              <a
+                href={resolve('/tailor/base/[id]', { id: base.id })}
+                class="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
                 <Pencil class="size-4" aria-hidden="true" />{s.base.edit}
               </a>
               <button
@@ -200,11 +212,25 @@
                 {s.base.tailor}
               </button>
               <!-- eslint-disable svelte/no-navigation-without-resolve -- external CV PDF API URL, not an internal route -->
-              <a href={api.cvPdfUrl(base.id)} target="_blank" rel="noopener" aria-label={s.openPdf} title={s.openPdf} class={iconButton}>
+              <a
+                href={api.cvPdfUrl(base.id)}
+                target="_blank"
+                rel="noopener"
+                aria-label={s.openPdf}
+                title={s.openPdf}
+                class={iconButton}
+              >
                 <!-- eslint-enable svelte/no-navigation-without-resolve -->
                 <Download class="h-4 w-4" />
               </a>
-              <button type="button" aria-label={s.base.duplicate} title={s.base.duplicate} disabled={busy} onclick={() => duplicate(base)} class={iconButton}>
+              <button
+                type="button"
+                aria-label={s.base.duplicate}
+                title={s.base.duplicate}
+                disabled={busy}
+                onclick={() => duplicate(base)}
+                class={iconButton}
+              >
                 <Copy class="h-4 w-4" />
               </button>
               <button
@@ -237,16 +263,28 @@
         </p>
         <ol class="mx-auto mt-5 flex max-w-sm flex-col gap-3 text-left text-sm">
           <li class="flex items-start gap-3">
-            <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">1</span>
+            <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold"
+              >1</span
+            >
             <span>{s.empty.step1}</span>
           </li>
           <li class="flex items-start gap-3">
-            <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">2</span>
-            <span>{s.empty.step2Lead} <strong class="font-medium text-foreground">{s.empty.tailorMyCv}</strong> {s.empty.step2Tail}</span>
+            <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold"
+              >2</span
+            >
+            <span
+              >{s.empty.step2Lead} <strong class="font-medium text-foreground">{s.empty.tailorMyCv}</strong>
+              {s.empty.step2Tail}</span
+            >
           </li>
           <li class="flex items-start gap-3">
-            <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">3</span>
-            <span>{s.empty.step3Lead} <strong class="font-medium text-foreground">{s.empty.tailorMyCv}</strong> {s.empty.step3Tail}</span>
+            <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold"
+              >3</span
+            >
+            <span
+              >{s.empty.step3Lead} <strong class="font-medium text-foreground">{s.empty.tailorMyCv}</strong>
+              {s.empty.step3Tail}</span
+            >
           </li>
         </ol>
         <div class="mt-6 text-center">
@@ -255,7 +293,8 @@
             onclick={() => openCvIntake()}
             class="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
           >
-            {s.empty.cta} <ArrowRight class="size-4" />
+            {s.empty.cta}
+            <ArrowRight class="size-4" />
           </button>
         </div>
       </div>
@@ -268,8 +307,17 @@
         >
           <!-- The whole card opens the workspace; the action buttons stop propagation below. -->
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended ?cv= query -->
-          <a href={`${resolve('/tailor/[slug]', { slug: cv.job_slug })}?cv=${cv.id}`} class="absolute inset-0" aria-label={format(s.openAria, { title: cv.job_title })}></a>
-          <EntityLogo name={cv.job_company} src={companyLogoUrl(cv.job_company) ?? undefined} shape="square" size="lg" />
+          <a
+            href={`${resolve('/tailor/[slug]', { slug: cv.job_slug })}?cv=${cv.id}`}
+            class="absolute inset-0"
+            aria-label={format(s.openAria, { title: cv.job_title })}
+          ></a>
+          <EntityLogo
+            name={cv.job_company}
+            src={companyLogoUrl(cv.job_company) ?? undefined}
+            shape="square"
+            size="lg"
+          />
           <div class="min-w-0 flex-1">
             <p class="truncate font-medium">{cv.job_title}</p>
             <p class="truncate text-sm text-muted-foreground">{cv.job_company}</p>
@@ -306,7 +354,9 @@
 
 <ConfirmDialog
   bind:open={confirmRemoveOpen}
-  title={format(removeTarget?.base ? s.base.deleteDialog.title : s.deleteDialog.title, { title: removeTarget?.title ?? '' })}
+  title={format(removeTarget?.base ? s.base.deleteDialog.title : s.deleteDialog.title, {
+    title: removeTarget?.title ?? '',
+  })}
   description={removeTarget?.base ? s.base.deleteDialog.description : s.deleteDialog.description}
   confirmLabel={s.deleteDialog.confirm}
   variant="destructive"

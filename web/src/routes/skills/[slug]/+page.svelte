@@ -16,9 +16,7 @@
   // The description is the page's own sentence, so it is also the meta description —
   // one claim, not a summary of a summary. The posting count trails it as a fact about
   // the catalogue, stated whether or not the list below is shown.
-  const metaDescription = $derived(
-    `${data.description} ${count(data.total)} open ${data.label} jobs on freehire.`,
-  );
+  const metaDescription = $derived(`${data.description} ${count(data.total)} open ${data.label} jobs on freehire.`);
   // Where "the open X jobs" goes. A collection pinning exactly this skill is the same
   // set behind a self-canonical URL, so it wins: /jobs?skills=X answers the reader fine
   // but its own canonical names /jobs, and this page's most-followed link should not
@@ -37,10 +35,7 @@
     jsonLdScript([
       // The page's subject, said in a form a machine can read: this heading names a
       // term, that paragraph defines it, and both belong to one glossary.
-      definedTermJsonLd(
-        { slug: data.slug, label: data.label, description: data.description },
-        origin,
-      ),
+      definedTermJsonLd({ slug: data.slug, label: data.label, description: data.description }, origin),
       breadcrumbJsonLd([
         { name: 'freehire', url: `${origin}/` },
         { name: 'Skills', url: `${origin}/skills` },
@@ -73,9 +68,10 @@
     {#if data.aliases.length > 0}
       <p class="mt-3 text-sm text-muted-foreground">
         Also written as
-        {#each data.aliases as alias, i (alias)}<span class="font-medium text-foreground"
-            >{alias}</span
-          >{i < data.aliases.length - 1 ? ', ' : ''}{/each}.
+        {#each data.aliases as alias, i (alias)}<span class="font-medium text-foreground">{alias}</span>{i <
+          data.aliases.length - 1
+            ? ', '
+            : ''}{/each}.
       </p>
     {/if}
 
@@ -84,9 +80,7 @@
          nothing to say about hiring. -->
     <p class="mt-4 text-sm">
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- jobsHref is resolve()d on the collection branch; the rule cannot see through the variable, and the fallback branch really is a query-only /jobs URL -->
-      <a href={jobsHref} class="font-medium underline"
-        >{count(data.total)} open {data.label} jobs</a
-      >
+      <a href={jobsHref} class="font-medium underline">{count(data.total)} open {data.label} jobs</a>
       on freehire.
     </p>
   </header>
@@ -123,8 +117,8 @@
     <!-- Below the gate the list is withheld and the reason is said out loud, rather
          than the page quietly looking like nobody is hiring. -->
     <p class="text-sm text-muted-foreground">
-      Fewer than {data.minPostings} open jobs name {data.label} right now, so there is no listing
-      here — a handful of postings describes a moment, not a market.
+      Fewer than {data.minPostings} open jobs name {data.label} right now, so there is no listing here — a handful of postings
+      describes a moment, not a market.
     </p>
   {/if}
 </div>

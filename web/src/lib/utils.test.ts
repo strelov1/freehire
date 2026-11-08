@@ -51,8 +51,7 @@ describe('formatCount', () => {
 // that fails at whatever hour the boundary lands on.
 describe('formatDateOrAgo', () => {
   const NOW = new Date('2026-09-04T12:00:00Z');
-  const at = (hoursAgo: number) =>
-    new Date(NOW.getTime() - hoursAgo * 3600 * 1000).toISOString();
+  const at = (hoursAgo: number) => new Date(NOW.getTime() - hoursAgo * 3600 * 1000).toISOString();
 
   beforeEach(() => {
     vi.useFakeTimers();

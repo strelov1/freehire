@@ -117,9 +117,7 @@ describe('completeWord', () => {
   });
 
   it('fills in a word caught mid-deletion', () => {
-    expect(typedTail(completeWord({ role: 0, chars: 1, deleting: true }, ['QA']), ['QA'])).toBe(
-      'QA',
-    );
+    expect(typedTail(completeWord({ role: 0, chars: 1, deleting: true }, ['QA']), ['QA'])).toBe('QA');
   });
 
   it('leaves an already-complete word alone', () => {

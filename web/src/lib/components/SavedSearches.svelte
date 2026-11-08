@@ -138,7 +138,8 @@
 <div class="flex flex-col gap-4">
   {#if !isAuthenticated()}
     <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query -->
-    <a href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}
+    <a
+      href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}
       class="self-start text-sm font-medium text-primary underline-offset-4 hover:underline"
     >
       Sign in to save filters
@@ -168,52 +169,70 @@
          you applied and then edited keeps a muted dot as the "base". -->
     {#if items.length > 0}
       <section class="flex flex-col gap-1.5">
-        <span class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <span
+          class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+        >
           <Bookmark class="size-3.5" aria-hidden="true" /> Your saved filters
         </span>
         <p class="-mt-0.5 text-xs text-muted-foreground">Click one to apply it to the list.</p>
         <ul class="flex flex-col gap-0.5">
-        {#each items as set (set.id)}
-          {#if renamingId === set.id}
-            <li class="flex items-center gap-2 py-0.5" {@attach focusInput}>
-              <Input bind:value={renameValue} maxlength={100} aria-label="Saved filter name" class="min-w-0 flex-1" onkeydown={onRenameKey} />
-              <Button variant="primary" size="sm" onclick={commitRename} disabled={!renameValue.trim() || busy}>Save</Button>
-              <Button variant="ghost" size="sm" onclick={cancelRename}>Cancel</Button>
-            </li>
-          {:else}
-            {@const active = set.id === activeId}
-            {@const isBase = dirty && set.id === baseId}
-            <li class="group flex items-center gap-0.5">
-              <button
-                type="button"
-                onclick={() => apply(set)}
-                title="Apply this filter"
-                class={['flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent', active && 'bg-accent']}
-              >
-                <span class={['size-1.5 shrink-0 rounded-full transition-colors', active ? 'bg-brand' : isBase ? 'bg-muted-foreground/50' : 'bg-transparent']}></span>
-                <span class={['truncate text-sm', active && 'font-medium']}>{set.name}</span>
-              </button>
-              <button
-                type="button"
-                aria-label="Rename “{set.name}”"
-                title="Rename"
-                onclick={() => startRename(set)}
-                class="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <Pencil class="size-4" />
-              </button>
-              <button
-                type="button"
-                aria-label="Delete “{set.name}”"
-                title="Delete"
-                onclick={() => requestRemove(set)}
-                class="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 class="size-4" />
-              </button>
-            </li>
-          {/if}
-        {/each}
+          {#each items as set (set.id)}
+            {#if renamingId === set.id}
+              <li class="flex items-center gap-2 py-0.5" {@attach focusInput}>
+                <Input
+                  bind:value={renameValue}
+                  maxlength={100}
+                  aria-label="Saved filter name"
+                  class="min-w-0 flex-1"
+                  onkeydown={onRenameKey}
+                />
+                <Button variant="primary" size="sm" onclick={commitRename} disabled={!renameValue.trim() || busy}
+                  >Save</Button
+                >
+                <Button variant="ghost" size="sm" onclick={cancelRename}>Cancel</Button>
+              </li>
+            {:else}
+              {@const active = set.id === activeId}
+              {@const isBase = dirty && set.id === baseId}
+              <li class="group flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onclick={() => apply(set)}
+                  title="Apply this filter"
+                  class={[
+                    'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent',
+                    active && 'bg-accent',
+                  ]}
+                >
+                  <span
+                    class={[
+                      'size-1.5 shrink-0 rounded-full transition-colors',
+                      active ? 'bg-brand' : isBase ? 'bg-muted-foreground/50' : 'bg-transparent',
+                    ]}
+                  ></span>
+                  <span class={['truncate text-sm', active && 'font-medium']}>{set.name}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Rename “{set.name}”"
+                  title="Rename"
+                  onclick={() => startRename(set)}
+                  class="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Pencil class="size-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Delete “{set.name}”"
+                  title="Delete"
+                  onclick={() => requestRemove(set)}
+                  class="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 class="size-4" />
+                </button>
+              </li>
+            {/if}
+          {/each}
         </ul>
       </section>
     {/if}

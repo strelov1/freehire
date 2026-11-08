@@ -1,10 +1,5 @@
 import { ApiError, MovedError } from '#lib/api.js';
-import {
-  companySubject,
-  jobSubject,
-  type DiscussionSubject,
-  type SubjectAbsence,
-} from '#lib/discussionSubject.js';
+import { companySubject, jobSubject, type DiscussionSubject, type SubjectAbsence } from '#lib/discussionSubject.js';
 import type { Company } from '#lib/types.js';
 import { serverApi } from './api';
 

@@ -24,9 +24,7 @@
   } = $props();
 
   const sideClass = $derived(
-    side === 'right'
-      ? 'right-0 rounded-l-lg border-r-0 pl-2 pr-1.5'
-      : 'left-0 rounded-r-lg border-l-0 pl-1.5 pr-2',
+    side === 'right' ? 'right-0 rounded-l-lg border-r-0 pl-2 pr-1.5' : 'left-0 rounded-r-lg border-l-0 pl-1.5 pr-2',
   );
 </script>
 

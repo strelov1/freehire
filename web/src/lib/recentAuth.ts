@@ -86,9 +86,7 @@ function isDraftFor<S extends ReauthDraft['surface']>(
   // real type guard rather than a cast wearing a boolean.
   switch (surface) {
     case 'create-api-key':
-      return (
-        typeof d.name === 'string' && typeof d.days === 'number' && typeof d.scope === 'string'
-      );
+      return typeof d.name === 'string' && typeof d.days === 'number' && typeof d.scope === 'string';
     case 'revoke-api-key':
       return typeof d.keyId === 'number';
     case 'revoke-oauth-grant':

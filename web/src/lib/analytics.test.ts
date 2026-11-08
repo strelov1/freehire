@@ -247,7 +247,10 @@ describe('trackSignupIfNew → GA4 sign-up', () => {
       location: { hostname: 'freehire.me' },
       document: { createElement: () => ({}), head: { appendChild: () => {} }, cookie: '' },
       dataLayer: [],
-      localStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) },
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+      },
       sessionStorage: { getItem: () => null, setItem: () => {} },
       fetch: vi.fn(answer),
     });

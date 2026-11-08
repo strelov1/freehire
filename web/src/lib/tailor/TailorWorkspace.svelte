@@ -14,7 +14,17 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { Check, Download, Menu, PanelLeftClose, PanelLeftOpen, Terminal, TriangleAlert, ZoomIn, ZoomOut } from '@lucide/svelte';
+  import {
+    Check,
+    Download,
+    Menu,
+    PanelLeftClose,
+    PanelLeftOpen,
+    Terminal,
+    TriangleAlert,
+    ZoomIn,
+    ZoomOut,
+  } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '#lib/cvRefreshOffer.js';
@@ -136,7 +146,9 @@
 
   // The right context panel's tab, lifted here so the mobile tab bar can drive it (on desktop the
   // panel's own tab bar sets it via the same binding).
-  let artifactTab = $state<'jd' | 'jobmatch' | 'score' | 'letter' | 'history'>(baseCvId !== undefined ? 'history' : 'jobmatch');
+  let artifactTab = $state<'jd' | 'jobmatch' | 'score' | 'letter' | 'history'>(
+    baseCvId !== undefined ? 'history' : 'jobmatch',
+  );
 
   // Mobile-only navigation: below lg the three columns collapse to one, so a single flat tab bar
   // picks which view fills the screen. At lg it's hidden and every column shows at once as before.
@@ -144,7 +156,17 @@
   // syncs the matching column's own selector (mobile → column) so the wide layout shows the same
   // content once revealed. The reverse (a desktop tab change updating mobileView) is not wired —
   // switching a column tab then narrowing across lg resets the mobile view to that tab's default.
-  type MobileView = 'chat' | 'editor' | 'experience' | 'design' | 'preview' | 'jd' | 'jobmatch' | 'score' | 'letter' | 'history';
+  type MobileView =
+    | 'chat'
+    | 'editor'
+    | 'experience'
+    | 'design'
+    | 'preview'
+    | 'jd'
+    | 'jobmatch'
+    | 'score'
+    | 'letter'
+    | 'history';
   const allMobileTabs: [MobileView, string][] = [
     ['chat', 'Chat'],
     ['editor', 'Editor'],
@@ -159,7 +181,9 @@
   ];
   // The vacancy panes do not exist in base mode: only the history remains of the right panel.
   const mobileTabs = $derived(
-    baseMode ? allMobileTabs.filter(([id]) => id !== 'jobmatch' && id !== 'score' && id !== 'letter' && id !== 'jd') : allMobileTabs,
+    baseMode
+      ? allMobileTabs.filter(([id]) => id !== 'jobmatch' && id !== 'score' && id !== 'letter' && id !== 'jd')
+      : allMobileTabs,
   );
   // Defaults to the same tab the desktop right panel opens on (artifactTab above), so a
   // cold start's match-analysis animation is the first thing a mobile visitor sees too,
@@ -335,7 +359,10 @@
     void loadRevisions();
     // Not awaited either: an empty list only means the font picker has nothing to offer yet,
     // and the preview falls back to the template's own face meanwhile.
-    void api.listCvFonts().then((f) => (fonts = f)).catch(() => {});
+    void api
+      .listCvFonts()
+      .then((f) => (fonts = f))
+      .catch(() => {});
   }
 
   // Applies a tailoring bootstrap's result (fresh or retried) to the page state and settles
@@ -373,10 +400,7 @@
         // no kickoff. If it has none (a CV created before session binding), mint a fresh
         // tailoring session for it and let the kickoff orient the agent.
         const existing = cvParam;
-        const [j, fit] = await Promise.all([
-          api.getJob(slug),
-          api.getMatchAnalysis(slug).catch(() => null),
-        ]);
+        const [j, fit] = await Promise.all([api.getJob(slug), api.getMatchAnalysis(slug).catch(() => null)]);
         job = j;
         cvId = existing;
         analysis = fit?.analysis ?? null;
@@ -424,7 +448,12 @@
         const more = at?.resets_at && !notInPlan(at) ? ` More at ${resetsAtLabel(at)}.` : '';
         errorMsg = `${e.message}${more}`;
       } else {
-        errorMsg = e instanceof ApiError ? e.message : baseMode ? 'Could not open this CV.' : 'Could not open the tailoring workspace.';
+        errorMsg =
+          e instanceof ApiError
+            ? e.message
+            : baseMode
+              ? 'Could not open this CV.'
+              : 'Could not open the tailoring workspace.';
       }
       status = 'error';
     }
@@ -654,7 +683,11 @@
   }
 </script>
 
-<svelte:head><title>{baseMode ? `Edit CV${title ? ` · ${title}` : ''}` : `Tailor CV${job ? ` · ${job.title}` : ''}`} — freehire</title></svelte:head>
+<svelte:head
+  ><title
+    >{baseMode ? `Edit CV${title ? ` · ${title}` : ''}` : `Tailor CV${job ? ` · ${job.title}` : ''}`} — freehire</title
+  ></svelte:head
+>
 
 <!-- Full-width workspace loses the account shell nav; the same left-edge icon rail as
      the Agent page brings the account sections back. It stays put across every state. -->
@@ -662,7 +695,11 @@
   <AccountNavRail collapsible bind:open={navOpen} />
   {#if status === 'loading'}
     <div class="flex min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
-      {baseMode ? 'Opening your CV…' : resuming ? 'Re-opening your tailoring session…' : 'Preparing your tailoring session…'}
+      {baseMode
+        ? 'Opening your CV…'
+        : resuming
+          ? 'Re-opening your tailoring session…'
+          : 'Preparing your tailoring session…'}
     </div>
   {:else if status === 'error'}
     <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
@@ -677,7 +714,9 @@
     <div class="flex min-w-0 flex-1 flex-col lg:flex-row">
       <!-- MOBILE TAB BAR: below lg the three columns collapse to one full-screen view; this flat,
            horizontally-scrollable bar switches between all of them. Hidden at lg (columns stack). -->
-      <nav class="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-2 py-1.5 text-sm lg:hidden">
+      <nav
+        class="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-2 py-1.5 text-sm lg:hidden"
+      >
         <!-- Burger opens the account nav drawer (the icon rail is hidden below lg). -->
         <button
           type="button"
@@ -694,7 +733,12 @@
             type="button"
             onclick={() => pickMobile(id)}
             aria-current={mobileView === id ? 'page' : undefined}
-            class={['shrink-0 rounded px-2 py-1 transition-colors', mobileView === id ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground']}
+            class={[
+              'shrink-0 rounded px-2 py-1 transition-colors',
+              mobileView === id
+                ? 'bg-muted font-medium text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
+            ]}
           >
             {label}
           </button>
@@ -747,7 +791,12 @@
                 aria-selected={leftTab === id}
                 aria-controls="tailor-left-panel"
                 onclick={() => (leftTab = id)}
-                class={['shrink-0 rounded px-2 py-1 transition-colors', leftTab === id ? 'bg-brand-muted font-semibold text-brand-strong' : 'text-muted-foreground hover:text-foreground']}
+                class={[
+                  'shrink-0 rounded px-2 py-1 transition-colors',
+                  leftTab === id
+                    ? 'bg-brand-muted font-semibold text-brand-strong'
+                    : 'text-muted-foreground hover:text-foreground',
+                ]}
               >
                 {label}
               </button>
@@ -760,7 +809,8 @@
                 aria-live="polite"
                 title={saveState === 'error' ? saveError : undefined}
               >
-                {#if saveState === 'saving'}Saving…{:else if saveState === 'saved'}Saved{:else if saveState === 'error'}Save failed{/if}
+                {#if saveState === 'saving'}Saving…{:else if saveState === 'saved'}Saved{:else if saveState === 'error'}Save
+                  failed{/if}
               </span>
             {/if}
             <button
@@ -892,10 +942,17 @@
       <div
         class={['min-w-0 min-h-0 flex-1 flex-col bg-muted/30 lg:flex', mobileView === 'preview' ? 'flex' : 'hidden']}
       >
-        <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border bg-background px-3 py-1.5 text-sm">
+        <div
+          class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border bg-background px-3 py-1.5 text-sm"
+        >
           <div class="flex flex-wrap items-center gap-2">
             <div class="flex items-center gap-1">
-              <button type="button" onclick={zoomOut} aria-label="Zoom out" class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground">
+              <button
+                type="button"
+                onclick={zoomOut}
+                aria-label="Zoom out"
+                class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+              >
                 <ZoomOut class="size-4" />
               </button>
               <button
@@ -908,20 +965,29 @@
               >
                 {zoomPct}%
               </button>
-              <button type="button" onclick={zoomIn} aria-label="Zoom in" class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground">
+              <button
+                type="button"
+                onclick={zoomIn}
+                aria-label="Zoom in"
+                class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+              >
                 <ZoomIn class="size-4" />
               </button>
             </div>
             {#if pageCount !== null}
               <span
-                class={['inline-flex items-center gap-1 text-xs tabular-nums', pageCount > 2 ? 'text-warning-strong' : 'text-muted-foreground']}
+                class={[
+                  'inline-flex items-center gap-1 text-xs tabular-nums',
+                  pageCount > 2 ? 'text-warning-strong' : 'text-muted-foreground',
+                ]}
               >
                 {#if pageCount > 2}
                   <TriangleAlert class="size-3.5" aria-hidden="true" />
                   {pageCount} pages · aim for 1–2
                 {:else}
                   <Check class="size-3.5 text-success-strong" aria-hidden="true" />
-                  {pageCount} {pageCount === 1 ? 'page' : 'pages'}
+                  {pageCount}
+                  {pageCount === 1 ? 'page' : 'pages'}
                 {/if}
               </span>
             {/if}
@@ -936,7 +1002,9 @@
               >
                 <TriangleAlert class="size-3.5" aria-hidden="true" />
                 <!-- Names one of the slots: "placeholder" alone did not say what was wrong. -->
-                {placeholders.length === 1 ? `1 gap: ${placeholders[0]?.token}` : `${placeholders.length} gaps like ${placeholders[0]?.token}`}
+                {placeholders.length === 1
+                  ? `1 gap: ${placeholders[0]?.token}`
+                  : `${placeholders.length} gaps like ${placeholders[0]?.token}`}
               </button>
             {/if}
             <!-- eslint-disable svelte/no-navigation-without-resolve -- external CV PDF API URL, not an internal route -->
@@ -990,7 +1058,11 @@
         {resetError}
         {cvId}
         bind:tab={artifactTab}
-        mobileVisible={mobileView === 'jd' || mobileView === 'jobmatch' || mobileView === 'score' || mobileView === 'letter' || mobileView === 'history'}
+        mobileVisible={mobileView === 'jd' ||
+          mobileView === 'jobmatch' ||
+          mobileView === 'score' ||
+          mobileView === 'letter' ||
+          mobileView === 'history'}
       />
     </div>
   {/if}
@@ -1001,7 +1073,9 @@
 
 <ConfirmDialog
   bind:open={confirmResetOpen}
-  title={baseMode ? 'Replace this CV’s content with your current CV?' : 'Rebuild this tailored CV from your current seed?'}
+  title={baseMode
+    ? 'Replace this CV’s content with your current CV?'
+    : 'Rebuild this tailored CV from your current seed?'}
   description={baseMode
     ? 'Anything you or the assistant edited in this CV is replaced. Your template and typography stay; the edits can be undone from History.'
     : 'Your template and typography stay; content edits can be undone from History.'}

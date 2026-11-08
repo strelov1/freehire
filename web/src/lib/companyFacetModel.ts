@@ -102,7 +102,11 @@ export function addCompanyFacet(f: CompanyFilters, param: string, raw: string): 
 
 /** Remove a value from the facet. */
 export function removeCompanyFacet(f: CompanyFilters, param: string, v: string): CompanyFilters {
-  return withFacet(f, param, (f.facets[param] ?? []).filter((x) => x !== v));
+  return withFacet(
+    f,
+    param,
+    (f.facets[param] ?? []).filter((x) => x !== v),
+  );
 }
 
 /** Reset a single facet. */

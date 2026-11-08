@@ -54,10 +54,7 @@
         price: dataPrice,
         name: 'Data',
         blurb: 'For mirroring the catalogue at volume.',
-        perks: [
-          'Everything in API',
-          'Bulk catalogue files — coming soon',
-        ],
+        perks: ['Everything in API', 'Bulk catalogue files — coming soon'],
       },
     ].filter((c) => !!c);
   });
@@ -68,8 +65,8 @@
     <header class="flex flex-col items-center gap-2 text-center">
       <h2 class="text-2xl font-semibold tracking-tight">Jobs API</h2>
       <p class="max-w-2xl text-balance text-muted-foreground">
-        The read API is free for personal and non-commercial use. An API plan licenses
-        the data for use in your product. Send a full-access key as
+        The read API is free for personal and non-commercial use. An API plan licenses the data for use in your product.
+        Send a full-access key as
         <code class="text-sm">Authorization: Bearer</code>.
       </p>
     </header>
@@ -118,13 +115,17 @@
       What the API carries and who it is for is on the <a
         href={resolve('/jobs-api')}
         class="font-medium text-foreground underline-offset-4 hover:underline">Jobs API</a
-      > page. Keys live on your <a
+      >
+      page. Keys live on your
+      <a
         href={resolve('/my/integrations/api-keys')}
         class="font-medium text-foreground underline-offset-4 hover:underline">API keys</a
-      > page. What you may do with the data is in the
+      >
+      page. What you may do with the data is in the
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() is applied; the rule cannot see through the appended section anchor -->
-      <a href={resolve('/terms') + '#data-licence'} class="font-medium text-foreground underline-offset-4 hover:underline"
-        >data licence</a
+      <a
+        href={resolve('/terms') + '#data-licence'}
+        class="font-medium text-foreground underline-offset-4 hover:underline">data licence</a
       >.
     </p>
   </section>

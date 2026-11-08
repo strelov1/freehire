@@ -12,10 +12,34 @@ export const DEMO_FEED: {
   company: string;
   day: string;
 }[] = [
-  { handle: 'amber-heron-42', summary: { category: 'backend', seniority: 'mid', country: 'de' }, type: 'applied', company: 'Northwind', day: '3 days ago' },
-  { handle: 'tidy-kestrel-318', summary: { category: 'backend', seniority: 'senior', country: 'pl' }, type: 'interview', company: 'Globex', day: 'yesterday' },
-  { handle: 'brisk-osprey-77', summary: { category: 'devops', seniority: 'mid', country: 'nl' }, type: 'applied', company: 'Globex', day: 'yesterday' },
-  { handle: 'kind-reef-2041', summary: { category: 'backend', seniority: 'senior', country: 'us' }, type: 'offer', company: 'Initech', day: 'today' },
+  {
+    handle: 'amber-heron-42',
+    summary: { category: 'backend', seniority: 'mid', country: 'de' },
+    type: 'applied',
+    company: 'Northwind',
+    day: '3 days ago',
+  },
+  {
+    handle: 'tidy-kestrel-318',
+    summary: { category: 'backend', seniority: 'senior', country: 'pl' },
+    type: 'interview',
+    company: 'Globex',
+    day: 'yesterday',
+  },
+  {
+    handle: 'brisk-osprey-77',
+    summary: { category: 'devops', seniority: 'mid', country: 'nl' },
+    type: 'applied',
+    company: 'Globex',
+    day: 'yesterday',
+  },
+  {
+    handle: 'kind-reef-2041',
+    summary: { category: 'backend', seniority: 'senior', country: 'us' },
+    type: 'offer',
+    company: 'Initech',
+    day: 'today',
+  },
 ];
 
 export const DEMO_INVITE = {

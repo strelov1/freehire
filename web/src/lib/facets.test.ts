@@ -44,9 +44,7 @@ describe('the role_type facet', () => {
   // that it is not. Labelling the excluded state "individual contributor" would turn
   // a known unknown into a false claim, so no label here may say it.
   it('never labels any value as individual contributor', () => {
-    const labels = (FACETS.find((f) => f.param === 'role_type')?.options ?? []).map((o) =>
-      o.label.toLowerCase(),
-    );
+    const labels = (FACETS.find((f) => f.param === 'role_type')?.options ?? []).map((o) => o.label.toLowerCase());
     for (const label of labels) {
       expect(label).not.toContain('individual contributor');
       expect(label).not.toMatch(/\bic\b/);

@@ -40,7 +40,9 @@
 
 <div class="flex flex-col gap-8">
   <!-- Coverage headline -->
-  <div class="flex flex-col gap-4 rounded-xl border border-border bg-card p-6 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 duration-500">
+  <div
+    class="flex flex-col gap-4 rounded-xl border border-border bg-card p-6 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 duration-500"
+  >
     <div class="flex flex-wrap items-end justify-between gap-2">
       <div class="flex items-baseline gap-2">
         <span class="text-6xl font-semibold tabular-nums leading-none">{verdict.coverage_percent}%</span>
@@ -73,12 +75,7 @@
       {:else}
         <!-- No skill clears the must-have frequency threshold for this role, so the
              covered/total ratio is undefined — show a dash instead of a broken "0/0". -->
-        <span
-          class="text-3xl font-semibold leading-none text-muted-foreground"
-          title={s.mustHaveNone}
-        >
-          —
-        </span>
+        <span class="text-3xl font-semibold leading-none text-muted-foreground" title={s.mustHaveNone}> — </span>
       {/if}
       <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.mustHaveCovered}</span>
     </div>
@@ -118,7 +115,8 @@
       <button
         type="button"
         onclick={() => (sub = 'gaps')}
-        class="-mb-px flex items-center gap-1.5 border-b-2 px-1 pb-2 text-sm font-medium transition-colors {sub === 'gaps'
+        class="-mb-px flex items-center gap-1.5 border-b-2 px-1 pb-2 text-sm font-medium transition-colors {sub ===
+        'gaps'
           ? 'border-brand text-foreground'
           : 'border-transparent text-muted-foreground hover:text-foreground'}"
       >
@@ -158,13 +156,17 @@
                   <TrendingUp class="size-3.5" />
                   +{gap.new_vacancies.toLocaleString('en-US')}
                 </span>
-                <span class="text-xs text-muted-foreground">{format(s.unlockPercent, { pct: String(gap.unlock_percent) })}</span>
+                <span class="text-xs text-muted-foreground"
+                  >{format(s.unlockPercent, { pct: String(gap.unlock_percent) })}</span
+                >
               </div>
             </li>
           {/each}
         </ul>
       {:else}
-        <div class="flex items-center gap-2 rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground">
+        <div
+          class="flex items-center gap-2 rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground"
+        >
           <Check class="size-4 text-primary" />
           {s.noGaps}
         </div>
@@ -189,7 +191,9 @@
                     {s.mustHaveBadge}
                   </span>
                 {/if}
-                <span class="text-xs text-muted-foreground">{format(s.marketFrequency, { pct: String(skill.market_frequency) })}</span>
+                <span class="text-xs text-muted-foreground"
+                  >{format(s.marketFrequency, { pct: String(skill.market_frequency) })}</span
+                >
               </div>
               <span
                 class="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide {statusStyle[

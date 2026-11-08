@@ -18,8 +18,7 @@
   // (e.g. a burger in its header) and binds `open`. Without `collapsible` the rail
   // renders exactly as before at every width.
 
-  let { open = $bindable(false), collapsible = false }: { open?: boolean; collapsible?: boolean } =
-    $props();
+  let { open = $bindable(false), collapsible = false }: { open?: boolean; collapsible?: boolean } = $props();
   const s = $derived(t(messages, locale()));
 </script>
 

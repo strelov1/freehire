@@ -1,19 +1,9 @@
-import {
-  COLLECTIONS,
-  FILTER_COLLECTIONS,
-  collectionBySlug,
-  toQuery,
-} from '#lib/collections.js';
+import { COLLECTIONS, FILTER_COLLECTIONS, collectionBySlug, toQuery } from '#lib/collections.js';
 import { backerBadges } from '#lib/backers.js';
-import {
-  COLLECTION_SECTIONS,
-  type CollectionRow,
-  type CollectionSectionDef,
-} from '#lib/collectionSections.js';
+import { COLLECTION_SECTIONS, type CollectionRow, type CollectionSectionDef } from '#lib/collectionSections.js';
 import COLLECTION_STACKS from '#lib/data/collectionStacks.json';
 import { resolveSeeAlsoMark } from '#lib/seeAlsoMark.js';
 import type { serverApi } from './api';
-
 
 export type CollectionSection = CollectionSectionDef & { rows: CollectionRow[] };
 

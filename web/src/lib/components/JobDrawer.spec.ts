@@ -99,7 +99,9 @@ describe('JobDrawer — phone layout in Russian', () => {
     // The badge beside the facet pills.
     expect(screen.getAllByText('Подготовка').some((el) => el.tagName === 'SPAN')).toBe(true);
     const select = screen.getByRole('combobox') as HTMLSelectElement;
-    const options = within(select).getAllByRole('option').map((o) => o.textContent);
+    const options = within(select)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
     expect(options).toContain('Собеседование');
     expect(options).toContain('Отказ');
     expect(options).not.toContain('Interview');
@@ -112,8 +114,6 @@ describe('JobDrawer — phone layout in Russian', () => {
     // The history row interpolates the label, not the raw `preparing` key.
     await waitFor(() => expect(screen.getByText('Переход на этап «Подготовка»')).toBeTruthy());
     expect(screen.queryByText(/preparing/)).toBeNull();
-
-
   });
 
   it('keeps View job in the employer row and Tailor CV in the action row', () => {

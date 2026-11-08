@@ -72,9 +72,7 @@ export default defineContentScript({
         case 'COMBOBOX_STEP':
           // The only asynchronous handler here: a widget re-renders when its
           // framework decides to, so the step awaits the result.
-          return runStep(document, message.step).then(
-            (reply): RuntimeMessage => ({ kind: 'COMBOBOX_REPLY', reply }),
-          );
+          return runStep(document, message.step).then((reply): RuntimeMessage => ({ kind: 'COMBOBOX_REPLY', reply }));
         default:
           return undefined;
       }

@@ -46,9 +46,7 @@
 </script>
 
 {#if failed}
-  <p class="text-muted-foreground">
-    Discussions couldn't be loaded just now. Please try again in a moment.
-  </p>
+  <p class="text-muted-foreground">Discussions couldn't be loaded just now. Please try again in a moment.</p>
 {:else if threads.length === 0}
   <p class="text-muted-foreground">No discussions yet.</p>
 {:else}

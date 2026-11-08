@@ -126,7 +126,12 @@
   );
   const projects = $derived(keepIndex(doc.projects ?? [], (p) => (p.name ?? '').trim() !== ''));
   const education = $derived(keepIndex((doc.education ?? []).map(educationLine), (l) => l !== ''));
-  const skills = $derived((doc.skills ?? []).flatMap((g) => g.items ?? []).map((s) => s.trim()).filter((s) => s !== ''));
+  const skills = $derived(
+    (doc.skills ?? [])
+      .flatMap((g) => g.items ?? [])
+      .map((s) => s.trim())
+      .filter((s) => s !== ''),
+  );
   const languages = $derived((doc.languages ?? []).map(languageLabel).filter((l) => l !== ''));
   const certifications = $derived((doc.certifications ?? []).map(certificationLine).filter((l) => l !== ''));
   const isLink = (c: string) => /^https?:\/\//i.test(c);
@@ -151,9 +156,19 @@
     if (education.length) bl.push({ id: 'education', kind: 'education' });
     // In the two-column layouts skills/languages/certs live in the narrow column, not the main flow.
     if (!twoColumn) {
-      if (skills.length) bl.push({ id: 'skills', kind: 'list', title: 'Skills', items: skills, sep: ', ', path: 'skills' });
-      if (languages.length) bl.push({ id: 'languages', kind: 'list', title: 'Languages', items: languages, sep: ', ', path: 'languages' });
-      if (certifications.length) bl.push({ id: 'certs', kind: 'list', title: 'Certifications', items: certifications, sep: '; ', path: 'certifications' });
+      if (skills.length)
+        bl.push({ id: 'skills', kind: 'list', title: 'Skills', items: skills, sep: ', ', path: 'skills' });
+      if (languages.length)
+        bl.push({ id: 'languages', kind: 'list', title: 'Languages', items: languages, sep: ', ', path: 'languages' });
+      if (certifications.length)
+        bl.push({
+          id: 'certs',
+          kind: 'list',
+          title: 'Certifications',
+          items: certifications,
+          sep: '; ',
+          path: 'certifications',
+        });
     }
     return bl;
   });
@@ -171,9 +186,7 @@
     // page pack slightly past its body.
     const measure = () => {
       const tops = present.map((el) => el.offsetTop);
-      heights = present.map((el, i) =>
-        i + 1 < present.length ? must(tops[i + 1]) - must(tops[i]) : el.offsetHeight,
-      );
+      heights = present.map((el, i) => (i + 1 < present.length ? must(tops[i + 1]) - must(tops[i]) : el.offsetHeight));
     };
     const ro = new ResizeObserver(measure);
     present.forEach((el) => ro.observe(el));
@@ -224,27 +237,23 @@
 {#snippet headerBlock()}
   <header class={['mb-1', isCentered ? 'text-center' : '', isHeadshot ? 'flex items-start gap-5' : '']}>
     <div class={isHeadshot ? 'min-w-0 flex-1' : ''}>
-    <h1
-      class={['leading-[1.333] font-bold', isSans ? 'uppercase tracking-wider' : 'tracking-tight']}
-      style="font-size: calc({nameSizeRatio} * 1em);"
-    >
-      {header.full_name || 'Your Name'}
-    </h1>
-    {#if !twoColumn && contacts.length}
-      <div class="mt-1">{@render contactLine()}</div>
-    {/if}
-    {#if (doc.summary ?? '').trim()}
-      <p
-        class:cv-lit={lit('summary')}
-        class={[
-          'mt-1 text-neutral-800',
-          isCentered ? 'mx-auto max-w-[62ch] italic' : '',
-          twoColumn ? 'italic' : '',
-        ]}
+      <h1
+        class={['leading-[1.333] font-bold', isSans ? 'uppercase tracking-wider' : 'tracking-tight']}
+        style="font-size: calc({nameSizeRatio} * 1em);"
       >
-        {doc.summary}
-      </p>
-    {/if}
+        {header.full_name || 'Your Name'}
+      </h1>
+      {#if !twoColumn && contacts.length}
+        <div class="mt-1">{@render contactLine()}</div>
+      {/if}
+      {#if (doc.summary ?? '').trim()}
+        <p
+          class:cv-lit={lit('summary')}
+          class={['mt-1 text-neutral-800', isCentered ? 'mx-auto max-w-[62ch] italic' : '', twoColumn ? 'italic' : '']}
+        >
+          {doc.summary}
+        </p>
+      {/if}
     </div>
     {#if isHeadshot}{@render photoFrame('size-[98px]')}{/if}
   </header>
@@ -274,7 +283,8 @@
     {/if}
     {#if stack.length}
       <p class="mt-0.5" class:cv-lit={lit(`experience[${at}].stack`)}>
-        <span class="font-bold">Stack:</span> {stack.join(', ')}
+        <span class="font-bold">Stack:</span>
+        {stack.join(', ')}
       </p>
     {/if}
   </div>
@@ -283,7 +293,10 @@
 {#snippet projectItem(p: Project, at: number)}
   {@const bullets = (p.bullets ?? []).filter((b) => b.trim())}
   <ul class="ml-4 list-disc">
-    <li class="mb-0.5" class:cv-lit={lit(`projects[${at}]`) || lit(`projects[${at}].bullets`) || litInside(`projects[${at}]`)}>
+    <li
+      class="mb-0.5"
+      class:cv-lit={lit(`projects[${at}]`) || lit(`projects[${at}].bullets`) || litInside(`projects[${at}]`)}
+    >
       <span class="font-bold">{p.name}</span>{#if bullets.length}: {bullets.join(' ')}{/if}
       {#if (p.link ?? '').trim()}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
@@ -336,7 +349,9 @@
       {#each contacts as c, i (i)}
         {#if isLink(c)}
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
-          <p class="mb-0.5 break-words"><a href={c} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{c}</a></p>
+          <p class="mb-0.5 break-words">
+            <a href={c} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{c}</a>
+          </p>
         {:else}<p class="mb-0.5 break-words">{c}</p>{/if}
       {/each}
     </section>
@@ -376,7 +391,9 @@
     >
       {#if twoColumn}
         <div class="grid grid-cols-[35%_1fr] gap-6">
-          <div>{#if p === 0}{@render sidebarColumn()}{/if}</div>
+          <div>
+            {#if p === 0}{@render sidebarColumn()}{/if}
+          </div>
           <div>
             {#each page as b (b.id)}{@render blockView(b)}{/each}
           </div>

@@ -25,14 +25,7 @@ export const ROLE_PREFIX = 'Search jobs: ';
  *  Busiest-looking first: under prefers-reduced-motion nothing is animated, so the first
  *  entry is the only one anyone sees and carries the whole weight of answering "what can
  *  I type here". Six is about what a visitor will sit through before typing. */
-export const PLACEHOLDER_ROLES: Category[] = [
-  'backend',
-  'frontend',
-  'devops',
-  'qa',
-  'data_science',
-  'product',
-];
+export const PLACEHOLDER_ROLES: Category[] = ['backend', 'frontend', 'devops', 'qa', 'data_science', 'product'];
 
 /** The fixed prefix and animated role examples for the homepage search box. */
 export const ROLE_PLACEHOLDER: { prefix: string; roles: string[] } = {
@@ -84,10 +77,7 @@ export function typedTail(state: TypewriterState, roles: string[]): string {
  *  The delay belongs to the step it precedes rather than the one that produced it, which
  *  is what lets the finished word hold: the step that removes its first character is the
  *  one that waits HOLD_MS, so the whole word stays on screen for that long. */
-export function typewriterStep(
-  state: TypewriterState,
-  roles: string[],
-): { next: TypewriterState; delayMs: number } {
+export function typewriterStep(state: TypewriterState, roles: string[]): { next: TypewriterState; delayMs: number } {
   const word = roles[state.role] ?? '';
   const nextRole = (state.role + 1) % Math.max(roles.length, 1);
 

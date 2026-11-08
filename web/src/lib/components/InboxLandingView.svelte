@@ -85,9 +85,7 @@
 <!-- The two marks the previews repeat: the initial tile that stands in for a
      sender's avatar, and the status chip in the product's own colours. -->
 {#snippet initial(name: string, size: string)}
-  <div
-    class="grid {size} shrink-0 place-items-center rounded-lg border border-border font-mono font-medium"
-  >
+  <div class="grid {size} shrink-0 place-items-center rounded-lg border border-border font-mono font-medium">
     {name.charAt(0).toUpperCase()}
   </div>
 {/snippet}
@@ -101,9 +99,9 @@
         Your recruiter replies, sorted automatically.
       </h1>
       <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-        Job mail arrives in one place, tagged with what it actually says — received, rejected,
-        interview, information requested — and attached to the application it belongs to. No folders,
-        no digging through a mailbox to work out where you stand.
+        Job mail arrives in one place, tagged with what it actually says — received, rejected, interview, information
+        requested — and attached to the application it belongs to. No folders, no digging through a mailbox to work out
+        where you stand.
       </p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
         <Button href={resolve('/my/inbox')} variant="primary" size="lg">Open your inbox</Button>
@@ -146,9 +144,7 @@
     <SectionLabel text="connect" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Two ways to get mail in.</h2>
-      <p class="mt-5 leading-relaxed text-muted-foreground">
-        Pick either, or run both — they feed the same inbox.
-      </p>
+      <p class="mt-5 leading-relaxed text-muted-foreground">Pick either, or run both — they feed the same inbox.</p>
     </div>
 
     <div class="mt-10 grid gap-6 lg:grid-cols-2">
@@ -158,10 +154,10 @@
           <h3 class="text-lg font-semibold tracking-tight">Claim a freehire address</h3>
         </div>
         <p class="text-sm leading-relaxed text-muted-foreground">
-          You get an address like <code
-            class="rounded bg-background/70 px-1.5 py-0.5 font-mono text-xs text-foreground">you@mail.freehire.me</code
-          >. Use it when you apply and the replies land here directly, or forward the job mail you
-          already have. Nothing else reaches it, and you can release it at any time.
+          You get an address like <code class="rounded bg-background/70 px-1.5 py-0.5 font-mono text-xs text-foreground"
+            >you@mail.freehire.me</code
+          >. Use it when you apply and the replies land here directly, or forward the job mail you already have. Nothing
+          else reaches it, and you can release it at any time.
         </p>
       </div>
 
@@ -171,10 +167,9 @@
           <h3 class="text-lg font-semibold tracking-tight">Connect Gmail, read-only</h3>
         </div>
         <p class="text-sm leading-relaxed text-muted-foreground">
-          Sign in with Google once and freehire syncs the job-related mail it finds — it learns the
-          senders that write about your applications rather than reading your whole mailbox.
-          Disconnecting stops the sync immediately. Google is still reviewing the app, so this route
-          is open to test users for now.
+          Sign in with Google once and freehire syncs the job-related mail it finds — it learns the senders that write
+          about your applications rather than reading your whole mailbox. Disconnecting stops the sync immediately.
+          Google is still reviewing the app, so this route is open to test users for now.
         </p>
       </div>
     </div>
@@ -186,8 +181,8 @@
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">It reads each message and tags it.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
-        Every message is classified into one controlled vocabulary — the same eight labels the inbox
-        filters on. Anything that doesn't clearly fit is stored as
+        Every message is classified into one controlled vocabulary — the same eight labels the inbox filters on.
+        Anything that doesn't clearly fit is stored as
         <code class="font-mono text-foreground">other</code>, never as a guess dressed up as a fact.
       </p>
     </div>
@@ -212,10 +207,9 @@
         Every reply lands on the application it belongs to.
       </h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
-        A message is attached automatically when the match is certain — the same thread, or the
-        company's name in the sender or the subject. Otherwise it waits as a suggestion you confirm
-        with one click. Either way the correspondence for a role ends up in one place, on the card,
-        instead of scattered across a mailbox.
+        A message is attached automatically when the match is certain — the same thread, or the company's name in the
+        sender or the subject. Otherwise it waits as a suggestion you confirm with one click. Either way the
+        correspondence for a role ends up in one place, on the card, instead of scattered across a mailbox.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
         <Button href={resolve('/my/tracking')} variant="primary" size="lg">Open Tracking</Button>
@@ -273,10 +267,9 @@
         {/each}
       </ol>
       <p class="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-        A confident reply nudges the card forward along that ladder, and only forward. It never walks
-        a card back, never touches an application you already settled as rejected, accepted or
-        withdrawn, and a rejection email never moves a card by itself — the outcome stays yours to
-        record.
+        A confident reply nudges the card forward along that ladder, and only forward. It never walks a card back, never
+        touches an application you already settled as rejected, accepted or withdrawn, and a rejection email never moves
+        a card by itself — the outcome stays yours to record.
       </p>
     </div>
   </section>
@@ -285,12 +278,8 @@
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="what we don't do" />
     <div class="mt-6 max-w-2xl">
-      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
-        Handing over your mail is a big ask.
-      </h2>
-      <p class="mt-5 leading-relaxed text-muted-foreground">
-        So here is the shape of it, written down.
-      </p>
+      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Handing over your mail is a big ask.</h2>
+      <p class="mt-5 leading-relaxed text-muted-foreground">So here is the shape of it, written down.</p>
     </div>
     <NumberedGrid items={promises} class="mt-10 sm:grid-cols-2" />
   </section>
@@ -300,23 +289,19 @@
     <SectionLabel text="for agents" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
-        <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
-          Bring your own mail client.
-        </h2>
+        <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Bring your own mail client.</h2>
         <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          The whole inbox is in the freehire CLI, so your own client — himalaya, mbsync, anything
-          that speaks IMAP — can fetch the mail and hand it over with
-          <code class="font-mono text-foreground">inbox push</code>. Each message is keyed by its
-          Message-ID, so a nightly re-sync updates rather than duplicates. freehire stores it, links
-          it and shows it on the board like any other message, but never classifies it: that tier
-          costs nothing to run and nothing to use.
+          The whole inbox is in the freehire CLI, so your own client — himalaya, mbsync, anything that speaks IMAP — can
+          fetch the mail and hand it over with
+          <code class="font-mono text-foreground">inbox push</code>. Each message is keyed by its Message-ID, so a
+          nightly re-sync updates rather than duplicates. freehire stores it, links it and shows it on the board like
+          any other message, but never classifies it: that tier costs nothing to run and nothing to use.
         </p>
         <p class="mt-4 max-w-md leading-relaxed text-muted-foreground">
-          <code class="font-mono text-foreground">inbox list --unclassified --body</code> is then
-          your agent's work queue — a whole page of messages to judge in one call, and unlike
+          <code class="font-mono text-foreground">inbox list --unclassified --body</code> is then your agent's work
+          queue — a whole page of messages to judge in one call, and unlike
           <code class="font-mono text-foreground">inbox read</code> it marks nothing read.
-          <code class="font-mono text-foreground">inbox triage</code> records the verdict and moves
-          the application's stage.
+          <code class="font-mono text-foreground">inbox triage</code> records the verdict and moves the application's stage.
         </p>
         <div class="mt-8 flex flex-wrap gap-3">
           <Button href={resolve('/cli')} variant="primary" size="lg">Get the CLI</Button>
@@ -329,7 +314,9 @@
           <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
           terminal
         </figcaption>
-        <pre class="overflow-x-auto p-4 leading-relaxed"><span class="text-muted-foreground"># hand over a batch your client fetched (external_id = Message-ID,</span>
+        <pre class="overflow-x-auto p-4 leading-relaxed"><span class="text-muted-foreground"
+            ># hand over a batch your client fetched (external_id = Message-ID,</span
+          >
 <span class="text-muted-foreground"># so re-pushing updates instead of duplicating)</span>
 freehire <span class="text-foreground">inbox push --file mail.json</span>
 
@@ -340,8 +327,12 @@ freehire <span class="text-foreground">inbox list --unclassified --body</span>
 freehire <span class="text-foreground">inbox triage &lt;id&gt; interview_invitation --slug &lt;job&gt;</span>
 
 <span class="text-muted-foreground"># the queues the matcher won't guess at</span>
-freehire <span class="text-foreground">inbox list --link suggested</span>   <span class="text-muted-foreground"># confirm / reject</span>
-freehire <span class="text-foreground">inbox list --link unlinked</span>    <span class="text-muted-foreground"># inbox application</span></pre>
+freehire <span class="text-foreground">inbox list --link suggested</span>   <span class="text-muted-foreground"
+            ># confirm / reject</span
+          >
+freehire <span class="text-foreground">inbox list --link unlinked</span>    <span class="text-muted-foreground"
+            ># inbox application</span
+          ></pre>
       </figure>
     </div>
   </section>
@@ -349,9 +340,7 @@ freehire <span class="text-foreground">inbox list --link unlinked</span>    <spa
   <!-- FAQ. The visible answers and the FAQPage JSON-LD share INBOX_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="faq" />
-    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
-      Frequently asked questions.
-    </h2>
+    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Frequently asked questions.</h2>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each INBOX_FAQ as item (item.question)}
         <div class="bg-background p-6 sm:p-7">
@@ -367,8 +356,8 @@ freehire <span class="text-foreground">inbox list --link unlinked</span>    <spa
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
       <h2 class="text-2xl font-semibold tracking-tight">Stop guessing where you stand.</h2>
       <p class="max-w-xl leading-relaxed text-muted-foreground">
-        Claim your freehire address, apply with it, and watch the replies sort themselves onto your
-        board. It's free, like the rest of freehire.
+        Claim your freehire address, apply with it, and watch the replies sort themselves onto your board. It's free,
+        like the rest of freehire.
       </p>
       <div class="flex flex-wrap gap-3">
         <Button href={resolve('/my/inbox')} variant="primary" size="lg">Open your inbox</Button>

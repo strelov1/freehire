@@ -91,7 +91,9 @@
 </script>
 
 <h2 class="text-xl font-semibold tracking-tight text-balance">What's hardest about your job search right now?</h2>
-<p class="mt-1 text-sm text-muted-foreground text-pretty">Pick all that apply — we'll show you what on freehire helps.</p>
+<p class="mt-1 text-sm text-muted-foreground text-pretty">
+  Pick all that apply — we'll show you what on freehire helps.
+</p>
 
 <div class="mt-6 grid items-start gap-5 md:grid-cols-2">
   <div role="group" aria-label="The hardest parts of your job search" class="flex flex-col gap-1.5">
@@ -107,7 +109,10 @@
           on ? 'border-brand bg-brand-muted/50 font-medium' : 'border-border bg-card hover:bg-accent',
         ]}
       >
-        <AnswerIcon class={['size-4 shrink-0', on ? 'text-brand-strong' : 'text-muted-foreground']} aria-hidden="true" />
+        <AnswerIcon
+          class={['size-4 shrink-0', on ? 'text-brand-strong' : 'text-muted-foreground']}
+          aria-hidden="true"
+        />
         <span class="flex-1">{o.label}</span>
         {#if on}<Check class="size-4 shrink-0 text-brand-strong" aria-hidden="true" />{/if}
       </button>
@@ -135,7 +140,11 @@
           {@const TipGlyph = TIP_ICONS[t.icon]}
           <li>
             <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- tips carry a site path with its query; resolve() takes a route, not a URL -->
-            <a href={t.href} target="_blank" class="group flex items-start gap-3 rounded-lg px-1 py-3 transition-colors hover:bg-card">
+            <a
+              href={t.href}
+              target="_blank"
+              class="group flex items-start gap-3 rounded-lg px-1 py-3 transition-colors hover:bg-card"
+            >
               <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-muted text-brand-strong">
                 <TipGlyph class="size-4.5" aria-hidden="true" />
               </span>

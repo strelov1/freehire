@@ -13,7 +13,12 @@
   import { filtersToParams } from '#lib/filters.js';
   import { promptSignIn } from '#lib/signin.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';
-  import { lookupIndustry, isIndustryMiss, searchIndustries, seedDictionaryReturnParams } from '#lib/dictionaryIndustry.js';
+  import {
+    lookupIndustry,
+    isIndustryMiss,
+    searchIndustries,
+    seedDictionaryReturnParams,
+  } from '#lib/dictionaryIndustry.js';
 
   type Kind = 'specialization' | 'skill' | 'industry';
 
@@ -124,7 +129,8 @@
   <header class="mb-6">
     <h1 class="text-2xl font-semibold tracking-tight">Explore the dictionaries</h1>
     <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      Search the specializations and skills we recognize in job posts, or the industries we use to classify companies. If a term is missing, request it for review.
+      Search the specializations and skills we recognize in job posts, or the industries we use to classify companies.
+      If a term is missing, request it for review.
     </p>
   </header>
 
@@ -186,7 +192,10 @@
   {#if jobsQuery}
     <div class="sticky bottom-4 mt-8 flex justify-end">
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string -->
-      <a href={`${resolve('/jobs')}?${jobsQuery}`} class="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background shadow">
+      <a
+        href={`${resolve('/jobs')}?${jobsQuery}`}
+        class="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background shadow"
+      >
         Show jobs
       </a>
     </div>

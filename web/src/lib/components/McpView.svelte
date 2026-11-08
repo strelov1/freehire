@@ -38,8 +38,8 @@
       Search jobs right inside your AI assistant.
     </h1>
     <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-      {MCP_CATALOG_PITCH} Find your next role inside Claude, ChatGPT or your coding assistant.
-      Start without an account, then connect with OAuth to save your shortlist, track applications and manage alerts.
+      {MCP_CATALOG_PITCH} Find your next role inside Claude, ChatGPT or your coding assistant. Start without an account, then
+      connect with OAuth to save your shortlist, track applications and manage alerts.
     </p>
     <AgentSetupButton />
   </div>
@@ -72,8 +72,8 @@
     <li>Without sign-in it cannot see or change anything of yours.</li>
     <li>
       With your account it reads your profile and tracked jobs, and saves, marks applied or moves jobs on your board —
-      never another person's. It can also manage alerts, suggest missing dictionary terms and report problems.
-      Automatic applications require your permission, a supported employer form and review before submission.
+      never another person's. It can also manage alerts, suggest missing dictionary terms and report problems. Automatic
+      applications require your permission, a supported employer form and review before submission.
     </li>
   </ul>
   <p class="mt-8 text-sm leading-relaxed text-muted-foreground">

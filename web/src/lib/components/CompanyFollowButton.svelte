@@ -23,15 +23,11 @@
 
   // The canonical query standing for "only this company", produced the same way the
   // filters panel and cmd/notify build it — so a matching saved search is recognised.
-  const companyQuery = $derived(
-    canonicalQuery(new URLSearchParams({ company_slug: slug }).toString()),
-  );
+  const companyQuery = $derived(canonicalQuery(new URLSearchParams({ company_slug: slug }).toString()));
 
   const telegram = $derived(notifications.telegram);
   // The saved search that is exactly this company filter, if any (reused on follow).
-  const savedSearch = $derived(
-    savedSearches.items.find((s) => canonicalQuery(s.query) === companyQuery),
-  );
+  const savedSearch = $derived(savedSearches.items.find((s) => canonicalQuery(s.query) === companyQuery));
   const sub = $derived(savedSearch ? notifications.forSavedSearch(savedSearch.id) : undefined);
   const subscribed = $derived(!!sub);
 
@@ -97,12 +93,7 @@
 {#if !isAuthenticated() || telegram.enabled}
   <div class="flex flex-col items-end gap-1">
     {#if isAuthenticated() && !telegram.linked}
-      <Button
-        variant="outline"
-        size="sm"
-        href={resolve('/my/integrations')}
-        aria-label="Connect Telegram to follow"
-      >
+      <Button variant="outline" size="sm" href={resolve('/my/integrations')} aria-label="Connect Telegram to follow">
         <Bell class="size-4" aria-hidden="true" />
         <!-- Icon-only on mobile; aria-label keeps the name the sm+ label shows. -->
         <span class="hidden sm:inline">Connect Telegram to follow</span>

@@ -64,10 +64,7 @@
   }
 </script>
 
-<svelte:window
-  onclick={onWindowClick}
-  onkeydown={(e) => e.key === 'Escape' && (open = false)}
-/>
+<svelte:window onclick={onWindowClick} onkeydown={(e) => e.key === 'Escape' && (open = false)} />
 
 <!-- Signed in, the profile trigger lives here on wide screens only (the consolidated menu
      carries it on a phone). Signed out, Sign in shows at every width: a first-time visitor
@@ -146,4 +143,3 @@
     </button>
   {/if}
 </div>
-

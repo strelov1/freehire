@@ -12,9 +12,7 @@ describe('ApiPlanPanel', () => {
   it('names the product and its expiry for a subscriber', async () => {
     getApiPlan.mockResolvedValue({ tier: 'api', until: '2026-11-19T12:00:00Z' });
     render(ApiPlanPanel);
-    expect(
-      await screen.findByText('API plan active until November 19, 2026.'),
-    ).toBeTruthy();
+    expect(await screen.findByText('API plan active until November 19, 2026.')).toBeTruthy();
   });
 
   it('drops the date when the server sent none it can read', async () => {
@@ -29,5 +27,4 @@ describe('ApiPlanPanel', () => {
     const link = await screen.findByRole('link', { name: 'See API plans' });
     expect(link.getAttribute('href')).toBe('/pricing#api');
   });
-
 });

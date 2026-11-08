@@ -15,7 +15,7 @@
     {
       n: '01',
       title: 'Maps the real form',
-      body: "Every question on the page, custom dropdowns that are not real select elements included, read off the live DOM and shown as a checklist. It counts the required ones, because those are what gate submission.",
+      body: 'Every question on the page, custom dropdowns that are not real select elements included, read off the live DOM and shown as a checklist. It counts the required ones, because those are what gate submission.',
     },
     {
       n: '02',
@@ -85,9 +85,9 @@
         Apply where you already are.
       </h1>
       <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-        A job-application agent in your browser's side panel, sitting next to the posting you are reading.
-        It reads that page itself, tells you where you fall short of it, and fills the application
-        form from your profile — on any site, not just the ones freehire tracks.
+        A job-application agent in your browser's side panel, sitting next to the posting you are reading. It reads that
+        page itself, tells you where you fall short of it, and fills the application form from your profile — on any
+        site, not just the ones freehire tracks.
       </p>
       <div class="mt-8 flex flex-wrap gap-2">
         {#each EXTENSION_CLAIMS as claim (claim)}
@@ -122,14 +122,14 @@
           Know whether you fit, before you apply.
         </h2>
         <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          The panel scores the posting against your freehire profile and names both halves of the
-          answer: the requirements your history covers, and the ones it does not. Not a model's
-          impression of your chances — a coverage count you can read line by line and disagree with.
+          The panel scores the posting against your freehire profile and names both halves of the answer: the
+          requirements your history covers, and the ones it does not. Not a model's impression of your chances — a
+          coverage count you can read line by line and disagree with.
         </p>
         <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          It works on a posting freehire has never seen, too. On a page outside the catalogue the
-          card still scores; the actions that need a catalogue entry — saving it, running the full
-          match analysis — are simply not shown rather than offered and then failing.
+          It works on a posting freehire has never seen, too. On a page outside the catalogue the card still scores; the
+          actions that need a catalogue entry — saving it, running the full match analysis — are simply not shown rather
+          than offered and then failing.
         </p>
         <div class="mt-8 flex flex-wrap gap-3">
           <Button href={EXTENSION_STORE_URL} target="_blank" variant="primary" size="lg">
@@ -140,9 +140,7 @@
             <ProviderIcon provider="firefox" class="size-4" />
             Add to Firefox
           </Button>
-          <Button href={resolve('/features/tailor')} variant="ghost" size="lg">
-            Then tailor the CV
-          </Button>
+          <Button href={resolve('/features/tailor')} variant="ghost" size="lg">Then tailor the CV</Button>
         </div>
       </div>
 
@@ -161,7 +159,9 @@
             <SectionLabel text="you have" />
             <div class="mt-2.5 flex flex-wrap gap-1.5">
               {#each ['Distributed systems', 'Kafka', 'Postgres', 'AWS', 'Go'] as skill (skill)}
-                <span class="rounded-md border border-success-strong/50 px-2 py-0.5 font-mono text-xs text-success-strong">
+                <span
+                  class="rounded-md border border-success-strong/50 px-2 py-0.5 font-mono text-xs text-success-strong"
+                >
                   {skill}
                 </span>
               {/each}
@@ -189,13 +189,10 @@
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="autofill" />
     <div class="mt-6 max-w-2xl">
-      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
-        It reads the form and fills it in. You send it.
-      </h2>
+      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">It reads the form and fills it in. You send it.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
-        The thirty-first time you type your own phone number, the application stops being about the
-        job. The panel takes that part — and does it slowly enough that you can watch, which is the
-        point rather than a limitation.
+        The thirty-first time you type your own phone number, the application stops being about the job. The panel takes
+        that part — and does it slowly enough that you can watch, which is the point rather than a limitation.
       </p>
     </div>
     <NumberedGrid items={autofill} class="mt-10 sm:grid-cols-2" />
@@ -203,7 +200,9 @@
     <div class="mt-10 grid gap-10 lg:grid-cols-2 lg:items-center">
       <!-- The checklist, as the panel keeps it. -->
       <figure class="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-        <figcaption class="flex items-center justify-between border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
+        <figcaption
+          class="flex items-center justify-between border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
+        >
           <span>Application form</span>
           <span class="tabular-nums">32 of 33 required answered</span>
         </figcaption>
@@ -226,14 +225,14 @@
       <div>
         <h3 class="text-2xl font-semibold tracking-tight">It knows what is not an application.</h3>
         <p class="mt-4 leading-relaxed text-muted-foreground">
-          The filler only engages on a page carrying the marks of a real application — a CV upload
-          among them. That is what stops a newsletter box or a job-alert signup from being written
-          into on a careers page that happens to have one.
+          The filler only engages on a page carrying the marks of a real application — a CV upload among them. That is
+          what stops a newsletter box or a job-alert signup from being written into on a careers page that happens to
+          have one.
         </p>
         <p class="mt-4 leading-relaxed text-muted-foreground">
-          The checklist appears on a looser test, because the screening questions on step two of an
-          ATS form have no upload and are exactly where the count is most wanted. Nothing is ever
-          typed on the strength of that looser test.
+          The checklist appears on a looser test, because the screening questions on step two of an ATS form have no
+          upload and are exactly where the count is most wanted. Nothing is ever typed on the strength of that looser
+          test.
         </p>
       </div>
     </div>
@@ -244,17 +243,15 @@
     <SectionLabel text="the agent" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
-        <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
-          Ask about the page in front of you.
-        </h2>
+        <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Ask about the page in front of you.</h2>
         <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          You do not hand the posting over, and there is no "read this page" button to remember.
-          Ask whether it is a fit and the agent reads the tab itself, because the question needed it.
+          You do not hand the posting over, and there is no "read this page" button to remember. Ask whether it is a fit
+          and the agent reads the tab itself, because the question needed it.
         </p>
         <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          Every read is named in the conversation as it happens, so a read you did not expect is one
-          you can see. The address is shown without its query or fragment — that is where session
-          tokens live, and they have no business in a transcript.
+          Every read is named in the conversation as it happens, so a read you did not expect is one you can see. The
+          address is shown without its query or fragment — that is where session tokens live, and they have no business
+          in a transcript.
         </p>
       </div>
 
@@ -272,16 +269,15 @@
             ⏺ read_current_page <span class="text-muted-foreground">— careers.example.com</span>
           </p>
           <p class="leading-relaxed">
-            Close. They want <span class="rounded bg-secondary px-1">Scala on the JVM</span> and you have
-            neither, which is the one gap a screener will catch. The rest lines up: distributed
-            systems, streaming data, AWS.
+            Close. They want <span class="rounded bg-secondary px-1">Scala on the JVM</span> and you have neither, which is
+            the one gap a screener will catch. The rest lines up: distributed systems, streaming data, AWS.
           </p>
           <p class="font-mono text-xs text-brand">
             ⏺ read_profile <span class="text-muted-foreground">— your CV</span>
           </p>
           <p class="leading-relaxed">
-            Your Kafka work is the closest thing you have to their throughput requirement. Lead with
-            it, and say plainly that the JVM is a gap you would close.
+            Your Kafka work is the closest thing you have to their throughput requirement. Lead with it, and say plainly
+            that the JVM is a gap you would close.
           </p>
           <div class="mt-1 flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
             <span class="flex-1 rounded-lg border border-border px-3 py-2">Message the agent…</span>
@@ -298,9 +294,9 @@
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">On the page you are on.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
-        Applications live on arbitrary hosts, so the panel works against the tab you opened it over
-        rather than a list of sites we recognise. The form reader works off the live DOM — which
-        makes an unfamiliar career page the same case as a familiar vendor, not a gap.
+        Applications live on arbitrary hosts, so the panel works against the tab you opened it over rather than a list
+        of sites we recognise. The form reader works off the live DOM — which makes an unfamiliar career page the same
+        case as a familiar vendor, not a gap.
       </p>
     </div>
     <div class="mt-8 flex flex-wrap gap-2">
@@ -319,12 +315,10 @@
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="what it can and cannot see" />
     <div class="mt-6 max-w-2xl">
-      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
-        Nothing is read in the background.
-      </h2>
+      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Nothing is read in the background.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
-        An extension that can see every page is worth being suspicious of. These three bounds are
-        properties of how it is built, which is why they are worth stating rather than promising.
+        An extension that can see every page is worth being suspicious of. These three bounds are properties of how it
+        is built, which is why they are worth stating rather than promising.
       </p>
     </div>
     <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
@@ -336,8 +330,8 @@
       {/each}
     </div>
     <p class="mt-6 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-      Everything the extension sends goes to freehire and nowhere else. There is no analytics
-      endpoint on the side, and no second host in the manifest.
+      Everything the extension sends goes to freehire and nowhere else. There is no analytics endpoint on the side, and
+      no second host in the manifest.
     </p>
   </section>
 
@@ -350,9 +344,7 @@
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share EXTENSION_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="faq" />
-    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
-      Frequently asked questions.
-    </h2>
+    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Frequently asked questions.</h2>
     <!-- An odd entry count would leave the last row half empty, which in a hairline
          grid reads as a slab of border colour. The last answer fills the row instead. -->
     <dl
@@ -372,8 +364,7 @@
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
       <h2 class="text-2xl font-semibold tracking-tight">Put it beside the next posting you open.</h2>
       <p class="max-w-xl leading-relaxed text-muted-foreground">
-        Free, and it works on whatever page you are already on — including the ones freehire does not
-        track.
+        Free, and it works on whatever page you are already on — including the ones freehire does not track.
       </p>
       <div class="flex flex-wrap gap-3">
         <Button href={EXTENSION_STORE_URL} target="_blank" variant="primary" size="lg">

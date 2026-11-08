@@ -10,7 +10,13 @@ vi.stubGlobal('matchMedia', (q: string) => ({
   addEventListener() {},
   removeEventListener() {},
 }));
-vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} });
+vi.stubGlobal(
+  'IntersectionObserver',
+  class {
+    observe() {}
+    disconnect() {}
+  },
+);
 
 describe('BuddiesLandingView', () => {
   it('leads with the headline and sends every join button to /buddies', () => {

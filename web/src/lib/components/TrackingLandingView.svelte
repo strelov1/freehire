@@ -114,9 +114,8 @@
       Every application, one board. Nothing falls through.
     </h1>
     <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-      Save what's worth a second look and freehire keeps it visible until it's resolved — through
-      four stages, from Preparing to Offer, with a day-counter when an employer goes quiet and a
-      place for the notes only you need.
+      Save what's worth a second look and freehire keeps it visible until it's resolved — through four stages, from
+      Preparing to Offer, with a day-counter when an employer goes quiet and a place for the notes only you need.
     </p>
     <div class="mt-9 flex flex-wrap items-center gap-3">
       <Button href={resolve('/my/tracking')} variant="primary" size="lg">Open Tracking</Button>
@@ -200,7 +199,10 @@
           <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
           {#if s.href}
             <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal route already passed through resolve() when building `signals`; the linter can't trace it via the variable -->
-            <a href={s.href} class="mt-4 inline-block text-sm font-medium text-foreground underline-offset-4 hover:underline">
+            <a
+              href={s.href}
+              class="mt-4 inline-block text-sm font-medium text-foreground underline-offset-4 hover:underline"
+            >
               {s.cta} →
             </a>
           {/if}
@@ -214,16 +216,17 @@
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="nudges" />
     <div class="mt-6 max-w-2xl">
-      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
-        It follows up before you have to remember to.
-      </h2>
+      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">It follows up before you have to remember to.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
-        The same silence a card's day-counter shows also goes out as a nudge — over email,
-        Telegram or push — so a stalled application doesn't just sit there. See what that looks
-        like on the <a href={resolve('/features/notifications')} class="font-medium text-foreground underline-offset-4 hover:underline">Notifications</a> page.
+        The same silence a card's day-counter shows also goes out as a nudge — over email, Telegram or push — so a
+        stalled application doesn't just sit there. See what that looks like on the <a
+          href={resolve('/features/notifications')}
+          class="font-medium text-foreground underline-offset-4 hover:underline">Notifications</a
+        > page.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
-        <Button href={resolve('/features/notifications')} variant="primary" size="lg">See how notifications work</Button>
+        <Button href={resolve('/features/notifications')} variant="primary" size="lg">See how notifications work</Button
+        >
         <Button href={resolve('/my/notifications/settings')} variant="ghost" size="lg">Notification settings</Button>
       </div>
     </div>
@@ -235,9 +238,9 @@
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">See where every application lands.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
-        As cards move through the board, freehire rolls them into one funnel — how many are still in
-        Preparing, sitting in Applied, in an active Interview loop, or turned into an Offer. Whatever
-        settled moves to Closed: out of the active board, never erased.
+        As cards move through the board, freehire rolls them into one funnel — how many are still in Preparing, sitting
+        in Applied, in an active Interview loop, or turned into an Offer. Whatever settled moves to Closed: out of the
+        active board, never erased.
       </p>
     </div>
     <figure class="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
@@ -260,7 +263,9 @@
         Same applications, four tabs. Switch when the board isn't the shape you need right now.
       </p>
     </div>
-    <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+    <div
+      class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4"
+    >
       {#each views as v (v.key)}
         <div class="bg-background p-6">
           <h3 class="text-sm font-semibold tracking-tight">{v.title}</h3>
@@ -279,8 +284,8 @@
           Or let a script keep the board current.
         </h2>
         <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          The freehire CLI drives the same board with one API key — save, apply, move a stage, leave a
-          note — so your own agent can keep it current without a browser.
+          The freehire CLI drives the same board with one API key — save, apply, move a stage, leave a note — so your
+          own agent can keep it current without a browser.
         </p>
         <div class="mt-8 flex flex-wrap gap-3">
           <Button href={resolve('/cli')} variant="primary" size="lg">Explore the CLI</Button>
@@ -292,7 +297,9 @@
           <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
           terminal
         </figcaption>
-        <pre class="overflow-x-auto p-4 leading-relaxed"><span class="text-muted-foreground"># save or apply — either starts tracking it</span>
+        <pre class="overflow-x-auto p-4 leading-relaxed"><span class="text-muted-foreground"
+            ># save or apply — either starts tracking it</span
+          >
 freehire <span class="text-foreground">apply &lt;slug&gt;</span>
 freehire <span class="text-foreground">save &lt;slug&gt;</span>
 
@@ -324,8 +331,8 @@ freehire <span class="text-foreground">note &lt;slug&gt; "referred by a former t
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
       <h2 class="text-2xl font-semibold tracking-tight">Stop losing track of where you applied.</h2>
       <p class="max-w-xl leading-relaxed text-muted-foreground">
-        Save the next job worth a second look and it's on the board — Preparing, Applied, Interview,
-        Offer, tracked from there on.
+        Save the next job worth a second look and it's on the board — Preparing, Applied, Interview, Offer, tracked from
+        there on.
       </p>
       <div class="flex flex-wrap gap-3">
         <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>

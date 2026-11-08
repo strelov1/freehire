@@ -29,9 +29,7 @@
   const PANEL_ID = 'activity-tabpanel';
 
   const active = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'saved'));
-  const tabs = $derived(
-    SECTIONS.map((sec) => ({ ...sec, label: s.tabs[sec.id], href: resolve(sec.href) })),
-  );
+  const tabs = $derived(SECTIONS.map((sec) => ({ ...sec, label: s.tabs[sec.id], href: resolve(sec.href) })));
 </script>
 
 <svelte:head>

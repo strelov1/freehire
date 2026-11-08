@@ -10,16 +10,28 @@ vi.mock('$app/state', () => ({ page: { data: { locale: 'en' } } }));
 const getTrackedApplication = vi.hoisted(() => vi.fn());
 vi.mock('#lib/api.js', () => ({ api: { getTrackedApplication } }));
 const item: MyJob = {
-  id: 'track-1', company_slug: 'acme', role_title: 'Engineer',
+  id: 'track-1',
+  company_slug: 'acme',
+  role_title: 'Engineer',
   job: { public_slug: 'engineer-acme', company: 'Acme', title: 'Engineer', closed_at: undefined },
-  viewed_at: '', saved_at: '2026-10-01T00:00:00Z', applied_at: null, stage: null,
-  notes: null, email_count: 0, last_activity_at: null, days_silent: null,
-  silence_state: null, followed_up_at: null, cv_opened_at: null,
+  viewed_at: '',
+  saved_at: '2026-10-01T00:00:00Z',
+  applied_at: null,
+  stage: null,
+  notes: null,
+  email_count: 0,
+  last_activity_at: null,
+  days_silent: null,
+  silence_state: null,
+  followed_up_at: null,
+  cv_opened_at: null,
 };
 beforeEach(() => getTrackedApplication.mockReset());
 
 it('fetches a plain-text preview on keyboard focus, caches it, and dismisses on Escape', async () => {
-  getTrackedApplication.mockResolvedValue({ job: { description: '<p>Build &amp; maintain</p><p>reliable systems.</p>' } });
+  getTrackedApplication.mockResolvedValue({
+    job: { description: '<p>Build &amp; maintain</p><p>reliable systems.</p>' },
+  });
   render(BoardPreview, { item, children });
   expect(getTrackedApplication).not.toHaveBeenCalled();
   const card = screen.getByRole('button', { name: 'Open Engineer at Acme' });
@@ -35,7 +47,9 @@ it('fetches a plain-text preview on keyboard focus, caches it, and dismisses on 
 });
 
 it('shows unavailable on failure, and permits a later retry', async () => {
-  getTrackedApplication.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ job: { description: 'Recovered' } });
+  getTrackedApplication
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValue({ job: { description: 'Recovered' } });
   render(BoardPreview, { item, children });
   const card = screen.getByRole('button', { name: 'Open Engineer at Acme' });
   await fireEvent.focusIn(card);
@@ -46,7 +60,9 @@ it('shows unavailable on failure, and permits a later retry', async () => {
 });
 
 it('limits the preview and never interprets description markup as live HTML', async () => {
-  getTrackedApplication.mockResolvedValue({ job: { description: '<script>malicious()</script><p>' + 'x'.repeat(250) + '</p>' } });
+  getTrackedApplication.mockResolvedValue({
+    job: { description: '<script>malicious()</script><p>' + 'x'.repeat(250) + '</p>' },
+  });
   render(BoardPreview, { item, children });
   await fireEvent.focusIn(screen.getByRole('button', { name: 'Open Engineer at Acme' }));
   await waitFor(() => expect(screen.getByRole('tooltip').textContent?.trim()).toBe('x'.repeat(200) + '…'));

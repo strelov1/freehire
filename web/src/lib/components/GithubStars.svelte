@@ -9,10 +9,7 @@
   // full-width drawer row on mobile (icon + "GitHub" label + count pushed right).
   // The count comes from the shared store — the first mounted instance loads it,
   // every other instance just reads it reactively.
-  let {
-    variant = 'inline',
-    class: className = '',
-  }: { variant?: 'inline' | 'row'; class?: string } = $props();
+  let { variant = 'inline', class: className = '' }: { variant?: 'inline' | 'row'; class?: string } = $props();
 
   onMount(() => {
     void githubStars.load();

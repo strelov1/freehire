@@ -68,8 +68,7 @@ export default ts.config(
           // Change-array-by-copy: Safari 16.4. Every call we had ran on an array a
           // `.map`/`.filter`/spread had just produced, so sorting in place is the
           // same thing without the floor on who can open the site.
-          selector:
-            "MemberExpression[property.name=/^(toSorted|toReversed|toSpliced)$/][computed=false]",
+          selector: 'MemberExpression[property.name=/^(toSorted|toReversed|toSpliced)$/][computed=false]',
           message:
             'Not in Safari before 16.4, and a throw here kills the whole module. Use [...x].sort() — or .sort() when the array is already a fresh copy.',
         },

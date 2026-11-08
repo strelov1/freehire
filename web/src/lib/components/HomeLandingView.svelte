@@ -158,13 +158,11 @@
    *
    *  `disjunctive` so each facet's numbers ignore its own selection — the same call
    *  every other host of this modal makes. */
-  const stagedCounts = (params: URLSearchParams) =>
-    api.facetCounts(params, { disjunctive: true });
+  const stagedCounts = (params: URLSearchParams) => api.facetCounts(params, { disjunctive: true });
 
   /** How many postings the staged selection would open, for the footer's Apply — read
    *  off the same count call rather than a one-row search, the way /analytics does. */
-  const previewCount = (params: URLSearchParams) =>
-    api.facetCounts(params).then((c) => c.total);
+  const previewCount = (params: URLSearchParams) => api.facetCounts(params).then((c) => c.total);
 
   function searchWithFilters(staged: StagedFilters) {
     filtersOpen = false;
@@ -178,22 +176,21 @@
      places — and they differ only in what they list, so they are one shape. -->
 {#snippet chipRow(label: string, chips: Chip[])}
   <div class="flex flex-col items-center gap-2">
-  <p class="text-xs uppercase tracking-wide text-muted-foreground/80" aria-hidden="true">{label}</p>
-  <nav aria-label={label} class="flex flex-wrap justify-center gap-2">
-    {#each chips as chip (chip.href)}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->
-      <a href={chip.href}
-        class="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-brand-strong hover:text-foreground"
-      >
-        {chip.label}
-        {#if chip.count !== undefined}
-          <span class="ml-1 text-xs tabular-nums"
-            >{chip.count.toLocaleString('en-US')}</span
-          >
-        {/if}
-      </a>
-    {/each}
-  </nav>
+    <p class="text-xs uppercase tracking-wide text-muted-foreground/80" aria-hidden="true">{label}</p>
+    <nav aria-label={label} class="flex flex-wrap justify-center gap-2">
+      {#each chips as chip (chip.href)}
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->
+        <a
+          href={chip.href}
+          class="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-brand-strong hover:text-foreground"
+        >
+          {chip.label}
+          {#if chip.count !== undefined}
+            <span class="ml-1 text-xs tabular-nums">{chip.count.toLocaleString('en-US')}</span>
+          {/if}
+        </a>
+      {/each}
+    </nav>
   </div>
 {/snippet}
 
@@ -202,7 +199,8 @@
      different-looking ways of saying "there is more of this over there". -->
 {#snippet onward(href: string, text: string)}
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every caller passes a resolve() result; the rule cannot see through a snippet parameter -->
-  <a {href}
+  <a
+    {href}
     class="group inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
   >
     {text}
@@ -238,10 +236,17 @@
            under the box: the box stays the page's only task, and the hero stays two lines. -->
       <p class="text-balance text-base leading-relaxed text-muted-foreground">
         {jobsFigure} live postings. Search them here, from
-        <a href={resolve('/agents')} class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">your AI agent</a>
+        <a
+          href={resolve('/agents')}
+          class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+          >your AI agent</a
+        >
         or through
-        <a href={resolve('/jobs-api')} class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">the API</a>.
-        Free and open source.
+        <a
+          href={resolve('/jobs-api')}
+          class="whitespace-nowrap font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+          >the API</a
+        >. Free and open source.
       </p>
     </div>
 
@@ -345,8 +350,8 @@
       <div class="flex flex-col gap-3">
         <h3 class="text-2xl font-semibold tracking-tight">Apply where you already are.</h3>
         <p class="text-sm leading-relaxed text-muted-foreground">
-          A job-application agent in Chrome's side panel, next to the posting you are
-          reading — on any site, not just the ones freehire tracks.
+          A job-application agent in Chrome's side panel, next to the posting you are reading — on any site, not just
+          the ones freehire tracks.
         </p>
       </div>
 

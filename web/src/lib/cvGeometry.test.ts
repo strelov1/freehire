@@ -158,10 +158,7 @@ describe('paginateBlocks', () => {
   });
 
   it('starts a new page when the next block would overflow', () => {
-    expect(paginateBlocks([400, 400, 400], 1000)).toEqual([
-      [0, 1],
-      [2],
-    ]);
+    expect(paginateBlocks([400, 400, 400], 1000)).toEqual([[0, 1], [2]]);
   });
 
   it('gives a block taller than a whole page its own page', () => {
@@ -232,7 +229,7 @@ describe('fitToWidthZoom', () => {
     expect(A4_WIDTH_PX * z).toBeLessThanOrEqual(574);
   });
 
-  it('shrinks below the buttons\' 50% floor so a phone shows the whole page', () => {
+  it("shrinks below the buttons' 50% floor so a phone shows the whole page", () => {
     expect(fitToWidthZoom(390 - 48)).toBe(0.43);
   });
 

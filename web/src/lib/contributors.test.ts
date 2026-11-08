@@ -44,9 +44,7 @@ describe('contributorGroups', () => {
   });
 
   it('drops an account whose login is marked as a bot', () => {
-    const groups = contributorGroups(
-      snapshot([person({ login: 'aleganza' }), person({ login: 'dependabot[bot]' })]),
-    );
+    const groups = contributorGroups(snapshot([person({ login: 'aleganza' }), person({ login: 'dependabot[bot]' })]));
 
     expect(logins(groups.contributors)).toEqual(['aleganza']);
   });
@@ -121,9 +119,7 @@ describe('contributorGroups', () => {
   // rather than being absent from the site.
   it('keeps a contributor whose only contribution is an issue', () => {
     const groups = contributorGroups(
-      snapshot([
-        person({ login: 'reporter', mergedPullRequests: 0, openedIssues: 3, recentPullRequests: [] }),
-      ]),
+      snapshot([person({ login: 'reporter', mergedPullRequests: 0, openedIssues: 3, recentPullRequests: [] })]),
     );
 
     expect(logins(groups.contributors)).toEqual(['reporter']);
@@ -135,10 +131,7 @@ describe('contributorGroups', () => {
   // merged. Nothing is a contribution the page can name, so the entry is not shown.
   it('drops an entry with no merged pull request and no opened issue', () => {
     const groups = contributorGroups(
-      snapshot([
-        person({ login: 'passer-by', mergedPullRequests: 0, openedIssues: 0 }),
-        person({ login: 'aleganza' }),
-      ]),
+      snapshot([person({ login: 'passer-by', mergedPullRequests: 0, openedIssues: 0 }), person({ login: 'aleganza' })]),
     );
 
     expect(logins(groups.contributors)).toEqual(['aleganza']);
@@ -156,15 +149,11 @@ describe('contributorGroups', () => {
 // would still be green.
 describe('contributionSummary', () => {
   it('names merged pull requests when that is all there is', () => {
-    expect(contributionSummary(person({ mergedPullRequests: 8, openedIssues: 0 }))).toBe(
-      '8 merged pull requests',
-    );
+    expect(contributionSummary(person({ mergedPullRequests: 8, openedIssues: 0 }))).toBe('8 merged pull requests');
   });
 
   it('names opened issues when there is no merged code', () => {
-    expect(contributionSummary(person({ mergedPullRequests: 0, openedIssues: 3 }))).toBe(
-      '3 issues opened',
-    );
+    expect(contributionSummary(person({ mergedPullRequests: 0, openedIssues: 3 }))).toBe('3 issues opened');
   });
 
   it('names both when there are both', () => {
@@ -176,12 +165,8 @@ describe('contributionSummary', () => {
   // Someone's first contribution is the one most likely to be read by them, and "1
   // merged pull requests" is a careless way to greet it.
   it('reads naturally for a single contribution of each kind', () => {
-    expect(contributionSummary(person({ mergedPullRequests: 1, openedIssues: 0 }))).toBe(
-      '1 merged pull request',
-    );
-    expect(contributionSummary(person({ mergedPullRequests: 0, openedIssues: 1 }))).toBe(
-      '1 issue opened',
-    );
+    expect(contributionSummary(person({ mergedPullRequests: 1, openedIssues: 0 }))).toBe('1 merged pull request');
+    expect(contributionSummary(person({ mergedPullRequests: 0, openedIssues: 1 }))).toBe('1 issue opened');
   });
 });
 
@@ -231,9 +216,7 @@ describe('findContributor', () => {
   });
 
   it('does not find an entry with nothing to show', () => {
-    const people = snapshot([
-      person({ login: 'passer-by', mergedPullRequests: 0, openedIssues: 0 }),
-    ]);
+    const people = snapshot([person({ login: 'passer-by', mergedPullRequests: 0, openedIssues: 0 })]);
 
     expect(findContributor(people, 'passer-by')).toBeNull();
   });

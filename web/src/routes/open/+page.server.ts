@@ -38,8 +38,7 @@ async function buildPayload(fetchImpl: typeof fetch) {
     githubStats(fetchImpl),
   ]);
 
-  const value = <T>(r: PromiseSettledResult<T>): T | null =>
-    r.status === 'fulfilled' ? r.value : null;
+  const value = <T>(r: PromiseSettledResult<T>): T | null => (r.status === 'fulfilled' ? r.value : null);
 
   const catalog = value(scale);
   // A degraded snapshot carries the approximate job count and the registry figures;

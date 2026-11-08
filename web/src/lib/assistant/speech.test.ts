@@ -3,11 +3,12 @@ import { transcribe, TranscriptionUnavailable } from './speech';
 
 /** Stub `fetch`, returning what it was called with so the request can be asserted. */
 function stubFetch(status: number, body: unknown) {
-  const spy = vi.fn(async () =>
-    new Response(typeof body === 'string' ? body : JSON.stringify(body), {
-      status,
-      headers: { 'content-type': 'application/json' },
-    }),
+  const spy = vi.fn(
+    async () =>
+      new Response(typeof body === 'string' ? body : JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      }),
   );
   vi.stubGlobal('fetch', spy);
   return spy;
@@ -37,9 +38,7 @@ describe('transcribe', () => {
 
   it('reports an unconfigured gateway as its own type, not as a failure', async () => {
     stubFetch(501, { error: 'transcription is not configured' });
-    await expect(transcribe(new Blob(['opus']), 'a.webm')).rejects.toBeInstanceOf(
-      TranscriptionUnavailable,
-    );
+    await expect(transcribe(new Blob(['opus']), 'a.webm')).rejects.toBeInstanceOf(TranscriptionUnavailable);
   });
 
   it('explains a throttled caller rather than showing them a status code', async () => {

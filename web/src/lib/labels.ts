@@ -36,9 +36,7 @@ const REGIONS: { code: string; short: string }[] = [
   { code: 'cis', short: 'CIS' },
 ];
 
-export const REGION_LABELS: Record<string, string> = Object.fromEntries(
-  REGIONS.map((r) => [r.code, r.short]),
-);
+export const REGION_LABELS: Record<string, string> = Object.fromEntries(REGIONS.map((r) => [r.code, r.short]));
 
 export const SENIORITY_LABELS: Record<string, string> = { c_level: 'C-level' };
 
@@ -79,7 +77,14 @@ export const SOURCE_TYPE_LABELS: Record<string, string> = {
 // English proficiency levels (vocab.EnglishLevelValues); `none` is the
 // no-requirement sentinel — detail pages filter it out before rendering.
 export const ENGLISH_LEVEL_LABELS: Record<string, string> = {
-  a1: 'A1', a2: 'A2', b1: 'B1', b2: 'B2', c1: 'C1', c2: 'C2', native: 'Native', none: 'None',
+  a1: 'A1',
+  a2: 'A2',
+  b1: 'B1',
+  b2: 'B2',
+  c1: 'C1',
+  c2: 'C2',
+  native: 'Native',
+  none: 'None',
 };
 
 export const EMPLOYMENT_LABELS: Record<string, string> = {

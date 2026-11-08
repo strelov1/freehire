@@ -1,12 +1,5 @@
 import { listPosts } from '#lib/blogPosts.js';
-import {
-  STATIC_PATHS,
-  blogPaths,
-  collectionPaths,
-  contributorPaths,
-  urlsetXml,
-  xmlResponse,
-} from '#lib/sitemap.js';
+import { STATIC_PATHS, blogPaths, collectionPaths, contributorPaths, urlsetXml, xmlResponse } from '#lib/sitemap.js';
 import type { PathEntry } from '#lib/sitemap.js';
 import type { RequestHandler } from './$types';
 
@@ -18,11 +11,7 @@ import type { RequestHandler } from './$types';
 // neither has a date we can state honestly, and a made-up one teaches crawlers to
 // ignore the field everywhere.
 export const GET: RequestHandler = ({ url }) => {
-  const undated: PathEntry[] = [
-    ...STATIC_PATHS,
-    ...collectionPaths(),
-    ...contributorPaths(),
-  ].map((path) => ({ path }));
+  const undated: PathEntry[] = [...STATIC_PATHS, ...collectionPaths(), ...contributorPaths()].map((path) => ({ path }));
   const entries = [...undated, ...blogPaths(listPosts())].map(({ path, lastmod }) => ({
     loc: `${url.origin}${path}`,
     lastmod,

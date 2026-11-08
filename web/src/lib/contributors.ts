@@ -110,10 +110,7 @@ export function contributionSummary(entry: ContributorEntry): string {
  *
  *  Matched case-insensitively because GitHub logins are, so a link shared with
  *  different casing reaches the page instead of a 404. */
-export function findContributor(
-  snapshot: ContributorsSnapshot,
-  login: string,
-): ContributorEntry | null {
+export function findContributor(snapshot: ContributorsSnapshot, login: string): ContributorEntry | null {
   const wanted = login.toLowerCase();
   const { maintainers, contributors } = contributorGroups(snapshot);
 

@@ -10,5 +10,8 @@ export const load: PageServerLoad = async ({ parent, url, fetch, request }) => {
   if (!user) {
     redirect(302, signinUrl({ returnTo: url.pathname + url.search, cancelTo: '/', mode: 'login' }));
   }
-  return { board: await loadBoard(fetch, request.headers.get('cookie')), initialId: url.searchParams.get('application') ?? undefined };
+  return {
+    board: await loadBoard(fetch, request.headers.get('cookie')),
+    initialId: url.searchParams.get('application') ?? undefined,
+  };
 };

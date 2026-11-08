@@ -15,16 +15,22 @@ interface ErrorTelemetryOptions {
 // Only exception fields enter telemetry. Never serialize a thrown object, a request,
 // or a rejection value: these often contain API responses or personal input.
 function sanitize(value: string, limit: number): string {
-  return value.slice(0, limit * 2)
+  return value
+    .slice(0, limit * 2)
     .replace(/(?:https?|file|chrome-extension|moz-extension):\/\/[^\s)"'<>]+/gi, (raw) => {
       try {
         const url = new URL(raw);
         return `${url.protocol}//${url.host}${url.pathname}`;
-      } catch { return '[url]'; }
+      } catch {
+        return '[url]';
+      }
     })
     .replace(/\bBearer\s+\S+/gi, 'Bearer [redacted]')
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]')
-    .replace(/\b[a-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key|authorization|credentials?)["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|(?:(?:basic|bearer)\s+)?[^\s,;"']+)/gi, '[redacted]')
+    .replace(
+      /\b[a-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key|authorization|credentials?)["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|(?:(?:basic|bearer)\s+)?[^\s,;"']+)/gi,
+      '[redacted]',
+    )
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[token]')
     .slice(0, limit);
 }
@@ -40,12 +46,21 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         'deployment.environment.name': options.environment || 'development',
       }),
       logRecordLimits: { attributeCountLimit: 8, attributeValueLengthLimit: 8192 },
-      processors: [new BatchLogRecordProcessor({
-        exporter: options.exporter ?? new OTLPLogExporter({ url: options.endpoint, timeoutMillis: 3000, concurrencyLimit: 1 }),
-        maxQueueSize: 20, maxExportBatchSize: 5, scheduledDelayMillis: 500, exportTimeoutMillis: 3000,
-      })],
+      processors: [
+        new BatchLogRecordProcessor({
+          exporter:
+            options.exporter ??
+            new OTLPLogExporter({ url: options.endpoint, timeoutMillis: 3000, concurrencyLimit: 1 }),
+          maxQueueSize: 20,
+          maxExportBatchSize: 5,
+          scheduledDelayMillis: 500,
+          exportTimeoutMillis: 3000,
+        }),
+      ],
     });
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
   const logger = provider.getLogger('freehire.errors');
   const seen = new Set<string>();
   let windowStart = Date.now();
@@ -69,7 +84,9 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         if (seen.size >= 20 || seen.has(key)) return;
         seen.add(key);
         logger.emit({
-          severityNumber: SeverityNumber.ERROR, severityText: 'ERROR', body: 'Unhandled exception',
+          severityNumber: SeverityNumber.ERROR,
+          severityText: 'ERROR',
+          body: 'Unhandled exception',
           attributes: {
             'event.name': 'exception',
             'exception.type': sanitize(type, 128),
@@ -77,20 +94,42 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
             'exception.stacktrace': stack,
           },
         });
-      } catch { /* Reporting must never become an application error. */ }
+      } catch {
+        /* Reporting must never become an application error. */
+      }
     },
-    async flush() { try { await provider.forceFlush({ timeoutMillis: 3000 }); } catch { /* Best effort. */ } },
-    async shutdown() { try { await provider.shutdown(); } catch { /* Best effort. */ } },
+    async flush() {
+      try {
+        await provider.forceFlush({ timeoutMillis: 3000 });
+      } catch {
+        /* Best effort. */
+      }
+    },
+    async shutdown() {
+      try {
+        await provider.shutdown();
+      } catch {
+        /* Best effort. */
+      }
+    },
   };
 }
 
 type ErrorTelemetry = ReturnType<typeof createErrorTelemetry>;
 
 /** A provenance predicate is required in content scripts sharing a host page. */
-export function installErrorListeners(target: EventTarget, telemetry: Pick<NonNullable<ErrorTelemetry>, 'capture'> | undefined, owns?: (error: Error, filename: string) => boolean) {
+export function installErrorListeners(
+  target: EventTarget,
+  telemetry: Pick<NonNullable<ErrorTelemetry>, 'capture'> | undefined,
+  owns?: (error: Error, filename: string) => boolean,
+) {
   target.addEventListener('error', (event) => {
     const failure = event as ErrorEvent;
-    if (failure.error != null && (!owns || (failure.error instanceof Error && owns(failure.error, failure.filename || '')))) telemetry?.capture(failure.error);
+    if (
+      failure.error != null &&
+      (!owns || (failure.error instanceof Error && owns(failure.error, failure.filename || '')))
+    )
+      telemetry?.capture(failure.error);
   });
   target.addEventListener('unhandledrejection', (event) => {
     const reason: unknown = (event as PromiseRejectionEvent).reason;

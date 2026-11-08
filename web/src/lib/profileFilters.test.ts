@@ -56,9 +56,7 @@ describe('filtersFromProfile', () => {
     expect(intern.get('experience_only_seniority_unspecified')).toBe('true');
     expect(intern.has('experience_include_unspecified')).toBe(false);
 
-    const junior = filtersToParams(
-      filtersFromProfile({ ...mkProfile([], []), seniorities: ['intern', 'junior'] }),
-    );
+    const junior = filtersToParams(filtersFromProfile({ ...mkProfile([], []), seniorities: ['intern', 'junior'] }));
     expect(junior.get('experience_years_max')).toBe('2');
     expect(junior.get('experience_only_seniority_unspecified')).toBe('true');
     expect(junior.has('experience_include_unspecified')).toBe(false);
@@ -297,9 +295,7 @@ describe('filtersFromProfile', () => {
     });
 
     it('keeps avoided companies and avoided sources independent', () => {
-      const p = filtersToParams(
-        filtersFromProfile(mkProfile([], [], null, [], ['smartrecruiters'], ['acme'])),
-      );
+      const p = filtersToParams(filtersFromProfile(mkProfile([], [], null, [], ['smartrecruiters'], ['acme'])));
 
       expect(p.getAll('source_exclude')).toEqual(['smartrecruiters']);
       expect(p.getAll('company_slug_exclude')).toEqual(['acme']);
@@ -403,7 +399,9 @@ describe('filtersFromProfile remote-anywhere flattening', () => {
 
   it('stages the modifier when the geography comes from relocation instead', () => {
     const p = filtersToParams(
-      filtersFromProfile(mkProfile([], [], loc(['remote', 'onsite'], { relocation: { open: true, countries: ['pl'] } }))),
+      filtersFromProfile(
+        mkProfile([], [], loc(['remote', 'onsite'], { relocation: { open: true, countries: ['pl'] } })),
+      ),
     );
     expect(p.get('work_mode_remote_anywhere')).toBe('true');
     expect(p.get('countries')?.split(',')).toContain('pl');
@@ -416,7 +414,9 @@ describe('filtersFromProfile remote-anywhere flattening', () => {
   // geography, so hybrid work is not widened to the whole reach.
   it('stages the remote reach on the remote arm, not on the location facets', () => {
     const p = filtersToParams(
-      filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid'], { remote: { regions: ['eu'], countries: ['us'] } }))),
+      filtersFromProfile(
+        mkProfile([], [], loc(['remote', 'hybrid'], { remote: { regions: ['eu'], countries: ['us'] } })),
+      ),
     );
     expect(p.get('work_mode_remote_anywhere')).toBe('true');
     expect(p.get('work_mode_remote_regions')).toBe('eu');
@@ -428,7 +428,9 @@ describe('filtersFromProfile remote-anywhere flattening', () => {
 
   // `regions=global` matches only postings labelled worldwide, so it does not cover home.
   it('keeps home on the remote arm when the reach is worldwide', () => {
-    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid'], { remote: { regions: ['global'] } }))));
+    const p = filtersToParams(
+      filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid'], { remote: { regions: ['global'] } }))),
+    );
     expect(p.get('work_mode_remote_regions')).toBe('global');
     expect(p.get('work_mode_remote_countries')).toBe('de');
   });

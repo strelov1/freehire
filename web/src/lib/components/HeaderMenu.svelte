@@ -54,7 +54,6 @@
   const isDark = $derived(themeStore.isDark);
   const isModerator = $derived(currentUser()?.role === 'moderator');
 
-
   // Static nav (always shown) and the signed-in account items (shown only when
   // authenticated). Moderation is gated on the moderator role at render time.
   // Primary destinations pinned to the very top of the menu. Jobs is the feed at
@@ -142,10 +141,7 @@
   }
 </script>
 
-<svelte:window
-  onclick={onWindowClick}
-  onkeydown={(e) => e.key === 'Escape' && (open = false)}
-/>
+<svelte:window onclick={onWindowClick} onkeydown={(e) => e.key === 'Escape' && (open = false)} />
 
 <!-- Theme toggle: reused across layouts, in the mobile bottom bar and, on
      desktop, inline at the end of the link list. Auth action: reused only on
@@ -197,17 +193,18 @@
        bell is how they learn something happened, and it cannot be a tap deeper than
        the menu that would tell them. -->
   {#if !inAccount}
-  <GithubStars class="hidden sm:inline-flex" />
+    <GithubStars class="hidden sm:inline-flex" />
 
-  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
-  <a href={DISCORD_URL}
-    target="_blank"
-    rel="noreferrer"
-    aria-label="freehire on Discord"
-    class={cn('hidden sm:inline-flex', iconButton)}
-  >
-    <ProviderIcon provider="discord" />
-  </a>
+    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
+    <a
+      href={DISCORD_URL}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="freehire on Discord"
+      class={cn('hidden sm:inline-flex', iconButton)}
+    >
+      <ProviderIcon provider="discord" />
+    </a>
   {/if}
 
   <NotificationBell />
@@ -250,9 +247,7 @@
          in here: an aria-label REPLACES an element's contents as its accessible name, so
          a span would have been silently unreadable. -->
     {#if isAuthenticated() && !open && !inAccount && setupOutstanding() > 0}
-      <span
-        class="absolute right-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-background"
-        aria-hidden="true"
+      <span class="absolute right-1.5 top-1.5 size-2 rounded-full bg-brand ring-2 ring-background" aria-hidden="true"
       ></span>
     {/if}
   </button>
@@ -289,7 +284,12 @@
              signed-in personal items and the rest of the site nav. -->
         {#each primaryLinks as link (link.href)}
           {@const Icon = link.icon}
-          <a href={resolve(toPath(link.href))} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
+          <a
+            href={resolve(toPath(link.href))}
+            role="menuitem"
+            onclick={() => (open = false)}
+            class={linkClass(link.href)}
+          >
             <Icon class="size-4 shrink-0" />
             {link.label}
           </a>
@@ -330,7 +330,12 @@
 
         {#each navLinks as link (link.href)}
           {@const Icon = link.icon}
-          <a href={resolve(toPath(link.href))} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
+          <a
+            href={resolve(toPath(link.href))}
+            role="menuitem"
+            onclick={() => (open = false)}
+            class={linkClass(link.href)}
+          >
             <Icon class="size-4 shrink-0" />
             {link.label}
           </a>
@@ -374,7 +379,8 @@
       <div class="shrink-0 border-t border-border p-2 sm:hidden">
         <GithubStars variant="row" class={cn(rowBase, 'text-muted-foreground')} />
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
-        <a href={DISCORD_URL}
+        <a
+          href={DISCORD_URL}
           target="_blank"
           rel="noreferrer"
           role="menuitem"

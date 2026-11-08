@@ -42,7 +42,12 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onClose()} />
 
 <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-  <button type="button" aria-label="Close dialog" class="absolute inset-0 animate-modal-fade bg-black/50" onclick={onClose}></button>
+  <button
+    type="button"
+    aria-label="Close dialog"
+    class="absolute inset-0 animate-modal-fade bg-black/50"
+    onclick={onClose}
+  ></button>
 
   <div
     role="dialog"
@@ -100,7 +105,9 @@
         {/each}
       </ol>
 
-      <div class="mt-5 flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+      <div
+        class="mt-5 flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground"
+      >
         <Lock class="mt-0.5 size-3.5 shrink-0" />
         <span>
           Read-only Gmail scope, only mail from recruiting platforms is fetched, and it's all

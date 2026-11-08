@@ -14,10 +14,7 @@
   // this viewer's match. Offering the text alternative is the caller's job — only it
   // knows which invitation applies, and where it can sit without joining the accessible
   // name of a card-wide link.
-  let {
-    match,
-    blurred = false,
-  }: { match: ClientMatch | null; blurred?: boolean } = $props();
+  let { match, blurred = false }: { match: ClientMatch | null; blurred?: boolean } = $props();
 </script>
 
 {#if match}

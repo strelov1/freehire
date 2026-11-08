@@ -3,23 +3,35 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CvBaseItem } from '#lib/cv.js';
 
-const { listCvs, listBaseCvs, listCvTemplates, duplicateCv, deleteCv, reseedBaseCv, goto, openCvIntake } = vi.hoisted(() => ({
-  listCvs: vi.fn(),
-  listBaseCvs: vi.fn(),
-  listCvTemplates: vi.fn(),
-  duplicateCv: vi.fn(),
-  deleteCv: vi.fn(),
-  reseedBaseCv: vi.fn(),
-  goto: vi.fn(),
-  openCvIntake: vi.fn(),
-}));
+const { listCvs, listBaseCvs, listCvTemplates, duplicateCv, deleteCv, reseedBaseCv, goto, openCvIntake } = vi.hoisted(
+  () => ({
+    listCvs: vi.fn(),
+    listBaseCvs: vi.fn(),
+    listCvTemplates: vi.fn(),
+    duplicateCv: vi.fn(),
+    deleteCv: vi.fn(),
+    reseedBaseCv: vi.fn(),
+    goto: vi.fn(),
+    openCvIntake: vi.fn(),
+  }),
+);
 
 vi.mock('$app/navigation', () => ({ goto }));
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/my/cvs') } }));
-vi.mock('$app/paths', () => ({ resolve: (route: string, params: Record<string, string>) => route.replace('[id]', params.id ?? '') }));
+vi.mock('$app/paths', () => ({
+  resolve: (route: string, params: Record<string, string>) => route.replace('[id]', params.id ?? ''),
+}));
 vi.mock('#lib/cvIntakeDialog.svelte.js', () => ({ openCvIntake }));
 vi.mock('#lib/api.js', () => ({
-  api: { listCvs, listBaseCvs, listCvTemplates, duplicateCv, deleteCv, reseedBaseCv, cvPdfUrl: (id: string) => `/pdf/${id}` },
+  api: {
+    listCvs,
+    listBaseCvs,
+    listCvTemplates,
+    duplicateCv,
+    deleteCv,
+    reseedBaseCv,
+    cvPdfUrl: (id: string) => `/pdf/${id}`,
+  },
   ApiError: class extends Error {},
 }));
 
@@ -36,7 +48,8 @@ const base = (id: string, title: string, isDefault = false): CvBaseItem => ({
 });
 
 beforeEach(() => {
-  for (const m of [listCvs, listBaseCvs, listCvTemplates, duplicateCv, deleteCv, reseedBaseCv, goto, openCvIntake]) m.mockReset();
+  for (const m of [listCvs, listBaseCvs, listCvTemplates, duplicateCv, deleteCv, reseedBaseCv, goto, openCvIntake])
+    m.mockReset();
   listCvs.mockResolvedValue([]);
   listCvTemplates.mockResolvedValue([{ id: 'classic-ats', label: 'Classic ATS' }]);
 });
@@ -82,7 +95,17 @@ describe('CvList base CVs', () => {
   it('still lists the tailored copies below the base CVs, each deletable on its own', async () => {
     listBaseCvs.mockResolvedValue([base('a', 'Backend', true)]);
     listCvs.mockResolvedValue([
-      { id: 't1', title: 'T', template_id: 'classic-ats', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-02T10:00:00Z', job_slug: 'sre-acme', job_title: 'SRE', job_company: 'Acme', agent_session_id: '' },
+      {
+        id: 't1',
+        title: 'T',
+        template_id: 'classic-ats',
+        created_at: '2026-10-01T10:00:00Z',
+        updated_at: '2026-10-02T10:00:00Z',
+        job_slug: 'sre-acme',
+        job_title: 'SRE',
+        job_company: 'Acme',
+        agent_session_id: '',
+      },
     ]);
     render(CvList);
     expect(await screen.findByText('Base CVs')).toBeTruthy();
@@ -94,7 +117,17 @@ describe('CvList base CVs', () => {
   it('keeps the tailored CVs when only the base list fails to load', async () => {
     listBaseCvs.mockRejectedValue(new Error('boom'));
     listCvs.mockResolvedValue([
-      { id: 't1', title: 'T', template_id: 'classic-ats', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-02T10:00:00Z', job_slug: 'sre-acme', job_title: 'SRE', job_company: 'Acme', agent_session_id: '' },
+      {
+        id: 't1',
+        title: 'T',
+        template_id: 'classic-ats',
+        created_at: '2026-10-01T10:00:00Z',
+        updated_at: '2026-10-02T10:00:00Z',
+        job_slug: 'sre-acme',
+        job_title: 'SRE',
+        job_company: 'Acme',
+        agent_session_id: '',
+      },
     ]);
     render(CvList);
     expect(await screen.findByText('SRE')).toBeTruthy();

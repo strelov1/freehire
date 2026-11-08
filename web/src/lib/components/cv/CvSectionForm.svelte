@@ -28,10 +28,7 @@
   // fields — Svelte proxies each element of the bound array, so edits flow back without
   // index-based access. Used in the tailoring workspace's Editor tab against a document the page
   // owns, so the centre preview re-renders live from the same object.
-  let {
-    doc = $bindable(),
-    title = $bindable(),
-  }: { doc: Document; title: string } = $props();
+  let { doc = $bindable(), title = $bindable() }: { doc: Document; title: string } = $props();
   const uid = $props.id();
 
   type Section = 'experience' | 'education' | 'skills' | 'languages' | 'projects' | 'certifications';
@@ -52,7 +49,7 @@
   // and with new rows on top the one it would drop is the candidate's oldest real entry.
   const full = (key: Section) => (doc[key]?.length ?? 0) >= sectionMax[key];
   const push =
-    <T,>(key: Section, make: () => T) =>
+    <T>(key: Section, make: () => T) =>
     () => {
       if (full(key)) return;
       doc = { ...doc, [key]: [make(), ...((doc[key] as T[] | undefined) ?? [])] };
@@ -73,14 +70,30 @@
   <section class="space-y-3">
     <h2 class="text-lg font-semibold">Header</h2>
     <div class="grid gap-3 sm:grid-cols-2 [&>*]:w-full">
-      <Input bind:value={doc.header.full_name} data-path="header.full_name" placeholder="Full name" aria-label="Full name" />
+      <Input
+        bind:value={doc.header.full_name}
+        data-path="header.full_name"
+        placeholder="Full name"
+        aria-label="Full name"
+      />
       <Input bind:value={doc.header.email} data-path="header.email" placeholder="Email" aria-label="Email" />
       <Input bind:value={doc.header.phone} data-path="header.phone" placeholder="Phone" aria-label="Phone" />
-      <Input bind:value={doc.header.location} data-path="header.location" placeholder="Location" aria-label="Location" />
+      <Input
+        bind:value={doc.header.location}
+        data-path="header.location"
+        placeholder="Location"
+        aria-label="Location"
+      />
     </div>
     <div>
       <p class="mb-1 text-sm text-muted-foreground">Links</p>
-      <StringListEditor bind:items={doc.header.links as string[]} path="header.links" placeholder="https://…" addLabel="Add link" label="Link" />
+      <StringListEditor
+        bind:items={doc.header.links as string[]}
+        path="header.links"
+        placeholder="https://…"
+        addLabel="Add link"
+        label="Link"
+      />
     </div>
   </section>
 
@@ -109,9 +122,25 @@
       <div class="space-y-3 rounded-lg border border-border p-4">
         <div class="flex items-start justify-between gap-2">
           <div class="grid flex-1 gap-3 sm:grid-cols-2 [&>*]:w-full">
-            <Input bind:value={entry.role} data-path="experience[{i}].role" placeholder="Role" aria-label="Role {i + 1}: role" />
-            <Input bind:value={entry.company} data-path="experience[{i}].company" placeholder="Company" aria-label="Role {i + 1}: company" />
-            <Input bind:value={entry.location} data-path="experience[{i}].location" placeholder="Location" aria-label="Role {i + 1}: location" class="sm:col-span-2" />
+            <Input
+              bind:value={entry.role}
+              data-path="experience[{i}].role"
+              placeholder="Role"
+              aria-label="Role {i + 1}: role"
+            />
+            <Input
+              bind:value={entry.company}
+              data-path="experience[{i}].company"
+              placeholder="Company"
+              aria-label="Role {i + 1}: company"
+            />
+            <Input
+              bind:value={entry.location}
+              data-path="experience[{i}].location"
+              placeholder="Location"
+              aria-label="Role {i + 1}: location"
+              class="sm:col-span-2"
+            />
             <!-- Dates get a full row: a native month control needs room for its digits and its
                  calendar button, and squeezed into a quarter of the row neither was clickable. -->
             <div class="grid grid-cols-2 gap-3 sm:col-span-2 [&>*]:w-full">
@@ -131,14 +160,32 @@
             <Trash2 class="h-4 w-4" />
           </Button>
         </div>
-        <Input bind:value={entry.summary} data-path="experience[{i}].summary" placeholder="One-line company/role context (optional)" aria-label="Role {i + 1}: context" class="w-full" />
+        <Input
+          bind:value={entry.summary}
+          data-path="experience[{i}].summary"
+          placeholder="One-line company/role context (optional)"
+          aria-label="Role {i + 1}: context"
+          class="w-full"
+        />
         <div>
           <p class="mb-1 text-sm text-muted-foreground">Bullets</p>
-          <StringListEditor bind:items={entry.bullets as string[]} path="experience[{i}].bullets" placeholder="Achievement or responsibility" addLabel="Add bullet" label="Role {i + 1} bullet" />
+          <StringListEditor
+            bind:items={entry.bullets as string[]}
+            path="experience[{i}].bullets"
+            placeholder="Achievement or responsibility"
+            addLabel="Add bullet"
+            label="Role {i + 1} bullet"
+          />
         </div>
         <div>
           <p class="mb-1 text-sm text-muted-foreground">Stack</p>
-          <StringListEditor bind:items={entry.stack as string[]} path="experience[{i}].stack" placeholder="e.g. Go" addLabel="Add technology" label="Role {i + 1} technology" />
+          <StringListEditor
+            bind:items={entry.stack as string[]}
+            path="experience[{i}].stack"
+            placeholder="e.g. Go"
+            addLabel="Add technology"
+            label="Role {i + 1} technology"
+          />
         </div>
       </div>
     {/each}
@@ -155,9 +202,25 @@
     {#each doc.education ?? [] as entry, i (entry)}
       <div class="flex items-start justify-between gap-2 rounded-lg border border-border p-4">
         <div class="grid flex-1 gap-3 sm:grid-cols-2 [&>*]:w-full">
-          <Input bind:value={entry.institution} data-path="education[{i}].institution" placeholder="Institution" aria-label="Education {i + 1}: institution" />
-          <Input bind:value={entry.degree} data-path="education[{i}].degree" placeholder="Degree" aria-label="Education {i + 1}: degree" />
-          <Input bind:value={entry.field} data-path="education[{i}].field" placeholder="Field" aria-label="Education {i + 1}: field of study" class="sm:col-span-2" />
+          <Input
+            bind:value={entry.institution}
+            data-path="education[{i}].institution"
+            placeholder="Institution"
+            aria-label="Education {i + 1}: institution"
+          />
+          <Input
+            bind:value={entry.degree}
+            data-path="education[{i}].degree"
+            placeholder="Degree"
+            aria-label="Education {i + 1}: degree"
+          />
+          <Input
+            bind:value={entry.field}
+            data-path="education[{i}].field"
+            placeholder="Field"
+            aria-label="Education {i + 1}: field of study"
+            class="sm:col-span-2"
+          />
           <div class="grid grid-cols-2 gap-3 sm:col-span-2 [&>*]:w-full">
             <PeriodDateInput bind:value={entry.start} placeholder="Start" label="Education {i + 1}: start" />
             <PeriodDateInput bind:value={entry.end} placeholder="End" label="Education {i + 1}: end" />
@@ -181,12 +244,24 @@
     {#each doc.skills ?? [] as entry, i (entry)}
       <div class="space-y-3 rounded-lg border border-border p-4">
         <div class="flex items-center justify-between gap-2">
-          <Input bind:value={entry.group} data-path="skills[{i}].group" placeholder="Group (e.g. Languages)" aria-label="Skill group {i + 1}: name" class="flex-1" />
+          <Input
+            bind:value={entry.group}
+            data-path="skills[{i}].group"
+            placeholder="Group (e.g. Languages)"
+            aria-label="Skill group {i + 1}: name"
+            class="flex-1"
+          />
           <Button variant="ghost" size="icon" aria-label="Remove group" onclick={() => removeAt('skills', i)}>
             <Trash2 class="h-4 w-4" />
           </Button>
         </div>
-        <StringListEditor bind:items={entry.items as string[]} path="skills[{i}].items" placeholder="e.g. Go" addLabel="Add skill" label="Skill group {i + 1} skill" />
+        <StringListEditor
+          bind:items={entry.items as string[]}
+          path="skills[{i}].items"
+          placeholder="e.g. Go"
+          addLabel="Add skill"
+          label="Skill group {i + 1} skill"
+        />
       </div>
     {/each}
   </section>
@@ -201,8 +276,20 @@
     </div>
     {#each doc.languages ?? [] as entry, i (entry)}
       <div class="flex items-center gap-2">
-        <Input bind:value={entry.name} data-path="languages[{i}].name" placeholder="Language" aria-label="Language {i + 1}: name" class="flex-1" />
-        <Input bind:value={entry.level} data-path="languages[{i}].level" placeholder="Level (e.g. C1)" aria-label="Language {i + 1}: level" class="flex-1" />
+        <Input
+          bind:value={entry.name}
+          data-path="languages[{i}].name"
+          placeholder="Language"
+          aria-label="Language {i + 1}: name"
+          class="flex-1"
+        />
+        <Input
+          bind:value={entry.level}
+          data-path="languages[{i}].level"
+          placeholder="Level (e.g. C1)"
+          aria-label="Language {i + 1}: level"
+          class="flex-1"
+        />
         <Button variant="ghost" size="icon" aria-label="Remove language" onclick={() => removeAt('languages', i)}>
           <Trash2 class="h-4 w-4" />
         </Button>
@@ -221,13 +308,31 @@
     {#each doc.projects ?? [] as entry, i (entry)}
       <div class="space-y-3 rounded-lg border border-border p-4">
         <div class="flex items-center gap-2">
-          <Input bind:value={entry.name} data-path="projects[{i}].name" placeholder="Project name" aria-label="Project {i + 1}: name" class="flex-1" />
-          <Input bind:value={entry.link} data-path="projects[{i}].link" placeholder="Link" aria-label="Project {i + 1}: link" class="flex-1" />
+          <Input
+            bind:value={entry.name}
+            data-path="projects[{i}].name"
+            placeholder="Project name"
+            aria-label="Project {i + 1}: name"
+            class="flex-1"
+          />
+          <Input
+            bind:value={entry.link}
+            data-path="projects[{i}].link"
+            placeholder="Link"
+            aria-label="Project {i + 1}: link"
+            class="flex-1"
+          />
           <Button variant="ghost" size="icon" aria-label="Remove project" onclick={() => removeAt('projects', i)}>
             <Trash2 class="h-4 w-4" />
           </Button>
         </div>
-        <StringListEditor bind:items={entry.bullets as string[]} path="projects[{i}].bullets" placeholder="What it does / your role" addLabel="Add bullet" label="Project {i + 1} bullet" />
+        <StringListEditor
+          bind:items={entry.bullets as string[]}
+          path="projects[{i}].bullets"
+          placeholder="What it does / your role"
+          addLabel="Add bullet"
+          label="Project {i + 1} bullet"
+        />
       </div>
     {/each}
   </section>
@@ -236,16 +341,38 @@
   <section class="space-y-4">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">Certifications</h2>
-      <Button variant="outline" size="sm" onclick={push('certifications', blankCertification)} disabled={full('certifications')}>
+      <Button
+        variant="outline"
+        size="sm"
+        onclick={push('certifications', blankCertification)}
+        disabled={full('certifications')}
+      >
         <Plus class="mr-1 h-4 w-4" /> Add certification
       </Button>
     </div>
     {#each doc.certifications ?? [] as entry, i (entry)}
       <div class="flex items-center gap-2">
-        <Input bind:value={entry.name} data-path="certifications[{i}].name" placeholder="Name" aria-label="Certification {i + 1}: name" class="flex-1" />
-        <Input bind:value={entry.issuer} data-path="certifications[{i}].issuer" placeholder="Issuer" aria-label="Certification {i + 1}: issuer" class="flex-1" />
+        <Input
+          bind:value={entry.name}
+          data-path="certifications[{i}].name"
+          placeholder="Name"
+          aria-label="Certification {i + 1}: name"
+          class="flex-1"
+        />
+        <Input
+          bind:value={entry.issuer}
+          data-path="certifications[{i}].issuer"
+          placeholder="Issuer"
+          aria-label="Certification {i + 1}: issuer"
+          class="flex-1"
+        />
         <PeriodDateInput bind:value={entry.year} placeholder="Year" label="Certification {i + 1}: year" />
-        <Button variant="ghost" size="icon" aria-label="Remove certification" onclick={() => removeAt('certifications', i)}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Remove certification"
+          onclick={() => removeAt('certifications', i)}
+        >
           <Trash2 class="h-4 w-4" />
         </Button>
       </div>

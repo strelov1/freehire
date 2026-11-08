@@ -55,7 +55,17 @@
   import ToolGroupList from './ToolGroupList.svelte';
   import JobDeck from './JobDeck.svelte';
   import { splitPresentingCalls } from '../../lib/assistant/deck';
-  import { Alert, Badge, Button, Card, EmptyState, Input, Skeleton, TabStrip, tabStripId } from 'freehire-design-system';
+  import {
+    Alert,
+    Badge,
+    Button,
+    Card,
+    EmptyState,
+    Input,
+    Skeleton,
+    TabStrip,
+    tabStripId,
+  } from 'freehire-design-system';
   import { ArrowUp, Plus, Square, RectangleEllipsis } from '@lucide/svelte';
 
   let chat = $state<ChatState>(initChat());
@@ -699,10 +709,7 @@
     autofilled.add(normalizeLabel(label));
     if (!plan) return;
     const item = plan.items.find(
-      (i) =>
-        i.label === label &&
-        (frame === undefined || i.frame === frame) &&
-        (form === undefined || i.form === form),
+      (i) => i.label === label && (frame === undefined || i.frame === frame) && (form === undefined || i.form === form),
     );
     if (item) plan = markAnswered(plan, item.key);
   }
@@ -938,7 +945,6 @@
       notices.push(`Autofill failed: ${err instanceof Error ? err.message : 'error'}`);
     }
   }
-
 </script>
 
 <div class="app">
@@ -1003,11 +1009,7 @@
               />
             {/if}
             {#if matchStatus === 'ready' && matchJob && match}
-              <MatchCard
-                job={matchJob}
-                {match}
-                hasUploadField={uploads.some((u) => u.frame === TOP_FRAME)}
-              />
+              <MatchCard job={matchJob} {match} hasUploadField={uploads.some((u) => u.frame === TOP_FRAME)} />
             {:else if matchStatus === 'loading'}
               <div class="match-skeleton">
                 <Skeleton class="h-9 w-9 rounded-lg" />
@@ -1053,8 +1055,8 @@
                    application. Saying so beats an empty space the user has to
                    guess about. -->
               <p class="no-plan">
-                {questionsSeen} field{questionsSeen === 1 ? '' : 's'} on this page — not enough to
-                read as an application form.
+                {questionsSeen} field{questionsSeen === 1 ? '' : 's'} on this page — not enough to read as an application
+                form.
               </p>
             {/if}
             {#if plan}

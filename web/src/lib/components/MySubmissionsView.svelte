@@ -53,7 +53,8 @@
           <li class="flex items-start justify-between gap-3 px-4 py-3">
             <div class="flex min-w-0 flex-col gap-0.5">
               <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external posting URL, opened in a new tab; not an internal route -->
-              <a href={sub.url}
+              <a
+                href={sub.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="truncate text-sm font-medium hover:underline"

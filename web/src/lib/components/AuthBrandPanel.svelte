@@ -141,7 +141,12 @@
         </div>
       {/if}
 
-      <div class="absolute inset-x-0 bottom-3 flex justify-center gap-1.5" role="tablist" aria-label="Highlights" use:tablist={active}>
+      <div
+        class="absolute inset-x-0 bottom-3 flex justify-center gap-1.5"
+        role="tablist"
+        aria-label="Highlights"
+        use:tablist={active}
+      >
         {#each SLIDES as _, i (i)}
           <button
             type="button"
@@ -177,7 +182,8 @@
     />
     {#each otherSocials as social (social.provider)}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
-      <a href={social.href}
+      <a
+        href={social.href}
         target="_blank"
         rel="noopener noreferrer"
         aria-label={social.label}

@@ -105,23 +105,14 @@
      containing block for the mobile menu's `position: fixed` full-screen drawer,
      pinning it to the header instead of the viewport and breaking it. -->
 <header class="sticky top-0 z-40 border-b border-border bg-background">
-  <div
-    class={[
-      'mx-auto flex h-14 items-center gap-3 px-4 sm:gap-4',
-      wideHeader ? 'max-w-none' : 'max-w-6xl',
-    ]}
-  >
+  <div class={['mx-auto flex h-14 items-center gap-3 px-4 sm:gap-4', wideHeader ? 'max-w-none' : 'max-w-6xl']}>
     <!-- Wide header only: the two side slots grow from a zero basis, so the free space
          splits evenly between them and the search sits on the container's axis — the
          menu cluster is wider than the brand, so centering the middle slot on its own
          leftover space would push it visibly off-centre. `basis-0` also keeps them from
          shrinking (shrink scales the basis), so the narrow layout is untouched. -->
     <div class={['flex shrink-0 items-center', wideHeader && 'flex-1 basis-0']}>
-      <a
-        href={resolve('/')}
-        aria-label="freehire"
-        class="flex items-center gap-2 text-sm font-semibold tracking-tight"
-      >
+      <a href={resolve('/')} aria-label="freehire" class="flex items-center gap-2 text-sm font-semibold tracking-tight">
         <BrandMark />
         <!-- Dropped on a phone to leave the middle slot its width for the search box —
              except wherever showSiteNav puts no box there (the homepage's own hero is the

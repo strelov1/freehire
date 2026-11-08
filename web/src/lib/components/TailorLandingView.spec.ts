@@ -25,12 +25,21 @@ vi.stubGlobal(
 );
 Element.prototype.animate = vi.fn(() => ({ cancel() {}, finished: Promise.resolve(), onfinish: null })) as never;
 
-const price = { id: 'price_m', amount_cents: 500, currency: 'usd', interval: 'month', default: true, tier: 'pro' } as PublicPrice;
+const price = {
+  id: 'price_m',
+  amount_cents: 500,
+  currency: 'usd',
+  interval: 'month',
+  default: true,
+  tier: 'pro',
+} as PublicPrice;
 
 describe('TailorLandingView', () => {
   it('states the promise and carries the founder note', () => {
     render(TailorLandingView, { price });
-    expect(screen.getByRole('heading', { level: 1 }).textContent?.trim()).toBe('Your CV, rewritten for this job. Nothing made up.');
+    expect(screen.getByRole('heading', { level: 1 }).textContent?.trim()).toBe(
+      'Your CV, rewritten for this job. Nothing made up.',
+    );
     expect(screen.getByText('— Ilya Strelov, founder')).toBeTruthy();
   });
 
@@ -42,7 +51,8 @@ describe('TailorLandingView', () => {
   it('falls back to the plan name and a pricing link without a price', () => {
     render(TailorLandingView, { price: null });
     expect(within(screen.getByRole('table')).getByText('Pro plan')).toBeTruthy();
-    for (const link of screen.getAllByRole('link', { name: 'See Pro plans' })) expect(link.getAttribute('href')).toBe('/pricing');
+    for (const link of screen.getAllByRole('link', { name: 'See Pro plans' }))
+      expect(link.getAttribute('href')).toBe('/pricing');
   });
   // Screen readers navigate by the outline; the how-it-works steps (h3) need an h2 above them.
   it('never skips a heading level', () => {

@@ -100,7 +100,10 @@ class ProfileStore extends UserResource<UserProfile | null> {
   /** Merge a CV's skills and roles into the latest profile inside the write queue.
    *  Manual edits queued before the import survive, and both the cap and the reported
    *  additions are computed from the same snapshot that is actually saved. */
-  mergeResumeExtraction(newSkills: string[], newSpecializations: string[]): Promise<{
+  mergeResumeExtraction(
+    newSkills: string[],
+    newSpecializations: string[],
+  ): Promise<{
     addedSkills: number;
     addedSpecializations: number;
     droppedSpecializations: number;

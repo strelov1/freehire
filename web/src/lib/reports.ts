@@ -54,9 +54,7 @@ export function decisionNotePrompt(kind: DecisionKind): string {
 
 /** An example note, shaped like the decision it belongs to. */
 export function decisionNotePlaceholder(kind: DecisionKind): string {
-  return kind === 'dismiss'
-    ? 'The source really does say remote'
-    : 'Fixed — the job is now marked hybrid';
+  return kind === 'dismiss' ? 'The source really does say remote' : 'Fixed — the job is now marked hybrid';
 }
 
 interface DecisionResult {
@@ -77,12 +75,7 @@ interface DecisionResult {
  * interrupting the moderator for is the gap between the two: they asked to tell the
  * reporter and the reporter was not told.
  */
-export function decisionOutcome({
-  notifyRequested,
-  notified,
-  reporterEmail,
-  jobTitle,
-}: DecisionResult): string | null {
+export function decisionOutcome({ notifyRequested, notified, reporterEmail, jobTitle }: DecisionResult): string | null {
   if (!notifyRequested || notified) return null;
   const who = reporterEmail ? ` to ${reporterEmail}` : ' to the reporter';
   const about = jobTitle ? ` about "${jobTitle}"` : '';

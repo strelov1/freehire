@@ -10,12 +10,8 @@
 
   // Taking one of a mentor's hours, rendered by MentorBookingView for the chosen slot.
   // `chosen`, not `slot`: a component attribute named `slot` is Svelte's legacy slot syntax.
-  let {
-    mentor,
-    chosen,
-    zone,
-    refused,
-  }: { mentor: Mentor; chosen: MentorSlot; zone: string; refused: () => void } = $props();
+  let { mentor, chosen, zone, refused }: { mentor: Mentor; chosen: MentorSlot; zone: string; refused: () => void } =
+    $props();
 
   const signedIn = $derived(Boolean(page.data.user));
 
@@ -66,8 +62,7 @@
       rows="3"
       maxlength="1000"
       class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-      placeholder="A sentence is plenty — it helps them prepare."
-    ></textarea>
+      placeholder="A sentence is plenty — it helps them prepare."></textarea>
   </label>
 
   <Button class="mt-3" disabled={booking} onclick={book}>

@@ -112,11 +112,7 @@ const relativeTime: Partial<Record<`${Locale}:${TimeAgoStyle}`, Intl.RelativeTim
  *  ago", "2 days ago"); '' for null/invalid. How recently a job was posted is a
  *  key signal, so the list card shows it relative rather than as a bare date. See
  *  `formatDate` for why `locale` is required. */
-export function timeAgo(
-  ts: string | null | undefined,
-  locale: Locale,
-  style: TimeAgoStyle = 'long'
-): string {
+export function timeAgo(ts: string | null | undefined, locale: Locale, style: TimeAgoStyle = 'long'): string {
   const d = parseTs(ts);
   if (!d) return '';
   const seconds = Math.round((Date.now() - d.getTime()) / 1000);
@@ -146,11 +142,7 @@ const RECENT_MS = 86400 * 1000;
  *  `style` reaches only the relative branch. Past the day boundary there is nothing to
  *  abbreviate, and a date a reader is comparing against another posting's must not be
  *  shortened out from under them. See `formatDate` for why `locale` is required. */
-export function formatDateOrAgo(
-  ts: string | null | undefined,
-  locale: Locale,
-  style: TimeAgoStyle = 'long'
-): string {
+export function formatDateOrAgo(ts: string | null | undefined, locale: Locale, style: TimeAgoStyle = 'long'): string {
   const d = parseTs(ts);
   if (!d) return '';
   const age = Date.now() - d.getTime();

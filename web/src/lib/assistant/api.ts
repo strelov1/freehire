@@ -37,8 +37,10 @@ async function request<T = void>(path: string, init?: RequestInit, base: string 
   if (res.status === 404) throw new SessionNotFound();
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => null);
-    const detail = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
-      ? body.error : undefined;
+    const detail =
+      typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
+        ? body.error
+        : undefined;
     throw new Error(detail || `assistant request failed (${res.status})`);
   }
   if (res.status === 204) return undefined as T;
@@ -60,10 +62,10 @@ export function createSession(preset: ChatPreset = 'chat'): Promise<SessionSumma
 /** Open the conversation held against one automatic application. The server reuses its
  *  session, so the numbered questions and answers remain in one transcript. */
 export function openApplyChat(slug: string): Promise<SessionSummary> {
-  return request<SessionSummary>(
-    `/sessions?preset=apply&job=${encodeURIComponent(slug)}`,
-    { method: 'POST', body: '{}' },
-  );
+  return request<SessionSummary>(`/sessions?preset=apply&job=${encodeURIComponent(slug)}`, {
+    method: 'POST',
+    body: '{}',
+  });
 }
 
 /** The caller's conversations, most recently active first. */
@@ -121,11 +123,7 @@ export async function mintVoiceToken(sessionId: string): Promise<VoiceToken> {
 
 /** Append one completed voice-mode turn to a session's transcript, so it reads the
  *  same afterward whether the exchange was typed or spoken. */
-export function appendVoiceTurn(
-  sessionId: string,
-  role: 'user' | 'assistant',
-  content: string,
-): Promise<void> {
+export function appendVoiceTurn(sessionId: string, role: 'user' | 'assistant', content: string): Promise<void> {
   return request(`/sessions/${encodeURIComponent(sessionId)}/voice-turns`, {
     method: 'POST',
     body: JSON.stringify({ role, content }),

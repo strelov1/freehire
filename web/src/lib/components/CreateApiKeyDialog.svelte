@@ -100,8 +100,7 @@
       // Holds a proof or buys one with the typed password — the component decides which,
       // and says so itself when the member has supplied neither.
       if (!(await identity?.prove())) return;
-      const expiresAt =
-        days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : undefined;
+      const expiresAt = days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : undefined;
       onCreated(await api.createApiKey(trimmed, expiresAt, scope || undefined));
       reset();
       open = false;

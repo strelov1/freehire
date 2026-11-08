@@ -3,9 +3,7 @@ import { INDUSTRY_ALIASES, INDUSTRY_LABELS, INDUSTRY_VALUES, type Industry } fro
 const industryAliases: Partial<Record<Industry, readonly string[]>> = INDUSTRY_ALIASES;
 const industryLabels: Record<Industry, string> = INDUSTRY_LABELS;
 
-export type IndustryLookup =
-  | { type: 'canonical' | 'alias'; slug: string; label: string }
-  | { type: 'miss' };
+export type IndustryLookup = { type: 'canonical' | 'alias'; slug: string; label: string } | { type: 'miss' };
 
 export interface IndustryOption {
   slug: string;
@@ -60,13 +58,14 @@ export function searchIndustries(term: string): IndustryOption[] {
   // A term that folds to nothing ("!!!", non-Latin script) matches nothing; only a
   // blank search lists the whole dictionary.
   if (!query && term.trim()) return [];
-  return INDUSTRY_VALUES
-    .filter((slug) => {
-      if (!query) return true;
-      return slug.includes(query)
-        || normalize(industryLabels[slug] ?? slug).includes(query)
-        || (industryAliases[slug] ?? []).some((alias) => alias.includes(query));
-    })
+  return INDUSTRY_VALUES.filter((slug) => {
+    if (!query) return true;
+    return (
+      slug.includes(query) ||
+      normalize(industryLabels[slug] ?? slug).includes(query) ||
+      (industryAliases[slug] ?? []).some((alias) => alias.includes(query))
+    );
+  })
     .map((slug) => ({
       slug,
       label: industryLabels[slug] ?? slug,

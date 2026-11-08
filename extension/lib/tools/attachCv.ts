@@ -30,7 +30,8 @@ import type { FramedUpload } from '../protocol';
  */
 export function uploadInputExpression(form: number): string {
   const scope = form >= 0 ? `document.querySelectorAll('form')[${form}]` : 'document';
-  const isHidden = `(el) => (el.hidden || el.closest('[hidden]')) || ` +
+  const isHidden =
+    `(el) => (el.hidden || el.closest('[hidden]')) || ` +
     `(typeof el.checkVisibility === 'function' && !el.checkVisibility())`;
   return (
     `(() => { const s = ${scope}; if (!s) return null; ` +
@@ -103,9 +104,7 @@ export async function resolveDownloadedPath(
 
     const timer = setTimeout(
       () =>
-        finish(() =>
-          reject(new Error('timed out waiting for the download to finish — check your Downloads prompt')),
-        ),
+        finish(() => reject(new Error('timed out waiting for the download to finish — check your Downloads prompt'))),
       timeoutMs,
     );
 
