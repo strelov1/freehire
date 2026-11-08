@@ -157,7 +157,7 @@ therefore passes every command above except the `vet` line, then fails CI, which
 seconds, no Docker. Run the full tagged suite when you change behaviour rather than a
 signature.
 
-**Before you run, change or add a `cmd/<name>` worker, read its entry in [docs/agents/workers.md](docs/agents/workers.md)**: what it needs, when it runs, and the trap behind it. A new worker gets its entry there.
+**Before you run, change or add a `cmd/<name>` worker, read its entry in [docs/agents/workers.md](docs/agents/workers.md) when it has one**: what it needs, when it runs, and the trap behind it. Not every worker has an entry yet (`ls cmd/` is the full list); without one, read the worker's own `main.go`. A new worker gets its entry there.
 
 ## Module files
 
