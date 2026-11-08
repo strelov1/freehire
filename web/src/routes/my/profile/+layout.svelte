@@ -180,13 +180,17 @@
 {:else}
   <!-- Above the tab strip: what is left to set up belongs to the account rather than to
        whichever section happens to be open — a card inside a section would be
-       re-announced on every tab switch. The Talent Network invitation follows it: the
-       skills and experience it would publish are edited on this page, and under the title
-       it no longer pushes the page's own heading down. -->
+       re-announced on every tab switch. It is one folded line; the Talent Network
+       invitation rides inside it while steps remain, and stands alone once they don't. -->
   <div class="mb-6">
-    <AccountSetupCard />
+    <AccountSetupCard>
+      {#snippet extra()}
+        <div class="mt-4 [&>*]:mb-0">
+          <TalentNetworkInvite />
+        </div>
+      {/snippet}
+    </AccountSetupCard>
   </div>
-  <TalentNetworkInvite />
 
   <!-- No separate "n/m sections" count: the tab dots already mark the empty sections, and
        a third progress meter beside the setup checklist read as clutter. -->

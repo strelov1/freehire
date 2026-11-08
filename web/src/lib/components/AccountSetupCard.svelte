@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Check, ArrowRight, X } from '@lucide/svelte';
+  import type { Snippet } from 'svelte';
+  import { Check, ArrowRight, ChevronDown, X } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { outstandingOf, stepLeadsSomewhere, type CompletenessStep } from '#lib/accountCompleteness.js';
@@ -14,6 +15,10 @@
   // questions once, and this is what remains of them afterwards for anyone who skipped a
   // step or signed up before the wizard existed. It disappears the moment nothing is
   // outstanding — a card that congratulates you forever is a permanent tax on the page.
+
+  // `extra` rides along with the checklist: inside the folded card while steps remain
+  // (the profile page keeps its Talent Network invite there), on its own once they don't.
+  let { extra }: { extra?: Snippet } = $props();
 
   const steps = $derived(setupSteps());
   const outstanding = $derived(outstandingOf(steps));
@@ -48,19 +53,25 @@
 {/snippet}
 
 {#if outstanding.length > 0}
-  <!-- No outer margin: every host so far is a flex column that owns its own spacing,
-       and a margin here would add to that gap rather than replace it. -->
-  <section class="rounded-xl border border-border bg-card p-4" aria-labelledby="account-setup-heading">
-    <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-      <h2 id="account-setup-heading" class="text-sm font-semibold tracking-tight">
-        Finish setting up your account
-      </h2>
-      <!-- The count, not a percentage bar: five steps is few enough that "3 of 5" is the
-           more precise statement and needs no legend. `tabular-nums` keeps it from
-           twitching as steps are completed. -->
-      <p class="text-xs tabular-nums text-muted-foreground">{done} of {steps.length} done</p>
-    </div>
-
+  <!-- One line until opened: the count and the next step, so the page's own content is the
+       first screen. A native <details>, so the fold needs no script and is a disclosure
+       to assistive technology. No outer margin: every host is a flex column that owns its
+       spacing. -->
+  <details class="group/setup rounded-xl border border-border bg-card" aria-labelledby="account-setup-heading">
+    <summary
+      class="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm [&::-webkit-details-marker]:hidden"
+    >
+      <span id="account-setup-heading" class="font-semibold tracking-tight">Finish setting up</span>
+      <span class="tabular-nums text-muted-foreground">{done} of {steps.length} done</span>
+      <span class="hidden min-w-0 flex-1 truncate text-muted-foreground sm:block">
+        · Next: {outstanding[0]?.label}
+      </span>
+      <ChevronDown
+        class="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-open/setup:rotate-180"
+        aria-hidden="true"
+      />
+    </summary>
+    <div class="border-t border-border px-4 pb-4">
     <ul class="mt-3 flex flex-col gap-1">
       {#each steps as step (step.id)}
         <li>
@@ -115,5 +126,9 @@
         </li>
       {/each}
     </ul>
-  </section>
+    {@render extra?.()}
+    </div>
+  </details>
+{:else}
+  {@render extra?.()}
 {/if}

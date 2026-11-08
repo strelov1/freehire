@@ -24,12 +24,15 @@
     open = false,
     title,
     onClose,
+    headerActions,
     children,
   }: {
     open?: boolean;
     /** The panel's heading, also its accessible name. */
     title: string;
     onClose: () => void;
+    /** Extra controls for the header row, beside Close (e.g. Help's "New conversation"). */
+    headerActions?: Snippet;
     /** The conversation, given the setter for the session id the "Open full" link needs. */
     children: Snippet<[(id: string) => void]>;
   } = $props();
@@ -126,6 +129,7 @@
             Open full
           </a>
         {/if}
+        {@render headerActions?.()}
         <button
           type="button"
           onclick={onClose}

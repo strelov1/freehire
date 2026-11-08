@@ -1153,8 +1153,12 @@
           {#if phase === 'loading'}
             <p class="text-sm text-muted-foreground">{s.connecting}</p>
           {:else if chat.messages.length === 0 && openingActions?.length}
-            <div class="rounded-xl border border-border bg-muted/30 p-4">
-              <div class="flex flex-wrap gap-2">
+            <!-- A plain list of left-aligned rows rather than filled pills in a boxed card: the
+                 brand fill is kept for the unattended run, the one action that does the work;
+                 a question to ask is a quiet row, so three of them no longer read as three
+                 competing calls to action. -->
+            <div>
+              <div class="flex flex-col gap-2">
                 <!-- The icon comes from the action's kind, not from the action itself: the
                      surfaces that offer these are plain modules, and a Svelte component cannot
                      travel through one. The two kinds are the two rhythms — the unattended run
@@ -1163,11 +1167,16 @@
                   {@const Icon = action.kind === 'autopilot' ? Rocket : MessagesSquare}
                   <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                    class={[
+                      'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors disabled:opacity-50',
+                      action.kind === 'autopilot'
+                        ? 'bg-brand text-brand-foreground hover:opacity-90'
+                        : 'border border-border bg-card text-foreground hover:bg-accent',
+                    ]}
                     disabled={turnActive || switching}
                     onclick={() => runOpening(action)}
                   >
-                    <Icon class="size-4" />
+                    <Icon class={['size-4 shrink-0', action.kind !== 'autopilot' && 'text-muted-foreground']} />
                     {action.label}
                   </button>
                 {/each}
