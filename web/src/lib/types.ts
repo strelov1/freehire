@@ -406,6 +406,9 @@ export interface CompanyListItem {
 /** Pagination metadata returned alongside list responses. */
 export interface ListMeta {
   total: number;
+  /** The total is "at least this many": the read stopped before the whole result was seen
+   *  (the minimum-skill-match scan). Absent for an ordinary count. */
+  total_is_lower_bound?: boolean;
   limit: number;
   offset: number;
 }

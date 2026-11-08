@@ -169,6 +169,7 @@ paths:
         - $ref: "#/components/parameters/WorkModeRemoteRegions"
         - $ref: "#/components/parameters/WorkModeRemoteCountries"
         - $ref: "#/components/parameters/HideSeen"
+        - $ref: "#/components/parameters/MinSkillMatch"
         - $ref: "#/components/parameters/HideAppliedCompanies"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
@@ -1157,6 +1158,27 @@ components:
         it narrows nothing. Without a session (or API key), or with a value
         that is not a boolean, the search runs unhidden and
         `hide_applied_companies` is reported in `meta.ignored_params`.
+    MinSkillMatch:
+      name: min_skill_match
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+      description: |
+        Keeps only postings whose skills the signed-in caller's profile covers
+        by at least this percent (matched skills over the posting's skills,
+        rounded — the percent a job card shows). Applied across the whole
+        ranking, and only with `sort=match`: the read walks the ranking from
+        the best match down and stops once no later posting can qualify, or at
+        a depth bound. When it stopped early `meta.total` is a minimum and
+        `meta.total_is_lower_bound` is `true`.
+
+        A per-person preference, not a filter: a saved search carrying it
+        narrows nothing. Without a session (or API key), without profile
+        skills, with any other sort, or with a value outside 1–100 it is not
+        applied and is reported in `meta.ignored_params`. An applied response
+        is `Cache-Control: private, no-store`.
     HideSeen:
       name: hide_seen
       in: query

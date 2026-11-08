@@ -180,7 +180,7 @@ const hideAppliedCompaniesParam = "hide_applied_companies"
 const hideSeenParam = "hide_seen"
 
 // publicJobSearchParams is what /jobs/search itself reads beyond the filter vocabulary.
-var publicJobSearchParams = slices.Concat(jobSearchParams, []string{hideSeenParam, hideAppliedCompaniesParam})
+var publicJobSearchParams = slices.Concat(jobSearchParams, []string{hideSeenParam, hideAppliedCompaniesParam, minSkillMatchParam})
 
 // agentSearchParams is jobSearchParams plus the agent endpoint's own two: the
 // response-format selector and the opt-in semantic search.
@@ -239,21 +239,28 @@ func (h *searchHandlers) matchVector(c *fiber.Ctx) []float32 {
 }
 
 func (h *searchHandlers) matchVectorFor(ctx context.Context, userID int64, vals url.Values) []float32 {
+	vector, _ := h.matchProfileFor(ctx, userID, vals)
+	return vector
+}
+
+// matchProfileFor is matchVectorFor plus the profile skills the vector was built from,
+// which the minimum-skill-match scan needs to state each posting's percent.
+func (h *searchHandlers) matchProfileFor(ctx context.Context, userID int64, vals url.Values) (vector []float32, skills []string) {
 	if vals.Get("sort") != sortMatch || h.userProfile == nil {
-		return nil
+		return nil, nil
 	}
 	// auth.UserID is what mw.optional populates; it reports false for an anonymous
 	// caller rather than erroring. requireUserID is the wrong helper here — its 401 is
 	// exactly the outcome this must avoid.
 	if userID == 0 {
-		return nil
+		return nil, nil
 	}
 	profile, err := h.userProfile.Get(ctx, userID)
 	if err != nil || len(profile.Skills) == 0 {
-		return nil
+		return nil, nil
 	}
 	// ProfileVector, never JobVector: the ballast belongs to the stored side only.
-	return skillvec.ProfileVector(profile.Skills)
+	return skillvec.ProfileVector(profile.Skills), profile.Skills
 }
 
 // SearchJobs runs a full-text/faceted keyword search over the jobs index. It is
@@ -263,7 +270,8 @@ func (h *searchHandlers) matchVectorFor(ctx context.Context, userID int64, vals 
 func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	seen, seenIgnored := h.seenExclusion(c)
 	appliedFrag, appliedIgnored := h.appliedCompanyExclusion(c)
-	out, err := h.runJobSearch(c, false, seen, appliedFrag)
+	match, matchIgnored := h.skillMatchFilter(c)
+	out, err := h.runJobSearch(c, false, seen, appliedFrag, match)
 	if err != nil {
 		return err
 	}
@@ -274,6 +282,9 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	if seenIgnored {
 		dropped = append(dropped, search.UnknownParam{Param: hideSeenParam})
 	}
+	if matchIgnored {
+		dropped = append(dropped, search.UnknownParam{Param: minSkillMatchParam})
+	}
 
 	views := make([]jobview.Job, len(res.Hits))
 	for i, hit := range res.Hits {
@@ -282,7 +293,11 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	h.attachGhost(c, res.Hits, views)
 
 	ignored := mergedJobSearchIgnored(c, out.own(publicJobSearchParams), dropped)
-	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignored, ignoredJobValues(c))
+	meta := listMeta(res.Total, limit, offset, ignored, ignoredJobValues(c))
+	if res.TotalIsLowerBound {
+		meta["total_is_lower_bound"] = true
+	}
+	return c.JSON(fiber.Map{"data": views, "meta": meta})
 }
 
 // appliedCompanyExclusion resolves ?hide_applied_companies=true into the filter
@@ -450,8 +465,9 @@ func (h *searchHandlers) formerEmployerSlugsFor(ctx context.Context, userID int6
 // wantSemantic runs the query as a hybrid through h.semantic; a flag it cannot honour
 // (see semanticDropped) is reported as a dropped param. exclude names job ids to keep
 // out of the result (hide_seen); nil excludes nothing. personal is the applied-company
-// exclusion fragment; an empty fragment leaves the result unchanged.
-func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude []int64, personal string) (jobSearchOutcome, error) {
+// exclusion fragment; an empty fragment leaves the result unchanged. match, when set, keeps
+// only the postings at or above the caller's minimum skill match (see skillMatchFilter).
+func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude []int64, personal string, match *skillMatchFilter) (jobSearchOutcome, error) {
 	if h.search == nil {
 		return jobSearchOutcome{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
@@ -465,7 +481,7 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude [
 	if err != nil {
 		return jobSearchOutcome{}, err
 	}
-	return h.executeJobSearch(c.Context(), queryValues(c), jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: formerApplied, vector: h.matchVector(c), exclude: exclude, personal: personal, wantSemantic: wantSemantic})
+	return h.executeJobSearch(c.Context(), queryValues(c), jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: formerApplied, vector: h.matchVector(c), exclude: exclude, personal: personal, wantSemantic: wantSemantic, match: match})
 }
 
 type jobSearchInput struct {
@@ -476,6 +492,7 @@ type jobSearchInput struct {
 	exclude              []int64
 	personal             string
 	wantSemantic, strict bool
+	match                *skillMatchFilter
 }
 
 func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, in jobSearchInput) (jobSearchOutcome, error) {
@@ -511,7 +528,16 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		return jobSearchOutcome{}, fmt.Errorf("search fields cannot be enforced")
 	}
 	dropped := qFieldsIgnored
-	res, outcome, err := h.semantic.search(ctx, h.search, params, wantSemantic)
+	var (
+		res     search.SearchResult
+		outcome semanticOutcome
+		err     error
+	)
+	if in.match != nil {
+		res, err = in.match.scan(ctx, h.search, params)
+	} else {
+		res, outcome, err = h.semantic.search(ctx, h.search, params, wantSemantic)
+	}
 	if outcome == semanticDropped {
 		dropped = append(dropped, search.UnknownParam{Param: "semantic"})
 	}
@@ -535,10 +561,15 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		}
 		// Both personal exclusions survive the retry: id and company_slug have always
 		// been filterable, so an undeclared facet cannot justify dropping either.
-		res, err = h.search.Search(ctx, search.SearchParams{
+		retry := search.SearchParams{
 			Query: vals.Get("q"), Filter: withExcludedIDs(withFilterGroup(formerFilter, personal), exclude),
 			Sort: sort, Vector: vector, QFields: qFields, Limit: limit, Offset: offset,
-		})
+		}
+		if in.match != nil {
+			res, err = in.match.scan(ctx, h.search, retry)
+		} else {
+			res, err = h.search.Search(ctx, retry)
+		}
 		if err != nil {
 			return jobSearchOutcome{}, err
 		}

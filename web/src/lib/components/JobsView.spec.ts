@@ -6,6 +6,7 @@ import JobsView from './JobsView.svelte';
 import SavedSearches from './SavedSearches.svelte';
 import { StagedFilters } from '#lib/stagedFilters.svelte.js';
 import { emptyFilters } from '#lib/facetModel.js';
+import type { Job } from '#lib/types.js';
 
 const session = new SvelteMap<string, number | null>();
 vi.mock('$app/env', () => ({ browser: false, PUBLIC_OPEN_WITHIN: '' }));
@@ -72,6 +73,31 @@ describe('minimum skill match from the URL or a saved search', () => {
     profileStore.profile = { skills: ['go'] };
     mountList('min_skill_match=70&sort=match');
     expect(screen.queryByRole('button', { name: hint })).toBeNull();
+  });
+
+  const lowJob = (n: number) => ({
+    public_slug: `low-${n}`, title: `Low match ${n}`, company: 'Acme', skills: ['go', 'kafka', 'aws', 'spark'],
+  }) as unknown as Job;
+
+  it('shows the server page as served under best match, with a lower-bound total', () => {
+    session.set('id', 7);
+    profileStore.profile = { skills: ['go'] };
+    render(JobsView, {
+      initial: { items: [lowJob(1)], total: 41, hasMore: true, totalIsLowerBound: true },
+      initialParams: 'min_skill_match=70&sort=match', currentPage: 1, scope: {},
+    });
+    expect(screen.getByText(/Low match 1/)).toBeTruthy();
+    expect(screen.getAllByTitle('At least 41 jobs').length).toBeGreaterThan(0);
+  });
+
+  it('still trims the page in the browser under any other ordering', () => {
+    session.set('id', 7);
+    profileStore.profile = { skills: ['go'] };
+    render(JobsView, {
+      initial: { items: [lowJob(1)], total: 41, hasMore: true },
+      initialParams: 'min_skill_match=70', currentPage: 1, scope: {},
+    });
+    expect(screen.queryByText(/Low match 1/)).toBeNull();
   });
 
   it('is restored by applying a saved set, and reset by clearing', () => {

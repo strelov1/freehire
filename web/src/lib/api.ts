@@ -175,6 +175,8 @@ import type {
 export interface Slice<T> {
   items: T[];
   total?: number;
+  /** `total` counts what has been read so far, not everything that matches. */
+  totalIsLowerBound?: boolean;
   hasMore: boolean;
 }
 
@@ -512,6 +514,7 @@ function toSlice<T>(page: Page<T>, offset: number): Slice<T> {
   return {
     items: page.data,
     total: page.meta.total,
+    ...(page.meta.total_is_lower_bound ? { totalIsLowerBound: true } : {}),
     hasMore: offset + page.data.length < page.meta.total,
   };
 }
