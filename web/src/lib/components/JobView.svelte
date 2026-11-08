@@ -1167,22 +1167,6 @@
       />
     {/if}
 
-    {#if job.company?.trim()}
-      <!-- A muted text link, not a button: it shows on every posting. The company page is
-           resolved only on click, keeping crawler visits cheap. -->
-      <a
-        href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
-        target="_blank"
-        rel="nofollow noopener noreferrer"
-        class="w-fit text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-      >
-        <!-- Inline, not flex: a long company name wraps the text, and the icon then follows
-             its last word (held together by nowrap) instead of standing alone. -->
-        Find people at {job.company.trim()} on <span class="whitespace-nowrap"
-          >LinkedIn<ExternalLink class="ml-1 inline size-3.5 align-text-bottom" aria-hidden="true" /></span
-        >
-      </a>
-    {/if}
 
     <!-- Mentorship is a separate way to get help from someone at this company. -->
     {#if job.company_slug}
@@ -1353,6 +1337,23 @@
         />
       {:else}
         <div class="min-w-0 flex-1 border-b border-border" aria-hidden="true"></div>
+      {/if}
+      {#if job.company?.trim()}
+        <!-- At the tab row's end, where it reads as one more thing to look at about this job,
+             rather than a sentence of its own under the CTAs. The full wording is the link's
+             name; the visible label stays short so it fits beside the tabs. The company page
+             is resolved only on click, keeping crawler visits cheap. -->
+        <a
+          href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          aria-label="Find people at {job.company.trim()} on LinkedIn"
+          title="Find people at {job.company.trim()} on LinkedIn"
+          class="inline-flex shrink-0 items-center gap-1.5 self-stretch border-b border-border pl-3 text-sm text-muted-foreground hover:text-foreground"
+        >
+          Find people
+          <ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />
+        </a>
       {/if}
     </div>
 

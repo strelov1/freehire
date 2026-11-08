@@ -122,6 +122,15 @@ backlog blocks nothing.
 - diff-cover is installed from `.github/requirements/diff-cover.txt` (hash-pinned, in a
   virtualenv); `COVERAGE_FAIL_UNDER=<n>` overrides both thresholds for one local run.
 
+## Python lint: Ruff
+
+Every tracked `.py` file (`services/scrapling-fetch`, `services/pii-filter`, `scripts/`,
+`.github/scripts/`) is linted and format-checked by Ruff. `ruff.toml` at the root holds the
+rules (`E4`/`E7`/`E9`/`F` plus `I`, `B`, `UP`; findings are fixed, never baselined), the
+version is pinned in `.mise.toml` and in the `python-lint` CI job (`RUFF_VERSION` and
+`RUFF_SHA256` there move with it), and the gates are the lefthook `ruff` command on staged
+files and that job, which runs `ruff check .` and `ruff format --check .`.
+
 ## Python: pii-filter and scripts
 
 The `pii-filter` CI job runs `services/pii-filter`'s tests with `python -m unittest` and no

@@ -107,7 +107,7 @@ real finding means **revoke the credential**.
 (`pnpm check:dead`), Go `deadcode`, actionlint + zizmor (SHA-pinned actions), agnix (32 KiB
 cap per AGENTS.md), rumdl, ast-grep, Markdown links (`pnpm check:links`), oasdiff on
 `web/static/openapi.yaml` (`API-Break:` trailer), changed-line coverage (diff-cover, Go
-≥ 60%), shellcheck/hadolint, shared JS deps (`pnpm check:deps`), gitleaks.
+≥ 60%), shellcheck/hadolint, shared JS deps (`pnpm check:deps`), Ruff on Python, gitleaks.
 
 **Before you run, change or add a `cmd/<name>` worker, read its entry in [docs/agents/workers.md](docs/agents/workers.md) when it has one**: what it needs, when it runs, and the trap behind it. Not every worker has an entry yet (`ls cmd/` is the full list); without one, read the worker's own `main.go`. A new worker gets its entry there.
 
@@ -201,6 +201,7 @@ Each is self-contained and can be read independently.
 | **On-site applications** | [internal/ingest/directapply/AGENTS.md](internal/ingest/directapply/AGENTS.md) |
 | **Telegram** | [internal/ingest/telegram/AGENTS.md](internal/ingest/telegram/AGENTS.md) |
 | **`internal/engage`** block | [internal/engage/AGENTS.md](internal/engage/AGENTS.md) |
+| **CV lifecycle letters** | [internal/engage/cvlifecycle/AGENTS.md](internal/engage/cvlifecycle/AGENTS.md) |
 | **Interview buddies** | [internal/engage/buddy/AGENTS.md](internal/engage/buddy/AGENTS.md) |
 | **Messaging core** | [internal/engage/messaging/AGENTS.md](internal/engage/messaging/AGENTS.md) |
 | **Employee referrals** | [internal/engage/referral/AGENTS.md](internal/engage/referral/AGENTS.md) |

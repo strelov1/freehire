@@ -478,6 +478,42 @@ jobs:
           tar -xzf /tmp/rumdl.tar.gz -C /tmp rumdl
           /tmp/rumdl check --no-cache .
 
+  # Every tracked .py file: ruff.toml holds the rules, and none are baselined. The release
+  # binary is checked against a digest written HERE, as in the docs job. A version bump
+  # changes RUFF_VERSION, RUFF_SHA256 and .mise.toml together.
+  python-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Tool archives come from a cache: see "Cache tool archives" in backend-jobs for why.
+      - name: Cache tool archives
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/ci-tools
+          key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: ci-tools-${{ github.job }}-
+
+      - name: Install Ruff
+        env:
+          RUFF_VERSION: 0.17.4
+          RUFF_SHA256: 3ab2b34aeacdbc1ea5c529cdbda3e05792633d587228123fd09f3b5a0facb27a
+        run: |
+          f=~/.cache/ci-tools/ruff-${RUFF_VERSION}.tar.gz
+          [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs -o "$f" \
+            "https://github.com/astral-sh/ruff/releases/download/${RUFF_VERSION}/ruff-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${RUFF_SHA256}  $f" | sha256sum -c -
+          tar -xzf "$f" -C /tmp --strip-components=1 ruff-x86_64-unknown-linux-gnu/ruff
+
+      - name: Lint
+        run: /tmp/ruff check .
+
+      - name: Check formatting
+        run: /tmp/ruff format --check .
+
   # The version of every package whose TYPES cross the design system's `link:` boundary.
   # design-system is symlinked into web and extension rather than copied, so each of the
   # three installs its own node_modules and a shared package lands on disk more than once —
@@ -1009,7 +1045,7 @@ jobs:
           if [ -n "$(git status --porcelain -- ../docs/API.md ../docs/API.internal.md)" ]; then
             git --no-pager diff -- ../docs/API.md ../docs/API.internal.md
             echo
-            echo 'docs/API.md or docs/API.internal.md is stale. Run "pnpm run gen:api-docs" in web/ and commit the result.'
+            echo 'docs/API.md or docs/API.internal.md is stale. Run "pnpm run gen:api-docs" in web/ and commit the result. This is not a bug in the code: regenerating fixes it (the api-docs-drift pre-commit hook does it for you).'
             exit 1
           fi
           echo 'docs/API.md and docs/API.internal.md match web/src/lib/docs/api-spec.ts.'
@@ -1032,7 +1068,7 @@ jobs:
           if [ -n "$(git status --porcelain -- src/lib/docs/generated/api-reference.openapi.json src/lib/docs/generated/api-reference.internal.openapi.json)" ]; then
             git --no-pager diff -- src/lib/docs/generated/api-reference.openapi.json src/lib/docs/generated/api-reference.internal.openapi.json
             echo
-            echo 'web/src/lib/docs/generated/api-reference.openapi.json or api-reference.internal.openapi.json is stale. Run "pnpm run gen:openapi" in web/ and commit the result.'
+            echo 'web/src/lib/docs/generated/api-reference.openapi.json or api-reference.internal.openapi.json is stale. Run "pnpm run gen:openapi" in web/ and commit the result. This is not a bug in the code: regenerating fixes it (the api-docs-drift pre-commit hook does it for you).'
             exit 1
           fi
           echo 'Both generated OpenAPI references match web/src/lib/docs/api-spec.ts.'
