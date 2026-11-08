@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
+	"net/mail"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -71,7 +75,7 @@ type Message struct {
 	Attachments []Attachment
 
 	// Campaign names the letter for engagement tracking. Empty, as on anything a person
-	// is waiting for, the mail goes out with no open pixel and no rewritten links. Set
+	// is waiting for, the mail goes out with no rewritten links. Set
 	// only on campaigns and digests. SES restricts tag values to ASCII letters, digits,
 	// '_', '-' and '.'.
 	Campaign string
@@ -88,8 +92,25 @@ func (m Message) validate() error {
 		return fmt.Errorf("emailnotify: %s mail to %s: %w", m.Group, m.To, ErrNoWayOut)
 	case !emailprefs.Silenceable(m.Group) && m.UnsubscribeURL != "":
 		return fmt.Errorf("emailnotify: %s mail to %s carries an unsubscribe URL it cannot honour", m.Group, m.To)
+	// The footer saying who wrote and why, with the way out, must reach the reader in
+	// both parts: SES Trust & Safety refused our appeal partly because the mail was hard
+	// to attribute, and a sender building its own body can drop it without noticing.
+	case emailprefs.Silenceable(m.Group) && !strings.Contains(m.Text, emailprefs.TextFooter(m.UnsubscribeURL)):
+		return fmt.Errorf("emailnotify: %s mail to %s: text part lacks emailprefs.TextFooter: %w", m.Group, m.To, ErrNoWayOut)
+	case emailprefs.Silenceable(m.Group) && !strings.Contains(m.HTML, html.EscapeString(m.UnsubscribeURL)):
+		return fmt.Errorf("emailnotify: %s mail to %s: HTML part lacks the unsubscribe link: %w", m.Group, m.To, ErrNoWayOut)
 	}
 	return nil
+}
+
+// withSenderName gives a bare From address the product's name, so no mail shows up in
+// a message list as just "notifications". A From that already names someone (the
+// founder sequence's "Ilya from freehire") is kept.
+func withSenderName(from string) string {
+	if a, err := mail.ParseAddress(from); err == nil && a.Name == "" {
+		return From(productName, from)
+	}
+	return from
 }
 
 // unsubscribeHeaders is the RFC 8058 pair, or nothing for mail that cannot be
@@ -119,10 +140,12 @@ type Client struct {
 	trackingSet string
 	// breaker is nil unless WithSendingBreaker was called.
 	breaker *breaker
+	// relay, when SMTP_URL is set, carries every message instead of SES.
+	relay *smtpRelay
 }
 
 // WithEngagementTracking returns the Client with the SES configuration set that
-// publishes opens, clicks, deliveries, bounces and complaints. Only the workers sending
+// publishes clicks, deliveries, bounces and complaints. Only the workers sending
 // campaigns and digests call it; every other worker's client cannot track by construction.
 func (c *Client) WithEngagementTracking(configurationSet string) *Client {
 	out := *c
@@ -139,7 +162,7 @@ const trackingCheckTimeout = 10 * time.Second
 // whole audience, so a sender checks once before its first letter. Without a set there is
 // nothing to check.
 func (c *Client) CheckEngagementTracking(ctx context.Context) error {
-	if c.trackingSet == "" {
+	if c.trackingSet == "" || c.relay != nil {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, trackingCheckTimeout)
@@ -155,20 +178,45 @@ func (c *Client) CheckEngagementTracking(ctx context.Context) error {
 }
 
 // NewClient builds a Client from AWS config resolved via the default chain
-// (SSO / IAM role / env) — credentials never come from app config, matching the
+// (SSO / IAM role / env). With SMTP_URL set it sends through that relay instead
+// and SES is never called — credentials never come from app config, matching the
 // apply service's inbound SES adapter.
 func NewClient(ctx context.Context, region string) (*Client, error) {
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 	if err != nil {
 		return nil, fmt.Errorf("emailnotify: aws config: %w", err)
 	}
-	return &Client{ses: sesv2.NewFromConfig(cfg)}, nil
+	c := &Client{ses: sesv2.NewFromConfig(cfg)}
+	// Read here rather than threaded through config so every worker that builds a
+	// Client follows the switch without a change of its own.
+	if raw := os.Getenv("SMTP_URL"); raw != "" {
+		if c.relay, err = parseSMTPURL(raw); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
 }
 
 // Send delivers one message. A send error is returned so the caller (a delivery
 // loop) retries and eventually dead-letters rather than dropping the notification.
 func (c *Client) Send(ctx context.Context, m Message) error {
+	m.From = withSenderName(m.From)
 	if err := m.validate(); err != nil {
+		return err
+	}
+	if c.breaker != nil && c.breaker.tripped.Load() {
+		return ErrSendingPaused
+	}
+	if c.relay != nil {
+		raw, err := buildRawMessage(m)
+		if err != nil {
+			return err
+		}
+		err = c.relay.send(ctx, m.From, m.To, raw)
+		if c.breaker != nil && errors.Is(err, errRelayDown) {
+			c.breaker.tripped.Store(true)
+			return fmt.Errorf("%w: %w", ErrSendingPaused, err)
+		}
 		return err
 	}
 	in, err := c.input(m)
@@ -176,9 +224,6 @@ func (c *Client) Send(ctx context.Context, m Message) error {
 		return err
 	}
 	c.track(in, m)
-	if c.breaker != nil && c.breaker.tripped.Load() {
-		return ErrSendingPaused
-	}
 	if _, err := c.ses.SendEmail(ctx, in); err != nil {
 		if c.breaker != nil && accountRefused(err) {
 			c.breaker.tripped.Store(true)
@@ -222,14 +267,17 @@ func (c *Client) input(m Message) (*sesv2.SendEmailInput, error) {
 	return in, nil
 }
 
-// track routes a campaign's mail through the configuration set and tags it, which is all
-// the event consumer (internal/engage/emailevents) learns about the letter.
+// track tags every mail with its group, so a bounce or complaint the identity's default
+// configuration set reports says which kind of mail drew it. A campaign's mail is also
+// routed through the engagement set and tagged with the campaign, which is all the event
+// consumer (internal/engage/emailevents) learns about the letter.
 func (c *Client) track(in *sesv2.SendEmailInput, m Message) {
+	in.EmailTags = []types.MessageTag{{Name: aws.String("group"), Value: aws.String(string(m.Group))}}
 	if c.trackingSet == "" || m.Campaign == "" {
 		return
 	}
 	in.ConfigurationSetName = aws.String(c.trackingSet)
-	in.EmailTags = []types.MessageTag{{Name: aws.String("campaign"), Value: aws.String(m.Campaign)}}
+	in.EmailTags = append(in.EmailTags, types.MessageTag{Name: aws.String("campaign"), Value: aws.String(m.Campaign)})
 	if m.Variant != "" {
 		in.EmailTags = append(in.EmailTags, types.MessageTag{Name: aws.String("variant"), Value: aws.String(m.Variant)})
 	}

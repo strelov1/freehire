@@ -50,6 +50,7 @@ func recordMatch(ctx context.Context, q *Queries, sub, job int64) (int64, error)
 	return q.RecordSubscriptionMatches(ctx, RecordSubscriptionMatchesParams{
 		SubscriptionIds: []int64{sub},
 		JobIds:          []int64{job},
+		QueryRevisions:  []int32{0},
 	})
 }
 
@@ -108,7 +109,7 @@ func TestGetSubscriptionForDelivery_ResolvesAccountEmail(t *testing.T) {
 	ctx := context.Background()
 
 	truncateSubs(t, pool)
-	uid := insertUser(t, pool, "digest@example.test")
+	uid := insertVerifiedUser(t, pool, "digest@example.test")
 	ssID := insertSavedSearch(t, pool, uid, "Go remote", "q=go")
 	sub, err := q.CreateSubscription(ctx, CreateSubscriptionParams{
 		Channel: "email", SavedSearchID: ssID, UserID: uid,
@@ -185,6 +186,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		n, err := q.RecordSubscriptionMatches(ctx, RecordSubscriptionMatchesParams{
 			SubscriptionIds: []int64{subA, subA, subB},
 			JobIds:          []int64{j1, j2, j1},
+			QueryRevisions:  []int32{0, 0, 0},
 		})
 		if err != nil {
 			t.Fatalf("batched record: %v", err)
@@ -215,6 +217,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		args := RecordSubscriptionMatchesParams{
 			SubscriptionIds: []int64{removed, remaining, remaining},
 			JobIds:          []int64{j1, j1, j2},
+			QueryRevisions:  []int32{0, 0, 0},
 		}
 		n, err := q.RecordSubscriptionMatches(ctx, args)
 		if err != nil || n != 2 {
@@ -261,6 +264,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 			n, err := New(recording).RecordSubscriptionMatches(ctx, RecordSubscriptionMatchesParams{
 				SubscriptionIds: []int64{removed, remaining},
 				JobIds:          []int64{job, job},
+				QueryRevisions:  []int32{0, 0},
 			})
 			recorded <- result{n, err}
 		}()
@@ -534,6 +538,164 @@ func TestTelegramLink(t *testing.T) {
 		}
 		if _, err := q.GetTelegramLink(ctx, uid); !errors.Is(err, pgx.ErrNoRows) {
 			t.Errorf("get after delete: err=%v, want ErrNoRows", err)
+		}
+	})
+}
+
+func TestSavedSearchQueryRevisionGuardsStaleMatches(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	text := func(v string) pgtype.Text { return pgtype.Text{String: v, Valid: true} }
+	claimAll := func(lease int32) int {
+		t.Helper()
+		c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: lease, PerSubscription: 100, BatchSize: 100})
+		if err != nil {
+			t.Fatalf("claim: %v", err)
+		}
+		return len(c)
+	}
+	expire := func() int64 {
+		t.Helper()
+		n, err := q.ExpireStaleSubscriptionMatches(ctx, ExpireStaleSubscriptionMatchesParams{LeaseSeconds: 0, FreshnessSeconds: 86400, BatchSize: 100})
+		if err != nil {
+			t.Fatalf("expire: %v", err)
+		}
+		return n
+	}
+	record := func(sub, job int64, rev int32) int64 {
+		t.Helper()
+		n, err := q.RecordSubscriptionMatches(ctx, RecordSubscriptionMatchesParams{
+			SubscriptionIds: []int64{sub}, JobIds: []int64{job}, QueryRevisions: []int32{rev},
+		})
+		if err != nil {
+			t.Fatalf("record: %v", err)
+		}
+		return n
+	}
+	seed := func(email string) (ssID, uid int64, sub Subscription) {
+		truncateSubs(t, pool)
+		uid = insertUser(t, pool, email)
+		ssID = insertSavedSearch(t, pool, uid, "s", "q=go")
+		sub, err := q.CreateSubscription(ctx, CreateSubscriptionParams{Channel: "telegram", SavedSearchID: ssID, UserID: uid})
+		if err != nil {
+			t.Fatalf("seed subscription: %v", err)
+		}
+		return ssID, uid, sub
+	}
+	revisionOf := func(ssID int64) int32 {
+		t.Helper()
+		var r int32
+		if err := pool.QueryRow(ctx, `SELECT query_revision FROM saved_searches WHERE id = $1`, ssID).Scan(&r); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+
+	t.Run("a match recorded after the edit under the old revision is refused", func(t *testing.T) {
+		ssID, uid, sub := seed("rec@example.test")
+		job := insertJob(t, pool, "j")
+		rows, err := q.ListActiveSubscriptions(ctx)
+		if err != nil || len(rows) != 1 {
+			t.Fatalf("list active: rows=%d err=%v", len(rows), err)
+		}
+		oldRev := rows[0].QueryRevision
+		if _, err := q.UpdateSavedSearch(ctx, UpdateSavedSearchParams{ID: ssID, UserID: uid, Query: text("q=rust")}); err != nil {
+			t.Fatal(err)
+		}
+		if n := record(sub.ID, job, oldRev); n != 0 {
+			t.Errorf("recorded %d rows under a stale revision, want 0", n)
+		}
+		if got := claimAll(3600); got != 0 {
+			t.Errorf("claimed %d, want 0", got)
+		}
+	})
+
+	for _, tc := range []string{"released", "lease lapsed"} {
+		t.Run("a leased match is not re-claimed after the edit: "+tc, func(t *testing.T) {
+			ssID, uid, sub := seed("lease-" + tc[:3] + "@example.test")
+			job := insertJob(t, pool, "j")
+			record(sub.ID, job, revisionOf(ssID))
+			if got := claimAll(3600); got != 1 {
+				t.Fatalf("first claim = %d, want 1", got)
+			}
+			if _, err := q.UpdateSavedSearch(ctx, UpdateSavedSearchParams{ID: ssID, UserID: uid, Query: text("q=rust")}); err != nil {
+				t.Fatal(err)
+			}
+			lease := int32(3600)
+			if tc == "released" {
+				if err := q.ReleaseMatchClaim(ctx, ReleaseMatchClaimParams{SubscriptionID: sub.ID, JobIds: []int64{job}}); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				lease = 0
+			}
+			if got := claimAll(lease); got != 0 {
+				t.Errorf("claimed %d superseded matches, want 0", got)
+			}
+			if n := expire(); n != 1 {
+				t.Errorf("expiry retired %d rows, want 1", n)
+			}
+		})
+	}
+
+	t.Run("a rename keeps pending matches claimable", func(t *testing.T) {
+		ssID, uid, sub := seed("rename@example.test")
+		job := insertJob(t, pool, "j")
+		record(sub.ID, job, revisionOf(ssID))
+		if _, err := q.UpdateSavedSearch(ctx, UpdateSavedSearchParams{ID: ssID, UserID: uid, Name: text("renamed")}); err != nil {
+			t.Fatal(err)
+		}
+		if got := revisionOf(ssID); got != 0 {
+			t.Errorf("revision after a rename = %d, want 0", got)
+		}
+		if got := claimAll(3600); got != 1 {
+			t.Errorf("claimed %d after a rename, want 1", got)
+		}
+	})
+
+	t.Run("a job matching old and new query is recorded again under the new revision", func(t *testing.T) {
+		ssID, uid, sub := seed("both@example.test")
+		job := insertJob(t, pool, "j")
+		record(sub.ID, job, 0)
+		// A leased row is kept by the edit's delete, so the conflict path must reset it.
+		if got := claimAll(3600); got != 1 {
+			t.Fatalf("claim = %d, want 1", got)
+		}
+		if _, err := q.UpdateSavedSearch(ctx, UpdateSavedSearchParams{ID: ssID, UserID: uid, Query: text("q=go&remote=1")}); err != nil {
+			t.Fatal(err)
+		}
+		if n := record(sub.ID, job, 1); n != 1 {
+			t.Fatalf("re-record under the new revision = %d rows, want 1", n)
+		}
+		if got := claimAll(3600); got != 1 {
+			t.Errorf("claimed %d, want 1", got)
+		}
+	})
+
+	t.Run("count and mark skip superseded rows", func(t *testing.T) {
+		ssID, uid, sub := seed("cm@example.test")
+		old, cur := insertJob(t, pool, "old"), insertJob(t, pool, "cur")
+		record(sub.ID, old, 0)
+		if _, err := pool.Exec(ctx, `UPDATE subscription_matches SET claimed_at = now()`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := q.UpdateSavedSearch(ctx, UpdateSavedSearchParams{ID: ssID, UserID: uid, Query: text("q=rust")}); err != nil {
+			t.Fatal(err)
+		}
+		record(sub.ID, cur, 1)
+		before := pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}
+		n, err := q.CountCoveredMatches(ctx, CountCoveredMatchesParams{SubscriptionID: sub.ID, BeforeMatchedAt: before, BeforeJobID: 0})
+		if err != nil || n != 1 {
+			t.Fatalf("count = %d err=%v, want 1", n, err)
+		}
+		marked, err := q.MarkCoveredMatchesNotified(ctx, MarkCoveredMatchesNotifiedParams{SubscriptionID: sub.ID, BeforeMatchedAt: before, BeforeJobID: 0})
+		if err != nil || marked != 1 {
+			t.Fatalf("mark = %d err=%v, want 1", marked, err)
+		}
+		var stamped int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM subscription_matches WHERE job_id = $1 AND notified_at IS NOT NULL`, old).Scan(&stamped); err != nil || stamped != 0 {
+			t.Errorf("superseded row stamped notified: n=%d err=%v", stamped, err)
 		}
 	})
 }

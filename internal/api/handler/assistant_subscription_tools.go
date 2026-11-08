@@ -474,12 +474,13 @@ type deliverySchedule struct {
 
 func (h *assistantHandlers) deliverySchedule(ctx context.Context, userID int64, origin string) (deliverySchedule, error) {
 	out := deliverySchedule{
-		DigestFrequency: notify.FrequencyInterval,
+		DigestFrequency: notify.FrequencyDaily,
 		Note:            "account-wide, for every alert; the person changes it at " + origin + "/my/notifications/settings",
 	}
 	row, err := h.queries.GetNotificationSettings(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		out.DigestIntervalHours = notify.DefaultIntervalHours
+		d := notify.DefaultDigestTime
+		out.DigestTime = *formatHHMM(&d)
 		return out, nil
 	}
 	if err != nil {

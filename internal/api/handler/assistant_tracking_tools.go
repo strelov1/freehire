@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -151,12 +152,14 @@ func (h *assistantHandlers) myJobsTool() assistant.Tool {
 			"properties": map[string]any{
 				"filter": map[string]any{"type": "string", "description": "Which slice to list: all, viewed, saved, applied, board or dismissed. Defaults to the whole board."},
 				"limit":  map[string]any{"type": "integer", "description": fmt.Sprintf("How many to return (default %d, max %d).", assistantDefaultSearchLimit, assistantMaxSearchLimit)},
+				"offset": map[string]any{"type": "integer", "description": "Skip this many (paging); total says how many there are."},
 			},
 		},
 		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
 			var in struct {
 				Filter string `json:"filter"`
 				Limit  int    `json:"limit"`
+				Offset int    `json:"offset"`
 			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
@@ -170,9 +173,9 @@ func (h *assistantHandlers) myJobsTool() assistant.Tool {
 			}
 			limit = min(limit, assistantMaxSearchLimit)
 
-			listing, err := h.tracking.tracking.ListTracked(ctx, userID, in.Filter, jobtracking.CardFull, int32(limit), 0)
+			listing, err := h.tracking.tracking.ListTracked(ctx, userID, in.Filter, jobtracking.CardFull, int32(limit), int32(min(max(in.Offset, 0), math.MaxInt32)))
 			if errors.Is(err, jobtracking.ErrInvalidFilter) {
-				return nil, fmt.Errorf("unknown filter %q — use all, viewed, saved, applied, board or dismissed", in.Filter)
+				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("unknown filter %q — use all, viewed, saved, applied, board or dismissed", in.Filter))
 			}
 			if err != nil {
 				return nil, err

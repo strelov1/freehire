@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math"
 	"net/url"
 	"slices"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/application/deliverywindow"
+	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -340,6 +340,7 @@ func (r *Runner) recordHits(ctx context.Context, hits []search.JobDocument, subs
 	// a popular query with many subscribers no longer costs one sequential INSERT per
 	// (hit, subscription) pair.
 	var subIDs, jobIDs []int64
+	var revisions []int32
 	for _, hit := range hits {
 		created, ok := hitCreatedAt(hit)
 		if !ok {
@@ -370,6 +371,7 @@ func (r *Runner) recordHits(ctx context.Context, hits []search.JobDocument, subs
 			}
 			subIDs = append(subIDs, s.ID)
 			jobIDs = append(jobIDs, hit.ID)
+			revisions = append(revisions, s.QueryRevision)
 		}
 	}
 	if len(subIDs) == 0 {
@@ -378,6 +380,7 @@ func (r *Runner) recordHits(ctx context.Context, hits []search.JobDocument, subs
 	n, err := r.store.RecordSubscriptionMatches(ctx, db.RecordSubscriptionMatchesParams{
 		SubscriptionIds: subIDs,
 		JobIds:          jobIDs,
+		QueryRevisions:  revisions,
 	})
 	if err != nil {
 		return fmt.Errorf("record matches: %w", err)
@@ -410,18 +413,7 @@ func meetsSkillMatch(jobSkills, held []string, minPercent int) bool {
 	if minPercent == 0 || len(jobSkills) == 0 || len(held) == 0 {
 		return true
 	}
-	have := make(map[string]struct{}, len(held))
-	for _, skill := range held {
-		have[strings.ToLower(skill)] = struct{}{}
-	}
-	matched := 0
-	for _, skill := range jobSkills {
-		if _, ok := have[strings.ToLower(skill)]; ok {
-			matched++
-		}
-	}
-	percent := int(math.Round(float64(matched) / float64(len(jobSkills)) * 100))
-	return percent >= minPercent
+	return skillvec.MatchPercent(jobSkills, held) >= minPercent
 }
 
 // hasAvoidedSkill reports whether any of a job's skills is in the subscriber's

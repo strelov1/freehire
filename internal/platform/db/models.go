@@ -1488,6 +1488,7 @@ type SavedSearch struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	DerivedFromProfile bool               `json:"derived_from_profile"`
+	QueryRevision      int32              `json:"query_revision"`
 }
 
 type ScreeningAnswer struct {
@@ -1628,6 +1629,7 @@ type SubscriptionMatch struct {
 	FailedAt       pgtype.Timestamptz `json:"failed_at"`
 	LastError      string             `json:"last_error"`
 	ExpiredAt      pgtype.Timestamptz `json:"expired_at"`
+	QueryRevision  int32              `json:"query_revision"`
 }
 
 type TelegramChannel struct {
@@ -1756,6 +1758,7 @@ type User struct {
 	ApiUntilStripe     pgtype.Timestamptz `json:"api_until_stripe"`
 	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
 	AgentsMayApply     bool               `json:"agents_may_apply"`
+	LastActiveAt       pgtype.Timestamptz `json:"last_active_at"`
 }
 
 type UserBlock struct {

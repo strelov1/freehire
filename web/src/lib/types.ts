@@ -406,6 +406,9 @@ export interface CompanyListItem {
 /** Pagination metadata returned alongside list responses. */
 export interface ListMeta {
   total: number;
+  /** The total is "at least this many": the read stopped before the whole result was seen
+   *  (the minimum-skill-match scan). Absent for an ordinary count. */
+  total_is_lower_bound?: boolean;
   limit: number;
   offset: number;
 }
@@ -1014,7 +1017,7 @@ export interface BankedAnswer {
 export interface NotificationSettings {
   enabled: boolean;
   channels: string[];
-  /** 'interval' (default), 'instant' or 'daily' — governs only saved-search
+  /** 'daily' (default, at 09:00), 'instant' or 'interval' — governs only saved-search
    *  digests, not reminders/nudges. */
   digest_frequency: string;
   /** "HH:MM" local time, meaningful only when digest_frequency is 'daily'. */

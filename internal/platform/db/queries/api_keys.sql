@@ -33,11 +33,22 @@ ORDER BY created_at DESC;
 -- scope, enforcing expiry and touching last_used_at in one atomic statement. No row
 -- means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
 -- and an insufficient scope as 403.
-UPDATE api_keys
-SET last_used_at = now()
-WHERE token_hash = $1
-  AND (expires_at IS NULL OR expires_at > now())
-RETURNING user_id, scope, id;
+--
+-- A key in use is the account in use, so the same statement keeps users.last_active_at
+-- current (at most once a day), as GetUserTokenVersion does for a session: optional
+-- mail stops after 180 idle days (mail_recipient, migration 0247).
+WITH k AS (
+    UPDATE api_keys
+    SET last_used_at = now()
+    WHERE token_hash = $1
+      AND (expires_at IS NULL OR expires_at > now())
+    RETURNING user_id, scope, id
+), seen AS (
+    UPDATE users SET last_active_at = now()
+    FROM k
+    WHERE users.id = k.user_id AND users.last_active_at < now() - interval '1 day'
+)
+SELECT k.user_id, k.scope, k.id FROM k;
 
 -- name: ResolveAPIKeyIdentity :one
 -- Read-only credential identity and entitlements for trusted infrastructure.

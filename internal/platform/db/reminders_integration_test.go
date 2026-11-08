@@ -128,7 +128,7 @@ func TestJobReminderLifecycle(t *testing.T) {
 
 	t.Run("claim leases only due reminders, delivery marks terminal", func(t *testing.T) {
 		reset(t)
-		uid := insertUser(t, pool, "claim@example.test")
+		uid := insertVerifiedUser(t, pool, "claim@example.test")
 		dueJob := insertJob(t, pool, "due-job")
 		futureJob := insertJob(t, pool, "future-job")
 

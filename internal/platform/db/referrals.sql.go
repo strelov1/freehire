@@ -253,7 +253,7 @@ func (q *Queries) GetReferralRequest(ctx context.Context, id uuid.UUID) (Referra
 }
 
 const listApprovedReferrerRecipients = `-- name: ListApprovedReferrerRecipients :many
-SELECT o.user_id, u.email, t.chat_id
+SELECT o.user_id, mail_recipient(u.email, u.email_verified, u.last_active_at)::text AS email, t.chat_id
 FROM referral_offers o
 JOIN users u ON u.id = o.user_id
 LEFT JOIN telegram_links t ON t.user_id = o.user_id
@@ -267,8 +267,8 @@ type ListApprovedReferrerRecipientsRow struct {
 }
 
 // The notify fan-out targets: every approved referrer of a company with their email and
-// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
-// optional Telegram ping.
+// linked Telegram chat (NULL when unlinked). Email is ” when mail_recipient (0247) says
+// the address may not be mailed; chat_id drives the optional Telegram ping.
 func (q *Queries) ListApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]ListApprovedReferrerRecipientsRow, error) {
 	rows, err := q.db.Query(ctx, listApprovedReferrerRecipients, companySlug)
 	if err != nil {

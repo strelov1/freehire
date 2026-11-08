@@ -86,6 +86,11 @@ func newMixedServer(tools []assistant.Tool, userID int64, origin string, reader 
 // openai-mcp) opens sign-in from the in-band mcp/www_authenticate result, as its
 // Apps SDK documents. Every other host (Grok, Claude.ai) opens sign-in only on the
 // MCP specification's HTTP 401 with WWW-Authenticate, and ignores the in-band one.
+//
+// Grok and Claude.ai go further: they offer sign-in only while a connector is being
+// added, and a 401 later in a conversation opens nothing (measured on Grok, 2026-11-07).
+// An anonymous request from them is therefore refused outright, so the connector asks
+// for sign-in when it is added; without that it could never reach a personal tool.
 func MixedHandler(tools []assistant.Tool, origin string, reader Reader) http.Handler {
 	personal := map[string]bool{}
 	for _, tool := range tools {
@@ -96,6 +101,11 @@ func MixedHandler(tools []assistant.Tool, origin string, reader Reader) http.Han
 	delete(personal, toolGetJob)
 	delete(personal, toolGetCompany)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get(AccountUserIDHeader) == "" && signsInOnlyAtConnect(r.Header.Get("User-Agent")) {
+			w.Header().Set("WWW-Authenticate", mixedChallenge(origin))
+			http.Error(w, "sign in to freehire to connect", http.StatusUnauthorized)
+			return
+		}
 		if r.Header.Get(AccountUserIDHeader) == "" && r.Method == http.MethodPost &&
 			!strings.HasPrefix(r.Header.Get("User-Agent"), "openai-mcp") {
 			body, err := io.ReadAll(r.Body)
@@ -129,4 +139,10 @@ func MixedHandler(tools []assistant.Tool, origin string, reader Reader) http.Han
 			return newMixedServer(tools, userID, origin, reader)
 		}, &mcp.StreamableHTTPOptions{Stateless: true}).ServeHTTP(w, r)
 	})
+}
+
+// signsInOnlyAtConnect names the hosts whose sign-in exists only while a connector is
+// being added (see MixedHandler). Read from production access logs.
+func signsInOnlyAtConnect(userAgent string) bool {
+	return strings.HasPrefix(userAgent, "grok-connectors-manager") || strings.HasPrefix(userAgent, "Claude-User")
 }

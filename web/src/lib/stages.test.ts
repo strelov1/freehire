@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { STAGE_GROUPS, STAGE_LABELS, STAGE_VALUES } from './generated/contracts';
-import { TRANSLATED_LOCALES } from './locale';
+import { TRANSLATED_LOCALES } from './i18n/locale';
 import { groupedStages, humanizeStage, stageGroupLabel } from './stages';
 import { must } from './utils';
 

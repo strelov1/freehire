@@ -115,6 +115,14 @@ var curatedAliases = map[string]string{
 	// row exists lands here, so the wave retires it too.
 	"krka-tovarna-zdravil": "krka",
 
+	// BRG's Workday tenant is named for its domain (thinkbrg.wd5.myworkdayjobs.com), so the
+	// board stored the host label as the company. The domain settles it: the
+	// berkeley-research-group company records homepage thinkbrg.com, and the same "Senior
+	// Engineering Manager" posting (Second Sight Solutions, a BRG subsidiary) sits under both
+	// slugs — builtin under the name, Workday under the tenant. Measured 2026-11-07 through the
+	// public company API: thinkbrg 47 open jobs, berkeley-research-group 4.
+	"thinkbrg": "berkeley-research-group",
+
 	// Numeric board artefacts, each confirmed by shared open titles (the count follows).
 	"aecom2":                   "aecom",         // 1063
 	"nagarro1":                 "nagarro",       // 323

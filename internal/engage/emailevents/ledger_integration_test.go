@@ -29,10 +29,10 @@ func TestLedger_KeepsTheFirstSightingAndRollsUpAgedEvents(t *testing.T) {
 	}
 
 	old := now.Add(-Retention - 24*time.Hour)
-	record("m-1", "open", old)
-	record("m-1", "open", old.Add(time.Hour)) // a second open changes nothing
-	record("m-2", "open", old)
-	record("m-3", "open", now)
+	record("m-1", "click", old)
+	record("m-1", "click", old.Add(time.Hour)) // a second click changes nothing
+	record("m-2", "click", old)
+	record("m-3", "click", now)
 
 	if err := RollUp(ctx, q, now); err != nil {
 		t.Fatalf("RollUp: %v", err)
@@ -45,7 +45,7 @@ func TestLedger_KeepsTheFirstSightingAndRollsUpAgedEvents(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM email_events`).Scan(&remaining); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `SELECT COALESCE(sum(count), 0) FROM email_event_daily WHERE campaign = 'launch' AND type = 'open'`).Scan(&total); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(sum(count), 0) FROM email_event_daily WHERE campaign = 'launch' AND type = 'click'`).Scan(&total); err != nil {
 		t.Fatal(err)
 	}
 	if remaining != 1 || total != 2 {
