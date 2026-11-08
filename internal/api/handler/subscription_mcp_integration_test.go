@@ -229,3 +229,25 @@ func TestSubscriptionMCP_SubscribeListUpdateUnsubscribe(t *testing.T) {
 		t.Fatalf("alerts after unsubscribe = %v", alerts)
 	}
 }
+
+// A refusal written for the caller reaches the agent word for word: the account server shows
+// only a *fiber.Error's text and replaces any other error with a generic sentence, so a
+// message left a plain error would arrive as "something went wrong".
+func TestMCPAccount_CallerRefusalsReachTheAgentVerbatim(t *testing.T) {
+	pool, h := newSubscriptionMCPFixture(t)
+	mcpc := newMCPToolCaller(t, h, seedOAuthUser(t, pool, "mcp-refusal-text@example.test"))
+
+	for _, tc := range []struct {
+		tool string
+		args map[string]any
+		want string
+	}{
+		{"track_job", map[string]any{"slug": "any"}, "nothing to change — pass a stage, a note, or both"},
+		{"update_subscription", map[string]any{"id": 987654}, "this account has no job alert with id 987654 — call list_subscriptions for the ids"},
+		{"subscription_updates", map[string]any{"since": "yesterday"}, `since must be an RFC 3339 time such as 2026-10-20T00:00:00Z: parsing time "yesterday" as "2006-01-02T15:04:05Z07:00": cannot parse "yesterday" as "2006"`},
+	} {
+		if text, failed := mcpc.call(tc.tool, tc.args); !failed || text != tc.want {
+			t.Errorf("%s = %q failed=%v, want %q", tc.tool, text, failed, tc.want)
+		}
+	}
+}

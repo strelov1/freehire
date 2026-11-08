@@ -155,7 +155,7 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 				return nil, err
 			}
 			if h.search == nil || h.search.facets == nil {
-				return nil, errors.New("search is not available")
+				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 			}
 			vals, err := in.Filters.values()
 			if err != nil {
@@ -166,7 +166,7 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 			if !full && facet != "" {
 				// Count only the named facet: one attribute costs Meili a fraction of all of them.
 				if !listableFacet(facet) {
-					return nil, fmt.Errorf("unknown facet %q; valid facets are: %s", facet, strings.Join(listableFacets(), ", "))
+					return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("unknown facet %q; valid facets are: %s", facet, strings.Join(listableFacets(), ", ")))
 				}
 				attrs = facetAttributes(facet)
 			}
@@ -175,7 +175,7 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 				Facets: attrs,
 			})
 			if err != nil {
-				return nil, err
+				return nil, searchToolError(err)
 			}
 			view := facetView(res)
 			if full {
@@ -306,7 +306,7 @@ func (h *assistantHandlers) searchJobs(full bool) assistant.Tool {
 				return nil, err
 			}
 			if h.search == nil || h.search.search == nil {
-				return nil, errors.New("search is not available")
+				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 			}
 			vals, err := in.Filters.values()
 			if err != nil {
@@ -345,7 +345,7 @@ func (h *assistantHandlers) searchJobs(full bool) assistant.Tool {
 				Offset: offset,
 			})
 			if err != nil {
-				return nil, err
+				return nil, searchToolError(err)
 			}
 			if full {
 				if err := h.search.hydrateDescriptions(ctx, res.Hits); err != nil {
@@ -364,6 +364,18 @@ func (h *assistantHandlers) searchJobs(full bool) assistant.Tool {
 			return map[string]any{"total": res.Total, "limit": limit, "offset": offset, "jobs": jobs}, nil
 		},
 	}
+}
+
+// searchToolError gives a query the search layer refused the same 400 and words the HTTP
+// search answers it with (classify); any other failure stays an internal one.
+func searchToolError(err error) error {
+	switch {
+	case errors.Is(err, search.ErrTooManyAlternatives):
+		return fiber.NewError(fiber.StatusBadRequest, search.ErrTooManyAlternatives.Error())
+	case errors.Is(err, search.ErrBadQuery):
+		return fiber.NewError(fiber.StatusBadRequest, "invalid search query")
+	}
+	return err
 }
 
 // lookupMiss answers a slug lookup that failed: a row that does not exist is the sentence the
@@ -499,14 +511,14 @@ func (h *assistantHandlers) marketFitTool() assistant.Tool {
 				return nil, err
 			}
 			if h.search == nil || h.search.facets == nil {
-				return nil, errors.New("search is not available")
+				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 			}
 			skills := nonEmptyStrings(in.Skills)
 			if len(skills) == 0 {
-				return nil, errors.New("skills is required — list the canonical slugs to measure")
+				return nil, fiber.NewError(fiber.StatusBadRequest, "skills is required — list the canonical slugs to measure")
 			}
 			if len(skills) > maxCoverageSkills {
-				return nil, fmt.Errorf("too many skills (max %d)", maxCoverageSkills)
+				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("too many skills (max %d)", maxCoverageSkills))
 			}
 			vals, err := in.Filters.values()
 			if err != nil {
@@ -518,7 +530,7 @@ func (h *assistantHandlers) marketFitTool() assistant.Tool {
 
 			v, err := h.resume.coverageFor(ctx, search.FilterFromValues(vals), skills, skills, nil, skills)
 			if err != nil {
-				return nil, err
+				return nil, searchToolError(err)
 			}
 			// Coherence is a CV-section metric; a flat skill list has no sections.
 			v.CoherencePercent = 0
