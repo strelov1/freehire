@@ -180,7 +180,7 @@ test.describe('full-page assistant on a phone', () => {
     const x = box.x + box.width / 2;
     const y0 = box.y + box.height / 2;
     const cdp = await page.context().newCDPSession(page);
-    const touch = (type: string, y?: number) =>
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', y?: number) =>
       cdp.send('Input.dispatchTouchEvent', {
         type,
         touchPoints: y === undefined ? [] : [{ x, y }],
