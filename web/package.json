@@ -40,7 +40,7 @@
     "@testing-library/svelte": "^5.4.2",
     "@tsconfig/svelte": "^5.0.4",
     "@types/node": "^26.6.5",
-    "@types/three": "^0.186.0",
+    "@types/three": "^0.187.0",
     "@vitest/coverage-v8": "^4.1.12",
     "eslint": "^10.8.0",
     "eslint-plugin-oxlint": "^1.77.0",
@@ -80,7 +80,7 @@
     "satori-html": "^0.3.2",
     "simple-icons": "^16.36.0",
     "svelte-dnd-action": "^0.9.80",
-    "three": "^0.186.1"
+    "three": "^0.187.0"
   },
   "imports": {
     "#lib/*": "./src/lib/*"
