@@ -31,7 +31,11 @@ describe('BuddiesLandingView', () => {
     for (const b of joins) b.click();
     expect(onJoin).toHaveBeenCalledTimes(joins.length);
     // Consent sits beside every button that joins, not only in a section further down.
-    expect(screen.getAllByText(/including applications you made before joining/)).toHaveLength(joins.length);
+    // and is announced with the button itself, since the click joins at once.
+    for (const b of joins) {
+      const note = document.getElementById(b.getAttribute('aria-describedby') ?? '');
+      expect(note?.textContent).toMatch(/role titles in your CV.*including applications you made before joining/s);
+    }
   });
 
   it('renders every FAQ question', () => {

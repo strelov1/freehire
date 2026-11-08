@@ -54,18 +54,18 @@
   ];
 </script>
 
-{#snippet join()}
+{#snippet join(consentId: string)}
   {#if onJoin}
-    <Button variant="primary" size="lg" onclick={onJoin}>Join interview buddies</Button>
+    <Button variant="primary" size="lg" onclick={onJoin} aria-describedby={consentId}>Join interview buddies</Button>
   {:else}
     <Button href={resolve('/buddies')} variant="primary" size="lg">Join interview buddies</Button>
   {/if}
 {/snippet}
 
-{#snippet consent()}
+{#snippet consent(id: string)}
   {#if onJoin}
-    <p class="max-w-xl text-xs text-muted-foreground text-pretty">
-      Joining shows members the companies and roles you apply to and your interview or offer moves, including applications you made before joining. Hide any of them from your tracker.
+    <p {id} class="max-w-xl text-xs text-muted-foreground text-pretty">
+      Joining shows members the role titles in your CV, which can name your employer, so check them first. It also shows the companies and roles you apply to and your interview or offer moves, including applications you made before joining; hide any of them from your tracker.
     </p>
   {/if}
 {/snippet}
@@ -83,11 +83,11 @@
         message the one who just had the interview you're preparing for.
       </p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
-        {@render join()}
+        {@render join('buddies-consent-hero')}
         <a href="#how-it-works" class="text-sm font-medium text-muted-foreground hover:text-foreground">See how it works ↓</a>
       </div>
       <p class="mt-3 text-xs text-muted-foreground">Free · Anonymous · Leave any time</p>
-      <div class="mt-2">{@render consent()}</div>
+      <div class="mt-2">{@render consent('buddies-consent-hero')}</div>
     </div>
     <BuddiesHeroDemo />
   </section>
@@ -181,8 +181,8 @@
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
       <h2 class="text-balance text-2xl font-semibold tracking-tight">Stop interviewing alone.</h2>
       <p class="max-w-xl text-muted-foreground text-pretty">Free, anonymous, and you can leave any time.</p>
-      {@render join()}
-      {@render consent()}
+      {@render join('buddies-consent-closing')}
+      {@render consent('buddies-consent-closing')}
     </div>
   </section>
 </div>
