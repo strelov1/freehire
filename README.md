@@ -66,7 +66,7 @@
 
 Aggregating **4.9M+ unique live postings** from **700,000+ companies** across
 **168 ATS platforms**, a long tail of aggregators and direct feeds, and **97
-Telegram channels** — **421 sources** in all, see [Sources](#sources) for the full
+Telegram channels** — **437 sources** in all, see [Sources](#sources) for the full
 breakdown. Reposts of one job across boards are collapsed, so every figure here is
 what [freehire.me/jobs](https://freehire.me/jobs?utm_source=github&utm_medium=readme&utm_campaign=stats) actually shows.
 

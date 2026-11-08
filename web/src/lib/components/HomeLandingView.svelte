@@ -235,7 +235,8 @@
         Every tech job, straight from the source — for you and your agent.
       </h1>
       <p class="text-balance text-base leading-relaxed text-muted-foreground">
-        {jobsFigure} live postings from company ATS boards, deduplicated and structured.
+        {jobsFigure} live postings from company career boards and other public sources,
+        deduplicated and structured.
         Search them here, plug them into Claude, Cursor or Codex over MCP, or build on the
         API. Free search, open source.
       </p>

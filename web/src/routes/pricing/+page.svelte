@@ -492,7 +492,9 @@
   </div>
 
   {#if plans}
-    <SectionLabel text="for builders" class="-mb-6 text-center" />
+    {#if plans.prices.some((p) => p.tier === 'api' || p.tier === 'api_data')}
+      <SectionLabel text="for builders" class="-mb-6 text-center" />
+    {/if}
     <ApiPlans prices={plans.prices} buttonVariant="outline" />
   {/if}
 
