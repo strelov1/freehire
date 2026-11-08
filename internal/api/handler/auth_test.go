@@ -222,8 +222,8 @@ func TestRegister_DBDown(t *testing.T) {
 	}
 	app.Post("/register", h.Register)
 
-	if got := postJSON(t, app, "/register", `{"email":"a@b.com","password":"validpassword123"}`); got != fiber.StatusServiceUnavailable {
-		t.Errorf("status = %d, want 503 Service Unavailable on DB outage", got)
+	if got := postJSON(t, app, "/register", `{"email":"a@b.com","password":"validpassword123"}`); got != fiber.StatusInternalServerError {
+		t.Errorf("status = %d, want 500 (a reported fault) on DB outage", got)
 	}
 }
 
@@ -248,8 +248,8 @@ func TestLogin_DBDown(t *testing.T) {
 	}
 	app.Post("/login", h.Login)
 
-	if got := postJSON(t, app, "/login", `{"email":"a@b.com","password":"validpassword123"}`); got != fiber.StatusServiceUnavailable {
-		t.Errorf("status = %d, want 503 Service Unavailable on DB outage", got)
+	if got := postJSON(t, app, "/login", `{"email":"a@b.com","password":"validpassword123"}`); got != fiber.StatusInternalServerError {
+		t.Errorf("status = %d, want 500 (a reported fault) on DB outage", got)
 	}
 }
 
