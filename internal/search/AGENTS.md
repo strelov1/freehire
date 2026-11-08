@@ -51,12 +51,14 @@ Its value-level twin is `meta.ignored_values`: a closed-vocabulary facet value o
 `internal/dict/vocab` (`work_mode=foo`) typically still narrows — to nothing — and
 `search.IgnoredValues` names it rather than letting `total: 0` pass for an empty market. Not
 every unknown value narrows to nothing: a true-or-absent boolean reads anything but `false`
-as true (`requires_clearance=flase` filters FOR clearance), and an unknown `_exclude` value
-excludes nothing; both are named all the same.
+as true (`requires_clearance=flase` filters FOR clearance, `requires_clearance_exclude=flase`
+excludes the postings that require it), while an unknown `_exclude` value on an ordinary
+equality facet excludes nothing; all are named all the same.
 
-The same rule decides what may be SUBSCRIBED to: `search.Narrows` asks whether a saved search
-selects less than the catalogue, and a subscription to one that does not is refused rather
-than reported, because nobody reads a digest's meta.
+The same rule decides what may be SUBSCRIBED to: `search.Narrows` refuses a saved search with
+no text and no surviving filter, rather than reporting it, because nobody reads a digest's
+meta. It checks only that a filter exists, not that it removes anything:
+`source_exclude=notarealsource` passes and digests the whole catalogue.
 
 ## The suggestions dictionary (`suggest`)
 

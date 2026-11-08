@@ -16,12 +16,15 @@ jobs list's `meta.total`, the `/about` and `/open` strips — reads ONE snapshot
   the planner estimate with `exact: false`, which zeroes the figures that exist only in the
   database — pass `exact` through to whatever renders them, because a zero must not reach a
   page as if it were a measurement.
-- **Two open counts.** `open_jobs` is the raw count (every open posting, reposts across
-  boards included, never duplicate-suppressed); `unique_open_jobs` is the de-duplicated
-  figure Meilisearch's own index holds, what `/jobs` would show unfiltered. It is measured
+- **Two open counts.** `open_jobs` is `CountCatalogueScale` from Postgres (open, public,
+  `duplicate_of IS NULL` — the predicate the indexer also uses, so the two differ only where
+  the index lags the database); `unique_open_jobs` is the
+  count Meilisearch's own index holds, what `/jobs` would show unfiltered. It is measured
   like `telegram_channels`: `cmd/rollup-stats` makes one `search.Client.Search` call (limit
   1, no filters) before publishing, best-effort — a missing `MEILI_MASTER_KEY` or an
-  unreachable Meilisearch costs that one figure, not the snapshot.
+  unreachable Meilisearch costs that one figure, not the snapshot. Unlike the channel count
+  it then keeps the PREVIOUSLY published value (zero on a first publication), and the snapshot
+  still says `exact: true` — so the figure can be stale while marked exact.
 
 ## Per-source figures
 
@@ -29,8 +32,8 @@ jobs list's `meta.total`, the `/about` and `/open` strips — reads ONE snapshot
 rebuilt by a pass inside `cmd/rollup-stats` (`internal/ingest/sourcestats`) as an atomic
 delete-and-reinsert.
 
-- **The same two-count pair as `catalogstats`.** `open_jobs` is the raw open count —
-  duplicates included — and the denominator the ATS-overlap figures are arithmetic on;
+- **A two-count pair like `catalogstats`, on a different predicate.** `open_jobs` is the raw
+  open count — `duplicate_of` rows included, unlike `CountCatalogueScale` — and the denominator the ATS-overlap figures are arithmetic on;
   `browsable_jobs` is Meilisearch's de-duplicated count, what `/jobs?source=<key>` shows and
   therefore what the PAGE displays. A card whose number the search it links to contradicts is
   the trap the pair exists to avoid.

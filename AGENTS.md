@@ -41,8 +41,9 @@ what it is and what it may reach for; substantial packages carry their own (tabl
 
 Enforced twice: `depguard` in `.golangci.yml` fails on the offending import line, and
 `internal/platform/arch/layering` holds the same table and reports the whole graph,
-including test-only imports — only because `run.build-tags` names `integration` and
-`llmlive`; without them both guards go blind over the tagged files. **Adding a package means
+including test-only imports — only because both name the build tags `integration` and
+`llmlive` (`run.build-tags` in `.golangci.yml`, the `buildTags` constant in
+`layering/repo_test.go`; a new tag goes in both, or the guards go blind over its files). **Adding a package means
 adding it to `internal/platform/arch/layering/blocks.go`**; a package in neither fails the
 guard. Two placements surprise people (both commented in the table): the LLM client
 (`platform/llm`) is transport, not AI, like `safehttp`; moderator-authored vacancies and the
