@@ -1013,7 +1013,7 @@ SET query_revision = EXCLUDED.query_revision,
     matched_at     = now(),
     claimed_at     = NULL,
     attempts       = 0,
-    last_error     = NULL,
+    last_error     = '',
     failed_at      = NULL,
     expired_at     = NULL
 WHERE subscription_matches.query_revision < EXCLUDED.query_revision

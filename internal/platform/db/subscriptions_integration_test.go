@@ -186,6 +186,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		n, err := q.RecordSubscriptionMatches(ctx, RecordSubscriptionMatchesParams{
 			SubscriptionIds: []int64{subA, subA, subB},
 			JobIds:          []int64{j1, j2, j1},
+			QueryRevisions:  []int32{0, 0, 0},
 		})
 		if err != nil {
 			t.Fatalf("batched record: %v", err)
@@ -216,6 +217,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		args := RecordSubscriptionMatchesParams{
 			SubscriptionIds: []int64{removed, remaining, remaining},
 			JobIds:          []int64{j1, j1, j2},
+			QueryRevisions:  []int32{0, 0, 0},
 		}
 		n, err := q.RecordSubscriptionMatches(ctx, args)
 		if err != nil || n != 2 {
@@ -262,6 +264,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 			n, err := New(recording).RecordSubscriptionMatches(ctx, RecordSubscriptionMatchesParams{
 				SubscriptionIds: []int64{removed, remaining},
 				JobIds:          []int64{job, job},
+				QueryRevisions:  []int32{0, 0},
 			})
 			recorded <- result{n, err}
 		}()
