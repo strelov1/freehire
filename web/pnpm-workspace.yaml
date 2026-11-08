@@ -54,7 +54,12 @@ overrides:
   # Agent again dropping function-valued TLS options, cross-origin redirect
   # cache poisoning, and an oversized Content-Encoding chain crashing the
   # process (SNYK-JS-UNDICI-21181005 .. -21185768).
-  undici@<8.12.2: 8.12.2
+  # Raised to 8.12.4 for six more published 2026-11-05, two high: a redirect
+  # chain cached under the original key (cache poisoning, cross-user
+  # disclosure) and a cache-replay handler exception killing the process
+  # (GHSA-mqg3-3v4r-cm32, GHSA-3g9m-rv3r-w5w2; Snyk SNYK-JS-UNDICI-22290988 ..
+  # -22291127). 8.12.3 fixes none of them.
+  undici@<8.12.4: 8.12.4
   # GHSA-px8p-9vwx-vf98 / CVE-2026-45820: fflate's unzipSync can loop forever
   # parsing a malformed ZIP64 central-directory entry (missing extra-field tag
   # 0x0001 after a 0xFFFFFFFF size sentinel). Reached transitively via
