@@ -88,11 +88,13 @@
 
 <!-- snap-start: the board's row snaps (JobBoard), so a swipe lands on a column, not between two.
      w-full on a phone: one column per screen, snapped, instead of the next one cut mid-word.
+     w-68 from sm: three whole columns fit the account content width with the fourth
+     peeking in, so the board shows it scrolls rather than clipping its third column.
      self-start: each column is as tall as its own cards, so an empty one is a short drop
      target rather than a grey slab stretched to the fullest column. -->
 <section
   aria-labelledby={titleId}
-  class="flex w-full shrink-0 snap-start flex-col gap-2 self-start rounded-xl bg-secondary/40 p-2 sm:w-72"
+  class="flex w-full shrink-0 snap-start flex-col gap-2 self-start rounded-xl bg-secondary/40 p-2 sm:w-68"
 >
   <header class="flex items-center justify-between px-1 py-0.5 text-sm font-medium">
     <h2 id={titleId}>{label}</h2>

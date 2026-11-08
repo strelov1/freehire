@@ -456,9 +456,11 @@ Then check whether any sitemap or static list of feature pages also needs the ne
 ### Task 4: Browser pass (controller)
 
 - [ ] Start the dev server against prod:
+
   ```bash
   VITE_API_URL=https://freehire.me API_INTERNAL_URL=https://freehire.me pnpm exec vite dev --port 5192
   ```
+
 - [ ] Screenshot `/features/interview-buddies` at 1440 and 390 widths with the Playwright script in `/tmp/tailor-shots/shot.mjs`. Point it at the new URL first.
 - [ ] Check four things:
   - The demo loops, and the card keeps its height while it does.

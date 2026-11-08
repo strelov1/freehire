@@ -7,6 +7,8 @@
 
 # freehire
 
+<!-- The tagline is a deliberate subtitle under the title, so it skips a heading level. -->
+<!-- rumdl-disable-next-line MD001 -->
 ### Every IT job, straight from the source.
 
 **4.7M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**

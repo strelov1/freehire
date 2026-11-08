@@ -27,7 +27,7 @@ import (
 // appears in the detail's jobPortalUrl, and some postings have none at all. The legacy AppOne
 // product (MainInfoReq.asp?R_ID=…&SearchScreenID=…, on www.appone.com and
 // recruiting.myapps.paychex.com) is a different system with no per-employer listing this
-// adapter can read; see the appone section of internal/ingest/sources/AGENTS.md.
+// adapter can read; see internal/ingest/sources/providers/appone.md.
 type appone struct {
 	http       JSONGetter
 	retryDelay time.Duration

@@ -136,11 +136,13 @@
     <button
       type="button"
       onclick={signIn}
-      aria-label="Sign in"
       title="Sign in"
-      class="inline-flex size-9 items-center justify-center rounded-md border border-border text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      class="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border px-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
     >
       <LogIn class="size-4" aria-hidden="true" />
+      <!-- Labelled from sm: the way in is the header's main action for a visitor, and a bare
+           boxed arrow read as a utility. A phone keeps the icon (its name stays here). -->
+      <span class="max-sm:sr-only">Sign in</span>
     </button>
   {/if}
 </div>
