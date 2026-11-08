@@ -12,28 +12,36 @@ import { statSync } from "node:fs";
 
 const MAX_TOKENS = 70000;
 
-// Files nobody writes by hand: lockfiles, generated code, binary or data assets, applied
-// migrations (never edited) and frozen history (archived specs, old plans and reviews).
+// Files nobody writes by hand: lockfiles, generated code, binary or data assets and frozen
+// history (archived specs, old plans and reviews).
 const IGNORED = [
   /(^|\/)(pnpm-lock\.yaml|package-lock\.json|go\.sum)$/,
   /(^|\/)(testdata|fixtures|generated)\//,
   /^internal\/platform\/db\/[^/]+\.go$/, // sqlc output
-  /^migrations\//,
   /^openspec\/changes\/archive\//,
   /^docs\/(superpowers|reviews)\//,
   /^docs\/API(\.internal)?\.md$/,
   /^web\/src\/lib\/worldMap\.ts$/, // Natural Earth geometry, regenerated rather than edited
-  /\.(gif|png|jpe?g|webp|ico|ttf|otf|woff2?|pdf|svg|tsv|csv|json|excalidraw)$/,
+  /^web\/static\/geo-cities\.json$/,
+  /^web\/src\/lib\/data\/contributors\.json$/, // fetched from GitHub
+  /\.(gif|png|jpe?g|webp|ico|ttf|otf|woff2?|pdf|svg|tsv|csv|excalidraw)$/,
 ];
+// An applied migration is never edited, so only a NEW one is held to the limit. --all has no
+// base to tell new from applied, so there the pre-commit hook is the only check.
+const APPLIED_MIGRATION = /^migrations\//;
 
 const git = (...args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 1 << 26 });
 const all = process.argv.includes("--all");
 
+const added = new Set(
+  all ? [] : git("diff", "--cached", "--name-only", "--diff-filter=AC", "-z").split("\0"),
+);
 const files = (
   all ? git("ls-files", "-z") : git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
 )
   .split("\0")
-  .filter((f) => f && !IGNORED.some((re) => re.test(f)));
+  .filter((f) => f && !IGNORED.some((re) => re.test(f)))
+  .filter((f) => !APPLIED_MIGRATION.test(f) || added.has(f));
 
 // Staged: the size of what is being committed, not of the working copy.
 const size = (f) => (all ? statSync(f).size : Number(git("cat-file", "-s", `:${f}`).trim()));
