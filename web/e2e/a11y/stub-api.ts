@@ -23,6 +23,8 @@ function answer(pathname: string): unknown | undefined {
       return list([job]);
     case '/api/v1/plans':
       return { data: plans };
+    case '/api/v1/auth/oauth/providers':
+      return { data: ['google', 'github'] };
     case '/api/v1/threads/count':
       return { data: { count: 0 } };
     case `/api/v1/jobs/${JOB_SLUG}`:

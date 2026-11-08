@@ -12,7 +12,8 @@ const PAGES = [
 	{ name: 'jobs', path: '/jobs', content: /Senior Backend Engineer/ },
 	{ name: 'job', path: `/jobs/${JOB_SLUG}`, content: /Senior Backend Engineer/ },
 	{ name: 'company', path: `/companies/${COMPANY_SLUG}`, content: /Logistics software for mid-size carriers/ },
-	{ name: 'pricing', path: '/pricing', content: /Pro/ }
+	{ name: 'pricing', path: '/pricing', content: /Pro/ },
+	{ name: 'signin', path: '/signin', content: /Sign in/ }
 ];
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
