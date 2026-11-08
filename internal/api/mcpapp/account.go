@@ -135,7 +135,11 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 func agentErrorText(err error) string {
 	var fe *fiber.Error
 	switch {
-	case errors.As(err, &fe), errors.Is(err, assistant.ErrInvalidArguments):
+	// The fiber error's own message, never err.Error(): a wrapper around it may add internal context.
+	case errors.As(err, &fe):
+		return fe.Message
+	// Only DecodeArgs makes these, from the caller's own arguments.
+	case errors.Is(err, assistant.ErrInvalidArguments):
 		return err.Error()
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return "the request was cancelled or timed out; try again"

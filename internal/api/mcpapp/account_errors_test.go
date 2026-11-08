@@ -15,13 +15,14 @@ import (
 // A third-party agent reads a tool's error verbatim, so only text written for the caller
 // may reach it; an internal fault's text (ids, SQL, personal data) must not.
 func TestAgentErrorText_ShowsOnlyCallerMessages(t *testing.T) {
-	for _, shown := range []error{
-		fiber.NewError(fiber.StatusBadRequest, "slug is required"),
-		fmt.Errorf("wrapped: %w", fiber.NewError(fiber.StatusNotFound, "no such answer")),
-		fmt.Errorf("%w: unexpected field", assistant.ErrInvalidArguments),
+	for err, want := range map[error]string{
+		fiber.NewError(fiber.StatusBadRequest, "slug is required"): "slug is required",
+		// A wrapper's internal context stays out; only the fiber error's own message is shown.
+		fmt.Errorf("load member 4242: %w", fiber.NewError(fiber.StatusNotFound, "no such answer")): "no such answer",
+		fmt.Errorf("%w: unexpected field", assistant.ErrInvalidArguments):                          "invalid arguments: unexpected field",
 	} {
-		if got := agentErrorText(shown); got != shown.Error() {
-			t.Errorf("agentErrorText(%q) = %q, want it shown", shown, got)
+		if got := agentErrorText(err); got != want {
+			t.Errorf("agentErrorText(%q) = %q, want %q", err, got, want)
 		}
 	}
 	internal := fmt.Errorf("load member 4242 (jane@example.com): %w", errors.New("pq: relation missing"))

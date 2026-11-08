@@ -244,9 +244,10 @@ func TestMCPAccount_CallerRefusalsReachTheAgentVerbatim(t *testing.T) {
 	}{
 		{"track_job", map[string]any{"slug": "any"}, "nothing to change — pass a stage, a note, or both"},
 		{"update_subscription", map[string]any{"id": 987654}, "this account has no job alert with id 987654 — call list_subscriptions for the ids"},
-		{"subscription_updates", map[string]any{"since": "yesterday"}, `since must be an RFC 3339 time such as 2026-10-20T00:00:00Z: parsing time "yesterday" as "2006-01-02T15:04:05Z07:00": cannot parse "yesterday" as "2006"`},
+		{"subscription_updates", map[string]any{"since": "yesterday"}, "since must be an RFC 3339 time such as 2026-10-20T00:00:00Z: "},
 	} {
-		if text, failed := mcpc.call(tc.tool, tc.args); !failed || text != tc.want {
+		// A prefix, so the standard library's parse wording after it can change freely.
+		if text, failed := mcpc.call(tc.tool, tc.args); !failed || !strings.HasPrefix(text, tc.want) {
 			t.Errorf("%s = %q failed=%v, want %q", tc.tool, text, failed, tc.want)
 		}
 	}
