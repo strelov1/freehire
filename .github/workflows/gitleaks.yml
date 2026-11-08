@@ -43,6 +43,17 @@ jobs:
           # below deliberately execute a downloaded binary over the repository.
           persist-credentials: false
 
+      # Tool archives come from a cache, so a GitHub Releases outage (504s for minutes on
+      # 2026-11-08) fails only a run that bumps a version. A digest check (all but typst's)
+      # covers a cached file like a downloaded one, and a job that fails it saves no cache.
+      # shortcut: old versions' archives stay in the cache until GitHub evicts it (7 days unused).
+      - name: Cache tool archives
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/ci-tools
+          key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/gitleaks.yml') }}
+          restore-keys: ci-tools-${{ github.job }}-
+
       # The archive is executed, so its integrity is checked before it is unpacked
       # rather than trusted because the URL looked right. The digest is the one in the
       # release's own checksums file and moves with GITLEAKS_VERSION; a bump that
@@ -54,9 +65,10 @@ jobs:
           GITLEAKS_VERSION: 8.30.1
           GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
         run: |
-          curl -fsSL --retry 5 --retry-all-errors "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
-          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum --check --strict -
-          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          f=~/.cache/ci-tools/gitleaks-${GITLEAKS_VERSION}.tar.gz
+          [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o "$f"
+          echo "${GITLEAKS_SHA256}  $f" | sha256sum --check --strict -
+          tar -xzf "$f" -C /tmp gitleaks
           sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
           gitleaks version
 
