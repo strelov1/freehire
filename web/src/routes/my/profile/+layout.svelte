@@ -4,11 +4,11 @@
   import { Briefcase, ClipboardList, Tags, User } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { Badge, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
   import { activeRouteTab } from '#lib/routeTabs.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { format, t } from '#lib/i18n/t.js';
+  import { t } from '#lib/i18n/t.js';
   import { profileCompleteness } from '#lib/profileCompleteness.svelte.js';
   import type { CompletenessSection } from '#lib/profileCompleteness.js';
   import { resumeStore } from '#lib/resume.svelte.js';
@@ -188,21 +188,8 @@
   </div>
   <TalentNetworkInvite />
 
-  <!-- The overall count reads the same helper the tab dots do, so the two cannot
-       disagree. Shown only while something is missing — a finished profile needs no
-       scoreboard. It sits above the strip rather than inside it: the strip is navigation,
-       and this is a measurement of the whole profile. -->
-  {#if completeness && completeness.filled < completeness.total}
-    <div class="mb-3 flex justify-end">
-      <Badge variant="outline" class="tabular-nums">
-        {format(s.completeness.summary, {
-          filled: String(completeness.filled),
-          total: String(completeness.total),
-        })}
-      </Badge>
-    </div>
-  {/if}
-
+  <!-- No separate "n/m sections" count: the tab dots already mark the empty sections, and
+       a third progress meter beside the setup checklist read as clutter. -->
   <TabStrip
     {tabs}
     active={activeSectionId}

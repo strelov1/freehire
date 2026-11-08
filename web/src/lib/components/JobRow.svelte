@@ -374,7 +374,7 @@
        card has moved it into the action row at its foot, leaving the corner free. -->
   <!-- Without the company there is nothing to the date's left, so it floats beside the
        title instead of holding a row of its own. -->
-  <div class={['flex items-center justify-between gap-3', compact && 'pr-11', hideCompany && 'float-right ml-3 mt-1.5']}>
+  <div class={['flex items-center justify-between gap-3', compact ? 'pr-11' : onHide ? 'pr-28' : 'pr-20', hideCompany && 'float-right ml-3 mt-1.5']}>
     <div class="flex min-w-0 items-center gap-2">
       {#if !hideCompany}
       <EntityLogo
@@ -634,127 +634,95 @@
     <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
   </button>
 {:else}
-  <!-- The card's action row. Save leads it; Hide, where the feed asked for one, sits at
-       the far end. Hide used to be an overlay pinned to the card's bottom-right corner,
-       which is exactly where this row now is — so it moves in here rather than being
-       covered by it, and it keeps its hover-reveal (a destructive-feeling gesture that
-       should not compete with Save for attention). `pointer-coarse` keeps it visible on
-       touch, which has no hover to reveal anything. -->
-  <div class="-mt-1 flex items-center gap-2 px-4 pb-3">
+  <!-- The card's controls ride its top-right corner, beside the date, rather than a row of
+       their own at its foot: that row added ~40px to every card in a feed of dozens. Save
+       keeps its word (an unlabelled glyph asked people to guess what saving does); Apply and
+       Hide, where the card has them, hover-reveal beside it (over the date, which they cover
+       only while the pointer is on the card). `pointer-coarse`
+       keeps Hide visible on touch, which has no hover to reveal anything. The rail inside
+       the link reserves the corner (see its `pr-*`), so the date never slides under it. -->
+  <div class="absolute right-3 top-3 flex items-center gap-1">
+    <!-- Direct-apply shortcut (freehire#2755): a way out to the posting's own site
+         without opening the job page first. Outline, never the brand-green primary —
+         that loud slot is reserved for auto-apply on the job page itself, and a list
+         card outshouting the page it links to states the wrong priority. `bg-transparent`
+         drops the outline variant's default `bg-background` fill: unlike a lone button on
+         a page, this one sits on the card's own background, and that fill read as a solid
+         chip louder than every other control on the card — Save carries the same border
+         with no fill, and Apply should read as its equal, not its loudest element.
+         Hover-reveal matches Hide; `pointer-coarse` is load-bearing, not decoration — a
+         phone has no hover, so without it the button is invisible to every touch visitor.
+         `nofollow`: the destination is the poster's own site, which the catalogue never
+         vetted (the same stance JobView.svelte's own Apply link takes) — without it a
+         submitted vacancy buys a followed link from every card in every list. -->
+    {#if directApply}
+      <Button
+        variant="outline"
+        href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+        aria-label="Apply to {job.title}"
+        class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+      >
+        Apply
+      </Button>
+    {/if}
+    {#if applyJob}
+      <Button
+        variant="outline"
+        href={isAuthenticated() ? applyJob.url : undefined}
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        onclick={onApplyClick}
+        aria-label={isAuthenticated()
+          ? `Apply to ${job.title} on the employer's site (opens in a new tab)`
+          : `Choose how to apply to ${job.title}`}
+        class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+      >
+        <ExternalLink class="size-4" aria-hidden="true" />
+        Apply
+      </Button>
+    {/if}
+
+    {#if onHide}
+      <button
+        type="button"
+        onclick={hide}
+        disabled={hiding}
+        aria-label="Hide this job"
+        title="Not interested — hide this job"
+        class="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground opacity-0 transition hover:border-border hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 disabled:pointer-events-none disabled:opacity-50"
+      >
+        <EyeOff class="size-3.5" aria-hidden="true" />
+      </button>
+    {/if}
     <!-- No `aria-pressed`, unlike the compact glyph: this button's visible name already
-         changes with the state, so the toggle role would announce the same fact twice in
-         two vocabularies. The glyph needs it precisely because its name cannot.
-         But only half of that visible name is an action. "Save to board" says what
-         activating does; "On your board" is a state, and on its own it leaves a screen
-         reader user with a button whose effect is unstated. So the saved case — and only
-         it — overrides the name with the action, while sighted readers keep the state. -->
+         changes with the state, so the toggle role would announce the same fact twice.
+         "Saved" is a state, though, and on its own leaves a screen reader user with a
+         button whose effect is unstated — so each state's name says what activating does,
+         and keeps the visible word in it. -->
     <button
       type="button"
       onclick={toggleSave}
       disabled={saving}
-      aria-label={saved ? 'Remove from saved' : undefined}
+      aria-label={saved ? 'Remove from saved' : 'Save to board'}
+      title={saved ? 'On your board' : 'Save to board'}
       class={[
-        '-ml-2 flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
+        'flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
         saved
           ? 'bg-brand/10 text-brand hover:bg-brand/15'
           : 'text-muted-foreground hover:bg-background hover:text-foreground',
       ]}
     >
       <Bookmark class="size-4 {saved ? 'fill-current' : ''}" aria-hidden="true" />
-      {saved ? 'Remove from saved' : 'Save to board'}
+      {saved ? 'Saved' : 'Save'}
     </button>
-
-    <!-- The caller's own controls share this row rather than getting a second bordered
-         one under it — two stacked rules under one card read as a layout mistake. -->
-    {@render footer?.()}
-
-    <!-- The invitation that gets this viewer a real match, once per card and quiet:
-         a guest signs in, a signed-in viewer without skills goes to their profile. -->
-    {#if teaser}
-      {#if matchState === 'guest'}
-        <button
-          type="button"
-          onclick={promptSignIn}
-          class="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground transition hover:bg-background hover:text-foreground"
-        >
-          <Lock class="size-3.5 shrink-0" aria-hidden="true" />
-          {matchInvite}
-        </button>
-      {:else}
-        <a
-          href={resolve('/my/profile')}
-          class="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground transition hover:bg-background hover:text-foreground"
-        >
-          <FileText class="size-3.5 shrink-0" aria-hidden="true" />
-          {matchInvite}
-        </a>
-      {/if}
-    {/if}
-
-    <!-- Apply and Hide share the row's far end, one `ml-auto` wrapper (not one each —
-         two auto margins on adjacent items split the leftover space and pull them
-         apart) pulling both away from Save so the destination and the dismissal read
-         as a distinct group instead of crowding Save's own affirmative slot. -->
-    {#if applyJob || onHide}
-      <div class="ml-auto flex shrink-0 items-center gap-2">
-        <!-- Direct-apply shortcut (freehire#2755): a way out to the posting's own site
-             without opening the job page first. Outline, never the brand-green primary —
-             that loud slot is reserved for auto-apply on the job page itself, and a list
-             card outshouting the page it links to states the wrong priority. `bg-transparent`
-             drops the outline variant's default `bg-background` fill: unlike a lone button on
-             a page, this one sits on the card's own background, and that fill read as a solid
-             chip louder than every other control on the card — Save carries the same border
-             with no fill, and Apply should read as its equal, not its loudest element.
-             Hover-reveal matches Hide; `pointer-coarse` is load-bearing, not decoration — a
-             phone has no hover, so without it the button is invisible to every touch visitor.
-             `nofollow`: the destination is the poster's own site, which the catalogue never
-             vetted (the same stance JobView.svelte's own Apply link takes) — without it a
-             submitted vacancy buys a followed link from every card in every list. -->
-        {#if directApply}
-          <Button
-            variant="outline"
-            href={resolve('/jobs/[slug]', { slug: job.public_slug })}
-            aria-label="Apply to {job.title}"
-            class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
-          >
-            Apply
-          </Button>
-        {/if}
-        {#if applyJob}
-          <Button
-            variant="outline"
-            href={isAuthenticated() ? applyJob.url : undefined}
-            target="_blank"
-            rel="nofollow noopener noreferrer"
-            onclick={onApplyClick}
-            aria-label={isAuthenticated()
-              ? `Apply to ${job.title} on the employer's site (opens in a new tab)`
-              : `Choose how to apply to ${job.title}`}
-            class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
-          >
-            <ExternalLink class="size-4" aria-hidden="true" />
-            Apply
-          </Button>
-        {/if}
-
-        <!-- A visible border on reveal gives Hide the same weight as Apply and Save
-             instead of a bare hover-fill floating unanchored next to two bordered
-             buttons — it stays transparent at rest, same hover-reveal as before. -->
-        {#if onHide}
-          <button
-            type="button"
-            onclick={hide}
-            disabled={hiding}
-            aria-label="Hide this job"
-            title="Not interested — hide this job"
-            class="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground opacity-0 transition hover:border-border hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 disabled:pointer-events-none disabled:opacity-50"
-          >
-            <EyeOff class="size-3.5" aria-hidden="true" />
-          </button>
-        {/if}
-      </div>
-    {/if}
   </div>
+
+  <!-- The caller's own controls, when it passes any, get the one row under the content. -->
+  {#if footer}
+    <div class="-mt-1 flex items-center gap-2 px-4 pb-3">
+      {@render footer()}
+    </div>
+  {/if}
 {/if}
 
 {#if justSaved && saved && !compact}
