@@ -75,11 +75,19 @@ func draftUserPrompt(in Input, atoms []experience.Atom, language string) (string
 		b.WriteString("It is the language of the VACANCY. The employer reads this letter, not the candidate.\n\n")
 	}
 	b.WriteString(vacancyBlock(in))
-	b.WriteString("\nREQUIREMENTS THE CV UNDERSELLS (this is what the letter is for):\n")
+	if in.Referral != nil {
+		b.WriteString("\nREQUIREMENTS THE CV UNDERSELLS:\n")
+	} else {
+		b.WriteString("\nREQUIREMENTS THE CV UNDERSELLS (this is what the letter is for):\n")
+	}
 	b.WriteString(requirementList(in.Context.MissingHave))
 	b.WriteString("\nGENUINE GAPS (claim no experience with these):\n")
 	b.WriteString(requirementList(in.Context.MissingGap))
-	b.WriteString("\nACHIEVEMENTS THE LETTER MAY STAND ON:\n")
+	if in.Referral != nil {
+		b.WriteString("\nBANKED ACHIEVEMENTS:\n")
+	} else {
+		b.WriteString("\nACHIEVEMENTS THE LETTER MAY STAND ON:\n")
+	}
 	blob, err := json.Marshal(atomsForPrompt(atoms))
 	if err != nil {
 		return "", fmt.Errorf("coverletter: marshal atoms: %w", err)

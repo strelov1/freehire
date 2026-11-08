@@ -11,7 +11,6 @@
   let profile = $state('');
   let message = $state('');
   let cited = $state.raw<{ id: string; claim?: string }[]>([]);
-  let stage = $state('');
   let drafting = $state(false);
   let error = $state('');
   let upgradeOffered = $state(false);
@@ -23,14 +22,13 @@
   });
   $effect(() => () => controller?.abort());
 
-  // Read only the stage, final message, and error events from the response stream.
+  // Read only the final message and error events from the response stream.
   function handleFrame(frame: string) {
     const event = /^event: (.+)$/m.exec(frame)?.[1];
     const raw = /^data: (.+)$/m.exec(frame)?.[1];
     if (!event || !raw) return;
     try {
       const data = JSON.parse(raw);
-      if (event === 'stage' && !data.done) stage = data.stage;
       if (event === 'message') {
         message = data.body;
         cited = data.cited ?? [];
@@ -51,7 +49,6 @@
     cited = [];
     error = '';
     upgradeOffered = false;
-    stage = 'select';
     controller = new AbortController();
     try {
       const response = await fetch(`/api/v1/jobs/${encodeURIComponent(slug)}/referral-message/stream`, {
@@ -84,7 +81,6 @@
       if ((e as Error).name !== 'AbortError') error = 'The connection failed. Please try again.';
     } finally {
       drafting = false;
-      stage = '';
       controller = null;
       if (error) announce(error, 'assertive');
     }
@@ -132,7 +128,7 @@
     <Button variant="outline" disabled={drafting || !profile.trim()} onclick={() => void generate()}>
       {#if drafting}
         <Loader2 class="size-4 animate-spin" aria-hidden="true" />
-        {stage === 'audit' ? 'Checking claims…' : 'Writing…'}
+        Writing…
       {:else}
         Draft message
       {/if}

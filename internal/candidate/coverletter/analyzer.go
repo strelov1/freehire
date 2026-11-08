@@ -45,12 +45,13 @@ type Input struct {
 	// decides what the letter is actually written in.
 	PostingLanguage string
 	Bounds          Bounds
-	// Referral adapts the same evidence/draft/audit chain to a request-only message.
+	// Referral uses the same evidence gate and bounds for a request-only message.
 	Referral *Referral
 }
 
-// Analyzer runs the three-stage chain. A nil client (LLM unconfigured) makes Draft a no-op,
-// so a server without a gateway degrades rather than errors.
+// Analyzer runs the three-stage cover-letter chain and the one-call referral draft.
+// A nil client (LLM unconfigured) makes Draft a no-op, so a server without a
+// gateway degrades rather than errors.
 type Analyzer struct {
 	client *llm.Client
 }
@@ -119,7 +120,9 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 	return a.DraftStream(ctx, in, func(string, bool) {})
 }
 
-// DraftStream runs select → draft → audit, calling emit as each stage opens and closes.
+// DraftStream runs select → draft → audit for cover letters. Referral messages take
+// the top Gather evidence through one draft call with citations. Each path reports
+// its stage boundaries to emit.
 //
 // Returns (nil, nil) when the LLM is unconfigured. Returns ErrNoPublishableEvidence when the
 // gate leaves nothing to write from. Any gateway failure is returned as an error with no
@@ -157,6 +160,9 @@ func (a *Analyzer) DraftStream(ctx context.Context, in Input, emit Emit) (*Lette
 	}
 	offered := IDs(atoms)
 	language := LanguageOf(in.PostingLanguage)
+	if in.Referral != nil {
+		return a.draftReferral(ctx, in, atoms, language, emit)
+	}
 
 	emit(StageSelect, false)
 	selected, err := a.selectEvidence(ctx, in, atoms)
@@ -270,9 +276,6 @@ func (a *Analyzer) write(ctx context.Context, in Input, atoms []experience.Atom,
 		return Letter{}, err
 	}
 	system := draftSystemPrompt(in.Band, in.Bounds)
-	if in.Referral != nil {
-		system += referralInstructions(in.Referral.Channel)
-	}
 	raw, err := a.client.GenerateJSON(ctx, system, prompt)
 	if err != nil {
 		return Letter{}, fmt.Errorf("coverletter: draft: %w", err)
@@ -297,10 +300,6 @@ func (a *Analyzer) audit(ctx context.Context, in Input, drafted Letter, atoms []
 		return nil, err
 	}
 	system := auditSystemPrompt(in.Band, in.Bounds)
-	if in.Referral != nil {
-		system += referralInstructions(in.Referral.Channel)
-		prompt += referralProfileBlock(in.Referral)
-	}
 	raw, err := a.client.GenerateJSON(ctx, system, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("coverletter: audit: %w", err)

@@ -7,9 +7,11 @@ from the achievement atoms the candidate has actually asserted. It owns the thre
 the wire shape and its sanitize pass, the evidence gathering, and the single stored draft per
 (candidate, vacancy).
 
-The referral-message path reuses that chain with a pasted public contact profile and short
-message bounds. The profile and result live only in the request; no cover-letter store is used.
-Generation tracing is disabled for this path so the contact text is not copied into traces.
+The referral-message path reuses the chain's evidence gate, prompt input, bounds, and citation
+sanitizer. It takes the top four `Gather` results into one draft call, requesting the message
+and the IDs it cites together. A response without a usable cited achievement fails. The profile
+and result live only in the request; no cover-letter store is used. Generation tracing is
+disabled for this path so the contact text is not copied into traces.
 
 Of the 402,117 open postings whose apply form we have captured, 209,297 ask for a letter and
 172,783 of those accept it as text. The remaining 36,514 (recruitee, ashby) take a file upload
@@ -28,6 +30,10 @@ only — the letter is still useful there, but by hand.
   like a working gate. Checking the finished prose instead would mean matching sentences back
   to atoms, the fuzzy problem the gate exists to avoid; a model that never sees an inferred
   atom cannot cite one. A caller cannot skip it, which is why it is not a parameter.
+- **A referral draft must cite an offered achievement.** `Gather` ranks the bank evidence,
+  `Publishable` removes inferred claims, and the one-call result passes through `Sanitize`.
+  An empty or unknown citation is a failure, not a message shown as supported. The short
+  referral path does not run the cover letter's select and audit stages.
 - **The letter is written in the language of the VACANCY.** This inverts `matchanalysis`, which
   writes in the candidate's profile language, and the inversion is the point: an analysis is
   the candidate reading themselves, a letter is read by the employer. `LanguageOf` falls back
