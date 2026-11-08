@@ -8,9 +8,17 @@ describe('formatSalary', () => {
   });
 
   it('preserves both source bounds on a job detail page', () => {
-    expect(formatSalary({
-      salary_min: 2_501, salary_max: 3_000, salary_currency: 'EUR', salary_period: 'month',
-    } as Enrichment, 'standard')).toBe('2,501 – 3,000 € / mo');
+    expect(
+      formatSalary(
+        {
+          salary_min: 2_501,
+          salary_max: 3_000,
+          salary_currency: 'EUR',
+          salary_period: 'month',
+        } as Enrichment,
+        'standard',
+      ),
+    ).toBe('2,501 – 3,000 € / mo');
   });
 
   it.each([
@@ -23,9 +31,9 @@ describe('formatSalary', () => {
   });
 
   it('compacts a full range to K, with the currency trailing', () => {
-    expect(
-      formatSalary({ salary_min: 30_000, salary_max: 50_000, salary_currency: 'GBP' } as Enrichment),
-    ).toBe('30K – 50K £');
+    expect(formatSalary({ salary_min: 30_000, salary_max: 50_000, salary_currency: 'GBP' } as Enrichment)).toBe(
+      '30K – 50K £',
+    );
   });
 
   it('rounds a non-round thousand to the nearest K', () => {
@@ -33,15 +41,11 @@ describe('formatSalary', () => {
   });
 
   it('compacts millions with one decimal only when not round', () => {
-    expect(formatSalary({ salary_min: 1_200_000, salary_max: 2_000_000 } as Enrichment)).toBe(
-      '1.2M – 2M',
-    );
+    expect(formatSalary({ salary_min: 1_200_000, salary_max: 2_000_000 } as Enrichment)).toBe('1.2M – 2M');
   });
 
   it('compacts billions the same way as millions', () => {
-    expect(formatSalary({ salary_min: 1_000_000_000, salary_max: 1_500_000_000 } as Enrichment)).toBe(
-      '1B – 1.5B',
-    );
+    expect(formatSalary({ salary_min: 1_000_000_000, salary_max: 1_500_000_000 } as Enrichment)).toBe('1B – 1.5B');
   });
 
   it('leaves sub-thousand amounts (e.g. an hourly rate) uncompacted', () => {
@@ -51,15 +55,11 @@ describe('formatSalary', () => {
   });
 
   it('renders a min-only floor as "from …"', () => {
-    expect(formatSalary({ salary_min: 100_000, salary_currency: 'USD' } as Enrichment)).toBe(
-      'from 100K $',
-    );
+    expect(formatSalary({ salary_min: 100_000, salary_currency: 'USD' } as Enrichment)).toBe('from 100K $');
   });
 
   it('renders a max-only ceiling as "up to …"', () => {
-    expect(formatSalary({ salary_max: 80_000, salary_currency: 'EUR' } as Enrichment)).toBe(
-      'up to 80K €',
-    );
+    expect(formatSalary({ salary_max: 80_000, salary_currency: 'EUR' } as Enrichment)).toBe('up to 80K €');
   });
 
   it('falls back to the raw currency code when it is not in the symbol map', () => {
@@ -86,9 +86,7 @@ describe('cardTags', () => {
   // override and REGION_LABELS does not cover the geography the LLM fallback can emit, so
   // both facets sentence-case the same raw value and print the same word.
   it('never repeats a tag, however two facets arrive at the same word', () => {
-    expect(
-      cardTags({ work_mode: 'remote', regions: ['remote'] } as unknown as Job),
-    ).toEqual(['Remote']);
+    expect(cardTags({ work_mode: 'remote', regions: ['remote'] } as unknown as Job)).toEqual(['Remote']);
   });
 });
 

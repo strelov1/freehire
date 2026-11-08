@@ -34,10 +34,7 @@
       <p class="text-sm leading-relaxed text-muted-foreground">
         We use Google Analytics and PostHog to understand usage.
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal route via resolve() -->
-        <a
-          href={resolve('/privacy')}
-          class="underline underline-offset-2 transition-colors hover:text-foreground"
-        >
+        <a href={resolve('/privacy')} class="underline underline-offset-2 transition-colors hover:text-foreground">
           Learn more
         </a>
       </p>

@@ -86,17 +86,35 @@
   $effect(() => {
     const saved = savedEducation();
     if (education.holding) return;
-    if (!same(saved, untrack(() => cleanEducation(educationRows)))) educationRows = saved.map((e) => ({ ...e }));
+    if (
+      !same(
+        saved,
+        untrack(() => cleanEducation(educationRows)),
+      )
+    )
+      educationRows = saved.map((e) => ({ ...e }));
   });
   $effect(() => {
     const saved = savedLanguages();
     if (languages.holding) return;
-    if (!same(saved, untrack(() => lines(languagesText)))) languagesText = saved.join('\n');
+    if (
+      !same(
+        saved,
+        untrack(() => lines(languagesText)),
+      )
+    )
+      languagesText = saved.join('\n');
   });
   $effect(() => {
     const saved = savedCertifications();
     if (certifications.holding) return;
-    if (!same(saved, untrack(() => lines(certificationsText)))) certificationsText = saved.join('\n');
+    if (
+      !same(
+        saved,
+        untrack(() => lines(certificationsText)),
+      )
+    )
+      certificationsText = saved.join('\n');
   });
 
   function removeEducationRow(i: number) {
@@ -105,9 +123,7 @@
     education.commit();
   }
 
-  const newEntryFilled = $derived(
-    !!(newEntry.degree?.trim() || newEntry.institution?.trim() || newEntry.year),
-  );
+  const newEntryFilled = $derived(!!(newEntry.degree?.trim() || newEntry.institution?.trim() || newEntry.year));
 
   function addEducation() {
     if (!newEntryFilled) return;
@@ -224,8 +240,7 @@
       aria-labelledby={languagesHeadingId}
       rows="3"
       class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-      placeholder={s.languages.placeholder}
-    ></textarea>
+      placeholder={s.languages.placeholder}></textarea>
   </div>
 
   <div class="flex flex-col gap-2" onfocusout={() => certifications.commit()}>
@@ -241,7 +256,6 @@
       aria-labelledby={certificationsHeadingId}
       rows="3"
       class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-      placeholder={s.certifications.placeholder}
-    ></textarea>
+      placeholder={s.certifications.placeholder}></textarea>
   </div>
 </div>

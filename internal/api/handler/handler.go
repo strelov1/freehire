@@ -565,6 +565,7 @@ func Register(app *fiber.App, cfg Config) {
 	embedProgressH := newEmbedProgressHandlers(embedProgressSrc)
 	ogH := newOGHandlers(queries, cfg.Cache)
 	votesH := newVoteHandlers(queries, cfg.Pool)
+	companyWatchH := newCompanyWatchHandlers(queries)
 	communityH := newCommunityHandlers(queries)
 	// Feedback reuses communityH's persona minting (via the communityPersonas
 	// adapter) so a user's pseudonym stays the same one discussion threads show,
@@ -976,6 +977,7 @@ func Register(app *fiber.App, cfg Config) {
 		buddy.NewMockMailNotifier(queries, mockMail, cfg.NotifyEmailFrom, cfg.FrontendOrigin))
 	conversationH := newConversationHandlers(messagingSvc, buddyMocks)
 	buddyH := newBuddyHandlers(buddySvc, buddyMocks)
+	assistantH.buddies = buddyH
 
 	// The mentorship marketplace: referral's opposite number, where the insider is named
 	// and chosen rather than anonymous. A nil notifier is a deployment with no mail
@@ -1128,6 +1130,7 @@ func Register(app *fiber.App, cfg Config) {
 	// segment under /me/tracking — see the comment on its register.
 	timelineH.register(api, mw)
 	votesH.register(api, mw)
+	companyWatchH.register(api, mw)
 	companyFeedbackH.register(api, mw)
 	companyProcessReportH.register(api, mw)
 	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).

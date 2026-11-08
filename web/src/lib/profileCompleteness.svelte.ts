@@ -18,13 +18,7 @@ import { screeningStore } from './screening.svelte';
  *  that most sections are missing — for the moment the résumé request takes — is worse
  *  than showing the indicator a beat later. */
 export function profileCompleteness(): ProfileCompleteness | null {
-  if (
-    !profileStore.loaded ||
-    !resumeStore.loaded ||
-    !screeningStore.loaded ||
-    !experienceBankStore.loaded
-  )
-    return null;
+  if (!profileStore.loaded || !resumeStore.loaded || !screeningStore.loaded || !experienceBankStore.loaded) return null;
   return getProfileCompleteness({
     profile: profileStore.profile,
     resume: resumeStore.meta,

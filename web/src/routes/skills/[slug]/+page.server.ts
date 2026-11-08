@@ -67,12 +67,9 @@ export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) =
     // Filtered against the catalogue, not against the dictionary: a facet value left
     // behind by a skill the dictionary no longer emits would otherwise be published as
     // a link to a 404, from the page whose whole claim is that it is worth linking to.
-    neighbours: topNeighbours(
-      counts.facets.skills ?? {},
-      slug,
-      NEIGHBOUR_LIMIT,
-      (s) => catalog[s] !== undefined
-    ).map((s) => ({ slug: s, label: skillLabel(s) })),
+    neighbours: topNeighbours(counts.facets.skills ?? {}, slug, NEIGHBOUR_LIMIT, (s) => catalog[s] !== undefined).map(
+      (s) => ({ slug: s, label: skillLabel(s) }),
+    ),
     total: counts.total,
     // The block, not the count: the count is stated either way, because "3 open
     // postings" is a fact. What the gate withholds is a list that would read as a

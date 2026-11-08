@@ -60,9 +60,7 @@
   let offerError = $state<string | null>(null);
 
   const offerLinkedinValid = $derived(isLinkedInUrl(offerLinkedin));
-  const canSubmitOffer = $derived(
-    offerSlug.trim() !== '' && offerLinkedinValid && !!offerFile?.[0],
-  );
+  const canSubmitOffer = $derived(offerSlug.trim() !== '' && offerLinkedinValid && !!offerFile?.[0]);
 
   function offerErrorMessage(err: unknown): string {
     if (err instanceof ApiError) {
@@ -154,7 +152,10 @@
       {#each requests.value as r (r.id)}
         <tr class="border-t border-border">
           <td class="py-3 pr-4 font-medium">
-            <a href={resolve('/companies/[slug]', { slug: r.company_slug })} class="flex items-center gap-2 hover:underline">
+            <a
+              href={resolve('/companies/[slug]', { slug: r.company_slug })}
+              class="flex items-center gap-2 hover:underline"
+            >
               <EntityLogo
                 name={r.company_name || r.company_slug}
                 src={companyLogoUrl(r.company_name || r.company_slug) ?? undefined}
@@ -179,7 +180,7 @@
     <p class="mt-4 text-xs text-muted-foreground">{s.requests.footnote}</p>
   {/if}
 
-<!-- ── Offers to refer ── -->
+  <!-- ── Offers to refer ── -->
 {:else if tab === 'offers'}
   <div class="mt-4 flex items-center justify-between">
     <p class="text-sm text-muted-foreground">{s.offers.lead}</p>
@@ -207,9 +208,7 @@
       </div>
       <FormField
         label={s.offers.linkedinLabel}
-        error={offerLinkedin.trim() !== '' && !offerLinkedinValid
-          ? s.offers.linkedinInvalid
-          : undefined}
+        error={offerLinkedin.trim() !== '' && !offerLinkedinValid ? s.offers.linkedinInvalid : undefined}
         hint={s.offers.linkedinHint}
       >
         {#snippet children({ id, describedBy, invalid })}
@@ -255,7 +254,10 @@
             size="xs"
           />
           <span class="min-w-0 truncate font-medium">{o.company_name || o.company_slug}</span>
-          <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold {offerPill[o.status] ?? 'bg-muted text-muted-foreground'}">
+          <span
+            class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold {offerPill[o.status] ??
+              'bg-muted text-muted-foreground'}"
+          >
             {tokenLabel(s.offers.status, o.status)}
           </span>
           <Button
@@ -272,7 +274,7 @@
     </ul>
   {/if}
 
-<!-- ── Incoming ── -->
+  <!-- ── Incoming ── -->
 {:else}
   {#if incoming.status === 'loading'}
     <States state="loading" />
@@ -297,15 +299,20 @@
                 {req.company_name || req.company_slug}
               </span>
             </b>
-            <span class="shrink-0 text-xs text-muted-foreground">{req.created_at ? timeAgo(req.created_at, locale()) : ''}</span>
+            <span class="shrink-0 text-xs text-muted-foreground"
+              >{req.created_at ? timeAgo(req.created_at, locale()) : ''}</span
+            >
           </div>
           <div class="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
             <span>{s.incoming.contactLabel}</span>
-            {#if req.contact_telegram}<code class="rounded bg-muted px-1.5 py-0.5 text-xs">{req.contact_telegram}</code>{/if}
+            {#if req.contact_telegram}<code class="rounded bg-muted px-1.5 py-0.5 text-xs">{req.contact_telegram}</code
+              >{/if}
             {#if req.contact_email}<code class="rounded bg-muted px-1.5 py-0.5 text-xs">{req.contact_email}</code>{/if}
             {#if req.linkedin_url}
               <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external LinkedIn URL, not an internal route -->
-              <a href={req.linkedin_url} target="_blank" rel="noopener" class="text-brand-strong hover:underline">{s.incoming.linkedin}</a>
+              <a href={req.linkedin_url} target="_blank" rel="noopener" class="text-brand-strong hover:underline"
+                >{s.incoming.linkedin}</a
+              >
             {/if}
           </div>
           {#if req.note}<p class="mt-1 text-sm italic text-muted-foreground">“{req.note}”</p>{/if}

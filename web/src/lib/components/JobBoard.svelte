@@ -198,14 +198,20 @@
   const matchesFilters = (i: BoardItem) =>
     matchesQuery(i, query) && (!attentionOnly || needsAttention(i)) && matchesStage(i, stageFilter);
   const shown = $derived<Record<BoardColumnId, BoardItem[]>>(
-    Object.fromEntries(BOARD_COLUMNS.map((c) => [
-      c.id,
-      sortBoardItems(filtering ? columns[c.id].filter(matchesFilters) : columns[c.id], sort),
-    ])) as Record<BoardColumnId, BoardItem[]>,
+    Object.fromEntries(
+      BOARD_COLUMNS.map((c) => [
+        c.id,
+        sortBoardItems(filtering ? columns[c.id].filter(matchesFilters) : columns[c.id], sort),
+      ]),
+    ) as Record<BoardColumnId, BoardItem[]>,
   );
-  const listItems = $derived(sort === 'default'
-    ? Object.values(shown).flat().sort((a, b) => (b.last_activity_at ?? '').localeCompare(a.last_activity_at ?? ''))
-    : sortBoardItems(Object.values(shown).flat(), sort));
+  const listItems = $derived(
+    sort === 'default'
+      ? Object.values(shown)
+          .flat()
+          .sort((a, b) => (b.last_activity_at ?? '').localeCompare(a.last_activity_at ?? ''))
+      : sortBoardItems(Object.values(shown).flat(), sort),
+  );
   const total = $derived(Object.values(columns).flat().length);
   const matched = $derived(Object.values(shown).flat().length);
 
@@ -461,12 +467,14 @@
   let visibleColumn = $state<BoardColumnId>('unstaged');
 
   $effect(() => {
-    if (boardRow) untrack(() => {
-      const first = (initialId ? cardCol[initialId] : undefined)
-        ?? BOARD_COLUMNS.find((column) => shown[column.id].length > 0)?.id;
-      if (first) goToColumn(first);
-      else syncVisibleColumn();
-    });
+    if (boardRow)
+      untrack(() => {
+        const first =
+          (initialId ? cardCol[initialId] : undefined) ??
+          BOARD_COLUMNS.find((column) => shown[column.id].length > 0)?.id;
+        if (first) goToColumn(first);
+        else syncVisibleColumn();
+      });
   });
 
   function syncVisibleColumn() {
@@ -599,7 +607,10 @@
        bounded, and a request per keystroke would buy nothing. -->
   <div class="mb-3 flex flex-wrap items-center gap-2">
     <div class="relative w-full sm:max-w-xs sm:flex-1">
-      <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      <Search
+        class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden="true"
+      />
       <input
         bind:this={searchInput}
         type="search"
@@ -610,23 +621,40 @@
         class="h-10 w-full rounded-md border border-input bg-transparent pl-8 pr-10 text-base focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:text-sm [&::-webkit-search-cancel-button]:appearance-none"
       />
       {#if searching}
-        <button type="button" onclick={clearSearch} aria-label={s.clearSearchAria}
-          class="absolute right-0 top-0 flex size-10 items-center justify-center rounded text-muted-foreground hover:text-foreground sm:size-9">
+        <button
+          type="button"
+          onclick={clearSearch}
+          aria-label={s.clearSearchAria}
+          class="absolute right-0 top-0 flex size-10 items-center justify-center rounded text-muted-foreground hover:text-foreground sm:size-9"
+        >
           <XIcon class="size-3.5" />
         </button>
       {/if}
     </div>
     <div class="flex w-full items-center gap-2 sm:w-auto">
-      <button type="button" aria-label={s.needsAttention} title={s.needsAttention} aria-pressed={attentionOnly}
+      <button
+        type="button"
+        aria-label={s.needsAttention}
+        title={s.needsAttention}
+        aria-pressed={attentionOnly}
         onclick={() => filters.setNow({ ...filters.value, attention: !attentionOnly })}
-        class={cn('inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors',
-          attentionOnly ? 'bg-warning-muted text-warning-strong' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
+        class={cn(
+          'inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors',
+          attentionOnly
+            ? 'bg-warning-muted text-warning-strong'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+        )}
+      >
         <CircleAlert class="size-4 shrink-0" aria-hidden="true" />
         <span class="sr-only sm:not-sr-only">{s.needsAttention}</span>
       </button>
       <span class="relative flex min-w-0 flex-1 items-center sm:w-40 sm:flex-none">
-        <select value={sort} onchange={(e) => filters.setNow({ ...filters.value, sort: parseBoardSort(e.currentTarget.value) })}
-          aria-label={s.sortAria} class="h-8 w-full min-w-0 appearance-none rounded-lg border border-input bg-background pl-2.5 pr-7 text-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm">
+        <select
+          value={sort}
+          onchange={(e) => filters.setNow({ ...filters.value, sort: parseBoardSort(e.currentTarget.value) })}
+          aria-label={s.sortAria}
+          class="h-8 w-full min-w-0 appearance-none rounded-lg border border-input bg-background pl-2.5 pr-7 text-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
+        >
           <option value="default">{s.sortDefault}</option>
           <option value="company">{s.sortCompany}</option>
           <option value="added">{s.sortAdded}</option>
@@ -636,8 +664,12 @@
       </span>
       {#if view === 'board'}
         <span class="relative flex min-w-0 flex-1 items-center sm:w-40 sm:flex-none">
-          <select value={visibleColumn} onchange={(e) => goToColumn(e.currentTarget.value)}
-            aria-label={s.boardStage} class="h-8 w-full min-w-0 appearance-none rounded-lg border border-input bg-background pl-2.5 pr-7 text-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm">
+          <select
+            value={visibleColumn}
+            onchange={(e) => goToColumn(e.currentTarget.value)}
+            aria-label={s.boardStage}
+            class="h-8 w-full min-w-0 appearance-none rounded-lg border border-input bg-background pl-2.5 pr-7 text-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
+          >
             {#each BOARD_COLUMNS as col (col.id)}
               <option value={col.id}>{columnLabel(col)} ({shown[col.id].length})</option>
             {/each}
@@ -646,8 +678,12 @@
         </span>
       {:else}
         <span class="relative flex min-w-0 flex-1 items-center sm:w-40 sm:flex-none">
-          <select value={stageFilter} onchange={(e) => filters.setNow({ ...filters.value, stage: e.currentTarget.value })}
-            aria-label={s.stageFilterAria} class="h-8 w-full min-w-0 appearance-none rounded-lg border border-input bg-background pl-2.5 pr-7 text-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm">
+          <select
+            value={stageFilter}
+            onchange={(e) => filters.setNow({ ...filters.value, stage: e.currentTarget.value })}
+            aria-label={s.stageFilterAria}
+            class="h-8 w-full min-w-0 appearance-none rounded-lg border border-input bg-background pl-2.5 pr-7 text-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
+          >
             <option value="">{s.allStages}</option>
             {#each BOARD_COLUMNS as col (col.id)}<option value={col.id}>{columnLabel(col)}</option>{/each}
           </select>
@@ -656,7 +692,9 @@
       {/if}
     </div>
     {#if filtering}
-      <span role="status" class="text-xs tabular-nums text-muted-foreground">{format(s.matchedOfTotal, { matched: String(matched), total: String(total) })}</span>
+      <span role="status" class="text-xs tabular-nums text-muted-foreground"
+        >{format(s.matchedOfTotal, { matched: String(matched), total: String(total) })}</span
+      >
     {/if}
   </div>
 
@@ -664,7 +702,9 @@
     <div class="rounded-xl border border-dashed border-border">
       <EmptyState title={s.noMatches} description={s.noMatchesDescription}>
         {#snippet action()}
-          <Button variant="outline" size="sm" class="min-h-11 sm:min-h-0" onclick={clearFilters}>{s.clearFilters}</Button>
+          <Button variant="outline" size="sm" class="min-h-11 sm:min-h-0" onclick={clearFilters}
+            >{s.clearFilters}</Button
+          >
         {/snippet}
       </EmptyState>
     </div>

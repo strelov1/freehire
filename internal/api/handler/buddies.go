@@ -82,11 +82,11 @@ type buddyStatusResponse struct {
 }
 
 func (h *buddyHandlers) statusResponse(c *fiber.Ctx, userID int64) error {
-	st, err := h.buddy.Status(c.Context(), userID)
+	st, err := h.status(c.Context(), userID)
 	if err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": buddyStatusResponse{Member: st.Member, Handle: st.Handle, CardEmpty: st.EmptyCard}})
+	return c.JSON(fiber.Map{"data": st})
 }
 
 // Status reports the caller's standing. A member's visit also refreshes their ranking

@@ -38,7 +38,9 @@ const plans: PlansMatrix = {
 // what production renders, so that is what the spec renders, and the mismatch is narrowed
 // to this one boundary instead of being spread across four calls.
 function renderPricing(matrix: PlansMatrix = plans) {
-  return render(Page, { props: { data: { user: null, locale: 'en', plans: matrix, promo: '' } as unknown as PageData } });
+  return render(Page, {
+    props: { data: { user: null, locale: 'en', plans: matrix, promo: '' } as unknown as PageData },
+  });
 }
 
 /** Stands in for the edge, answering `/geo/region` with one country. */

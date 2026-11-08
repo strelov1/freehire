@@ -96,8 +96,7 @@ describe('job path segment encoding', () => {
   // covered without anyone remembering to add it here.
   it('treats a non-job body as a missing job', async () => {
     const listBody = '{"data":[{"public_slug":"a-job"}],"meta":{"total":1}}';
-    const fetcher = (() =>
-      Promise.resolve(new Response(listBody, { status: 200 }))) as unknown as typeof fetch;
+    const fetcher = (() => Promise.resolve(new Response(listBody, { status: 200 }))) as unknown as typeof fetch;
     const client = createApi(fetcher);
 
     await expect(client.getJob('search')).rejects.toMatchObject({ status: 404 });
@@ -109,8 +108,11 @@ describe('recent authentication adapters', () => {
     let seenURL = '';
     let seenInit: RequestInit | undefined;
     const fetcher = ((url: string, init?: RequestInit) => {
-      seenURL = url; seenInit = init;
-      return Promise.resolve(new Response('{"data":{"recent_auth_expires_at":"2026-08-11T00:00:00Z"}}',{status:200}));
+      seenURL = url;
+      seenInit = init;
+      return Promise.resolve(
+        new Response('{"data":{"recent_auth_expires_at":"2026-08-11T00:00:00Z"}}', { status: 200 }),
+      );
     }) as unknown as typeof fetch;
     const expires = await createApi(fetcher).reauthenticatePassword('correct horse');
     expect(seenURL).toBe('/api/v2/auth/reauth/password');
@@ -127,8 +129,9 @@ describe('recent authentication adapters', () => {
   // action was refused.
   it('reads an empty identity list as an array, not null', async () => {
     const fetcher = (() =>
-      Promise.resolve(new Response('{"data":{"has_password":true,"identities":null}}', { status: 200 }))
-    ) as unknown as typeof fetch;
+      Promise.resolve(
+        new Response('{"data":{"has_password":true,"identities":null}}', { status: 200 }),
+      )) as unknown as typeof fetch;
     const result = await createApi(fetcher).connectedIdentities();
     expect(result.identities).toEqual([]);
     expect(result.has_password).toBe(true);
@@ -209,10 +212,7 @@ describe('buddy mock paths', () => {
     const client = createApi(fetcher, '', {});
     await client.getBuddyMockSummary('a/b');
     await client.cancelBuddyMock('x/y');
-    expect(urls).toEqual([
-      '/api/v1/me/buddies/profiles/a%2Fb/mock-reviews',
-      '/api/v1/me/buddies/mocks/x%2Fy/cancel',
-    ]);
+    expect(urls).toEqual(['/api/v1/me/buddies/profiles/a%2Fb/mock-reviews', '/api/v1/me/buddies/mocks/x%2Fy/cancel']);
   });
 });
 

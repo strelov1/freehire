@@ -51,6 +51,12 @@ export interface JobFilters {
    *  posting, so it never reaches a saved search (see savedSearchQuery); signed out, the
    *  server ignores it and says so in `meta.ignored_params`. */
   formerEmployers: boolean;
+  /** "Your watchlist": keep only postings at the companies on the signed-in reader's own
+   *  watchlist, resolved by the server. Serialized as `watchlist=true`, true-or-absent.
+   *  Unlike `formerEmployers` it IS kept in a saved search: the saved search
+   *  `watchlist=true` is the alert, and the digest matcher resolves it against its
+   *  owner's list. Signed out, the server ignores it and says so in `meta.ignored_params`. */
+  watchlist: boolean;
   /** Keep only postings whose captured application form requires at most this many
    *  questions beyond the CV and contact details (null = no bound). The filter modal's
    *  "Short application" toggle writes SHORT_APPLICATION_MAX; any other bound arrives
@@ -300,6 +306,7 @@ export function emptyFilters(): JobFilters {
     hideAIInterview: false,
     autoApplyAvailable: false,
     formerEmployers: false,
+    watchlist: false,
     applyQuestionsMax: null,
     minSkillMatch: null,
     salaryMin: null,
@@ -338,6 +345,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.hideAIInterview) p.set('ai_interview', 'false');
   if (f.autoApplyAvailable) p.set('auto_apply_available', 'true');
   if (f.formerEmployers) p.set('former_employers', 'true');
+  if (f.watchlist) p.set('watchlist', 'true');
   if (f.applyQuestionsMax != null) p.set('apply_questions_max', String(f.applyQuestionsMax));
   if (f.minSkillMatch != null) p.set('min_skill_match', String(f.minSkillMatch));
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
@@ -367,7 +375,6 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   }
   return p;
 }
-
 
 /** The furthest back either date bound reaches, mirroring `maxWithinDays` in
  *  internal/search/search. A century is past anything in the catalogue; the ceiling is
@@ -441,6 +448,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.hideAIInterview = p.get('ai_interview') === 'false';
   f.autoApplyAvailable = p.get('auto_apply_available') === 'true';
   f.formerEmployers = p.get('former_employers') === 'true';
+  f.watchlist = p.get('watchlist') === 'true';
   f.applyQuestionsMax = nonNegativeInt(p.get('apply_questions_max'));
   const minSkillMatch = nonNegativeInt(p.get('min_skill_match'));
   f.minSkillMatch = minSkillMatch != null && minSkillMatch > 0 && minSkillMatch <= 100 ? minSkillMatch : null;
@@ -471,7 +479,12 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   // Read like the server reads it (trimmed, case-insensitive), so a hand-written TRUE
   // does not silently drop a modifier the server would apply.
   f.workModeRemoteAnywhere = p.get('work_mode_remote_anywhere')?.trim().toLowerCase() === 'true';
-  const list = (key: string) => p.getAll(key).flatMap((v) => v.split(',')).map((v) => v.trim()).filter(Boolean);
+  const list = (key: string) =>
+    p
+      .getAll(key)
+      .flatMap((v) => v.split(','))
+      .map((v) => v.trim())
+      .filter(Boolean);
   if (f.workModeRemoteAnywhere) {
     f.workModeRemoteRegions = list('work_mode_remote_regions');
     f.workModeRemoteCountries = list('work_mode_remote_countries');
@@ -548,6 +561,7 @@ export function activeFilterCount(f: JobFilters): number {
   if (f.hideAIInterview) n += 1;
   if (f.autoApplyAvailable) n += 1;
   if (f.formerEmployers) n += 1;
+  if (f.watchlist) n += 1;
   if (f.applyQuestionsMax != null) n += 1;
   if (f.minSkillMatch != null) n += 1;
   // One control and one summary chip, so one count whichever ends are set.
@@ -570,7 +584,7 @@ export function canonicalQuery(query: string): string {
 
 /** The saved-search / alert target: the filters as a canonical query string, WITHOUT
  *  the ordering. A named wrapper over filtersToParams so the saved-search call sites
- *  (SavedSearches, FilterSummary, CompanyFollowButton) express intent ("the comparable
+ *  (SavedSearches, FilterSummary) express intent ("the comparable
  *  query for this filter set") rather than reaching for the raw serializer.
  *
  *  The ordering is dropped because a saved search is about WHICH jobs are in the set,
@@ -587,7 +601,9 @@ export function canonicalQuery(query: string): string {
  *
  *  "Hiring again" is dropped for a different reason: it is resolved per request from the
  *  reader's experience bank, and the digest matcher replays a stored query with no reader
- *  to resolve it for — an alert carrying it would mail the whole catalogue. */
+ *  to resolve it for — an alert carrying it would mail the whole catalogue. The watchlist
+ *  is the opposite case and stays: the matcher resolves it against the list of the
+ *  search's owner. */
 export function savedSearchQuery(f: JobFilters): string {
   // Neither feed preference can be replayed by a digest.
   return filtersToParams({ ...f, sort: null, hideSeen: false, formerEmployers: false }).toString();
@@ -848,7 +864,11 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
       // Every other shape keeps the plain flatten: one AND of the modes with the union
       // of the remote reach and the physical geography.
       f.facets.regions = seed([...reachRegions, ...(reloc.regions ?? [])]);
-      f.facets.countries = seed([...reachCountries, ...(base.country ? [base.country] : []), ...(reloc.countries ?? [])]);
+      f.facets.countries = seed([
+        ...reachCountries,
+        ...(base.country ? [base.country] : []),
+        ...(reloc.countries ?? []),
+      ]);
       if (loc.relocation.open) f.facets.relocation = seed(['supported', 'required']);
     }
   }

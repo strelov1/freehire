@@ -56,9 +56,7 @@
           ? { cast: api.voteJob, clear: api.clearJobVote }
           : { cast: api.voteCompany, clear: api.clearCompanyVote };
       const wasMine = mine === (dir === 'up' ? 1 : -1);
-      const res: VoteResult = wasMine
-        ? await endpoints.clear(slug)
-        : await endpoints.cast(slug, dir);
+      const res: VoteResult = wasMine ? await endpoints.clear(slug) : await endpoints.cast(slug, dir);
       up = res.upvote_count;
       down = res.downvote_count;
       mine = res.my_vote;

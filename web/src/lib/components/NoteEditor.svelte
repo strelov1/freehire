@@ -9,12 +9,22 @@
     `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
   const icons = {
     bold: svgIcon('<path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/>'),
-    italic: svgIcon('<line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/>'),
+    italic: svgIcon(
+      '<line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/>',
+    ),
     heading: svgIcon('<path d="M6 12h12"/><path d="M6 20V4"/><path d="M18 20V4"/>'),
-    unorderedList: svgIcon('<path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/>'),
-    orderedList: svgIcon('<path d="M11 5h10"/><path d="M11 12h10"/><path d="M11 19h10"/><path d="M4 4h1v5"/><path d="M4 9h2"/><path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"/>'),
-    link: svgIcon('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
-    preview: svgIcon('<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>'),
+    unorderedList: svgIcon(
+      '<path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/>',
+    ),
+    orderedList: svgIcon(
+      '<path d="M11 5h10"/><path d="M11 12h10"/><path d="M11 19h10"/><path d="M4 4h1v5"/><path d="M4 9h2"/><path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"/>',
+    ),
+    link: svgIcon(
+      '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    ),
+    preview: svgIcon(
+      '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+    ),
   };
 </script>
 
@@ -95,7 +105,10 @@
       saveState = 'error';
       if (showSaveState) announce(s.saveFailed, 'assertive');
     } finally {
-      inFlight.splice(inFlight.findIndex((f) => f.seq === seq), 1);
+      inFlight.splice(
+        inFlight.findIndex((f) => f.seq === seq),
+        1,
+      );
     }
   };
 
@@ -142,15 +155,58 @@
         // Built-in actions keep their default keyboard shortcuts (Cmd-B/I, bound to the
         // CodeMirror keymap by action name, independent of the toolbar array).
         toolbar: [
-          { name: 'bold', action: EasyMDECtor.toggleBold, className: ICON_CLASS, title: s.toolbar.bold, icon: icons.bold },
-          { name: 'italic', action: EasyMDECtor.toggleItalic, className: ICON_CLASS, title: s.toolbar.italic, icon: icons.italic },
-          { name: 'heading', action: EasyMDECtor.toggleHeadingSmaller, className: ICON_CLASS, title: s.toolbar.heading, icon: icons.heading },
+          {
+            name: 'bold',
+            action: EasyMDECtor.toggleBold,
+            className: ICON_CLASS,
+            title: s.toolbar.bold,
+            icon: icons.bold,
+          },
+          {
+            name: 'italic',
+            action: EasyMDECtor.toggleItalic,
+            className: ICON_CLASS,
+            title: s.toolbar.italic,
+            icon: icons.italic,
+          },
+          {
+            name: 'heading',
+            action: EasyMDECtor.toggleHeadingSmaller,
+            className: ICON_CLASS,
+            title: s.toolbar.heading,
+            icon: icons.heading,
+          },
           '|',
-          { name: 'unordered-list', action: EasyMDECtor.toggleUnorderedList, className: ICON_CLASS, title: s.toolbar.unorderedList, icon: icons.unorderedList },
-          { name: 'ordered-list', action: EasyMDECtor.toggleOrderedList, className: ICON_CLASS, title: s.toolbar.orderedList, icon: icons.orderedList },
+          {
+            name: 'unordered-list',
+            action: EasyMDECtor.toggleUnorderedList,
+            className: ICON_CLASS,
+            title: s.toolbar.unorderedList,
+            icon: icons.unorderedList,
+          },
+          {
+            name: 'ordered-list',
+            action: EasyMDECtor.toggleOrderedList,
+            className: ICON_CLASS,
+            title: s.toolbar.orderedList,
+            icon: icons.orderedList,
+          },
           '|',
-          { name: 'link', action: EasyMDECtor.drawLink, className: ICON_CLASS, title: s.toolbar.link, icon: icons.link },
-          { name: 'preview', action: EasyMDECtor.togglePreview, className: ICON_CLASS, title: s.toolbar.preview, icon: icons.preview, noDisable: true },
+          {
+            name: 'link',
+            action: EasyMDECtor.drawLink,
+            className: ICON_CLASS,
+            title: s.toolbar.link,
+            icon: icons.link,
+          },
+          {
+            name: 'preview',
+            action: EasyMDECtor.togglePreview,
+            className: ICON_CLASS,
+            title: s.toolbar.preview,
+            icon: icons.preview,
+            noDisable: true,
+          },
         ],
       });
       editor.codemirror.on('blur', () => void persist());
@@ -184,9 +240,7 @@
 {#if showSaveState}
   <div class="flex min-h-5 items-center justify-end gap-2 text-xs">
     <!-- Voiced through the shared announcer (see persist); this is only what is seen. -->
-    <span
-      class={saveState === 'error' ? 'text-destructive-strong' : 'text-muted-foreground'}
-    >
+    <span class={saveState === 'error' ? 'text-destructive-strong' : 'text-muted-foreground'}>
       {#if saveState === 'saving'}{s.saving}{:else if saveState === 'saved'}{s.saved}{:else if saveState === 'error'}{s.saveFailed}{/if}
     </span>
     {#if saveState === 'error'}

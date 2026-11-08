@@ -32,7 +32,12 @@
   const groups = $derived(
     workspaceNav(workspaceId, currentUser()?.role === 'moderator', currentUser()?.beta_tester ?? false),
   );
-  const activeHref = $derived(activeSection(path, groups.flatMap((g) => g.items))?.href);
+  const activeHref = $derived(
+    activeSection(
+      path,
+      groups.flatMap((g) => g.items),
+    )?.href,
+  );
 
   const rowClass = (active: boolean) =>
     cn(
@@ -51,7 +56,9 @@
      since its sidebar no longer carries the sections you might be looking for. -->
 {#if workspaceId !== 'seeker' && !compact}
   {@const Icon = workspaceIcons[workspaceId]}
-  <div class="mb-2 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground">
+  <div
+    class="mb-2 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground"
+  >
     <Icon class="size-4 shrink-0" aria-hidden="true" />
     {s.workspaces[workspaceId]}
   </div>

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buddyAvatarName, buddyHeading, buddyRelativeDay, buddySharedCompanies, buddyYearTotals, localDay } from './buddyPresent';
+import {
+  buddyAvatarName,
+  buddyHeading,
+  buddyRelativeDay,
+  buddySharedCompanies,
+  buddyYearTotals,
+  localDay,
+} from './buddyPresent';
 
 describe('buddyHeading', () => {
   it('builds the Talent Network heading from the summary', () => {

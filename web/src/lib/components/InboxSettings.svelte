@@ -96,12 +96,19 @@
   <!-- Hosted mailbox -->
   <div class="rounded-xl border border-border bg-card p-4">
     <div class="flex items-center gap-2 text-sm font-medium">
-      <AtSign class="h-4 w-4 text-muted-foreground" /> {s.freehireMailboxLabel}
+      <AtSign class="h-4 w-4 text-muted-foreground" />
+      {s.freehireMailboxLabel}
     </div>
     {#if hasMailbox}
       <div class="mt-1 flex items-center gap-1">
         <code class="truncate rounded bg-muted px-1.5 py-0.5 text-xs">{mailbox?.address}</code>
-        <button type="button" onclick={copyAddress} title={s.copyAddressTitle} aria-label={s.copyAddressTitle} class="relative shrink-0 text-muted-foreground after:absolute after:-inset-1.5 hover:text-foreground">
+        <button
+          type="button"
+          onclick={copyAddress}
+          title={s.copyAddressTitle}
+          aria-label={s.copyAddressTitle}
+          class="relative shrink-0 text-muted-foreground after:absolute after:-inset-1.5 hover:text-foreground"
+        >
           <Copy class="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </div>
@@ -113,7 +120,8 @@
       <p class="mt-1 text-xs text-muted-foreground">{s.getMailboxHint}</p>
       <!-- The same weight as the Gmail card's button: two equal ways in, neither favoured. -->
       <Button variant="secondary" size="sm" class="mt-3" disabled={claiming} onclick={claimMailbox}>
-        <AtSign class="size-4" aria-hidden="true" /> {claiming ? s.creating : s.getMailbox}
+        <AtSign class="size-4" aria-hidden="true" />
+        {claiming ? s.creating : s.getMailbox}
       </Button>
     {:else}
       <p class="mt-1 text-xs text-muted-foreground">{s.notAvailable}</p>

@@ -8,6 +8,7 @@ Guidance for AI agents working in this repository.
 - **MVP stage — keep the architecture fluid.** The current structure is not load-bearing legacy. When a new feature doesn't fit cleanly, prefer reshaping the affected part over bolting on an awkward special case.
 - **Surgical changes.** Clean up what your change orphaned; leave pre-existing dead code alone. Prefer a library's intended API over a clever shim.
 - **English only.** All code, comments, identifiers, docs, and commits.
+- **PR titles follow [Conventional Commits](https://www.conventionalcommits.org):** `type(scope)?: summary`, with type one of `feat fix perf refactor docs test ci build chore revert` and a free-form optional scope (`fix(ingest): close empty Workday boards`). Merges are squashes whose commit is the PR title, so CI (`.github/workflows/pr-title.yml`, rules in `commitlint.config.js`) fails any other title; `pnpm check:pr-title` checks one locally from stdin.
 - **Read [.out-of-scope/](.out-of-scope/README.md) before proposing or starting something new.** It holds the ideas this project already declined, each with what was checked and what would reopen it. A request that matches an entry is answered with its link, not investigated again; a decision that is reversed is deleted there.
 
 ## What this is
@@ -88,6 +89,10 @@ them where mise's environment reaches: a shell with `eval "$(mise activate zsh)"
 **Before committing** any `*.go` file: `gofmt -w` those paths (`gofmt -l .` must print
 nothing), then `go vet ./...` and `go test ./...`. Do not commit if they fail. Skip this
 suite when the commit has no Go.
+
+**Formatting TS/JS/Svelte:** oxfmt, one root `.oxfmtrc.json` for `web/`, `design-system/`,
+`extension/`; `pnpm run format` (npm in `extension/`) rewrites, `format:check` is the gate — see
+[ci-checks](docs/agents/ci-checks.md#formatting-oxfmt).
 
 **`go test ./...` compiles no `//go:build integration` file, and those files are not
 confined to `internal/platform/db`** — there are hundreds across the module (141 in

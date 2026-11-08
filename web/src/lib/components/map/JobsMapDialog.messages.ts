@@ -27,7 +27,12 @@ export const messages = defineMessages(
         many: '{count} вакансий в {places}',
         other: '{count} вакансии в {places}',
       }),
-      countries: plurals({ one: '{count} стране', few: '{count} странах', many: '{count} странах', other: '{count} странах' }),
+      countries: plurals({
+        one: '{count} стране',
+        few: '{count} странах',
+        many: '{count} странах',
+        other: '{count} странах',
+      }),
       summaryIn: plurals({
         one: '{count} вакансия: {country}',
         few: '{count} вакансии: {country}',

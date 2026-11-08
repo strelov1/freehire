@@ -73,8 +73,7 @@ export const messages = defineMessages(
       viewCv: 'View CV',
       markContacted: 'Mark contacted',
       decline: 'Decline',
-      footnote:
-        "The seeker's identity is never shown — only the contact they chose to share. You reach out directly.",
+      footnote: "The seeker's identity is never shown — only the contact they chose to share. You reach out directly.",
     },
   },
   {
@@ -101,8 +100,7 @@ export const messages = defineMessages(
           contacted: 'Связались',
           declined: 'Отклонён',
         },
-        footnote:
-          'Уведомлений здесь нет — рекомендатель свяжется с вами по тому контакту, который вы оставили.',
+        footnote: 'Уведомлений здесь нет — рекомендатель свяжется с вами по тому контакту, который вы оставили.',
       },
       offers: {
         lead: 'Компании, куда вы можете рекомендовать.',

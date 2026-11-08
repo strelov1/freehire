@@ -138,9 +138,7 @@ describe('ApiKeysView — revoking', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Revoke CI bot' }));
 
-    expect(
-      await within(openDialog()).findByRole('button', { name: 'Confirm with google' }),
-    ).toBeTruthy();
+    expect(await within(openDialog()).findByRole('button', { name: 'Confirm with google' })).toBeTruthy();
   });
 
   it('carries which key was being revoked across a provider round trip', async () => {
@@ -149,9 +147,7 @@ describe('ApiKeysView — revoking', () => {
     await screen.findByText('CI bot');
     await fireEvent.click(screen.getByRole('button', { name: 'Revoke CI bot' }));
 
-    await fireEvent.click(
-      await within(openDialog()).findByRole('button', { name: 'Confirm with google' }),
-    );
+    await fireEvent.click(await within(openDialog()).findByRole('button', { name: 'Confirm with google' }));
 
     expect(begin).toHaveBeenCalledWith('google', '/my/integrations/api-keys', {
       surface: 'revoke-api-key',

@@ -26,7 +26,8 @@
 
 <div class="space-y-6">
   <p class="text-sm text-muted-foreground">
-    {lead} {s.leadSuffix}
+    {lead}
+    {s.leadSuffix}
   </p>
 
   {#if cvAppearance.loadFailed}

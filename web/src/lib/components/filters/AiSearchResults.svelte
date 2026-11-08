@@ -91,7 +91,11 @@
           </div>
         </header>
         <Card class="overflow-hidden">
-          <div class="grid divide-x divide-border border-b border-border {stats.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}">
+          <div
+            class="grid divide-x divide-border border-b border-border {stats.length === 3
+              ? 'grid-cols-3'
+              : 'grid-cols-2'}"
+          >
             {#each stats as stat (stat.label)}
               <div class="p-3 sm:p-5">
                 <p class="text-lg font-semibold tabular-nums sm:text-3xl">{stat.value}</p>
@@ -116,7 +120,12 @@
               <div class="mt-3 flex flex-wrap gap-2">
                 {#each overview.topCompanies as company (company.slug)}
                   <span title={company.name}>
-                    <EntityLogo name={company.name} src={companyLogoUrl(company.name) ?? undefined} shape="square" size="lg" />
+                    <EntityLogo
+                      name={company.name}
+                      src={companyLogoUrl(company.name) ?? undefined}
+                      shape="square"
+                      size="lg"
+                    />
                   </span>
                 {/each}
               </div>

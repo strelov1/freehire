@@ -45,6 +45,20 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   `ErrUnfilteredSearch` (400). The guard is at subscribe time, not at save time, because
   that is where the meaning changes.
 
+- **The company watchlist alert is a saved search, not a second engine.** A person's list
+  (`internal/engage/companywatch`, table `company_watchlist`, up to `MaxEntries` = 5000) sends
+  nothing itself; its alert is a saved search carrying `watchlist=true`, subscribed to like any
+  other, so channels, quiet hours and digest sections come for free. The same query string
+  means a different set of companies to each person, so `cmd/notify` groups such a query
+  **per subscriber** (`matchGroup`) instead of per query string, and narrows its search with
+  `company_slug IN <their list>` read at match time (`ListWatchlistSlugsForUsers`) — editing
+  the list changes the next search with no re-subscribe. **An empty list matches nothing**: the
+  group runs no search at all, because dropping the filter would send the whole catalogue. The
+  param counts as a narrowing for `search.Narrows`, so the subscribe gate admits it. The list
+  keeps a slug a merge retired and follows it through `company_slug_aliases` on every read,
+  and has no foreign key to `companies` (that table is derived from jobs and loses an employer
+  the day its last posting closes — the day a watcher most wants to hear about it).
+
 - **A subscription must carry a query the search can RUN, and stays that way.** Create
   and resume (`subscription.Service.SetActive(true)`) share one gate (`admit`): the
   query parses (`search.ParseQuery` — e.g. at most 5 OR alternatives), narrows, and the

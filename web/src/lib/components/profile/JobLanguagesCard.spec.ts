@@ -8,11 +8,21 @@ const mock = vi.hoisted(() => ({
   counts: vi.fn(),
   locale: 'en',
 }));
-vi.mock('$app/state', () => ({ page: { get data() { return { locale: mock.locale }; } } }));
-vi.mock('#lib/profile.svelte.js', () => ({ profileStore: {
-  get profile() { return { job_languages: mock.languages }; },
-  updateJobLanguages: mock.update,
-} }));
+vi.mock('$app/state', () => ({
+  page: {
+    get data() {
+      return { locale: mock.locale };
+    },
+  },
+}));
+vi.mock('#lib/profile.svelte.js', () => ({
+  profileStore: {
+    get profile() {
+      return { job_languages: mock.languages };
+    },
+    updateJobLanguages: mock.update,
+  },
+}));
 vi.mock('#lib/api.js', () => ({
   ApiError: class extends Error {},
   api: { facetCounts: mock.counts },
@@ -62,7 +72,6 @@ describe('job language preferences', () => {
     expect(await screen.findByRole('option', { name: /русский/i })).toBeTruthy();
   });
 });
-
 
 describe('facet-backed language selector', () => {
   it('offers only available facet values and renders their flags', async () => {

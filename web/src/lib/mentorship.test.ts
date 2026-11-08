@@ -101,9 +101,7 @@ describe('mentor directory filters', () => {
   });
 
   test('the six filters the directory reads survive a round trip', () => {
-    const params = new URLSearchParams(
-      'company=acme&topic=career&language=en&seniority=senior&q=jane&no_reviews=1',
-    );
+    const params = new URLSearchParams('company=acme&topic=career&language=en&seniority=senior&q=jane&no_reviews=1');
     const forwarded = mentorFiltersToParams(mentorFiltersFromParams(params));
     expect(forwarded.get('company')).toBe('acme');
     expect(forwarded.get('topic')).toBe('career');
@@ -118,9 +116,7 @@ describe('mentor directory filters', () => {
   test('no_reviews is a flag: absent means unfiltered, never sent as false', () => {
     expect(mentorFiltersFromParams(new URLSearchParams('')).noReviews).toBe(false);
     expect(mentorFiltersToParams(emptyMentorFilters()).has('no_reviews')).toBe(false);
-    expect(
-      mentorFiltersToParams({ ...emptyMentorFilters(), noReviews: true }).get('no_reviews'),
-    ).toBe('1');
+    expect(mentorFiltersToParams({ ...emptyMentorFilters(), noReviews: true }).get('no_reviews')).toBe('1');
   });
 
   // The directory's vocabulary is company/topic/language and nothing else — the same
@@ -140,9 +136,7 @@ describe('mentor directory filters', () => {
   // silently keep the first.
   test('a repeated key collapses to one value', () => {
     const params = new URLSearchParams('topic=career&topic=system-design');
-    expect(mentorFiltersToParams(mentorFiltersFromParams(params)).getAll('topic')).toEqual([
-      'career',
-    ]);
+    expect(mentorFiltersToParams(mentorFiltersFromParams(params)).getAll('topic')).toEqual(['career']);
   });
 
   // An empty value is not a filter. `?company=` narrows nothing, and forwarding it makes
@@ -156,9 +150,7 @@ describe('mentor directory filters', () => {
 
   test('the query string form clears to empty, so a cleared filter has no trailing ?', () => {
     expect(mentorFiltersToQuery(emptyMentorFilters())).toBe('');
-    expect(mentorFiltersToQuery({ ...emptyMentorFilters(), company: 'acme' })).toBe(
-      'company=acme',
-    );
+    expect(mentorFiltersToQuery({ ...emptyMentorFilters(), company: 'acme' })).toBe('company=acme');
   });
 
   // Surrounding space comes from hand-edited and shared links; it is not part of a slug.
@@ -501,9 +493,7 @@ describe('who may leave a review', () => {
   });
 
   test('the mentor of the same session may not', () => {
-    expect(canReview(session({ completed: true, seeker_email: 'seeker@example.test' }))).toBe(
-      false,
-    );
+    expect(canReview(session({ completed: true, seeker_email: 'seeker@example.test' }))).toBe(false);
   });
 
   // `completed` is already "confirmed AND ended", so a cancelled session is never
@@ -535,15 +525,7 @@ describe('weekdays, stored and displayed', () => {
   // component. This asserts the headings a Monday-first grid actually draws, so the two
   // cannot drift into disagreeing about which column is which.
   test('the short labels spell the calendar header', () => {
-    expect(weekdayOrder().map(weekdayShortLabel)).toEqual([
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ]);
+    expect(weekdayOrder().map(weekdayShortLabel)).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
   });
 
   // The two together: reading the display order through the labels must spell the week,
@@ -563,10 +545,7 @@ describe('weekdays, stored and displayed', () => {
 
 describe('splitting availability into a week and its exceptions', () => {
   test('a rule is weekly or dated, and lands in exactly one half', () => {
-    const split = splitAvailability([
-      rule({ id: 1, weekday: 1 }),
-      rule({ id: 2, weekday: null, date: '2026-10-16' }),
-    ]);
+    const split = splitAvailability([rule({ id: 1, weekday: 1 }), rule({ id: 2, weekday: null, date: '2026-10-16' })]);
     expect(split.weekly.map((r) => r.id)).toEqual([1]);
     expect(split.dated.map((r) => r.id)).toEqual([2]);
   });
@@ -597,18 +576,14 @@ describe('splitting availability into a week and its exceptions', () => {
 describe('writing the booker state back to the query', () => {
   test('a set value is written and the rest is left alone', () => {
     const current = new URLSearchParams('month=2026-10&ref=newsletter');
-    expect(withSearchParams(current, { date: '2026-10-15' })).toBe(
-      'month=2026-10&ref=newsletter&date=2026-10-15',
-    );
+    expect(withSearchParams(current, { date: '2026-10-15' })).toBe('month=2026-10&ref=newsletter&date=2026-10-15');
   });
 
   // Picking a new day has to DROP the slot chosen under the old one, or the page shows one
   // date while the button is armed with an hour from another.
   test('a null value removes its key', () => {
     const current = new URLSearchParams('month=2026-10&date=2026-10-15&slot=x');
-    expect(withSearchParams(current, { date: '2026-10-16', slot: null })).toBe(
-      'month=2026-10&date=2026-10-16',
-    );
+    expect(withSearchParams(current, { date: '2026-10-16', slot: null })).toBe('month=2026-10&date=2026-10-16');
   });
 
   test('an empty string removes its key too, so a cleared control does not linger', () => {
@@ -741,9 +716,7 @@ describe('profileInputFromProfile', () => {
   });
 
   test('a stated seniority carries over unchanged', () => {
-    expect(profileInputFromProfile(ownProfile({ seniority: 'senior' })).seniority).toBe(
-      'senior',
-    );
+    expect(profileInputFromProfile(ownProfile({ seniority: 'senior' })).seniority).toBe('senior');
   });
 
   test('an unset seniority becomes the empty string, never undefined', () => {
@@ -771,20 +744,13 @@ describe('profileInputFromProfile', () => {
   });
 });
 
-function interval(
-  startsAt: string,
-  endsAt: string,
-  status: MentorCalendarInterval['status'],
-): MentorCalendarInterval {
+function interval(startsAt: string, endsAt: string, status: MentorCalendarInterval['status']): MentorCalendarInterval {
   return { starts_at: startsAt, ends_at: endsAt, status };
 }
 
 describe('grouping a mentor own-calendar into local days', () => {
   test('an interval wholly inside one day is grouped under it alone', () => {
-    const grouped = groupCalendarByLocalDay(
-      [interval('2026-09-08T16:00:00Z', '2026-09-08T17:00:00Z', 'free')],
-      'UTC',
-    );
+    const grouped = groupCalendarByLocalDay([interval('2026-09-08T16:00:00Z', '2026-09-08T17:00:00Z', 'free')], 'UTC');
     expect([...grouped.keys()]).toEqual(['2026-09-08']);
   });
 
@@ -803,10 +769,7 @@ describe('grouping a mentor own-calendar into local days', () => {
   // ends_at is exclusive, matching the domain's half-open intervals: an interval ending
   // exactly at a day's start does not touch that day.
   test('an interval ending exactly at midnight does not touch that day', () => {
-    const grouped = groupCalendarByLocalDay(
-      [interval('2026-09-08T22:00:00Z', '2026-09-09T00:00:00Z', 'busy')],
-      'UTC',
-    );
+    const grouped = groupCalendarByLocalDay([interval('2026-09-08T22:00:00Z', '2026-09-09T00:00:00Z', 'busy')], 'UTC');
     expect([...grouped.keys()]).toEqual(['2026-09-08']);
   });
 
@@ -835,9 +798,7 @@ describe('which statuses a day shows, in priority order', () => {
   });
 
   test('a day with only closed time reports just closed', () => {
-    expect(dayStatuses([interval('2026-09-08T00:00:00Z', '2026-09-09T00:00:00Z', 'closed')])).toEqual([
-      'closed',
-    ]);
+    expect(dayStatuses([interval('2026-09-08T00:00:00Z', '2026-09-09T00:00:00Z', 'closed')])).toEqual(['closed']);
   });
 
   test('a day with no intervals reports nothing', () => {
@@ -847,13 +808,20 @@ describe('which statuses a day shows, in priority order', () => {
 
 describe('the weekly schedule editor', () => {
   const rule = (id: number, weekday: number, start: string, end: string): MentorAvailabilityRule => ({
-    id, weekday, start, end, closure: false,
+    id,
+    weekday,
+    start,
+    end,
+    closure: false,
   });
 
   test('draws all seven days Monday first, each with its own ranges in order', () => {
     const draft = weekDraft([rule(1, 0, '10:00', '12:00'), rule(2, 2, '19:00', '21:00'), rule(3, 2, '08:00', '09:00')]);
     expect(draft.map((d) => d.weekday)).toEqual([1, 2, 3, 4, 5, 6, 0]);
-    expect(draft[1]?.ranges).toEqual([{ start: '08:00', end: '09:00' }, { start: '19:00', end: '21:00' }]);
+    expect(draft[1]?.ranges).toEqual([
+      { start: '08:00', end: '09:00' },
+      { start: '19:00', end: '21:00' },
+    ]);
     expect(draft[6]?.ranges).toEqual([{ start: '10:00', end: '12:00' }]);
     expect(draft[0]?.ranges).toEqual([]);
   });
@@ -887,19 +855,25 @@ describe('the month a booking calendar opens on', () => {
 
   test('the opening read searches forward within the endpoint limit across short months and year boundaries', () => {
     expect(openingSlotWindow(new Date('2027-01-31T12:00:00Z'))).toEqual({
-      from: '2027-01-31T00:00:00.000Z', to: '2027-04-03T00:00:00.000Z',
+      from: '2027-01-31T00:00:00.000Z',
+      to: '2027-04-03T00:00:00.000Z',
     });
     expect(openingSlotWindow(new Date('2026-12-31T12:00:00Z'))).toEqual({
-      from: '2026-12-31T00:00:00.000Z', to: '2027-03-03T00:00:00.000Z',
+      from: '2026-12-31T00:00:00.000Z',
+      to: '2027-03-03T00:00:00.000Z',
     });
   });
 
   test('stays on the shown month while it has an open hour', () => {
-    expect(firstOpenMonth([slot('2026-11-02T19:00:00+01:00'), slot('2026-10-31T19:00:00+01:00')], '2026-10')).toBe('2026-10');
+    expect(firstOpenMonth([slot('2026-11-02T19:00:00+01:00'), slot('2026-10-31T19:00:00+01:00')], '2026-10')).toBe(
+      '2026-10',
+    );
   });
 
   test('moves to the month of the earliest open hour when the shown month has none', () => {
-    expect(firstOpenMonth([slot('2026-12-01T09:00:00+01:00'), slot('2026-11-02T19:00:00+01:00')], '2026-10')).toBe('2026-11');
+    expect(firstOpenMonth([slot('2026-12-01T09:00:00+01:00'), slot('2026-11-02T19:00:00+01:00')], '2026-10')).toBe(
+      '2026-11',
+    );
   });
 
   test('ignores the padding day before the shown month and stays put with nothing open', () => {

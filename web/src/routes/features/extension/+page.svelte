@@ -19,7 +19,7 @@
         { name: 'freehire', url: `${origin}/` },
         { name: 'Browser extension', url: canonical },
       ]),
-    ])
+    ]),
   );
 </script>
 

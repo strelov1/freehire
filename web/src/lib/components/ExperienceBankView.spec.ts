@@ -142,9 +142,7 @@ describe('ExperienceBankView add-job form', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
-      expect(createExperienceEmployment).toHaveBeenCalledWith(
-        expect.objectContaining({ current: false }),
-      ),
+      expect(createExperienceEmployment).toHaveBeenCalledWith(expect.objectContaining({ current: false })),
     );
   });
 

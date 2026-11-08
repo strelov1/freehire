@@ -40,11 +40,7 @@
       >
         {lane.mark}
       </span>
-      <span
-        class="w-32 shrink-0 text-xs {lane.counts
-          ? 'font-medium text-foreground'
-          : 'text-muted-foreground'}"
-      >
+      <span class="w-32 shrink-0 text-xs {lane.counts ? 'font-medium text-foreground' : 'text-muted-foreground'}">
         {lane.label}
       </span>
     </div>

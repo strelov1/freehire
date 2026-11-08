@@ -1,11 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import {
-  geoScopeOffered,
-  JOB_FILTERS_KEY,
-  loadJobFilters,
-  markGeoScopeOffered,
-  saveJobFilters,
-} from './filterStorage';
+import { geoScopeOffered, JOB_FILTERS_KEY, loadJobFilters, markGeoScopeOffered, saveJobFilters } from './filterStorage';
 
 // A minimal in-memory localStorage stand-in for the Node test environment (where
 // there is no browser storage). Individual tests swap in throwing/undefined

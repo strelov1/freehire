@@ -111,31 +111,38 @@
        through: above the zone, a card released on the hint landed outside it and sprang back.
        It is not a child of the zone, which svelte-dnd-action reserves for its items. -->
   <div class="relative">
-  {#if items.length === 0 && emptyHint && !dragDisabled}
-    <p class="pointer-events-none absolute inset-x-1 top-2 text-xs text-muted-foreground/70">{emptyHint}</p>
-  {/if}
-  <div
-    class="flex max-h-[calc(100dvh-14rem)] min-h-24 flex-col gap-2 overflow-y-auto"
-    bind:this={zone}
-    onscroll={grow}
-    use:dndzone={{ items: visible, flipDurationMs: 150, type: 'board', dropTargetStyle, dragDisabled, delayTouchStart: touchDragDelay }}
-    onconsider={(e) => {
-      // Paused only while the dragged card is in this zone: a card that passes through
-      // and leaves, or a keyboard drag cancelled here, sends no finalize to this column.
-      const { trigger } = e.detail.info;
-      dragging = trigger !== TRIGGERS.DRAGGED_LEFT && trigger !== TRIGGERS.DRAG_STOPPED;
-      onconsider(id, withTail(e.detail.items as BoardItem[]));
-    }}
-    onfinalize={(e) => {
-      dragging = false;
-      onfinalize(id, withTail(e.detail.items as BoardItem[]));
-    }}
-  >
-    {#each visible as item (item.id)}
-      <div>
-        <BoardCard {item} {onopen} {onremove} removing={removing.includes(item.id)} />
-      </div>
-    {/each}
-  </div>
+    {#if items.length === 0 && emptyHint && !dragDisabled}
+      <p class="pointer-events-none absolute inset-x-1 top-2 text-xs text-muted-foreground/70">{emptyHint}</p>
+    {/if}
+    <div
+      class="flex max-h-[calc(100dvh-14rem)] min-h-24 flex-col gap-2 overflow-y-auto"
+      bind:this={zone}
+      onscroll={grow}
+      use:dndzone={{
+        items: visible,
+        flipDurationMs: 150,
+        type: 'board',
+        dropTargetStyle,
+        dragDisabled,
+        delayTouchStart: touchDragDelay,
+      }}
+      onconsider={(e) => {
+        // Paused only while the dragged card is in this zone: a card that passes through
+        // and leaves, or a keyboard drag cancelled here, sends no finalize to this column.
+        const { trigger } = e.detail.info;
+        dragging = trigger !== TRIGGERS.DRAGGED_LEFT && trigger !== TRIGGERS.DRAG_STOPPED;
+        onconsider(id, withTail(e.detail.items as BoardItem[]));
+      }}
+      onfinalize={(e) => {
+        dragging = false;
+        onfinalize(id, withTail(e.detail.items as BoardItem[]));
+      }}
+    >
+      {#each visible as item (item.id)}
+        <div>
+          <BoardCard {item} {onopen} {onremove} removing={removing.includes(item.id)} />
+        </div>
+      {/each}
+    </div>
   </div>
 </section>

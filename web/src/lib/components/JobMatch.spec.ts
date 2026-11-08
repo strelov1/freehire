@@ -11,8 +11,8 @@ vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/jobs/rust-
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-const { addSkill, removeSkill, avoidSkill, unavoidSkill, getJobMatch, getMatchAnalysis, syncProfileAlert } =
-  vi.hoisted(() => ({
+const { addSkill, removeSkill, avoidSkill, unavoidSkill, getJobMatch, getMatchAnalysis, syncProfileAlert } = vi.hoisted(
+  () => ({
     addSkill: vi.fn(),
     removeSkill: vi.fn(),
     avoidSkill: vi.fn(),
@@ -23,7 +23,8 @@ const { addSkill, removeSkill, avoidSkill, unavoidSkill, getJobMatch, getMatchAn
     // throwing, which is what lets the test below name it.
     getMatchAnalysis: vi.fn(),
     syncProfileAlert: vi.fn(),
-  }));
+  }),
+);
 
 const authState = vi.hoisted(() => ({ signedIn: true }));
 

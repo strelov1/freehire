@@ -50,9 +50,7 @@
     return [...LINE_HEIGHTS, { value: v, label: format(s.custom, { value: v.toFixed(2) }) }];
   });
 
-  const isPristine = $derived(
-    !style.font_family && !((style.font_size ?? 0) > 0) && !((style.line_height ?? 0) > 0),
-  );
+  const isPristine = $derived(!style.font_family && !((style.font_size ?? 0) > 0) && !((style.line_height ?? 0) > 0));
 
   function reset() {
     style.font_family = '';

@@ -47,8 +47,21 @@ function inline(node: Node): string {
 // dropped (a real ATS description can carry a stray text node freehire's own sanitizer
 // never forces into a block).
 const BLOCK_TAGS = new Set([
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-  'p', 'div', 'blockquote', 'pre', 'ul', 'ol', 'hr', 'table', 'dl',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'p',
+  'div',
+  'blockquote',
+  'pre',
+  'ul',
+  'ol',
+  'hr',
+  'table',
+  'dl',
 ]);
 
 function blocks(node: Element): string[] {
@@ -82,7 +95,13 @@ function blocks(node: Element): string[] {
       if (text) out.push(`${'#'.repeat(Number(heading[1]))} ${text}`);
     } else if (tag === 'blockquote') {
       const text = inline(el).trim();
-      if (text) out.push(text.split('\n').map((l) => `> ${l}`).join('\n'));
+      if (text)
+        out.push(
+          text
+            .split('\n')
+            .map((l) => `> ${l}`)
+            .join('\n'),
+        );
     } else if (tag === 'pre') {
       const text = (el.textContent ?? '').trim();
       if (text) out.push('```\n' + text + '\n```');
@@ -104,13 +123,8 @@ function blocks(node: Element): string[] {
       const [header, ...body] = rows;
       if (header) {
         const width = Math.max(...rows.map((r) => r.length));
-        const line = (cells: string[]) =>
-          `| ${Array.from({ length: width }, (_, i) => cells[i] ?? '').join(' | ')} |`;
-        out.push(
-          [line(header), `| ${Array(width).fill('---').join(' | ')} |`, ...body.map(line)].join(
-            '\n',
-          ),
-        );
+        const line = (cells: string[]) => `| ${Array.from({ length: width }, (_, i) => cells[i] ?? '').join(' | ')} |`;
+        out.push([line(header), `| ${Array(width).fill('---').join(' | ')} |`, ...body.map(line)].join('\n'));
       }
     } else if (tag === 'p' || tag === 'div') {
       const text = inline(el).trim();

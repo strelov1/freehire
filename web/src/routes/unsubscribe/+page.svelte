@@ -85,12 +85,9 @@
    *  only deactivate, so a link that leaked cannot sign anybody up for anything. */
   const turnSearchOff = (id: number) => save({ deactivateSearches: [id] });
 
-  const unsubscribeFromEverything = () =>
-    save({ alerts: false, activity: false, news: false });
+  const unsubscribeFromEverything = () => save({ alerts: false, activity: false, news: false });
 
-  const allOff = $derived(
-    !!prefs && !prefs.alerts_enabled && !prefs.activity_enabled && !prefs.news_enabled,
-  );
+  const allOff = $derived(!!prefs && !prefs.alerts_enabled && !prefs.activity_enabled && !prefs.news_enabled);
 </script>
 
 <svelte:head>
@@ -106,8 +103,8 @@
          account would let an unauthenticated visitor learn which accounts exist. -->
     <h1 class="text-xl font-semibold">This link is no longer valid</h1>
     <p class="mt-3 text-sm text-muted-foreground">
-      Open the most recent email you had from us and use the link in its footer. If you
-      have an account, you can also change everything from
+      Open the most recent email you had from us and use the link in its footer. If you have an account, you can also
+      change everything from
       <a class="underline" href={resolve('/my/notifications')}>your notification settings</a>.
     </p>
   {:else if prefs}
@@ -115,26 +112,17 @@
     <p class="mt-1 text-sm text-muted-foreground">{prefs.email}</p>
 
     {#if saveFailed}
-      <p role="alert" class="mt-4 text-sm text-destructive">
-        That didn’t save. Try again — nothing was changed.
-      </p>
+      <p role="alert" class="mt-4 text-sm text-destructive">That didn’t save. Try again — nothing was changed.</p>
     {/if}
 
     <div class="mt-8 space-y-6">
-      {@render group(
-        'Job alerts',
-        'New matches for the searches you saved.',
-        prefs.alerts_enabled,
-        toggleAlerts,
-      )}
+      {@render group('Job alerts', 'New matches for the searches you saved.', prefs.alerts_enabled, toggleAlerts)}
 
       {#if prefs.searches.length > 0}
         <ul class="ml-4 space-y-3 border-l border-border pl-4">
           {#each prefs.searches as search (search.id)}
             <li class="flex items-center justify-between gap-4">
-              <span
-                class={cn('text-sm', search.active ? '' : 'text-muted-foreground line-through')}
-              >
+              <span class={cn('text-sm', search.active ? '' : 'text-muted-foreground line-through')}>
                 {search.name}
               </span>
               {#if search.active}
@@ -179,8 +167,8 @@
         {allOff ? 'You’re unsubscribed from everything' : 'Unsubscribe from everything'}
       </button>
       <p class="mt-3 text-xs text-muted-foreground">
-        Security emails — confirming your address, resetting your password — are always
-        sent. There is no setting that stops them.
+        Security emails — confirming your address, resetting your password — are always sent. There is no setting that
+        stops them.
       </p>
     </div>
   {/if}

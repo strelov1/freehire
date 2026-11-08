@@ -54,9 +54,8 @@
         Some postings are not being filled. freehire tells you which, and why it thinks so.
       </h1>
       <p class="text-base leading-relaxed text-muted-foreground">
-        You can't tell by looking at the page. An hour spent on one is work you'll never
-        hear back about. So freehire checks two things it can actually see: how the posting
-        behaves, and what happened to people who applied.
+        You can't tell by looking at the page. An hour spent on one is work you'll never hear back about. So freehire
+        checks two things it can actually see: how the posting behaves, and what happened to people who applied.
       </p>
 
       <!-- Two lines, not a section. The limit on the claim is the feature's most
@@ -66,24 +65,21 @@
         <div>
           <dt class="inline font-medium">We check —</dt>
           <dd class="inline text-muted-foreground">
-            how long the job has been up, how often it's reposted, whether the company's own
-            careers page lists it, and whether people who applied got an answer.
+            how long the job has been up, how often it's reposted, whether the company's own careers page lists it, and
+            whether people who applied got an answer.
           </dd>
         </div>
         <div>
           <dt class="inline font-medium text-muted-foreground">We never say —</dt>
           <dd class="inline text-muted-foreground">
-            that a company isn't really hiring. That's about what someone meant to do, and
-            we can't see that.
+            that a company isn't really hiring. That's about what someone meant to do, and we can't see that.
           </dd>
         </div>
       </dl>
 
       <div class="flex flex-wrap gap-3">
         <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
-        <Button href={resolve('/my/tracking')} variant="ghost" size="lg">
-          Track your applications
-        </Button>
+        <Button href={resolve('/my/tracking')} variant="ghost" size="lg">Track your applications</Button>
       </div>
     </div>
 
@@ -94,10 +90,9 @@
   <section class="flex flex-col gap-6">
     <SectionLabel text="what lights the mark" />
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      Two of them look at the <strong class="font-medium text-foreground">posting</strong>.
-      Two look at what happened to
-      <strong class="font-medium text-foreground">people who applied</strong>. Only the
-      second kind can tell you nobody is working on the job.
+      Two of them look at the <strong class="font-medium text-foreground">posting</strong>. Two look at what happened to
+      <strong class="font-medium text-foreground">people who applied</strong>. Only the second kind can tell you nobody
+      is working on the job.
     </p>
 
     <div class="grid gap-x-6 gap-y-8 sm:grid-cols-2">
@@ -160,8 +155,7 @@
   <section class="flex flex-col gap-5">
     <SectionLabel text="your part" />
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      The strongest signal is one only you can give: you applied and nobody answered. There
-      are two ways it reaches us.
+      The strongest signal is one only you can give: you applied and nobody answered. There are two ways it reaches us.
     </p>
     <NumberedGrid
       items={[
@@ -189,23 +183,23 @@
     <ul class="flex max-w-3xl flex-col gap-3 text-sm leading-relaxed text-muted-foreground">
       <li>
         <strong class="font-medium text-foreground">We only check pages we crawl.</strong>
-        If we don't crawl a company's careers page, its jobs aren't judged on that criterion
-        at all. Not finding something isn't proof.
+        If we don't crawl a company's careers page, its jobs aren't judged on that criterion at all. Not finding something
+        isn't proof.
       </li>
       <li>
         <strong class="font-medium text-foreground">Age counts from when we first saw it.</strong>
-        Sources that refresh the date don't fool us, but a job that was up before we started
-        crawling looks younger than it is.
+        Sources that refresh the date don't fool us, but a job that was up before we started crawling looks younger than it
+        is.
       </li>
       <li>
         <strong class="font-medium text-foreground">Agencies trip this honestly.</strong>
-        They advertise roles that belong to their clients, so those roles really are missing from
-        their own page. That's why one criterion is never enough.
+        They advertise roles that belong to their clients, so those roles really are missing from their own page. That's why
+        one criterion is never enough.
       </li>
       <li>
         <strong class="font-medium text-foreground">A quiet company isn't a fake job.</strong>
-        Recruiters go quiet for ordinary reasons. That's why a silence needs a second person and
-        a second signal before it says anything.
+        Recruiters go quiet for ordinary reasons. That's why a silence needs a second person and a second signal before it
+        says anything.
       </li>
     </ul>
   </section>
@@ -228,8 +222,8 @@
   <section class="flex flex-col items-start gap-4 rounded-lg border border-border p-6">
     <h2 class="text-lg font-semibold tracking-tight">Stop applying into the void</h2>
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      The catalogue is open and needs no account. Tracking your applications is what makes
-      the signal sharper — for you, and for whoever reads the posting after you.
+      The catalogue is open and needs no account. Tracking your applications is what makes the signal sharper — for you,
+      and for whoever reads the posting after you.
     </p>
     <div class="flex flex-wrap gap-3">
       <Button href={resolve('/jobs')} variant="primary">Browse jobs</Button>

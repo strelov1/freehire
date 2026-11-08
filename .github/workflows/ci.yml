@@ -70,7 +70,7 @@ jobs:
           echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Go modules
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.go-cache.outputs.modules }}
           key: go-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}
@@ -79,7 +79,7 @@ jobs:
       # each task's compiled packages across source changes, without a short Go
       # tooling job winning the shared cache key before the tests finish.
       - name: Cache Go build
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.go-cache.outputs.build }}
           key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ matrix.task }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
@@ -113,7 +113,7 @@ jobs:
       # shortcut: old versions' archives stay in the cache until GitHub evicts it (7 days unused).
       - name: Cache tool archives
         if: matrix.task != 'checks'
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ci-tools
           key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -325,7 +325,7 @@ jobs:
 
       # Tool archives come from a cache: see "Cache tool archives" in backend-jobs for why.
       - name: Cache tool archives
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ci-tools
           key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -422,7 +422,7 @@ jobs:
 
       # Tool archives come from a cache: see "Cache tool archives" in backend-jobs for why.
       - name: Cache tool archives
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ci-tools
           key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -491,7 +491,7 @@ jobs:
 
       # Tool archives come from a cache: see "Cache tool archives" in backend-jobs for why.
       - name: Cache tool archives
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ci-tools
           key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -600,7 +600,7 @@ jobs:
 
       # Tool archives come from a cache: see "Cache tool archives" in backend-jobs for why.
       - name: Cache tool archives
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ci-tools
           key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -888,6 +888,9 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
+      - name: Check formatting
+        run: pnpm run format:check
+
       - name: Build
         run: pnpm build
 
@@ -993,6 +996,9 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
+      - name: Check formatting
+        run: pnpm run format:check
+
       - name: Type check
         run: pnpm run check
 
@@ -1007,7 +1013,7 @@ jobs:
       # release carries it, install that release instead and drop the cargo build.
       - name: Cache easement
         id: easement-cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/easement
           key: easement-${{ runner.os }}-${{ env.EASEMENT_REV }}
@@ -1106,6 +1112,18 @@ jobs:
       # it reuses that build and the required check list stays as it is.
       - name: Bundle size budgets
         run: pnpm run size
+
+      # axe-core over the built app, serving five public pages from a loopback stub API
+      # (web/e2e/a11y/stub-api.ts): serious or critical WCAG 2.1 A/AA violations fail it.
+      # A step here and not a job of its own: it needs this job's install and build, and the
+      # required check list names jobs. It runs wherever web-work does, which the `web` job
+      # below reports on every PR. Needs no backend, no secrets and no network beyond the
+      # Chromium download.
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Accessibility check (axe-core)
+        run: pnpm run test:a11y
 
   # Always report the required check, including an intentional skip of web work.
   web:

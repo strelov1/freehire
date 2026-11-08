@@ -144,7 +144,9 @@ export function dockToastOffsetClass(windows: readonly DockWindow[]): string {
 export class DraftBook {
   #drafts = new Map<number, string>();
 
-  get(id: number): string { return this.#drafts.get(id) ?? ''; }
+  get(id: number): string {
+    return this.#drafts.get(id) ?? '';
+  }
 
   /** A draft emptied (sent, or deleted by hand) is forgotten. */
   set(id: number, text: string): void {
@@ -152,5 +154,7 @@ export class DraftBook {
     else this.#drafts.delete(id);
   }
 
-  clear(): void { this.#drafts.clear(); }
+  clear(): void {
+    this.#drafts.clear();
+  }
 }

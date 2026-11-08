@@ -116,7 +116,12 @@
 <!-- Each channel: what it is on top, its one action pinned to the bottom so the three line
      up whatever their copy wraps to. -->
 <div class="mt-6 grid gap-3 sm:grid-cols-3">
-  <div class={['flex flex-col rounded-xl border p-4 transition-colors', emailOn ? 'border-brand bg-brand-muted/40' : 'border-border bg-card']}>
+  <div
+    class={[
+      'flex flex-col rounded-xl border p-4 transition-colors',
+      emailOn ? 'border-brand bg-brand-muted/40' : 'border-border bg-card',
+    ]}
+  >
     <p class="flex items-center gap-2 text-sm font-semibold">
       <Mail class="size-5" aria-hidden="true" /> Email
     </p>
@@ -137,27 +142,49 @@
         ]}
       >
         <span
-          class={['inline-block size-5 rounded-full bg-white shadow-sm transition-transform', emailOn ? 'translate-x-5.5' : 'translate-x-0.5']}
+          class={[
+            'inline-block size-5 rounded-full bg-white shadow-sm transition-transform',
+            emailOn ? 'translate-x-5.5' : 'translate-x-0.5',
+          ]}
         ></span>
       </button>
     </div>
   </div>
 
-  <div class={['flex flex-col rounded-xl border p-4 transition-colors', telegramOn ? 'border-brand bg-brand-muted/40' : 'border-border bg-card']}>
+  <div
+    class={[
+      'flex flex-col rounded-xl border p-4 transition-colors',
+      telegramOn ? 'border-brand bg-brand-muted/40' : 'border-border bg-card',
+    ]}
+  >
     <p class="flex items-center gap-2 text-sm font-semibold">
       <ProviderIcon provider="telegram" class="size-5" /> Telegram
     </p>
     <p class="mt-1.5 text-xs text-muted-foreground">Messages from our bot</p>
     <div class="mt-auto pt-4">
       {#if telegramOn}
-        <p class="flex h-8 items-center gap-1 text-sm font-medium text-brand-strong"><Check class="size-4" aria-hidden="true" /> Connected</p>
+        <p class="flex h-8 items-center gap-1 text-sm font-medium text-brand-strong">
+          <Check class="size-4" aria-hidden="true" /> Connected
+        </p>
       {:else if telegramPending}
-        <Button variant="outline" size="sm" class="w-full" disabled={busy !== null} onclick={() => void recheckTelegram()}>
+        <Button
+          variant="outline"
+          size="sm"
+          class="w-full"
+          disabled={busy !== null}
+          onclick={() => void recheckTelegram()}
+        >
           {#if busy === 'telegram'}<LoaderCircle class="size-4 animate-spin" aria-hidden="true" />{/if}
           I pressed Start
         </Button>
       {:else}
-        <Button variant="outline" size="sm" class="w-full" disabled={!canEnable || busy !== null} onclick={() => void connectTelegram()}>
+        <Button
+          variant="outline"
+          size="sm"
+          class="w-full"
+          disabled={!canEnable || busy !== null}
+          onclick={() => void connectTelegram()}
+        >
           {#if busy === 'telegram'}<LoaderCircle class="size-4 animate-spin" aria-hidden="true" />{/if}
           {notifications.telegram.linked ? 'Turn on' : 'Connect'}
         </Button>

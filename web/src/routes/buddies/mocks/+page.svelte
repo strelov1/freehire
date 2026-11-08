@@ -49,8 +49,8 @@
   <header class="flex flex-col gap-1">
     <h1 class="text-2xl font-semibold">Mock interviews</h1>
     <p class="text-sm text-muted-foreground">
-      Practise with another member: sixty minutes on the host's own call link, booked at least
-      twelve hours ahead. Book someone below; members book you from your buddy page.
+      Practise with another member: sixty minutes on the host's own call link, booked at least twelve hours ahead. Book
+      someone below; members book you from your buddy page.
     </p>
   </header>
 
@@ -62,7 +62,9 @@
     <section class="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
       <h2 class="text-base font-semibold">Your upcoming mocks</h2>
       {#if mocks.upcoming.length === 0}
-        <p class="text-sm text-muted-foreground">Nothing booked. Pick a host above, or wait for a member to book you.</p>
+        <p class="text-sm text-muted-foreground">
+          Nothing booked. Pick a host above, or wait for a member to book you.
+        </p>
       {:else}
         <BuddyMockList mocks={mocks.upcoming} upcoming onchange={refreshMocks} />
       {/if}

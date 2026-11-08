@@ -5,7 +5,14 @@
 </script>
 
 <div class="mx-auto w-full max-w-3xl px-4 py-6">
-  <SubjectHeader subject={data.subject} absence={data.absence} subjectType="job" subjectSlug={data.slug} heading class="mb-4" />
+  <SubjectHeader
+    subject={data.subject}
+    absence={data.absence}
+    subjectType="job"
+    subjectSlug={data.slug}
+    heading
+    class="mb-4"
+  />
   <DiscussionIndex
     subjectType="job"
     subjectSlug={data.slug}

@@ -53,10 +53,7 @@ const catchAll = 'other';
  *  so taking the first ten in sequence spends every row on it and never reaches a
  *  designer or a PM. Instead each group contributes its busiest category before any
  *  group contributes a second — Engineering still leads, but the list spans the map. */
-export function starterSuggestions(
-  counts: FacetCounts | null,
-  limit: number = maxStarters,
-): Suggestion[] {
+export function starterSuggestions(counts: FacetCounts | null, limit: number = maxStarters): Suggestion[] {
   const dist = counts?.facets?.category;
   if (!dist) return [];
 

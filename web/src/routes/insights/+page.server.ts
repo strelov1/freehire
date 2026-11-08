@@ -13,7 +13,9 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ fetch, setHeaders }) => {
   const [globalRoles, grid] = await Promise.all([
     loadInsightsGate(fetch),
-    serverApi(fetch).insightsRoleCountries().catch(() => null),
+    serverApi(fetch)
+      .insightsRoleCountries()
+      .catch(() => null),
   ]);
   // A page cached without its grid would stay that way for every visitor for the full
   // hour, so a failed read caches for a minute instead.

@@ -126,7 +126,10 @@ describe('summarizeScope', () => {
 
     it('rolls up regions then remote_regions', () => {
       expect(
-        summarizeScope(fakeStore({ regions: { include: ['eu'] }, remote_regions: { include: ['uk'] } }), COMPANIES_SCOPE),
+        summarizeScope(
+          fakeStore({ regions: { include: ['eu'] }, remote_regions: { include: ['uk'] } }),
+          COMPANIES_SCOPE,
+        ),
       ).toEqual({ icons: ['globe'], text: 'Europe', extra: 1, label: 'Europe +1' });
     });
 

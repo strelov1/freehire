@@ -49,7 +49,9 @@ describe('the category axis', () => {
   });
 
   it('publishes every generated category except the catch-all', () => {
-    const published = landingCategories().map((c) => c.category).toSorted();
+    const published = landingCategories()
+      .map((c) => c.category)
+      .toSorted();
     const expected = CATEGORY_VALUES.filter((c) => c !== 'other').toSorted();
     expect(published).toEqual(expected);
   });
@@ -202,9 +204,7 @@ describe('internal linking', () => {
   });
 
   it('caps each neighbour list so the footer stays a link block, not a directory', () => {
-    const many = Object.fromEntries(
-      slugifiedCountries().map((c, i) => [c.code, 100 + i])
-    );
+    const many = Object.fromEntries(slugifiedCountries().map((c, i) => [c.code, 100 + i]));
     expect(Object.keys(many).length).toBeGreaterThan(8);
     expect(neighbourCountries(many, 'de').length).toBeLessThanOrEqual(8);
   });

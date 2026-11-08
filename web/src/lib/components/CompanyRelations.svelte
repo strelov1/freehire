@@ -123,9 +123,7 @@
           <input type="radio" class="mt-0.5" name="kind" value="subsidiary" bind:group={kind} />
           <span>
             a subsidiary or local entity of another company
-            <span class="block text-xs text-muted-foreground">
-              Both pages stay, and each links to the other.
-            </span>
+            <span class="block text-xs text-muted-foreground"> Both pages stay, and each links to the other. </span>
           </span>
         </label>
       </fieldset>

@@ -167,3 +167,7 @@ later commit is still leaked. A finding that survives `.gitleaks.toml` means **r
 credential** — rewriting history does not un-leak anything. Suppressions in that file
 allowlist a *line shape*, never a path: gitleaks ORs `paths` with `regexes` and prunes the
 file before reading it, so a path entry switches the scanner off for that file entirely.
+
+## Formatting: oxfmt
+
+[oxfmt](https://oxc.rs/docs/guide/usage/formatter) formats TypeScript, JavaScript and Svelte with one config for all three packages. `.oxfmtrc.json` at the repository root is read by `web/`, `design-system/` and `extension/` alike; in each, `pnpm run format` (`npm run format` in `extension/`) rewrites the files and `format:check` is what CI and the lefthook hook run. The version is pinned exactly in each `package.json`, because a formatter that moves between releases rewrites code nobody touched. The config's `ignorePatterns` leave out `**/generated/**` (the `contracts` CI job compares it with a regeneration) and every file type that is not TypeScript, JavaScript or Svelte, so JSON, CSS and Markdown are not reformatted. `.svelte` is opt-in (`"svelte": true`) and runs through prettier-plugin-svelte inside oxfmt. The commit that first applied it is in `.git-blame-ignore-revs`; point blame at the file with `git config blame.ignoreRevsFile .git-blame-ignore-revs` (GitHub reads it by itself). There are no stylistic lint rules to keep in step: oxlint runs only correctness, suspicious and perf, and each `eslint.config.js` spreads `svelte.configs.prettier`.

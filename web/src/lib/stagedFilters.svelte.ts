@@ -96,6 +96,10 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, formerEmployers: on };
   }
 
+  setWatchlist(on: boolean): void {
+    this.#f = { ...this.#f, watchlist: on };
+  }
+
   setHideSeen(on: boolean): void {
     this.#f = { ...this.#f, hideSeen: on };
   }
@@ -137,7 +141,11 @@ export class StagedFilters implements FacetStore {
   }
 
   setWorkModeRemoteAnywhere(on: boolean): void {
-    this.#f = { ...this.#f, workModeRemoteAnywhere: on, ...(on ? {} : { workModeRemoteRegions: [], workModeRemoteCountries: [] }) };
+    this.#f = {
+      ...this.#f,
+      workModeRemoteAnywhere: on,
+      ...(on ? {} : { workModeRemoteRegions: [], workModeRemoteCountries: [] }),
+    };
   }
 
   /** Reset every staged filter. */

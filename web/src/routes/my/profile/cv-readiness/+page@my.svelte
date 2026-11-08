@@ -200,12 +200,7 @@
 </div>
 
 {#if filters}
-  <FilterEdgeTab
-    active={filters.active}
-    onclick={() => (modalOpen = true)}
-    side="right"
-    class="top-[5.5rem]"
-  />
+  <FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} side="right" class="top-[5.5rem]" />
   <FilterModal
     store={filters}
     {counts}

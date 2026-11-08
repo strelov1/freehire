@@ -87,7 +87,12 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
 
 <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-  <button type="button" aria-label={s.closeDialogAria} class="absolute inset-0 animate-modal-fade bg-black/50" onclick={onclose}></button>
+  <button
+    type="button"
+    aria-label={s.closeDialogAria}
+    class="absolute inset-0 animate-modal-fade bg-black/50"
+    onclick={onclose}
+  ></button>
 
   <div
     role="dialog"
@@ -103,7 +108,9 @@
       <div class="min-w-0 flex-1">
         <h2 class="text-lg font-semibold leading-tight">{s.heading}</h2>
         <p class="mt-0.5 truncate text-sm text-muted-foreground">
-          {who}{#if draft}&nbsp;— {format(plural(locale(), draft.days_silent, s.noReply), { days: String(draft.days_silent) })}{/if}
+          {who}{#if draft}&nbsp;— {format(plural(locale(), draft.days_silent, s.noReply), {
+              days: String(draft.days_silent),
+            })}{/if}
         </p>
       </div>
       <button

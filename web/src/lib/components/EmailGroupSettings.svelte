@@ -46,8 +46,8 @@
     <div class="min-w-0 flex-1">
       <h2 class="text-sm font-semibold leading-tight">Email</h2>
       <p class="text-xs text-muted-foreground">
-        The other two kinds of email we send. Security emails — confirming your address,
-        resetting your password — are always sent.
+        The other two kinds of email we send. Security emails — confirming your address, resetting your password — are
+        always sent.
       </p>
     </div>
     {#if saveFailed}
@@ -59,17 +59,11 @@
     <p class="mt-4 text-xs text-destructive">Couldn't load your email settings.</p>
   {:else if prefs}
     <div class="mt-4 space-y-4">
-      {@render row(
-        'Job alerts',
-        'New matches for the searches you saved.',
-        prefs.alerts_enabled,
-        () => save({ alerts: !prefs?.alerts_enabled }),
+      {@render row('Job alerts', 'New matches for the searches you saved.', prefs.alerts_enabled, () =>
+        save({ alerts: !prefs?.alerts_enabled }),
       )}
-      {@render row(
-        'News and product updates',
-        'Occasional letters about what we’ve built.',
-        prefs.news_enabled,
-        () => save({ news: !prefs?.news_enabled }),
+      {@render row('News and product updates', 'Occasional letters about what we’ve built.', prefs.news_enabled, () =>
+        save({ news: !prefs?.news_enabled }),
       )}
     </div>
   {/if}

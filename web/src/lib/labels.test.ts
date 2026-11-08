@@ -1,11 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  CATEGORY_LABELS,
-  RELOCATION_LABELS,
-  AI_ARCHETYPE_LABELS,
-  categoryLabel,
-  titleCase,
-} from './labels';
+import { CATEGORY_LABELS, RELOCATION_LABELS, AI_ARCHETYPE_LABELS, categoryLabel, titleCase } from './labels';
 import { AI_ARCHETYPE_VALUES } from './generated/contracts';
 
 // Exhaustiveness over the generated vocabulary is enforced by the type checker rather

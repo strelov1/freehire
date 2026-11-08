@@ -8,7 +8,7 @@
   // fetches web/static/agent-setup.md and runs the steps for whichever host it is. A chat
   // app with no shell cannot, which is why this sits on /agents and /mcp, not site-wide.
   const prompt = $derived(
-    `Fetch and execute the appropriate instructions to set me up for freehire from ${page.url.origin}/agent-setup.md`
+    `Fetch and execute the appropriate instructions to set me up for freehire from ${page.url.origin}/agent-setup.md`,
   );
   let copied = $state(false);
   // Clipboard can be denied; then the prompt is shown so it can be selected by hand.
@@ -45,7 +45,11 @@
 {#if failed}
   <label class="mt-3 block text-sm text-muted-foreground">
     Could not copy. Select the prompt and copy it yourself:
-    <textarea readonly rows="2" value={prompt} onfocus={(e) => e.currentTarget.select()}
+    <textarea
+      readonly
+      rows="2"
+      value={prompt}
+      onfocus={(e) => e.currentTarget.select()}
       class="mt-2 block w-full max-w-2xl resize-none rounded-md border border-border bg-secondary/40 p-3 font-mono text-sm text-foreground"
     ></textarea>
   </label>

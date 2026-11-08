@@ -34,7 +34,11 @@
   {#if avatar}<BuddyAvatar {handle} size={size === 'md' ? 'md' : 'sm'} class="shrink-0" />{/if}
   <span class="flex min-w-0 flex-col">
     <span class="flex min-w-0 items-center gap-1.5">
-      <span class="truncate font-semibold text-foreground {size === 'md' ? 'text-base' : 'text-sm'} {link ? 'group-hover:underline' : ''}">{heading}</span>
+      <span
+        class="truncate font-semibold text-foreground {size === 'md' ? 'text-base' : 'text-sm'} {link
+          ? 'group-hover:underline'
+          : ''}">{heading}</span
+      >
       {#if summary.country}
         <CountryFlag code={summary.country} label={countryLabel(summary.country)} class="text-xs" />
       {/if}

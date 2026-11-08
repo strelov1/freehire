@@ -155,9 +155,19 @@
                 <!-- Bound to the range rather than to draft[i].ranges[j]: `$state` makes the
                      draft deeply reactive, so writing through it is the same edit. -->
                 <div class="flex items-center gap-2">
-                  <Input type="time" bind:value={range.start} class={timeClass} aria-label="{label}, range {j + 1}, from" />
+                  <Input
+                    type="time"
+                    bind:value={range.start}
+                    class={timeClass}
+                    aria-label="{label}, range {j + 1}, from"
+                  />
                   <span class="text-sm text-muted-foreground" aria-hidden="true">–</span>
-                  <Input type="time" bind:value={range.end} class={timeClass} aria-label="{label}, range {j + 1}, until" />
+                  <Input
+                    type="time"
+                    bind:value={range.end}
+                    class={timeClass}
+                    aria-label="{label}, range {j + 1}, until"
+                  />
                   <Button
                     variant="ghost"
                     size="icon"
@@ -265,13 +275,7 @@
           <Input type="time" bind:value={overrideEnd} class={timeClass} aria-label="Exception until" />
         </span>
       {/if}
-      <Button
-        variant="outline"
-        size="sm"
-        class="sm:ml-auto"
-        disabled={saving || !overrideDate}
-        onclick={addOverride}
-      >
+      <Button variant="outline" size="sm" class="sm:ml-auto" disabled={saving || !overrideDate} onclick={addOverride}>
         <Plus class="size-4" aria-hidden="true" /> Add exception
       </Button>
     </div>

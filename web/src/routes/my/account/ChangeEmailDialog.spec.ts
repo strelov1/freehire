@@ -3,14 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '#lib/types.js';
 import ChangeEmail from './ChangeEmailDialog.svelte';
 
-const { requestEmailChange, confirmEmailChange, reauthenticatePassword, invalidateAll, user } =
-  vi.hoisted(() => ({
-    requestEmailChange: vi.fn(),
-    confirmEmailChange: vi.fn(),
-    reauthenticatePassword: vi.fn(),
-    invalidateAll: vi.fn(),
-    user: { current: null as User | null },
-  }));
+const { requestEmailChange, confirmEmailChange, reauthenticatePassword, invalidateAll, user } = vi.hoisted(() => ({
+  requestEmailChange: vi.fn(),
+  confirmEmailChange: vi.fn(),
+  reauthenticatePassword: vi.fn(),
+  invalidateAll: vi.fn(),
+  user: { current: null as User | null },
+}));
 
 const { StubApiError } = vi.hoisted(() => ({
   StubApiError: class StubApiError extends Error {
@@ -72,9 +71,7 @@ describe('account page — email change dialog', () => {
 
     await requestCode('taken@example.test');
 
-    await waitFor(() =>
-      expect(screen.getByText('Another freehire account already uses this email.')).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText('Another freehire account already uses this email.')).toBeTruthy());
     expect(screen.queryByLabelText('Code')).toBeNull();
   });
 

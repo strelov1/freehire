@@ -13,8 +13,7 @@ export const messages = defineMessages(
     scopeLabel: 'Scope',
     scopeFull: 'Full access',
     scopeEmbed: 'Embed only (volunteer embedding)',
-    scopeHint:
-      'Embed-only keys can only lease and submit volunteer embedding tasks — nothing else on your account.',
+    scopeHint: 'Embed-only keys can only lease and submit volunteer embedding tasks — nothing else on your account.',
     // The `prompt` handed to ConfirmIdentity: why THIS action is worth confirming. A key is
     // a bearer credential with no session behind it, which is a different danger from the
     // one account deletion carries, so the sentence lives with the action.

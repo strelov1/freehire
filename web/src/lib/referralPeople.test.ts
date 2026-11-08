@@ -4,13 +4,13 @@ import { referralPeopleUrl } from './referralPeople';
 describe('referralPeopleUrl', () => {
   it('uses the stored company people tab and drops tracking parameters', () => {
     expect(referralPeopleUrl('Acme', 'https://www.linkedin.com/company/acme/?trk=public')).toBe(
-      'https://www.linkedin.com/company/acme/people/'
+      'https://www.linkedin.com/company/acme/people/',
     );
   });
 
   it('accepts an existing school people tab', () => {
     expect(referralPeopleUrl('Acme University', 'http://linkedin.com/school/acme/people/')).toBe(
-      'https://www.linkedin.com/school/acme/people/'
+      'https://www.linkedin.com/school/acme/people/',
     );
   });
 
