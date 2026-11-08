@@ -4,6 +4,10 @@
   import { Button, NumberedGrid, SectionLabel } from '#lib/ui/index.js';
   import { BUDDIES_FAQ } from '#lib/buddiesFaq.js';
 
+  // Signed-in non-members see this page at /buddies itself, where the button joins in place;
+  // the public feature page links there instead.
+  let { onJoin }: { onJoin?: () => void } = $props();
+
   const facts = ['Free for everyone', 'Anonymous handle', 'Members only, no crawlers', 'You choose what shows'];
 
   const steps = [
@@ -51,7 +55,11 @@
 </script>
 
 {#snippet join()}
-  <Button href={resolve('/buddies')} variant="primary" size="lg">Join interview buddies</Button>
+  {#if onJoin}
+    <Button variant="primary" size="lg" onclick={onJoin}>Join interview buddies</Button>
+  {:else}
+    <Button href={resolve('/buddies')} variant="primary" size="lg">Join interview buddies</Button>
+  {/if}
 {/snippet}
 
 <div class="flex flex-col">
@@ -127,7 +135,7 @@
       {/each}
     </div>
     <p class="mt-6 max-w-3xl text-sm text-muted-foreground text-pretty">
-      Hide any single application from the feed with one switch on the job in your tracker.
+      Applications you made before joining show too. Hide any single application from the feed with one switch on the job in your tracker.
     </p>
   </section>
 
