@@ -75,3 +75,39 @@ describe('Hiring again in the Company filter pane', () => {
     expect(store.value.formerEmployers).toBe(true);
   });
 });
+
+describe('Your watchlist in the Company filter pane', () => {
+  it('stages the toggle and applies it through the normal action', async () => {
+    const store = new FilterStore();
+    render(FilterModal, { store, watchlistAvailable: true, open: true, onClose() {} });
+    await fireEvent.click(screen.getByRole('button', { name: 'Company' }));
+    const checkbox = screen.getByRole('checkbox', { name: 'Your watchlist' }) as HTMLInputElement;
+    await fireEvent.click(checkbox);
+    expect(checkbox.checked).toBe(true);
+    expect(store.value.watchlist).toBe(false);
+    expect(screen.getByRole('button', { name: /Company.*1 selected/ })).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }));
+    expect(store.value.watchlist).toBe(true);
+    expect(store.params.get('watchlist')).toBe('true');
+  });
+
+  it.each([
+    { signedIn: false, standalone: true },
+    { signedIn: true, standalone: false },
+  ])('is unavailable for $signedIn/$standalone', async ({ signedIn, standalone }) => {
+    session.set('id', signedIn ? 7 : null);
+    render(FilterModal, { store: new FilterStore(), watchlistAvailable: standalone, open: true, onClose() {} });
+    await fireEvent.click(screen.getByRole('button', { name: 'Company' }));
+    expect(screen.queryByRole('checkbox', { name: 'Your watchlist' })).toBeNull();
+  });
+
+  it('can be found and selected through the normal filter search', async () => {
+    const store = new FilterStore();
+    render(FilterModal, { store, watchlistAvailable: true, open: true, onClose() {} });
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Search filters' }), { target: { value: 'watchlist' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Your watchlist' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }));
+    expect(store.value.watchlist).toBe(true);
+  });
+});

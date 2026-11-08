@@ -61,6 +61,7 @@
     plain = false,
     savedSearches = false,
     formerEmployersAvailable = false,
+    watchlistAvailable = false,
     hideSeenAvailable = false,
     open = false,
     onClose,
@@ -79,6 +80,8 @@
     savedSearches?: boolean;
     /** Personal company filter: enabled only by a feed whose search uses the session. */
     formerEmployersAvailable?: boolean;
+    /** Personal watchlist filter: enabled by the same feeds as the former-employers one. */
+    watchlistAvailable?: boolean;
     hideSeenAvailable?: boolean;
     title?: string;
     applyLabel?: string;
@@ -111,11 +114,14 @@
   // to it, so the jump never lands on a missing tab.
   const hasSavedTab = $derived(savedSearches && !railKeys);
   const showHideSeen = $derived(hideSeenAvailable && !plain && isAuthenticated());
-  // Both personal filters are applied by the search only: /jobs/facets ignores them, so a
-  // count or a facet distribution fetched with either staged would describe a wider set
+  // The personal filters are applied by the search only: /jobs/facets ignores them, so a
+  // count or a facet distribution fetched with any staged would describe a wider set
   // than "Show results" returns.
-  const personalStaged = $derived(staged.value.formerEmployers || (showHideSeen && staged.value.hideSeen));
+  const personalStaged = $derived(
+    staged.value.formerEmployers || staged.value.watchlist || (showHideSeen && staged.value.hideSeen),
+  );
   const showFormerEmployers = $derived(formerEmployersAvailable && !plain && isAuthenticated());
+  const showWatchlist = $derived(watchlistAvailable && !plain && isAuthenticated());
 
   // Warm the Telegram feature flag and the user's profile when the modal opens for a
   // signed-in user on the full job modal: the footer "save for TG alerts" nudge gates on
@@ -212,7 +218,8 @@
     // The Minimum skill match threshold lives at the top of the Skills pane, so it
     // counts toward that tab's badge alongside the skills facet selections.
     if (e.key === 'skills') return selCount(f, 'skills') + (matchAvailable && f.minSkillMatch != null ? 1 : 0);
-    if (e.key === 'company_slug') return selCount(f, 'company_slug') + (showFormerEmployers && f.formerEmployers ? 1 : 0);
+    if (e.key === 'company_slug')
+      return selCount(f, 'company_slug') + (showFormerEmployers && f.formerEmployers ? 1 : 0) + (showWatchlist && f.watchlist ? 1 : 0);
     if (e.key === 'source') return selCount(f, 'source_type') + selCount(f, 'source');
     return selCount(f, e.facetParam ?? e.key);
   }
@@ -262,7 +269,7 @@
           },
         ]
       : []),
-    ...jobFilterSearchItems({ exclude, railKeys, openWithin: openWithinAvailable, formerEmployers: showFormerEmployers, hideSeen: showHideSeen }),
+    ...jobFilterSearchItems({ exclude, railKeys, openWithin: openWithinAvailable, formerEmployers: showFormerEmployers, watchlist: showWatchlist, hideSeen: showHideSeen }),
     ...remoteHits,
   ]);
 
@@ -316,7 +323,7 @@
     if (!action) return null;
     const colon = action.indexOf(':');
     if (colon < 0) {
-      if (action === 'visa' || action === 'hide-ai' || action === 'auto-apply' || action === 'short-apply' || action === 'former-employers' || action === 'hide-seen')
+      if (action === 'visa' || action === 'hide-ai' || action === 'auto-apply' || action === 'short-apply' || action === 'former-employers' || action === 'watchlist' || action === 'hide-seen')
         return { kind: action, rest: '' };
       return null;
     }
@@ -333,6 +340,8 @@
     switch (action?.kind) {
       case 'former-employers':
         return { ...off, included: staged.value.formerEmployers };
+      case 'watchlist':
+        return { ...off, included: staged.value.watchlist };
       case 'hide-seen':
         return { ...off, included: staged.value.hideSeen };
       case 'visa':
@@ -364,6 +373,9 @@
     switch (action?.kind) {
       case 'former-employers':
         if (showFormerEmployers) staged.setFormerEmployers(!staged.value.formerEmployers);
+        return;
+      case 'watchlist':
+        if (showWatchlist) staged.setWatchlist(!staged.value.watchlist);
         return;
       case 'hide-seen':
         if (showHideSeen) staged.setHideSeen(!staged.value.hideSeen);
@@ -600,6 +612,20 @@
           <span>Hiring again</span>
         </label>
         <p class="mt-1 text-xs text-muted-foreground">Only jobs at companies you have worked at and left.</p>
+      </div>
+    {/if}
+    {#if entry.key === 'company_slug' && showWatchlist}
+      <div class="mb-6">
+        <label class="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            class="size-4 rounded border-border"
+            checked={staged.value.watchlist}
+            onchange={(e) => staged.setWatchlist(e.currentTarget.checked)}
+          />
+          <span>Your watchlist</span>
+        </label>
+        <p class="mt-1 text-xs text-muted-foreground">Only jobs at the companies you follow.</p>
       </div>
     {/if}
     {#if entry.key === 'skills' && matchAvailable}

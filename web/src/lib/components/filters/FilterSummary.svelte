@@ -92,6 +92,8 @@
       push('Hiring again', [
         { key: 'former_employers', text: 'Your former employers', exclude: false, remove: () => store.setFormerEmployers(false) },
       ]);
+    if (f.watchlist && isAuthenticated())
+      push('Watchlist', [{ key: 'watchlist', text: 'Your watchlist', exclude: false, remove: () => store.setWatchlist(false) }]);
     // Same server-side rule as above. Without a chip the sidebar reads "No filters yet"
     // while viewed jobs are being left out, and there is nothing to click to bring them back.
     if (f.hideSeen && isAuthenticated())

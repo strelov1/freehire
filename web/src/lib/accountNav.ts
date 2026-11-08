@@ -41,6 +41,9 @@ export const accountNav = [
   // Mail inbox: connect Gmail and/or claim a freehire mailbox to track application
   // replies. Open to every signed-in user.
   { href: '/my/inbox', label: 'Inbox', workspace: 'seeker', group: 'main' },
+  // The companies the member follows, and the alert for their new postings. Open to every
+  // signed-in user.
+  { href: '/my/watchlist', label: 'Watchlist', workspace: 'seeker', group: 'main' },
   // Named lists of specific jobs — independent of the "Save" star — optionally
   // shared read-only by link. Replaces the retired public saved-search "boards".
   // Personal skill-demand trend: how the market for the candidate's own profile

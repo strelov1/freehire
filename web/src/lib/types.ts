@@ -381,6 +381,21 @@ export interface VoteResult {
   my_vote: number;
 }
 
+/** One company on the caller's watchlist (GET /me/watchlist), newest added first. */
+export interface WatchedCompany {
+  slug: string;
+  name: string;
+  added_at: string;
+}
+
+/** What a bulk import of names did: how many it added, how many were already on the
+ *  list, and the entries that matched no company. */
+export interface WatchlistImportResult {
+  added: number;
+  already: number;
+  unmatched: string[];
+}
+
 /** A row of the companies catalog: company plus its computed job count and a few
  *  company-info facts for the card (present-only — absent on unenriched rows). */
 export interface CompanyListItem {

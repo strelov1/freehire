@@ -65,6 +65,10 @@ describe('alertName', () => {
     expect(name).toContain('Senior');
     expect(name).toContain('Backend');
   });
+  it('names the watchlist alert', () => {
+    expect(alertName('watchlist=true')).toBe('Companies I follow');
+    expect(alertName('watchlist=true&q=react')).toBe('Companies I follow · react');
+  });
   it('includes the text query and stays within 100 chars', () => {
     const name = alertName('q=react');
     expect(name).toContain('react');

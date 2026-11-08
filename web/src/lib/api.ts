@@ -49,6 +49,8 @@ import type {
   CompanyListItem,
   FacetCounts,
   ListMeta,
+  WatchedCompany,
+  WatchlistImportResult,
   Mentor,
   MentorAvailabilityRule,
   MentorCalendar,
@@ -1680,6 +1682,41 @@ export function createApi(
   /** Clear the caller's thumbs vote on a company. Idempotent (no-op when none). */
   function clearCompanyVote(slug: string): Promise<VoteResult> {
     return requestData<VoteResult>(`/api/v1/companies/${slug}/vote`, { method: 'DELETE' });
+  }
+
+  /** A page of the caller's watchlist, newest added first, optionally narrowed to the
+   *  names containing `q`. `max` is the most companies a list may hold. */
+  async function listWatchlist(
+    q: string,
+    limit: number,
+    offset: number,
+  ): Promise<Slice<WatchedCompany> & { max: number }> {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (q) params.set('q', q);
+    const page = await request<{ data: WatchedCompany[]; meta: ListMeta & { max: number } }>(
+      `/api/v1/me/watchlist?${params}`,
+    );
+    return { ...toSlice(page, offset), max: page.meta.max };
+  }
+
+  /** Whether the caller watches this company. */
+  async function isWatched(slug: string): Promise<boolean> {
+    return (await requestData<{ watched: boolean }>(`/api/v1/me/watchlist/${encodeURIComponent(slug)}`)).watched;
+  }
+
+  /** Put a company on the watchlist. Idempotent; a full list is a 400 whose message says so. */
+  function watchCompany(slug: string): Promise<WatchedCompany> {
+    return requestData<WatchedCompany>(`/api/v1/me/watchlist/${encodeURIComponent(slug)}`, { method: 'PUT' });
+  }
+
+  /** Take a company off the watchlist. Idempotent. */
+  async function unwatchCompany(slug: string): Promise<void> {
+    await call(`/api/v1/me/watchlist/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+  }
+
+  /** Add many companies at once from names or slugs, one per entry. */
+  function importWatchlist(names: string[]): Promise<WatchlistImportResult> {
+    return requestData<WatchlistImportResult>('/api/v1/me/watchlist/import', jsonBody('POST', { names }));
   }
 
   /** Drop a job's pipeline progress (stage + applied), keeping its saved mark —
@@ -3543,6 +3580,11 @@ export function createApi(
     clearJobVote,
     voteCompany,
     clearCompanyVote,
+    listWatchlist,
+    isWatched,
+    watchCompany,
+    unwatchCompany,
+    importWatchlist,
     clearJobStage,
     untrackJob,
     trackJob,

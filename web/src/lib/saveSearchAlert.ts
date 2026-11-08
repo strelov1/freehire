@@ -29,6 +29,7 @@ function labelFor(param: string, value: string): string {
 export function alertName(query: string): string {
   const f = filtersFromParams(new URLSearchParams(query));
   const parts: string[] = [];
+  if (f.watchlist) parts.push('Companies I follow');
   if (f.q.trim()) parts.push(f.q.trim());
   for (const param of NAME_FACETS) {
     if (parts.length >= 3) break;

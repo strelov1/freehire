@@ -29,6 +29,7 @@ import {
   HandHelping,
   UserPlus,
   Briefcase,
+  Eye,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
 import type { AccountNavItem, WorkspaceId } from './accountNav';
@@ -53,6 +54,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/referrals/incoming': UserPlus,
   '/my/employer/vacancies': Briefcase,
   '/my/tracking': LayoutList,
+  '/my/watchlist': Eye,
   '/my/activity': Activity,
   '/my/inbox': Inbox,
   '/my/market-pulse': TrendingUp,

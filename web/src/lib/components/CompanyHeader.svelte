@@ -11,6 +11,7 @@
   import CredentialBadge from './CredentialBadge.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import CompanyFollowButton from './CompanyFollowButton.svelte';
+  import WatchCompanyButton from './WatchCompanyButton.svelte';
   import VoteControl from './VoteControl.svelte';
 
   // The company's header card: identity (logo + name + tagline + follow CTA) with the
@@ -124,7 +125,8 @@
     </div>
     <!-- flex-1 above lets the name/tagline use the full width; the follow CTA stays
          top-right and never shrinks (it collapses to an icon on mobile itself). -->
-    <div class="shrink-0">
+    <div class="flex shrink-0 items-start gap-2">
+      <WatchCompanyButton {slug} companyName={company.name} />
       <CompanyFollowButton {slug} companyName={company.name} />
     </div>
   </div>
