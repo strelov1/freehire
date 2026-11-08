@@ -10,11 +10,6 @@ import { readDismissed, writeDismissed } from './cliPromo';
 
 let dismissed = $state(false);
 
-/** Reactive: whether the visitor has closed the strip. */
-export function cliBannerDismissed(): boolean {
-  return dismissed;
-}
-
 /** Seed the flag from storage. Called from the strip's `onMount`; safe to call again. */
 export function loadCliBannerDismissed(): void {
   dismissed = readDismissed();
