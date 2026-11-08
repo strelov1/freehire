@@ -19,6 +19,9 @@ func TestParseSMTPURL(t *testing.T) {
 	if err != nil || r.host != "smtp.resend.com" || r.port != "465" {
 		t.Fatalf("got %+v, %v", r, err)
 	}
+	if _, err := parseSMTPURL("smtps://u:p%zz-secret@h"); err == nil || strings.Contains(err.Error(), "secret") {
+		t.Errorf("parse error must not repeat the password: %v", err)
+	}
 	for _, bad := range []string{"smtp://u:p@h:587", "smtps://h:465", "smtps://u@h:465", "smtps://u:p@:465"} {
 		if _, err := parseSMTPURL(bad); err == nil {
 			t.Errorf("%s: want error", bad)

@@ -34,7 +34,12 @@ const smtpSendTimeout = 30 * time.Second
 func parseSMTPURL(raw string) (*smtpRelay, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return nil, fmt.Errorf("emailnotify: SMTP_URL: %w", err)
+		// url.Error repeats the whole input, password included; keep only its cause.
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
+		return nil, fmt.Errorf("emailnotify: SMTP_URL is not a URL: %w", err)
 	}
 	pass, _ := u.User.Password()
 	if u.Scheme != "smtps" || u.Hostname() == "" || u.User.Username() == "" || pass == "" {
@@ -89,5 +94,7 @@ func (r *smtpRelay) send(ctx context.Context, from, to string, raw []byte) error
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("emailnotify: smtp send to %s: %w", to, err)
 	}
-	return c.Quit()
+	// The relay accepted the message at Close; a failed QUIT must not resend it.
+	_ = c.Quit()
+	return nil
 }
