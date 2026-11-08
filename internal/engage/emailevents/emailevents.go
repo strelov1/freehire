@@ -89,11 +89,6 @@ func decode(body string) (db.RecordEmailEventParams, time.Time, error) {
 	if e.Mail.MessageID == "" {
 		return db.RecordEmailEventParams{}, time.Time{}, errors.New("emailevents: event names no message")
 	}
-	campaign := first(e.Mail.Tags["campaign"])
-	if campaign == "" {
-		return db.RecordEmailEventParams{}, time.Time{}, errIgnored
-	}
-
 	// Opens are deliberately absent: the configuration set publishes none, so no pixel is
 	// added to the mail, and one arriving anyway stays out of the ledger.
 	// A send has no timestamp of its own; it falls on the mail's, as any other event does
@@ -104,6 +99,16 @@ func decode(body string) (db.RecordEmailEventParams, time.Time, error) {
 	}[eventType]
 	if !tracked {
 		return db.RecordEmailEventParams{}, time.Time{}, errIgnored
+	}
+	campaign := first(e.Mail.Tags["campaign"])
+	if campaign == "" {
+		// Mail outside a campaign reaches the queue through the sending identity's default
+		// configuration set, which publishes only bounces and complaints: those are what SES
+		// pauses an account over, whatever mail drew them. Its group stands in for the campaign.
+		if eventType != "bounce" && eventType != "complaint" {
+			return db.RecordEmailEventParams{}, time.Time{}, errIgnored
+		}
+		campaign = "group:" + first(e.Mail.Tags["group"])
 	}
 	at := seen.Timestamp
 	if at.IsZero() {
