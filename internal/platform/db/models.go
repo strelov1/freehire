@@ -584,6 +584,28 @@ type CvAppearanceDefault struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
+// CV lifecycle letters: one row per account. uploaded_at is the clock anchor and never moves; holdout rows are observed but never mailed.
+type CvLifecycleEnrollment struct {
+	ID         int64              `json:"id"`
+	UserID     int64              `json:"user_id"`
+	UploadedAt pgtype.Timestamptz `json:"uploaded_at"`
+	EnrolledAt pgtype.Timestamptz `json:"enrolled_at"`
+	Holdout    bool               `json:"holdout"`
+	// active = in the sequence; unsubscribed = turned the letters off; paid = a Stripe or RevenueCat tier went live; entitled = only a granted tier is live, which is not a payment.
+	Status string `json:"status"`
+	// When the paying observation first saw a Stripe or RevenueCat tier live. NULL for a granted-only account.
+	PaidAt   pgtype.Timestamptz `json:"paid_at"`
+	ExitedAt pgtype.Timestamptz `json:"exited_at"`
+}
+
+// CV lifecycle letters step ledger. PK (user_id, step) = one claim per pair, ever; error is the transport failure that burned the step.
+type CvLifecycleSend struct {
+	UserID int64              `json:"user_id"`
+	Step   int16              `json:"step"`
+	SentAt pgtype.Timestamptz `json:"sent_at"`
+	Error  string             `json:"error"`
+}
+
 type CvLinkClick struct {
 	ID           int64              `json:"id"`
 	TracerLinkID pgtype.UUID        `json:"tracer_link_id"`
@@ -1147,6 +1169,14 @@ type LearnedAtsDomain struct {
 	FirstSeenAt   pgtype.Timestamptz `json:"first_seen_at"`
 	LastSeenAt    pgtype.Timestamptz `json:"last_seen_at"`
 	OtherHits     int64              `json:"other_hits"`
+}
+
+// The shared one-optional-letter-a-day claim. PK (user_id, day), day in UTC; source says who took it.
+type MailDayClaim struct {
+	UserID    int64              `json:"user_id"`
+	Day       pgtype.Date        `json:"day"`
+	Source    string             `json:"source"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
 }
 
 type Mailbox struct {

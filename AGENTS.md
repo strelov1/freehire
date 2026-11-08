@@ -248,6 +248,7 @@ Each is self-contained and can be read independently.
 | **On-site applications** (a candidate applying to an employer vacancy here, recorded once, emailed to the employer) | [internal/ingest/directapply/AGENTS.md](internal/ingest/directapply/AGENTS.md) |
 | **Telegram** (crawl + LLM vacancy extraction) | [internal/ingest/telegram/AGENTS.md](internal/ingest/telegram/AGENTS.md) |
 | **`internal/engage`** — the block itself: what it is, what it may import | [internal/engage/AGENTS.md](internal/engage/AGENTS.md) |
+| **CV lifecycle letters** (enrollment, holdout, claim-then-send, what "started paying" means, the one-letter-a-day claim) | [internal/engage/cvlifecycle/AGENTS.md](internal/engage/cvlifecycle/AGENTS.md) |
 | **Interview buddies** (anonymous peer network: handle, feed vocabulary, one conversation per pair, mock interviews) | [internal/engage/buddy/AGENTS.md](internal/engage/buddy/AGENTS.md) |
 | **Messaging core** (conversations of every kind: participants speaking as personas, request-and-accept, account-wide blocks, reports, unread notices) | [internal/engage/messaging/AGENTS.md](internal/engage/messaging/AGENTS.md) |
 | **Employee referrals** (offer/request marketplace, moderation, anonymity) | [internal/engage/referral/AGENTS.md](internal/engage/referral/AGENTS.md) |
