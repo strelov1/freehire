@@ -39,6 +39,7 @@
     const words = feature.split(/[-_]+/).filter(Boolean).join(' ');
     return words.charAt(0).toUpperCase() + words.slice(1);
   };
+  const unlimitedFeatures = $derived((plan?.allowances ?? []).filter((a) => a.unlimited).map((a) => featureLabel(a.feature)));
   let history = $state<UsageHistoryEntry[]>([]);
   let status = $state<'loading' | 'error' | 'ready'>('loading');
 
@@ -303,13 +304,13 @@
             {fmtTime(plan.resets_at)}
           </span>
         </div>
+        <!-- The metered rows are the ones a reader checks, so they get a row each; every
+             unlimited feature shares one closing row instead of repeating "Unlimited". -->
         <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
-          {#each plan.allowances as a (a.feature)}
+          {#each plan.allowances.filter((a) => !a.unlimited) as a (a.feature)}
             <li class="flex items-center justify-between gap-3 px-4 py-3">
               <span class="truncate text-sm font-medium">{featureLabel(a.feature)}</span>
-              {#if a.unlimited}
-                <span class="shrink-0 text-sm text-muted-foreground">{s.today.unlimited}</span>
-              {:else if !a.limit}
+              {#if !a.limit}
                 <!-- The API omits a zero limit. Printing it left a dangling "0 /"; a zero
                      allowance is a feature this plan does not include, so it says that. -->
                 <span class="shrink-0 text-sm text-muted-foreground">
@@ -326,6 +327,12 @@
               {/if}
             </li>
           {/each}
+          {#if unlimitedFeatures.length}
+            <li class="flex items-start justify-between gap-3 px-4 py-3">
+              <span class="text-sm text-muted-foreground">{unlimitedFeatures.join(' · ')}</span>
+              <span class="shrink-0 text-sm text-muted-foreground">{s.today.unlimited}</span>
+            </li>
+          {/if}
         </ul>
       </div>
     {/if}

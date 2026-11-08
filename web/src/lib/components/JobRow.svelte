@@ -441,7 +441,7 @@
     class={[
       'font-semibold leading-snug tracking-tight',
       compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-lg sm:text-xl',
-      !compact && !hideCompany && 'mt-2.5',
+      !compact && !hideCompany && 'mt-1.5',
     ]}
   >
     {job.title}
@@ -487,8 +487,9 @@
              wrapper (rather than a span inside) also makes the badge's own padding
              hoverable — the same shape the job's own page uses. -->
         <span title={badge.tooltip} class="inline-flex shrink-0">
-          <!-- Neutral: the brand fill is kept for the page's one primary action. -->
-          <Badge variant="secondary">{badge.label}</Badge>
+          <!-- Plain accent text, not a pill: it says the least on the row, so it must not be
+               its loudest shape; the brand fill is kept for the page's one primary action. -->
+          <span class="text-xs font-semibold text-brand-strong">{badge.label}</span>
         </span>
       {/each}
       <!-- The role's facets, then the pay and the cost of applying, as one line of quiet

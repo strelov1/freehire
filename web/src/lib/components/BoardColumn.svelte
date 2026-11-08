@@ -98,7 +98,7 @@
     <span class="text-xs tabular-nums text-muted-foreground">{items.length}</span>
   </header>
   {#if items.length === 0 && emptyHint && !dragDisabled}
-    <p class="px-1 text-xs text-muted-foreground">{emptyHint}</p>
+    <p class="px-1 text-xs text-muted-foreground/70">{emptyHint}</p>
   {/if}
   <!-- Each column's card list is its own bounded scroll container. svelte-dnd-action
        auto-scrolls a scrollable *container* correctly during a drag, but mis-places

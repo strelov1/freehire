@@ -69,6 +69,12 @@
     display: none;
   }
 
+  /* The column's own gap spaces the body from what precedes it; a first block's margin
+     added a blank line on top of it. */
+  .job-description > :global(:first-child) {
+    margin-top: 0;
+  }
+
   .job-description :global(p) {
     margin: 0.5rem 0;
   }

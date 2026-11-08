@@ -293,12 +293,13 @@
         <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Lock class="size-3.5 shrink-0" />Sign in to see your match
         </span>
-        <Button variant="primary" size="sm" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</Button>
+        <!-- Outline: Tailor my CV is the page's one filled button. -->
+        <Button variant="outline" size="sm" href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}>Sign in</Button>
       {:else}
         <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
           <FileText class="size-3.5 shrink-0" />Add your skills or upload a CV
         </span>
-        <Button variant="primary" size="sm" href={profileHref}>Upload CV</Button>
+        <Button variant="outline" size="sm" href={profileHref}>Upload CV</Button>
       {/if}
     </div>
   {:else if blockState === 'ready' && view}
