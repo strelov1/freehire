@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -15,7 +16,11 @@ func TestJibeProvider(t *testing.T) {
 // jibeJob renders one /api/jobs "data" object with the fields the adapter reads. tags is a
 // fragment of tag fields (`"tags1": ["On-site"]`), or "" for none. location_type is the live
 // value every sampled posting carries: a geocoding setting, not a work arrangement.
-func jibeJob(slug, title, locName, tags, org, posted string) string {
+func jibeJob(slug, title, locName, tags, org, posted string, canonical ...string) string {
+	if len(canonical) > 0 {
+		tags += `"meta_data": {"canonical_url": "` + canonical[0] + `"}`
+		tags = strings.TrimPrefix(tags, ",")
+	}
 	if tags != "" {
 		tags += ","
 	}
@@ -63,8 +68,8 @@ func TestJibeFetchPaginatesAndMaps(t *testing.T) {
 	if j.Title != "Software Engineer III" {
 		t.Errorf("Title = %q", j.Title)
 	}
-	if j.URL != "https://www.github.careers/careers-home/jobs/5441" {
-		t.Errorf("URL = %q, want the public job page built from board+slug", j.URL)
+	if j.URL != "https://www.github.careers/jobs/5441" {
+		t.Errorf("URL = %q, want the /jobs/<id> fallback", j.URL)
 	}
 	if j.Company != "GitHub, Inc." {
 		t.Errorf("Company = %q, want the posting's hiring_organization", j.Company)
@@ -166,5 +171,48 @@ func TestJibeWorkModeFromTags(t *testing.T) {
 		if got := jibeWorkMode(c.tags); got != c.want {
 			t.Errorf("jibeWorkMode(%v) = %q, want %q", c.tags, got, c.want)
 		}
+	}
+}
+
+func TestJibeJobURL(t *testing.T) {
+	const board = "www.example.careers"
+	fallback := "https://www.example.careers/jobs/42"
+	cases := []struct {
+		name, canonical, want string
+	}{
+		{"canonical other path", "https://www.example.careers/acme/jobs/42", "https://www.example.careers/acme/jobs/42"},
+		{"canonical other host", "https://jobs.acme.com/en/jobs/42", "https://jobs.acme.com/en/jobs/42"},
+		{"padded", "  https://www.example.careers/acme/jobs/42 ", "https://www.example.careers/acme/jobs/42"},
+		{"empty", "", fallback},
+		{"whitespace", "   ", fallback},
+		{"javascript", "javascript:alert(1)", fallback},
+		{"data", "data:text/html,<script>alert(1)</script>", fallback},
+		{"http", "http://www.example.careers/jobs/42", fallback},
+		{"relative", "/careers-home/jobs/42", fallback},
+		{"empty host", "https:///jobs/42", fallback},
+		{"userinfo", "https://user:pass@evil.example/jobs/42", fallback},
+		{"unparsable", "https://exa mple.com/%zz", fallback},
+	}
+	for _, c := range cases {
+		if got := jibeJobURL(board, "42", c.canonical); got != c.want {
+			t.Errorf("%s: jibeJobURL(%q) = %q, want %q", c.name, c.canonical, got, c.want)
+		}
+	}
+	if got, want := jibeJobURL(board, "a/b?c#d", ""), "https://www.example.careers/jobs/a%2Fb%3Fc%23d"; got != want {
+		t.Errorf("escaped fallback = %q, want %q", got, want)
+	}
+}
+
+func TestJibeToJobDecodesCanonicalURL(t *testing.T) {
+	var item struct {
+		Data jibePosting `json:"data"`
+	}
+	raw := jibeJob("5441", "Role", "Berlin", "", "Org", "2026-06-16T20:41:00+0000", "https://www.example.careers/acme/jobs/5441")
+	if err := json.Unmarshal([]byte(raw), &item); err != nil {
+		t.Fatal(err)
+	}
+	job, ok := jibe{}.toJob(CompanyEntry{Board: "www.example.careers"}, item.Data)
+	if !ok || job.URL != "https://www.example.careers/acme/jobs/5441" {
+		t.Errorf("URL = %q, want the canonical_url", job.URL)
 	}
 }
