@@ -71,7 +71,8 @@
                  and do. -->
             <p class="flex items-center gap-2 px-1 py-1.5 text-sm text-muted-foreground">
               <Check class="size-4 shrink-0 text-brand" aria-hidden="true" />
-              <span class="line-through decoration-border">{step.label}</span>
+              <!-- Muted with a check, not struck through: a line through it read as cancelled. -->
+              <span>{step.label}</span>
             </p>
           {:else if leadsSomewhere(step)}
             <!-- The dismiss button (alerts only) must not nest inside the link, so the
@@ -97,6 +98,9 @@
                 >
                   <X class="size-4" aria-hidden="true" />
                 </button>
+              {:else}
+                <!-- Holds the dismiss button's width, so every row's arrow lines up. -->
+                <span class="size-6 shrink-0" aria-hidden="true"></span>
               {/if}
             </div>
           {:else}

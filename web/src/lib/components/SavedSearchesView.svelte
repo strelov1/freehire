@@ -222,7 +222,7 @@
             </div>
 
             <!-- Per-search alerts: the shared toggle chips (Telegram / Email). -->
-            <div class="mt-3 border-t border-dashed border-border pt-3">
+            <div class="mt-3 border-t border-border/60 pt-3">
               <AlertChannels savedSearchId={s.id} />
             </div>
           </article>
