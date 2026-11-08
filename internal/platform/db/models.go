@@ -1351,6 +1351,16 @@ type OnboardingEmail struct {
 	Error string `json:"error"`
 }
 
+// One row per (user, feature, job, day) a free user was refused by the paid-AI gate (402). Operator report, last 7 days by feature: SELECT h.feature, h.user_id, j.public_slug, h.day, h.created_at FROM paywall_hits h LEFT JOIN jobs j ON j.id = h.job_id WHERE h.created_at >= now() - interval '7 days' ORDER BY h.feature, h.created_at DESC. Not plan_limit_hits: that one is a metered ceiling being reached.
+type PaywallHit struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Feature   string             `json:"feature"`
+	JobID     pgtype.Int8        `json:"job_id"`
+	Day       pgtype.Date        `json:"day"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 // One row per (user, feature, day) a real plan-ceiling refusal was recorded (any tier). Feeds cmd/limit-nudge-mail's candidate query, which filters to free tier.
 type PlanLimitHit struct {
 	UserID    int64              `json:"user_id"`
