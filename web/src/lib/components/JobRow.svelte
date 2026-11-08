@@ -434,7 +434,7 @@
     lang={foreignContentLang(job)}
     class={[
       'font-semibold leading-snug tracking-tight',
-      compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-lg sm:text-[1.35rem]',
+      compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-lg sm:text-xl',
       !compact && !hideCompany && 'mt-2.5',
     ]}
   >

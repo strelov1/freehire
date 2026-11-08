@@ -125,10 +125,12 @@
   }
 </script>
 
+<!-- Outline in the destructive tone: a bare ghost read as plain text inside the red-framed
+     danger zone. The filled destructive button stays for the dialog's final confirm. -->
 <Button
-  variant="ghost"
+  variant="outline"
   size="sm"
-  class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+  class="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
   onclick={() => (open = true)}
 >
   {s.trigger}
