@@ -56,7 +56,7 @@ rules:
   views: { may_depend_on: [assistant, components, actions, generated, i18n, ui, lib] }
   assistant:
     may_depend_on: [components, generated, i18n, ui, lib]
-    because: the assistant draws building blocks from src/lib/components and is embedded by the views above it, never by a view of its own
+    because: the assistant draws building blocks from src/lib/components and never embeds a view; the views above it embed the assistant
   components:
     may_depend_on: [actions, generated, i18n, ui, lib]
     because: a building block never reaches into a route, lib/server, the assistant, a view or the tailor workspace, which are built from it; a component that embeds the assistant is listed under views
