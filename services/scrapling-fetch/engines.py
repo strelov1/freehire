@@ -2,8 +2,8 @@
 Scrapling is imported lazily, so the rest of the service (and its tests) loads without it."""
 
 import itertools
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Mapping, Optional
 from urllib.parse import urlsplit
 
 from app import FetchError, FetchRequest, FetchResult
@@ -51,7 +51,7 @@ class ProxyConfig:
     With only SOURCES_PROXY_URL set, that one proxy serves both — the behaviour before rotation.
     """
 
-    rotating: Optional[str]
+    rotating: str | None
     sticky: list
     _cycle: object = field(default=None, repr=False)
 
@@ -62,7 +62,7 @@ class ProxyConfig:
     def available(self) -> bool:
         return bool(self.rotating or self.sticky)
 
-    def next_sticky(self) -> Optional[str]:
+    def next_sticky(self) -> str | None:
         return next(self._cycle) if self._cycle else self.rotating
 
     @classmethod
@@ -161,7 +161,7 @@ def browser_fetcher(pool: SessionPool):
     return fetch
 
 
-async def _open_stealth(key, proxy: Optional[str], tabs: int = 1):
+async def _open_stealth(key, proxy: str | None, tabs: int = 1):
     from scrapling.fetchers import AsyncStealthySession
 
     # max_pages is how many tabs the session runs at once; the pool sends it no more uses.

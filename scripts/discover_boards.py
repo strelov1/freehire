@@ -27,7 +27,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ats_boards import github_fragments, extract_slugs, emit_survivors  # noqa: E402
+from ats_boards import emit_survivors, extract_slugs, github_fragments  # noqa: E402
 
 # Provider -> the ATS host to put in a `site:` search / Common Crawl prefix.
 PROVIDER_HOSTS = {

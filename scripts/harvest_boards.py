@@ -32,9 +32,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ats_boards import (  # noqa: E402
-    REPO, SOURCES_DIR, UA, SLUG_PATTERNS, SLUG_BLOCKLIST, VALIDATORS,
-    fetch, yaml_name, extract_slugs, existing_slugs, validate,
-    github_fragments, emit_survivors,
+    REPO,
+    SOURCES_DIR,
+    UA,
+    emit_survivors,
+    extract_slugs,
+    fetch,
+    github_fragments,
+    yaml_name,
 )
 
 # Aggregator JSON files. We sweep the raw text with regex, so the per-file schema
@@ -92,7 +97,7 @@ def attribute_names(text: str) -> dict[str, str]:
         for v in row.values():
             if not isinstance(v, str):
                 continue
-            for prov, slug in extract_slugs(v):
+            for _prov, slug in extract_slugs(v):
                 names.setdefault(slug.lower(), str(name).strip())
     return names
 
@@ -241,7 +246,7 @@ def run_workday(write: bool, github: bool) -> int:
         counts = list(ex.map(lambda kv: validate_workday(kv[0][0], kv[0][1]), items))
 
     rows = sorted(
-        (((n, f"{h}/{s}", c) for ((h, s), n), c in zip(items, counts) if c)),
+        (((n, f"{h}/{s}", c) for ((h, s), n), c in zip(items, counts, strict=True) if c)),
         key=lambda r: -r[2],
     )
     print(f"\n# === workday: {len(rows)} new live boards ===")
@@ -251,7 +256,7 @@ def run_workday(write: bool, github: bool) -> int:
     if write:
         f = SOURCES_DIR / "workday.yml"
         with f.open("a") as fh:
-            for name, board, c in rows:
+            for name, board, _c in rows:
                 fh.write(f"- company: {yaml_name(name)}\n  board: {board}\n")
         print(f"  -> appended {len(rows)} entries to {f.relative_to(REPO)}", file=sys.stderr)
     return 0
@@ -298,7 +303,7 @@ def hn_company_name(comment: str) -> str:
     """
     text = re.sub(r"<[^>]+>", " ", comment)          # drop HTML tags
     text = html.unescape(re.sub(r"\s+", " ", text)).strip()
-    head = re.split(r"[|\n\r–—:/]| - ", text, 1)[0].strip(" .,-")
+    head = re.split(r"[|\n\r–—:/]| - ", text, maxsplit=1)[0].strip(" .,-")
     low = head.lower()
     if (not head or len(head) > 40 or "http" in low
             or low.startswith(_NAME_REJECT_PREFIX) or _NAME_REJECT_ROLE.match(head)):

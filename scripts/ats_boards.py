@@ -254,7 +254,7 @@ def emit_survivors(cand: dict[tuple[str, str], str], write: bool) -> int:
         counts = list(ex.map(lambda kv: validate(kv[0][0], kv[0][1]), items))
 
     best: dict[tuple[str, str], tuple[str, str, int]] = {}
-    for ((prov, slug), name), n in zip(items, counts):
+    for ((prov, slug), name), n in zip(items, counts, strict=True):
         if not n:
             continue
         key = (prov, slug.lower())

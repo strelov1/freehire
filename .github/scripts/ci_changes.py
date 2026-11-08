@@ -1,14 +1,13 @@
 """Select expensive CI work while keeping cross-file Go unit guards on every run."""
 
 import argparse
-from dataclasses import dataclass
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
-
+from dataclasses import dataclass
+from pathlib import Path
 
 BACKEND_TASKS = (
     "checks",
@@ -74,8 +73,7 @@ def read_changes(base, head, repo=Path(".")):
             ["git", "diff", "--no-renames", "--name-only", "-z", base, head, "--"],
             cwd=repo,
             check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             timeout=60,
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):

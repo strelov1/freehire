@@ -16,8 +16,8 @@ import hmac
 import ipaddress
 import json
 import socket
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable, List
 from urllib.parse import urlsplit
 
 from starlette.applications import Starlette
@@ -60,10 +60,10 @@ class BadRequest(Exception):
 # fetcher's own choice (see engines.ProxyConfig).
 Fetcher = Callable[[FetchRequest], Awaitable[FetchResult]]
 # A resolver maps a host name to the addresses it resolves to (blocking; run off the loop).
-Resolver = Callable[[str], List[str]]
+Resolver = Callable[[str], list[str]]
 
 
-def system_resolver(host: str) -> List[str]:
+def system_resolver(host: str) -> list[str]:
     return [info[4][0] for info in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)]
 
 
@@ -88,7 +88,7 @@ def parse_request(payload) -> FetchRequest:
     try:
         parts = urlsplit(url)
     except ValueError:  # e.g. an unclosed IPv6 bracket
-        raise BadRequest("url must be an absolute http(s) URL")
+        raise BadRequest("url must be an absolute http(s) URL") from None
     if parts.scheme not in ("http", "https") or not parts.netloc:
         raise BadRequest("url must be an absolute http(s) URL")
     mode = payload.get("mode")
@@ -109,7 +109,7 @@ def parse_request(payload) -> FetchRequest:
     try:
         body = base64.b64decode(raw_body, validate=True)
     except (binascii.Error, ValueError):
-        raise BadRequest("body is not valid base64")
+        raise BadRequest("body is not valid base64") from None
     proxy = payload.get("proxy", False)
     if not isinstance(proxy, bool):
         raise BadRequest("proxy must be a boolean")
@@ -176,4 +176,4 @@ def _json(raw: bytes):
     try:
         return json.loads(raw)
     except ValueError:
-        raise BadRequest("body is not JSON")
+        raise BadRequest("body is not JSON") from None

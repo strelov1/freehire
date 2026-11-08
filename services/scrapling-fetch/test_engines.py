@@ -1,4 +1,14 @@
-from engines import forwardable_headers
+import asyncio
+
+from app import FetchRequest
+from engines import (
+    ProxyConfig,
+    browser_fetcher,
+    forwardable_headers,
+    http_fetcher,
+    stealth_session_factory,
+)
+from pool import SessionPool
 
 
 def test_identity_and_transport_headers_are_dropped():
@@ -38,13 +48,6 @@ def test_listen_address_defaults_its_host_to_loopback():
     assert listen_address("") == ("127.0.0.1", 8098)
     assert listen_address(":9000") == ("127.0.0.1", 9000)
     assert listen_address("0.0.0.0:8098") == ("0.0.0.0", 8098)
-
-
-import asyncio
-
-from app import FetchRequest
-from engines import ProxyConfig, browser_fetcher, http_fetcher, stealth_session_factory
-from pool import SessionPool
 
 
 def test_proxy_config_from_env_prefers_the_rotating_gateway_and_sticky_pool():

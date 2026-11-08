@@ -38,7 +38,7 @@ def decode_spans(labels, offsets):
         if cur_base and cur_base in KIND_MAP:
             spans.append({"start": cur_start, "end": cur_end, "kind": KIND_MAP[cur_base]})
 
-    for label, (start, end) in zip(labels, offsets):
+    for label, (start, end) in zip(labels, offsets, strict=True):
         base = _base(label)
         if base is None or end == 0:  # 'O' or a special token boundary
             flush()

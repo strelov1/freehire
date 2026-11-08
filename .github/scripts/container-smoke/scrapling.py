@@ -1,13 +1,13 @@
 """Runs only in the network-disabled Scrapling image, never on the runner host."""
 import asyncio
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
-from pathlib import Path
 import sys
 import threading
 import urllib.error
 import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 assert os.getuid() == 10001
 assert not os.access('/service', os.W_OK)
@@ -40,10 +40,11 @@ class Page(BaseHTTPRequestHandler):
 server = ThreadingHTTPServer(('127.0.0.1', 18080), Page)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 sys.path.insert(0, '/service')
-from engines import _open_stealth
 
 
 async def browser_smoke():
+    from engines import _open_stealth
+
     # The real service session factory resolves and launches the relocated browser.
     # Direct session use avoids weakening the service's internal-address refusal.
     session = await _open_stealth(('127.0.0.1', False), None)
