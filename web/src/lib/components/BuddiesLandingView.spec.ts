@@ -19,6 +19,7 @@ describe('BuddiesLandingView', () => {
     const joins = screen.getAllByRole('link', { name: 'Join interview buddies' });
     expect(joins.length).toBeGreaterThan(0);
     for (const a of joins) expect(a.getAttribute('href')).toBe('/buddies');
+    expect(screen.queryByText(/^Joining shows members/)).toBeNull();
   });
 
   it('joins in place when given onJoin, for a signed-in non-member at /buddies', async () => {
@@ -29,6 +30,8 @@ describe('BuddiesLandingView', () => {
     expect(joins.length).toBeGreaterThan(0);
     for (const b of joins) b.click();
     expect(onJoin).toHaveBeenCalledTimes(joins.length);
+    // Consent sits beside every button that joins, not only in a section further down.
+    expect(screen.getAllByText(/including applications you made before joining/)).toHaveLength(joins.length);
   });
 
   it('renders every FAQ question', () => {

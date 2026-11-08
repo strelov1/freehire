@@ -62,6 +62,14 @@
   {/if}
 {/snippet}
 
+{#snippet consent()}
+  {#if onJoin}
+    <p class="max-w-xl text-xs text-muted-foreground text-pretty">
+      Joining shows members the companies and roles you apply to and your interview or offer moves, including applications you made before joining. Hide any of them from your tracker.
+    </p>
+  {/if}
+{/snippet}
+
 <div class="flex flex-col">
   <!-- Hero -->
   <section class="dot-grid -mx-4 grid items-center gap-12 px-4 pb-16 pt-8 lg:grid-cols-2">
@@ -79,6 +87,7 @@
         <a href="#how-it-works" class="text-sm font-medium text-muted-foreground hover:text-foreground">See how it works ↓</a>
       </div>
       <p class="mt-3 text-xs text-muted-foreground">Free · Anonymous · Leave any time</p>
+      <div class="mt-2">{@render consent()}</div>
     </div>
     <BuddiesHeroDemo />
   </section>
@@ -173,6 +182,7 @@
       <h2 class="text-balance text-2xl font-semibold tracking-tight">Stop interviewing alone.</h2>
       <p class="max-w-xl text-muted-foreground text-pretty">Free, anonymous, and you can leave any time.</p>
       {@render join()}
+      {@render consent()}
     </div>
   </section>
 </div>
