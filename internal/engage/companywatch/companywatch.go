@@ -30,6 +30,10 @@ import (
 // MaxEntries is the most companies one person can watch. One early user keeps about 3,000,
 // so the limit leaves room without letting a list grow into the filter an alert's search
 // would have to carry.
+//
+// shortcut: the count and the insert share one statement, not a lock, so the same person's
+// concurrent adds at the edge can land a few past it. That is harmless to a bound meant to
+// keep a list sane; take a per-user lock in a transaction if it ever has to be exact.
 const MaxEntries = 5000
 
 var (

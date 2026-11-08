@@ -1,6 +1,6 @@
 //go:build integration
 
-// Integration test for the watchlist's SQL: the alias following, the atomic cap, and the
+// Integration test for the watchlist's SQL: the alias following, the cap, and the
 // import that resolves names against a real catalogue. Only a real Postgres can say these hold.
 // Run with: go test -tags=integration ./internal/engage/companywatch/
 package companywatch_test
@@ -98,7 +98,7 @@ func TestWatchlist_FollowsMergesAndKeepsCompaniesWithNoJobs(t *testing.T) {
 	}
 }
 
-func TestWatchlist_CapIsAtomicAndNeverRefusesWhatIsAlreadyThere(t *testing.T) {
+func TestWatchlist_CapIsAllOrNothingAndNeverRefusesWhatIsAlreadyThere(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
 	svc := companywatch.New(db.New(pool))

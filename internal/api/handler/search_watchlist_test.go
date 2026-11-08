@@ -108,6 +108,26 @@ func TestWatchlist_FalseIsNotAFilter(t *testing.T) {
 	}
 }
 
+// Only `watchlist=true` is the filter, the spelling search.Narrows and the notify worker read.
+// A search that took `watchlist=1` as well would show a saved `watchlist=1&q=go` narrowed to
+// the list, while its alert mailed every Go posting in the catalogue.
+func TestWatchlist_OnlyTrueIsTheFilter(t *testing.T) {
+	fake := &fakeSearcher{}
+	lookup := &fakeWatchlist{slugs: []string{"acme"}}
+	app := watchlistApp(fake, 7, lookup, nil)
+
+	status, body := doGet(t, app, "/jobs/search?watchlist=1")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if lookup.called || fake.got.Filter != nil {
+		t.Errorf("watchlist=1 narrowed the search (filter %#v)", fake.got.Filter)
+	}
+	if names := ignoredParamNames(body); !reflect.DeepEqual(names, []string{search.WatchlistParam}) {
+		t.Errorf("ignored_params = %v, want [%s]", names, search.WatchlistParam)
+	}
+}
+
 func TestWatchlist_LookupFailureFailsTheRequest(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := watchlistApp(fake, 7, &fakeWatchlist{err: errors.New("db down")}, nil)

@@ -475,11 +475,8 @@ func (h *searchHandlers) formerEmployerSlugsFor(ctx context.Context, userID int6
 // with no slugs is a real answer — an empty list — that narrows to nothing.
 func (h *searchHandlers) watchlistSlugs(c *fiber.Ctx) (slugs []string, applied bool, err error) {
 	userID, _ := auth.UserID(c)
-	vals := queryValues(c)
-	if c.QueryBool(search.WatchlistParam) {
-		vals.Set(search.WatchlistParam, "true")
-	}
-	slugs, applied, err = h.watchlistSlugsFor(c.Context(), userID, vals)
+	// Only the spelling search.WantsWatchlist reads, the one Narrows and cmd/notify read too.
+	slugs, applied, err = h.watchlistSlugsFor(c.Context(), userID, queryValues(c))
 	if applied {
 		c.Set(fiber.HeaderCacheControl, "private, no-store")
 	}
