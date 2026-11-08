@@ -165,6 +165,7 @@
   const freshness = $derived(cardFreshnessBadges(job.posted_at, reality, job.closed_at));
 
   const MAX_SKILLS = 5;
+  const metaFacts = $derived([...tags, equity, questions].filter((f): f is string => Boolean(f)));
   const shownSkills = $derived(skills.slice(0, MAX_SKILLS));
   const extraSkills = $derived(skills.length - MAX_SKILLS);
 
@@ -484,16 +485,17 @@
           <Badge variant="brand">{badge.label}</Badge>
         </span>
       {/each}
-      {#each tags as tag (tag)}
-        <Badge variant="outline">{tag}</Badge>
-      {/each}
-      <!-- Facts about the pay and the cost of applying, after the role's own facets.
-           Outside the tags' each block: a tag's text could equal one of these. -->
-      {#if equity}
-        <Badge variant="outline">{equity}</Badge>
-      {/if}
-      {#if questions}
-        <Badge variant="outline">{questions}</Badge>
+      <!-- The role's facets, then the pay and the cost of applying, as one line of quiet
+           text joined by dots rather than a row of outlined chips: the skills below are
+           chips already, and two rows of identical outlines made every card noisy.
+           Indexed keys: a tag's text could equal one of the trailing facts. -->
+      {#if metaFacts.length}
+        <span class="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-muted-foreground">
+          {#each metaFacts as fact, i (i)}
+            {#if i > 0}<span aria-hidden="true">·</span>{/if}
+            <span>{fact}</span>
+          {/each}
+        </span>
       {/if}
       <!-- Register-backed employer credentials (visa-sponsor licences). A fact about
            the employer, so it sits with the metadata chips and carries its own

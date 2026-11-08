@@ -44,7 +44,7 @@
     (interval === 'year' ? ultraAnnual : ultraMonthly) ?? ultraMonthly ?? ultraAnnual,
   );
 
-  const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency);
+  const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency, undefined, { trimWhole: true });
 
   // What one tier's allowance reads as. `unlimited` makes the number a fair-use guard rather
   // than a ceiling, so it is not shown — quoting a guard as a limit would promise less than
