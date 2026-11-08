@@ -171,8 +171,12 @@
   // The region is dropped when the flags already name the country ("UK · 🇬🇧 United
   // Kingdom" said one place twice); with no country it is the only geography and stays.
   const regionTag = $derived(job.countries?.length ? regionLabel({ regions: job.regions ?? [] }) : null);
+  // On the employer's own page the rail (logo, name, date) is not drawn, so the date leads
+  // the meta line instead — the same place a reader finds it relative to the title elsewhere.
   const metaFacts = $derived(
-    [...tags.filter((t) => t !== regionTag), equity, questions].filter((f): f is string => Boolean(f)),
+    [hideCompany ? posted : null, ...tags.filter((t) => t !== regionTag), equity, questions].filter(
+      (f): f is string => Boolean(f),
+    ),
   );
   const shownSkills = $derived(skills.slice(0, MAX_SKILLS));
   const extraSkills = $derived(skills.length - MAX_SKILLS);
@@ -383,9 +387,9 @@
   <!-- Reserves the top-right corner for the Save overlay outside this link, so the
        timestamp never slides under it. Only a compact card keeps Save up here; a normal
        card has moved it into the action row at its foot, leaving the corner free. -->
-  <!-- Without the company there is nothing to the date's left, so it floats beside the
-       title instead of holding a row of its own. -->
-  <div class={['flex items-center gap-2', compact ? 'pr-11' : onHide ? 'pr-20' : 'pr-11', !compact && (applyJob || directApply) && 'pointer-coarse:pr-48', hideCompany && 'float-right ml-3 mt-1.5']}>
+  <!-- Not drawn on the employer's own page (`hideCompany`): with no company it held only
+       the date, which leads the meta line there instead. -->
+  <div class={['flex items-center gap-2', compact ? 'pr-11' : onHide ? 'pr-20' : 'pr-11', !compact && (applyJob || directApply) && 'pointer-coarse:pr-48', hideCompany && 'hidden']}>
     <div class="flex min-w-0 items-center gap-2">
       {#if !hideCompany}
       <EntityLogo
@@ -452,6 +456,7 @@
       'font-semibold leading-snug tracking-tight',
       compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-base sm:text-lg',
       !compact && !hideCompany && 'mt-1.5',
+      hideCompany && 'pr-10',
     ]}
   >
     {job.title}
@@ -462,7 +467,7 @@
   <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary}
+  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && posted)}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
