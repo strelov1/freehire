@@ -524,7 +524,8 @@
       <!-- Register-backed employer credentials (visa-sponsor licences). A fact about
            the employer, so it sits with the metadata chips and carries its own
            disclaimer rather than reading as a promise about this role. -->
-      <CredentialBadge collections={job.collections} plain />
+      <!-- Not on the employer's own page, whose header already states it for every row. -->
+      {#if !hideCompany}<CredentialBadge collections={job.collections} plain />{/if}
       <!-- Eligible countries as an overlapping flag cluster. Display-only here: the
            whole card is a link, so the flags carry no nested filter links. -->
       {#if job.countries?.length}

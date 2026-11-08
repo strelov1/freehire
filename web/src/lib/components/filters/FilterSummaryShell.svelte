@@ -117,7 +117,7 @@
   {@render afterButton?.()}
 
   {#if groups.length === 0}
-    <div class="px-1 text-center text-sm text-muted-foreground">
+    <div class="px-1 text-sm text-muted-foreground">
       No filters yet.<br />Open <b>All filters</b> to refine.
     </div>
   {:else}
