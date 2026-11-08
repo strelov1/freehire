@@ -8,7 +8,7 @@
 // with a label per tool.
 
 import { format, plural, t } from '#lib/i18n/t.js';
-import type { Locale } from '#lib/locale.js';
+import type { Locale } from '#lib/i18n/locale.js';
 import { messages } from './tool-formatters.messages';
 
 export interface ToolCall {

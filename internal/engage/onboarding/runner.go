@@ -2,9 +2,11 @@ package onboarding
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
+	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -102,10 +104,15 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 			return stats, fmt.Errorf("onboarding: listing %s candidates: %w", step, err)
 		}
 		for _, rec := range recipients {
-			if r.deliver(ctx, step, rec) {
+			sent, paused := r.deliver(ctx, step, rec)
+			if sent {
 				stats.Sent[step]++
-			} else {
-				stats.Failed[step]++
+				continue
+			}
+			stats.Failed[step]++
+			if paused {
+				log.Printf("onboarding: ses is not sending for the account, ending the pass at %s; nothing was recorded for the rest", step)
+				return stats, nil
 			}
 		}
 	}
@@ -228,15 +235,21 @@ func (r *Runner) candidates(ctx context.Context, step Step) ([]recipient, error)
 }
 
 // deliver sends one mail and closes out the ledger row. It reports whether the send
-// itself succeeded.
+// succeeded, and whether SES refused the whole account (the caller ends the pass).
 //
-// The ledger is written either way, and that is the important part: a failed send
-// still burns the (user, step) pair. Retrying an address that SES just rejected is
-// how a sending domain accumulates bounces, and the sequence is a courtesy — not
-// worth risking deliverability for every other mail the product sends. Re-arming is
-// a manual DELETE.
-func (r *Runner) deliver(ctx context.Context, step Step, rec recipient) bool {
+// A failure of one address burns the (user, step) pair: the ledger is written with
+// the error. Retrying an address that SES just rejected is how a sending domain
+// accumulates bounces, and the sequence is a courtesy — not worth risking
+// deliverability for every other mail the product sends. Re-arming is a manual DELETE.
+//
+// An account-level refusal (emailnotify.ErrSendingPaused) is the opposite case and
+// writes no row: nothing was judged about this address, so burning its slot would
+// lose the mail for good just because SES was paused. The next pass finds it again.
+func (r *Runner) deliver(ctx context.Context, step Step, rec recipient) (sent, paused bool) {
 	sendErr := r.mailer.Send(ctx, step, rec.userID, rec.email)
+	if errors.Is(sendErr, emailnotify.ErrSendingPaused) {
+		return false, true
+	}
 
 	var errText string
 	if sendErr != nil {
@@ -254,5 +267,5 @@ func (r *Runner) deliver(ctx context.Context, step Step, rec recipient) bool {
 		// symptom this feature can produce.
 		log.Printf("onboarding: recording %s for user %d failed (mail may repeat): %v", step, rec.userID, err)
 	}
-	return sendErr == nil
+	return sendErr == nil, false
 }

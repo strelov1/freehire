@@ -36,15 +36,28 @@ const pauseTimeout = 250 * time.Millisecond
 // reading that as one would run the very fleet they just held.
 const IgnorePauseEnv = "FREEHIRE_IGNORE_PAUSE"
 
+// PauseKey is the pause key named by suffix. A caller that owns a family of
+// keys of its own (the mail classes) builds them here so the prefix has one author.
+func PauseKey(suffix string) string { return pauseKeyPrefix + suffix }
+
 // Paused reports whether an external switch is holding this worker back, where
 // job is the worker binary's name. It answers only "may this run start"; a run
-// already in flight is never interrupted.
-func Paused(ctx context.Context, redisURL, job string) bool {
+// already in flight is never interrupted. extraKeys are further keys that hold
+// this worker, for a caller that classifies workers in a way this package does
+// not know (see Main).
+func Paused(ctx context.Context, redisURL, job string, extraKeys ...string) bool {
+	return AnyHeld(ctx, redisURL, append([]string{pauseAllKey, PauseKey(job)}, extraKeys...)...)
+}
+
+// AnyHeld reports whether any of keys exists, with the bypass and the fail-open
+// behaviour of Paused: FREEHIRE_IGNORE_PAUSE lifts every hold, and an unreadable
+// Redis holds nothing.
+func AnyHeld(ctx context.Context, redisURL string, keys ...string) bool {
 	if ignore, err := strconv.ParseBool(os.Getenv(IgnorePauseEnv)); err == nil && ignore {
 		return false
 	}
 
-	held, err := switchHeld(ctx, redisURL, job)
+	held, err := keysHeld(ctx, redisURL, keys...)
 	if err != nil {
 		// Fail open, and say so. A facility for shedding load must never become
 		// the reason the catalogue stops updating, but a silent degrade would be
@@ -55,8 +68,8 @@ func Paused(ctx context.Context, redisURL, job string) bool {
 	return held
 }
 
-// switchHeld reports whether either pause key exists, or why it could not tell.
-func switchHeld(ctx context.Context, redisURL, job string) (bool, error) {
+// keysHeld reports whether any of keys exists, or why it could not tell.
+func keysHeld(ctx context.Context, redisURL string, keys ...string) (bool, error) {
 	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return false, err
@@ -76,7 +89,7 @@ func switchHeld(ctx context.Context, redisURL, job string) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, pauseTimeout)
 	defer cancel()
 
-	held, err := client.Exists(ctx, pauseAllKey, pauseKeyPrefix+job).Result()
+	held, err := client.Exists(ctx, keys...).Result()
 	return held > 0, err
 }
 

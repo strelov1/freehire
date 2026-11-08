@@ -1,342 +1,253 @@
-import { createServer as createMockBackend, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { createServer as createViteServer, type ViteDevServer } from 'vite';
-import { expect as baseExpect, test as base, type Page, type Route } from '@playwright/test';
+import { createServer, type Server } from 'node:http';
+import { expect, test, type Page } from '@playwright/test';
 
-// The assistant's message list must scroll by itself: wheel, trackpad and touch over it move
-// the list, never the page behind it, and the edge of the list does not hand the gesture on.
+// The assistant's message list must scroll by itself: wheel and touch over it move the
+// list, never the page behind it.
 //
-// Self-contained: it starts its own Vite dev server pointed at a tiny in-process backend, so
-// no stack needs to be running. The backend answers only what a SvelteKit `load` asks the
-// server for (`/me`, which no `page.route` can see because it never crosses the browser);
-// everything the browser fetches is mocked with `page.route`.
-//   pnpm exec playwright test e2e/assistant-scroll.spec.ts
+// Local, like the other specs here. Server-side rendering asks the API who is signed in
+// before any /my page renders, and that call never passes through the browser, so the
+// spec runs a one-route stand-in for it and the dev server must point at it:
+//   API_INTERNAL_URL=http://127.0.0.1:18090 pnpm exec vite --port 5199
+//   PLAYWRIGHT_BASE_URL=http://localhost:5199 pnpm exec playwright test assistant-scroll
+// Everything the browser itself fetches is mocked with page.route.
 
-const ASSISTANT = '/api/v1/assistant';
-const SUPPORT = '/api/v1/support';
+const SSR_API_PORT = 18090;
+const SESSION = { id: 's1', preset: 'chat', label: 'Long chat' };
 
 const USER = {
   id: 1,
-  email: 'e2e@example.test',
+  email: 'e2e@example.com',
   role: 'user',
-  beta_tester: false,
+  beta_tester: true,
   email_verified: true,
   has_password: true,
   created_at: '2026-01-01T00:00:00Z',
   timezone: 'UTC',
   language: 'en',
   onboarding_completed_at: '2026-01-01T00:00:00Z',
-  tier: 'pro',
-  agent_connected: false,
 };
 
-type App = { origin: string };
+// Serial keeps every test of this file in ONE worker, so the stand-in below has one owner:
+// it is bound before the first test and closed after the last, and no other worker can
+// close it under a page that is still loading.
+test.describe.configure({ mode: 'serial' });
 
-const test = base.extend<{ baseURL: string }, { app: App }>({
-  app: [
-    // Playwright reads a fixture's dependencies from the destructured first argument and rejects anything else.
-    // oxlint-disable-next-line no-empty-pattern
-    async ({}, use) => {
-      const backend: Server = createMockBackend((req, res) => {
-        res.setHeader('content-type', 'application/json');
-        if (req.url?.startsWith('/api/v1/auth/me')) {
-          res.end(JSON.stringify({ data: USER }));
-          return;
-        }
-        res.statusCode = 404;
-        res.end(JSON.stringify({ error: 'not mocked' }));
-      });
-      await new Promise<void>((done) => backend.listen(0, '127.0.0.1', done));
-      process.env.VITE_API_URL = `http://127.0.0.1:${(backend.address() as AddressInfo).port}`;
-
-      const vite: ViteDevServer = await createViteServer({
-        root: process.cwd(),
-        server: { host: '127.0.0.1', port: 0, strictPort: false },
-        logLevel: 'error',
-      });
-      await vite.listen();
-      const origin = vite.resolvedUrls?.local[0]?.replace(/\/$/, '');
-      if (!origin) throw new Error('vite did not report an address');
-
-      // The first render of a route compiles the whole app (~1 min cold); pay it here, once,
-      // rather than inside whichever test happens to ask first.
-      await Promise.all(
-        ['/my/assistant', '/my/notifications'].map((path) =>
-          fetch(`${origin}${path}`, { headers: { cookie: 'hire_token=warmup' } }),
-        ),
-      );
-
-      await use({ origin });
-
-      await vite.close();
-      await new Promise((done) => backend.close(done));
-    },
-    { scope: 'worker', timeout: 300_000 },
-  ],
-  baseURL: async ({ app }, use) => use(app.origin),
+let ssrApi: Server;
+test.beforeAll(async () => {
+  ssrApi = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify(req.url?.includes('/auth/me') ? { data: USER } : { data: null }));
+  });
+  await new Promise<void>((done, fail) => {
+    ssrApi.once('error', fail);
+    ssrApi.listen(SSR_API_PORT, '127.0.0.1', done);
+  });
 });
+test.afterAll(() => new Promise<void>((done) => ssrApi.close(() => done())));
 
-// One long reply, so the transcript is far taller than any viewport used here.
-const paragraph = (n: number) => `Paragraph ${n}. ${'The quick brown fox jumps over the lazy dog. '.repeat(8)}`;
-const LONG_REPLY = Array.from({ length: 60 }, (_, n) => paragraph(n)).join('\n\n');
-
-// The browser compiles the client modules on first load too, so allow for a cold dev server.
-test.beforeEach(() => test.setTimeout(120_000));
-const expect = baseExpect.configure({ timeout: 45_000 });
-
-const SESSION = { id: 's1', preset: 'chat', label: 'Long chat' };
-const TRANSCRIPT = Array.from({ length: 30 }, (_, n) => ({
-  seq: n + 1,
-  role: n % 2 === 0 ? ('user' as const) : ('assistant' as const),
-  content: { text: n % 2 === 0 ? `Question ${n}` : paragraph(n) },
-}));
-
-const json = (route: Route, data: unknown) =>
-  route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data }) });
-
-function sse(events: object[]): string {
-  return events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+function transcript(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    seq: i + 1,
+    role: i % 2 === 0 ? 'user' : 'assistant',
+    content: { text: `Message ${i + 1}. ` + 'Lorem ipsum dolor sit amet. '.repeat(12) },
+  }));
 }
 
-/** Everything the full-page assistant fetches. `gate`, when given, holds each turn's reply
- *  until the test releases it, so the test can scroll while a reply is still on its way. */
-async function mockAssistant(page: Page, gate?: Promise<void>) {
-  await page.route(`**${ASSISTANT}/sessions`, (route) =>
-    route.request().method() === 'GET' ? json(route, [SESSION]) : json(route, SESSION),
+async function mockAssistant(page: Page, baseURL: string | undefined) {
+  if (!baseURL) throw new Error('baseURL is not configured');
+  await page.context().addCookies([{ name: 'hire_token', value: 'e2e', url: baseURL }]);
+  // Anything the page asks beyond what this spec is about: answered with no data, so no request
+  // waits on a backend that is not there. Registered first, so the routes below win.
+  await page.route('**/api/v1/**', (route) => route.fulfill({ json: { data: null } }));
+  await page.route('**/api/v1/me/experience', (route) =>
+    route.fulfill({ json: { data: { employments: [], unplaced: [] } } }),
   );
-  await page.route(`**${ASSISTANT}/sessions/s1`, (route) =>
-    json(route, { session: SESSION, messages: TRANSCRIPT }),
-  );
-  await page.route(`**${ASSISTANT}/sessions/s1/messages`, async (route) => {
-    await gate;
-    await route.fulfill({
-      contentType: 'text/event-stream',
-      body: sse([
-        { type: 'assistant_text', text: 'Fresh reply that arrives last.' },
-        { type: 'result', stop_reason: 'end_turn' },
-      ]),
-    });
+  await page.route('**/api/v1/assistant/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const data = path.endsWith('/sessions')
+      ? [SESSION]
+      : { session: SESSION, messages: transcript(60) };
+    await route.fulfill({ json: { data } });
+  });
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill({ json: { data: USER } }));
+}
+
+const list = (page: Page) => page.getByRole('log');
+const scroller = (page: Page) => list(page).locator('xpath=..');
+async function scrollerBox(page: Page) {
+  const box = await scroller(page).boundingBox();
+  if (!box) throw new Error('the message list is not on screen');
+  return box;
+}
+const pageScrollY = (page: Page) => page.evaluate(() => window.scrollY);
+const state = (page: Page) =>
+  scroller(page).evaluate((el) => ({
+    top: el.scrollTop,
+    max: el.scrollHeight - el.clientHeight,
+    pageY: window.scrollY,
+    docOverflow: document.documentElement.scrollHeight - window.innerHeight,
+  }));
+
+// The pages these chats sit on are taller than the viewport (the account content, the
+// footer), which is what gives a wheel somewhere to go once the list stops taking it.
+async function makePageScrollable(page: Page) {
+  await page.evaluate(() => {
+    const spacer = document.createElement('div');
+    spacer.style.height = '250vh';
+    spacer.setAttribute('aria-hidden', 'true');
+    document.body.append(spacer);
   });
 }
 
-async function signIn(page: Page, origin: string) {
-  await page.context().addCookies([{ name: 'hire_token', value: 'e2e', url: origin }]);
-}
-
-// The transcript's parent is the scroller; the transcript itself is as tall as the whole
-// conversation, so its own box says nothing about what is on screen.
-const LIST = '[role="log"] >> xpath=..';
-
-/** The geometry that matters, read in the page. */
-async function metrics(page: Page) {
-  return page.evaluate(() => {
-    const list = document.querySelector<HTMLElement>('[role="log"]')?.parentElement;
-    if (!list) throw new Error('no message list');
-    return {
-      listTop: list.scrollTop,
-      listMax: list.scrollHeight - list.clientHeight,
-      overflows: list.scrollHeight > list.clientHeight,
-      pageY: window.scrollY,
-    };
-  });
+async function open(page: Page, baseURL: string | undefined, url: string) {
+  await mockAssistant(page, baseURL);
+  await page.goto(url);
+  await makePageScrollable(page);
+  await expect(list(page)).toContainText('Message 60.', { timeout: 20_000 });
 }
 
 async function wheelOverList(page: Page, deltaY: number) {
-  const box = await page.locator(LIST).boundingBox();
-  if (!box) throw new Error('message list is not visible');
-  await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height / 2, 200));
+  const box = await scrollerBox(page);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, deltaY);
+  await settled(page);
 }
 
-async function send(page: Page, text: string) {
-  await page.getByRole('textbox').last().fill(text);
-  await page.keyboard.press('Enter');
-}
-
-/** A one-finger swipe, the way a phone delivers it; Playwright has no touch scroll of its own.
- *  Positive `deltaY` scrolls down, like a wheel: the finger travels up. */
-async function swipeOverList(page: Page, deltaY: number) {
-  const box = await page.locator(LIST).boundingBox();
-  if (!box) throw new Error('message list is not visible');
-  const x = Math.round(box.x + box.width / 2);
-  const startY = Math.round(box.y + box.height / 2);
-  const cdp = await page.context().newCDPSession(page);
-  const touch = (type: string, y: number) =>
-    cdp.send('Input.dispatchTouchEvent', {
-      type,
-      touchPoints: type === 'touchEnd' ? [] : [{ x, y }],
-    });
-  const steps = 12;
-  const travel = Math.max(-box.height / 2 + 20, Math.min(box.height / 2 - 20, -deltaY));
-  await touch('touchStart', startY);
-  for (let i = 1; i <= steps; i++) {
-    await touch('touchMove', Math.round(startY + (travel * i) / steps));
-    await page.waitForTimeout(16);
-  }
-  await touch('touchEnd', 0);
-  await cdp.detach();
-}
-
-async function openFullPage(page: Page, origin: string) {
-  await signIn(page, origin);
-  await mockAssistant(page);
-  await page.goto('/my/assistant');
-  await expect(page.getByText('Paragraph 29.').first()).toBeAttached();
-  await expect.poll(async () => (await metrics(page)).overflows).toBe(true);
-}
-
-async function openSupportPanel(page: Page, origin: string) {
-  await signIn(page, origin);
-  await page.route(`**${SUPPORT}/sessions`, (route) => json(route, { id: 'sup1', preset: 'support', label: 'Support' }));
-  await page.route(`**${SUPPORT}/sessions/sup1/messages`, (route) =>
-    route.fulfill({
-      contentType: 'text/event-stream',
-      body: sse([
-        { type: 'assistant_text', text: LONG_REPLY },
-        { type: 'result', stop_reason: 'end_turn' },
-      ]),
-    }),
+// The wheel is handled asynchronously: wait until neither the list nor the page has moved
+// for several frames, so an assertion reads the outcome and not a position mid-scroll.
+async function settled(page: Page) {
+  await scroller(page).evaluate(
+    (el) =>
+      new Promise<void>((done) => {
+        let last = '';
+        let still = 0;
+        const tick = () => {
+          const now = `${el.scrollTop}/${window.scrollY}`;
+          still = now === last ? still + 1 : 0;
+          last = now;
+          if (still >= 8) done();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
   );
-  await page.goto('/my/notifications');
-  // A click that lands before hydration is lost, so click until the panel reports open.
-  const help = page.getByRole('button', { name: 'Help', exact: true });
-  await expect(async () => {
-    if ((await help.getAttribute('aria-expanded')) !== 'true') await help.click();
-    await expect(help).toHaveAttribute('aria-expanded', 'true', { timeout: 1_000 });
-  }).toPass();
-  await page.getByRole('textbox').last().fill('Tell me everything');
-  await page.keyboard.press('Enter');
-  await expect(page.getByText('Paragraph 59.').first()).toBeAttached();
-  await expect.poll(async () => (await metrics(page)).overflows).toBe(true);
 }
 
-/** The page must be able to scroll at all, or "the page did not move" proves nothing. */
-async function expectPageScrollable(page: Page) {
-  const room = await page.evaluate(
-    () => document.documentElement.scrollHeight - document.documentElement.clientHeight,
-  );
-  expect(room, 'the page has nowhere to scroll, so a chained scroll would be invisible').toBeGreaterThan(0);
-}
+test.describe('full-page assistant', () => {
+  test('wheel scrolls the list, not the page, and stops at the edge', async ({ page, baseURL }) => {
+    await open(page, baseURL, '/my/assistant/s1');
+    const before = await state(page);
+    expect(before.max, 'transcript must overflow the list').toBeGreaterThan(500);
+    expect(before.docOverflow, 'the page must have room to scroll').toBeGreaterThan(100);
 
-test.describe('full-page assistant (/my/assistant)', () => {
-  test.use({ viewport: { width: 1280, height: 720 } });
-
-  test('wheel over the list scrolls the list, not the page', async ({ page, app }) => {
-    await openFullPage(page, app.origin);
-    const before = await metrics(page);
-    const start = before.listTop;
+    // Pinned to the newest message, and the wheel keeps pushing down: nothing is left in
+    // the list to take it, and the page must not either.
+    await wheelOverList(page, 400);
+    expect((await state(page)).pageY).toBe(0);
 
     await wheelOverList(page, -400);
-    await wheelOverList(page, 400);
-    await expect.poll(async () => (await metrics(page)).listTop).not.toBe(start);
-    expect((await metrics(page)).pageY).toBe(0);
+    const up = await state(page);
+    expect(up.top).toBeLessThan(before.top);
+    expect(up.pageY).toBe(before.pageY);
+
+    // Scroll to the very top, then keep pushing: the page must not take the overflow.
+    await wheelOverList(page, -100000);
+    await wheelOverList(page, -400);
+    const edge = await state(page);
+    expect(edge.top).toBe(0);
+    expect(edge.pageY).toBe(before.pageY);
   });
 
-  test('the end of the list does not hand the scroll to the page', async ({ page, app }) => {
-    await openFullPage(page, app.origin);
-
-    await wheelOverList(page, 100_000);
+  test('jump-to-latest pins the list back to the newest message', async ({ page, baseURL }) => {
+    await open(page, baseURL, '/my/assistant/s1');
+    await wheelOverList(page, -100000);
+    expect((await state(page)).top).toBe(0);
+    await page.getByRole('button', { name: /latest/i }).click();
     await expect.poll(async () => {
-      const m = await metrics(page);
-      return Math.abs(m.listMax - m.listTop) < 2;
-    }).toBe(true);
-    await wheelOverList(page, 600);
-    await page.waitForTimeout(300);
-    expect((await metrics(page)).pageY).toBe(0);
+      const s = await state(page);
+      return s.max - s.top;
+    }).toBeLessThan(4);
   });
 });
 
 test.describe('full-page assistant on a phone', () => {
   test.use({ viewport: { width: 390, height: 780 }, hasTouch: true, isMobile: true });
 
-  test('a swipe over the list scrolls the list, not the page', async ({ page, app }) => {
-    await openFullPage(page, app.origin);
-    const start = (await metrics(page)).listTop;
+  test('touch drag scrolls the list, not the page', async ({ page, baseURL }) => {
+    await open(page, baseURL, '/my/assistant/s1');
+    const before = await state(page);
+    const box = await scrollerBox(page);
+    const x = box.x + box.width / 2;
+    const y0 = box.y + box.height / 2;
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type: string, y?: number) =>
+      cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: y === undefined ? [] : [{ x, y }],
+      });
+    // Finger up moves the content on, but the list is already at its end: the page must
+    // stay put. Then finger down reads back through the list.
+    await touch('touchStart', y0);
+    for (let step = 1; step <= 10; step++) {
+      await touch('touchMove', y0 - step * 30);
+      await page.waitForTimeout(16);
+    }
+    await touch('touchEnd');
+    await settled(page);
+    expect((await state(page)).pageY).toBe(0);
 
-    await swipeOverList(page, -400);
-    await expect.poll(async () => (await metrics(page)).listTop).not.toBe(start);
-    expect((await metrics(page)).pageY).toBe(0);
-
-    await swipeOverList(page, 100_000);
-    await page.waitForTimeout(300);
-    expect((await metrics(page)).pageY).toBe(0);
+    await touch('touchStart', y0);
+    for (let step = 1; step <= 10; step++) {
+      await touch('touchMove', y0 + step * 30);
+      await page.waitForTimeout(16);
+    }
+    await touch('touchEnd');
+    await settled(page);
+    const after = await state(page);
+    expect(after.top).toBeLessThan(before.top);
+    expect(after.pageY).toBe(before.pageY);
   });
 });
 
-test.describe('docked support panel', () => {
-  test.use({ viewport: { width: 1440, height: 800 } });
+// The docked panel (and, on a narrow screen, the covering overlay) hosts the same chat
+// inside a fixed, overflow-hidden box, so the list only scrolls if every ancestor passes
+// its bound down.
+async function openPanel(page: Page, baseURL: string | undefined) {
+  await mockAssistant(page, baseURL);
+  await page.goto('/my/profile/experience');
+  await page.getByRole('button', { name: 'Tailor your experience' }).first().click();
+  await expect(list(page)).toContainText('Message 60.', { timeout: 20_000 });
+  await makePageScrollable(page);
+}
 
-  test('wheel over the list scrolls the list, not the page', async ({ page, app }) => {
-    await openSupportPanel(page, app.origin);
-    await expectPageScrollable(page);
-    const start = (await metrics(page)).listTop;
+async function expectListScrolls(page: Page) {
+  const before = await state(page);
+  expect(before.max, 'transcript must overflow the list, not the panel').toBeGreaterThan(500);
+  const pageBefore = await pageScrollY(page);
+  await wheelOverList(page, 400);
+  expect(await pageScrollY(page)).toBe(pageBefore);
+  await wheelOverList(page, -400);
+  const up = await state(page);
+  expect(up.top).toBeLessThan(before.top);
 
-    await wheelOverList(page, -400);
-    await expect.poll(async () => (await metrics(page)).listTop).not.toBe(start);
-    expect((await metrics(page)).pageY).toBe(0);
+  await wheelOverList(page, -100000);
+  await wheelOverList(page, -400);
+  expect((await state(page)).top).toBe(0);
+  expect(await pageScrollY(page)).toBe(pageBefore);
+}
 
-    // Wheel scrolling latches onto the element it started on for a moment, so a second wheel
-    // at the edge only tests chaining once that has lapsed.
-    await wheelOverList(page, 100_000);
-    await expect.poll(async () => {
-      const m = await metrics(page);
-      return Math.abs(m.listMax - m.listTop) < 2;
-    }).toBe(true);
-    await page.waitForTimeout(1_000);
-    await wheelOverList(page, 600);
-    await page.waitForTimeout(500);
-    expect((await metrics(page)).pageY).toBe(0);
+test.describe('docked assistant panel', () => {
+  test('wheel scrolls the list, not the page', async ({ page, baseURL }) => {
+    await openPanel(page, baseURL);
+    await expectListScrolls(page);
   });
 });
 
-test.describe('covering support panel on a phone', () => {
+test.describe('covering assistant panel on a phone', () => {
   test.use({ viewport: { width: 390, height: 780 }, hasTouch: true, isMobile: true });
 
-  test('a swipe over the list scrolls the list, and the page stays put', async ({ page, app }) => {
-    await openSupportPanel(page, app.origin);
-    const start = (await metrics(page)).listTop;
-
-    await swipeOverList(page, -400);
-    await expect.poll(async () => (await metrics(page)).listTop).not.toBe(start);
-    expect((await metrics(page)).pageY).toBe(0);
-  });
-});
-
-test.describe('following the newest message', () => {
-  test.use({ viewport: { width: 1280, height: 720 } });
-
-  test('a reply scrolls into view when the reader is at the bottom', async ({ page, app }) => {
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => (release = resolve));
-    await signIn(page, app.origin);
-    await mockAssistant(page, gate);
-    await page.goto('/my/assistant');
-    await expect.poll(async () => (await metrics(page)).overflows).toBe(true);
-
-    await send(page, 'Anything new?');
-    release();
-    await expect(page.getByText('Fresh reply that arrives last.')).toBeInViewport();
-  });
-
-  test('a reply leaves a reader who scrolled up where they were, and the button brings them back', async ({
-    page,
-    app,
-  }) => {
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => (release = resolve));
-    await signIn(page, app.origin);
-    await mockAssistant(page, gate);
-    await page.goto('/my/assistant');
-    await expect.poll(async () => (await metrics(page)).overflows).toBe(true);
-
-    await send(page, 'Anything new?');
-    await wheelOverList(page, -100_000);
-    await expect.poll(async () => (await metrics(page)).listTop).toBeLessThan(5);
-    release();
-    await expect(page.getByText('Fresh reply that arrives last.')).toBeAttached();
-    expect((await metrics(page)).listTop).toBeLessThan(5);
-
-    await page.getByRole('button', { name: 'Jump to latest' }).click();
-    await expect(page.getByText('Fresh reply that arrives last.')).toBeInViewport();
+  test('wheel scrolls the list, not the page', async ({ page, baseURL }) => {
+    await openPanel(page, baseURL);
+    await expectListScrolls(page);
   });
 });

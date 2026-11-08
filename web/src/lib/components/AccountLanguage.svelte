@@ -4,7 +4,7 @@
   import { currentUser, updateLanguage } from '#lib/auth.svelte.js';
   import { ApiError } from '#lib/api.js';
   import { must } from '#lib/utils.js';
-  import { SUPPORTED_LOCALES } from '#lib/locale.js';
+  import { SUPPORTED_LOCALES } from '#lib/i18n/locale.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t, tokenLabel } from '#lib/i18n/t.js';
   import { messages } from './AccountLanguage.messages';
@@ -28,7 +28,7 @@
   // entry recognizable at a glance.
   //
   // The code list itself comes from `SUPPORTED_LOCALES` — the same list
-  // `#lib/locale.ts` mirrors from the backend's CHECK constraint — rather than a
+  // `#lib/i18n/locale.ts` mirrors from the backend's CHECK constraint — rather than a
   // second hand-written array, so a language added or removed there needs no
   // matching edit here. Only the flag (cosmetic, has no other source of truth)
   // and the display NAME (which follows the resolved locale — see

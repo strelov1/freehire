@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -166,6 +167,10 @@ func failed(msg string) Result {
 // fails with a reason the model can act on instead of silently running with
 // half the arguments dropped. Empty arguments decode as an empty object, which
 // is what models send for a no-argument tool.
+// ErrInvalidArguments marks a call the MODEL got wrong, so a surface can report it as the
+// caller's mistake rather than a server fault.
+var ErrInvalidArguments = errors.New("invalid arguments")
+
 func DecodeArgs(args json.RawMessage, dst any) error {
 	raw := bytes.TrimSpace(args)
 	if len(raw) == 0 {
@@ -174,12 +179,12 @@ func DecodeArgs(args json.RawMessage, dst any) error {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
-		return fmt.Errorf("invalid arguments: %w", err)
+		return fmt.Errorf("%w: %w", ErrInvalidArguments, err)
 	}
 	// A second value means the model concatenated objects; decoding only the first
 	// would run the call with arguments it did not intend.
 	if _, err := dec.Token(); err != io.EOF {
-		return fmt.Errorf("invalid arguments: expected a single JSON object")
+		return fmt.Errorf("%w: expected a single JSON object", ErrInvalidArguments)
 	}
 	return nil
 }

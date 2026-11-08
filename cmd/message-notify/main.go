@@ -30,7 +30,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-func main() { worker.Main(run) }
+func main() { worker.Main(run, emailnotify.HoldKeys("message-notify")...) }
 
 func run() int {
 	cfg := config.Load()
@@ -64,6 +64,7 @@ func run() int {
 		log.Printf("message-notify: ses: %v", err)
 		return 1
 	}
+	ses = ses.WithSendingBreaker()
 	queries := db.New(pool)
 	nc := messaging.NotifierConfig{
 		Email:     ses,

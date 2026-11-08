@@ -1,0 +1,78 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/mokevnin/easement/main/easement.schema.json
+# The boundaries of the SvelteKit app, checked by easement: `easement check` in this
+# directory, a step of the `web-work` CI job. A dependency between two components that is
+# not listed here fails; add it here, with its reason, when it is meant. The Go backend
+# keeps its own guard (internal/platform/arch/layering), so this file covers web/ only.
+# There is no baseline: every rule here holds today. A violation is fixed, or argued into
+# these rules with its reason; it is never recorded as known debt (`easement baseline`).
+version: 1
+tests: auto
+
+components:
+  routes: { in: src/routes }
+  hooks: { in: "src/*.ts" }
+  server:
+    in: src/lib/server
+    allow_importers: [routes, hooks, tests]
+  generated: { in: src/lib/generated }
+  components: { in: src/lib/components }
+  # The composite views that embed the assistant, carved out of src/lib/components by
+  # their longer patterns. Everything else there is a building block the assistant itself
+  # draws (JobRow, PlanLimitLink), so a component that starts embedding the assistant is
+  # listed here on purpose rather than closing a loop.
+  views:
+    in:
+      - src/lib/components/AnalyticsView.svelte
+      - src/lib/components/CompanyView.svelte
+      - src/lib/components/ExperienceAssistantPanel.svelte
+      - src/lib/components/ExperienceBankView.svelte
+      - src/lib/components/HomeLandingView.svelte
+      - src/lib/components/JobBoard.svelte
+      - src/lib/components/JobDrawer.svelte
+      - src/lib/components/JobsView.svelte
+      - src/lib/components/SupportPanel.svelte
+      - src/lib/components/SwipeDeck.svelte
+      - src/lib/components/filters/AiFilterButton.svelte
+      - src/lib/components/filters/AiFilterDialog.svelte
+      - src/lib/components/filters/FilterModal.svelte
+  assistant: { in: src/lib/assistant }
+  tailor: { in: src/lib/tailor }
+  actions: { in: src/lib/actions }
+  i18n: { in: src/lib/i18n }
+  ui: { in: src/lib/ui }
+  data: { in: src/lib/data }
+  docs: { in: src/lib/docs }
+  fixtures: { in: src/lib/fixtures }
+  lib: { in: src/lib }
+
+rules:
+  routes:
+    may_depend_on: [hooks, server, generated, views, components, assistant, tailor, actions, i18n, ui, docs, lib]
+  hooks: { may_depend_on: [i18n, lib] }
+  server:
+    may_depend_on: [lib, generated]
+    because: lib/server runs only on the server, so only routes and hooks import it; code a component needs too belongs in src/lib
+  tailor: { may_depend_on: [views, assistant, components, actions, generated, i18n, ui, lib] }
+  views: { may_depend_on: [assistant, components, actions, generated, i18n, ui, lib] }
+  assistant:
+    may_depend_on: [components, generated, i18n, ui, lib]
+    because: the assistant draws building blocks from src/lib/components and never embeds a view; the views above it embed the assistant
+  components:
+    may_depend_on: [actions, generated, i18n, ui, lib]
+    because: a building block never reaches into a route, lib/server, the assistant, a view or the tailor workspace, which are built from it; a component that embeds the assistant is listed under views
+  docs: { may_depend_on: [lib] }
+  i18n:
+    may_depend_on: []
+    because: translations sit under src/lib and every component, so they import none of them
+  lib:
+    may_depend_on: [generated, i18n]
+    because: src/lib is shared by every page and component; code that needs a component belongs in src/lib/components
+  generated:
+    may_depend_on: []
+    because: generated from the API contract, so it stays a leaf; regenerate it rather than edit it
+
+no_cycles: true
+
+uncovered_ok:
+  - name: ["scripts/**", "e2e/**", "vitest-stubs/**", "static/sw.js", "*.config.ts", "*.config.js", "vitest.setup.ts", "svelte.options.ts", "cluster.js"]
+    because: build scripts, end-to-end tests, test stubs and tool configs sit outside the app's tsconfig and outside its architecture

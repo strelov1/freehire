@@ -429,7 +429,7 @@ func NewFormClientFromEnv() (client *Client, proxied bool, err error) {
 		return nil, false, err
 	}
 	if rotating != nil {
-		return NewProxyClient(rotating), true, nil
+		return NewRotatingProxyClient(rotating), true, nil
 	}
 	raw := strings.TrimSpace(os.Getenv("SOURCES_PROXY_URL"))
 	if raw == "" {

@@ -1,4 +1,4 @@
-import type { Locale } from './locale';
+import type { Locale } from './i18n/locale';
 
 /** User-facing message for a caught value: the Error's message, else the fallback. */
 export function errorMessage(e: unknown, fallback: string): string {

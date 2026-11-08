@@ -128,7 +128,7 @@ func (s *Service) GetSettings(ctx context.Context, userID int64) (Settings, erro
 }
 
 // UpdateSettings validates and stores the caller's rule. An enabled rule must have
-// at least one valid channel. DigestFrequency (empty reads as "interval") must be
+// at least one valid channel. DigestFrequency (empty reads as "daily" at the default time) must be
 // one of notify.Frequency*; "daily" requires a DigestTime, and "interval" an
 // interval within notify's bounds (zero reads as the default). QuietHoursStart/End must be
 // set together or not at all — a one-sided window has no meaning.
@@ -143,7 +143,11 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 	}
 	switch in.DigestFrequency {
 	case "":
-		in.DigestFrequency = notify.FrequencyInterval
+		in.DigestFrequency = notify.FrequencyDaily
+		if in.DigestTime == nil {
+			t := notify.DefaultDigestTime
+			in.DigestTime = &t
+		}
 	case notify.FrequencyInstant, notify.FrequencyDaily, notify.FrequencyInterval:
 	default:
 		return Settings{}, ErrInvalidFrequency

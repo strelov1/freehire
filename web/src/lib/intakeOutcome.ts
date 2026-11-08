@@ -10,7 +10,7 @@
 // only two of the five outcomes carry one and a sentence is not a link.
 
 import { defineMessages, t } from './i18n/t';
-import type { Locale } from './locale';
+import type { Locale } from './i18n/locale';
 import type { ResolvedLink } from './types';
 
 // One of the two surfaces is the public search box, where the locale is always `en`

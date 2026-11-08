@@ -49,7 +49,7 @@ func main() {
 		worker.Main(sendOne)
 		return
 	}
-	worker.Main(run)
+	worker.Main(run, emailnotify.HoldKeys("onboarding")...)
 }
 
 // sendOne delivers a single mail for inspection. It shares the transport and the
@@ -109,6 +109,7 @@ func run() int {
 		log.Printf("onboarding: ses: %v", err)
 		return 1
 	}
+	ses = ses.WithSendingBreaker()
 
 	mailer := onboarding.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
 	runner := onboarding.New(db.New(pool), mailer, onboarding.DefaultConfig())

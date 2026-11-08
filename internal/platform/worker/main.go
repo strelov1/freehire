@@ -16,11 +16,16 @@ import (
 // Main runs a worker and exits only after its final outcome has been reported.
 // Reporting lives outside run so Bootstrap's deferred cleanup cannot shut it
 // down before the worker's terminal error or panic is known.
-func Main(run func() int) {
-	os.Exit(runReported(run))
+//
+// extraPauseKeys are pause keys, beyond the fleet's and the binary's own, that
+// also hold this worker. Main knows nothing about what they mean: a block that
+// classifies its workers (outbound mail) names the keys, and this package only
+// checks them.
+func Main(run func() int, extraPauseKeys ...string) {
+	os.Exit(runReported(run, extraPauseKeys))
 }
 
-func runReported(run func() int) int {
+func runReported(run func() int, extraPauseKeys []string) int {
 	shutdown, err := observability.InitLogs("freehire-" + workerJob())
 	if err != nil {
 		log.Printf("exception reporting: %v", err)
@@ -28,7 +33,7 @@ func runReported(run func() int) int {
 	}
 	defer shutdown()
 	defer capturePanic()
-	code := runOrPause(run)
+	code := runOrPause(run, extraPauseKeys)
 	if code != 0 {
 		observability.CaptureError(context.Background(), fmt.Errorf("worker %s exited with status %d", workerJob(), code), attribute.String("worker.name", workerJob()), attribute.Int("process.exit.code", code))
 	}
@@ -42,8 +47,8 @@ func runReported(run func() int) int {
 // by returning an error and every worker answers an error with a non-zero exit —
 // a pause is an operator's decision, not a failure, and must not page anyone.
 // Refusing here also means a held run costs one Redis GET: the database pool is never opened.
-func runOrPause(run func() int) int {
-	if Paused(context.Background(), config.Load().RedisURL, workerJob()) {
+func runOrPause(run func() int, extraPauseKeys []string) int {
+	if Paused(context.Background(), config.Load().RedisURL, workerJob(), extraPauseKeys...) {
 		log.Printf("worker: %s is paused, skipping this run", workerJob())
 		writePausedMetrics()
 		return 0

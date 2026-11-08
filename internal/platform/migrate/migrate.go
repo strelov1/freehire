@@ -62,6 +62,9 @@ const noTxMarker = "migrate: no-transaction"
 //	                                   company-relation approval at a time, so two decisions
 //	                                   checked against the same registry cannot both pass and
 //	                                   together make the chain neither would alone
+//	0x66687470  internal/platform/testdb — "fhtp", a blocking pg_advisory_lock on the TEST
+//	                                   server only; one integration-test binary builds the
+//	                                   shared template while the others wait for it
 //	hashtextextended('assistant_session_create:<user id>')
 //	            internal/api/handler — a blocking pg_advisory_xact_lock per account; one
 //	                                   support-session create at a time, so reusing the
@@ -389,6 +392,13 @@ func (r *Runner) Run(ctx context.Context, migs []Migration, forceBaseline bool) 
 		}
 		applied = append(applied, m.Version)
 		log.Printf("migrate: applied %s", m.Version)
+		// initdb runs each file in a session of its own, and the files rely on it: 0001 is a
+		// schema dump that empties search_path for the rest of its session, so a fresh
+		// database failed on the next file. DISCARD TEMP drops what a file left in pg_temp
+		// (DISCARD ALL would also release the advisory lock). RESET ALL drops lock_timeout too.
+		if _, err := conn.Exec(ctx, "DISCARD TEMP; RESET ALL; SET lock_timeout = '"+lockTimeout+"'"); err != nil {
+			return baselined, applied, fmt.Errorf("reset session after %s: %w", m.Version, err)
+		}
 	}
 	return baselined, applied, nil
 }

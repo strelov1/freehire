@@ -358,9 +358,20 @@ Bot API — check which one you're in.
   were never marked notified — and only while they are fresh: an outage longer than the
   freshness window loses what it held back, by design.
 
+## Pausing outbound mail
+
+Outbound mail workers can be held by class (transactional, engagement, lifecycle) or all at
+once with one Redis key, and a worker stops sending for the rest of its run once SES refuses the
+whole account. The keys, the class table, the fail-open note, the resume order
+(transactional, then engagement, then lifecycle) and the breaker are in
+[internal/platform/worker/AGENTS.md](../../internal/platform/worker/AGENTS.md#holding-outbound-mail-by-class).
+A hold sends nothing and never bypasses unsubscribe or consent rules; the API server's own
+mail is never held.
+
 ## Engagement tracking
 
-Campaigns (`cmd/broadcast`) and the saved-search digest (`cmd/notify`) can be measured; nothing
+Campaigns (`cmd/broadcast`) and the saved-search digest (`cmd/notify`) can be measured for delivery
+and clicks; nothing
 else can. A message is tracked only when it names a `Campaign` and its client was given a
 configuration set (`WithEngagementTracking`, from `SES_ENGAGEMENT_CONFIGURATION_SET`), so account,
 security and application mail cannot pick up an open pixel by accident.
@@ -374,8 +385,10 @@ security and application mail cannot pick up an open pixel by accident.
 - **A set SES does not know is caught before sending.** `CheckEngagementTracking` needs
   `ses:GetConfigurationSet`. `cmd/broadcast` refuses to start, because recorded failures would
   spend the audience; `cmd/notify` falls back to untracked mail, because a digest is retried.
-- **Opens overcount.** Apple Mail Privacy Protection and security scanners fetch the pixel without a
-  person reading anything, typically soon after delivery. Judge send times by clicks.
+- **Clicks only, no open pixel.** The configuration set publishes no Open event, which is what
+  keeps SES from adding the pixel. Opens would overcount anyway: Apple Mail Privacy Protection and
+  security scanners fetch it without a person reading anything. The owner chose this on 2026-11-05.
+  Scanners can follow links too, so a click within seconds of delivery deserves suspicion.
 - **Comparing two send times:** run `./broadcast -campaign <name> -half a` at one time and
   `-half b` at the other. The sides are hashed with the campaign name and stable across runs. Then:
 

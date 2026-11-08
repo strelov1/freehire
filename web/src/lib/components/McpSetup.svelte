@@ -46,7 +46,7 @@
       steps: [
         'Open Settings, then Connectors.',
         'Choose Add custom connector.',
-        'Name it freehire, paste the address, and choose Add.',
+        'Name it freehire, paste the address, and choose Add, then sign in to freehire when asked.',
         'Start a new chat, turn the freehire connector on, and ask a job question.',
       ],
     },
@@ -78,7 +78,7 @@
       steps: [
         'Open Connect apps in the sidebar.',
         'Add a custom app, name it freehire, and paste the address.',
-        'If Grok Bot asks you to authorize, finish the sign-in in your browser.',
+        'Grok Bot asks you to sign in to freehire; finish it in your browser.',
         'In a chat, type @ and pick freehire, then ask a job question.',
       ],
     },

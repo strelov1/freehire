@@ -19,7 +19,9 @@ func (h *assistantHandlers) problemMCPTools() []assistant.Tool {
 			"Do not include conversations, CV contents, credentials, tokens, personal contact details, or URL query strings. " +
 			"A successful receipt means the report was recorded for review; it does not mean the issue is fixed or that a reply is guaranteed. " +
 			"Repeated matching open reports for this account increase request_count. " +
-			"Use only for an observed problem, and never report a failure of report_problem itself recursively.",
+			"Use only for a problem met while doing what the user asked, and for a missing capability only when the user asked for it. " +
+			"Never file a test, sample or demonstration report: this tool needs no trial run. " +
+			"Never report a failure of report_problem itself recursively.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

@@ -253,8 +253,8 @@ type Settings struct {
 	// sender address (e.g. notifications@freehire.me).
 	AWSRegion       string
 	NotifyEmailFrom string
-	// SESEngagementConfigurationSet is the SES configuration set publishing opens, clicks
-	// and delivery outcomes for campaigns and digests. Empty tracks nothing.
+	// SESEngagementConfigurationSet is the SES configuration set publishing clicks and
+	// delivery outcomes for campaigns and digests. Empty tracks nothing.
 	SESEngagementConfigurationSet string
 
 	// DiscordDigestWebhookURL is the incoming-webhook URL cmd/social-digest posts the

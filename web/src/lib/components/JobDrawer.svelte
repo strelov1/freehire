@@ -5,7 +5,7 @@
   import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
   import { Trash2, X, ExternalLink, Send, SquarePen, Check } from '@lucide/svelte';
   import { askConfirmTailor, confirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
-  import { tailorHref } from '#lib/tailor/tailorHref.js';
+  import { tailorHref } from '#lib/tailorHref.js';
   import { groupedStages, humanizeStage } from '#lib/stages.js';
   import { canFollowUp } from '#lib/followup.js';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '#lib/board.js';

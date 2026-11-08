@@ -3,6 +3,8 @@ package mcpapp
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -58,6 +60,9 @@ func TestMixedAuthenticationBeforeAccountExecution(t *testing.T) {
 			if err != nil || public.IsError {
 				t.Fatalf("public call: %v %v", public, err)
 			}
+			if account, _ := public.Meta[accountMetaKey].(map[string]any); account["signed_in"] != (userID != 0) {
+				t.Fatalf("widget account flag=%v want signed_in=%v", public.Meta, userID != 0)
+			}
 			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "my_jobs", Arguments: map[string]any{}})
 			if err != nil {
 				t.Fatal(err)
@@ -72,6 +77,45 @@ func TestMixedAuthenticationBeforeAccountExecution(t *testing.T) {
 				}
 			} else if result.IsError || calls != 1 {
 				t.Fatalf("authenticated call: %v calls=%d", result, calls)
+			}
+		})
+	}
+}
+
+// Hosts other than ChatGPT open sign-in only on HTTP 401; ChatGPT reads the in-band result.
+func TestMixedAnonymousPersonalCallStatus(t *testing.T) {
+	tools := []assistant.Tool{{Name: "my_jobs", Schema: map[string]any{"type": "object"}, Run: func(context.Context, int64, json.RawMessage) (any, error) {
+		t.Fatal("personal tool ran anonymously")
+		return nil, nil
+	}}}
+	handler := MixedHandler(tools, testOrigin, readerThatFinds(t))
+	cases := []struct {
+		name, agent, tool string
+		want              int
+	}{
+		{"other host personal", "codex-mcp-client/0.167.0", "my_jobs", http.StatusUnauthorized},
+		{"chatgpt personal", "openai-mcp/1.0.0", "my_jobs", http.StatusOK},
+		{"other host public", "codex-mcp-client/0.167.0", "search_jobs", http.StatusOK},
+		// These hosts offer sign-in only while a connector is added, so even a public call asks.
+		{"grok public", "grok-connectors-manager/0.1.0", "search_jobs", http.StatusUnauthorized},
+		{"claude.ai public", "Claude-User", "search_jobs", http.StatusUnauthorized},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + tc.tool + `","arguments":{"query":"Go"}}}`
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/mcp", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept", "application/json, text/event-stream")
+			req.Header.Set("MCP-Protocol-Version", "2025-06-18")
+			req.Header.Set("User-Agent", tc.agent)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("status=%d want %d: %s", rec.Code, tc.want, rec.Body)
+			}
+			challenge := rec.Header().Get("WWW-Authenticate")
+			if tc.want == http.StatusUnauthorized && !strings.Contains(challenge, MixedResourceMetadataPath) {
+				t.Fatalf("challenge=%q", challenge)
 			}
 		})
 	}

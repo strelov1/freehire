@@ -8,7 +8,7 @@
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import type { SaveStatus } from '#lib/saveStatus.svelte.js';
-  import { messages } from './SaveStatus.messages';
+  import { messages } from '#lib/saveStatus.messages.js';
 
   let { status }: { status: SaveStatus } = $props();
 

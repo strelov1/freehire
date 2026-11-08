@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -71,7 +72,7 @@ type Message struct {
 	Attachments []Attachment
 
 	// Campaign names the letter for engagement tracking. Empty, as on anything a person
-	// is waiting for, the mail goes out with no open pixel and no rewritten links. Set
+	// is waiting for, the mail goes out with no rewritten links. Set
 	// only on campaigns and digests. SES restricts tag values to ASCII letters, digits,
 	// '_', '-' and '.'.
 	Campaign string
@@ -117,13 +118,19 @@ type Client struct {
 	// trackingSet is the SES configuration set that publishes engagement events. Empty
 	// tracks nothing, whatever a message's Campaign says.
 	trackingSet string
+	// breaker is nil unless WithSendingBreaker was called.
+	breaker *breaker
+	// relay, when SMTP_URL is set, carries every message instead of SES.
+	relay *smtpRelay
 }
 
 // WithEngagementTracking returns the Client with the SES configuration set that
-// publishes opens, clicks, deliveries, bounces and complaints. Only the workers sending
+// publishes clicks, deliveries, bounces and complaints. Only the workers sending
 // campaigns and digests call it; every other worker's client cannot track by construction.
 func (c *Client) WithEngagementTracking(configurationSet string) *Client {
-	return &Client{ses: c.ses, trackingSet: configurationSet}
+	out := *c
+	out.trackingSet = configurationSet
+	return &out
 }
 
 // trackingCheckTimeout bounds CheckEngagementTracking: the workers calling it have no deadline
@@ -135,7 +142,7 @@ const trackingCheckTimeout = 10 * time.Second
 // whole audience, so a sender checks once before its first letter. Without a set there is
 // nothing to check.
 func (c *Client) CheckEngagementTracking(ctx context.Context) error {
-	if c.trackingSet == "" {
+	if c.trackingSet == "" || c.relay != nil {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, trackingCheckTimeout)
@@ -151,14 +158,23 @@ func (c *Client) CheckEngagementTracking(ctx context.Context) error {
 }
 
 // NewClient builds a Client from AWS config resolved via the default chain
-// (SSO / IAM role / env) — credentials never come from app config, matching the
+// (SSO / IAM role / env). With SMTP_URL set it sends through that relay instead
+// and SES is never called — credentials never come from app config, matching the
 // apply service's inbound SES adapter.
 func NewClient(ctx context.Context, region string) (*Client, error) {
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 	if err != nil {
 		return nil, fmt.Errorf("emailnotify: aws config: %w", err)
 	}
-	return &Client{ses: sesv2.NewFromConfig(cfg)}, nil
+	c := &Client{ses: sesv2.NewFromConfig(cfg)}
+	// Read here rather than threaded through config so every worker that builds a
+	// Client follows the switch without a change of its own.
+	if raw := os.Getenv("SMTP_URL"); raw != "" {
+		if c.relay, err = parseSMTPURL(raw); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
 }
 
 // Send delivers one message. A send error is returned so the caller (a delivery
@@ -167,12 +183,31 @@ func (c *Client) Send(ctx context.Context, m Message) error {
 	if err := m.validate(); err != nil {
 		return err
 	}
+	if c.breaker != nil && c.breaker.tripped.Load() {
+		return ErrSendingPaused
+	}
+	if c.relay != nil {
+		raw, err := buildRawMessage(m)
+		if err != nil {
+			return err
+		}
+		err = c.relay.send(ctx, m.From, m.To, raw)
+		if c.breaker != nil && errors.Is(err, errRelayDown) {
+			c.breaker.tripped.Store(true)
+			return fmt.Errorf("%w: %w", ErrSendingPaused, err)
+		}
+		return err
+	}
 	in, err := c.input(m)
 	if err != nil {
 		return err
 	}
 	c.track(in, m)
 	if _, err := c.ses.SendEmail(ctx, in); err != nil {
+		if c.breaker != nil && accountRefused(err) {
+			c.breaker.tripped.Store(true)
+			return fmt.Errorf("emailnotify: ses send: %w: %w", ErrSendingPaused, err)
+		}
 		return fmt.Errorf("emailnotify: ses send to %s: %w", m.To, err)
 	}
 	return nil

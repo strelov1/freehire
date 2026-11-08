@@ -2,8 +2,17 @@
 
 The canonical MCP at `/api/v1/mcp` combines anonymous catalogue reads with
 OAuth account tools (`mixed.go`). Anonymous and OAuth sessions discover the same
-38 tools; personal calls without authentication return `mcp/www_authenticate`
-before business code runs. Per-tool `_meta.securitySchemes` declares access.
+38 tools; personal calls without authentication never reach business code.
+ChatGPT (User-Agent `openai-mcp`) gets an error result carrying `mcp/www_authenticate`,
+the in-band challenge its Apps SDK opens sign-in from. Every other host gets HTTP 401 with
+`WWW-Authenticate`, because Grok and Claude.ai ignore the in-band challenge and open sign-in
+only on the specification's 401 — an anonymous connection there otherwise never sees a way to
+sign in. Grok (`grok-connectors-manager`) and Claude.ai (`Claude-User`) go further: they offer
+sign-in only while a connector is added, and a 401 later in a conversation opens nothing, so
+an anonymous request from them is refused outright (`signsInOnlyAtConnect`) and those two
+hosts have no anonymous search. `search_jobs`/`get_job` results carry `_meta["freehire.me/account"].signed_in` so the
+widget shows one Connect panel instead of per-card buttons that would fail.
+Per-tool `_meta.securitySchemes` declares access.
 
 The eleven catalogue tools retain their public schemas, previews and widgets.
 The strict bearer-only `/api/v1/mcp/account` alias (`account.go`) retains its
@@ -140,7 +149,13 @@ OJCP surface uses). A search result carries only `first_seen_at`.
 - **`check_jobs_open`** answers open / closed / not_found for up to `maxOpenChecks` (50)
   slugs in one Postgres read (`ListJobLivenessBySlugs`). It reports a CLOSED posting as closed
   — that is the point of the tool — so it does not reuse `publishedToAgents`, which refuses
-  closed postings; private and duplicate postings still answer not_found, as on `get_job`.
+  closed postings; private and duplicate postings still answer not_found.
+- **`get_job`** (here and on the account server) loads through `agentJobBySlug`, NOT
+  `publishedToAgents`: search reads an index that trails the database, so it hands out slugs
+  that closed or became duplicates since the push, and a not_found for a slug the previous
+  turn returned is what four agent reports in one day were about (2026-11-07). A closed
+  posting is served with `closed_at`, a duplicate as its canonical posting (or as itself when
+  that one is not public); only a private posting is a miss.
   Slugs past the cap are named back in `unchecked`, never dropped. A failed lookup is an error,
   never a page of not_found.
 - **`search` / `fetch`** exist for ChatGPT's deep-research and company-knowledge connectors,
