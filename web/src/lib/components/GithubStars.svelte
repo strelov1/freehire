@@ -27,6 +27,9 @@
   // widens on arrival, which pushes the header's right-hand group and drags the
   // `flex-1` search box between them sideways, on every page load.
   const label = $derived(count != null ? formatStars(count) : '');
+
+  // The accessible name must contain the visible text (WCAG 2.5.3), the count included.
+  const name = $derived(label ? `freehire on GitHub, ${label} stars` : 'freehire on GitHub');
 </script>
 
 <!-- eslint-disable svelte/no-navigation-without-resolve -- external GitHub URL, not an internal route -->
@@ -35,7 +38,7 @@
   target="_blank"
   rel="noreferrer"
   role={variant === 'row' ? 'menuitem' : undefined}
-  aria-label="freehire on GitHub"
+  aria-label={name}
   class={cn(
     variant === 'inline' &&
       'inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
