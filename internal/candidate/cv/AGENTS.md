@@ -13,6 +13,7 @@ registry is `templates []TemplateInfo` in `template.go` (id, label, style, `phot
 generation.
 
 **Adding a template:**
+
 1. Add `templates/<id>.typ` — a self-contained file reading the CV from `json("data.json")`
    (helpers `s`/`arr`/`daterange` are duplicated per file; the renderer only stages
    `template.typ` + `data.json` + fonts, so Typst `#import` of a shared module won't resolve).

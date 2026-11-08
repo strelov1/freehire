@@ -1,12 +1,14 @@
 # The in-app assistant
 
 ## Scope
+
 The `internal/ai/assistant` package — the agent's turn loop, its tool contract, the
 session/transcript store, and the prompts each preset runs under. The tools
 themselves live in `internal/api/handler` (`assistant_*_tools.go`), because they are
 built from the same services the HTTP handlers use.
 
 ## Always true
+
 - **The agent runs in this process.** There is no external runtime, no shell, and
   no credential: a tool receives the session owner's `userID` and calls a Go
   service directly. Anything a tool must not reach is a tool that does not exist.
@@ -70,7 +72,7 @@ built from the same services the HTTP handlers use.
 
 ## How it works
 
-```
+```text
 POST /api/v1/assistant/sessions/:id/messages
   └─ handler: owner check → registry for the session's preset → SSE writer
        └─ Runner.Run
@@ -358,6 +360,7 @@ to `OnText`, reasoning to `OnThinking`. The chat renders them apart, so reasonin
 is never mistaken for the answer.
 
 ## Adding a tool
+
 1. Write it in `internal/api/handler/assistant_*_tools.go` as an `assistant.Tool`:
    a name, a one-paragraph description the model reads, a JSON schema, and a
    `Run` that decodes with `assistant.DecodeArgs` and calls the same service the
@@ -436,6 +439,7 @@ text beside its vacancy so a reader judges the rest. See
 asserts it: swapping both would measure two models and attribute the result to one.
 
 ## Limitations
+
 - **Bounded by the allowance, not by spend.** A turn is attributed to the account that ran
   it and its cost is readable (`GET /me/usage`, and per-feature on the gateway). What
   refuses one is `internal/ai/plan`: `assistant_meter.go` consumes `plan.FeatureAssistant`

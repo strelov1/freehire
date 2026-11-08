@@ -1,9 +1,11 @@
 # Per-user job tracking conventions
 
 ## Scope
+
 Per-user job interactions: view/apply/save/track endpoints backed by the `user_jobs` table.
 
 ## Always true
+
 - **One row per (user, job).** The composite PK `PRIMARY KEY (user_id, job_id)` is the dedup key — the invariant is "at most one interaction per (user, job)".
 - **All writes are idempotent upserts** behind `RequireAuthOrKey` (session cookie or API key) and addressed by the job's public `:slug` (resolved to internal id before the write).
 - **`stage` is a controlled vocabulary** (`userjob.Stages`/`ValidStage` in `internal/application/userjob/stages.go`): preparing/applied/screening/responded/interview/offer/accepted/rejected/withdrawn/expired. The SPA mirrors it; an unknown stage is a 400 before any DB touch.
@@ -54,4 +56,5 @@ The `/me/tracking` read joins the caller's interactions with the jobs they touch
 **"You already applied to this company" reads `applications`, not `user_jobs`** (`ListAppliedCompanySlugs`, served at `GET /me/tracking/applied-companies` and behind `/jobs/search?hide_applied_companies=true`). Three rules, each from a measurement: only `applied_at IS NOT NULL` counts (a `preparing` row asserts nothing about the employer); the slug is the posting's CURRENT `company_slug` while it exists and the application's snapshot only once it is gone, because the snapshot is frozen at apply time and the slug rule has moved under it (383 of 11,856 applications on 2026-10-31); and either is resolved through `company_slug_aliases`. It reads the newest 1000 applications before the posting join — unbounded, the heaviest account took 10.7s cold. The SPA compares the set client-side (`appliedCompanies.svelte.ts`), like the viewed and saved sets; the search exclusion is a per-person param, not search vocabulary, so a saved search carrying it narrows nothing.
 
 ## Limitations
+
 - No bulk operations (e.g. "mark all viewed"); each interaction is an individual per-(user, job) upsert.

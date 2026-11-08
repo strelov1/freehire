@@ -1,6 +1,7 @@
 # OJCP projection conventions
 
 ## Scope
+
 Projecting this catalogue into the wire shapes of the **Open Job Context Protocol** (OJCP,
 draft v0.1) — the standard AI agents read job data through. This package is the projection
 and the manifest; the two transports that publish it live elsewhere:

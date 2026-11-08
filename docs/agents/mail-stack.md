@@ -6,7 +6,7 @@ how they compose and where the traps are.
 
 ## The pipeline
 
-```
+```text
                  ┌── Gmail OAuth ──→ internal/application/gmailsync ──┐
 inbound mail ────┤                                        ├──→ emails table
                  └── SES→S3→SQS ──→ internal/application/mailingest ──┘    (source = gmail|hosted)

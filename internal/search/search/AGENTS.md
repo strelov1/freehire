@@ -29,7 +29,6 @@ HNSW index were dropped by migrations `0228` and `0229` (#4088).
   creating skeletons. Private/missing rows still require physical removal; a full rebuild
   omits closed/duplicate rows to reclaim retained storage. Before rolling back readers,
   physically remove marked documents and await completion or the old filter exposes them.
-
 - **A job whose category is unresolved by both the title dictionary and the LLM never
   enters the index.** `search.CategoryUnresolved` (`document.go`) reports true when
   `jobs.category` is empty (`internal/dict/classify` found nothing in the title) AND the raw

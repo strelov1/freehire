@@ -1,11 +1,13 @@
 # Structured résumé extraction conventions
 
 ## Scope
+
 Best-effort, read-only LLM parse of the stored user CV into a typed `Structured` shape. Extracted in the background on every CV upload.
 
 **It no longer owns work experience.** Since the experience-bank change the parse also feeds `internal/candidate/experience`, which is the durable home of what the candidate has done; this package keeps the sections that have no accumulation problem — contacts, summary, education, languages, links, the total-years estimate. The staleness rule below governs those and only those.
 
 ## Always true
+
 - **Derived in the background on every upload** (both `PutResume` and `ExtractResumeProfile`), both through `deriveResumeArtifacts` so the two paths can't drift.
 - **Staleness governs the sections this package still owns, and NOT the work history.** Experience is imported into the bank, which is additive and unstamped: a pending extraction, a superseded structure or a deleted résumé must not hide banked experience. Before the bank, a stale structure took the whole fit analysis with it.
 - **Staleness is keyed on upload time ALONE, not the model stamp.** A superseded structure reads as absent (self-healing on the next extract), the same stamp-and-compare discipline as the matchanalysis cache.
@@ -45,5 +47,6 @@ The third surface is `visibility.go`'s `Anonymous()`/`Public()` (the talent-netw
 **Staleness rationale for model stamp:** unlike the CV embedding (re-checked against current embedder), the structure has no reconciler that re-derives it — only a re-upload does. So gating reads on the model would hide the parsed profile forever after an `LLM_MODEL` upgrade. Serving a best-effort display-only structure from an older model is the better degradation.
 
 ## Limitations
+
 - `resume_structured_model` is provenance for a future backfill (the noted seam) — no reconciler re-derives the structure.
 - Migration `0011` must be applied to prod manually before deploy.

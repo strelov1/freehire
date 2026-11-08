@@ -1,12 +1,14 @@
 # Ghost-signal conventions
 
 ## Scope
+
 The hedged "is this posting real" verdict — `none` / `possible` / `likely` — derived from
 two tiers of evidence, plus the cross-check that stamps aggregator postings absent from
 the employer's own board. Pure classifier over scalars: no database, no clock of its own.
 The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
 
 ## Always true
+
 - **Two tiers of evidence, and the tiers are the point** (classify.go:1-13). STRUCTURAL
   criteria describe the shape of a posting — `evergreen_posting` (from
   `internal/job/jobreality`'s class) and `ats_absent` (the cross-check stamp). OUTCOME criteria
@@ -78,6 +80,7 @@ The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
   posting is already down, so there is nobody left to warn.
 
 ## Consumers
+
 - `cmd/gen-contracts` — emits `CriterionCodes` into the web contracts as
   `GHOST_CRITERION_VALUES`; the SPA's checklist is keyed off it.
 - `cmd/ghost-crosscheck` (main.go + report.go) — the worker that runs `Crosscheck` per
