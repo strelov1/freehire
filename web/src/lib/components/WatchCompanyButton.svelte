@@ -1,9 +1,13 @@
 <script lang="ts">
   import { Eye } from '@lucide/svelte';
+  import { resolve } from '$app/paths';
   import { announce } from '#lib/announce.svelte.js';
   import { ApiError, api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
+  import { notifications } from '#lib/notifications.svelte.js';
+  import { savedSearches } from '#lib/savedSearches.svelte.js';
+  import { matchedSavedSearch } from '#lib/saveSearchAlert.js';
   import { Button } from '#lib/ui/index.js';
 
   // "Watch" on a company page: put the company on the personal watchlist whose new
@@ -14,11 +18,21 @@
   let watched = $state(false);
   let busy = $state(false);
   let error = $state<string | null>(null);
+  // Set by a successful Watch click, never on load: the hint answers "where do the alerts
+  // come from?" at the moment of asking, not on every visit to a company already watched.
+  let justWatched = $state(false);
+
+  // The watchlist alert is the saved search `watchlist=true` with a channel (WatchlistAlert).
+  const alertOn = $derived.by(() => {
+    const alert = matchedSavedSearch('watchlist=true', savedSearches.items);
+    return !!alert && notifications.subscriptions.some((s) => s.saved_search_id === alert.id);
+  });
 
   $effect(() => {
     const target = slug;
     watched = false;
     error = null;
+    justWatched = false;
     if (!isAuthenticated()) return;
     let current = true;
     api
@@ -44,10 +58,15 @@
       if (watched) {
         await api.unwatchCompany(slug);
         watched = false;
+        justWatched = false;
         announce(`Stopped watching ${companyName}`);
       } else {
         await api.watchCompany(slug);
         watched = true;
+        // Loaded only now, so a company page costs nobody these two reads until they watch,
+        // and awaited so the hint does not flash for someone whose alert is already on.
+        await Promise.all([savedSearches.ensureLoaded(), notifications.ensureLoaded()]).catch(() => {});
+        justWatched = true;
         announce(`Watching ${companyName}`);
       }
     } catch (e) {
@@ -71,6 +90,15 @@
     <Eye class="size-4" aria-hidden="true" />
     <span class="hidden sm:inline">{watched ? 'Watching' : 'Watch'}</span>
   </Button>
+  {#if justWatched && !alertOn}
+    <p class="max-w-56 text-right text-xs text-muted-foreground">
+      Added to your watchlist.
+      <a href={resolve('/my/watchlist')} class="font-medium text-foreground underline underline-offset-2">
+        Turn on alerts
+      </a>
+      to hear about new jobs.
+    </p>
+  {/if}
   {#if error}
     <p class="max-w-56 text-right text-xs text-destructive">{error}</p>
   {/if}
