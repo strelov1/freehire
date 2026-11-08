@@ -226,7 +226,7 @@ it("keeps a card's deadline visible on the employer's own page", () => {
 
 it('moves the date from the rail to the meta line on touch when the card carries Apply', () => {
   const posted_at = new Date(Date.now() - 5 * 60_000).toISOString();
-  const view = render(JobRow, { job: { ...job, url: 'https://example.com/apply', closed_at: null, posted_at } });
+  const view = render(JobRow, { job: { ...job, url: 'https://example.com/apply', closed_at: undefined, posted_at } });
   const dates = [...view.container.querySelectorAll('span')].filter((s) => /min/.test(s.textContent ?? '') && s.children.length === 0);
   expect(dates.map((d) => d.className.includes('pointer-coarse:hidden'))).toContain(true);
   expect(dates.map((d) => d.className.includes('pointer-coarse:inline'))).toContain(true);
