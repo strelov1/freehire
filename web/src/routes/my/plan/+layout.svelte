@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { Coins, Gift } from '@lucide/svelte';
+  import { Gauge, Gift } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -16,7 +16,7 @@
   let { children }: { children: Snippet } = $props();
 
   const TABS = [
-    { id: 'plan', href: '/my/plan', icon: Coins },
+    { id: 'plan', href: '/my/plan', icon: Gauge },
     { id: 'invite', href: '/my/plan/invite', icon: Gift },
   ] as const;
 
@@ -29,9 +29,9 @@
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
 <div class="flex flex-col gap-6">
-  <div class="flex flex-col gap-1 max-lg:sr-only">
-    <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
-    <p class="text-sm text-muted-foreground">{s.description}</p>
+  <div class="flex flex-col gap-1">
+    <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">{s.title}</h1>
+    <p class="text-sm text-muted-foreground max-lg:sr-only">{s.description}</p>
   </div>
 
   <TabStrip {tabs} {active} label={s.tabsLabel} panelId={PANEL_ID} />

@@ -12,8 +12,8 @@ import (
 // segments required, exactly as the platform's own public URLs carry them
 // (careers.werecruit.io/<locale>/<tenant>/…). The locale is load-bearing, not cosmetic: a
 // tenant configured for only one locale answers every OTHER locale with an empty listing rather
-// than an error — verified live (see internal/ingest/sources/AGENTS.md's "werecruit traps"
-// section) — so it is kept as part of the board id rather than folded off the way Dayforce's
+// than an error — verified live (see internal/ingest/sources/providers/werecruit.md)
+// — so it is kept as part of the board id rather than folded off the way Dayforce's
 // optional culture segment is.
 //
 // The tenant's listing page embeds its WHOLE open-postings list server-side as

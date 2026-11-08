@@ -373,7 +373,7 @@
             <!-- One line per entry, the date right-aligned: a log, not a list of cards. -->
             <li class="flex items-center justify-between gap-3 px-4 py-2 text-sm">
               <span class="min-w-0 truncate">
-                <span class="font-medium">{entry.label}</span>
+                <span>{entry.label}</span>
                 {#if entry.subtitle}<span class="text-muted-foreground"> · {entry.subtitle}</span>{/if}
               </span>
               <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{fmtDate(entry.created_at)}</span>

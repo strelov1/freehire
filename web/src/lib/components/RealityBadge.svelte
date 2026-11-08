@@ -18,7 +18,13 @@
   let {
     reality,
     detailed = false,
-  }: { reality?: Reality | null; detailed?: boolean } = $props();
+    plain = false,
+  }: {
+    reality?: Reality | null;
+    detailed?: boolean;
+    /** Neutral facts as plain text (a job card's meta line); a warning keeps its pill. */
+    plain?: boolean;
+  } = $props();
 
   const badge = $derived(realityBadge(reality));
   const detail = $derived(badge?.evidence ?? '');
@@ -33,10 +39,9 @@
   <span class="inline-flex items-center gap-1.5">
     <span
       title={badge.tooltip}
-      class={cn(
-        'inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium',
-        toneClass[badge.tone],
-      )}
+      class={plain && badge.tone === 'muted'
+        ? 'text-xs font-medium text-muted-foreground'
+        : cn('inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium', toneClass[badge.tone])}
     >
       {badge.label}
     </span>

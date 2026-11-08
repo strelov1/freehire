@@ -90,9 +90,9 @@
          (WCAG 2.5.3), prefixed so a screen reader hears what the button switches. The
          negative right margin aligns the control with the content's right edge.
 
-         It is also the section's visible title below lg: each section's own heading and
-         description carry `max-lg:sr-only`, since repeating the name this button already
-         shows only pushed the content down on a phone. -->
+         Each section still shows its own heading below lg (a size smaller), and hides only
+         its description there: with the heading gone too, a phone screen had no visible
+         title at all. -->
     <!-- lg and up, Help lives in the sidebar's top row; this row held nothing else there. -->
     <div class="-mr-3 mb-3 flex items-center justify-end gap-1 lg:hidden">
       <button

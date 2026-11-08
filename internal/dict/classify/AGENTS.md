@@ -95,7 +95,7 @@ Help/service desk, desktop/end-user support, tiered desk (1st/2nd line, L1-L3), 
 
 ## German compound heads
 
-German names the role in the LAST morpheme (Kranken|pfleger, Stapler|fahrer). `german.go` holds `germanCategoryTable` and `germanSeniorityTable`: an alias `-pfleger` matches any word ending in it, one without the dash is a whole-word phrase.
+German names the role in the LAST morpheme (Kranken\|pfleger, Stapler\|fahrer). `german.go` holds `germanCategoryTable` and `germanSeniorityTable`: an alias `-pfleger` matches any word ending in it, one without the dash is a whole-word phrase.
 
 Heads resolve per WORD: a word takes the first head it ends in, so a longer veto (`-begleiter` → `categoryNone`) claims "Alltagsbegleiter" before `-leiter` reads a lead, without blanking the rest of the title. Feminine endings (`-in`, `-innen`) are folded once per word; `(m/w/d)` notices are cut first. Trainee words outrank `-leiter`/`-leitung` ("Praktikant Bauleitung" is intern). Short or ambiguous words are absent: `maler` is whole-word only ("normaler"); `MFA`/`OTA`/`PTA` mean other things in English.
 

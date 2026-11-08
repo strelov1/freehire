@@ -245,7 +245,7 @@
           aria-selected={interval === 'month'}
           aria-controls="pricing-plans"
           class="rounded-md px-4 py-1.5 text-sm font-medium {interval === 'month'
-            ? 'bg-primary text-primary-foreground'
+            ? 'bg-secondary text-foreground shadow-xs'
             : 'text-muted-foreground'}"
           onclick={() => (interval = 'month')}
         >
@@ -258,13 +258,14 @@
           aria-selected={interval === 'year'}
           aria-controls="pricing-plans"
           class="rounded-md px-4 py-1.5 text-sm font-medium {interval === 'year'
-            ? 'bg-primary text-primary-foreground'
+            ? 'bg-secondary text-foreground shadow-xs'
             : 'text-muted-foreground'}"
           onclick={() => (interval = 'year')}
         >
           Yearly
           {#if saving > 0}
-            <span class="ml-1 text-xs opacity-80">−{saving}%</span>
+            <!-- The saving is the reason to pick this tab, so it gets the accent, not a fade. -->
+            <span class="ml-1 rounded-full bg-brand-muted px-1.5 py-0.5 text-xs font-semibold text-brand-strong">−{saving}%</span>
           {/if}
         </button>
       </div>
@@ -342,8 +343,9 @@
   aria-labelledby={monthly && annual ? `pricing-tab-${interval}` : undefined}
   class="grid gap-4 sm:grid-cols-2 {ultraChosen ? 'lg:grid-cols-3' : ''}"
 >
-    <!-- Free -->
-    <section class="flex flex-col gap-4 rounded-xl border border-border p-6">
+    <!-- Free. As tall as its own content (`self-start`): stretched to Pro's height it opened a
+         hollow band between its list and its button. -->
+    <section class="flex flex-col gap-4 self-start rounded-xl border border-border p-6">
       <div class="flex flex-col gap-1">
         <h2 class="text-lg font-semibold">Free</h2>
         <p class="text-3xl font-semibold tracking-tight">$0</p>
@@ -363,7 +365,7 @@
     </section>
 
     <!-- Pro -->
-    <section class="flex flex-col gap-4 rounded-xl border border-brand/40 bg-brand/[0.03] p-6 shadow-sm ring-1 ring-brand/20">
+    <section class="flex flex-col gap-4 rounded-xl border border-brand/40 bg-brand/[0.03] p-6 shadow-sm">
       <div class="flex flex-col gap-1">
         <h2 class="text-lg font-semibold">Pro</h2>
         {#if chosen}
