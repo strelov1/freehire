@@ -10,7 +10,7 @@ export const GHOST_FAQ: FaqItem[] = [
   {
     question: 'What is a ghost job?',
     answer:
-      'A posting nobody is actually working to fill — kept up to collect CVs, to look like the company is growing, or simply because nobody took it down. Studies put it between 18% and 27% of listings; Greenhouse, which can see its own customers\' hiring pipelines, reported 18–22% per quarter with 70% of its employers having listed at least one.',
+      "A posting nobody is actually working to fill — kept up to collect CVs, to look like the company is growing, or simply because nobody took it down. Studies put it between 18% and 27% of listings; Greenhouse, which can see its own customers' hiring pipelines, reported 18–22% per quarter with 70% of its employers having listed at least one.",
   },
   {
     question: 'Does freehire say a company is lying?',

@@ -54,9 +54,7 @@ export function focusTrap(): Attachment<HTMLElement> {
     const opener = openerOf(document.activeElement);
 
     const focusables = () =>
-      Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (el) => el.getClientRects().length > 0,
-      );
+      Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.getClientRects().length > 0);
 
     // Focus the container itself (not a specific control), so we neither steal focus
     // to an arbitrary button nor fight any inner autofocus. Needs a tabindex to be

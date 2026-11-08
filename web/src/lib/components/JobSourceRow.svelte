@@ -15,11 +15,7 @@
   // seeing that source at all. Lifted out of JobView — which is 1,100 lines — because it is
   // the one part of that sidebar with its own state and its own write, and because a
   // control that edits a profile deserves a test that does not have to mount a job page.
-  let {
-    source,
-    jobUrl,
-    manuallyAdded = false,
-  }: { source: string; jobUrl: string; manuallyAdded?: boolean } = $props();
+  let { source, jobUrl, manuallyAdded = false }: { source: string; jobUrl: string; manuallyAdded?: boolean } = $props();
 
   const label = $derived(sourceLabel(source));
 
@@ -27,9 +23,7 @@
   // (userprofile.normalizeExcludedSet), and nothing guarantees a caller hands us the same
   // casing the list was written in.
   const avoided = $derived(
-    (profileStore.profile?.excluded_sources ?? []).some(
-      (s) => s.toLowerCase() === source.toLowerCase()
-    )
+    (profileStore.profile?.excluded_sources ?? []).some((s) => s.toLowerCase() === source.toLowerCase()),
   );
 
   let pending = $state(false);
@@ -100,9 +94,7 @@
       type="button"
       disabled={pending}
       onclick={() => setAvoided(!avoided)}
-      title={avoided
-        ? `Show ${label} postings again`
-        : `Hide every ${label} posting from your search and alerts`}
+      title={avoided ? `Show ${label} postings again` : `Hide every ${label} posting from your search and alerts`}
       class="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-muted-foreground/40 disabled:opacity-50"
     >
       {#if avoided}

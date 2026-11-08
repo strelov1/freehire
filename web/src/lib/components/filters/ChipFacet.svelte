@@ -20,8 +20,13 @@
     label,
     counts = null,
     options: optionsOverride,
-  }: { store: FacetStore; param: string; label: string; counts?: FacetCounts | null; options?: FacetOption[] } =
-    $props();
+  }: {
+    store: FacetStore;
+    param: string;
+    label: string;
+    counts?: FacetCounts | null;
+    options?: FacetOption[];
+  } = $props();
 
   const def = FACETS.find((d) => d.param === param);
   const excludable = def?.excludable ?? false;

@@ -27,9 +27,7 @@
   const PANEL_ID = 'notification-center-panel';
 
   const active = $derived(activeRouteTab(page.url.pathname, NOTIFICATION_TABS, 'history'));
-  const tabs = $derived(
-    NOTIFICATION_TABS.map((tab) => ({ ...tab, icon: ICONS[tab.id], href: resolve(tab.href) })),
-  );
+  const tabs = $derived(NOTIFICATION_TABS.map((tab) => ({ ...tab, icon: ICONS[tab.id], href: resolve(tab.href) })));
 </script>
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
@@ -40,8 +38,7 @@
   <div class="flex flex-col gap-1">
     <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">Notifications</h1>
     <p class="text-sm text-muted-foreground max-lg:sr-only">
-      Every new-job match, reminder and application nudge you've been sent — and what you
-      get next.
+      Every new-job match, reminder and application nudge you've been sent — and what you get next.
     </p>
   </div>
 

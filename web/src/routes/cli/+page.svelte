@@ -14,7 +14,7 @@
         { name: 'freehire', url: `${origin}/` },
         { name: 'CLI', url: canonical },
       ]),
-    ])
+    ]),
   );
 </script>
 

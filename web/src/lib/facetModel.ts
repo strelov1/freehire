@@ -376,7 +376,6 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   return p;
 }
 
-
 /** The furthest back either date bound reaches, mirroring `maxWithinDays` in
  *  internal/search/search. A century is past anything in the catalogue; the ceiling is
  *  there because Go's day-to-duration arithmetic wraps above ~106,751 days, and a bound
@@ -480,7 +479,12 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   // Read like the server reads it (trimmed, case-insensitive), so a hand-written TRUE
   // does not silently drop a modifier the server would apply.
   f.workModeRemoteAnywhere = p.get('work_mode_remote_anywhere')?.trim().toLowerCase() === 'true';
-  const list = (key: string) => p.getAll(key).flatMap((v) => v.split(',')).map((v) => v.trim()).filter(Boolean);
+  const list = (key: string) =>
+    p
+      .getAll(key)
+      .flatMap((v) => v.split(','))
+      .map((v) => v.trim())
+      .filter(Boolean);
   if (f.workModeRemoteAnywhere) {
     f.workModeRemoteRegions = list('work_mode_remote_regions');
     f.workModeRemoteCountries = list('work_mode_remote_countries');
@@ -860,7 +864,11 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
       // Every other shape keeps the plain flatten: one AND of the modes with the union
       // of the remote reach and the physical geography.
       f.facets.regions = seed([...reachRegions, ...(reloc.regions ?? [])]);
-      f.facets.countries = seed([...reachCountries, ...(base.country ? [base.country] : []), ...(reloc.countries ?? [])]);
+      f.facets.countries = seed([
+        ...reachCountries,
+        ...(base.country ? [base.country] : []),
+        ...(reloc.countries ?? []),
+      ]);
       if (loc.relocation.open) f.facets.relocation = seed(['supported', 'required']);
     }
   }

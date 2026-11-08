@@ -14,7 +14,8 @@ describe('engagement facet', () => {
     expect(def?.control).toBe('pills');
     expect(def?.excludable).toBe(true);
     expect((def?.options ?? []).map((o) => o.value)).toEqual([...ENGAGEMENT_VALUES]);
-    for (const o of def?.options ?? []) expect(o.label).toBe(ENGAGEMENT_LABELS[o.value as keyof typeof ENGAGEMENT_LABELS]);
+    for (const o of def?.options ?? [])
+      expect(o.label).toBe(ENGAGEMENT_LABELS[o.value as keyof typeof ENGAGEMENT_LABELS]);
   });
 
   it('round-trips include and exclude through the URL', () => {

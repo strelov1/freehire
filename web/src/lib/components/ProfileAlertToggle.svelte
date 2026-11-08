@@ -95,12 +95,19 @@
     {#if saveState === 'saving'}
       <span class="text-xs text-muted-foreground">Saving…</span>
     {:else if saveState === 'saved'}
-      <span class="flex items-center gap-1 text-xs text-brand-strong"><Check class="size-3.5" aria-hidden="true" /> Saved</span>
+      <span class="flex items-center gap-1 text-xs text-brand-strong"
+        ><Check class="size-3.5" aria-hidden="true" /> Saved</span
+      >
     {:else if saveState === 'error'}
       <span class="text-xs text-destructive">{saveError}</span>
     {/if}
 
-    {@render toggleSwitch(enabled, 'Notify me about jobs matching my profile', toggle, saveState === 'saving' || !ready || (!enabled && !canEnable))}
+    {@render toggleSwitch(
+      enabled,
+      'Notify me about jobs matching my profile',
+      toggle,
+      saveState === 'saving' || !ready || (!enabled && !canEnable),
+    )}
   </div>
   {#if !enabled && !canEnable}
     <p class="mt-3 text-xs text-muted-foreground">Add a role, skill or work preference to enable profile alerts.</p>

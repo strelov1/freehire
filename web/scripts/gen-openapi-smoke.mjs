@@ -40,7 +40,10 @@ async function main() {
   assert('tags come from the group title', jobsSearch.tags?.includes('Jobs'));
 
   // auth: 'none' is an explicit empty security requirement, not an omitted field.
-  assert('public endpoint has explicit empty security', Array.isArray(a.paths['/jobs'].get.security) && a.paths['/jobs'].get.security.length === 0);
+  assert(
+    'public endpoint has explicit empty security',
+    Array.isArray(a.paths['/jobs'].get.security) && a.paths['/jobs'].get.security.length === 0,
+  );
 
   // Security schemes named per auth level, all riding the same session cookie
   // where applicable, semantically distinguished by their own description.
@@ -67,13 +70,19 @@ async function main() {
     'placeholder param is not a literal parameter',
     !(oauthExchange.parameters ?? []).some((p) => p.name.startsWith('(')),
   );
-  assert('placeholder param note reaches the description', oauthExchange.description.includes('Any search facet param scopes the market'));
+  assert(
+    'placeholder param note reaches the description',
+    oauthExchange.description.includes('Any search facet param scopes the market'),
+  );
 
   // SSE endpoints get a text/event-stream response, not application/json.
   const stream = a.paths['/jobs/{slug}/match-analysis/stream']?.get;
   assert('SSE endpoint found', Boolean(stream));
   assert('SSE endpoint uses text/event-stream', 'text/event-stream' in (stream.responses?.['200']?.content ?? {}));
-  assert('SSE endpoint has no application/json response', !('application/json' in (stream.responses?.['200']?.content ?? {})));
+  assert(
+    'SSE endpoint has no application/json response',
+    !('application/json' in (stream.responses?.['200']?.content ?? {})),
+  );
 
   // A second, differently-shaped SSE endpoint: its example opens with a named
   // `event:` frame before the `data:` line, not `data:` first — the shape that
@@ -118,7 +127,9 @@ async function main() {
   // `GET /jobs` (auth: none) and `POST /jobs` (auth: moderator, "Moderator jobs"
   // group) share one path but land in opposite documents.
   const ext = renderOpenApi(partitionForAudience(spec, 'external'), filters);
-  const int = renderOpenApi(partitionForAudience(spec, 'internal'), filters, { title: 'freehire API — internal reference' });
+  const int = renderOpenApi(partitionForAudience(spec, 'internal'), filters, {
+    title: 'freehire API — internal reference',
+  });
 
   assert('external spec documents GET /jobs', Boolean(ext.paths['/jobs']?.get));
   assert('external spec omits the moderator-only POST /jobs', !ext.paths['/jobs']?.post);
@@ -126,13 +137,22 @@ async function main() {
 
   assert('internal spec documents the moderator-only POST /jobs', Boolean(int.paths['/jobs']?.post));
   assert('internal spec omits GET /jobs', !int.paths['/jobs']?.get);
-  assert('internal spec has a Moderator jobs tag', int.tags.some((t) => t.name === 'Moderator jobs'));
+  assert(
+    'internal spec has a Moderator jobs tag',
+    int.tags.some((t) => t.name === 'Moderator jobs'),
+  );
 
   assert('default title is unchanged', ext.info.title === 'freehire API');
   assert('title override reaches info.title', int.info.title === 'freehire API — internal reference');
 
-  assert('external description cross-links to the internal reference', ext.info.description.includes('freehire.me/docs/api/internal'));
-  assert('internal description cross-links back to the external reference', int.info.description.includes('freehire.me/docs/api'));
+  assert(
+    'external description cross-links to the internal reference',
+    ext.info.description.includes('freehire.me/docs/api/internal'),
+  );
+  assert(
+    'internal description cross-links back to the external reference',
+    int.info.description.includes('freehire.me/docs/api'),
+  );
 
   let failed = 0;
   for (const c of checks) {

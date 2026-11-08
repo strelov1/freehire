@@ -182,7 +182,8 @@ export function partitionForAudience(spec, audience) {
   })).filter((g) => g.endpoints.length > 0);
 
   const authIndex = spec.OVERVIEW.findIndex((o) => o.title === 'Authentication model');
-  if (authIndex === -1) throw new Error('OVERVIEW has no "Authentication model" section to splice the audience intro after');
+  if (authIndex === -1)
+    throw new Error('OVERVIEW has no "Authentication model" section to splice the audience intro after');
   const OVERVIEW = [...spec.OVERVIEW];
   OVERVIEW.splice(authIndex + 1, 0, AUDIENCE_INTRO[audience]);
 

@@ -154,9 +154,7 @@
 </script>
 
 {#if !isModerator}
-  <p class="py-12 text-center text-sm text-muted-foreground">
-    This page is for moderators only.
-  </p>
+  <p class="py-12 text-center text-sm text-muted-foreground">This page is for moderators only.</p>
 {:else}
   <div class="flex flex-col gap-6">
     <h1 class="text-2xl font-semibold tracking-tight">Moderation</h1>
@@ -194,83 +192,83 @@
       </aside>
 
       <div class="min-w-0 flex-1">
-    {#if view === 'queue'}
-      <div class="flex flex-col gap-6">
-        <p class="text-sm text-muted-foreground">
-          Submissions awaiting review. Approving mints a live vacancy; rejecting records a reason.
-        </p>
+        {#if view === 'queue'}
+          <div class="flex flex-col gap-6">
+            <p class="text-sm text-muted-foreground">
+              Submissions awaiting review. Approving mints a live vacancy; rejecting records a reason.
+            </p>
 
-        {#if actionError}
-          <p class="text-sm text-destructive">{actionError}</p>
-        {/if}
+            {#if actionError}
+              <p class="text-sm text-destructive">{actionError}</p>
+            {/if}
 
-        {#if status === 'loading'}
-          <States state="loading" />
-        {:else if status === 'error'}
-          <States state="error" message="Couldn't load the queue." />
-        {:else if queue.length === 0}
-          <States state="empty" message="Nothing to review — the queue is empty." />
+            {#if status === 'loading'}
+              <States state="loading" />
+            {:else if status === 'error'}
+              <States state="error" message="Couldn't load the queue." />
+            {:else if queue.length === 0}
+              <States state="empty" message="Nothing to review — the queue is empty." />
+            {:else}
+              <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
+                {#each queue as s (s.id)}
+                  <li class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="flex min-w-0 flex-col gap-0.5">
+                      <!-- eslint-disable svelte/no-navigation-without-resolve -- external job posting URL, not an internal route -->
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="truncate text-sm font-medium hover:underline"
+                      >
+                        <!-- eslint-enable svelte/no-navigation-without-resolve -->
+                        {s.title}
+                      </a>
+                      <span class="truncate text-xs text-muted-foreground">
+                        {s.company}{s.location ? ` · ${s.location}` : ''}{s.remote ? ' · remote' : ''}
+                      </span>
+                      <span class="truncate text-xs text-muted-foreground">
+                        by {s.submitter_email ?? 'unknown'} · {timeAgo(s.created_at, locale())}
+                      </span>
+                    </div>
+                    <div class="flex shrink-0 gap-2">
+                      <Button variant="primary" size="sm" disabled={acting !== null} onclick={() => approve(s)}>
+                        Approve
+                      </Button>
+                      <Button variant="ghost" size="sm" disabled={acting !== null} onclick={() => openReject(s)}>
+                        Reject
+                      </Button>
+                    </div>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        {:else if view === 'reports'}
+          <ReportQueue />
+        {:else if view === 'feedback'}
+          <ReportedFeedbackQueue />
+        {:else if view === 'mentors'}
+          <MentorReviewView />
+        {:else if view === 'employer'}
+          <div class="flex flex-col gap-6">
+            <p class="text-sm text-muted-foreground">
+              Company claims a work-email domain check couldn't auto-verify. Approving activates the account and, if the
+              company's website was unknown, records the confirmed domain.
+            </p>
+            <EmployerClaimsQueue />
+          </div>
+        {:else if view === 'conversations'}
+          <ConversationReportsQueue />
+        {:else if view === 'companies'}
+          <CompanyRelationsQueue />
         {:else}
-          <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
-            {#each queue as s (s.id)}
-              <li class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
-                <div class="flex min-w-0 flex-col gap-0.5">
-                  <!-- eslint-disable svelte/no-navigation-without-resolve -- external job posting URL, not an internal route -->
-                  <a
-                    href={s.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="truncate text-sm font-medium hover:underline"
-                  >
-                    <!-- eslint-enable svelte/no-navigation-without-resolve -->
-                    {s.title}
-                  </a>
-                  <span class="truncate text-xs text-muted-foreground">
-                    {s.company}{s.location ? ` · ${s.location}` : ''}{s.remote ? ' · remote' : ''}
-                  </span>
-                  <span class="truncate text-xs text-muted-foreground">
-                    by {s.submitter_email ?? 'unknown'} · {timeAgo(s.created_at, locale())}
-                  </span>
-                </div>
-                <div class="flex shrink-0 gap-2">
-                  <Button variant="primary" size="sm" disabled={acting !== null} onclick={() => approve(s)}>
-                    Approve
-                  </Button>
-                  <Button variant="ghost" size="sm" disabled={acting !== null} onclick={() => openReject(s)}>
-                    Reject
-                  </Button>
-                </div>
-              </li>
-            {/each}
-          </ul>
+          <div class="flex flex-col gap-6">
+            <p class="text-sm text-muted-foreground">
+              Applications to become a referrer. Approving lets seekers request referrals into that company.
+            </p>
+            <ReferralReviewView />
+          </div>
         {/if}
-      </div>
-    {:else if view === 'reports'}
-      <ReportQueue />
-    {:else if view === 'feedback'}
-      <ReportedFeedbackQueue />
-    {:else if view === 'mentors'}
-      <MentorReviewView />
-    {:else if view === 'employer'}
-      <div class="flex flex-col gap-6">
-        <p class="text-sm text-muted-foreground">
-          Company claims a work-email domain check couldn't auto-verify. Approving activates the
-          account and, if the company's website was unknown, records the confirmed domain.
-        </p>
-        <EmployerClaimsQueue />
-      </div>
-    {:else if view === 'conversations'}
-      <ConversationReportsQueue />
-    {:else if view === 'companies'}
-      <CompanyRelationsQueue />
-    {:else}
-      <div class="flex flex-col gap-6">
-        <p class="text-sm text-muted-foreground">
-          Applications to become a referrer. Approving lets seekers request referrals into that company.
-        </p>
-        <ReferralReviewView />
-      </div>
-    {/if}
       </div>
     </div>
   </div>

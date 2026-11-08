@@ -9,12 +9,7 @@
   import { messagingDock } from '#lib/messagingDock.svelte.js';
   import { dockToastOffsetClass } from '#lib/messagingDock.js';
   import { cn, ProviderIcon } from '#lib/ui/index.js';
-  import {
-    ownsMobileStickyCta,
-    readDismissed,
-    suppressesToast,
-    writeDismissed,
-  } from '#lib/supportToast.js';
+  import { ownsMobileStickyCta, readDismissed, suppressesToast, writeDismissed } from '#lib/supportToast.js';
 
   // A floating ask for a GitHub star, self-gating so the layout mounts it unconditionally.
   //

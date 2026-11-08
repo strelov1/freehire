@@ -129,7 +129,9 @@
 {/if}
 
 <h3 class="mb-2 mt-6 text-sm font-medium">Specialization</h3>
-<div class="mb-3 flex items-center gap-2 rounded-lg border border-input px-3 focus-within:ring-2 focus-within:ring-ring">
+<div
+  class="mb-3 flex items-center gap-2 rounded-lg border border-input px-3 focus-within:ring-2 focus-within:ring-ring"
+>
   <Search class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
   <input
     bind:value={query}

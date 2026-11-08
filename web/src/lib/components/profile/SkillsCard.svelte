@@ -40,5 +40,4 @@
 
 <div class="flex flex-col gap-4">
   <SkillsPicker {skills} onToggleSkill={toggleSkill} {status} />
-
 </div>

@@ -55,26 +55,27 @@ describe('callLine', () => {
   });
 
   it('summarises the filters when a search has no keyword', () => {
-    const line = callLine(
-      call('search_jobs', { filters: { seniority: ['senior'], regions: ['eu'] } }),
-    );
+    const line = callLine(call('search_jobs', { filters: { seniority: ['senior'], regions: ['eu'] } }));
     expect(line).toBe('Searching jobs: seniority=senior, regions=eu');
   });
 
   it('shows the slug a vacancy call addresses', () => {
-    expect(callLine(call('apply_job', { slug: 'go-dev-acme' }))).toBe(
-      'Marking as applied: go-dev-acme',
-    );
+    expect(callLine(call('apply_job', { slug: 'go-dev-acme' }))).toBe('Marking as applied: go-dev-acme');
   });
 
   // cv_edit takes a batch, so the useful detail is how much it changed at once — there are no
   // named ops any more to report.
   it('shows how many edits a CV change carried', () => {
-    expect(callLine(call('cv_edit', { ops: [{ kind: 'set', path: 'summary' }] }))).toBe(
-      'Updating your CV: 1 edit',
-    );
+    expect(callLine(call('cv_edit', { ops: [{ kind: 'set', path: 'summary' }] }))).toBe('Updating your CV: 1 edit');
     expect(
-      callLine(call('cv_edit', { ops: [{ kind: 'set', path: 'summary' }, { kind: 'remove', path: 'skills[0]' }] })),
+      callLine(
+        call('cv_edit', {
+          ops: [
+            { kind: 'set', path: 'summary' },
+            { kind: 'remove', path: 'skills[0]' },
+          ],
+        }),
+      ),
     ).toBe('Updating your CV: 2 edits');
   });
 
@@ -85,11 +86,7 @@ describe('callLine', () => {
 
 describe('toolErrorMessage', () => {
   it('unwraps the error envelope the backend sends the model', () => {
-    const failed = call(
-      'search_jobs',
-      {},
-      { isError: true, result: '{"error":"search is not available"}' },
-    );
+    const failed = call('search_jobs', {}, { isError: true, result: '{"error":"search is not available"}' });
     expect(toolErrorMessage(failed)).toBe('search is not available');
   });
 
@@ -113,9 +110,7 @@ describe('isExpandable', () => {
   });
 
   it('expands a failed call even with no arguments, so the reason is reachable', () => {
-    expect(isExpandable([call('facets', {}, { isError: true, result: '{"error":"down"}' })])).toBe(
-      true,
-    );
+    expect(isExpandable([call('facets', {}, { isError: true, result: '{"error":"down"}' })])).toBe(true);
   });
 
   it('expands any group of more than one call', () => {

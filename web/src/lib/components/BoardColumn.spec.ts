@@ -125,7 +125,15 @@ describe('BoardColumn', () => {
   // zone without being one of its children and lets the pointer through to it.
   it('lays the empty-column hint over the drop zone without catching the pointer', () => {
     render(BoardColumn, {
-      props: { id: 'applied', label: 'Applied', items: [], emptyHint: 'Drag a job here', onconsider: vi.fn(), onfinalize: vi.fn(), onopen: vi.fn() },
+      props: {
+        id: 'applied',
+        label: 'Applied',
+        items: [],
+        emptyHint: 'Drag a job here',
+        onconsider: vi.fn(),
+        onfinalize: vi.fn(),
+        onopen: vi.fn(),
+      },
     });
     const hint = screen.getByText('Drag a job here');
     const zoneEl = must(hint.parentElement?.querySelector('.overflow-y-auto'));
@@ -137,7 +145,15 @@ describe('BoardColumn', () => {
 
   it('shows no hint once the column holds a card', () => {
     render(BoardColumn, {
-      props: { id: 'applied', label: 'Applied', items: [card(1)], emptyHint: 'Drag a job here', onconsider: vi.fn(), onfinalize: vi.fn(), onopen: vi.fn() },
+      props: {
+        id: 'applied',
+        label: 'Applied',
+        items: [card(1)],
+        emptyHint: 'Drag a job here',
+        onconsider: vi.fn(),
+        onfinalize: vi.fn(),
+        onopen: vi.fn(),
+      },
     });
     expect(screen.queryByText('Drag a job here')).toBeNull();
   });

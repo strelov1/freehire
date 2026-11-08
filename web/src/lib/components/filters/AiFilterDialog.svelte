@@ -27,11 +27,7 @@
   //
   // This file is the shell and the conversation. The plan's rendering is AiSearchPlan,
   // the overview's layout AiSearchResults, the pure logic lib/aiFilter.ts.
-  let {
-    store,
-    onclose,
-    onApplied,
-  }: { store: FilterStore; onclose: () => void; onApplied?: () => void } = $props();
+  let { store, onclose, onApplied }: { store: FilterStore; onclose: () => void; onApplied?: () => void } = $props();
 
   type Stage = 'describe' | 'plan' | 'results';
   /** One line of the conversation. `plan` carries the interpretation it shows, so an
@@ -65,7 +61,10 @@
   const planTitle = $derived(plan ? titleCase(plan.query || plan.summary) : '');
 
   function titleCase(text: string) {
-    return text.replace(/\s+/g, ' ').trim().replace(/^./, (c) => c.toUpperCase());
+    return text
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^./, (c) => c.toUpperCase());
   }
 
   // The CV is read by the deterministic extractor (no model, nothing stored) and handed
@@ -158,12 +157,10 @@
   async function loadOverview(p: Interpretation): Promise<Overview> {
     catalog ??= api.catalogScale().catch(() => null);
     const params = planParams(p);
-    const facets = api
-      .facetCounts(params, { facets: ['countries', 'company_slug'] })
-      .catch((e: unknown) => {
-        if (e instanceof ApiError && e.status === 400) return api.facetCounts(params, { facets: ['countries'] });
-        throw e;
-      });
+    const facets = api.facetCounts(params, { facets: ['countries', 'company_slug'] }).catch((e: unknown) => {
+      if (e instanceof ApiError && e.status === 400) return api.facetCounts(params, { facets: ['countries'] });
+      throw e;
+    });
     const [snapshot, counts] = await Promise.all([catalog, facets]);
     return {
       catalogue: snapshot?.exact ? snapshot.unique_open_jobs : null,
@@ -275,7 +272,12 @@
   }}
   {@attach portal()}
 >
-  <button type="button" aria-label={s.closeDialog} class="absolute inset-0 animate-modal-fade bg-black/50" onclick={onclose}></button>
+  <button
+    type="button"
+    aria-label={s.closeDialog}
+    class="absolute inset-0 animate-modal-fade bg-black/50"
+    onclick={onclose}
+  ></button>
 
   <div
     role="dialog"
@@ -296,7 +298,9 @@
         {#each STAGES as id, i (id)}
           <li class="flex items-center gap-2" aria-current={i === step ? 'step' : undefined}>
             {#if i < step}
-              <span class="grid size-5 place-items-center rounded-full bg-brand text-brand-foreground"><Check class="size-3" /></span>
+              <span class="grid size-5 place-items-center rounded-full bg-brand text-brand-foreground"
+                ><Check class="size-3" /></span
+              >
             {:else}
               <span
                 class="grid size-5 place-items-center rounded-full text-xs {i === step
@@ -309,7 +313,12 @@
           </li>
         {/each}
       </ol>
-      <button type="button" aria-label={s.close} class="relative ml-auto flex text-muted-foreground after:absolute after:-inset-0.5 hover:text-foreground sm:ml-0" onclick={onclose}>
+      <button
+        type="button"
+        aria-label={s.close}
+        class="relative ml-auto flex text-muted-foreground after:absolute after:-inset-0.5 hover:text-foreground sm:ml-0"
+        onclick={onclose}
+      >
         <X class="size-5" />
       </button>
     </div>
@@ -331,8 +340,7 @@
               e.preventDefault();
               submitDescription();
             }
-          }}
-        ></textarea>
+          }}></textarea>
         <div class="mt-4 flex items-end justify-between gap-4">
           <input bind:this={fileInput} type="file" accept=".pdf,application/pdf" class="hidden" onchange={onCvPicked} />
           {#if cvFile}
@@ -352,7 +360,12 @@
                   {/if}
                 </span>
               </span>
-              <button type="button" aria-label={s.removeCv} class="relative text-muted-foreground after:absolute after:-inset-1 hover:text-foreground" onclick={clearCv}>
+              <button
+                type="button"
+                aria-label={s.removeCv}
+                class="relative text-muted-foreground after:absolute after:-inset-1 hover:text-foreground"
+                onclick={clearCv}
+              >
                 <X class="size-4" />
               </button>
             </div>
@@ -362,10 +375,15 @@
               onclick={() => fileInput?.click()}
               class="flex items-center gap-3 rounded-lg border border-dashed border-border px-3 py-2 text-left hover:bg-muted"
             >
-              <span class="grid size-8 shrink-0 place-items-center rounded-md bg-brand-muted text-brand-strong"><Plus class="size-4" /></span>
+              <span class="grid size-8 shrink-0 place-items-center rounded-md bg-brand-muted text-brand-strong"
+                ><Plus class="size-4" /></span
+              >
               <span class="text-sm">
-                <span class="font-medium">{s.addCv}</span> <span class="text-xs text-muted-foreground">{s.pdf}</span><br />
-                <span class={cvError ? 'text-destructive-strong' : 'text-brand-strong'}>{cvError ?? s.clickToUpload}</span>
+                <span class="font-medium">{s.addCv}</span> <span class="text-xs text-muted-foreground">{s.pdf}</span><br
+                />
+                <span class={cvError ? 'text-destructive-strong' : 'text-brand-strong'}
+                  >{cvError ?? s.clickToUpload}</span
+                >
               </span>
             </button>
           {/if}
@@ -403,9 +421,13 @@
         >
           {#each conversation as m, i (i)}
             {#if m.kind === 'you'}
-              <article class="max-w-4/5 self-end rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-sm text-secondary-foreground">
+              <article
+                class="max-w-4/5 self-end rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-sm text-secondary-foreground"
+              >
                 {#if m.file}
-                  <span class="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground"><FileText class="size-3.5" /> {m.file}</span>
+                  <span class="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground"
+                    ><FileText class="size-3.5" /> {m.file}</span
+                  >
                 {/if}
                 {m.text}
               </article>
@@ -435,7 +457,7 @@
           {#if busy}<ThinkingIndicator />{/if}
         </div>
         <Composer
-            attachable={false}
+          attachable={false}
           bind:this={composer}
           bind:draft={chatDraft}
           queue={[]}

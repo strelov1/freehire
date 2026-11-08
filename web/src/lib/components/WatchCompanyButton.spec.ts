@@ -16,7 +16,11 @@ vi.mock('#lib/savedSearches.svelte.js', () => ({ savedSearches: saved }));
 vi.mock('#lib/notifications.svelte.js', () => ({ notifications: notes }));
 vi.mock('#lib/api.js', () => ({
   ApiError: class extends Error {},
-  api: { isWatched: vi.fn(async () => false), watchCompany: vi.fn(async () => {}), unwatchCompany: vi.fn(async () => {}) },
+  api: {
+    isWatched: vi.fn(async () => false),
+    watchCompany: vi.fn(async () => {}),
+    unwatchCompany: vi.fn(async () => {}),
+  },
 }));
 
 describe('WatchCompanyButton', () => {
@@ -54,9 +58,7 @@ describe('WatchCompanyButton', () => {
   it('leaves the next company alone when the page moves before a Watch answers', async () => {
     let done: () => void = () => {};
     const added = { slug: 'acme', name: 'Acme', added_at: '2026-11-08T00:00:00Z' };
-    vi.mocked(api.watchCompany).mockImplementationOnce(
-      () => new Promise((r) => (done = () => r(added))),
-    );
+    vi.mocked(api.watchCompany).mockImplementationOnce(() => new Promise((r) => (done = () => r(added))));
     const view = render(WatchCompanyButton, { slug: 'acme', companyName: 'Acme' });
     await fireEvent.click(screen.getByRole('button', { name: 'Watch' }));
     await view.rerender({ slug: 'globex', companyName: 'Globex' });

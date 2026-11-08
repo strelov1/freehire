@@ -14,8 +14,13 @@ describe('captureFirstTouch', () => {
   it('keeps campaign tags, the referring host and the path — never the query string', () => {
     const store = memory();
     captureFirstTouch(
-      { href: 'https://freehire.me/jobs?utm_source=linkedin&utm_medium=social&token=secret', referrer: 'https://www.linkedin.com/feed/?x=1' },
-      store, 'freehire.me', never,
+      {
+        href: 'https://freehire.me/jobs?utm_source=linkedin&utm_medium=social&token=secret',
+        referrer: 'https://www.linkedin.com/feed/?x=1',
+      },
+      store,
+      'freehire.me',
+      never,
     );
     expect(readFirstTouch(store)).toEqual({
       landing_path: '/jobs',
@@ -31,7 +36,9 @@ describe('captureFirstTouch', () => {
     captureFirstTouch({ href: 'https://freehire.me/?utm_source=ph', referrer: '' }, store, 'freehire.me', never);
     captureFirstTouch(
       { href: 'https://freehire.me/auth/callback', referrer: 'https://accounts.google.com/' },
-      store, 'freehire.me', (r) => new URL(r).hostname === 'accounts.google.com',
+      store,
+      'freehire.me',
+      (r) => new URL(r).hostname === 'accounts.google.com',
     );
     expect(readFirstTouch(store).utm_source).toBe('ph');
   });
@@ -41,13 +48,27 @@ describe('captureFirstTouch', () => {
     captureFirstTouch({ href: 'https://freehire.me/', referrer: 'https://freehire.me/jobs' }, a, 'freehire.me', never);
     expect(readFirstTouch(a).referrer_host).toBeUndefined();
     const b = memory();
-    captureFirstTouch({ href: 'https://freehire.me/', referrer: 'https://accounts.google.com/' }, b, 'freehire.me', () => true);
+    captureFirstTouch(
+      { href: 'https://freehire.me/', referrer: 'https://accounts.google.com/' },
+      b,
+      'freehire.me',
+      () => true,
+    );
     expect(readFirstTouch(b).referrer_host).toBeUndefined();
   });
 
   it('survives a storage that throws', () => {
-    const broken = { getItem: () => { throw new Error('denied'); }, setItem: () => { throw new Error('denied'); } };
-    expect(() => captureFirstTouch({ href: 'https://freehire.me/', referrer: '' }, broken, 'freehire.me', never)).not.toThrow();
+    const broken = {
+      getItem: () => {
+        throw new Error('denied');
+      },
+      setItem: () => {
+        throw new Error('denied');
+      },
+    };
+    expect(() =>
+      captureFirstTouch({ href: 'https://freehire.me/', referrer: '' }, broken, 'freehire.me', never),
+    ).not.toThrow();
     expect(readFirstTouch(broken)).toEqual({});
   });
 });

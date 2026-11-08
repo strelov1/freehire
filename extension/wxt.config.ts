@@ -38,11 +38,7 @@ export default defineConfig({
     // Keep hidden maps beside the private build, out of store artifacts.
     exclude: ['**/*.map'],
     sourcesRoot: '..',
-    includeSources: [
-      'extension/**',
-      'extension/.env.production',
-      'design-system/**',
-    ],
+    includeSources: ['extension/**', 'extension/.env.production', 'design-system/**'],
   },
   vite: () => ({ plugins: [tailwindcss()], build: { sourcemap: 'hidden' } }),
   manifest: ({ browser }) =>

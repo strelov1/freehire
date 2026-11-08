@@ -81,27 +81,28 @@
 <div class="jobs-api">
   <section class="grid-bg relative -mx-4 px-4 pb-14 pt-12 sm:pt-16">
     <SectionLabel text="jobs api · commercial use" />
-    <h1
-      class="mt-6 max-w-3xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl"
-    >
+    <h1 class="mt-6 max-w-3xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
       Millions of open jobs, one API, one flat price.
     </h1>
     <p class="mt-7 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-      Postings read straight from employers’ own applicant-tracking systems, de-duplicated,
-      classified and linked to the company behind them. Use them in your product under a plain
-      licence — <span class="text-foreground">no per-job metering</span>, no sales call.
+      Postings read straight from employers’ own applicant-tracking systems, de-duplicated, classified and linked to the
+      company behind them. Use them in your product under a plain licence — <span class="text-foreground"
+        >no per-job metering</span
+      >, no sales call.
     </p>
     <div class="mt-9 flex flex-wrap items-center gap-3">
       <Button href="#plans" variant="primary" size="lg">See plans</Button>
       <Button href={resolve('/docs/api')} variant="outline" size="lg">API reference</Button>
     </div>
     <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted-foreground">
-      The same API answers without a key for personal and non-commercial use, so you can build
-      against it today and add a key when you ship.
+      The same API answers without a key for personal and non-commercial use, so you can build against it today and add
+      a key when you ship.
     </p>
 
     {#if figures.length > 0}
-      <dl class="mt-12 grid max-w-4xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
+      <dl
+        class="mt-12 grid max-w-4xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4"
+      >
         {#each figures as f (f.label)}
           <div class="bg-background p-5">
             <dt class="text-xs text-muted-foreground">{f.label}</dt>
@@ -129,12 +130,10 @@
 
   <section class="border-t border-border py-14 sm:py-16">
     <SectionLabel text="what you get" />
-    <h2 class="mt-6 max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">
-      A posting, already structured.
-    </h2>
+    <h2 class="mt-6 max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">A posting, already structured.</h2>
     <p class="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
-      Every field on every plan, and every filter the site’s own search has — country, region,
-      city, category, seniority, skills, work mode, salary, company, source and freshness.
+      Every field on every plan, and every filter the site’s own search has — country, region, city, category,
+      seniority, skills, work mode, salary, company, source and freshness.
     </p>
     <div class="mt-10 grid gap-8 lg:grid-cols-2">
       <dl class="flex flex-col gap-4">
@@ -163,16 +162,15 @@
       <div class="rounded-xl border border-border p-6">
         <h3 class="font-semibold text-muted-foreground">Metered by record</h3>
         <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-          The usual job-data pricing: a monthly allowance of records, and every posting you read
-          spends it. Around $100 a month buys tens of thousands of postings; mirroring a
-          catalogue of millions runs to thousands.
+          The usual job-data pricing: a monthly allowance of records, and every posting you read spends it. Around $100
+          a month buys tens of thousands of postings; mirroring a catalogue of millions runs to thousands.
         </p>
       </div>
       <div class="rounded-xl border-2 border-primary p-6">
         <h3 class="font-semibold">Flat on freehire</h3>
         <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-          One monthly price. A page returns up
-          to 100 full postings, so how much of the catalogue you read never changes the bill.
+          One monthly price. A page returns up to 100 full postings, so how much of the catalogue you read never changes
+          the bill.
         </p>
       </div>
     </div>
@@ -183,7 +181,10 @@
       <ApiPlans prices={plans.prices} />
     {:else}
       <p class="text-center text-muted-foreground">
-        Plans are on the <a href={resolve('/pricing')} class="font-medium text-foreground underline-offset-4 hover:underline">pricing page</a>.
+        Plans are on the <a
+          href={resolve('/pricing')}
+          class="font-medium text-foreground underline-offset-4 hover:underline">pricing page</a
+        >.
       </p>
     {/if}
   </section>
@@ -194,16 +195,24 @@
       What a plan lets you do, in four lines.
     </h2>
     <ul class="mt-8 flex max-w-2xl flex-col gap-3 text-muted-foreground">
-      <li><span class="text-foreground">Store</span> what you read and <span class="text-foreground">show</span> it in your own product, commercial or not.</li>
+      <li>
+        <span class="text-foreground">Store</span> what you read and <span class="text-foreground">show</span> it in your
+        own product, commercial or not.
+      </li>
       <li><span class="text-foreground">Don’t resell</span> the raw data as a dataset, download or feed of its own.</li>
       <li><span class="text-foreground">Analyse</span> it over time and train your own models on it.</li>
-      <li><span class="text-foreground">When the plan ends</span>, stop showing the postings. What you derived from them — figures, trends, models — stays yours.</li>
+      <li>
+        <span class="text-foreground">When the plan ends</span>, stop showing the postings. What you derived from them —
+        figures, trends, models — stays yours.
+      </li>
     </ul>
     <p class="mt-6 text-sm text-muted-foreground">
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() is applied; the rule cannot see through the appended section anchor -->
-      The full text is the <a href={resolve('/terms') + '#data-licence'} class="font-medium text-foreground underline-offset-4 hover:underline"
-        >data licence</a
-      > in our terms.
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() is applied; the rule cannot see through the appended section anchor -->
+      The full text is the
+      <a
+        href={resolve('/terms') + '#data-licence'}
+        class="font-medium text-foreground underline-offset-4 hover:underline">data licence</a
+      ><!-- eslint-enable svelte/no-navigation-without-resolve --> in our terms.
     </p>
   </section>
 

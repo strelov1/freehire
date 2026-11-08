@@ -13,7 +13,7 @@ vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }
 vi.mock('$app/navigation', () => ({ afterNavigate() {}, goto: vi.fn(), replaceState: vi.fn() }));
 vi.mock('#lib/auth.svelte.js', () => ({
   isAuthenticated: () => session.get('id') != null,
-  currentUser: () => session.get('id') == null ? null : { id: session.get('id') },
+  currentUser: () => (session.get('id') == null ? null : { id: session.get('id') }),
 }));
 vi.mock('#lib/analytics.js', () => ({ track() {} }));
 vi.mock('#lib/profile.svelte.js', () => ({
@@ -48,7 +48,9 @@ describe('Hiring again in the Company filter pane', () => {
 
     await view.rerender({ open: false });
     await view.rerender({ open: true });
-    await waitFor(() => expect((screen.getByRole('checkbox', { name: 'Hiring again' }) as HTMLInputElement).checked).toBe(false));
+    await waitFor(() =>
+      expect((screen.getByRole('checkbox', { name: 'Hiring again' }) as HTMLInputElement).checked).toBe(false),
+    );
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Hiring again' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }));
     expect(store.value.formerEmployers).toBe(true);
@@ -68,7 +70,9 @@ describe('Hiring again in the Company filter pane', () => {
   it('can find and select it through the normal filter search', async () => {
     const store = new FilterStore();
     render(FilterModal, { store, formerEmployersAvailable: true, open: true, onClose() {} });
-    await fireEvent.input(screen.getByRole('textbox', { name: 'Search filters' }), { target: { value: 'former employers' } });
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Search filters' }), {
+      target: { value: 'former employers' },
+    });
     await fireEvent.click(screen.getByRole('button', { name: 'Hiring again' }));
     expect(store.value.formerEmployers).toBe(false);
     await fireEvent.click(screen.getByRole('button', { name: 'Show jobs' }));

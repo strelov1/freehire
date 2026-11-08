@@ -28,16 +28,11 @@
   // listingRobots for why the two counts disagree.
   const robots = $derived(listingRobots(data.initial?.total));
   const pageTitle = $derived(
-    data.pageNumber > 1
-      ? `${data.company.name} — page ${data.pageNumber} · freehire`
-      : listingTitle,
+    data.pageNumber > 1 ? `${data.company.name} — page ${data.pageNumber} · freehire` : listingTitle,
   );
   // The one breadcrumb trail feeding both the visible nav and the structured data below —
   // a single array so the two can never disagree about what the trail is.
-  const breadcrumbItems = $derived([
-    { name: 'Companies', href: '/companies' },
-    { name: data.company.name },
-  ]);
+  const breadcrumbItems = $derived([{ name: 'Companies', href: '/companies' }, { name: data.company.name }]);
   const jsonLd = $derived(
     jsonLdScript([
       organizationJsonLd(data.company, origin),
@@ -47,17 +42,11 @@
           url: item.href ? `${origin}${item.href}` : base,
         })),
       ),
-    ])
+    ]),
   );
 </script>
 
-<Seo
-  title={pageTitle}
-  {description}
-  {canonical}
-  {robots}
-  image={`${origin}/companies/${data.slug}/og.png`}
-/>
+<Seo title={pageTitle} {description} {canonical} {robots} image={`${origin}/companies/${data.slug}/og.png`} />
 
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->

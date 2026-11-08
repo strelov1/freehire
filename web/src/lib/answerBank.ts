@@ -25,9 +25,7 @@ const WORK_AUTHORIZATION_TERMS = ['authoriz', 'right to work', 'sponsor', 'visa'
  *  candidate — asking anyway is work we already handle. One asking about work authorization
  *  is refused for the reason WORK_AUTHORIZATION_TERMS gives. And one with no readable text
  *  cannot be answered at all: there is nothing to show. */
-export function answerableQuestions(
-  pending: AutoApplyPreviewPending[] | undefined | null
-): AutoApplyPreviewPending[] {
+export function answerableQuestions(pending: AutoApplyPreviewPending[] | undefined | null): AutoApplyPreviewPending[] {
   if (!pending) return [];
   return pending.filter(isAnswerable);
 }
@@ -94,9 +92,7 @@ export interface PendingAnswerRow {
  *  day it mapped, spread or copied one, every row would silently become unanswerable, no
  *  input would render anywhere, and every test here would still pass, because none of them
  *  can see an object's identity. A shared predicate has nothing to drift from. */
-export function pendingRows(
-  pending: AutoApplyPreviewPending[] | undefined | null
-): PendingAnswerRow[] {
+export function pendingRows(pending: AutoApplyPreviewPending[] | undefined | null): PendingAnswerRow[] {
   return (pending ?? []).map((p, key) => ({ key, pending: p, kind: rowKind(p) }));
 }
 

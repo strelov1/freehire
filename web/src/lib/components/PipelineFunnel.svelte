@@ -120,12 +120,7 @@
     {#each model.ribbons as r (r.key)}
       <path d={r.path} fill={r.color} fill-opacity="0.5" />
       <rect x={RX} y={r.nodeY} width={RW} height={Math.max(r.nodeH, 1)} rx="2" fill={r.color} />
-      <text
-        x={RX + RW + 10}
-        y={r.breakdown ? r.labelY - 6 : r.labelY}
-        dy="0.32em"
-        class="fill-foreground"
-      >
+      <text x={RX + RW + 10} y={r.breakdown ? r.labelY - 6 : r.labelY} dy="0.32em" class="fill-foreground">
         {r.label}<tspan dx="6" class="fill-muted-foreground">{r.count}</tspan>
       </text>
       {#if r.breakdown}

@@ -145,22 +145,13 @@ async function mockWatchlist(page: Page, baseURL: string | undefined, initial: W
 
 test.describe('watchlist page', () => {
   test('lists the watched companies and removes one', async ({ page, baseURL }) => {
-    const calls = await mockWatchlist(page, baseURL, [
-      entry('acme', 'Acme Corp'),
-      entry('globex', 'Globex'),
-    ]);
+    const calls = await mockWatchlist(page, baseURL, [entry('acme', 'Acme Corp'), entry('globex', 'Globex')]);
     await page.goto('/my/watchlist');
 
     await expect(page.getByTestId('watchlist-count')).toHaveText('2 of 5000');
-    await expect(page.getByRole('link', { name: 'Acme Corp' })).toHaveAttribute(
-      'href',
-      '/companies/acme',
-    );
+    await expect(page.getByRole('link', { name: 'Acme Corp' })).toHaveAttribute('href', '/companies/acme');
     await expect(page.getByRole('link', { name: 'Globex' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Show jobs' })).toHaveAttribute(
-      'href',
-      '/jobs?watchlist=true',
-    );
+    await expect(page.getByRole('link', { name: 'Show jobs' })).toHaveAttribute('href', '/jobs?watchlist=true');
 
     await page.getByRole('button', { name: 'Remove Acme Corp from watchlist' }).click();
 
@@ -207,10 +198,7 @@ test.describe('watchlist page', () => {
 });
 
 test.describe('company page', () => {
-  test('the Watch button puts the company on the watchlist and takes it off again', async ({
-    page,
-    baseURL,
-  }) => {
+  test('the Watch button puts the company on the watchlist and takes it off again', async ({ page, baseURL }) => {
     const calls = await mockWatchlist(page, baseURL, []);
     await openCompany(page);
 
@@ -223,10 +211,7 @@ test.describe('company page', () => {
     expect(calls.put).toEqual(['acme']);
 
     await watching.click();
-    await expect(page.getByRole('button', { name: 'Watch', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    await expect(page.getByRole('button', { name: 'Watch', exact: true })).toHaveAttribute('aria-pressed', 'false');
     expect(calls.del).toEqual(['acme']);
   });
 
@@ -234,10 +219,7 @@ test.describe('company page', () => {
     await mockWatchlist(page, baseURL, [entry('acme', 'Acme Corp')]);
     await openCompany(page);
 
-    await expect(page.getByRole('button', { name: 'Watching', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await expect(page.getByRole('button', { name: 'Watching', exact: true })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('says so when the watchlist is full', async ({ page, baseURL }) => {
@@ -255,9 +237,6 @@ test.describe('company page', () => {
     await page.getByRole('button', { name: 'Watch', exact: true }).click();
 
     await expect(page.getByText('Your watchlist is full (5000 companies).')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Watch', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    await expect(page.getByRole('button', { name: 'Watch', exact: true })).toHaveAttribute('aria-pressed', 'false');
   });
 });

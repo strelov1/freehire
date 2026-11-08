@@ -3,8 +3,7 @@ import { isTransientNoise } from './transientNoise';
 
 /** The shape `#lib/api`'s `call()` throws, without importing it — see the module's own
  *  note on why the filter duck-types instead. */
-const apiError = (status: number, message: string) =>
-  Object.assign(new Error(message), { name: 'ApiError', status });
+const apiError = (status: number, message: string) => Object.assign(new Error(message), { name: 'ApiError', status });
 
 describe('isTransientNoise', () => {
   // Each case is a real production issue, named by the title Sentry grouped it under, so a
@@ -18,10 +17,19 @@ describe('isTransientNoise', () => {
     ['FREEHIRE-WEB-F: Chrome', new TypeError('Failed to fetch')],
     ['FREEHIRE-WEB-1M: Firefox', new TypeError('NetworkError when attempting to fetch resource.')],
     ['FREEHIRE-WEB-K: Firefox, shorter', new TypeError('network error')],
-    ['FREEHIRE-WEB-6: a chunk the deploy deleted', new TypeError('Failed to fetch dynamically imported module: https://freehire.me/_app/immutable/nodes/0.js')],
-    ['FREEHIRE-WEB-1D: the same, Firefox wording', new TypeError('error loading dynamically imported module: https://freehire.me/_app/immutable/chunks/a.js')],
+    [
+      'FREEHIRE-WEB-6: a chunk the deploy deleted',
+      new TypeError('Failed to fetch dynamically imported module: https://freehire.me/_app/immutable/nodes/0.js'),
+    ],
+    [
+      'FREEHIRE-WEB-1D: the same, Firefox wording',
+      new TypeError('error loading dynamically imported module: https://freehire.me/_app/immutable/chunks/a.js'),
+    ],
     ['FREEHIRE-WEB-8: the same, Safari wording', new TypeError('Importing a module script failed.')],
-    ['FREEHIRE-WEB-1R: the suggestion box abandoning a query', Object.assign(new Error('signal is aborted without reason'), { name: 'AbortError' })],
+    [
+      'FREEHIRE-WEB-1R: the suggestion box abandoning a query',
+      Object.assign(new Error('signal is aborted without reason'), { name: 'AbortError' }),
+    ],
     // The abort and timeout entries below had no test, which is how a filter entry becomes
     // an assertion nobody can check. Each is a distinct MECHANISM, not a spelling: by class
     // name, by the DOMException's own default text, and by a class name flattened into the
@@ -29,7 +37,10 @@ describe('isTransientNoise', () => {
     // `new Error(String(err))` and loses its name on the way.
     ['an abort carrying only the DOMException default text', new Error('The operation was aborted.')],
     ['an abort whose class name survived only in its message', new Error('AbortError: the read was cancelled')],
-    ['a timeout from AbortSignal.timeout(), before any ApiError wraps it', Object.assign(new Error('signal timed out'), { name: 'TimeoutError' })],
+    [
+      'a timeout from AbortSignal.timeout(), before any ApiError wraps it',
+      Object.assign(new Error('signal timed out'), { name: 'TimeoutError' }),
+    ],
   ])('drops %s', (_, err) => {
     expect(isTransientNoise(err)).toBe(true);
   });
@@ -51,10 +62,7 @@ describe('isTransientNoise', () => {
 
   // Whatever it cannot read, it reports: silence is the failure mode this filter must not
   // introduce. FREEHIRE-WEB-29 is a rejected promise whose reason was an object with no keys.
-  it.each([[null], [undefined], ['a thrown string'], [42], [{}]])(
-    'reports what it cannot read: %s',
-    (err) => {
-      expect(isTransientNoise(err)).toBe(false);
-    },
-  );
+  it.each([[null], [undefined], ['a thrown string'], [42], [{}]])('reports what it cannot read: %s', (err) => {
+    expect(isTransientNoise(err)).toBe(false);
+  });
 });

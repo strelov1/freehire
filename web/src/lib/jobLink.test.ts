@@ -13,9 +13,7 @@ describe('linkInText', () => {
 
   // Copying from the address bar drops the scheme, so this is what a paste usually is.
   it('takes a bare host with a path, and puts a scheme back on it', () => {
-    expect(linkInText('job-boards.greenhouse.io/acme/jobs/123')).toBe(
-      'https://job-boards.greenhouse.io/acme/jobs/123',
-    );
+    expect(linkInText('job-boards.greenhouse.io/acme/jobs/123')).toBe('https://job-boards.greenhouse.io/acme/jobs/123');
     expect(linkInText('acme.com/jobs/1?src=x#top')).toBe('https://acme.com/jobs/1?src=x#top');
   });
 
@@ -70,14 +68,13 @@ describe('pastedJobLink', () => {
   // Pasting one of our own links back in is a thing people do, and there is nothing to
   // look up: the slug is in the path.
   it('reads the slug out of one of our own posting links', () => {
-    expect(pastedJobLink('https://freehire.me/jobs/go-dev-acme', ORIGIN)?.ownSlug).toBe(
-      'go-dev-acme',
-    );
+    expect(pastedJobLink('https://freehire.me/jobs/go-dev-acme', ORIGIN)?.ownSlug).toBe('go-dev-acme');
   });
 
   it('judges "ours" by the running origin, so it holds on localhost too', () => {
-    expect(pastedJobLink('http://localhost:5173/jobs/go-dev-acme', 'http://localhost:5173')?.ownSlug)
-      .toBe('go-dev-acme');
+    expect(pastedJobLink('http://localhost:5173/jobs/go-dev-acme', 'http://localhost:5173')?.ownSlug).toBe(
+      'go-dev-acme',
+    );
     // The same link is somebody else's site when served from production.
     expect(pastedJobLink('http://localhost:5173/jobs/go-dev-acme', ORIGIN)?.ownSlug).toBeNull();
   });

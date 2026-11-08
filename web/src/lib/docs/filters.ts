@@ -60,10 +60,11 @@ const VALUES_NOTE: Record<string, string> = {
   clearance_levels:
     '. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one',
   category: '. The retired value management is still accepted and answered as role_type=people_manager',
-  perks: ' — matched from the description; a posting without one does not mention it, which is not the same as not offering it',
+  perks:
+    ' — matched from the description; a posting without one does not mention it, which is not the same as not offering it',
   equity: ' — not_stated means none was read, not that the job offers no equity',
   engagement:
-    ' — employee or own business, in each market\'s own term (UK IR35, US W-2/1099/C2C, Polish B2B and umowy, Brazilian CLT/PJ, Russian ТК/ГПХ/самозанятость/ИП, German, Dutch, French, Spanish and Argentine freelance statuses), as the title, the description or a source\'s own contract-type field states it; a posting offering several carries each, one that does not say carries none. Separate from employment_type',
+    " — employee or own business, in each market's own term (UK IR35, US W-2/1099/C2C, Polish B2B and umowy, Brazilian CLT/PJ, Russian ТК/ГПХ/самозанятость/ИП, German, Dutch, French, Spanish and Argentine freelance statuses), as the title, the description or a source's own contract-type field states it; a posting offering several carries each, one that does not say carries none. Separate from employment_type",
 };
 
 /** Every string facet: the SPA-derived rows plus the API-only ones. */
@@ -84,7 +85,8 @@ export const FILTER_EXTRAS: FilterRow[] = [
   {
     param: 'via_recruiter',
     label: 'Posting says a recruiter publishes it for a client',
-    values: 'true — the description says so; false — every posting not marked, including recruiter posts that never say so',
+    values:
+      'true — the description says so; false — every posting not marked, including recruiter posts that never say so',
   },
   {
     param: 'former_employers',
@@ -148,7 +150,8 @@ export const FILTER_EXTRAS: FilterRow[] = [
     label: 'Open within',
     values:
       'integer — jobs first recorded by freehire in the last N days, i.e. how long the posting has been in the catalogue regardless of the date its source states. Independent of posted_within_days; both may be set and they narrow together',
-  },  {
+  },
+  {
     param: 'apply_questions_max',
     label: 'Application questions',
     values:
@@ -175,11 +178,20 @@ export interface Recipe {
 
 export const RECIPES: Recipe[] = [
   { title: 'Senior Go, remote, in the CIS region', query: 'q=go&seniority=senior&work_mode=remote&regions=cis' },
-  { title: 'Backend roles, freshest first, in Germany', query: 'category=backend&countries=DE&sort=posted_at&order=desc' },
-  { title: 'One country only — no region param, or it widens back out', query: 'countries=IT&employment_type=contract' },
+  {
+    title: 'Backend roles, freshest first, in Germany',
+    query: 'category=backend&countries=DE&sort=posted_at&order=desc',
+  },
+  {
+    title: 'One country only — no region param, or it widens back out',
+    query: 'countries=IT&employment_type=contract',
+  },
   { title: 'Must use both Go and Rust', query: 'skills=go,rust&skills_mode=and' },
   { title: 'Exclude outstaff companies', query: 'company_type_exclude=outstaff' },
-  { title: 'At least $100k, with visa sponsorship', query: 'salary_currency=USD&salary_min=100000&visa_sponsorship=true' },
+  {
+    title: 'At least $100k, with visa sponsorship',
+    query: 'salary_currency=USD&salary_min=100000&visa_sponsorship=true',
+  },
   { title: 'Excluding jobs that need a security clearance', query: 'clearance_levels=none' },
   { title: 'Jobs stating Secret or Top Secret clearance', query: 'clearance_levels=secret,top_secret' },
   { title: 'Only jobs that need a security clearance', query: 'requires_clearance=true' },

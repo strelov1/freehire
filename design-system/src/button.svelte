@@ -48,16 +48,7 @@
   } & HTMLButtonAttributes &
     HTMLAnchorAttributes;
 
-  let {
-    variant = 'secondary',
-    size = 'md',
-    class: className,
-    href,
-    target,
-    rel,
-    children,
-    ...rest
-  }: Props = $props();
+  let { variant = 'secondary', size = 'md', class: className, href, target, rel, children, ...rest }: Props = $props();
 
   // A target="_blank" anchor keeps a window.opener handle back to this page unless
   // rel says otherwise — the reverse-tabnabbing gap. Fill in the safe default once,

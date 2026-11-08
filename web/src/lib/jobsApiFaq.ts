@@ -47,8 +47,7 @@ export const JOBS_API_FAQ: FaqItem[] = [
   },
   {
     question: 'Can I cancel?',
-    answer:
-      'Any time, from the billing portal. The plan stays until the end of the period you paid for.',
+    answer: 'Any time, from the billing portal. The plan stays until the end of the period you paid for.',
   },
   {
     question: 'What happens to the data I stored when my plan ends?',

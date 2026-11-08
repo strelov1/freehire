@@ -43,11 +43,7 @@ export function regionFromCountry(country: string | null | undefined): string | 
  *  - `offered` — this browser has already been asked once. Only wiping browser
  *    storage re-arms it.
  */
-export function shouldOfferGeoScope(state: {
-  search: string;
-  storedFilters: string;
-  offered: boolean;
-}): boolean {
+export function shouldOfferGeoScope(state: { search: string; storedFilters: string; offered: boolean }): boolean {
   return state.search === '' && state.storedFilters === '' && !state.offered;
 }
 

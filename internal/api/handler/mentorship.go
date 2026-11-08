@@ -353,27 +353,40 @@ const maxSlotWindowDays = 62
 
 // slotWindow reads the requested window, defaulting to the next 30 days.
 func slotWindow(c *fiber.Ctx) (from, to time.Time, err error) {
-	now := time.Now().UTC()
-	from, to = now, now.AddDate(0, 0, 30)
-
+	var fromAt, toAt *time.Time
 	if raw := c.Query("from"); raw != "" {
 		parsed, parseErr := time.Parse(time.RFC3339, raw)
 		if parseErr != nil {
 			return from, to, fiber.NewError(fiber.StatusBadRequest, "from must be an RFC 3339 timestamp")
 		}
-		from = parsed
+		fromAt = &parsed
 	}
 	if raw := c.Query("to"); raw != "" {
 		parsed, parseErr := time.Parse(time.RFC3339, raw)
 		if parseErr != nil {
 			return from, to, fiber.NewError(fiber.StatusBadRequest, "to must be an RFC 3339 timestamp")
 		}
-		to = parsed
+		toAt = &parsed
+	}
+	from, to = slotWindowBounds(fromAt, toAt)
+	return from, to, nil
+}
+
+// slotWindowBounds fills an unset end of the window (from now, to 30 days after from) and clamps
+// it to maxSlotWindowDays, for the routes and the MCP tools alike.
+func slotWindowBounds(fromAt, toAt *time.Time) (from, to time.Time) {
+	from = time.Now().UTC()
+	if fromAt != nil {
+		from = *fromAt
+	}
+	to = from.AddDate(0, 0, 30)
+	if toAt != nil {
+		to = *toAt
 	}
 	if limit := from.AddDate(0, 0, maxSlotWindowDays); to.After(limit) {
 		to = limit
 	}
-	return from, to, nil
+	return from, to
 }
 
 // offsetLabel renders a zone offset as ±HH:MM, the form a reader recognises.

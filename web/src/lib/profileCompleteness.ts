@@ -78,9 +78,7 @@ export function getProfileCompleteness({
     // Education and the summary are candidate-owned on the contacts block and fall back to
     // the CV parse for a résumé nobody has corrected yet — unless the candidate cleared
     // the field, which the `*_set` flag records (an emptied field leaves no value behind).
-    education:
-      (contacts?.education?.length ?? 0) > 0 ||
-      (!contacts?.education_set && (cv?.education?.length ?? 0) > 0),
+    education: (contacts?.education?.length ?? 0) > 0 || (!contacts?.education_set && (cv?.education?.length ?? 0) > 0),
     screening: hasAnyScreeningAnswer(screening),
     summary: nonEmpty(contacts?.summary) || (!contacts?.summary_set && nonEmpty(cv?.summary)),
   };

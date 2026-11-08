@@ -93,7 +93,8 @@ export const messages = defineMessages(
     urlTakenError: 'This URL is already used by another employer’s vacancy.',
     applyModeLabel: 'How candidates apply',
     applyModeFreehire: 'On freehire',
-    applyModeFreehireHint: 'Candidates apply on the vacancy page. You receive each application by email — CV attached, reply goes straight to the candidate. The vacancy is only on freehire.',
+    applyModeFreehireHint:
+      'Candidates apply on the vacancy page. You receive each application by email — CV attached, reply goes straight to the candidate. The vacancy is only on freehire.',
     applyModeExternal: 'On my own site',
     applyModeExternalHint: 'Candidates follow your link to apply.',
     questionsLabel: 'Questions for candidates',
@@ -123,7 +124,8 @@ export const messages = defineMessages(
       companyNamePlaceholder: 'Acme',
       workEmailLabel: 'Рабочий email',
       workEmailPlaceholder: 'you@acme.com',
-      workEmailHint: 'Публичные почтовые сервисы (Gmail, Outlook и т.п.) не принимаются — используйте корпоративный адрес.',
+      workEmailHint:
+        'Публичные почтовые сервисы (Gmail, Outlook и т.п.) не принимаются — используйте корпоративный адрес.',
       claimSubmit: 'Заявить компанию',
       claiming: 'Отправка…',
 
@@ -193,7 +195,8 @@ export const messages = defineMessages(
       urlTakenError: 'Эта ссылка уже используется вакансией другого работодателя.',
       applyModeLabel: 'Как откликаются кандидаты',
       applyModeFreehire: 'На freehire',
-      applyModeFreehireHint: 'Кандидаты откликаются прямо на странице вакансии. Каждый отклик приходит вам на почту: CV во вложении, ответ уходит кандидату напрямую. Вакансия есть только на freehire.',
+      applyModeFreehireHint:
+        'Кандидаты откликаются прямо на странице вакансии. Каждый отклик приходит вам на почту: CV во вложении, ответ уходит кандидату напрямую. Вакансия есть только на freehire.',
       applyModeExternal: 'На своём сайте',
       applyModeExternalHint: 'Кандидаты переходят по вашей ссылке.',
       questionsLabel: 'Вопросы кандидатам',

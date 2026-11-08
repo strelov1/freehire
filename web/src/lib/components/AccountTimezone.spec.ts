@@ -19,7 +19,10 @@ vi.mock('$app/state', () => ({
 
 const { updateTimezone, user } = vi.hoisted(() => ({
   updateTimezone: vi.fn(),
-  user: { current: { email: 'a@b.co', timezone: 'Europe/Moscow' } as { email: string; timezone?: string }, notify: () => {} },
+  user: {
+    current: { email: 'a@b.co', timezone: 'Europe/Moscow' } as { email: string; timezone?: string },
+    notify: () => {},
+  },
 }));
 
 const { announce } = vi.hoisted(() => ({ announce: vi.fn() }));
@@ -27,8 +30,16 @@ vi.mock('#lib/announce.svelte.js', () => ({ announce }));
 
 vi.mock('#lib/auth.svelte.js', async () => {
   const { createSubscriber } = await import('svelte/reactivity');
-  const subscribe = createSubscriber((notify) => { user.notify = notify; });
-  return { currentUser: () => { subscribe(); return user.current; }, updateTimezone };
+  const subscribe = createSubscriber((notify) => {
+    user.notify = notify;
+  });
+  return {
+    currentUser: () => {
+      subscribe();
+      return user.current;
+    },
+    updateTimezone,
+  };
 });
 
 describe('AccountTimezone — Russian locale', () => {
@@ -69,9 +80,7 @@ describe('AccountTimezone — Russian locale', () => {
 
   it('renders the saving and saved states in Russian', async () => {
     let resolveSave: () => void = () => {};
-    updateTimezone.mockImplementation(
-      () => new Promise<void>((resolve) => (resolveSave = resolve)),
-    );
+    updateTimezone.mockImplementation(() => new Promise<void>((resolve) => (resolveSave = resolve)));
     render(AccountTimezone);
 
     const select = screen.getByRole('combobox') as HTMLSelectElement;

@@ -10,11 +10,5 @@
 </script>
 
 <div class="max-w-md">
-  <TabStrip
-    {tabs}
-    {active}
-    onSelect={(id) => (active = id)}
-    label="Demo sections"
-    panelId="demo-panel"
-  />
+  <TabStrip {tabs} {active} onSelect={(id) => (active = id)} label="Demo sections" panelId="demo-panel" />
 </div>

@@ -44,7 +44,7 @@ export function categorySlug(category: string): string {
 }
 
 const CATEGORY_BY_SLUG = new Map(
-  CATEGORY_VALUES.filter((c) => c !== UNSEARCHABLE_CATEGORY).map((c) => [categorySlug(c), c])
+  CATEGORY_VALUES.filter((c) => c !== UNSEARCHABLE_CATEGORY).map((c) => [categorySlug(c), c]),
 );
 
 /** URL segment → vocabulary value, or undefined when the slug names no published
@@ -128,9 +128,7 @@ export function isPairPublished(countryCounts: Record<string, number>, code: str
  *  Currencies and periods are never merged — the endpoint returns one row per
  *  (currency, period) and each renders as its own line. */
 export function publishableSalaryBands(bands: InsightSalaryBand[]): InsightSalaryBand[] {
-  return bands
-    .filter((b) => b.sample_size >= MIN_SALARY_SAMPLE)
-    .sort((a, b) => b.sample_size - a.sample_size);
+  return bands.filter((b) => b.sample_size >= MIN_SALARY_SAMPLE).sort((a, b) => b.sample_size - a.sample_size);
 }
 
 export interface EnglishRow {
@@ -146,10 +144,7 @@ export interface EnglishRow {
  *  Measured: backend × Germany annotates 136 of 2041 postings. "C1 required in 90%"
  *  off that sample is a statement about which postings carry the annotation. The
  *  shares are of the declaring subset, and the caller labels them as such. */
-export function englishBreakdown(
-  levelCounts: Record<string, number>,
-  total: number
-): EnglishRow[] | null {
+export function englishBreakdown(levelCounts: Record<string, number>, total: number): EnglishRow[] | null {
   const declared = Object.values(levelCounts).reduce((n, c) => n + c, 0);
   if (declared === 0) return null;
   if (total > 0 && declared / total < MIN_ENGLISH_COVERAGE) return null;
@@ -206,10 +201,7 @@ export function landingIntro({ category, countryCode, total, fresh, topSkills }:
 
 /** The same category in other countries — the sibling links under a landing.
  *  Excludes the country being viewed, and everything the gate already refuses. */
-export function neighbourCountries(
-  countryCounts: Record<string, number>,
-  currentCode: string
-): PublishedCountry[] {
+export function neighbourCountries(countryCounts: Record<string, number>, currentCode: string): PublishedCountry[] {
   return publishedCountries(countryCounts)
     .filter((c) => c.code !== currentCode)
     .slice(0, NEIGHBOUR_LIMIT);
@@ -226,7 +218,7 @@ export interface NeighbourCategory {
  *  Excludes the category being viewed and the catch-all. */
 export function neighbourCategories(
   categoryCounts: Record<string, number>,
-  currentCategory: string
+  currentCategory: string,
 ): NeighbourCategory[] {
   const rows: NeighbourCategory[] = [];
   for (const [category, openCount] of Object.entries(categoryCounts)) {

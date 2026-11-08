@@ -4,13 +4,7 @@
   import { replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
-  import type {
-    GmailStatus,
-    MailboxStatus,
-    InboxSource,
-    InboxMessage,
-    EmailBody,
-  } from '#lib/api.js';
+  import type { GmailStatus, MailboxStatus, InboxSource, InboxMessage, EmailBody } from '#lib/api.js';
   import type { EmailLinking } from '#lib/types.js';
   import { statusLabel, statusLabels } from '#lib/emailStatus.js';
   import StatusChip from '#lib/components/StatusChip.svelte';
@@ -19,17 +13,7 @@
   import InboxSettings from './InboxSettings.svelte';
   import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
-  import {
-    Mail,
-    Search,
-    RefreshCw,
-    ChevronLeft,
-    CheckCheck,
-    Trash2,
-    Inbox,
-    Settings,
-    X,
-  } from '@lucide/svelte';
+  import { Mail, Search, RefreshCw, ChevronLeft, CheckCheck, Trash2, Inbox, Settings, X } from '@lucide/svelte';
   import { Alert, TabStrip, tabStripId } from '#lib/ui/index.js';
   import { ActionError } from '#lib/actionError.svelte.js';
   import States from './States.svelte';
@@ -453,20 +437,9 @@
   <States state="error" message={loadError} onRetry={load} />
 {:else}
   <div class="flex flex-col gap-4">
-    <TabStrip
-      tabs={TABS}
-      active={tab}
-      onSelect={(id) => (tab = id)}
-      label={s.tabStripLabel}
-      panelId={PANEL_ID}
-    />
+    <TabStrip tabs={TABS} active={tab} onSelect={(id) => (tab = id)} label={s.tabStripLabel} panelId={PANEL_ID} />
 
-    <div
-      id={PANEL_ID}
-      role="tabpanel"
-      aria-labelledby={tabStripId(PANEL_ID, tab)}
-      class="flex flex-col gap-4"
-    >
+    <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, tab)} class="flex flex-col gap-4">
       {#if actionError.message}
         <Alert variant="destructive" live={false} class="items-center py-2">
           <span class="flex-1">{actionError.message}</span>
@@ -482,11 +455,13 @@
       {/if}
 
       {#if tab === 'settings'}
-        <InboxSettings {gmail} bind:mailbox onSourceChanged={onSourceChanged} onError={(m) => actionError.fail(null, m)} />
+        <InboxSettings {gmail} bind:mailbox {onSourceChanged} onError={(m) => actionError.fail(null, m)} />
       {:else if !hasAnySource}
         <p class="py-8 text-center text-sm text-muted-foreground">
           {s.noSource.lead}
-          <button type="button" class="font-medium text-primary hover:underline" onclick={() => (tab = 'settings')}>{s.noSource.link}</button>.
+          <button type="button" class="font-medium text-primary hover:underline" onclick={() => (tab = 'settings')}
+            >{s.noSource.link}</button
+          >.
         </p>
       {:else}
         <!-- Toolbar: account switcher + label filter + search on the left; a compact
@@ -523,7 +498,9 @@
           </select>
 
           <div class="relative min-w-[11rem] flex-1">
-            <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search
+              class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            />
             <input
               type="search"
               placeholder={s.searchPlaceholder}
@@ -572,10 +549,14 @@
         </div>
 
         {#if lastDeleted}
-          <div class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          <div
+            class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+          >
             {format(s.deletedToast, { subject: lastDeleted.subject || s.noSubject })}
             <span aria-hidden="true">·</span>
-            <button type="button" onclick={undoDelete} class="font-medium text-brand-strong hover:underline">{s.undo}</button>
+            <button type="button" onclick={undoDelete} class="font-medium text-brand-strong hover:underline"
+              >{s.undo}</button
+            >
           </div>
         {/if}
 
@@ -620,9 +601,7 @@
                internally, and the list infinite-loads in place. On md+ side by side; below
                md a master-detail (open a message → the reading pane replaces the list). -->
           <div class="grid h-[calc(100dvh-12rem)] min-h-[26rem] gap-5 md:grid-cols-[minmax(0,19rem)_1fr]">
-            <div
-              class="min-h-0 flex-col gap-1 overflow-y-auto pr-1 {selectedId === null ? 'flex' : 'hidden md:flex'}"
-            >
+            <div class="min-h-0 flex-col gap-1 overflow-y-auto pr-1 {selectedId === null ? 'flex' : 'hidden md:flex'}">
               <ul class="flex flex-col gap-1">
                 {#each pager.items as m, i (m.id)}
                   <li class="row-in" style="animation-delay: {Math.min(i, 14) * 15}ms">
@@ -630,7 +609,8 @@
                       type="button"
                       onclick={() => openMessage(m.id)}
                       aria-current={selectedId === m.id}
-                      class="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors {selectedId === m.id
+                      class="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors {selectedId ===
+                      m.id
                         ? 'border-brand-ring bg-brand-muted/60'
                         : 'border-transparent hover:border-border hover:bg-accent'}"
                     >
@@ -646,10 +626,16 @@
                             <span class="sr-only">{s.unreadDotAria}</span>
                             <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true"></span>
                           {/if}
-                          <span class="min-w-0 flex-1 truncate text-sm {m.read ? 'font-medium text-foreground/90' : 'font-semibold text-foreground'}">
+                          <span
+                            class="min-w-0 flex-1 truncate text-sm {m.read
+                              ? 'font-medium text-foreground/90'
+                              : 'font-semibold text-foreground'}"
+                          >
                             {m.from_name || m.from_addr}
                           </span>
-                          <span class="shrink-0 text-[11px] text-muted-foreground">{timeAgo(m.received_at, locale())}</span>
+                          <span class="shrink-0 text-[11px] text-muted-foreground"
+                            >{timeAgo(m.received_at, locale())}</span
+                          >
                         </div>
                         <div class="mt-0.5 truncate text-sm {m.read ? 'text-muted-foreground' : 'text-foreground'}">
                           {m.subject || s.noSubject}
@@ -675,10 +661,7 @@
 
               {#if pager.hasMore}
                 <!-- Scroll-to-bottom auto-load (inside the list's own scroll pane). -->
-                <InfiniteScroll
-                  onLoad={loadMore}
-                  enabled={!pager.loadingMore && !pager.loadMoreError && !reloading}
-                />
+                <InfiniteScroll onLoad={loadMore} enabled={!pager.loadingMore && !pager.loadMoreError && !reloading} />
               {/if}
               {#if pager.loadingMore}
                 <p class="py-3 text-center text-xs text-muted-foreground">{s.loading}</p>
@@ -693,7 +676,8 @@
                 onclick={backToList}
                 class="mb-3 -ml-1 flex shrink-0 items-center gap-1 rounded-md px-1 py-1 text-sm text-muted-foreground hover:text-foreground md:hidden"
               >
-                <ChevronLeft class="h-4 w-4" /> {s.tabs.inbox}
+                <ChevronLeft class="h-4 w-4" />
+                {s.tabs.inbox}
               </button>
               {#if bodyLoading}
                 <p class="py-16 text-center text-sm text-muted-foreground">{s.loading}</p>
@@ -743,20 +727,42 @@
                     >
                       {format(s.linkedTo, { company: msg.linked_company || s.linkedFallback })} ↗
                     </a>
-                    <button type="button" onclick={unlink} class="relative text-xs text-muted-foreground after:absolute after:-inset-1 hover:text-destructive">{s.unlink}</button>
+                    <button
+                      type="button"
+                      onclick={unlink}
+                      class="relative text-xs text-muted-foreground after:absolute after:-inset-1 hover:text-destructive"
+                      >{s.unlink}</button
+                    >
                   {:else if linkState === 'suggested'}
-                    <span class="inline-flex items-center gap-2 rounded-full border border-brand-ring/50 bg-brand-muted/40 px-2.5 py-0.5 text-xs">
+                    <span
+                      class="inline-flex items-center gap-2 rounded-full border border-brand-ring/50 bg-brand-muted/40 px-2.5 py-0.5 text-xs"
+                    >
                       {s.looksLike} <span class="font-medium">{msg.suggested_company || s.suggestedFallback}</span>
-                      <button type="button" onclick={confirmLink} class="relative font-medium text-brand-strong after:absolute after:-inset-1 hover:underline">{s.link}</button>
+                      <button
+                        type="button"
+                        onclick={confirmLink}
+                        class="relative font-medium text-brand-strong after:absolute after:-inset-1 hover:underline"
+                        >{s.link}</button
+                      >
                       <span aria-hidden="true">·</span>
-                      <button type="button" onclick={rejectLink} class="relative text-muted-foreground after:absolute after:-inset-1 hover:text-foreground">{s.notThis}</button>
+                      <button
+                        type="button"
+                        onclick={rejectLink}
+                        class="relative text-muted-foreground after:absolute after:-inset-1 hover:text-foreground"
+                        >{s.notThis}</button
+                      >
                     </span>
                   {:else}
                     {#if linkState === 'undo'}
                       <span class="inline-flex items-center gap-2 text-xs text-muted-foreground">
                         {s.unlinked}
                         <span aria-hidden="true">·</span>
-                        <button type="button" onclick={undoUnlink} class="relative font-medium text-brand-strong after:absolute after:-inset-1 hover:underline">{s.undo}</button>
+                        <button
+                          type="button"
+                          onclick={undoUnlink}
+                          class="relative font-medium text-brand-strong after:absolute after:-inset-1 hover:underline"
+                          >{s.undo}</button
+                        >
                       </span>
                     {/if}
                     <ApplicationLinkPicker applications={trackedApps} loading={trackedLoading} onpick={linkTo} />
@@ -771,7 +777,7 @@
                       target="_blank"
                       rel="noopener noreferrer"
                       class="text-xs font-medium text-brand-strong hover:underline"
-                    ><!-- eslint-enable svelte/no-navigation-without-resolve -->
+                      ><!-- eslint-enable svelte/no-navigation-without-resolve -->
                       {s.openInGmail} ↗
                     </a>
                   </div>
@@ -788,7 +794,8 @@
                     class="min-h-0 w-full flex-1 rounded-md border border-border bg-white"
                   ></iframe>
                 {:else}
-                  <pre class="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{msg.body_text}</pre>
+                  <pre
+                    class="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{msg.body_text}</pre>
                 {/if}
               {/if}
             </div>

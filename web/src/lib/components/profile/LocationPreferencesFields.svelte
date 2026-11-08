@@ -4,13 +4,7 @@
   // immediately, the same way the Skills view's chips do). This component owns no
   // persistence itself — every edit recomputes the whole block and hands it to `onChange`;
   // the caller decides whether that means "buffer until Save" or "write it now".
-  import {
-    COUNTRY_OPTIONS,
-    countryLabel,
-    REGION_OPTIONS,
-    searchCities,
-    WORK_MODE_OPTIONS,
-  } from '#lib/facets.js';
+  import { COUNTRY_OPTIONS, countryLabel, REGION_OPTIONS, searchCities, WORK_MODE_OPTIONS } from '#lib/facets.js';
   import { api } from '#lib/api.js';
   import { ComboboxNav } from '#lib/comboboxNav.svelte.js';
   import { buildLocationPreferences } from '#lib/profileLocation.js';
@@ -110,7 +104,11 @@
       try {
         const rows = await api.searchCities(q);
         if (mine !== baseReqToken) return;
-        baseResults = rows.map((r) => ({ value: r.value, country: r.country, label: `${r.value}, ${countryLabel(r.country)}` }));
+        baseResults = rows.map((r) => ({
+          value: r.value,
+          country: r.country,
+          label: `${r.value}, ${countryLabel(r.country)}`,
+        }));
       } catch {
         if (mine !== baseReqToken) return;
         baseResults = [];
@@ -248,7 +246,12 @@
           class="absolute inset-x-0 top-full z-10 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-lg"
         >
           {#if baseLoading && baseResults.length === 0}
-            <li role="option" aria-selected="false" aria-disabled="true" class="px-2 py-1.5 text-sm text-muted-foreground">
+            <li
+              role="option"
+              aria-selected="false"
+              aria-disabled="true"
+              class="px-2 py-1.5 text-sm text-muted-foreground"
+            >
               {s.searching}
             </li>
           {/if}

@@ -12,22 +12,45 @@
 
   const steps = [
     { n: '01', title: 'Join', body: 'One click. You get a random handle like amber-heron-42 — no name, no photo.' },
-    { n: '02', title: 'Meet people like you', body: 'Members ranked by the same category, the same country and region, and the companies you both applied to in the last 90 days.' },
-    { n: '03', title: 'Follow their progress', body: 'A feed of who applied where and who reached the interview or the offer, by day.' },
-    { n: '04', title: "Ask the one who's been there", body: 'Invite a member to chat with a first message of up to 500 characters. Declining is silent.' },
+    {
+      n: '02',
+      title: 'Meet people like you',
+      body: 'Members ranked by the same category, the same country and region, and the companies you both applied to in the last 90 days.',
+    },
+    {
+      n: '03',
+      title: 'Follow their progress',
+      body: 'A feed of who applied where and who reached the interview or the offer, by day.',
+    },
+    {
+      n: '04',
+      title: "Ask the one who's been there",
+      body: 'Invite a member to chat with a first message of up to 500 characters. Declining is silent.',
+    },
   ];
 
   const visibility = [
     {
       key: 'seen',
       title: 'Others see',
-      items: ['Your handle', 'Role titles, as you wrote them', 'Category, seniority, skills and country', 'Applications and interview or offer moves, with company and day'],
+      items: [
+        'Your handle',
+        'Role titles, as you wrote them',
+        'Category, seniority, skills and country',
+        'Applications and interview or offer moves, with company and day',
+      ],
       chip: 'border-success-strong/50 text-success-strong',
     },
     {
       key: 'hidden',
       title: 'Nobody sees',
-      items: ['Your name or email', 'Anything else in your CV', 'Rejections and withdrawals', 'The offer you accepted', 'Postings pasted privately'],
+      items: [
+        'Your name or email',
+        'Anything else in your CV',
+        'Rejections and withdrawals',
+        'The offer you accepted',
+        'Postings pasted privately',
+      ],
       chip: 'border-border text-muted-foreground',
     },
   ];
@@ -35,16 +58,16 @@
   const reasons = [
     {
       title: 'Rarely the same seat',
-      body: 'Even at one company, people apply to different openings, at different levels, on different timelines — and companies often hire more than one.'
+      body: 'Even at one company, people apply to different openings, at different levels, on different timelines — and companies often hire more than one.',
     },
     {
       title: 'Shared after the loop',
-      body: "Most of what's worth telling comes once your own interview is over. Whichever way it went, you lose nothing by passing it on."
+      body: "Most of what's worth telling comes once your own interview is over. Whichever way it went, you lose nothing by passing it on.",
     },
     {
       title: 'It runs both ways',
-      body: "You apply to dozens of companies. Tell one person about one loop, and you get others' notes on many — plus someone to run mock interviews with."
-    }
+      body: "You apply to dozens of companies. Tell one person about one loop, and you get others' notes on many — plus someone to run mock interviews with.",
+    },
   ];
 
   const controls = [
@@ -54,11 +77,21 @@
   ];
 </script>
 
-{#snippet join()}
+{#snippet join(consentId: string)}
   {#if onJoin}
-    <Button variant="primary" size="lg" onclick={onJoin}>Join interview buddies</Button>
+    <Button variant="primary" size="lg" onclick={onJoin} aria-describedby={consentId}>Join interview buddies</Button>
   {:else}
     <Button href={resolve('/buddies')} variant="primary" size="lg">Join interview buddies</Button>
+  {/if}
+{/snippet}
+
+{#snippet consent(id: string)}
+  {#if onJoin}
+    <p {id} class="max-w-xl text-xs text-muted-foreground text-pretty">
+      Joining shows members the role titles in your CV, which can name your employer, so check them first. It also shows
+      the companies and roles you apply to and your interview or offer moves, including applications you made before
+      joining. Hide any application from the buddy feed with its switch in your tracker.
+    </p>
   {/if}
 {/snippet}
 
@@ -71,14 +104,17 @@
         Find people interviewing where you are.
       </h1>
       <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty">
-        Join anonymously, see who's applying to the same companies and how far they got, and
-        message the one who just had the interview you're preparing for.
+        Join anonymously, see who's applying to the same companies and how far they got, and message the one who just
+        had the interview you're preparing for.
       </p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
-        {@render join()}
-        <a href="#how-it-works" class="text-sm font-medium text-muted-foreground hover:text-foreground">See how it works ↓</a>
+        {@render join('buddies-consent-hero')}
+        <a href="#how-it-works" class="text-sm font-medium text-muted-foreground hover:text-foreground"
+          >See how it works ↓</a
+        >
       </div>
       <p class="mt-3 text-xs text-muted-foreground">Free · Anonymous · Leave any time</p>
+      <div class="mt-2">{@render consent('buddies-consent-hero')}</div>
     </div>
     <BuddiesHeroDemo />
   </section>
@@ -93,7 +129,9 @@
   <!-- How it works -->
   <section id="how-it-works" class="scroll-mt-20 py-16 sm:py-20">
     <SectionLabel text="how it works" />
-    <h2 class="mt-6 max-w-2xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">From a handle to a conversation.</h2>
+    <h2 class="mt-6 max-w-2xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+      From a handle to a conversation.
+    </h2>
     <NumberedGrid items={steps} class="mt-10 sm:grid-cols-2" />
   </section>
 
@@ -112,7 +150,8 @@
       {/each}
     </div>
     <p class="mt-6 max-w-3xl text-sm text-muted-foreground text-pretty">
-      In the final for the same seat right now? You don't have to share anything — who you talk to is always your choice.
+      In the final for the same seat right now? You don't have to share anything — who you talk to is always your
+      choice.
     </p>
   </section>
 
@@ -135,14 +174,17 @@
       {/each}
     </div>
     <p class="mt-6 max-w-3xl text-sm text-muted-foreground text-pretty">
-      Applications you made before joining show too. Hide any single application from the feed with one switch on the job in your tracker.
+      Applications you made before joining show too. Hide any single application from the feed with one switch on the
+      job in your tracker.
     </p>
   </section>
 
   <!-- Control -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="you stay in control" />
-    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Leave, block or report at any time.</h2>
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+      Leave, block or report at any time.
+    </h2>
     <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
       {#each controls as c (c.title)}
         <div class="bg-background p-6 sm:p-7">
@@ -156,7 +198,9 @@
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share BUDDIES_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="faq" />
-    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Questions people ask before joining.</h2>
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+      Questions people ask before joining.
+    </h2>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each BUDDIES_FAQ as item (item.question)}
         <div class="bg-background p-6 sm:odd:last:col-span-2 sm:p-7">
@@ -172,7 +216,8 @@
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
       <h2 class="text-balance text-2xl font-semibold tracking-tight">Stop interviewing alone.</h2>
       <p class="max-w-xl text-muted-foreground text-pretty">Free, anonymous, and you can leave any time.</p>
-      {@render join()}
+      {@render join('buddies-consent-closing')}
+      {@render consent('buddies-consent-closing')}
     </div>
   </section>
 </div>

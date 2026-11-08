@@ -977,6 +977,7 @@ func Register(app *fiber.App, cfg Config) {
 		buddy.NewMockMailNotifier(queries, mockMail, cfg.NotifyEmailFrom, cfg.FrontendOrigin))
 	conversationH := newConversationHandlers(messagingSvc, buddyMocks)
 	buddyH := newBuddyHandlers(buddySvc, buddyMocks)
+	assistantH.buddies = buddyH
 
 	// The mentorship marketplace: referral's opposite number, where the insider is named
 	// and chosen rather than anonymous. A nil notifier is a deployment with no mail

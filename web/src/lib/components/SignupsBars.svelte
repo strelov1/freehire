@@ -148,9 +148,7 @@
           <div class="mb-1 font-medium text-foreground">{fullDate(hoveredBar.date)}</div>
           <div class="flex items-center gap-1.5 text-muted-foreground">
             <span class="inline-block h-2 w-2 rounded-sm bg-primary"></span>
-            New members <span class="ml-auto font-medium text-foreground"
-              >{hoveredBar.new.toLocaleString()}</span
-            >
+            New members <span class="ml-auto font-medium text-foreground">{hoveredBar.new.toLocaleString()}</span>
           </div>
         </div>
       {/if}

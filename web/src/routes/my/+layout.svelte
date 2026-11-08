@@ -83,7 +83,6 @@
     <!-- No signed-out branch here: +layout.server.ts redirects an anonymous visitor to
          /signin before this renders, so the shell only ever draws for a session. -->
 
-
     <!-- Below lg: a section switcher naming where you are, opening the drawer. A chevron,
          not a burger: the site header already carries one, and two identical icons a row
          apart read as the same control. The accessible name keeps the visible label in it
@@ -131,12 +130,7 @@
            an <aside>: a named complementary landmark wrapping a nav of the same name read
            as two "Account sections" landmarks, one inside the other. The nav is the
            landmark. -->
-      <div
-        class={cn(
-          'hidden shrink-0 transition-[width] duration-200 lg:block',
-          collapsed ? 'lg:w-14' : 'lg:w-56',
-        )}
-      >
+      <div class={cn('hidden shrink-0 transition-[width] duration-200 lg:block', collapsed ? 'lg:w-14' : 'lg:w-56')}>
         <!-- top-20 clears the sticky site header (h-14), the offset every other sticky
              side panel uses; at top-6 the collapse toggle sat behind it. Capped to the
              window and scrollable, so on a short window the last links stay reachable. -->
@@ -146,31 +140,36 @@
           </nav>
           <!-- Help and the collapse toggle close the column, so the nav's first item lines up
                with the section heading instead of under a row of utilities. -->
-          <div class={cn('mt-2 flex items-center border-t border-border pt-2', collapsed ? 'flex-col gap-1' : 'justify-between')}>
-          <button
-            type="button"
-            onclick={() => (helpOpen = !helpOpen)}
-            aria-haspopup="dialog"
-            aria-expanded={helpOpen}
-            title={helpLabel}
-            class="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          <div
+            class={cn(
+              'mt-2 flex items-center border-t border-border pt-2',
+              collapsed ? 'flex-col gap-1' : 'justify-between',
+            )}
           >
-            <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
-            <span class={collapsed ? 'sr-only' : undefined}>{helpLabel}</span>
-          </button>
-          <button
-            type="button"
-            onclick={toggleNav}
-            title={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
-            aria-label={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
-            class="flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            {#if collapsed}
-              <PanelLeft class="size-4" />
-            {:else}
-              <PanelLeftClose class="size-4" />
-            {/if}
-          </button>
+            <button
+              type="button"
+              onclick={() => (helpOpen = !helpOpen)}
+              aria-haspopup="dialog"
+              aria-expanded={helpOpen}
+              title={helpLabel}
+              class="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
+              <span class={collapsed ? 'sr-only' : undefined}>{helpLabel}</span>
+            </button>
+            <button
+              type="button"
+              onclick={toggleNav}
+              title={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
+              aria-label={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
+              class="flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              {#if collapsed}
+                <PanelLeft class="size-4" />
+              {:else}
+                <PanelLeftClose class="size-4" />
+              {/if}
+            </button>
           </div>
         </div>
       </div>

@@ -25,9 +25,7 @@
   // beside a stack start at different places in one card.
   const hasStack = (rows: PageData['sections'][number]['rows']) =>
     rows.some((row) => row.companies.length > 0 || row.flags.length > 1);
-  const visibleSections = $derived(
-    data.sections.filter((section) => section.rows.some(matches)),
-  );
+  const visibleSections = $derived(data.sections.filter((section) => section.rows.some(matches)));
 </script>
 
 <Seo

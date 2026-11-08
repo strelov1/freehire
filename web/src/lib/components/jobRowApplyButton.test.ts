@@ -39,10 +39,8 @@ describe('JobRow direct-apply button', () => {
   it('is gated on an open job that actually carries an outbound url', () => {
     // A non-empty one: a vacancy taking applications on freehire carries `url: ""`. And an
     // open one: a closed posting takes no applications, on any surface that lists it.
-    expect(ROW).toContain(
-      "const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);",
-    );
-    expect(ROW).toContain("job.direct_apply === true && !job.closed_at");
+    expect(ROW).toContain("const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);");
+    expect(ROW).toContain('job.direct_apply === true && !job.closed_at');
     expect(applyBlock).not.toBe('');
   });
 
@@ -99,9 +97,7 @@ describe('JobRow direct-apply button', () => {
 
   it('announces the apply choices through a persistently mounted live region', () => {
     expect(ROW).toContain('<div class="sr-only" aria-live="polite" aria-atomic="true">');
-    expect(ROW).toContain(
-      'Choose how to apply to {job.title}: sign in, sign up, or continue without signing in.',
-    );
+    expect(ROW).toContain('Choose how to apply to {job.title}: sign in, sign up, or continue without signing in.');
   });
 });
 

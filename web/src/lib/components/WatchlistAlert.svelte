@@ -26,9 +26,7 @@
   });
 
   const matched = $derived(matchedSavedSearch(QUERY, savedSearches.items));
-  const subscribed = $derived(
-    notifications.subscriptions.some((s) => s.saved_search_id === matched?.id),
-  );
+  const subscribed = $derived(notifications.subscriptions.some((s) => s.saved_search_id === matched?.id));
 
   async function create() {
     if (busy) return;

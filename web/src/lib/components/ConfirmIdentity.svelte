@@ -75,9 +75,7 @@
   const identitiesData = new AsyncData<string[]>([]);
   function loadProviders(): void {
     void identitiesData.run(async () =>
-      (await api.connectedIdentities()).identities
-        .filter((i) => i.status === 'active')
-        .map((i) => i.provider),
+      (await api.connectedIdentities()).identities.filter((i) => i.status === 'active').map((i) => i.provider),
     );
   }
   $effect(() => {
@@ -172,73 +170,71 @@
   const providers = $derived(identitiesData.value);
   // The one state this component must never reach in silence: claiming confirmation is
   // required while offering nothing to press.
-  const noMethodAvailable = $derived(
-    !hasPassword && identitiesData.status === 'ready' && providers.length === 0,
-  );
+  const noMethodAvailable = $derived(!hasPassword && identitiesData.status === 'ready' && providers.length === 0);
 </script>
 
 {#if active}
   <!-- `aria-live` because this block SWAPS IN PLACE: `refused()` turns a standing "identity
      confirmed" back into a password field after the server 428s, and a screen-reader user
      would otherwise be given no sign that what they are looking at changed. -->
-{#if confirmed}
-  <p
-    aria-live="polite"
-    class="flex items-center gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm"
-  >
-    <span aria-hidden="true">✓</span>
-    <span>{s.confirmed}</span>
-    <span class="text-muted-foreground">· {remaining}</span>
-  </p>
-{:else}
-  <div aria-live="polite" class="flex flex-col gap-2 border-t border-border pt-4">
-    <!-- The heading and the prompt are the DEMAND, so they wait until there is something
+  {#if confirmed}
+    <p
+      aria-live="polite"
+      class="flex items-center gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm"
+    >
+      <span aria-hidden="true">✓</span>
+      <span>{s.confirmed}</span>
+      <span class="text-muted-foreground">· {remaining}</span>
+    </p>
+  {:else}
+    <div aria-live="polite" class="flex flex-col gap-2 border-t border-border pt-4">
+      <!-- The heading and the prompt are the DEMAND, so they wait until there is something
          to demand with. While the providers are still loading the block says only what it
          is doing: a "confirm it is you" above an empty box is the shape the spec forbids,
          and it is on screen for as long as that request takes. -->
-    {#if !hasPassword && identitiesData.status === 'loading'}
-      <p class="text-sm text-muted-foreground">{s.providersLoading}</p>
-    {:else}
-      <p class="text-sm font-medium">{s.heading}</p>
-      <p class="text-sm text-muted-foreground">{prompt}</p>
+      {#if !hasPassword && identitiesData.status === 'loading'}
+        <p class="text-sm text-muted-foreground">{s.providersLoading}</p>
+      {:else}
+        <p class="text-sm font-medium">{s.heading}</p>
+        <p class="text-sm text-muted-foreground">{prompt}</p>
 
-      {#if hasPassword}
-        <label class="mt-1 flex flex-col gap-1">
-          <span class="text-sm font-medium">{s.passwordLabel}</span>
-          <Input type="password" autocomplete="current-password" bind:value={password} {disabled} />
-        </label>
-        {#if inlineError}
-          <p class="text-sm text-destructive">{inlineError}</p>
-        {/if}
-      {:else if identitiesData.status === 'error' || noMethodAvailable}
-      <!-- Both of these states used to be terminal: a sentence, and nothing to press. The
+        {#if hasPassword}
+          <label class="mt-1 flex flex-col gap-1">
+            <span class="text-sm font-medium">{s.passwordLabel}</span>
+            <Input type="password" autocomplete="current-password" bind:value={password} {disabled} />
+          </label>
+          {#if inlineError}
+            <p class="text-sm text-destructive">{inlineError}</p>
+          {/if}
+        {:else if identitiesData.status === 'error' || noMethodAvailable}
+          <!-- Both of these states used to be terminal: a sentence, and nothing to press. The
            effect has no reason to re-run, so a member whose network blipped was stuck
            until they reloaded the page — the same dead end this component exists to
            abolish, just one layer down. The retry also covers the no-method case, where
            an empty list may simply be a read that went wrong. -->
-        <p class="text-sm text-destructive">
-          {identitiesData.status === 'error' ? s.providersError : s.noMethod}
-        </p>
-        <div class="mt-1">
-          <Button variant="outline" size="sm" {disabled} onclick={loadProviders}>{s.retry}</Button>
-        </div>
-      {:else}
-        <p class="text-sm text-muted-foreground">{s.returnNote}</p>
-        <div class="mt-1 flex flex-wrap gap-2">
-          {#each providers as provider (provider)}
-            <Button
-              variant="outline"
-              size="sm"
-              {disabled}
-              onclick={() => beginProviderReauthentication(provider, returnTo, draft?.())}
-            >
-              {s.confirmWithPrefix}
-              {provider}
-            </Button>
-          {/each}
-        </div>
+          <p class="text-sm text-destructive">
+            {identitiesData.status === 'error' ? s.providersError : s.noMethod}
+          </p>
+          <div class="mt-1">
+            <Button variant="outline" size="sm" {disabled} onclick={loadProviders}>{s.retry}</Button>
+          </div>
+        {:else}
+          <p class="text-sm text-muted-foreground">{s.returnNote}</p>
+          <div class="mt-1 flex flex-wrap gap-2">
+            {#each providers as provider (provider)}
+              <Button
+                variant="outline"
+                size="sm"
+                {disabled}
+                onclick={() => beginProviderReauthentication(provider, returnTo, draft?.())}
+              >
+                {s.confirmWithPrefix}
+                {provider}
+              </Button>
+            {/each}
+          </div>
+        {/if}
       {/if}
-    {/if}
-  </div>
-{/if}
+    </div>
+  {/if}
 {/if}

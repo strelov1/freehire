@@ -93,12 +93,8 @@
   const allowance = $derived(fit?.allowance ?? null);
   const blockedNew = $derived(coldStart && refuses(allowance));
   const dimensions = $derived(analysis?.dimensions ?? []);
-  const requirements = $derived(
-    analysis?.requirement_match?.length ? analysis.requirement_match : stream.requirements,
-  );
-  const hiddenSignals = $derived(
-    analysis?.hidden_signals?.length ? analysis.hidden_signals : stream.hiddenSignals,
-  );
+  const requirements = $derived(analysis?.requirement_match?.length ? analysis.requirement_match : stream.requirements);
+  const hiddenSignals = $derived(analysis?.hidden_signals?.length ? analysis.hidden_signals : stream.hiddenSignals);
   // Coverage tally for the ATS-view header: covered folds in synonym-only matches (both are
   // positive, matching the hero's count), `addit` is the fixable near-miss, `gap` the genuine
   // miss. `synonym` is a sub-count of covered, surfaced as a legend note on the coverage meter.
@@ -117,12 +113,8 @@
   // Split the ledger so the misses stand out: `attentionReqs` are the fixable
   // near-misses + genuine gaps, pulled into a highlighted callout; `coveredReqs`
   // are everything already satisfied.
-  const attentionReqs = $derived(
-    requirements.filter((r) => r.status === 'missing-have' || r.status === 'missing-gap'),
-  );
-  const coveredReqs = $derived(
-    requirements.filter((r) => r.status === 'covered' || r.status === 'synonym-only'),
-  );
+  const attentionReqs = $derived(requirements.filter((r) => r.status === 'missing-have' || r.status === 'missing-gap'));
+  const coveredReqs = $derived(requirements.filter((r) => r.status === 'covered' || r.status === 'synonym-only'));
   const reqTotal = $derived(reqTally.covered + reqTally.addit + reqTally.gap);
 
   function start() {
@@ -138,7 +130,16 @@
     es = source;
     // NB: our server error event is `stream_error`, never `error` — `error` is
     // EventSource's own reserved connection-error event (handled by onerror below).
-    for (const name of ['meta', 'stage_start', 'stage_done', 'thinking', 'requirements', 'dimensions', 'final', 'stream_error']) {
+    for (const name of [
+      'meta',
+      'stage_start',
+      'stage_done',
+      'thinking',
+      'requirements',
+      'dimensions',
+      'final',
+      'stream_error',
+    ]) {
       source.addEventListener(name, (e) => {
         // A malformed/truncated frame must not throw out of the listener: an
         // uncaught error here would skip the stop() below, so a bad `final` frame
@@ -187,7 +188,7 @@
   async function recoverFromDrop() {
     recovering = true;
     let delay = 3_000;
-    for (let attempts = 0; attempts < 30; ) {
+    for (let attempts = 0; attempts < 30;) {
       await sleep(delay);
       if (destroyed || !recovering) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') continue;
@@ -225,13 +226,7 @@
     // opening its stream (stages stuck on "pending" forever).
     const hasAnalysis = !!fit?.analysis;
     const noAllowance = !hasAnalysis && refuses(fit?.allowance);
-    if (
-      isAuthenticated() &&
-      !hasAnalysis &&
-      (fit?.has_cv ?? true) &&
-      !noAllowance &&
-      autoRun
-    ) {
+    if (isAuthenticated() && !hasAnalysis && (fit?.has_cv ?? true) && !noAllowance && autoRun) {
       start();
     }
   });
@@ -293,7 +288,9 @@
       Sign in to analyse your match for this role.
     </p>
   {:else if !stream.hasCV}
-    <div class="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border bg-card p-10 text-center">
+    <div
+      class="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border bg-card p-10 text-center"
+    >
       <FileText class="size-8 text-muted-foreground" />
       <p class="text-sm text-muted-foreground">Upload a CV to analyse your match for this role.</p>
       <Button variant="primary" size="sm" href={resolve('/my/profile')}>Upload CV</Button>
@@ -334,22 +331,32 @@
             <svg width="140" height="140" viewBox="0 0 140 140" class="-rotate-90">
               <circle cx="70" cy="70" r={GAUGE_R} fill="none" class="stroke-secondary" stroke-width="10" />
               <circle
-                cx="70" cy="70" r={GAUGE_R} fill="none"
-                class="fit-arc {toneStroke[tone]}" stroke-width="10" stroke-linecap="round"
+                cx="70"
+                cy="70"
+                r={GAUGE_R}
+                fill="none"
+                class="fit-arc {toneStroke[tone]}"
+                stroke-width="10"
+                stroke-linecap="round"
                 stroke-dasharray="{(GAUGE_C * analysis.overall_score) / 100} {GAUGE_C}"
               />
             </svg>
             <div class="absolute inset-0 flex flex-col items-center justify-center">
-              <span class="text-4xl font-bold tabular-nums leading-none tracking-tight {toneText[tone]}">{analysis.overall_score}</span>
+              <span class="text-4xl font-bold tabular-nums leading-none tracking-tight {toneText[tone]}"
+                >{analysis.overall_score}</span
+              >
               <span class="text-xs font-medium text-muted-foreground">/ 100</span>
             </div>
           </div>
           <!-- Verdict copy -->
           <div class="flex flex-1 flex-col items-center gap-3 text-center sm:items-start sm:text-left">
-            <span class="rounded-full border px-3 py-1 text-sm font-semibold uppercase tracking-wide {toneChip[tone]}">{analysis.verdict}</span>
+            <span class="rounded-full border px-3 py-1 text-sm font-semibold uppercase tracking-wide {toneChip[tone]}"
+              >{analysis.verdict}</span
+            >
             <p class="text-sm text-muted-foreground">
-              Across <strong class="font-semibold text-foreground">{dimensions.length}</strong> dimensions,
-              covering <strong class="font-semibold text-foreground">{covered}</strong> of
+              Across <strong class="font-semibold text-foreground">{dimensions.length}</strong> dimensions, covering
+              <strong class="font-semibold text-foreground">{covered}</strong>
+              of
               <strong class="font-semibold text-foreground">{requirements.length}</strong> requirements an ATS screens for.
             </p>
             <Button variant="ghost" size="sm" onclick={start} disabled={streaming}>
@@ -366,7 +373,10 @@
     {/if}
 
     {#if isStale && !streaming}
-      <p class="fit-reveal rounded-lg border border-dashed border-warning/40 bg-warning/5 px-4 py-2.5 text-xs text-warning-strong" style="--i:2">
+      <p
+        class="fit-reveal rounded-lg border border-dashed border-warning/40 bg-warning/5 px-4 py-2.5 text-xs text-warning-strong"
+        style="--i:2"
+      >
         Your CV or this role changed since this ran — recompute for an up-to-date read.
       </p>
     {/if}
@@ -379,7 +389,10 @@
          used up, and naming a reset time under it promises a morning that changes nothing —
          the link below is the only thing that would. -->
     {#if blockedNew}
-      <div class="fit-reveal flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-card p-10 text-center" style="--i:1">
+      <div
+        class="fit-reveal flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-card p-10 text-center"
+        style="--i:1"
+      >
         {#if notInPlan(allowance)}
           <p class="text-sm font-medium">Your plan doesn't include job analyses.</p>
           <p class="text-xs text-muted-foreground">
@@ -408,26 +421,42 @@
             <div class="relative z-10 flex flex-1 flex-col items-center gap-2">
               <span
                 class="flex size-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors
-                {st.state === 'done' ? 'border-brand bg-brand text-brand-foreground' : st.state === 'active' ? 'border-brand bg-card text-primary' : 'border-border bg-card text-muted-foreground'}"
+                {st.state === 'done'
+                  ? 'border-brand bg-brand text-brand-foreground'
+                  : st.state === 'active'
+                    ? 'border-brand bg-card text-primary'
+                    : 'border-border bg-card text-muted-foreground'}"
               >
                 {#if st.state === 'done'}<Check class="size-4" />
                 {:else if st.state === 'active'}<Loader class="size-4 animate-spin" />
                 {:else}{st.n}{/if}
               </span>
-              <span class="max-w-[7rem] text-center text-xs font-medium leading-tight sm:text-sm {st.state === 'pending' ? 'text-muted-foreground' : 'text-foreground'}">{st.label}</span>
+              <span
+                class="max-w-[7rem] text-center text-xs font-medium leading-tight sm:text-sm {st.state === 'pending'
+                  ? 'text-muted-foreground'
+                  : 'text-foreground'}">{st.label}</span
+              >
             </div>
           {/each}
         </div>
 
         {#if recovering}
-          <p class="mt-6 flex items-center justify-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
+          <p
+            class="mt-6 flex items-center justify-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground"
+          >
             <Loader class="size-3.5 animate-spin" aria-hidden="true" /> Connection dropped — waiting for your result…
           </p>
         {/if}
 
         {#if stream.thinking}
           <div class="mt-6 border-t border-border pt-4">
-            <button type="button" class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground" onclick={() => (showThinking = !showThinking)} aria-expanded={showThinking} aria-controls={thinkingId}>
+            <button
+              type="button"
+              class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              onclick={() => (showThinking = !showThinking)}
+              aria-expanded={showThinking}
+              aria-controls={thinkingId}
+            >
               <span class="relative flex size-2" aria-hidden="true">
                 <span class="absolute inline-flex size-full motion-safe:animate-ping rounded-full bg-brand/60"></span>
                 <span class="relative inline-flex size-2 rounded-full bg-brand"></span>
@@ -435,13 +464,21 @@
               Thinking <span aria-hidden="true">{showThinking ? '▾' : '▸'}</span>
             </button>
             {#if showThinking}
-              <p id={thinkingId} bind:this={thinkingEl} class="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">{stream.thinking}</p>
+              <p
+                id={thinkingId}
+                bind:this={thinkingEl}
+                class="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground"
+              >
+                {stream.thinking}
+              </p>
             {/if}
           </div>
         {/if}
       </section>
     {:else if !blockedNew && !analysis && !stream.error}
-      <div class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card p-8 text-center">
+      <div
+        class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card p-8 text-center"
+      >
         <p class="text-sm text-muted-foreground">
           Run the three-stage match analysis — Extract &amp; Match, Recruiter verdict, then Adversarial audit.
         </p>
@@ -453,7 +490,9 @@
 
     {#if stream.error && !analysis}
       {@const msg = stream.error.charAt(0).toUpperCase() + stream.error.slice(1)}
-      <div class="flex flex-col items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-8 text-center">
+      <div
+        class="flex flex-col items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-8 text-center"
+      >
         <span class="flex size-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
           <TriangleAlert class="size-5" aria-hidden="true" />
         </span>
@@ -507,15 +546,33 @@
                 <span class="text-sm text-muted-foreground">requirements covered</span>
               </div>
               <div class="flex h-2 overflow-hidden rounded-full bg-secondary">
-                {#if reqTally.covered}<div class="fit-meter h-full bg-brand" style="width: {(reqTally.covered / reqTotal) * 100}%"></div>{/if}
-                {#if reqTally.addit}<div class="fit-meter h-full bg-warning" style="width: {(reqTally.addit / reqTotal) * 100}%"></div>{/if}
-                {#if reqTally.gap}<div class="fit-meter h-full bg-destructive" style="width: {(reqTally.gap / reqTotal) * 100}%"></div>{/if}
+                {#if reqTally.covered}<div
+                    class="fit-meter h-full bg-brand"
+                    style="width: {(reqTally.covered / reqTotal) * 100}%"
+                  ></div>{/if}
+                {#if reqTally.addit}<div
+                    class="fit-meter h-full bg-warning"
+                    style="width: {(reqTally.addit / reqTotal) * 100}%"
+                  ></div>{/if}
+                {#if reqTally.gap}<div
+                    class="fit-meter h-full bg-destructive"
+                    style="width: {(reqTally.gap / reqTotal) * 100}%"
+                  ></div>{/if}
               </div>
               <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                {#if reqTally.covered}<span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-brand"></span>{reqTally.covered} covered</span>{/if}
-                {#if reqTally.addit}<span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-warning"></span>{reqTally.addit} to add</span>{/if}
-                {#if reqTally.gap}<span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-destructive"></span>{reqTally.gap} gap</span>{/if}
-                {#if reqTally.synonym}<span class="flex items-center gap-1.5"><span class="size-2 rounded-full border border-dotted border-brand-strong"></span>{reqTally.synonym} via synonym</span>{/if}
+                {#if reqTally.covered}<span class="flex items-center gap-1.5"
+                    ><span class="size-2 rounded-full bg-brand"></span>{reqTally.covered} covered</span
+                  >{/if}
+                {#if reqTally.addit}<span class="flex items-center gap-1.5"
+                    ><span class="size-2 rounded-full bg-warning"></span>{reqTally.addit} to add</span
+                  >{/if}
+                {#if reqTally.gap}<span class="flex items-center gap-1.5"
+                    ><span class="size-2 rounded-full bg-destructive"></span>{reqTally.gap} gap</span
+                  >{/if}
+                {#if reqTally.synonym}<span class="flex items-center gap-1.5"
+                    ><span class="size-2 rounded-full border border-dotted border-brand-strong"
+                    ></span>{reqTally.synonym} via synonym</span
+                  >{/if}
               </div>
             {/if}
           </div>
@@ -536,7 +593,9 @@
                     <span class="h-4 w-[3px] shrink-0 rounded-full {toneBar[meta.tone]}"></span>
                     <span class="min-w-0 flex-1 text-sm font-medium leading-snug text-foreground">{r.text}</span>
                     {#if r.priority && r.priority.toLowerCase() !== 'required'}
-                      <span class="shrink-0 text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground">{r.priority}</span>
+                      <span class="shrink-0 text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground"
+                        >{r.priority}</span
+                      >
                     {/if}
                     <span class="shrink-0 text-xs font-semibold {toneText[meta.tone]}">{meta.label}</span>
                   </li>
@@ -558,16 +617,30 @@
                   {@const syn = r.status === 'synonym-only'}
                   {@const weak = r.evidence_strength === 'keyword'}
                   <li class="flex items-baseline gap-2.5 border-b border-border/60 py-2">
-                    <span class="shrink-0 text-xs leading-snug {syn ? 'text-muted-foreground' : 'text-brand-strong'}">{syn ? '≈' : '✓'}</span>
-                    <span class={['min-w-0 flex-1 text-sm leading-snug', syn && 'border-b border-dotted border-brand-strong/50']}>{r.text}</span>
+                    <span class="shrink-0 text-xs leading-snug {syn ? 'text-muted-foreground' : 'text-brand-strong'}"
+                      >{syn ? '≈' : '✓'}</span
+                    >
+                    <span
+                      class={[
+                        'min-w-0 flex-1 text-sm leading-snug',
+                        syn && 'border-b border-dotted border-brand-strong/50',
+                      ]}>{r.text}</span
+                    >
                     {#if r.evidence_strength}
                       <span
-                        class={['shrink-0 text-[0.6rem] font-medium lowercase tracking-wide', weak ? 'text-warning-strong' : 'text-muted-foreground']}
-                        title={weak ? 'Only a bare mention in your CV — back it with a concrete result' : 'Backed by ' + r.evidence_strength + ' evidence in your CV'}
-                      >{r.evidence_strength}</span>
+                        class={[
+                          'shrink-0 text-[0.6rem] font-medium lowercase tracking-wide',
+                          weak ? 'text-warning-strong' : 'text-muted-foreground',
+                        ]}
+                        title={weak
+                          ? 'Only a bare mention in your CV — back it with a concrete result'
+                          : 'Backed by ' + r.evidence_strength + ' evidence in your CV'}>{r.evidence_strength}</span
+                      >
                     {/if}
                     {#if r.priority && r.priority.toLowerCase() !== 'required'}
-                      <span class="shrink-0 text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground">{r.priority}</span>
+                      <span class="shrink-0 text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground"
+                        >{r.priority}</span
+                      >
                     {/if}
                   </li>
                 {/each}
@@ -602,7 +675,10 @@
               <ul class="flex flex-col gap-2.5">
                 {#each analysis.strengths as s, i (i)}
                   <li class="flex gap-2.5 text-sm leading-relaxed">
-                    <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-brand-muted text-brand-strong">+</span>
+                    <span
+                      class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-brand-muted text-brand-strong"
+                      >+</span
+                    >
                     {s}
                   </li>
                 {/each}
@@ -615,7 +691,10 @@
               <ul class="flex flex-col gap-2.5">
                 {#each analysis.gaps as g, i (i)}
                   <li class="flex gap-2.5 text-sm leading-relaxed">
-                    <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive-strong">−</span>
+                    <span
+                      class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive-strong"
+                      >−</span
+                    >
                     {g}
                   </li>
                 {/each}

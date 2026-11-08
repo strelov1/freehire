@@ -194,20 +194,9 @@
 
   <!-- No separate "n/m sections" count: the tab dots already mark the empty sections, and
        a third progress meter beside the setup checklist read as clutter. -->
-  <TabStrip
-    {tabs}
-    active={activeSectionId}
-    label="Profile sections"
-    panelId={PANEL_ID}
-    class="mb-6"
-  />
+  <TabStrip {tabs} active={activeSectionId} label="Profile sections" panelId={PANEL_ID} class="mb-6" />
 
-  <div
-    id={PANEL_ID}
-    role="tabpanel"
-    aria-labelledby={tabStripId(PANEL_ID, activeSectionId)}
-    tabindex="0"
-  >
+  <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, activeSectionId)} tabindex="0">
     {@render children()}
   </div>
 {/if}

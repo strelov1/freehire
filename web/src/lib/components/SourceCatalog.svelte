@@ -68,18 +68,14 @@
     if (!q) return all;
     // Match the key as well as the label: somebody who read `source=smartrecruiters` in a
     // URL should find it by typing exactly that.
-    return all.filter(
-      (s) => s.source.toLowerCase().includes(q) || sourceLabel(s.source).toLowerCase().includes(q)
-    );
+    return all.filter((s) => s.source.toLowerCase().includes(q) || sourceLabel(s.source).toLowerCase().includes(q));
   });
 
   const grouped = $derived(
     GROUPS.map((group) => ({
       ...group,
-      entries: matches
-        .filter((s) => s.kind === group.kind)
-        .sort((a, b) => sortWeight(b) - sortWeight(a)),
-    })).filter((group) => group.entries.length > 0)
+      entries: matches.filter((s) => s.kind === group.kind).sort((a, b) => sortWeight(b) - sortWeight(a)),
+    })).filter((group) => group.entries.length > 0),
   );
 
   // The headline total sums only the sources whose count was actually MEASURED.
@@ -90,9 +86,7 @@
   // correctly says "not measured yet". The per-card discipline has to reach the aggregate.
   // Narrowed to numbers BEFORE summing, so the reduce has no null to decide about and the
   // shape cannot express the bug it is guarding against.
-  const measured = $derived(
-    (sources ?? []).map((s) => s.jobs?.browsable).filter((n): n is number => n != null)
-  );
+  const measured = $derived((sources ?? []).map((s) => s.jobs?.browsable).filter((n): n is number => n != null));
   const totalJobs = $derived(measured.reduce((sum, n) => sum + n, 0));
 
   // When the snapshot was taken. Every row of one run shares it, so it is stated once here
@@ -124,9 +118,7 @@
   // the headline number on the card is the de-duplicated one. Without printing the base, a
   // card reading "40 jobs · 30% not matched to one" gives a reader two numbers they cannot
   // reconcile and no way to notice they are measuring different things.
-  function overlap(
-    entry: SourceEntry
-  ): { matched: string; unmatched: string; width: number; base: number } | null {
+  function overlap(entry: SourceEntry): { matched: string; unmatched: string; width: number; base: number } | null {
     const jobs = entry.jobs;
     if (!jobs || jobs.ats_matched == null || jobs.ats_unmatched == null || jobs.open <= 0) {
       return null;
@@ -144,13 +136,11 @@
   function jobsHref(source: string): string {
     return `${resolve('/jobs')}?source=${encodeURIComponent(source)}`;
   }
-
 </script>
 
 {#if sources === null}
   <p class="rounded-lg border border-border bg-muted/30 p-6 text-sm text-muted-foreground">
-    The source catalogue is unavailable right now. It is rebuilt on a schedule — try again in
-    a few minutes.
+    The source catalogue is unavailable right now. It is rebuilt on a schedule — try again in a few minutes.
   </p>
 {:else}
   <div class="mb-8">
@@ -222,9 +212,7 @@
                       <span class="text-muted-foreground">No open jobs right now</span>
                     {:else}
                       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string, no dynamic route to resolve -->
-                      <a href={jobsHref(entry.source)} class="underline-offset-4 hover:underline"
-                        >{count(jobs)} jobs</a
-                      >
+                      <a href={jobsHref(entry.source)} class="underline-offset-4 hover:underline">{count(jobs)} jobs</a>
                     {/if}
                   </p>
 

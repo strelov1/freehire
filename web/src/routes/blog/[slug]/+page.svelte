@@ -34,12 +34,7 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-3xl px-4 py-6">
-  <a
-    href={resolve('/blog')}
-    class="text-sm text-muted-foreground hover:text-foreground"
-  >
-    ← Blog
-  </a>
+  <a href={resolve('/blog')} class="text-sm text-muted-foreground hover:text-foreground"> ← Blog </a>
 
   <article class="mt-4">
     <header class="mb-6">

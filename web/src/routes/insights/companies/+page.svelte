@@ -14,9 +14,7 @@
   const title = 'Company Hiring Signal · freehire';
   const description =
     'Which companies are ramping up or slowing down hiring — ranked by the 30-day change in their number of open jobs across the freehire catalogue.';
-  const updated = $derived(
-    new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-  );
+  const updated = $derived(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
   const jsonLd = $derived(
     jsonLdScript([
       datasetJsonLd('Company hiring signal', description, canonical, origin),

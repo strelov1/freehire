@@ -7,4 +7,9 @@
   let { name, size = 'md', class: className }: { name: string; size?: 'sm' | 'md' | 'lg'; class?: string } = $props();
 </script>
 
-<EntityLogo {name} src={companyLogoUrl(name) ?? undefined} {size} class={cn('shrink-0 bg-white ring-1 ring-border', className)} />
+<EntityLogo
+  {name}
+  src={companyLogoUrl(name) ?? undefined}
+  {size}
+  class={cn('shrink-0 bg-white ring-1 ring-border', className)}
+/>

@@ -97,11 +97,7 @@ export interface SubscriptionsPort {
  *  this reached a user as a raw "already subscribed to this saved search on this
  *  channel". The load is awaited first for the same reason: a write racing an in-flight
  *  load is discarded by the snapshot that lands after it. */
-export async function ensureSubscribed(
-  savedSearchId: number,
-  channel: string,
-  subs: SubscriptionsPort,
-): Promise<void> {
+export async function ensureSubscribed(savedSearchId: number, channel: string, subs: SubscriptionsPort): Promise<void> {
   await subs.ensureLoaded();
   if (subs.find(savedSearchId, channel)) return;
   try {

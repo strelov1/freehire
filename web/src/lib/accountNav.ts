@@ -130,10 +130,7 @@ export type AccountNavItem = (typeof accountNav)[number];
 // `moderatorOrBeta` section needs either. This is a UI affordance only — the relevant
 // server surfaces re-check on every request, so hiding the nav is not the security
 // boundary.
-export function visibleAccountNav(
-  isModerator: boolean,
-  isBetaTester: boolean,
-): readonly AccountNavItem[] {
+export function visibleAccountNav(isModerator: boolean, isBetaTester: boolean): readonly AccountNavItem[] {
   return accountNav.filter((i) => {
     if ('moderatorOnly' in i && i.moderatorOnly) return isModerator;
     if ('betaOnly' in i && i.betaOnly) return isBetaTester;

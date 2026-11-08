@@ -6,21 +6,45 @@ const { saveProfile } = vi.hoisted(() => ({ saveProfile: vi.fn() }));
 vi.mock('#lib/api.js', () => ({ api: { saveProfile } }));
 
 const emptyProfile: UserProfile = {
-  specializations: [], skills: [], seniorities: [],
-  excluded_skills: [], excluded_sources: [], excluded_companies: [],
-  location_preferences: null, derived_location: null, cv: null,
-  created_at: null, updated_at: null,
+  specializations: [],
+  skills: [],
+  seniorities: [],
+  excluded_skills: [],
+  excluded_sources: [],
+  excluded_companies: [],
+  location_preferences: null,
+  derived_location: null,
+  cv: null,
+  created_at: null,
+  updated_at: null,
 };
 
 beforeEach(async () => {
   profileStore.reset();
-  saveProfile.mockReset().mockImplementation(async (
-    specializations, skills, seniorities, excluded_skills,
-    excluded_sources, excluded_companies, location_preferences, job_languages,
-  ) => ({
-    ...emptyProfile, specializations, skills, seniorities, excluded_skills,
-    excluded_sources, excluded_companies, location_preferences, job_languages,
-  }));
+  saveProfile
+    .mockReset()
+    .mockImplementation(
+      async (
+        specializations,
+        skills,
+        seniorities,
+        excluded_skills,
+        excluded_sources,
+        excluded_companies,
+        location_preferences,
+        job_languages,
+      ) => ({
+        ...emptyProfile,
+        specializations,
+        skills,
+        seniorities,
+        excluded_skills,
+        excluded_sources,
+        excluded_companies,
+        location_preferences,
+        job_languages,
+      }),
+    );
   await profileStore.save(['backend'], ['go'], [], [], [], [], null);
   saveProfile.mockClear();
 });
@@ -28,7 +52,12 @@ beforeEach(async () => {
 describe('profile CV merge', () => {
   it('preserves a manual role edit queued before the CV import', async () => {
     let finish!: (profile: UserProfile) => void;
-    saveProfile.mockImplementationOnce(() => new Promise<UserProfile>((resolve) => { finish = resolve; }));
+    saveProfile.mockImplementationOnce(
+      () =>
+        new Promise<UserProfile>((resolve) => {
+          finish = resolve;
+        }),
+    );
     const edit = profileStore.updateSpecializations(['backend', 'devops']);
     await vi.waitFor(() => expect(saveProfile).toHaveBeenCalledOnce());
 
@@ -49,7 +78,18 @@ describe('profile CV merge', () => {
   });
 
   it('caps imported roles while preserving every manually selected role', async () => {
-    const roles = ['backend', 'frontend', 'fullstack', 'mobile', 'devops', 'sre', 'qa', 'security', 'hardware', 'embedded'];
+    const roles = [
+      'backend',
+      'frontend',
+      'fullstack',
+      'mobile',
+      'devops',
+      'sre',
+      'qa',
+      'security',
+      'hardware',
+      'embedded',
+    ];
     await profileStore.updateSpecializations(roles);
     saveProfile.mockClear();
 

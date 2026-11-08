@@ -46,21 +46,35 @@ describe('jobFilterSearchItems', () => {
     const enabled = jobFilterSearchItems({ hideSeen: true });
     expect(matchFilterSearch(enabled, 'viewed').some((h) => h.action === 'hide-seen')).toBe(true);
     expect(jobFilterSearchItems().some((h) => h.action === 'hide-seen')).toBe(false);
-    expect(jobFilterSearchItems({ hideSeen: true, railKeys: ['salary'] }).some((h) => h.action === 'hide-seen')).toBe(false);
+    expect(jobFilterSearchItems({ hideSeen: true, railKeys: ['salary'] }).some((h) => h.action === 'hide-seen')).toBe(
+      false,
+    );
   });
 
   it('offers Your watchlist only when the personal filters are available', () => {
-    expect(matchFilterSearch(jobFilterSearchItems({ watchlist: true }), 'watchlist').some((h) => h.action === 'watchlist')).toBe(true);
+    expect(
+      matchFilterSearch(jobFilterSearchItems({ watchlist: true }), 'watchlist').some((h) => h.action === 'watchlist'),
+    ).toBe(true);
     expect(jobFilterSearchItems().some((h) => h.action === 'watchlist')).toBe(false);
-    expect(jobFilterSearchItems({ watchlist: true, exclude: ['company_slug'] }).some((h) => h.action === 'watchlist')).toBe(false);
+    expect(
+      jobFilterSearchItems({ watchlist: true, exclude: ['company_slug'] }).some((h) => h.action === 'watchlist'),
+    ).toBe(false);
   });
 
   it('offers Hiring again only in an eligible Company pane, including former-employer aliases', () => {
     const enabled = jobFilterSearchItems({ formerEmployers: true });
     expect(matchFilterSearch(enabled, 'former employers').some((h) => h.action === 'former-employers')).toBe(true);
     expect(jobFilterSearchItems().some((h) => h.action === 'former-employers')).toBe(false);
-    expect(jobFilterSearchItems({ formerEmployers: true, exclude: ['company_slug'] }).some((h) => h.action === 'former-employers')).toBe(false);
-    expect(jobFilterSearchItems({ formerEmployers: true, railKeys: ['salary'] }).some((h) => h.action === 'former-employers')).toBe(false);
+    expect(
+      jobFilterSearchItems({ formerEmployers: true, exclude: ['company_slug'] }).some(
+        (h) => h.action === 'former-employers',
+      ),
+    ).toBe(false);
+    expect(
+      jobFilterSearchItems({ formerEmployers: true, railKeys: ['salary'] }).some(
+        (h) => h.action === 'former-employers',
+      ),
+    ).toBe(false);
   });
 
   it('hides panes and params the modal is not showing', () => {

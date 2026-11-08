@@ -23,18 +23,30 @@
   let membershipError = $state('');
   let confirmLeaveOpen = $state(false);
 
-  onMount(() => { void status.run(() => api.buddyStatus()); });
+  onMount(() => {
+    void status.run(() => api.buddyStatus());
+  });
 
   // Joining or leaving changes which conversations exist, so the shared list is re-read.
-  async function join() { await status.run(() => api.joinBuddies()); messagingDock.reset(); }
+  async function join() {
+    await status.run(() => api.joinBuddies());
+    messagingDock.reset();
+  }
   async function leave() {
     membershipError = '';
-    try { await api.leaveBuddies(); messagingDock.reset(); await status.run(() => api.buddyStatus()); }
-    catch (err) { membershipError = err instanceof Error ? err.message : 'Could not leave interview buddies.'; }
+    try {
+      await api.leaveBuddies();
+      messagingDock.reset();
+      await status.run(() => api.buddyStatus());
+    } catch (err) {
+      membershipError = err instanceof Error ? err.message : 'Could not leave interview buddies.';
+    }
   }
 
   // The Chats badge reads the same list the dock does.
-  $effect(() => { if (status.value?.member) void messagingDock.refresh().catch(() => {}); });
+  $effect(() => {
+    if (status.value?.member) void messagingDock.refresh().catch(() => {});
+  });
   const unread = $derived(totalUnread(messagingDock.conversations));
 
   const nav = $derived([
@@ -57,7 +69,10 @@
   {:else}
     <div class="flex flex-col gap-4 lg:flex-row lg:gap-6">
       <aside class="lg:sticky lg:top-20 lg:w-52 lg:shrink-0 lg:self-start">
-        <nav aria-label="Interview buddies" class="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 lg:flex-col">
+        <nav
+          aria-label="Interview buddies"
+          class="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 lg:flex-col"
+        >
           {#each nav as item (item.route)}
             {@const Icon = item.icon}
             {@const current = page.url.pathname === resolve(item.route)}
@@ -66,13 +81,17 @@
               aria-current={current ? 'page' : undefined}
               class={cn(
                 'flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                current ? 'bg-brand-muted text-brand-strong' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                current
+                  ? 'bg-brand-muted text-brand-strong'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               <Icon class="size-4" aria-hidden="true" />
               {item.label}
               {#if item.badge > 0}
-                <span class="ml-auto rounded-full bg-brand px-1.5 text-xs font-semibold tabular-nums text-brand-foreground">
+                <span
+                  class="ml-auto rounded-full bg-brand px-1.5 text-xs font-semibold tabular-nums text-brand-foreground"
+                >
                   {item.badge}<span class="sr-only"> unread</span>
                 </span>
               {/if}
@@ -80,8 +99,15 @@
           {/each}
         </nav>
         <div class="mt-3 px-1 text-xs text-muted-foreground">
-          <p>You are <span class="font-medium text-foreground">{status.value.handle}</span>. Members see your role, country and companies, never your name or employer.</p>
-          <button type="button" class="mt-3 inline-flex items-center gap-1.5 font-medium hover:text-foreground" onclick={() => (confirmLeaveOpen = true)}>
+          <p>
+            You are <span class="font-medium text-foreground">{status.value.handle}</span>. Members see your role,
+            country and companies, never your name or employer.
+          </p>
+          <button
+            type="button"
+            class="mt-3 inline-flex items-center gap-1.5 font-medium hover:text-foreground"
+            onclick={() => (confirmLeaveOpen = true)}
+          >
             <LogOut class="size-3.5" aria-hidden="true" />Leave interview buddies
           </button>
           {#if membershipError}<p role="alert" class="mt-2 text-destructive">{membershipError}</p>{/if}

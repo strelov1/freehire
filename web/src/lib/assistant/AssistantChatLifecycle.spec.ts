@@ -22,25 +22,45 @@ vi.mock('#lib/assistant/Composer.svelte', () => ({
 }));
 vi.mock('#lib/assistant/ThinkingIndicator.svelte', () => ({ default() {} }));
 vi.mock('@lucide/svelte', () => ({
-  AlertTriangle() {}, ArrowDown() {}, FileText() {}, MessagesSquare() {}, PanelLeft() {},
-  Phone() {}, Plus() {}, Rocket() {}, Trash2() {}, X() {},
+  AlertTriangle() {},
+  ArrowDown() {},
+  FileText() {},
+  MessagesSquare() {},
+  PanelLeft() {},
+  Phone() {},
+  Plus() {},
+  Rocket() {},
+  Trash2() {},
+  X() {},
 }));
 
 afterEach(() => vi.unstubAllGlobals());
 
 it('does not start an opening after its host replaced a still-loading conversation', async () => {
   let resolveSession!: (response: Response) => void;
-  const pending = new Promise<Response>((resolve) => { resolveSession = resolve; });
-  const fetcher = vi.fn((url: string) => String(url).endsWith('/sessions')
-    ? Promise.resolve(Response.json({ data: [] }))
-    : pending);
+  const pending = new Promise<Response>((resolve) => {
+    resolveSession = resolve;
+  });
+  const fetcher = vi.fn((url: string) =>
+    String(url).endsWith('/sessions') ? Promise.resolve(Response.json({ data: [] })) : pending,
+  );
   vi.stubGlobal('fetch', fetcher);
   const { unmount } = render(AssistantChat, {
-    session: '7fe956bc-cae6-4cc8-b527-a0d76cb5bc14', kickoff: 'Shortlist this search', showSessionRail: false,
+    session: '7fe956bc-cae6-4cc8-b527-a0d76cb5bc14',
+    kickoff: 'Shortlist this search',
+    showSessionRail: false,
   });
-  await waitFor(() => expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/7fe956bc-cae6-4cc8-b527-a0d76cb5bc14'))).toBe(true));
+  await waitFor(() =>
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/7fe956bc-cae6-4cc8-b527-a0d76cb5bc14'))).toBe(
+      true,
+    ),
+  );
   unmount();
-  resolveSession(Response.json({ data: { session: { id: '7fe956bc-cae6-4cc8-b527-a0d76cb5bc14', preset: 'chat', label: '' }, messages: [] } }));
+  resolveSession(
+    Response.json({
+      data: { session: { id: '7fe956bc-cae6-4cc8-b527-a0d76cb5bc14', preset: 'chat', label: '' }, messages: [] },
+    }),
+  );
   await pending;
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/messages'))).toBe(false);
@@ -65,7 +85,9 @@ it('warns that a support answer may be cut off when its stream drops', async () 
   });
   vi.stubGlobal('fetch', fetcher);
   const { findByText } = render(AssistantChat, {
-    preset: 'support', kickoff: 'Where is my refund?', showSessionRail: false,
+    preset: 'support',
+    kickoff: 'Where is my refund?',
+    showSessionRail: false,
   });
   expect(await findByText(/this answer may be cut off/)).toBeTruthy();
 });
@@ -77,7 +99,11 @@ it('keeps the cut-off warning up through a queued message and closes the cut ans
   const encoder = new TextEncoder();
   const frame = (event: object) => encoder.encode(`data: ${JSON.stringify(event)}\n\n`);
   let first!: ReadableStreamDefaultController<Uint8Array>;
-  const firstStream = new ReadableStream<Uint8Array>({ start(controller) { first = controller; } });
+  const firstStream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      first = controller;
+    },
+  });
   const secondStream = new ReadableStream<Uint8Array>({});
   const answers = [firstStream, secondStream];
   const fetcher = vi.fn((url: string) => {
@@ -85,14 +111,18 @@ it('keeps the cut-off warning up through a queued message and closes the cut ans
       return Promise.resolve(Response.json({ data: { id: 'support-1', preset: 'support', label: '' } }));
     }
     if (String(url).endsWith('/support/sessions/support-1/messages')) {
-      return Promise.resolve(new Response(answers.shift(), { status: 200, headers: { 'content-type': 'text/event-stream' } }));
+      return Promise.resolve(
+        new Response(answers.shift(), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+      );
     }
     return Promise.resolve(Response.json({ data: [] }));
   });
   vi.stubGlobal('fetch', fetcher);
   const messageCalls = () => fetcher.mock.calls.filter(([url]) => String(url).endsWith('/messages')).length;
   const { container, findByText, queryByText } = render(AssistantChat, {
-    preset: 'support', kickoff: 'Where is my refund?', showSessionRail: false,
+    preset: 'support',
+    kickoff: 'Where is my refund?',
+    showSessionRail: false,
   });
   await waitFor(() => expect(messageCalls()).toBe(1));
 

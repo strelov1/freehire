@@ -77,10 +77,7 @@
         <span class="flex shrink-0 items-center gap-0.5" aria-hidden="true">
           {#each { length: gauge.segments }, i (i)}
             <span
-              class={cn(
-                'h-3 w-1.5 rounded-sm',
-                i < gauge.filled ? filledTone[gauge.tone] : 'bg-muted-foreground/30',
-              )}
+              class={cn('h-3 w-1.5 rounded-sm', i < gauge.filled ? filledTone[gauge.tone] : 'bg-muted-foreground/30')}
             ></span>
           {/each}
         </span>
@@ -92,14 +89,9 @@
       <!-- Beside the scale, not pushed to the far edge: the button spans the row so the
            whole line is a hit area, but a control a thousand pixels from the thing it
            expands stops reading as belonging to it. -->
-      <span
-        class="inline-flex shrink-0 items-center gap-1 text-muted-foreground group-hover:text-foreground"
-      >
+      <span class="inline-flex shrink-0 items-center gap-1 text-muted-foreground group-hover:text-foreground">
         Details
-        <ChevronDown
-          class={cn('size-3.5 transition-transform', open && 'rotate-180')}
-          aria-hidden="true"
-        />
+        <ChevronDown class={cn('size-3.5 transition-transform', open && 'rotate-180')} aria-hidden="true" />
       </span>
     </button>
 
@@ -113,29 +105,18 @@
          A rule rather than a box: the disclosure is already grouped by the row above
          it, and a second border inside the page's own bordered column was the frame
          that made this read as a warning panel. -->
-    <div
-      id={criteriaId}
-      class={cn(
-        'flex-col gap-1.5 border-l border-border pl-3 text-sm',
-        open ? 'flex' : 'hidden',
-      )}
-    >
+    <div id={criteriaId} class={cn('flex-col gap-1.5 border-l border-border pl-3 text-sm', open ? 'flex' : 'hidden')}>
       <!-- A list, so a screen reader still announces how many criteria fired — a count
            the gauge conveys visually and `aria-hidden` withholds. -->
       <ul class="flex flex-col gap-1.5">
         {#each fired as row (row.code)}
           <li class="flex items-baseline gap-2">
-            <Check
-              class="size-3.5 shrink-0 translate-y-0.5 text-warning-strong"
-              aria-hidden="true"
-            />
+            <Check class="size-3.5 shrink-0 translate-y-0.5 text-warning-strong" aria-hidden="true" />
             <!-- The separator is glued to the fact with a non-breaking space: Svelte
                  trims leading whitespace inside an element, and a bare "·" would also
                  be free to wrap onto a line of its own. -->
             <span
-              >{row.label}{#if row.detail}<span class="text-muted-foreground"
-                  >&nbsp;· {row.detail}</span
-                >{/if}</span
+              >{row.label}{#if row.detail}<span class="text-muted-foreground">&nbsp;· {row.detail}</span>{/if}</span
             >
           </li>
         {/each}

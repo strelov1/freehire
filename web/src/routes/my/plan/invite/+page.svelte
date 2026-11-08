@@ -42,16 +42,14 @@
     <h2 class="text-lg font-semibold tracking-tight">Invite a friend</h2>
     {#if summary}
       <p class="text-sm text-muted-foreground">
-        They get {summary.percent_off}% off their first month. You get {summary.percent_off}%
-        off your next one, once they have actually paid.
+        They get {summary.percent_off}% off their first month. You get {summary.percent_off}% off your next one, once
+        they have actually paid.
       </p>
     {/if}
   </header>
 
   {#if error}
-    <p class="text-sm text-destructive">
-      Your invite link could not be loaded. Please try again in a moment.
-    </p>
+    <p class="text-sm text-destructive">Your invite link could not be loaded. Please try again in a moment.</p>
   {:else if summary}
     <section class="flex flex-col gap-2">
       <label for="invite-link" class="text-sm text-muted-foreground">Your link</label>
@@ -63,11 +61,7 @@
           value={summary.link}
           class="min-w-0 flex-1 rounded-md border border-border bg-muted px-3 py-2 font-mono text-sm"
         />
-        <button
-          type="button"
-          class="shrink-0 rounded-md border border-border px-3 py-2 text-sm"
-          onclick={copy}
-        >
+        <button type="button" class="shrink-0 rounded-md border border-border px-3 py-2 text-sm" onclick={copy}>
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
@@ -94,8 +88,7 @@
     </section>
 
     <p class="text-sm text-muted-foreground">
-      Credit is applied to your next invoice automatically. If you are not on Pro yet, it
-      waits until you are.
+      Credit is applied to your next invoice automatically. If you are not on Pro yet, it waits until you are.
     </p>
   {/if}
 </div>

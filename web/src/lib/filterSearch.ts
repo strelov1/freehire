@@ -153,9 +153,7 @@ function buildJobCatalog(): FilterSearchHit[] {
   pushFacet(hits, 'relocation', 'relocation');
   pushFacet(hits, 'relocation', 'collections', EMPLOYER_CREDENTIALS, 'Employer credentials');
   hits.push(actionHit('relocation', 'Visa', 'Offers visa sponsorship', 'visa'));
-  hits.push(
-    actionHit('relocation', 'AI interviews', 'Hide employers reported to interview with AI', 'hide-ai'),
-  );
+  hits.push(actionHit('relocation', 'AI interviews', 'Hide employers reported to interview with AI', 'hide-ai'));
   hits.push(actionHit('relocation', 'Auto-apply', 'Auto-apply available', 'auto-apply'));
   hits.push(actionHit('relocation', 'Application', 'Short application', 'short-apply'));
   pushFacet(hits, 'relocation', 'clearance_levels', undefined, 'Security clearance');

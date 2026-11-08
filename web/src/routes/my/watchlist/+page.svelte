@@ -134,12 +134,20 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h2 id="watchlist-list" class="text-base font-semibold tracking-tight">
         Your companies
-        <span class="ml-1 text-sm font-normal text-muted-foreground" data-testid="watchlist-count">{size} of {max}</span>
+        <span class="ml-1 text-sm font-normal text-muted-foreground" data-testid="watchlist-count">{size} of {max}</span
+        >
       </h2>
       <Button variant="outline" size="sm" href={`${resolve('/jobs')}?watchlist=true`}>Show jobs</Button>
     </div>
     {#if size > 0 || applied !== ''}
-      <Input type="search" bind:value={filter} oninput={onFilter} placeholder="Filter by name" aria-label="Filter by name" class="w-full" />
+      <Input
+        type="search"
+        bind:value={filter}
+        oninput={onFilter}
+        placeholder="Filter by name"
+        aria-label="Filter by name"
+        class="w-full"
+      />
     {/if}
     {#if notice}
       <p role="status" class="text-sm text-muted-foreground">{notice}</p>
