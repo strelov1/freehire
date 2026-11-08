@@ -71,7 +71,10 @@ type assistantHandlers struct {
 	reports    *reportHandlers
 	dictionary *dictionaryHandlers
 	problems   *problemreport.Service
-	cv         *cvHandlers
+	// buddies serves the interview-buddy and mock-interview tools of the signed-in MCP
+	// server (buddy_mcp_tools.go). Set by Register to the handler behind the cookie routes.
+	buddies *buddyHandlers
+	cv      *cvHandlers
 	// profile backs the get_profile tool. Reusing the profile handlers rather than the
 	// services underneath keeps the tool and GET /me/profile on one assembly, so the
 	// agent cannot drift from what the profile page shows.

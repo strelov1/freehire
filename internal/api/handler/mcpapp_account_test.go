@@ -121,6 +121,22 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"unsubscribe": assistant.EffectOverwrites,
 		// Replaces the alert's search, name, channels or paused state.
 		"update_subscription": assistant.EffectOverwrites,
+
+		"buddy_status":            assistant.EffectReads,
+		"buddy_mock_hosts":        assistant.EffectReads,
+		"buddy_mock_slots":        assistant.EffectReads,
+		"buddy_mock_list":         assistant.EffectReads,
+		"buddy_mock_schedule_get": assistant.EffectReads,
+		"buddy_join":              assistant.EffectAdds,
+		"buddy_mock_book":         assistant.EffectAdds,
+		// Adds one dated row; the weekly rules and other overrides stay.
+		"buddy_mock_schedule_add_override": assistant.EffectAdds,
+		// Closes conversations and cancels every upcoming mock.
+		"buddy_leave":                    assistant.EffectOverwrites,
+		"buddy_mock_cancel":              assistant.EffectOverwrites,
+		"buddy_mock_settings_set":        assistant.EffectOverwrites,
+		"buddy_mock_schedule_set_weekly": assistant.EffectOverwrites,
+		"buddy_mock_schedule_delete":     assistant.EffectOverwrites,
 	}
 	for _, tool := range mcpAccountTools(&assistantHandlers{}, testMCPOrigin) {
 		effect, known := want[tool.Name]
@@ -203,5 +219,30 @@ func TestMCPKeyTools_ServeAlertsButNotAutoApply(t *testing.T) {
 	}
 	if served[presentJobsToolName] {
 		t.Errorf("%s served to an API key", presentJobsToolName)
+	}
+}
+
+// Every buddy route is cookie-only, so a leaked API key cannot book or read a member's mocks;
+// the account server keeps that line and serves the buddy tools to OAuth grants only.
+func TestMCPKeyTools_ServeNoBuddyTool(t *testing.T) {
+	served := map[string]bool{}
+	for _, tool := range mcpKeyTools(&assistantHandlers{}, testMCPOrigin) {
+		served[tool.Name] = true
+	}
+	granted := map[string]bool{}
+	for _, tool := range mcpAccountTools(&assistantHandlers{}, testMCPOrigin) {
+		granted[tool.Name] = true
+	}
+	buddyTools := (*buddyHandlers)(nil).mcpTools()
+	if len(buddyTools) != 13 {
+		t.Fatalf("buddy tools = %d, want 13", len(buddyTools))
+	}
+	for _, tool := range buddyTools {
+		if served[tool.Name] {
+			t.Errorf("%s: a buddy tool served to an API key", tool.Name)
+		}
+		if !granted[tool.Name] {
+			t.Errorf("%s: a buddy tool missing from the OAuth grant's set", tool.Name)
+		}
 	}
 }
