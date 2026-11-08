@@ -64,7 +64,9 @@ Resolver = Callable[[str], list[str]]
 
 
 def system_resolver(host: str) -> list[str]:
-    return [info[4][0] for info in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)]
+    return [
+        info[4][0] for info in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    ]
 
 
 def is_internal(addr: str) -> bool:
@@ -73,8 +75,12 @@ def is_internal(addr: str) -> bool:
     non-routable space."""
     ip = ipaddress.ip_address(addr.split("%", 1)[0])
     return (
-        ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
-        or ip.is_reserved or ip.is_unspecified
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
     )
 
 
@@ -101,7 +107,9 @@ def parse_request(payload) -> FetchRequest:
     if mode == "browser" and method != "GET":
         raise BadRequest("browser mode is a navigation and accepts GET only")
     headers = payload.get("headers", {})
-    if not isinstance(headers, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
+    if not isinstance(headers, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in headers.items()
+    ):
         raise BadRequest("headers must be an object of strings")
     raw_body = payload.get("body", "")
     if not isinstance(raw_body, str):
@@ -113,7 +121,9 @@ def parse_request(payload) -> FetchRequest:
     proxy = payload.get("proxy", False)
     if not isinstance(proxy, bool):
         raise BadRequest("proxy must be a boolean")
-    return FetchRequest(url=url, method=method, headers=headers, body=body, mode=mode, proxy=proxy)
+    return FetchRequest(
+        url=url, method=method, headers=headers, body=body, mode=mode, proxy=proxy
+    )
 
 
 def create_app(
@@ -133,7 +143,9 @@ def create_app(
         return JSONResponse({"status": "ok"})
 
     async def fetch(request: Request) -> JSONResponse:
-        if not hmac.compare_digest(request.headers.get("authorization", "").encode(), expected):
+        if not hmac.compare_digest(
+            request.headers.get("authorization", "").encode(), expected
+        ):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         raw = await request.body()
         if len(raw) > max_request_bytes:
@@ -143,7 +155,9 @@ def create_app(
         except BadRequest as e:
             return JSONResponse({"error": str(e)}, status_code=400)
         if req.proxy and not proxy_available:
-            return JSONResponse({"error": "proxy requested but none is configured"}, status_code=400)
+            return JSONResponse(
+                {"error": "proxy requested but none is configured"}, status_code=400
+            )
         # Some adapters follow links scraped from the source's own pages, and the fetch runs on
         # the crawl host: a link pointing inside it is refused, the check safehttp makes for
         # the plain client. Checked even through the proxy, which would resolve it remotely.
@@ -153,13 +167,18 @@ def create_app(
         except OSError as e:
             return JSONResponse({"error": f"resolve {host}: {e}"}, status_code=502)
         if not addrs or any(is_internal(a) for a in addrs):
-            return JSONResponse({"error": f"{host} resolves to an internal address"}, status_code=400)
+            return JSONResponse(
+                {"error": f"{host} resolves to an internal address"}, status_code=400
+            )
         try:
             result = await fetchers[req.mode](req)
         except FetchError as e:
             return JSONResponse({"error": str(e)}, status_code=502)
         if len(result.body) > max_response_bytes:
-            return JSONResponse({"error": f"upstream body exceeds {max_response_bytes} bytes"}, status_code=502)
+            return JSONResponse(
+                {"error": f"upstream body exceeds {max_response_bytes} bytes"},
+                status_code=502,
+            )
         return JSONResponse(
             {
                 "status": result.status,
@@ -169,7 +188,9 @@ def create_app(
             }
         )
 
-    return Starlette(routes=[Route("/health", health), Route("/fetch", fetch, methods=["POST"])])
+    return Starlette(
+        routes=[Route("/health", health), Route("/fetch", fetch, methods=["POST"])]
+    )
 
 
 def _json(raw: bytes):

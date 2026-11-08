@@ -42,7 +42,9 @@ def classify(paths):
         if path.startswith(("web/", "design-system/")):
             web = True
         elif path.startswith(("internal/", "cmd/", "migrations/")) or path in (
-            "go.mod", "go.sum", ".golangci.yml"
+            "go.mod",
+            "go.sum",
+            ".golangci.yml",
         ):
             backend = True
             # PlanView.test.ts reads the Go feature vocabulary directly.
@@ -77,7 +79,10 @@ def read_changes(base, head, repo=Path(".")):
             timeout=60,
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        print("Cannot determine changed files; selecting the full CI suite.", file=sys.stderr)
+        print(
+            "Cannot determine changed files; selecting the full CI suite.",
+            file=sys.stderr,
+        )
         return None
     return [os.fsdecode(path) for path in result.stdout.split(b"\0") if path]
 

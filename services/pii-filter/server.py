@@ -72,7 +72,9 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # fail loud so the Go caller fails closed
             self._json(500, {"error": str(e)})
 
-    def log_message(self, *args):  # suppress the default request-line noise (incl. /health)
+    def log_message(
+        self, *args
+    ):  # suppress the default request-line noise (incl. /health)
         pass
 
 
@@ -83,7 +85,9 @@ class BoundedThreadingHTTPServer(ThreadingHTTPServer):
     serially from the accept loop) blocks once the cap is reached, so excess connections
     queue in the listen backlog instead of each getting their own thread immediately."""
 
-    def __init__(self, *args, max_concurrent_requests=MAX_CONCURRENT_REQUESTS, **kwargs):
+    def __init__(
+        self, *args, max_concurrent_requests=MAX_CONCURRENT_REQUESTS, **kwargs
+    ):
         self._concurrency = threading.BoundedSemaphore(max_concurrent_requests)
         super().__init__(*args, **kwargs)
 

@@ -50,7 +50,9 @@ class BoundedThreadingHTTPServerTest(unittest.TestCase):
     def test_process_request_thread_releases_its_slot_on_success(self):
         server = self._server(1)
         server._concurrency.acquire()
-        with patch.object(socketserver.ThreadingMixIn, "process_request_thread", lambda self, *a: None):
+        with patch.object(
+            socketserver.ThreadingMixIn, "process_request_thread", lambda self, *a: None
+        ):
             server.process_request_thread(object(), ("127.0.0.1", 0))
         # The slot freed up, so a next request can be admitted.
         self.assertTrue(server._concurrency.acquire(blocking=False))

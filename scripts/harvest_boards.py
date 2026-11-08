@@ -76,7 +76,10 @@ def harvest_aggregators() -> dict[tuple[str, str], str]:
         names = attribute_names(text)
         for prov, slug in found:
             candidates.setdefault((prov, slug), names.get(slug.lower(), slug))
-        print(f"  {len(found):4} slugs from {url.split('/')[4]}/{url.split('/')[5]} ({url.rsplit('/',1)[-1]})", file=sys.stderr)
+        print(
+            f"  {len(found):4} slugs from {url.split('/')[4]}/{url.split('/')[5]} ({url.rsplit('/', 1)[-1]})",
+            file=sys.stderr,
+        )
     return candidates
 
 
@@ -87,11 +90,24 @@ def attribute_names(text: str) -> dict[str, str]:
         data = json.loads(text)
     except Exception:
         return names
-    rows = data if isinstance(data, list) else data.values() if isinstance(data, dict) else []
+    rows = (
+        data
+        if isinstance(data, list)
+        else data.values()
+        if isinstance(data, dict)
+        else []
+    )
     for row in rows:
         if not isinstance(row, dict):
             continue
-        name = next((row[k] for k in ("company_name", "company", "name", "employer") if row.get(k)), None)
+        name = next(
+            (
+                row[k]
+                for k in ("company_name", "company", "name", "employer")
+                if row.get(k)
+            ),
+            None,
+        )
         if not name:
             continue
         for v in row.values():
@@ -111,17 +127,35 @@ def harvest_github(per_provider_pages: int = 3) -> set[tuple[str, str]]:
     """
     out: set[tuple[str, str]] = set()
     queries = [
-        "jobs.smartrecruiters.com", "apply.workable.com", "recruitee.com",
-        "job-boards.greenhouse.io", "jobs.lever.co", "jobs.ashbyhq.com",
+        "jobs.smartrecruiters.com",
+        "apply.workable.com",
+        "recruitee.com",
+        "job-boards.greenhouse.io",
+        "jobs.lever.co",
+        "jobs.ashbyhq.com",
     ]
     for q in queries:
         for page in range(1, per_provider_pages + 1):
             try:
                 raw = subprocess.run(
-                    ["gh", "api", "-X", "GET", "search/code",
-                     "-H", "Accept: application/vnd.github.text-match+json",
-                     "-f", f"q={q} in:file", "-f", "per_page=100", "-f", f"page={page}"],
-                    capture_output=True, text=True, timeout=60,
+                    [
+                        "gh",
+                        "api",
+                        "-X",
+                        "GET",
+                        "search/code",
+                        "-H",
+                        "Accept: application/vnd.github.text-match+json",
+                        "-f",
+                        f"q={q} in:file",
+                        "-f",
+                        "per_page=100",
+                        "-f",
+                        f"page={page}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
                 ).stdout
                 items = json.loads(raw).get("items", [])
             except Exception as e:
@@ -157,11 +191,24 @@ def workday_names(text: str) -> dict[tuple[str, str], str]:
         data = json.loads(text)
     except Exception:
         return names
-    rows = data if isinstance(data, list) else data.values() if isinstance(data, dict) else []
+    rows = (
+        data
+        if isinstance(data, list)
+        else data.values()
+        if isinstance(data, dict)
+        else []
+    )
     for row in rows:
         if not isinstance(row, dict):
             continue
-        name = next((row[k] for k in ("company_name", "company", "name", "employer") if row.get(k)), None)
+        name = next(
+            (
+                row[k]
+                for k in ("company_name", "company", "name", "employer")
+                if row.get(k)
+            ),
+            None,
+        )
         if not name:
             continue
         for v in row.values():
@@ -199,17 +246,26 @@ def validate_workday(host: str, site: str, attempts: int = 3) -> int | None:
     """
     tenant = host.split(".")[0]
     url = f"https://{host}/wday/cxs/{tenant}/{site}/jobs"
-    payload = json.dumps({"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": ""}).encode()
+    payload = json.dumps(
+        {"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": ""}
+    ).encode()
     for attempt in range(attempts):
         req = urllib.request.Request(
-            url, data=payload,
-            headers={"User-Agent": UA, "Content-Type": "application/json", "Accept": "application/json"},
+            url,
+            data=payload,
+            headers={
+                "User-Agent": UA,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
         )
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
                 data = json.loads(r.read())
             total = data.get("total") if isinstance(data, dict) else 0
-            total = total or len(data.get("jobPostings", []) if isinstance(data, dict) else [])
+            total = total or len(
+                data.get("jobPostings", []) if isinstance(data, dict) else []
+            )
             return total or None
         except urllib.error.HTTPError as e:
             if e.code not in (429, 500, 502, 503, 504):
@@ -238,15 +294,24 @@ def run_workday(write: bool, github: bool) -> int:
             continue
         have.add(board.lower())
         new[(h, s)] = name
-    print(f"{len(cand)} candidates, {len(cand) - len(new)} already tracked/collapsed, "
-          f"{len(new)} new to validate", file=sys.stderr)
+    print(
+        f"{len(cand)} candidates, {len(cand) - len(new)} already tracked/collapsed, "
+        f"{len(new)} new to validate",
+        file=sys.stderr,
+    )
 
     items = list(new.items())
     with ThreadPoolExecutor(max_workers=12) as ex:
         counts = list(ex.map(lambda kv: validate_workday(kv[0][0], kv[0][1]), items))
 
     rows = sorted(
-        (((n, f"{h}/{s}", c) for ((h, s), n), c in zip(items, counts, strict=True) if c)),
+        (
+            (
+                (n, f"{h}/{s}", c)
+                for ((h, s), n), c in zip(items, counts, strict=True)
+                if c
+            )
+        ),
         key=lambda r: -r[2],
     )
     print(f"\n# === workday: {len(rows)} new live boards ===")
@@ -258,7 +323,10 @@ def run_workday(write: bool, github: bool) -> int:
         with f.open("a") as fh:
             for name, board, _c in rows:
                 fh.write(f"- company: {yaml_name(name)}\n  board: {board}\n")
-        print(f"  -> appended {len(rows)} entries to {f.relative_to(REPO)}", file=sys.stderr)
+        print(
+            f"  -> appended {len(rows)} entries to {f.relative_to(REPO)}",
+            file=sys.stderr,
+        )
     return 0
 
 
@@ -276,7 +344,9 @@ def select_hiring_threads(hits: list[dict], months: int) -> list[str]:
     Filters by title so sibling threads ('Freelancer? Seeking freelancer?',
     'Who wants to be hired?') from the same author are excluded.
     """
-    ids = [h["objectID"] for h in hits if "who is hiring" in (h.get("title") or "").lower()]
+    ids = [
+        h["objectID"] for h in hits if "who is hiring" in (h.get("title") or "").lower()
+    ]
     return ids[:months]
 
 
@@ -301,12 +371,17 @@ def hn_company_name(comment: str) -> str:
     Returns "" when the leading token looks like prose/URL/role (caller falls back
     to the slug) — keeps junk like 'Do you want to work on…' out of the YAML.
     """
-    text = re.sub(r"<[^>]+>", " ", comment)          # drop HTML tags
+    text = re.sub(r"<[^>]+>", " ", comment)  # drop HTML tags
     text = html.unescape(re.sub(r"\s+", " ", text)).strip()
     head = re.split(r"[|\n\r–—:/]| - ", text, maxsplit=1)[0].strip(" .,-")
     low = head.lower()
-    if (not head or len(head) > 40 or "http" in low
-            or low.startswith(_NAME_REJECT_PREFIX) or _NAME_REJECT_ROLE.match(head)):
+    if (
+        not head
+        or len(head) > 40
+        or "http" in low
+        or low.startswith(_NAME_REJECT_PREFIX)
+        or _NAME_REJECT_ROLE.match(head)
+    ):
         return ""
     return head
 
@@ -315,7 +390,7 @@ def extract_hn_candidates(comments: list[str]) -> dict[tuple[str, str], str]:
     """Per comment, attribute every ATS slug to that comment's leading company name."""
     cand: dict[tuple[str, str], str] = {}
     for c in comments:
-        dec = html.unescape(c)                        # &#x2F; → / before slug regex
+        dec = html.unescape(c)  # &#x2F; → / before slug regex
         name = hn_company_name(c)
         for prov, slug in extract_slugs(dec):
             cand.setdefault((prov, slug), name or _slug_title(slug))
@@ -323,7 +398,9 @@ def extract_hn_candidates(comments: list[str]) -> dict[tuple[str, str], str]:
 
 
 def hn_hiring_threads(months: int) -> list[str]:
-    body = fetch(f"{HN_API}/search_by_date?tags=story,author_whoishiring&query=hiring&hitsPerPage=20")
+    body = fetch(
+        f"{HN_API}/search_by_date?tags=story,author_whoishiring&query=hiring&hitsPerPage=20"
+    )
     if not body:
         print("  ! HN thread search failed", file=sys.stderr)
         return []
@@ -353,19 +430,34 @@ def harvest_hn(months: int = 3) -> dict[tuple[str, str], str]:
         added = extract_hn_candidates(comments)
         for key, name in added.items():
             cand.setdefault(key, name)
-        print(f"  HN thread {tid}: {len(comments)} comments -> {len(added)} board candidates",
-              file=sys.stderr)
+        print(
+            f"  HN thread {tid}: {len(comments)} comments -> {len(added)} board candidates",
+            file=sys.stderr,
+        )
     return cand
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--github", action="store_true", help="also sweep GitHub code search")
-    ap.add_argument("--hn", action="store_true", help="also harvest HN 'Who is hiring?' threads")
-    ap.add_argument("--hn-months", type=int, default=3, help="how many recent HN threads to scan")
-    ap.add_argument("--workday", action="store_true", help="harvest Workday boards only (host/site, POST validation)")
-    ap.add_argument("--write", action="store_true",
-                     help="write survivors to scripts/.harvest-seeds/<provider>.json")
+    ap.add_argument(
+        "--github", action="store_true", help="also sweep GitHub code search"
+    )
+    ap.add_argument(
+        "--hn", action="store_true", help="also harvest HN 'Who is hiring?' threads"
+    )
+    ap.add_argument(
+        "--hn-months", type=int, default=3, help="how many recent HN threads to scan"
+    )
+    ap.add_argument(
+        "--workday",
+        action="store_true",
+        help="harvest Workday boards only (host/site, POST validation)",
+    )
+    ap.add_argument(
+        "--write",
+        action="store_true",
+        help="write survivors to scripts/.harvest-seeds/<provider>.json",
+    )
     args = ap.parse_args()
 
     if args.workday:
@@ -378,7 +470,10 @@ def main() -> int:
         for key in harvest_github():
             cand.setdefault(key, key[1])
     if args.hn:
-        print(f"== harvesting HN 'Who is hiring?' ({args.hn_months} threads) ==", file=sys.stderr)
+        print(
+            f"== harvesting HN 'Who is hiring?' ({args.hn_months} threads) ==",
+            file=sys.stderr,
+        )
         for key, name in harvest_hn(args.hn_months).items():
             cand.setdefault(key, name)
 
