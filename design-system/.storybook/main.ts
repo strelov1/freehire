@@ -20,7 +20,7 @@ const config: StorybookConfig = {
     // the repo is on. Revisit when the plugin runs after the svelte transform.
     options: { docgen: false },
   },
-  viteFinal: async (config) => {
+  viteFinal: async (viteConfig) => {
     // Storybook ships its own .svelte components (PreviewRender), and the
     // framework's plugin does not reach them — without a second svelte()
     // instance the build hands them to the JS parser and dies on the markup.
@@ -28,9 +28,9 @@ const config: StorybookConfig = {
     // The primitives are styled entirely through Tailwind utilities, so the
     // preview needs the same compiler web's vite config runs.
     const { default: tailwindcss } = await import('@tailwindcss/vite');
-    config.plugins = config.plugins ?? [];
-    config.plugins.push(svelte(), tailwindcss());
-    return config;
+    viteConfig.plugins = viteConfig.plugins ?? [];
+    viteConfig.plugins.push(svelte(), tailwindcss());
+    return viteConfig;
   },
 };
 

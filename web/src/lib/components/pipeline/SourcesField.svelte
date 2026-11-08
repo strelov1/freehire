@@ -23,6 +23,21 @@
   let canvas = $state<HTMLCanvasElement | undefined>(undefined);
   let cleanup: (() => void) | undefined;
 
+  // A plain numeric-index read on a typed array is `number | undefined` under
+  // this project's tsconfig; every read here is bounds-safe by construction
+  // (i*3(+0..2) never exceeds pointCount*3), so this is purely a type escape
+  // hatch, not a real fallback.
+  const at = (arr: Float32Array, i: number) => arr[i] ?? 0;
+
+  // Uniform-random point on a unit sphere (rejection-free: this parametrization
+  // does not clump at the poles the way naive lat/long sampling would).
+  const randomOnSphere = (): [number, number, number] => {
+    const cosPhi = Math.random() * 2 - 1;
+    const sinPhi = Math.sqrt(1 - cosPhi * cosPhi);
+    const theta = Math.random() * Math.PI * 2;
+    return [Math.cos(theta) * sinPhi, cosPhi, Math.sin(theta) * sinPhi];
+  };
+
   onMount(() => {
     let cancelled = false;
 
@@ -72,24 +87,10 @@
       const colors = new Float32Array(pointCount * 3);
       const brand = readCssColor('--brand');
 
-      // A plain numeric-index read on a typed array is `number | undefined` under
-      // this project's tsconfig; every read here is bounds-safe by construction
-      // (i*3(+0..2) never exceeds pointCount*3), so this is purely a type escape
-      // hatch, not a real fallback.
-      const at = (arr: Float32Array, i: number) => arr[i] ?? 0;
       // BufferGeometry.getAttribute() is typed to return possibly-undefined too, for
       // an attribute name that was in fact just set two lines above every call site.
       const attrOf = (g: InstanceType<typeof THREE.BufferGeometry>, name: string) =>
         g.getAttribute(name) as InstanceType<typeof THREE.BufferAttribute>;
-
-      // Uniform-random point on a unit sphere (rejection-free: this parametrization
-      // does not clump at the poles the way naive lat/long sampling would).
-      const randomOnSphere = (): [number, number, number] => {
-        const cosPhi = Math.random() * 2 - 1;
-        const sinPhi = Math.sqrt(1 - cosPhi * cosPhi);
-        const theta = Math.random() * Math.PI * 2;
-        return [Math.cos(theta) * sinPhi, cosPhi, Math.sin(theta) * sinPhi];
-      };
 
       // (Re)launches point i on a chord from one random point on the outer shell to
       // another — a trajectory that has nothing to do with where the core sits, so

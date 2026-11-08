@@ -65,7 +65,6 @@ class ResumeStore extends UserResource<ResumeMeta | null> {
     for (let attempt = 0; ; attempt++) {
       let status: string | undefined;
       try {
-        // oxlint-disable-next-line no-await-in-loop -- a backoff poll is sequential by design
         // A read superseded by another says nothing either: the copy held may predate it.
         if (!(await this.reload())) status = 'pending';
         else if (!this.#meta?.present) return false;
@@ -79,7 +78,6 @@ class ResumeStore extends UserResource<ResumeMeta | null> {
       if (status !== 'pending') return status !== 'failed';
       const delay = nextResumePollDelayMs(attempt);
       if (delay === null) return false;
-      // oxlint-disable-next-line no-await-in-loop -- the wait between reads is the point
       await new Promise((resolve) => setTimeout(resolve, delay));
       if (generation !== this.generation) return false;
     }

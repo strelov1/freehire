@@ -30,4 +30,5 @@ declare global {
   }
 }
 
+// oxlint-disable-next-line unicorn/require-module-specifiers -- an empty export is what makes this file a module, which `declare global` needs
 export {};

@@ -577,6 +577,55 @@ export interface EmailBody extends EmailLinking {
   read: boolean;
 }
 
+/** Build the request init for a JSON body (POST/PATCH/PUT). Single-sources the
+ *  Content-Type header and JSON.stringify so no call site repeats them. */
+function jsonBody(method: string, body: unknown): RequestInit {
+  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
+
+function insightsQuery(opts: {
+  category?: string;
+  seniority?: string;
+  country?: string;
+  sort?: 'open' | 'growth';
+  limit?: number;
+}): string {
+  const q = new URLSearchParams();
+  if (opts.category) q.set('category', opts.category);
+  if (opts.seniority) q.set('seniority', opts.seniority);
+  if (opts.country) q.set('country', opts.country);
+  if (opts.sort) q.set('sort', opts.sort);
+  if (opts.limit != null) q.set('limit', String(opts.limit));
+  return q.toString();
+}
+
+/** Build the request init for a résumé payload: pasted text goes as JSON, a `File`
+ *  goes as multipart. */
+function resumeInit(method: string, input: File | string): RequestInit {
+  if (typeof input === 'string') {
+    return {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: input }),
+    };
+  }
+  const form = new FormData();
+  form.append('file', input);
+  return { method, body: form };
+}
+
+/** Open the streaming draft. Returns the raw Response so the caller can read the body as it
+ *  arrives AND see the status: a 402 for an exhausted allowance, a 409 for a vacancy with no
+ *  fit analysis. EventSource would hide both behind a bare connection error, and could not
+ *  POST — which this must be, because drafting spends an allowance and writes storage. */
+async function openCoverLetterStream(id: string, band: 'short' | 'standard'): Promise<Response> {
+  return fetch(`/api/v1/me/cvs/${encodeURIComponent(id)}/cover-letter/stream?band=${band}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { accept: 'text/event-stream' },
+  });
+}
+
 /** Build an API client bound to a specific fetch and base URL.
  *
  *  - Browser: the default `api` uses global fetch and an empty base, so requests
@@ -600,7 +649,7 @@ export function createApi(
    *  lets a server caller forward the request's Cookie to an absolute API URL
    *  (where `event.fetch` would not). */
   async function call(path: string, init?: RequestInit): Promise<Response> {
-    const request: RequestInit = {
+    const outgoing: RequestInit = {
       credentials: 'include',
       ...init,
       headers: { ...defaultHeaders, ...init?.headers },
@@ -614,14 +663,14 @@ export function createApi(
     // `signal` key at all. Tighten this to `===` and those three quietly stop getting
     // the SSR timeout above — which is the ~8 `+page.server.ts` callers, and exactly the
     // failure that comment describes.
-    const timeout = timeoutMs != null && request.signal == null ? AbortSignal.timeout(timeoutMs) : undefined;
+    const timeout = timeoutMs != null && outgoing.signal == null ? AbortSignal.timeout(timeoutMs) : undefined;
     if (timeout) {
-      request.signal = timeout;
+      outgoing.signal = timeout;
     }
 
     let res: Response;
     try {
-      res = await fetchImpl(`${baseUrl}${path}`, request);
+      res = await fetchImpl(`${baseUrl}${path}`, outgoing);
     } catch (err) {
       // Report the timeout as the gateway timeout it is, so a `load` renders the
       // error page for a slow backend instead of surfacing a bare DOMException.
@@ -635,7 +684,7 @@ export function createApi(
     if (res.status === 301 || res.status === 308) {
       const location = res.headers.get('location') ?? '';
       const [pathname = ''] = location.split('?');
-      const slug = pathname.split('/').filter(Boolean).pop() ?? '';
+      const slug = pathname.replace(/\/+$/, '').split('/').pop() ?? '';
       throw new MovedError(decodeURIComponent(slug));
     }
     if (!res.ok) {
@@ -653,12 +702,6 @@ export function createApi(
    *  its payload this way, so this collapses the request+`.data` unwrap into one call. */
   async function requestData<T>(path: string, init?: RequestInit): Promise<T> {
     return (await request<{ data: T }>(path, init)).data;
-  }
-
-  /** Build the request init for a JSON body (POST/PATCH/PUT). Single-sources the
-   *  Content-Type header and JSON.stringify so no call site repeats them. */
-  function jsonBody(method: string, body: unknown): RequestInit {
-    return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
   }
 
   async function listJobs(limit: number, offset: number): Promise<Slice<Job>> {
@@ -1220,22 +1263,6 @@ export function createApi(
   }
 
   // --- Insights (aggregate market data behind the /insights SEO pages) --------
-
-  function insightsQuery(opts: {
-    category?: string;
-    seniority?: string;
-    country?: string;
-    sort?: 'open' | 'growth';
-    limit?: number;
-  }): string {
-    const q = new URLSearchParams();
-    if (opts.category) q.set('category', opts.category);
-    if (opts.seniority) q.set('seniority', opts.seniority);
-    if (opts.country) q.set('country', opts.country);
-    if (opts.sort) q.set('sort', opts.sort);
-    if (opts.limit != null) q.set('limit', String(opts.limit));
-    return q.toString();
-  }
 
   /** Ranked roles (category × seniority). Pass `category` to restrict to one
    *  category's seniorities (the per-category roles page); omit for all. */
@@ -2024,14 +2051,18 @@ export function createApi(
     return requestData<SavedSearch[]>('/api/v1/me/searches');
   }
 
-  /** Save the current filter state under a name. `query` is the canonical search
+  /** Save the current filter state under a name. `queryString` is the canonical search
    *  query string (may be empty). A duplicate name or the per-user cap is a 409.
    *  `derivedFromProfile` marks the auto-generated "notify me about jobs matching my
    *  profile" search; a second one for the same user is a 409. */
-  async function createSavedSearch(name: string, query: string, derivedFromProfile = false): Promise<SavedSearch> {
+  async function createSavedSearch(
+    name: string,
+    queryString: string,
+    derivedFromProfile = false,
+  ): Promise<SavedSearch> {
     return requestData<SavedSearch>(
       '/api/v1/me/searches',
-      jsonBody('POST', { name, query, derived_from_profile: derivedFromProfile }),
+      jsonBody('POST', { name, query: queryString, derived_from_profile: derivedFromProfile }),
     );
   }
 
@@ -2230,21 +2261,6 @@ export function createApi(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     });
-  }
-
-  /** Build the request init for a résumé payload: pasted text goes as JSON, a `File`
-   *  goes as multipart. */
-  function resumeInit(method: string, input: File | string): RequestInit {
-    if (typeof input === 'string') {
-      return {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: input }),
-      };
-    }
-    const form = new FormData();
-    form.append('file', input);
-    return { method, body: form };
   }
 
   /** Derive a résumé's profile — a PDF `File` (sent as multipart) or pasted text (sent
@@ -3083,18 +3099,6 @@ export function createApi(
    *  model and consumes no allowance: `present: false` means the pair was never drafted. */
   async function getCoverLetter(id: string): Promise<CoverLetterView> {
     return requestData<CoverLetterView>(`/api/v1/me/cvs/${encodeURIComponent(id)}/cover-letter`);
-  }
-
-  /** Open the streaming draft. Returns the raw Response so the caller can read the body as it
-   *  arrives AND see the status: a 402 for an exhausted allowance, a 409 for a vacancy with no
-   *  fit analysis. EventSource would hide both behind a bare connection error, and could not
-   *  POST — which this must be, because drafting spends an allowance and writes storage. */
-  async function openCoverLetterStream(id: string, band: 'short' | 'standard'): Promise<Response> {
-    return fetch(`/api/v1/me/cvs/${encodeURIComponent(id)}/cover-letter/stream?band=${band}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { accept: 'text/event-stream' },
-    });
   }
 
   /** What tailoring did to a tailored CV's ATS readiness, against the base CV it came from.

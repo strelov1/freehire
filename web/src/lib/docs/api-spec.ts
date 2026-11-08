@@ -1124,7 +1124,7 @@ data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...
         auth: 'cookie',
         summary: 'Delete your feedback in one category (no-op if absent).',
         description:
-          "Returns the company's freshly recomputed counters, the same " + 'cast/clear shape as the vote endpoints.',
+          "Returns the company's freshly recomputed counters, the same cast/clear shape as the vote endpoints.",
         pathParams: [
           { name: 'slug', type: 'string', required: true, description: 'The company slug.', example: 'acme' },
         ],

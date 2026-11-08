@@ -330,11 +330,11 @@
   // Signed-out visitors are gated first: the click is intercepted (the link does
   // not open) and a sign-in offer is shown instead — the posting opens only via
   // "View without signing in" below.
-  function onApplyClick(e: MouseEvent) {
+  function onApplyClick(event: MouseEvent) {
     // Apply-intent — fired regardless of auth (the CTA click is the funnel step).
     track('job_apply', { slug: job.public_slug, source: job.source });
     if (!isAuthenticated()) {
-      e.preventDefault();
+      event.preventDefault();
       showSignInPrompt = true;
       return;
     }
@@ -381,11 +381,11 @@
   }
 
   // Build the callback from this posting before the dialog starts an asynchronous send.
-  function directAppliedCallback({ public_slug: slug, company_slug: companySlug }: Job) {
+  function directAppliedCallback({ public_slug: slug, company_slug: company }: Job) {
     const userID = currentUser()?.id;
     return () => {
       if (currentUser()?.id !== userID) return;
-      markAppliedToCompany(companySlug);
+      markAppliedToCompany(company);
       track('job_track', { slug, stage: 'applied' });
       if (job.public_slug !== slug) return;
       directApplied = true;
@@ -400,7 +400,7 @@
   }
 
   async function confirmApplied() {
-    const { public_slug: slug, company_slug: companySlug } = job;
+    const { public_slug: slug, company_slug: company } = job;
     const userID = currentUser()?.id;
     let result: UserJob;
     try {
@@ -410,7 +410,7 @@
       return;
     }
     if (currentUser()?.id !== userID) return;
-    markAppliedToCompany(companySlug);
+    markAppliedToCompany(company);
     track('job_track', { slug, stage: 'applied' });
     if (job.public_slug !== slug) return;
     interaction = result;
@@ -452,9 +452,9 @@
   // The discussion is members-only: a signed-out click is held back (the link
   // does not navigate) and the sign-in page opens instead. The href stays put
   // so the route is still SSR-linkable for signed-in visitors.
-  function onDiscussionClick(e: MouseEvent) {
+  function onDiscussionClick(event: MouseEvent) {
     if (!isAuthenticated()) {
-      e.preventDefault();
+      event.preventDefault();
       promptSignIn();
     }
   }

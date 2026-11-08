@@ -85,7 +85,7 @@
       ) {
         const next = await api.listBuddyMemberFeed(current, historyCursor ?? undefined, DAY_PAGE_SIZE);
         if (current !== handle) return;
-        history = [...history, ...next.data];
+        history.push(...next.data);
         historyCursor = next.meta.next_cursor;
         historyPages += 1;
       }

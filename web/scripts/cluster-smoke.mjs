@@ -66,7 +66,6 @@ async function start(t, workers = 2) {
   async function waitFor(predicate) {
     while (!predicate(output)) {
       assert.equal(child.exitCode, null, `primary exited early: ${errors}`);
-      // oxlint-disable-next-line no-await-in-loop -- Readiness depends on the next event.
       await Promise.race([
         once(child.stdout, 'data'),
         exited.then(() => {

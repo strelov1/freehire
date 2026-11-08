@@ -147,8 +147,8 @@
       });
     }
     const n = countryPlaces.length;
-    const places = format(plural(loc, n, s.countries), { count: fmt(n) });
-    return format(plural(loc, total, s.summary), { count: fmt(total), places });
+    const placesText = format(plural(loc, n, s.countries), { count: fmt(n) });
+    return format(plural(loc, total, s.summary), { count: fmt(total), places: placesText });
   });
 
   function pick(place: MapPlace) {

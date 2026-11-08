@@ -39,11 +39,11 @@
 
   // The no-device note sends the user to the phone; when they come back to this tab,
   // re-read so the note goes away without a reload.
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') notifications.refreshPushDevice().catch(() => {});
+  };
   $effect(() => {
     if (!pushSub || notifications.hasPushDevice) return;
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') notifications.refreshPushDevice().catch(() => {});
-    };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   });

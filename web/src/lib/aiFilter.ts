@@ -90,13 +90,14 @@ export function limitToRequestedCountries(counts: Record<string, number>, result
 type PreviewChip = { key: string; text: string; exclude: boolean };
 export type PreviewGroup = { label: string; chips: PreviewChip[] };
 
+const label = (param: string, value: string) =>
+  FACETS.find((d) => d.param === param)?.options?.find((o) => o.value === value)?.label ?? dynamicLabel(param, value);
+
 /** What a plan will apply, grouped and labelled exactly as the filter controls label it,
  *  so the preview and the applied filter read the same. Included wins over excluded —
  *  the rule filtersFromInterpretation applies — which also keeps one value from being
  *  keyed twice. */
 export function planPreview(result: Interpretation): PreviewGroup[] {
-  const label = (param: string, value: string) =>
-    FACETS.find((d) => d.param === param)?.options?.find((o) => o.value === value)?.label ?? dynamicLabel(param, value);
   const groups: PreviewGroup[] = [];
   const push = (heading: string, chips: PreviewChip[]) => {
     if (chips.length) groups.push({ label: heading, chips });

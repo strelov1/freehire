@@ -19,7 +19,7 @@
     "build": "pnpm tokens:build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
-    "lint": "oxlint && eslint .",
+    "lint": "oxlint --deny-warnings && eslint .",
     "lint:fix": "oxlint --fix && eslint . --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check",

@@ -29,6 +29,8 @@ const MIN_VIEW_WIDTH = 60;
 // reads better than a window that crops one coast.
 const WORLD_THRESHOLD = 240;
 
+const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+
 /** The view that fits `points`: padded, never narrower than 60°, in the outline's 2:1
  *  aspect, kept inside the inhabited band — or the whole inhabited world when there is
  *  nothing to fit or the points span most of it. */
@@ -40,7 +42,6 @@ export function fitView(points: readonly { x: number; y: number }[]): MapView {
   const w = Math.max(maxX - minX + FIT_PADDING, 2 * (maxY - minY + FIT_PADDING), MIN_VIEW_WIDTH);
   if (w >= WORLD_THRESHOLD) return WORLD_VIEW;
   const h = w / 2;
-  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
   return {
     x: clamp((minX + maxX) / 2 - w / 2, WORLD_VIEW.x, WORLD_VIEW.x + WORLD_VIEW.w - w),
     y: clamp((minY + maxY) / 2 - h / 2, WORLD_VIEW.y, WORLD_VIEW.y + WORLD_VIEW.h - h),

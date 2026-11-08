@@ -11,7 +11,18 @@
     "perf": "warn"
   },
   "rules": {
-    "import/no-unassigned-import": "off"
+    "import/no-unassigned-import": "off",
+    // Every loop awaits in sequence on purpose: pagination, SSE reads, and a combobox
+    // that must see one step settle before the next.
+    "no-await-in-loop": "off"
   },
+  "overrides": [
+    {
+      // A helper declared inside `describe`/`it` sits next to the tests that use it;
+      // hoisting it to module scope would scatter each one away from its only reader.
+      "files": ["**/*.{test,spec}.ts", "vitest.setup.ts"],
+      "rules": { "unicorn/consistent-function-scoping": "off" }
+    }
+  ],
   "ignorePatterns": [".output", ".wxt", "node_modules"]
 }
