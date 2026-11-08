@@ -17,8 +17,9 @@ jobs list's `meta.total`, the `/about` and `/open` strips — reads ONE snapshot
   database — pass `exact` through to whatever renders them, because a zero must not reach a
   page as if it were a measurement.
 - **Two open counts.** `open_jobs` is `CountCatalogueScale` from Postgres (open, public,
-  `duplicate_of IS NULL` — the predicate the indexer also uses, so the two differ only where
-  the index lags the database); `unique_open_jobs` is the
+  `duplicate_of IS NULL`); the index starts from the same predicate but also withholds
+  what `search.Withheld` names (no resolved category, no description, unseen too long), so
+  the two differ by more than index lag; `unique_open_jobs` is the
   count Meilisearch's own index holds, what `/jobs` would show unfiltered. It is measured
   like `telegram_channels`: `cmd/rollup-stats` makes one `search.Client.Search` call (limit
   1, no filters) before publishing, best-effort — a missing `MEILI_MASTER_KEY` or an

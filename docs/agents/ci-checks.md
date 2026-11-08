@@ -11,6 +11,10 @@ Never edit an applied migration; add a new file. `pnpm check:sql`
 main already holds, unless a commit in the change carries a `Migration-Edit: <reason>`
 trailer — for the rare edit that is right (a comment, a file that never ran anywhere). A
 migration the branch itself added is new at the merge base, so editing it is never caught.
+With no arguments it compares the merge base with `HEAD`, so before a commit it sees neither
+uncommitted edits nor a new file; the pre-commit hook passes staged paths, which lints them
+but skips the immutability check. Lint a new file explicitly with
+`node scripts/check-migrations.mjs migrations/<file>.sql`.
 
 The same script lints (squawk) only the migrations a change ADDS — the applied history holds
 many findings that stay, because rewriting an applied file is a worse hazard than any of
@@ -75,7 +79,8 @@ GitHub runs it, so a mistake in one that fires on a tag or a schedule surfaces l
 - **`pnpm check:links`** (the `docs` CI job and a pre-commit hook) resolves every relative
   Markdown link in the repository. A dead link in the module table sends a reader somewhere
   confidently. The hook carries no glob on purpose: what breaks a link is renaming its
-  **target**, usually a `.go` or `.svelte` file.
+  **target**, usually a `.go` or `.svelte` file. It strips `#fragment` before resolving, so a link to a
+  renamed heading still passes: check section links by hand.
 
 ## Syntax rules: ast-grep
 
