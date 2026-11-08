@@ -264,7 +264,8 @@
         >
           Yearly
           {#if saving > 0}
-            <span class="ml-1 text-xs opacity-80">−{saving}%</span>
+            <!-- The saving is the reason to pick this tab, so it gets the accent, not a fade. -->
+            <span class="ml-1 rounded-full bg-brand-muted px-1.5 py-0.5 text-xs font-semibold text-brand-strong">−{saving}%</span>
           {/if}
         </button>
       </div>

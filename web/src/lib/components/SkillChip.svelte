@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Tooltip, badgeVariants } from '#lib/ui/index.js';
+  import { Tooltip, badgeVariants, cn } from '#lib/ui/index.js';
   import { filterHref } from '#lib/enrichment.js';
   import { skillLabel } from '#lib/facets.js';
   import { skillDescription } from '#lib/skillDescriptions.js';
@@ -51,7 +51,7 @@
 <Tooltip side="top">
   <!-- Outline, the site's one chip for a skill: brand-filled here, it was a second chip style
        louder than the same skills on the cards beside it. -->
-  <span class={badgeVariants({ variant: 'outline' })}>
+  <span class={cn(badgeVariants({ variant: 'outline' }), 'group/chip')}>
     {#if linked}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
       <a href={filterHref('skills', slug)} class="inline-flex items-center gap-1 transition hover:opacity-80" onpointerdown={keepTapOnTheLink}>
@@ -70,7 +70,7 @@
          chip's own link and a near miss would navigate instead. -->
     <button
       type="button"
-      class="ml-0.5 inline-flex size-6 items-center justify-center opacity-50 transition hover:opacity-100"
+      class="ml-0.5 inline-flex size-6 items-center justify-center opacity-0 transition hover:opacity-100 focus-visible:opacity-100 group-hover/chip:opacity-50 pointer-coarse:opacity-50"
       aria-label="Show what {label} is"
     >
       <span
