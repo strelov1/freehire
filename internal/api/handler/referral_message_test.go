@@ -62,7 +62,7 @@ func TestReferralMessageRejectsInvalidRequests(t *testing.T) {
 				c.Locals(auth.LocalsUserID, int64(7))
 				return c.Next()
 			}, h.Stream)
-			req := httptest.NewRequest(fiber.MethodPost, "/jobs/test-job/referral-message/stream", strings.NewReader(`{"channel":"`+tt.channel+`","profile":"Sam is an engineer"}`))
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/jobs/test-job/referral-message/stream", strings.NewReader(`{"channel":"`+tt.channel+`","profile":"Sam is an engineer"}`))
 			req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 			response, err := app.Test(req)
 			if err != nil {
