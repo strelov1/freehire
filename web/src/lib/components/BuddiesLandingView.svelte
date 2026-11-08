@@ -65,7 +65,7 @@
 {#snippet consent(id: string)}
   {#if onJoin}
     <p {id} class="max-w-xl text-xs text-muted-foreground text-pretty">
-      Joining shows members the role titles in your CV, which can name your employer, so check them first. It also shows the companies and roles you apply to and your interview or offer moves, including applications you made before joining; hide any of them from your tracker.
+      Joining shows members the role titles in your CV, which can name your employer, so check them first. It also shows the companies and roles you apply to and your interview or offer moves, including applications you made before joining. Hide any application from the buddy feed with its switch in your tracker.
     </p>
   {/if}
 {/snippet}
