@@ -22,6 +22,8 @@ const PAGE_TTL_MS = 60 * 1000;
 type OpenPayload = Awaited<ReturnType<typeof buildPayload>>;
 let pageCache: { at: number; data: OpenPayload } | null = null;
 
+const settledValue = <T>(r: PromiseSettledResult<T>): T | null => (r.status === 'fulfilled' ? r.value : null);
+
 async function buildPayload(fetchImpl: typeof fetch) {
   const api = serverApi(fetchImpl);
   // One call for the whole scale strip instead of two list totals: the figures come
@@ -41,9 +43,7 @@ async function buildPayload(fetchImpl: typeof fetch) {
     githubStats(fetchImpl),
   ]);
 
-  const value = <T>(r: PromiseSettledResult<T>): T | null => (r.status === 'fulfilled' ? r.value : null);
-
-  const catalog = value(scale);
+  const catalog = settledValue(scale);
   // A degraded snapshot carries the approximate job count and the registry figures;
   // the counts that exist only in the database (or, for unique_open_jobs, only in
   // Meilisearch) come back as zero. Map those to null rather than passing the zero
@@ -59,11 +59,11 @@ async function buildPayload(fetchImpl: typeof fetch) {
       sources: catalog?.sources ?? null,
       telegramChannels: dbOnly(catalog?.telegram_channels),
     },
-    activity: value(activity) ?? [],
-    facets: value(facets) ?? null,
-    growth: value(growth) ?? [],
+    activity: settledValue(activity) ?? [],
+    facets: settledValue(facets) ?? null,
+    growth: settledValue(growth) ?? [],
     engagement,
-    github: value(github),
+    github: settledValue(github),
   };
 }
 

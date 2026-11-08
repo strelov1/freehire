@@ -23,7 +23,7 @@
     "gen:openapi:smoke": "node scripts/gen-openapi-smoke.mjs",
     "gen:collection-stacks": "svelte-kit sync && node scripts/build-collection-stacks.mjs",
     "size": "size-limit",
-    "lint": "oxlint && eslint .",
+    "lint": "oxlint --deny-warnings && eslint .",
     "lint:fix": "oxlint --fix && eslint . --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check"

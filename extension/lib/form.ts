@@ -819,7 +819,7 @@ function answerQuestion({ controls }: Question, value: string): boolean {
  * unambiguously.
  */
 function chosenOptions(controls: Fillable[], value: string): Fillable[] | null {
-  const byLongestLabel = [...controls].sort((a, b) => extractLabel(b).length - extractLabel(a).length);
+  const byLongestLabel = controls.toSorted((a, b) => extractLabel(b).length - extractLabel(a).length);
   const chosen: Fillable[] = [];
   let rest = value.trim();
 

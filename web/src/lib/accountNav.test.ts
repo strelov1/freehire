@@ -60,9 +60,9 @@ describe('accountNav config', () => {
   it('every item links under /my/ (or to a named space outside it) and has a label', () => {
     // Interview buddies needs the full width the cabinet's sidebar takes, so it lives at
     // /buddies; the cabinet still leads there.
-    const outsideMy = ['/buddies'];
+    const outsideMy = new Set(['/buddies']);
     for (const item of accountNav) {
-      expect(item.href.startsWith('/my/') || outsideMy.includes(item.href)).toBe(true);
+      expect(item.href.startsWith('/my/') || outsideMy.has(item.href)).toBe(true);
       expect(item.label.length).toBeGreaterThan(0);
     }
   });

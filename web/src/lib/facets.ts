@@ -387,12 +387,12 @@ export function optionMatches(
  *  Without tiers a typo match outranks an exact alias whenever it is the busier option:
  *  "golang" sat one typo from Solana, and Solana carried more jobs than Go. */
 export function rankOptionMatches(
-  options: readonly FacetOption[],
+  candidates: readonly FacetOption[],
   query: string,
   searchAliases?: Record<string, readonly string[]>,
 ): FacetOption[] {
   const q = query.trim().toLowerCase();
-  if (q === '') return [...options];
+  if (q === '') return [...candidates];
   const tier = (o: FacetOption): number => {
     const names = [o.label.toLowerCase(), ...(searchAliases?.[o.value] ?? [])];
     if (names.includes(q)) return 0;
@@ -400,7 +400,7 @@ export function rankOptionMatches(
     if (names.some((n) => n.includes(q))) return 2;
     return optionMatches(o, q, searchAliases) ? 3 : -1;
   };
-  return options
+  return candidates
     .map((o) => ({ o, t: tier(o) }))
     .filter(({ t }) => t >= 0)
     .sort((a, b) => a.t - b.t)

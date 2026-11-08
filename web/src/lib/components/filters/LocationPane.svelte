@@ -122,15 +122,14 @@
       for (const v of values)
         out.push({ key: `${param}:${v}`, label: label(v), exclude, remove: () => store.remove(param, v) });
     };
-    const cityText = (city: string) => city;
     push('regions', regionF.include, regionLabel, false);
     push('countries', countryF.include, countryLabel, false);
     push('metros', metroF.include, metroLabel, false);
-    push('cities', cityF.include, cityText, false);
+    push('cities', cityF.include, (city) => city, false);
     push('regions', regionF.exclude, regionLabel, true);
     push('countries', countryF.exclude, countryLabel, true);
     push('metros', metroF.exclude, metroLabel, true);
-    push('cities', cityF.exclude, cityText, true);
+    push('cities', cityF.exclude, (city) => city, true);
     return out;
   });
 

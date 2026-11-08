@@ -13,7 +13,7 @@
     "zip:firefox": "WXT_RELEASE=1 wxt zip -b firefox",
     "test": "vitest run",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "lint": "oxlint && eslint .",
+    "lint": "oxlint --deny-warnings && eslint .",
     "lint:fix": "oxlint --fix && eslint . --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check",

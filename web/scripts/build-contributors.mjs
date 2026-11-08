@@ -241,6 +241,7 @@ function readAuthor(author) {
     login: author.login,
     id: author.databaseId ?? 0,
     avatarUrl: author.avatarUrl,
+    // oxlint-disable-next-line no-underscore-dangle -- `__typename` is the GraphQL field's own name
     accountType: author.__typename,
   };
 }

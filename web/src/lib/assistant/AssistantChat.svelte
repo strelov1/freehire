@@ -905,11 +905,11 @@
   $effect(() => {
     if (!keepInSync || phase !== 'ready' || !activeId) return;
     const id = activeId;
-    const tick = () => {
+    const check = () => {
       if (!turnActive && !turn && !catchingUp && !syncRefused) void catchUp(id);
     };
-    tick();
-    const timer = setInterval(tick, SYNC_INTERVAL_MS);
+    check();
+    const timer = setInterval(check, SYNC_INTERVAL_MS);
     return () => clearInterval(timer);
   });
 

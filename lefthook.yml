@@ -215,7 +215,7 @@ pre-commit:
     # {staged_files} to eslint, which does not read that file and answers "File ignored
     # because no matching configuration was supplied" — a warning where the intent was a
     # check, so the glob would add noise and cover nothing. design-system-lint runs
-    # `pnpm run lint` over its whole package, which is `oxlint && eslint .`, so there
+    # `pnpm run lint` over its whole package, which is `oxlint --deny-warnings && eslint .`, so there
     # the config genuinely decides the outcome. The web and extension CI jobs run that
     # same whole-package lint on every push, which is what covers a rule switched off
     # here.

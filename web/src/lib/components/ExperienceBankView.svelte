@@ -246,12 +246,10 @@
         resumeParse = 'idle';
         return;
       }
-      // oxlint-disable-next-line no-await-in-loop -- the wait between reads is the point
       await new Promise((resolve) => setTimeout(resolve, delay));
       if (token !== resumeWaitToken) return;
       let status: string | undefined;
       try {
-        // oxlint-disable-next-line no-await-in-loop -- a backoff poll is sequential by design
         const resume = await api.getResume();
         status = resume.parse_status;
       } catch {

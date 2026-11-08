@@ -59,7 +59,7 @@
   // call time, so a filter change just re-fetches the first page.
   const pager = new Paginator<InboxMessage>(
     async (limit, offset) => {
-      const page = await api.getInbox({
+      const result = await api.getInbox({
         q: search,
         limit,
         offset,
@@ -68,8 +68,8 @@
         status: label,
         includeOther,
       });
-      hidden = page.hidden;
-      return page;
+      hidden = result.hidden;
+      return result;
     },
     { limit: PAGE_SIZE },
   );

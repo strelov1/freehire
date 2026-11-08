@@ -16,14 +16,14 @@
 /** Schemes an ordinary web page is served over. Everything else — the browser's
  *  own pages, other extensions, the user's filesystem — is out of reach on
  *  purpose. */
-const READABLE_PROTOCOLS = ['http:', 'https:'];
+const READABLE_PROTOCOLS = new Set(['http:', 'https:']);
 
 /** Whether the agent may read the page at this url. A url it cannot parse is not
  *  a page: a tab that has not committed one yet reports an empty string. */
 export function isReadablePageUrl(url: string | undefined): boolean {
   if (!url) return false;
   try {
-    return READABLE_PROTOCOLS.includes(new URL(url).protocol);
+    return READABLE_PROTOCOLS.has(new URL(url).protocol);
   } catch {
     return false;
   }

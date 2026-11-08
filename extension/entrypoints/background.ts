@@ -246,37 +246,39 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+const attachFailed = (error: string): RuntimeMessage => ({ kind: 'ATTACH_TAILORED_CV_RESULT', ok: false, error });
+
 /**
  * Attaches the caller's tailored CV for `jobSlug` to the current page's upload field.
  * See lib/tools/attachCv.ts and openspec/changes/extension-attach-tailored-cv/design.md
  * for why this needs the debugging protocol at all.
  */
 async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
-  const fail = (error: string): RuntimeMessage => ({ kind: 'ATTACH_TAILORED_CV_RESULT', ok: false, error });
-
   const token = await getToken();
-  if (!token) return fail('not signed in');
+  if (!token) return attachFailed('not signed in');
 
   const tabId = await activeTabId();
-  if (tabId == null) return fail('no active tab to attach the file to');
+  if (tabId == null) return attachFailed('no active tab to attach the file to');
 
   // Independent of each other — reading the page's frames and fetching the tailored CV
   // metadata share nothing, so there is no reason to pay their latency one after another.
   const [formReply, cv] = await Promise.all([readFramedForm(), getTailoredCVForJob(jobSlug, token)]);
-  if (formReply.kind !== 'FRAMED_FORM') return fail('could not read this page to find the upload field');
+  if (formReply.kind !== 'FRAMED_FORM') return attachFailed('could not read this page to find the upload field');
 
   const pick = pickAttachableUpload(formReply.uploads);
   switch (pick.kind) {
     case 'none':
-      return fail('no file upload field found on this page');
+      return attachFailed('no file upload field found on this page');
     case 'unreachable':
-      return fail("can't reach this embedded form yet — it's inside a frame this action cannot address");
+      return attachFailed("can't reach this embedded form yet — it's inside a frame this action cannot address");
     case 'ambiguous':
-      return fail(`found ${pick.count} file fields on this page and cannot tell which one to use — attach it by hand`);
+      return attachFailed(
+        `found ${pick.count} file fields on this page and cannot tell which one to use — attach it by hand`,
+      );
   }
   const upload = pick.upload;
 
-  if (!cv) return fail('no tailored CV found for this job');
+  if (!cv) return attachFailed('no tailored CV found for this job');
 
   const pdfBytes = await getCVPdfBytes(cv.id, token);
   const dataUrl = pdfDataUrl(pdfBytes);
@@ -286,21 +288,21 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
   try {
     filePath = await resolveDownloadedPath(realDownloadsAPI, dataUrl, filename, DOWNLOAD_TIMEOUT_MS);
   } catch (err) {
-    return fail(errorMessage(err));
+    return attachFailed(errorMessage(err));
   }
 
   const debuggee = { tabId };
   try {
     await browser.debugger.attach(debuggee, '1.3');
   } catch (err) {
-    return fail(classifyAttachError(errorMessage(err)));
+    return attachFailed(classifyAttachError(errorMessage(err)));
   }
   try {
     const evalResult = (await browser.debugger.sendCommand(debuggee, 'Runtime.evaluate', {
       expression: uploadInputExpression(upload.form),
     })) as { result?: { objectId?: string } } | undefined;
     const objectId = evalResult?.result?.objectId;
-    if (!objectId) return fail('could not find the upload field on the page any more');
+    if (!objectId) return attachFailed('could not find the upload field on the page any more');
 
     await browser.debugger.sendCommand(debuggee, 'DOM.setFileInputFiles', {
       objectId,
@@ -308,7 +310,7 @@ async function attachTailoredCV(jobSlug: string): Promise<RuntimeMessage> {
     });
     return { kind: 'ATTACH_TAILORED_CV_RESULT', ok: true };
   } catch (err) {
-    return fail(errorMessage(err));
+    return attachFailed(errorMessage(err));
   } finally {
     await browser.debugger.detach(debuggee).catch(() => {
       // Already detached (e.g. the tab closed mid-call) — nothing left to clean up.

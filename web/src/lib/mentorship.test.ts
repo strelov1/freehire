@@ -807,7 +807,7 @@ describe('which statuses a day shows, in priority order', () => {
 });
 
 describe('the weekly schedule editor', () => {
-  const rule = (id: number, weekday: number, start: string, end: string): MentorAvailabilityRule => ({
+  const slotRule = (id: number, weekday: number, start: string, end: string): MentorAvailabilityRule => ({
     id,
     weekday,
     start,
@@ -816,7 +816,11 @@ describe('the weekly schedule editor', () => {
   });
 
   test('draws all seven days Monday first, each with its own ranges in order', () => {
-    const draft = weekDraft([rule(1, 0, '10:00', '12:00'), rule(2, 2, '19:00', '21:00'), rule(3, 2, '08:00', '09:00')]);
+    const draft = weekDraft([
+      slotRule(1, 0, '10:00', '12:00'),
+      slotRule(2, 2, '19:00', '21:00'),
+      slotRule(3, 2, '08:00', '09:00'),
+    ]);
     expect(draft.map((d) => d.weekday)).toEqual([1, 2, 3, 4, 5, 6, 0]);
     expect(draft[1]?.ranges).toEqual([
       { start: '08:00', end: '09:00' },
@@ -827,7 +831,7 @@ describe('the weekly schedule editor', () => {
   });
 
   test('flattens back into the rows the replace-week endpoint takes', () => {
-    const rows = weekRows(weekDraft([rule(1, 0, '10:00', '12:00'), rule(2, 1, '18:00', '20:00')]));
+    const rows = weekRows(weekDraft([slotRule(1, 0, '10:00', '12:00'), slotRule(2, 1, '18:00', '20:00')]));
     expect(rows).toEqual([
       { weekday: 1, start: '18:00', end: '20:00' },
       { weekday: 0, start: '10:00', end: '12:00' },

@@ -104,10 +104,10 @@
       onCreated(await api.createApiKey(trimmed, expiresAt, scope || undefined));
       reset();
       open = false;
-    } catch (e) {
+    } catch (err) {
       // Identity refusals are worded once, by the component that asked for the proof;
       // anything else is this dialog's own to explain.
-      fail(identity?.handleRefusal(e) ?? messageFor(e));
+      fail(identity?.handleRefusal(err) ?? messageFor(err));
     } finally {
       creating = false;
     }
