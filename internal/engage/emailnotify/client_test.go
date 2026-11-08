@@ -215,7 +215,8 @@ func TestClient_TracksNothingWithoutBothCampaignAndSet(t *testing.T) {
 			if err := tc.client(fake).Send(context.Background(), tc.message); err != nil {
 				t.Fatalf("Send: %v", err)
 			}
-			if fake.in.ConfigurationSetName != nil || len(fake.in.EmailTags) != 0 {
+			// Only the group tag, which every mail carries for the identity's feedback set.
+			if fake.in.ConfigurationSetName != nil || len(fake.in.EmailTags) != 1 || *fake.in.EmailTags[0].Name != "group" {
 				t.Errorf("mail was tracked: set=%v tags=%v", fake.in.ConfigurationSetName, fake.in.EmailTags)
 			}
 		})

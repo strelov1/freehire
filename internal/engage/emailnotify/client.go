@@ -246,14 +246,17 @@ func (c *Client) input(m Message) (*sesv2.SendEmailInput, error) {
 	return in, nil
 }
 
-// track routes a campaign's mail through the configuration set and tags it, which is all
-// the event consumer (internal/engage/emailevents) learns about the letter.
+// track tags every mail with its group, so a bounce or complaint the identity's default
+// configuration set reports says which kind of mail drew it. A campaign's mail is also
+// routed through the engagement set and tagged with the campaign, which is all the event
+// consumer (internal/engage/emailevents) learns about the letter.
 func (c *Client) track(in *sesv2.SendEmailInput, m Message) {
+	in.EmailTags = []types.MessageTag{{Name: aws.String("group"), Value: aws.String(string(m.Group))}}
 	if c.trackingSet == "" || m.Campaign == "" {
 		return
 	}
 	in.ConfigurationSetName = aws.String(c.trackingSet)
-	in.EmailTags = []types.MessageTag{{Name: aws.String("campaign"), Value: aws.String(m.Campaign)}}
+	in.EmailTags = append(in.EmailTags, types.MessageTag{Name: aws.String("campaign"), Value: aws.String(m.Campaign)})
 	if m.Variant != "" {
 		in.EmailTags = append(in.EmailTags, types.MessageTag{Name: aws.String("variant"), Value: aws.String(m.Variant)})
 	}

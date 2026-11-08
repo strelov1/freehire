@@ -389,6 +389,12 @@ security and application mail cannot pick up an open pixel by accident.
   keeps SES from adding the pixel. Opens would overcount anyway: Apple Mail Privacy Protection and
   security scanners fetch it without a person reading anything. The owner chose this on 2026-11-05.
   Scanners can follow links too, so a click within seconds of delivery deserves suspicion.
+- **Bounces and complaints on every other mail.** The sending identity (`mail.freehire.me`,
+  us-east-1) has `freehire-feedback` as its default configuration set, which publishes only
+  BOUNCE and COMPLAINT to the same topic. Every mail carries a `group` tag, and the consumer
+  records such an event under `campaign = 'group:<group>'` (`group:essential`, `group:news`, ...),
+  so a complaint spike names the kind of mail behind it. A message naming
+  `freehire-engagement` overrides the default, so campaign mail is not counted twice.
 - **Comparing two send times:** run `./broadcast -campaign <name> -half a` at one time and
   `-half b` at the other. The sides are hashed with the campaign name and stable across runs. Then:
 

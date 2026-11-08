@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,6 +62,19 @@ func TestDecode_IgnoresWhatTheLedgerDoesNotTrack(t *testing.T) {
 	} {
 		if _, _, err := decode(body); !errors.Is(err, errIgnored) {
 			t.Errorf("%s: err = %v, want errIgnored", name, err)
+		}
+	}
+}
+
+func TestDecode_RecordsFeedbackOnMailOutsideACampaignUnderItsGroup(t *testing.T) {
+	for _, kind := range []string{"Bounce", "Complaint"} {
+		body := `{"eventType":"` + kind + `","mail":{"messageId":"m","timestamp":"2026-11-10T14:00:00Z","tags":{"group":["essential"]}}}`
+		got, _, err := decode(body)
+		if err != nil {
+			t.Fatalf("%s: %v", kind, err)
+		}
+		if got.Campaign != "group:essential" || got.Type != strings.ToLower(kind) {
+			t.Errorf("%s: got %+v, want campaign group:essential", kind, got)
 		}
 	}
 }
