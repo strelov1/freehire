@@ -191,13 +191,13 @@
 
   {#if jobsQuery}
     <div class="sticky bottom-4 mt-8 flex justify-end">
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string -->
       <a
         href={`${resolve('/jobs')}?${jobsQuery}`}
         class="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background shadow"
       >
         Show jobs
-      </a>
+      </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
     </div>
   {/if}
 </div>

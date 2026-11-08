@@ -135,13 +135,13 @@
                 {#if country === ALL_COUNTRIES}
                   {columnName(country)}
                 {:else}
-                  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string, no dynamic route to resolve -->
+                  <!-- eslint-disable svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string, no dynamic route to resolve -->
                   <a
                     href={`${resolve('/jobs')}?countries=${encodeURIComponent(country)}`}
                     class="hover:text-foreground hover:underline"
                   >
                     {columnName(country)}
-                  </a>
+                  </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
                 {/if}
                 {#if jumped(country)}
                   <span
@@ -174,7 +174,7 @@
                 <td class="p-0 text-right {country === ALL_COUNTRIES ? 'border-r border-border' : ''}">
                   {#if cell}
                     {@const growth = growthText(country, cell)}
-                    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- hrefOf builds every target with resolve(); the rule cannot see through the call -->
+                    <!-- eslint-disable svelte/no-navigation-without-resolve -- hrefOf builds every target with resolve(); the rule cannot see through the call -->
                     <a
                       href={hrefOf(cellTarget(row.category, country, cell.open))}
                       aria-label={cellLabel(row.category, country, cell)}
@@ -188,7 +188,7 @@
                     >
                       <span class="block font-medium text-foreground">{compact.format(cell.open)}</span>
                       <span class="block text-xs whitespace-nowrap {growth.tone}">{growth.text}</span>
-                    </a>
+                    </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
                   {:else}
                     <span class="block px-2 py-1.5 text-muted-foreground"
                       ><span aria-hidden="true">·</span><span class="sr-only">none</span></span

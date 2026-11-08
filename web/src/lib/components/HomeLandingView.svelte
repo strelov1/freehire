@@ -179,7 +179,7 @@
     <p class="text-xs uppercase tracking-wide text-muted-foreground/80" aria-hidden="true">{label}</p>
     <nav aria-label={label} class="flex flex-wrap justify-center gap-2">
       {#each chips as chip (chip.href)}
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->
         <a
           href={chip.href}
           class="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-brand-strong hover:text-foreground"
@@ -188,7 +188,7 @@
           {#if chip.count !== undefined}
             <span class="ml-1 text-xs tabular-nums">{chip.count.toLocaleString('en-US')}</span>
           {/if}
-        </a>
+        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
       {/each}
     </nav>
   </div>
@@ -198,14 +198,14 @@
      when you point at it. Written once so the two cannot drift into being two
      different-looking ways of saying "there is more of this over there". -->
 {#snippet onward(href: string, text: string)}
-  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every caller passes a resolve() result; the rule cannot see through a snippet parameter -->
+  <!-- eslint-disable svelte/no-navigation-without-resolve -- every caller passes a resolve() result; the rule cannot see through a snippet parameter -->
   <a
     {href}
     class="group inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
   >
     {text}
     <ArrowRight class="size-4 transition-transform group-hover:translate-x-0.5" />
-  </a>
+  </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
 {/snippet}
 
 <!-- Hero. Deliberately shorter than the viewport: `-19rem` is the 3.5rem header plus

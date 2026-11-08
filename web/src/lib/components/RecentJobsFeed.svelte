@@ -169,7 +169,7 @@
     >
       {#each entries as entry (entry.id)}
         <li animate:flip={{ duration: motionMs }}>
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- entryHref always returns a resolve() result; the rule cannot see through the function call -->
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- entryHref always returns a resolve() result; the rule cannot see through the function call -->
           <a
             href={entryHref(entry)}
             in:fly={{ y: -8, duration: motionMs }}
@@ -186,7 +186,7 @@
               <p class="truncate text-xs text-muted-foreground">{subtitle(entry)}</p>
             </div>
             <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{ago(entry)}</span>
-          </a>
+          </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
         </li>
       {/each}
       {#each { length: MAX_ENTRIES - entries.length }, i (i)}

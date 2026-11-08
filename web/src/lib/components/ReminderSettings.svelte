@@ -355,11 +355,12 @@
       </p>
       {#if digestFrequency === 'daily' && !hasTimezone}
         <p class="text-xs text-muted-foreground">
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
           Set your
           <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}
             >timezone</a
-          > so the digest time means your own local time — until then it's read as UTC.
+          ><!-- eslint-enable svelte/no-navigation-without-resolve --> so the digest time means your own local time — until
+          then it's read as UTC.
         </p>
       {/if}
     </div>
@@ -398,11 +399,12 @@
         </div>
         {#if !hasTimezone}
           <p class="pl-12 text-xs text-muted-foreground">
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
             Set your
             <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}
               >timezone</a
-            > so this means your own local time — until then it's read as UTC.
+            ><!-- eslint-enable svelte/no-navigation-without-resolve --> so this means your own local time — until then it's
+            read as UTC.
           </p>
         {/if}
       {/if}

@@ -117,7 +117,7 @@
           {#each contributions as c (c.id)}
             <li class="flex items-start justify-between gap-3 px-4 py-3">
               <div class="flex min-w-0 flex-col gap-0.5">
-                <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external board URL, opened in a new tab; not an internal route -->
+                <!-- eslint-disable svelte/no-navigation-without-resolve -- external board URL, opened in a new tab; not an internal route -->
                 <a
                   href={c.url}
                   target="_blank"
@@ -125,7 +125,7 @@
                   class="truncate text-sm font-medium hover:underline"
                 >
                   {c.board || hostOf(c.url)}
-                </a>
+                </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
                 <span class="truncate text-xs text-muted-foreground">
                   {#if c.status === 'review'}
                     <span class="font-medium text-foreground">{s.underReview}</span>

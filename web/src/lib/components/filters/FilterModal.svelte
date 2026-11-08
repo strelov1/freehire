@@ -584,24 +584,24 @@
 {#snippet unrecognized(noun: string, param: 'specialization' | 'skill', term: string)}
   <p class="py-1 text-sm text-muted-foreground">
     No {noun} matches “{term}”.
-    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve()d /dictionary plus a query string -->
+    <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve()d /dictionary plus a query string -->
     <a
       href={`${resolve('/dictionary')}?${new URLSearchParams({ [param]: term })}`}
       class="font-medium text-foreground underline underline-offset-4">Help us recognize it</a
-    >
+    ><!-- eslint-enable svelte/no-navigation-without-resolve -->
   </p>
 {/snippet}
 {#snippet unrecognizedRole(term: string)}{@render unrecognized('specialization', 'specialization', term)}{/snippet}
 {#snippet unrecognizedSkill(term: string)}{@render unrecognized('skill', 'skill', term)}{/snippet}
 
 {#snippet recognizeLink(noun: string, query: string)}
-  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve()d /dictionary plus a query string -->
+  <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve()d /dictionary plus a query string -->
   <a
     href={`${resolve('/dictionary')}${query}`}
     class="mt-6 inline-block text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
   >
     Can't find your {noun}? Help us recognize it →
-  </a>
+  </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
 {/snippet}
 
 {#snippet pane(entry: RailEntry, live: FacetCounts | null)}

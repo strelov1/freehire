@@ -139,7 +139,7 @@
         {#each tips as t (t.title)}
           {@const TipGlyph = TIP_ICONS[t.icon]}
           <li>
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- tips carry a site path with its query; resolve() takes a route, not a URL -->
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- tips carry a site path with its query; resolve() takes a route, not a URL -->
             <a
               href={t.href}
               target="_blank"
@@ -159,7 +159,7 @@
                 class="mt-2.5 size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-brand-strong"
                 aria-hidden="true"
               />
-            </a>
+            </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
           </li>
         {/each}
       </ul>

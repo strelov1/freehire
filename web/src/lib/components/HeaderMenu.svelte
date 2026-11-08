@@ -195,7 +195,7 @@
   {#if !inAccount}
     <GithubStars class="hidden sm:inline-flex" />
 
-    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
+    <!-- eslint-disable svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
     <a
       href={DISCORD_URL}
       target="_blank"
@@ -204,7 +204,7 @@
       class={cn('hidden sm:inline-flex', iconButton)}
     >
       <ProviderIcon provider="discord" />
-    </a>
+    </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
   {/if}
 
   <NotificationBell />
@@ -378,7 +378,7 @@
       <!-- Mobile-only: GitHub + theme + auth pinned to the bottom of the drawer. -->
       <div class="shrink-0 border-t border-border p-2 sm:hidden">
         <GithubStars variant="row" class={cn(rowBase, 'text-muted-foreground')} />
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- external Discord invite, not an internal route -->
         <a
           href={DISCORD_URL}
           target="_blank"
@@ -389,7 +389,7 @@
         >
           <ProviderIcon provider="discord" class="size-4 shrink-0" />
           <span>Discord</span>
-        </a>
+        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
         {@render themeButton()}
         {@render authButton()}
       </div>

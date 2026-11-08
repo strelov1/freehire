@@ -207,12 +207,12 @@
       </li>
     </ul>
     <p class="mt-6 text-sm text-muted-foreground">
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() is applied; the rule cannot see through the appended section anchor -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() is applied; the rule cannot see through the appended section anchor -->
       The full text is the
       <a
         href={resolve('/terms') + '#data-licence'}
         class="font-medium text-foreground underline-offset-4 hover:underline">data licence</a
-      > in our terms.
+      ><!-- eslint-enable svelte/no-navigation-without-resolve --> in our terms.
     </p>
   </section>
 

@@ -206,7 +206,7 @@
         class="-mx-4 mt-8 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
       >
         <!-- Greyed until hovered: in full colour the red badge was the loudest thing in the footer. -->
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
         <a
           href={productHunt.href}
           target="_blank"
@@ -229,10 +229,10 @@
             loading="lazy"
             class="hidden size-full object-contain dark:block"
           />
-        </a>
+        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
 
         {#each stores as store (store.href)}
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external store listing opened in a new tab; not an internal route -->
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- external store listing opened in a new tab; not an internal route -->
           <a
             href={store.href}
             target="_blank"
@@ -246,7 +246,7 @@
               </span>
               <span class="text-sm font-semibold">{store.name}</span>
             </span>
-          </a>
+          </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
         {/each}
       </div>
     </div>
@@ -268,7 +268,7 @@
         </button>
         <div class="flex items-center gap-3">
           {#each SOCIAL_LINKS as social (social.provider)}
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
             <a
               href={social.href}
               target="_blank"
@@ -277,7 +277,7 @@
               class="text-muted-foreground transition-colors hover:text-foreground"
             >
               <ProviderIcon provider={social.provider} />
-            </a>
+            </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
           {/each}
         </div>
       </div>

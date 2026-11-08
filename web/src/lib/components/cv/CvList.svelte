@@ -306,12 +306,12 @@
           class="group relative flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-muted/30"
         >
           <!-- The whole card opens the workspace; the action buttons stop propagation below. -->
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended ?cv= query -->
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended ?cv= query -->
           <a
             href={`${resolve('/tailor/[slug]', { slug: cv.job_slug })}?cv=${cv.id}`}
             class="absolute inset-0"
             aria-label={format(s.openAria, { title: cv.job_title })}
-          ></a>
+          ></a><!-- eslint-enable svelte/no-navigation-without-resolve -->
           <EntityLogo
             name={cv.job_company}
             src={companyLogoUrl(cv.job_company) ?? undefined}

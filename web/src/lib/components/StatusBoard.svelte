@@ -235,13 +235,13 @@
           <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// providers</p>
           <!-- A raw JSON API endpoint, not a SvelteKit page route — there is nothing
                for resolve() to map, so the internal-navigation rule doesn't apply. -->
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+          <!-- eslint-disable svelte/no-navigation-without-resolve -->
           <a
             href="/api/v1/status"
             class="font-mono text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
           >
             /status ↗
-          </a>
+          </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
         </div>
 
         {#if providers.length === 0}

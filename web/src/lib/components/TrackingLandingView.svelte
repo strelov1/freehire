@@ -198,13 +198,13 @@
           <h3 class="text-lg font-semibold tracking-tight">{s.title}</h3>
           <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
           {#if s.href}
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal route already passed through resolve() when building `signals`; the linter can't trace it via the variable -->
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- internal route already passed through resolve() when building `signals`; the linter can't trace it via the variable -->
             <a
               href={s.href}
               class="mt-4 inline-block text-sm font-medium text-foreground underline-offset-4 hover:underline"
             >
               {s.cta} →
-            </a>
+            </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
           {/if}
         </div>
       {/each}

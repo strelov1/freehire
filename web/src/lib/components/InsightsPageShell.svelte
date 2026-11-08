@@ -88,26 +88,26 @@
           By country
         </a>
       {/if}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string, no dynamic route to resolve -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- internal /jobs filter link; resolve()d base plus a query string, no dynamic route to resolve -->
       <a
         href={`${resolve('/jobs')}?category=${encodeURIComponent(category)}`}
         class="text-brand-strong hover:underline"
       >
         Browse {label} jobs →
-      </a>
+      </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
     </div>
 
     {#if siblings.length > 0}
       <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
         <span class="font-medium text-foreground">Other categories:</span>
         {#each siblings as s (s.category)}
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- href is resolve()d inside kindHref; the linter can't trace it through the helper -->
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- href is resolve()d inside kindHref; the linter can't trace it through the helper -->
           <a
             href={kindHref(kind, s.category)}
             class="rounded-full bg-secondary px-3 py-1 text-secondary-foreground hover:bg-accent"
           >
             {s.label}
-          </a>
+          </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
         {/each}
       </div>
     {/if}

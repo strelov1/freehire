@@ -53,7 +53,7 @@
        louder than the same skills on the cards beside it. -->
   <span class={cn(badgeVariants({ variant: 'outline' }), 'group/chip')}>
     {#if linked}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
       <a
         href={filterHref('skills', slug)}
         class="inline-flex items-center gap-1 transition hover:opacity-80"
@@ -61,7 +61,7 @@
       >
         <SkillIcon {slug} />
         {label}
-      </a>
+      </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
     {:else}
       <span class="inline-flex items-center gap-1">
         <SkillIcon {slug} />

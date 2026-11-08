@@ -348,10 +348,11 @@
       {@render sectionHeading('Contact')}
       {#each contacts as c, i (i)}
         {#if isLink(c)}
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
           <p class="mb-0.5 break-words">
             <a href={c} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{c}</a>
           </p>
+          <!-- eslint-enable svelte/no-navigation-without-resolve -->
         {:else}<p class="mb-0.5 break-words">{c}</p>{/if}
       {/each}
     </section>

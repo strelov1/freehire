@@ -160,13 +160,13 @@
                   <ul class="mt-2 flex flex-col gap-1 text-sm">
                     {#each block.rows as row (row.value)}
                       <li class="flex items-baseline justify-between gap-3">
-                        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the path IS resolve()d; the rule can't see through the appended filter query -->
+                        <!-- eslint-disable svelte/no-navigation-without-resolve -- the path IS resolve()d; the rule can't see through the appended filter query -->
                         <a
                           class="truncate hover:underline"
                           href={`${resolve('/companies/[slug]', { slug: data.slug })}?${new URLSearchParams({ [block.param]: row.value })}`}
                         >
                           {breakdownLabel(block.param, row.value)}
-                        </a>
+                        </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
                         <span class="tabular-nums text-muted-foreground">{row.count}</span>
                       </li>
                     {/each}

@@ -122,11 +122,11 @@
         class="font-medium text-foreground underline-offset-4 hover:underline">API keys</a
       >
       page. What you may do with the data is in the
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() is applied; the rule cannot see through the appended section anchor -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() is applied; the rule cannot see through the appended section anchor -->
       <a
         href={resolve('/terms') + '#data-licence'}
         class="font-medium text-foreground underline-offset-4 hover:underline">data licence</a
-      >.
+      ><!-- eslint-enable svelte/no-navigation-without-resolve -->.
     </p>
   </section>
 {/if}

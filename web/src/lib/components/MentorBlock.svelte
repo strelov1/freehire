@@ -51,7 +51,7 @@
 </script>
 
 {#if inBeta && mentors.length > 0}
-  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the /mentors path; the rule can't see through the appended query -->
+  <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() applied to the /mentors path; the rule can't see through the appended query -->
   <a
     href={directoryHref}
     class="border-border hover:bg-muted/50 flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors"
@@ -65,5 +65,5 @@
       </span>
       <span class="text-muted-foreground block"> Book half an hour before you apply. </span>
     </span>
-  </a>
+  </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
 {/if}

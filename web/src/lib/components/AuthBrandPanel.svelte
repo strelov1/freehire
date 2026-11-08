@@ -181,7 +181,7 @@
       class="min-h-0 gap-1 px-0 text-xs text-brand-foreground hover:bg-transparent hover:text-brand-foreground hover:underline"
     />
     {#each otherSocials as social (social.provider)}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->
       <a
         href={social.href}
         target="_blank"
@@ -190,7 +190,7 @@
         class="text-brand-foreground underline-offset-4 hover:underline"
       >
         <ProviderIcon provider={social.provider} />
-      </a>
+      </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
     {/each}
   </div>
 </div>

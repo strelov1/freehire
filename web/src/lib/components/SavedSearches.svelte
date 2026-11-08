@@ -137,13 +137,13 @@
 
 <div class="flex flex-col gap-4">
   {#if !isAuthenticated()}
-    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query -->
+    <!-- eslint-disable svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query -->
     <a
       href={signinUrl({ returnTo: page.url.pathname + page.url.search, mode: 'login' })}
       class="self-start text-sm font-medium text-primary underline-offset-4 hover:underline"
     >
       Sign in to save filters
-    </a>
+    </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
   {:else}
     <!-- Zone 1: alerts for the filters staged right now. Save is the primary action;
          once saved, the channel toggles (Telegram / Email) render in place. -->
