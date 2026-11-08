@@ -76,9 +76,9 @@ structured scalars fully replace the dictionary rather than merely seeding it.
 flag.** Once `is_tech` is a bare tri-state column, the search layer cannot
 tell whether it became `true` via the source hint or via `classify.IsTech`
 matching the title with no sub-category. Two ways to close the reported gap:
-  - (a) Widen `CategoryUnresolved` to admit any `is_tech = true` job, from any
+- (a) Widen `CategoryUnresolved` to admit any `is_tech = true` job, from any
     source.
-  - (b) Add a second column/flag carrying "source asserted this, not just the
+- (b) Add a second column/flag carrying "source asserted this, not just the
     dictionary" and only that flag bypasses the gate.
   We pick (a). The `tech-classification` spec already requires the
   tech-title dictionary to be conservative and never guess (`internal/dict/classify/AGENTS.md`,

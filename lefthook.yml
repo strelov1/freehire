@@ -44,6 +44,18 @@ pre-commit:
           exit 0
         fi
         typos --force-exclude {staged_files}
+    # Markdown structure over the staged docs (unclosed fences, heading levels, broken tables
+    # and lists); .rumdl.toml decides what is checked and what is excluded, and a staged file
+    # it excludes is skipped. Steps aside when the binary is missing: the docs CI job is the
+    # gate.
+    rumdl:
+      glob: "*.md"
+      run: |
+        if ! command -v rumdl >/dev/null 2>&1; then
+          echo "rumdl not installed (mise install) - skipping"
+          exit 0
+        fi
+        rumdl check {staged_files}
     # internal/platform/db is generated and committed, so a query edited without
     # regenerating ships the OLD Go with every check green — nothing else here reads
     # both halves. Same shape of check as design-system's check:dist, except that an

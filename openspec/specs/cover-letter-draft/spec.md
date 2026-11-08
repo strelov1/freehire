@@ -3,6 +3,8 @@
 The cover letter a vacancy's application form asks for, written from the achievement atoms the
 candidate has actually asserted.
 
+## Requirements
+
 ### Requirement: A cached fit analysis is a precondition of drafting
 
 Drafting SHALL require a fit analysis already cached for the (candidate, vacancy) pair, and

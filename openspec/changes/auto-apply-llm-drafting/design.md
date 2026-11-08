@@ -101,11 +101,13 @@ rule that would admit a future background worker by accident.
 ### The drafter is a narrow interface, tested with a fake — no real model call in unit tests
 
 Mirrors every other LLM-backed feature in this repo (`matchanalysis`, `resumeextract`):
+
 ```go
 type Drafter interface {
     Draft(ctx context.Context, question MergedField, grounding GroundingContext) (string, bool, error)
 }
 ```
+
 `bool` is whether a groundable draft was produced at all (a model call that legitimately
 found nothing to say returns `false`, not an empty string treated as an answer). The real
 implementation wraps `internal/llm.Client` with a structured-output schema (label, grounded
