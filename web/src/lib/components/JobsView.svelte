@@ -806,6 +806,15 @@
     <MapIcon class="size-4" />
     <span class="hidden sm:inline">Map</span>
   </Button>
+  <!-- Desktop swipe-mode entry, beside Map in the toolbar: as a tab pinned to the viewport
+       edge it sat half outside the content column, aligned with nothing. Phones keep
+       their own entry in the inline toolbar. -->
+  {#if standalone}
+    <Button variant="outline" size="sm" onclick={openSwipe} aria-label="Swipe mode" title="Swipe mode" class="hidden md:inline-flex">
+      <Layers class="size-4" />
+      <span class="hidden lg:inline">Swipe</span>
+    </Button>
+  {/if}
 {/snippet}
 
 {#snippet listControls()}
@@ -989,21 +998,6 @@
   </div>
 </div>
 
-{#if standalone}
-  <!-- Desktop swipe-mode entry: an icon-only button pinned to the right viewport edge
-       (mobile uses the inline toolbar / scroll-revealed tab, so this is md-only). Fixed,
-       so it exists only while the standalone list is mounted and stays reachable while
-       scrolling; kept below the z-40 mobile overlays. -->
-  <button
-    type="button"
-    onclick={openSwipe}
-    aria-label="Swipe mode"
-    title="Swipe mode"
-    class="fixed right-0 top-16 z-30 hidden items-center rounded-l-xl border border-r-0 border-border bg-secondary py-2.5 pl-2.5 pr-2 text-secondary-foreground shadow-md transition-colors hover:bg-accent md:flex"
-  >
-    <Layers class="size-4 shrink-0" />
-  </button>
-{/if}
 
 {#if standalone && mapLoaded && !filters.value.formerEmployers}
   {#await import('./map/JobsMapDialog.svelte') then { default: JobsMapDialog }}

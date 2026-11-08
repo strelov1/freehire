@@ -379,7 +379,7 @@
        card has moved it into the action row at its foot, leaving the corner free. -->
   <!-- Without the company there is nothing to the date's left, so it floats beside the
        title instead of holding a row of its own. -->
-  <div class={['flex items-center gap-2', compact ? 'pr-11' : onHide ? 'pr-28' : 'pr-20', !compact && (applyJob || directApply) && 'pointer-coarse:pr-48', hideCompany && 'float-right ml-3 mt-1.5']}>
+  <div class={['flex items-center gap-2', compact ? 'pr-11' : onHide ? 'pr-28 max-sm:pr-20' : 'pr-20 max-sm:pr-11', !compact && (applyJob || directApply) && 'pointer-coarse:pr-48', hideCompany && 'float-right ml-3 mt-1.5']}>
     <div class="flex min-w-0 items-center gap-2">
       {#if !hideCompany}
       <EntityLogo
@@ -710,7 +710,9 @@
       ]}
     >
       <Bookmark class="size-4 {saved ? 'fill-current' : ''}" aria-hidden="true" />
-      {saved ? 'Saved' : 'Save'}
+      <!-- The word only from sm: on a phone it took the width the company name needed. The
+           button's aria-label carries the action at every width. -->
+      <span class="max-sm:hidden">{saved ? 'Saved' : 'Save'}</span>
     </button>
   </div>
 

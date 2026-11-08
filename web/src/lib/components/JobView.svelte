@@ -1168,7 +1168,7 @@
         href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
         target="_blank"
         rel="nofollow noopener noreferrer"
-        class="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+        class="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
       >
         Find someone to refer you on LinkedIn
         <ExternalLink class="size-4 shrink-0" aria-hidden="true" />
