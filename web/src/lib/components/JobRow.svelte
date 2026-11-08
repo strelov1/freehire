@@ -215,8 +215,7 @@
   // no profile to compare against there is nothing to tint: the chips are plain facts.
   function chipVariant(skill: string): 'brand' | 'missing' | 'outline' {
     if (haveSet) return haveSet.has(skill.toLowerCase()) ? 'brand' : 'missing';
-    if (teaser) return 'outline';
-    return 'brand';
+    return 'outline';
   }
 
   // Whether the signed-in user has saved this job, read from the shared saved set

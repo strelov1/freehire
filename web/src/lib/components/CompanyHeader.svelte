@@ -145,7 +145,7 @@
       {#if industries.length}
         <div class="flex flex-wrap items-center gap-2">
           {#each industries as industry (industry)}
-            <span class="rounded-full bg-secondary px-2.5 py-0.5 text-xs text-secondary-foreground">{industry}</span>
+            <span class="rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">{industry}</span>
           {/each}
         </div>
       {/if}
