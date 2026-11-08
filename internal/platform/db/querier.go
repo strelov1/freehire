@@ -1624,9 +1624,6 @@ type Querier interface {
 	// Only while the saved search still holds the query the worker judged: an owner who
 	// fixed it after the worker read it must not find the fixed alert paused.
 	DeactivateSubscriptions(ctx context.Context, arg DeactivateSubscriptionsParams) (int64, error)
-	// Whether the caller already spent points on this (feature, ref). True means the action
-	// is a recompute/resume and must not be charged again (idempotency by ref).
-	DebitExists(ctx context.Context, arg DebitExistsParams) (bool, error)
 	DecideCompanyRelationProposal(ctx context.Context, arg DecideCompanyRelationProposalParams) error
 	// Approve or reject a pending profile, recording the moderator and the time. The
 	// status='pending' guard makes a second decision match no row, which the repository
@@ -1806,22 +1803,6 @@ type Querier interface {
 	// CloseMisattributedSourceJobs, which queues nothing on purpose), and worth
 	// doing on evidence rather than on the strength of the reading above.
 	DeleteDeadSearchDeleteOutbox(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
-	// Void a debit taken as a RESERVATION for work that then produced nothing.
-	//
-	// It deletes rather than appending a compensating row, and that is forced by
-	// credit_ledger_debit_ref_uniq: at most one debit may exist per (user, feature, ref), so a
-	// compensating entry would leave the ref permanently spent and the candidate's retry would
-	// find it already charged and never re-reserve. Deleting frees the ref.
-	//
-	// The ledger's reconstructability is untouched — a voided reservation is a charge that did not
-	// happen, and the balance still sums correctly from what remains. What is not kept is the
-	// record that a reservation was briefly held, which is bookkeeping about our own retry, not
-	// about the candidate's spending.
-	//
-	// Returns the number of rows removed, so the caller adds the cost back exactly when it really
-	// took one away — a double release, or a release of a charge someone else already voided,
-	// removes nothing and returns 0.
-	DeleteDebit(ctx context.Context, arg DeleteDebitParams) (int64, error)
 	DeleteEmailClassificationOutbox(ctx context.Context, id int64) error
 	// Consume the code (on success) or burn it (on too many attempts). Idempotent: deleting
 	// an absent code is a no-op, so a double submit cannot fail the request.
@@ -2305,11 +2286,6 @@ type Querier interface {
 	// SQL, so a parameterized table name would cost both the codegen and the schema's
 	// compile-time guarantee to save two dozen lines.
 	EnrichmentOutboxMetrics(ctx context.Context) (EnrichmentOutboxMetricsRow, error)
-	// Seed a balance row for a brand-new user so the subsequent SELECT ... FOR UPDATE
-	// always has a row to lock (this is what serializes concurrent first-ever debits).
-	// For an existing user the row is left untouched; a stale period is reset later
-	// under the lock. remaining is seeded with the monthly grant for a fresh row.
-	EnsureBalance(ctx context.Context, arg EnsureBalanceParams) error
 	// The account's invite code, minted on first ask and never rotated.
 	//
 	// ON CONFLICT DO UPDATE rather than DO NOTHING, because DO NOTHING returns no row and the
@@ -2611,13 +2587,6 @@ type Querier interface {
 	// entry's own state (job_id for tailoring, tailored_cv_id/review_decision for the review
 	// gate) that neither endpoint needs a second query to decide whether to proceed.
 	GetAutoApplyQueueEntryForReview(ctx context.Context, arg GetAutoApplyQueueEntryForReviewParams) (GetAutoApplyQueueEntryForReviewRow, error)
-	// Read-only balance for display (no lock, no LLM). Returns no rows for a user who has never
-	// had credit activity; the caller treats that as a full monthly grant remaining.
-	GetBalance(ctx context.Context, userID int64) (GetBalanceRow, error)
-	// Lock the caller's balance row for the debit transaction. EnsureBalance guarantees
-	// the row exists, so this never returns no-rows on the debit path; the lock serializes
-	// concurrent debits for the same user so the balance can never be oversold.
-	GetBalanceForUpdate(ctx context.Context, userID int64) (GetBalanceForUpdateRow, error)
 	// The user's DEFAULT base CV — the one used wherever a single base is needed without asking
 	// (a tailor request that names none, auto-apply, reseed, the profile and header readers). Used
 	// as the seed source when tailoring; returns no row when the user has only tailored CVs or none
@@ -3461,10 +3430,6 @@ type Querier interface {
 	// does not take part or they already reported it; the caller looks the conversation up to
 	// say which.
 	InsertConversationReport(ctx context.Context, arg InsertConversationReportParams) (int64, error)
-	// Append the debit for a metered action. delta is negative (the action cost). The partial
-	// unique index on (user_id, feature, ref) WHERE kind='debit' guards against a double charge
-	// for the same ref even under a race.
-	InsertDebit(ctx context.Context, arg InsertDebitParams) error
 	// Record the redirects cmd/backfill-derive earned when it re-keyed a company whose slug an older
 	// rule had minted from the same name (normalize.SlugPredatesRule) — the retirement
 	// cmd/merge-companies records for a lone company, reached here from the other side. Without
@@ -3499,11 +3464,6 @@ type Querier interface {
 	// Second half of the atomic rebuild: one row per (facet, value). Called once per
 	// value the worker computed, inside the same transaction as DeleteAllFacetStats.
 	InsertFacetStat(ctx context.Context, arg InsertFacetStatParams) error
-	// Record the monthly grant for (user, period), idempotent via the partial unique index
-	// on (user_id, period) WHERE kind = 'grant'. Safe to call on every debit: it inserts
-	// once per period and does nothing thereafter. Purchase grants (kind='purchase') are
-	// exempt from this index and can be added later without contention.
-	InsertGrant(ctx context.Context, arg InsertGrantParams) error
 	// Store a message received at a hosted mailbox, idempotent by
 	// (user_id, source, external_id) with source fixed to 'hosted'.
 	InsertHostedMessage(ctx context.Context, arg InsertHostedMessageParams) error
@@ -3585,11 +3545,6 @@ type Querier interface {
 	// comparable if it were ever to matter, even though it is never indexed or clustered.
 	InsertPrivateJob(ctx context.Context, arg InsertPrivateJobParams) (Job, error)
 	InsertRemoteAuditJudgement(ctx context.Context, arg InsertRemoteAuditJudgementParams) error
-	// Append a reward: points earned (e.g. for an accepted board contribution), delta positive,
-	// feature NULL. Rewards bank above the monthly grant and survive the period reset. The
-	// partial unique index on (user_id, ref) WHERE kind='reward' guards against a double
-	// grant for the same ref even under a race.
-	InsertReward(ctx context.Context, arg InsertRewardParams) error
 	// First report wins, and only for an account created in the last ten minutes: the
 	// table records how an account ARRIVED, so a report from a years-old session would
 	// be a made-up answer rather than an observation.
@@ -4361,10 +4316,6 @@ type Querier interface {
 	// soonest-to-expire first — the recovery probe's candidates. The ordering rotates the sample as
 	// cooldowns lapse, so a run does not keep probing the same few boards.
 	ListCooledBoards(ctx context.Context, arg ListCooledBoardsParams) ([]ListCooledBoardsRow, error)
-	// The caller's credit-ledger entries, newest first, for the transaction-history page. Bounded
-	// by a caller-supplied limit and served by the (user_id, created_at DESC) index. The handler
-	// resolves each debit's ref to a human label (the job/CV it named).
-	ListCreditLedger(ctx context.Context, arg ListCreditLedgerParams) ([]ListCreditLedgerRow, error)
 	// The next page of bindings to reconcile, each with the plan that decides its role.
 	//
 	// The plan comes back WITH the link, in one read, because resolving it separately would be
@@ -5240,10 +5191,6 @@ type Querier interface {
 	// selling it what it bought reads as nobody looking. pro_until/ultra_until rather than
 	// the per-provider sources, for the reason ListProWelcomeCandidates gives.
 	ListTailorCandidates(ctx context.Context, arg ListTailorCandidatesParams) ([]ListTailorCandidatesRow, error)
-	// Resolve tailored-CV ids to their target job's display labels for the credit-history page
-	// (tailor debits). Only tailored CVs (job_id set) whose job still exists resolve; the handler
-	// falls back to a generic label otherwise.
-	ListTailoredCVLabelsByIDs(ctx context.Context, ids []pgtype.UUID) ([]ListTailoredCVLabelsByIDsRow, error)
 	// Resolve tailoring-session ids to their vacancy's display labels for the usage history.
 	//
 	// A tailoring charge names the SESSION, not the CV — that is what the turn ceiling is
@@ -6970,9 +6917,6 @@ type Querier interface {
 	// migration comment: there is no self-service handoff on this MVP, so freeing the slug on
 	// revoke would let anyone re-claim a company an admin just decided to shut out.
 	RevokeCompanyAccount(ctx context.Context, userID int64) (CompanyAccount, error)
-	// Whether the caller already received a reward for this ref (e.g. an accepted contribution).
-	// True means the reward was already granted and must not be granted again (idempotency).
-	RewardExists(ctx context.Context, arg RewardExistsParams) (bool, error)
 	// The job-reality repost/mass-posting counts for one role cluster: how many postings
 	// of the same role (by role_fingerprint within a company) exist of any status
 	// (repost_count = repost history) and how many are still open (mass_count = concurrent
@@ -7840,10 +7784,6 @@ type Querier interface {
 	UntrackJob(ctx context.Context, arg UntrackJobParams) (UntrackJobRow, error)
 	// Only the owner can update preferences, and never the immutable initial search.
 	UpdateAssistantSelectionBrief(ctx context.Context, arg UpdateAssistantSelectionBriefParams) (int64, error)
-	// Persist the post-transaction balance: the current period and remaining points. Called at
-	// the end of the debit transaction to write back any lazy reset and/or decrement. The row is
-	// guaranteed to exist (EnsureBalance ran first).
-	UpdateBalance(ctx context.Context, arg UpdateBalanceParams) error
 	// Correct a board's company name — for a crowdsourced row seeded with
 	// boardcatalog.PlaceholderCompany, once a curator knows the real one. Matches any status
 	// (a placeholder is worth fixing whether the board is still pending or already active).
