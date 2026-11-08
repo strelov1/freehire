@@ -111,11 +111,12 @@
   aria-describedby="{location ? `${locationId} ` : ''}{hasStatus ? `${statusId} ` : ''}{indicatorsId} {hintId}"
   class="relative flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 >
-  <span class="flex min-h-8 items-center gap-1.5 pr-11 text-sm font-semibold sm:min-h-0 sm:pr-7">
+  <!-- The company is the quiet eyebrow and the role the strong line, as on every job card. -->
+  <span class="flex min-h-8 items-center gap-1.5 pr-11 text-xs font-medium text-muted-foreground sm:min-h-0 sm:pr-7">
     <EntityLogo name={company} src={companyLogoUrl(company) ?? undefined} shape="square" size="xs" />
     <span class="min-w-0 truncate">{company || 'Unknown company'}</span>
   </span>
-  <span class="line-clamp-2 text-sm">{title}</span>
+  <span class="line-clamp-2 text-sm font-semibold">{title}</span>
   {#if location}
     <span id={locationId} title={location} class="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
       <MapPin class="size-3 shrink-0" aria-hidden="true" />

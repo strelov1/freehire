@@ -457,7 +457,7 @@
   <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions}
+  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
@@ -501,12 +501,18 @@
            text joined by dots rather than a row of outlined chips: the skills below are
            chips already, and two rows of identical outlines made every card noisy.
            Indexed keys: a tag's text could equal one of the trailing facts. -->
-      {#if metaFacts.length}
+      {#if metaFacts.length || salary}
         <span class="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-muted-foreground">
           {#each metaFacts as fact, i (i)}
             {#if i > 0}<span aria-hidden="true">·</span>{/if}
             <span>{fact}</span>
           {/each}
+          <!-- The pay leads into the same line, in ink, rather than standing alone in bold at
+               the card's foot, where cards with and without it ended at different heights. -->
+          {#if salary}
+            {#if metaFacts.length}<span aria-hidden="true">·</span>{/if}
+            <span class="font-semibold tabular-nums text-foreground">{salary}</span>
+          {/if}
         </span>
       {/if}
       <!-- Register-backed employer credentials (visa-sponsor licences). A fact about
@@ -534,25 +540,9 @@
     <p class="mt-2 line-clamp-2 text-sm text-muted-foreground">{blurb}</p>
   {/if}
 
-  <!-- No corner gutter here any more: Hide moved into the action row at the foot of the
-       card, so nothing overlays this corner and the skills tail and salary can use the
-       full width.
-       On a phone the salary is ~160px of the ~360px card, so sharing a row with it
-       squeezed the chips into a five-line stack. Stacking the two below `sm` gives the
-       chips the full width (three lines become two); from `sm` up the original
-       chips-left / salary-right row is unchanged. -->
-  {#if skills.length || salary}
-  <div
-    class="mt-3 flex flex-col items-start gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3"
-  >
-    <!-- flex-1 (not the default basis:auto) so the chips get every pixel the salary
-         doesn't need. With basis:auto the row's width is derived from its max-content
-         width, so shorter chips would ironically shrink the row and cause *more*
-         wrapping. -->
-    <!-- No skills, no chip row: an empty flex-1 slot pushed the salary to the far edge
-         alone on its line. -->
-    {#if skills.length}
-    <div class="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:flex-1">
+  <!-- The skills, as the card's one chip row (the pay rides the meta line above). -->
+  {#if skills.length}
+    <div class="mt-3 flex min-w-0 flex-wrap items-center gap-1.5">
       <!-- A long dictionary slug ("event-driven-architecture") would wrap inside its
            own chip and stretch the row to two lines, breaking the card's rhythm on a
            phone. Each chip stays one line and truncates with an ellipsis past max-w; the full skill is
@@ -572,13 +562,6 @@
         <span class="text-xs text-muted-foreground">+{extraSkills} skills</span>
       {/if}
     </div>
-    {/if}
-    {#if salary}
-      <span class={['shrink-0 text-sm font-semibold tabular-nums tracking-tight sm:self-auto', skills.length && 'self-end']}>
-        {salary}
-      </span>
-    {/if}
-  </div>
   {/if}
 
   <!-- Card-level profile match: the real client-computed coverage bar, only for a

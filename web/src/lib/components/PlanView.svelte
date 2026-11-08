@@ -370,13 +370,13 @@
       {:else}
         <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
           {#each history as entry, i (i)}
-            <li class="flex items-center justify-between gap-3 px-4 py-3">
-              <div class="flex min-w-0 flex-col gap-0.5">
-                <span class="truncate text-sm font-medium">{entry.label}</span>
-                <span class="truncate text-xs text-muted-foreground">
-                  {#if entry.subtitle}{entry.subtitle} · {/if}{fmtDate(entry.created_at)}
-                </span>
-              </div>
+            <!-- One line per entry, the date right-aligned: a log, not a list of cards. -->
+            <li class="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+              <span class="min-w-0 truncate">
+                <span class="font-medium">{entry.label}</span>
+                {#if entry.subtitle}<span class="text-muted-foreground"> · {entry.subtitle}</span>{/if}
+              </span>
+              <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{fmtDate(entry.created_at)}</span>
             </li>
           {/each}
         </ul>
