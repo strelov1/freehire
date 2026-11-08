@@ -309,6 +309,25 @@ pre-commit:
         - "web/src/**/*.{svelte,ts,js}"
       run: pnpm --dir design-system run check:adoption
 
+# The same commitlint config CI applies to the PR title (commitlint.config.js). Local
+# commits are not what lands on main — the squash merge takes the PR title — but a branch
+# that follows the convention makes a title easy to write. Steps aside when the root
+# tooling is not installed (`pnpm install` at the repository root): the PR title check is
+# the gate.
+commit-msg:
+  commands:
+    commitlint:
+      # Merge and rebase messages are git's own, and only the squash title reaches main.
+      skip:
+        - merge
+        - rebase
+      run: |
+        if [ ! -x node_modules/.bin/commitlint ]; then
+          echo "commitlint not installed (pnpm install at the repository root) - skipping"
+          exit 0
+        fi
+        node_modules/.bin/commitlint --edit {1}
+
 # A merge commit skips pre-commit and runs pre-merge-commit instead, and a merge from
 # main is the usual way generated docs go stale: main brings new outputs (or a new CI
 # check on them) while this branch's api-spec/filters edits are not in them.
