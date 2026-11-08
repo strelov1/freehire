@@ -21,6 +21,9 @@
   // Set by a successful Watch click, never on load: the hint answers "where do the alerts
   // come from?" at the moment of asking, not on every visit to a company already watched.
   let justWatched = $state(false);
+  // A lookup that started before a successful click read the list as it was, so it must not
+  // overwrite what the click just did.
+  let toggled = false;
 
   // The watchlist alert is the saved search `watchlist=true` with a channel (WatchlistAlert).
   const alertOn = $derived.by(() => {
@@ -33,12 +36,13 @@
     watched = false;
     error = null;
     justWatched = false;
+    toggled = false;
     if (!isAuthenticated()) return;
     let current = true;
     api
       .isWatched(target)
       .then((on) => {
-        if (current) watched = on;
+        if (current && !toggled) watched = on;
       })
       .catch(() => {});
     return () => {
@@ -57,11 +61,13 @@
     try {
       if (watched) {
         await api.unwatchCompany(slug);
+        toggled = true;
         watched = false;
         justWatched = false;
         announce(`Stopped watching ${companyName}`);
       } else {
         await api.watchCompany(slug);
+        toggled = true;
         watched = true;
         // Loaded only now, so a company page costs nobody these two reads until they watch,
         // and awaited so the hint does not flash for someone whose alert is already on.

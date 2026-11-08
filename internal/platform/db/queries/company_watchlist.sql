@@ -55,12 +55,15 @@ ORDER BY 1, 2;
 
 -- name: IsWatchingCompany :one
 -- Whether the person watches this company, by the slug a company page carries. A stored
--- alias of it counts: the person added the company under its old spelling.
+-- alias of it counts: the person added the company under its old spelling. An alias slug a
+-- company row still holds is its own company, as in the reads above, and does not count.
 SELECT EXISTS (
     SELECT 1 FROM company_watchlist w
     WHERE w.user_id = @user_id
       AND (w.company_slug = @slug
-           OR w.company_slug IN (SELECT a.alias_slug FROM company_slug_aliases a WHERE a.canonical_slug = @slug))
+           OR w.company_slug IN (SELECT a.alias_slug FROM company_slug_aliases a
+                                 WHERE a.canonical_slug = @slug
+                                   AND NOT EXISTS (SELECT 1 FROM companies c WHERE c.slug = a.alias_slug)))
 );
 
 -- name: ResolveWatchableCompany :one
@@ -113,11 +116,14 @@ SELECT (SELECT count(*) FROM fresh)::bigint AS fresh,
        (SELECT count(*) FROM ins)::bigint AS inserted;
 
 -- name: RemoveFromWatchlist :exec
--- Remove a company by the slug a page carries, together with any stored alias of it.
+-- Remove a company by the slug a page carries, together with any stored alias of it that no
+-- company row still holds (that one is a company of its own, and stays).
 DELETE FROM company_watchlist
 WHERE user_id = @user_id
   AND (company_slug = @slug
-       OR company_slug IN (SELECT a.alias_slug FROM company_slug_aliases a WHERE a.canonical_slug = @slug));
+       OR company_slug IN (SELECT a.alias_slug FROM company_slug_aliases a
+                           WHERE a.canonical_slug = @slug
+                             AND NOT EXISTS (SELECT 1 FROM companies c WHERE c.slug = a.alias_slug)));
 
 -- name: ListWatchableCompaniesByFoldedSlug :many
 -- The companies — hiring or not — whose slug folds to one of the keys or IS one of the

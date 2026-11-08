@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { api } from '#lib/api.js';
 import WatchCompanyButton from './WatchCompanyButton.svelte';
 
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
@@ -38,5 +39,16 @@ describe('WatchCompanyButton', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Watch' }));
     await screen.findByRole('button', { name: 'Watching' });
     expect(screen.queryByRole('link', { name: 'Turn on alerts' })).toBeNull();
+  });
+
+  it('keeps Watching when the lookup that began before the click answers late', async () => {
+    let answer: (on: boolean) => void = () => {};
+    vi.mocked(api.isWatched).mockImplementationOnce(() => new Promise<boolean>((r) => (answer = r)));
+    render(WatchCompanyButton, { slug: 'acme', companyName: 'Acme' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Watch' }));
+    await screen.findByRole('button', { name: 'Watching' });
+    answer(false);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole('button', { name: 'Watching' })).toBeTruthy();
   });
 });
