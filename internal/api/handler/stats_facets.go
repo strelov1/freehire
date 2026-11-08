@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -42,4 +44,28 @@ func (h *statsHandlers) StatsFacets(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"data": fiber.Map{"facets": groupFacetStats(rows)}})
+}
+
+// skillNeighbour is one entry of a skill's neighbours: Count open postings list both.
+type skillNeighbour struct {
+	Skill string `json:"skill"`
+	Count int64  `json:"count"`
+}
+
+// SkillNeighbours serves the skills most often listed beside one skill, most frequent
+// first, from the insights_skill_neighbours snapshot cmd/rollup-facets rebuilds daily.
+// The /skills/<slug> glossary page reads this instead of a live skills facet count,
+// which costs the engine 100-700 ms per call and is what a crawler burst turned into
+// 500s. An unknown skill, or a snapshot not yet built, is an empty list (200).
+func (h *statsHandlers) SkillNeighbours(c *fiber.Ctx) error {
+	skill := strings.ToLower(c.Params("slug"))
+	rows, err := h.queries.ListSkillNeighbours(c.Context(), skill)
+	if err != nil {
+		return err
+	}
+	items := make([]skillNeighbour, len(rows))
+	for i, r := range rows {
+		items[i] = skillNeighbour{Skill: r.Neighbour, Count: r.Count}
+	}
+	return c.JSON(fiber.Map{"data": items, "meta": fiber.Map{"skill": skill}})
 }

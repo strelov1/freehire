@@ -71,6 +71,11 @@ func (h *statsHandlers) register(api fiber.Router, optionalAuth fiber.Handler) {
 	// counts only.
 	api.Get("/stats/facets", h.StatsFacets)
 
+	// Public skill co-occurrence snapshot: the skills most often listed beside one
+	// skill, for the /skills/<slug> glossary page. Served from insights_skill_neighbours
+	// (cmd/rollup-facets) so a page render never asks the engine for a skills facet.
+	api.Get("/stats/skills/:slug/neighbours", h.SkillNeighbours)
+
 	// Public Trends & Insights reads: aggregate market intelligence (role & skill
 	// demand, hiring velocity, salary bands) served from the insights_* rollups
 	// (cmd/rollup-stats), unauthenticated like the other public reads. Aggregate-only

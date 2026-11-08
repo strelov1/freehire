@@ -45,18 +45,18 @@ export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) =
   // entry, and the sitemap lists exactly what this route serves.
   if (!description) error(404, 'Not found');
 
-  // Two calls, run together. The neighbours read the skills distribution under this
-  // skill; the gate and the sentence above it read `total` from that same response, so
-  // the two cannot state different numbers.
+  // Two calls, run together. The neighbours come from the nightly co-occurrence
+  // snapshot, never from a live skills facet count: that count costs the engine
+  // 100-700 ms, and a crawler opening thousands of cold glossary URLs in one minute
+  // starved it into 500s (2026-11-07/08). The gate and the sentence above it read
+  // `total` from the postings search, which counts the same filter for ~1 ms.
   const filter = new URLSearchParams({ skills: slug });
   const api = serverApi(fetch);
-  const [counts, postings] = await Promise.all([
-    api.facetCounts(filter, { facets: ['skills'] }),
-    api.searchJobs(filter, POSTINGS_SHOWN, 0),
-  ]);
+  const [related, postings] = await Promise.all([api.skillNeighbours(slug), api.searchJobs(filter, POSTINGS_SHOWN, 0)]);
 
   const label = skillLabel(slug);
-  const showPostings = showsPostings(counts.total);
+  const total = postings.total ?? 0; // the search endpoint always reports one
+  const showPostings = showsPostings(total);
   setHeaders({ 'cache-control': 'public, max-age=0, s-maxage=3600' });
 
   return {
@@ -67,10 +67,11 @@ export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) =
     // Filtered against the catalogue, not against the dictionary: a facet value left
     // behind by a skill the dictionary no longer emits would otherwise be published as
     // a link to a 404, from the page whose whole claim is that it is worth linking to.
-    neighbours: topNeighbours(counts.facets.skills ?? {}, slug, NEIGHBOUR_LIMIT, (s) => catalog[s] !== undefined).map(
-      (s) => ({ slug: s, label: skillLabel(s) }),
-    ),
-    total: counts.total,
+    neighbours: topNeighbours(related, slug, NEIGHBOUR_LIMIT, (s) => catalog[s] !== undefined).map((s) => ({
+      slug: s,
+      label: skillLabel(s),
+    })),
+    total,
     // The block, not the count: the count is stated either way, because "3 open
     // postings" is a fact. What the gate withholds is a list that would read as a
     // sample of a market.

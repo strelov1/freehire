@@ -11,14 +11,20 @@
 // touches the table (the prior snapshot serves on).
 //
 // It is a run-once-and-exit worker (cron-scheduled once per day — facet
-// distributions move slowly). The delete + reinsert run inside one transaction, so a
-// reader never sees a partial rebuild and a rerun is idempotent. It exits non-zero if
+// distributions move slowly). A second pass then rebuilds insights_skill_neighbours,
+// the skills listed most often beside each skill, which the /skills/<slug> glossary
+// pages read instead of asking the engine on every render. Each delete + reinsert runs
+// inside one transaction, so a reader never sees a partial rebuild and a rerun is idempotent. It exits non-zero if
 // the facet count or the rebuild fails, so cron can alert.
 package main
 
 import (
 	"context"
 	"log"
+	"maps"
+	"slices"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
@@ -81,5 +87,40 @@ func run() int {
 	}
 
 	log.Printf("rollup-facets: rebuilt insights_facet_stats (%d rows across %d facets)", len(rows), len(facetsnapshot.Facets))
+
+	// Second pass, its own swap: each skill's neighbours, for the glossary pages. One
+	// engine query per skill in the distribution above, so it runs after the first
+	// snapshot is committed — a failure here costs only this table's refresh.
+	skills := slices.Collect(maps.Keys(res.Facets[search.StringFacets["skills"]]))
+	pairs, err := facetsnapshot.Neighbours(ctx, client, skills, facetsnapshot.NeighbourLimit)
+	if err != nil {
+		log.Printf("skill neighbours: %v", err)
+		return 1
+	}
+	if err := storeNeighbours(ctx, pool, pairs); err != nil {
+		log.Printf("skill neighbours: %v", err)
+		return 1
+	}
+	log.Printf("rollup-facets: rebuilt insights_skill_neighbours (%d pairs across %d skills)", len(pairs), len(skills))
 	return 0
+}
+
+// storeNeighbours swaps the co-occurrence snapshot in one transaction, so a reader
+// keeps the previous one until commit.
+func storeNeighbours(ctx context.Context, pool *pgxpool.Pool, pairs []facetsnapshot.NeighbourRow) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	q := db.New(pool).WithTx(tx)
+	if err := q.DeleteAllSkillNeighbours(ctx); err != nil {
+		return err
+	}
+	for _, p := range pairs {
+		if err := q.InsertSkillNeighbour(ctx, db.InsertSkillNeighbourParams{Skill: p.Skill, Neighbour: p.Neighbour, Count: p.Count}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }

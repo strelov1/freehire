@@ -1744,6 +1744,11 @@ type Querier interface {
 	// days (a day that had only closures, now reopened) are dropped rather than left
 	// stale.
 	DeleteAllJobDailyStats(ctx context.Context) error
+	// Skill co-occurrence snapshot (insights_skill_neighbours), recomputed by
+	// cmd/rollup-facets as an atomic delete-and-reinsert, and the read the public
+	// /api/v1/stats/skills/{slug}/neighbours endpoint serves from it.
+	// First half of the atomic rebuild; run in the same transaction as the inserts.
+	DeleteAllSkillNeighbours(ctx context.Context) error
 	// First half of the atomic rebuild. Run in the same transaction as the
 	// InsertSourceStat loop.
 	DeleteAllSourceStats(ctx context.Context) error
@@ -3638,6 +3643,7 @@ type Querier interface {
 	// table records how an account ARRIVED, so a report from a years-old session would
 	// be a made-up answer rather than an observation.
 	InsertSignupAttribution(ctx context.Context, arg InsertSignupAttributionParams) (int64, error)
+	InsertSkillNeighbour(ctx context.Context, arg InsertSkillNeighbourParams) error
 	// Second half of the atomic rebuild: one row per source in the UNION of the adapter
 	// registry and what the scan above found — see sourcestats.Rows, which is where that
 	// union is decided.
@@ -5226,6 +5232,8 @@ type Querier interface {
 	// direction. A viewer who is not an active member yields no rows (the service checks first).
 	// The CV is read for the page's rows only, to project the card summary.
 	ListSimilarBuddies(ctx context.Context, arg ListSimilarBuddiesParams) ([]ListSimilarBuddiesRow, error)
+	// One skill's neighbours, most frequent first. Aggregate only.
+	ListSkillNeighbours(ctx context.Context, skill string) ([]ListSkillNeighboursRow, error)
 	// Companies whose ingested name is still a squished slug (lowercase, no
 	// whitespace or uppercase) and that have at least one open job, with a
 	// representative open job's source and URL so the backfill worker can locate the
