@@ -889,6 +889,18 @@ export function createApi(
     return res.data.facets ?? {};
   }
 
+  /** The skills most often listed beside one skill, as skill → postings listing both.
+   *  Served from the daily insights_skill_neighbours rollup, so the /skills/<slug> page
+   *  never asks for a live skills facet count — 100-700 ms of engine time each, which a
+   *  crawler burst over cold glossary URLs turned into 500s. Empty until the rollup has
+   *  run, or for a skill it never saw. Unauthenticated. */
+  async function skillNeighbours(slug: string): Promise<Record<string, number>> {
+    const res = await request<{ data: { skill: string; count: number }[] }>(
+      `/api/v1/stats/skills/${encodeURIComponent(slug)}/neighbours`,
+    );
+    return Object.fromEntries((res.data ?? []).map((n) => [n.skill, n.count]));
+  }
+
   /** How big the catalogue is, as one snapshot: open postings, companies, sources,
    *  ATS platforms and Telegram channels. Every surface quoting catalogue scale reads
    *  this one call, so /about and /open cannot show different numbers — which they
@@ -3393,6 +3405,7 @@ export function createApi(
     userGrowth,
     engagementStats,
     statsFacets,
+    skillNeighbours,
     catalogScale,
     embedProgress,
     embedProgressStreamUrl,

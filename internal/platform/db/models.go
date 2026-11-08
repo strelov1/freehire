@@ -955,6 +955,12 @@ type InsightsSkillHistory struct {
 	OpenCount int32       `json:"open_count"`
 }
 
+type InsightsSkillNeighbour struct {
+	Skill     string `json:"skill"`
+	Neighbour string `json:"neighbour"`
+	Count     int64  `json:"count"`
+}
+
 type InsightsSkillStat struct {
 	Skill         string `json:"skill"`
 	Category      string `json:"category"`
