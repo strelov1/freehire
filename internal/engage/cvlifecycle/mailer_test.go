@@ -74,7 +74,7 @@ func TestMailer_LettersNameWhatTheyAreAbout(t *testing.T) {
 	if first.Subject != "Your CV scored 61/100 in an ATS check" {
 		t.Errorf("letter 1 subject = %q", first.Subject)
 	}
-	for _, want := range []string{"Add a summary section", "Kubernetes", "https://freehire.me/my/cvs?utm_source=email"} {
+	for _, want := range []string{"Add a summary section", "Kubernetes", "https://freehire.me/my/profile/cv-readiness?utm_source=email"} {
 		if !strings.Contains(first.HTML, want) || !strings.Contains(first.Text, want) {
 			t.Errorf("letter 1 does not carry %q in both parts", want)
 		}

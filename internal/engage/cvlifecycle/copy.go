@@ -27,7 +27,7 @@ const listStyle = `margin:0 0 14px 0;padding-left:20px;font-size:15px;line-heigh
 var specs = map[Step]spec{
 	StepATS: {
 		subject:   func(d data) string { return fmt.Sprintf("Your CV scored %d/100 in an ATS check", d.Overall) },
-		preheader: func(d data) string { return "The three things costing you the most points." },
+		preheader: func(d data) string { return "What is costing your CV the most points." },
 		heading:   "What an ATS makes of your CV",
 		body: body("ats", `
 {{template "p" "You uploaded your CV to freehire, so I ran the check an applicant tracking system would run on it. The score is a plain read of the document, and nobody read it but a program."}}

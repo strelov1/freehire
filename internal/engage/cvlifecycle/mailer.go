@@ -83,7 +83,7 @@ type data struct {
 func (m *Mailer) data(l Letter) (data, error) {
 	d := data{
 		Overall: l.Overall, Potential: l.Potential, Gaps: l.Gaps, Keywords: l.Keywords,
-		ReportURL:    m.baseURL + "/my/cvs?utm_source=email",
+		ReportURL:    m.baseURL + "/my/profile/cv-readiness?utm_source=email",
 		TailorURL:    m.baseURL + "/features/tailor?utm_source=email",
 		PortraitURL:  m.baseURL + "/ilya.jpg",
 		LinkedInIcon: m.baseURL + "/email-icon-linkedin.png",
