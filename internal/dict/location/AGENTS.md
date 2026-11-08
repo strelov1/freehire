@@ -1,9 +1,11 @@
 # Location conventions
 
 ## Scope
+
 Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and a work-mode hint from a free-text ATS location string.
 
 ## Always true
+
 - **Two entry points, by design.** `Parse` answers "where is the WORK" (a job's location
   line); `ParseResidence` answers "where is the PERSON" (a CV's). They are distinct types,
   not a flag, because the same string means opposite things on the two sides and a flag can
@@ -165,12 +167,14 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
 - `countries`/`regions` are a dict-then-LLM hybrid (`jobview.geoFacet`), the one deliberate exception to dict-only: the dictionary wins when it pins a place; the LLM's `enrichment.countries`/`regions` fill only the unpinned (global/unspecified) bucket.
 
 ### Work-arrangement prose (description)
+
 `WorkModeFromDescription` reads phrase lists in order English → German → Dutch → Spanish →
 Portuguese → French → Croatian/Serbian (`workmode_bcs.go`) → Polish → Indian; a later list
 runs only when no earlier one matched. German through Polish check remote FIRST (the
 reverse of English): these languages state remote only as a totality that contains the
 hybrid phrase. Dutch through Polish share `guardedPhraseMatches` (negation before,
 perk/refusal guards after).
+
 - **German** (`workmode_de.go`): home working is a BENEFIT, hence hybrid ("Homeoffice
   möglich", "2 Tage Homeoffice", "mobiles Arbeiten"); remote needs a totality ("100%
   Homeoffice", "vollständig remote"). Folded markup, word boundary at the end ("mobile
@@ -232,6 +236,7 @@ perk/refusal guards after).
   WFH", "WFH / Remote", "Location: WFH") are. Measured 2026-10-25: 8.6% → 10.7%.
 
 ### Per-country location lines
+
 - **Dutch and Flemish** (`location_nl.go`, Dutch blocks of `nameToCountry` and
   `foreignSubdivisionNames`). Recruitee writes the country in the posting's language;
   "Nederland" was the Colorado town (10,801 open rows with no country, 2026-10-25).
@@ -341,9 +346,11 @@ perk/refusal guards after).
   84.8%; ESS placed 98.2% → 100%.
 
 ## How it works
+
 `jobderive.Derive` calls `ParseIn` with the adapter's countries; output reaches users through Meilisearch facets, so a dictionary change needs `cmd/backfill-derive` then `cmd/reindex`.
 
 ## Limitations
+
 - **The country dictionary is incomplete: 138 of 252 ISO countries carry a region**
   (2026-11-08); the rest (Cuba, Syria, DR Congo, many dependencies) resolve to nothing. GeoNames `countryInfo.txt` supplies names, but regions
   are a business taxonomy (`uk` split from `eu`, `cis` spanning the Caucasus and Central

@@ -1,9 +1,11 @@
 # Job lifecycle conventions
 
 ## Scope
+
 The open/closed state of a job row, the seven mechanisms that write `closed_at`, and the filtering semantics that depend on it.
 
 ## Always true
+
 - A job is open while `closed_at IS NULL`. Closing is a soft state; nothing hard-deletes jobs. (`cmd/prune`, which removed non-IT postings into `pruned_jobs`, was retired once the catalogue grew broader than IT: `closed_at` means only "the employer took this down".)
 - A closed row keeps its `public_slug`, enrichment and `user_jobs` references; reopening is free.
 - List, search and company surfaces filter `closed_at IS NULL`. Detail still serves a closed job (with `closed_at`) so links and history don't break.
@@ -17,11 +19,13 @@ The open/closed state of a job row, the seven mechanisms that write `closed_at`,
 - An open posting its source has not shown for more than 14 days (`last_seen_at`) is **hidden from search, not closed** (see "The unseen safety net"). It stays open, its page serves, and it returns when its source lists it again.
 
 ## How it works
+
 Seven independent mechanisms write `closed_at`, each covering a gap the others can't reach. Six close on evidence; the age rule (4) guesses, which is why every close records its mechanism. The safety nets (5) and (6) read a board's history, not a posting: (5) nothing could reach the board for weeks, (6) everything reached it and found nothing.
 
 **(1) Ingest sweep** (`cmd/ingest`, `CloseUnseenJobs`): board sources stamp `last_seen_at` every crawl (cheap `RefreshUnchangedJob` on the common path, `UpsertJob` for a new, edited or reopening posting). The post-run sweep closes a provider's jobs unseen for 48h; the upsert's `ON CONFLICT` path clears `closed_at` on reappearance. The sweep runs per provider, only for providers that ingested at least one job, so a total crawl outage can't mass-close a catalogue. It is scoped to the `company_slug`s the run crawled, so a partial run closes only companies it saw. That deliberate under-close *leaks the last postings of a company that vanished from the feed entirely*: the scope can't tell "company gone" from "company not reached". A recency-budgeted aggregator (`himalayas`, see `internal/ingest/sources/himalayas.go`) leaks routinely: a company that ages out of its window never re-enters scope.
 
 **(1a) Board-scoped close** (`CloseUnseenJobsForBoard`, freehire#2328): retires a company whose LAST posting drops off a board the fleet still crawls. Its slug never re-enters the company scope, and (2) excludes board sources, so without this the row leaks forever. A board qualifies only when the run structurally proved it covered it, read off `Stats`, not `BoardHealth` (which deliberately calls a streaming board that died mid-crawl healthy):
+
 - the board did not fail (`Stats.Failed` is 0 for it);
 - it yielded at least one posting (`Ingested + Rejected + ATSCovered > 0`; `Skipped` excluded, so a board whose every save fails cannot prove itself on those failures);
 - it read what it listed (`boardReadWhatItListed`, (1b) below);
@@ -55,6 +59,7 @@ The company scope stays because it reaches boardless entries and every provider 
 **(2) Liveness probe** (`cmd/liveness`): sources outside the `sources.All` registry (manual/`resolve-url` imports and the like) are never re-crawled. Registered providers are swept by (1)/(1b) and excluded; so is `telegram` (`unsignalledSources`, closed by (4)). The worker URL-probes those orphans, classifies the page with `internal/job/liveness` (HTTP 404/410, error/listing redirect, curated EN/DE/FR closed-posting phrases, near-empty content; no browser, no LLM), and closes after two consecutive `expired` reads (`liveness_strikes`; any healthy probe resets it). It never reopens (an orphan has no re-ingest to reopen it), so it biases toward under-closing. Run-once, cron-scheduled.
 
 **(2b) Backstop for a registered provider's scope leak** (`probeDespiteRegistered` in `cmd/liveness`): the sweep still owns the provider's regular closes, but the provider is also a probe candidate, restricted via `SelectStaleRegisteredCandidates` to jobs past the sweep's 48h window (mirroring `cmd/ingest`'s `staleAfter`), so it picks up only what (1) cannot reach. Members are recency-ordered aggregators whose crawl budget (page cap, offset ceiling, freshness window) is smaller than the live catalogue:
+
 - `himalayas`, `echojobs`, `jobicy`, `remoteok`.
 - `hh`: board-scoped (one board per professional role), but each board is read only as its newest ~2000 postings of the last 7 days.
 - `empregos`: no budget, but it reads only postings that name a state and cannot prove it read the location-less rest, so it is not `fullCatalog` and its sweep is company-scoped.
@@ -64,6 +69,7 @@ The company scope stays because it reaches boardless entries and every provider 
 Most of 4dayweek's backlog was not the feed (it names the whole 27.5k catalogue): 98% of stale rows belonged to employers the aggregator-coverage gate kept out of the write path without refreshing them. The gate now refreshes rows it skips (`pipeline.CoveredRefresher`) for every aggregator; the probe stays the backstop for an employer that leaves the feed.
 
 Each member needs its own evidence path, by design: a GET probe is not guaranteed to work (`probeDespiteRegisteredGET` in `cmd/liveness/main.go` is the verified plain-GET subset):
+
 - `jobicy`, `remoteok`, `empregos`: the (2) plain-GET probe as-is. jobicy answers `410` for a removed posting; remoteok answers `200` with a "this job post is closed" banner (`internal/job/liveness`'s `hardExpired` patterns); empregos redirects to `/404`, which answers `404`.
 - `himalayas`: job pages are Cloudflare-blocked (403 even with a browser User-Agent), so `cmd/liveness/himalayas.go` downloads the unprotected sitemap (~114k URLs, `sitemapindex`) once per run and checks membership.
 - `echojobs`: the stored `jobs.url` is the employer's ATS link, as reliable as that employer. `cmd/liveness/echojobs.go` GETs echojobs.io's own job page keyed on `external_id`: `200` listed, `404`/`410` removed, anything else unverifiable.
@@ -96,6 +102,7 @@ So `board_health.last_yield_at` records when a board last YIELDED a posting. **B
 **The unseen safety net** (`search.Withheld`): every `last_seen_at` close waits for a run that PROVED coverage, so a board whose crawl keeps failing never sweeps. On 2026-10-26, 96,479 of 848,549 open canonical technical postings were unseen for over 14 days. Search withholds a posting unseen for longer than `search.UnseenWindow` (14 days), or the adapter's `sweepGrace` when wider. A filter, not a close: nothing is written, the page serves it, and a crawl that lists it again (any write stamps `last_seen_at`) brings it back. The rule is applied where a document is WRITTEN (`cmd/reindex` deletes it from the rebuild; `cmd/search-drain` and `linkimport` skip it) and mirrored by `RefreshCompanyFacets`' count and the similar-jobs list. Not a query-time filter on an indexed `last_seen_at`: `RefreshUnchangedJob` deliberately pushes nothing to `search_outbox`, so an indexed value would freeze at the last content write and hide live, unchanged postings. The cost is a few hours' latency either way (next full rebuild or content write). Per-source windows come from `sources.UnseenWindows`, which omits every source whose stale `last_seen_at` is not evidence: `selfClosing` adapters (re-report only changes), `livenessProbed` ones (re-list only the newest slice; a probe closes the dead: `hh`, `himalayas`, `echojobs`, `jobicy`, `remoteok`, `empregos`, `adzuna`), and sources with no adapter (`telegram`, employer vacancies, manual and pasted-link imports), which nothing re-crawls.
 
 ## Limitations
+
 - A missed liveness cron run leaves orphans open until the next run.
 - The probe is pure heuristics, so a 200 with a "position filled" message in an uncurated language or phrasing stays open.
 - The age rule is a guess: a Telegram vacancy still open at 46 days is closed and nothing reopens it. `closed_reason = 'expired'` makes the set findable and restorable.
