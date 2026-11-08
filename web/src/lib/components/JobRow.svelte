@@ -173,6 +173,7 @@
   const regionTag = $derived(job.countries?.length ? regionLabel({ regions: job.regions ?? [] }) : null);
   // On the employer's own page the rail (logo, name, date) is not drawn, so the date leads
   // the meta line instead — the same place a reader finds it relative to the title elsewhere.
+  const railEmpty = $derived(hideCompany && !(views > 0 || isViewed || job.application_deadline));
   const metaFacts = $derived(
     [hideCompany ? posted : null, ...tags.filter((t) => t !== regionTag), equity, questions].filter(
       (f): f is string => Boolean(f),
@@ -387,9 +388,9 @@
   <!-- Reserves the top-right corner for the Save overlay outside this link, so the
        timestamp never slides under it. Only a compact card keeps Save up here; a normal
        card has moved it into the action row at its foot, leaving the corner free. -->
-  <!-- Not drawn on the employer's own page (`hideCompany`): with no company it held only
-       the date, which leads the meta line there instead. -->
-  <div class={['flex items-center gap-2', compact ? 'pr-11' : onHide ? 'pr-20' : 'pr-11', !compact && (applyJob || directApply) && 'pointer-coarse:pr-48', hideCompany && 'hidden']}>
+  <!-- On the employer's own page (`hideCompany`) the date leads the meta line instead, so
+       the rail is drawn there only for what else it carries: views, the viewed mark, a deadline. -->
+  <div class={['flex items-center gap-2', !compact && onHide ? 'pr-20' : 'pr-11', !compact && (applyJob || directApply) && 'pointer-coarse:pr-48', railEmpty && 'hidden']}>
     <div class="flex min-w-0 items-center gap-2">
       {#if !hideCompany}
       <EntityLogo
@@ -434,7 +435,7 @@
           <span class="sr-only">{views} views</span>
         </span>
       {/if}
-      {#if posted}
+      {#if posted && !hideCompany}
         <span class="text-xs tabular-nums">{posted}</span>
       {/if}
       {#if job.application_deadline}
@@ -455,8 +456,8 @@
     class={[
       'font-semibold leading-snug tracking-tight',
       compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-base sm:text-lg',
-      !compact && !hideCompany && 'mt-1.5',
-      hideCompany && 'pr-10',
+      !compact && !railEmpty && 'mt-1.5',
+      railEmpty && 'pr-10',
     ]}
   >
     {job.title}

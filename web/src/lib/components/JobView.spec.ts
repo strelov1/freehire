@@ -216,3 +216,10 @@ it('waits for saved state before toggling a card while its initial load is pendi
   saved.resolve([job.public_slug]);
   await waitFor(() => expect(unsave).toHaveBeenCalledWith(job.public_slug));
 });
+
+it("keeps a card's deadline visible on the employer's own page", () => {
+  const view = render(JobRow, { job: { ...job, application_deadline: '2026-11-11' }, hideCompany: true });
+  const deadline = view.container.querySelector('time[datetime="2026-11-11"]');
+  expect(deadline?.closest('.hidden')).toBeNull();
+  expect(deadline?.parentElement?.textContent).toContain('Apply by');
+});
