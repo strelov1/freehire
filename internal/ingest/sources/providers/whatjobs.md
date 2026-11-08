@@ -1,0 +1,13 @@
+**WhatJobs FeedAPI traps** (its documentation is wrong in several places; all of the below was verified against the live API):
+
+- A `/` in the `user_agent` query value makes the edge redirect with the value corrupted (`Mozilla/5.0` → `Mozilla%215.0`), which is why every code sample in the vendor's docs fails. The adapter sends no `user_agent` at all.
+- `limit` above 50 is silently clamped, and `limit=1` **with** a keyword returns an empty `data` with `per_page: 0`. Worse, the feed post-filters duplicates *after* selecting a page, so a request for 50 routinely returns 44 while more pages remain — **a short page is not the last page**, and the same posting can appear on several pages of one keyword.
+- Pagination dies past roughly 2000 pages regardless of the `total` reported (594k), so no keyword is ever exhaustible; keep board keywords narrow enough to fit the page budget.
+- `snippet` is the FULL description HTML, not the highlighted excerpt the docs describe. The documented `onmousedown` field does not exist.
+- `salary` is always `"0.000000 - 0.000000"`, `job_type` always `""`, `logo` always `null` — all three are dropped rather than stored.
+- `age`/`age_days` measure the record's age in the reseller's index, not the posting date (postings from unrelated companies share one value), so `PostedAt` is left nil.
+- An invalid publisher answers **410** (docs claim 422); `unique_id` does not deduplicate despite the docs.
+- No country field, and its cities collide with foreign ones (London is Ohio, Vienna is Virginia) — the account's country is stated by the adapter, since the publisher id is per-country.
+
+- **jobleads must NOT be a StreamingSource.** The pipeline prefers StreamingSource over HydratingSource (pipeline.go:486) and `FetchStream` has no `seen` predicate — the streaming adapters (`taleo`, `jobtech`, `feinaactiva`) re-read every listed posting every run, which is what kept eightfold on its crawl deadline until it became a HydratingSource on 2026-10-29. jobleads' windows run tens of thousands of postings deep, so that would cost hours per run; only the buffered `FetchNew` (seen-gated details, one batched save per board) is affordable. Both costs of that choice — no rows until a board completes, an interrupted run loses it — are repo-standard (seek, emagine, justjoin, hh).
+- **Every keyword is padded deep — there is no small window.** Any keyword answers full pages of ~100 (COBOL/Rust IT still full at page 40-50, Angular ~6000+, measured 2026-08-30), the same trap as whatjobs' `total`. A scratch one-keyword board is not a fast first run; verify locally by tightening the (already present) page cap and relaxing `jobleadsRequestInterval`, then revert — how the 683-row smoke test was run.

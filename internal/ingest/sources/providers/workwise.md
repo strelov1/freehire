@@ -1,0 +1,6 @@
+**Workwise traps** (`workwise`, www.workwise.io; live-verified 2026-10-25 — 4,015 postings, ~10–14% technical by title, DE only):
+
+- **The listing is ONE sitemap, `enquiryFocusPagesSitemap.xml`**, reached through `/sitemap.xml`. It is complete: 25 of 25 job-board short links (`/s/<code>`, which 302 to `/bewerben?id=<id>`) sampled from the harvest named an id it lists. The search API (`api.workwise.io/v2/…`) answers 405 to a plain GET and is not needed.
+- **A closed posting answers 200** with "Dieser Job ist nicht mehr aktiv" and no JobPosting; a posting whose page carries none is dropped. Ids outside the sitemap resolve the same way — the sitemap is the open set.
+- **The work mode is read from the line the platform renders from its own form field** at the top of the description: "N - M Tage pro Woche Homeoffice" and "Remote möglich" are hybrid, `jobLocationType: TELECOMMUTE` with "Remote Job" is remote. "Kein Homeoffice" (70% of sampled postings) is NOT read as onsite — the form cannot tell a choice from an untouched field, the same reason XING's `NON_REMOTE` maps to nothing.
+- `addressRegion` is a German state abbreviation ("NRW", "BY") and is not used; `baseSalary` states one `value` or a `minValue`/`maxValue` pair with `unitText` YEAR, MONTH or HOUR.
