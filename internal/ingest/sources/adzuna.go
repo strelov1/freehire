@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -126,6 +127,18 @@ type adzunaPosting struct {
 // page is a board-level error; a failure on a later page ends the walk with what was already
 // gathered. Pagination stops on an empty page or at adzunaMaxPages.
 func (a adzuna) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	return a.fetch(ctx, e, adzunaMaxDaysOld)
+}
+
+// FetchRecent reads the same slice as Fetch but bounds it to the run's window. The window goes
+// out as max_days_old, which Adzuna's search API documents as "the age of the oldest advertisment
+// in days that will be returned" (https://developer.adzuna.com/docs/search). A window under one
+// day still asks for one, the finest grain the parameter has.
+func (a adzuna) FetchRecent(ctx context.Context, e CompanyEntry, window time.Duration) ([]Job, error) {
+	return a.fetch(ctx, e, max(1, int(window/(24*time.Hour))))
+}
+
+func (a adzuna) fetch(ctx context.Context, e CompanyEntry, maxDaysOld int) ([]Job, error) {
 	country := strings.TrimSpace(e.Region)
 	if country == "" {
 		return nil, fmt.Errorf("adzuna: company %q has a blank country (Region)", e.Company)
@@ -140,7 +153,7 @@ func (a adzuna) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		var resp struct {
 			Results []adzunaPosting `json:"results"`
 		}
-		if err := a.http.GetJSON(ctx, adzunaPageURL(country, category, page, a.appID, a.appKey), &resp); err != nil {
+		if err := a.http.GetJSON(ctx, adzunaPageURL(country, category, page, maxDaysOld, a.appID, a.appKey), &resp); err != nil {
 			if page == 1 {
 				return nil, fmt.Errorf("adzuna: country %q category %q page %d: %w", country, category, page, err)
 			}
@@ -158,7 +171,7 @@ func (a adzuna) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return jobs, nil
 }
 
-func adzunaPageURL(country, category string, page int, appID, appKey string) string {
+func adzunaPageURL(country, category string, page, maxDaysOld int, appID, appKey string) string {
 	q := url.Values{
 		"app_id":           {appID},
 		"app_key":          {appKey},
@@ -166,7 +179,7 @@ func adzunaPageURL(country, category string, page int, appID, appKey string) str
 		"category":         {category},
 		"content-type":     {"application/json"},
 		"sort_by":          {adzunaSortOrder},
-		"max_days_old":     {fmt.Sprint(adzunaMaxDaysOld)},
+		"max_days_old":     {strconv.Itoa(maxDaysOld)},
 	}
 	return fmt.Sprintf("%s/%s/search/%d?%s", adzunaBaseURL, country, page, q.Encode())
 }

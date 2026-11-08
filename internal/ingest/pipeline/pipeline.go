@@ -301,6 +301,10 @@ type Stats struct {
 	// only part of it, so it must never prove coverage (boardQualifies). It is not Failed: the
 	// board did nothing wrong, the run simply ran out of time around it.
 	Interrupted int
+	// RecentUnsupported counts boards a recent-only run skipped because their adapter has no
+	// date filter (sources.RecentSource). Reported so the run says what it left alone rather
+	// than doing a hidden full crawl.
+	RecentUnsupported int
 	// SeenUnknown counts boards a hydrating adapter crawled without the catalogue's seen-set,
 	// because the lookup failed. Every stored posting then reads as new, so a budgeted adapter
 	// yields only its budget of them and refreshes none of the rest: the crawl is no evidence
@@ -350,6 +354,7 @@ func (s *Stats) add(o Stats) {
 	s.Unreadable += o.Unreadable
 	s.Interrupted += o.Interrupted
 	s.SeenUnknown += o.SeenUnknown
+	s.RecentUnsupported += o.RecentUnsupported
 	s.QualifyingBoards = append(s.QualifyingBoards, o.QualifyingBoards...)
 	s.EmptyBoards = append(s.EmptyBoards, o.EmptyBoards...)
 	s.UnprovenCompanies = append(s.UnprovenCompanies, o.UnprovenCompanies...)
@@ -382,7 +387,16 @@ type Runner struct {
 	Coverage CoverageLookup
 	// Aliases is optional (nil keeps every posting on its derived company slug).
 	Aliases AliasLookup
+	// RecentWindow, when positive, makes this a recent-only run: each board is read through its
+	// adapter's FetchRecent for postings published within the window, and a board whose adapter
+	// has no date filter is skipped (Stats.RecentUnsupported) instead of crawled in full. A
+	// recent listing omits every older posting by construction, so such a run records no board
+	// health at all — neither success, yield nor failure — and never recovers a cooled provider.
+	// Zero is the ordinary full crawl.
+	RecentWindow time.Duration
 }
+
+func (r Runner) recent() bool { return r.RecentWindow > 0 }
 
 // AliasLookup resolves folded company slugs to the canonical slug a merge elected for that
 // employer (company_slug_aliases). Keyed on the FOLD rather than on the slug so a spelling
@@ -538,7 +552,7 @@ type boardKey struct{ provider, board, region string }
 // probes" becomes a full second crawl of the one board that happened to answer.
 func (r Runner) recoverProviders(ctx context.Context, entries []sources.CompanyEntry) map[boardKey]Stats {
 	handled := make(map[boardKey]Stats)
-	if r.BoardHealth == nil {
+	if r.BoardHealth == nil || r.recent() {
 		return handled
 	}
 	byProvider := entriesByProvider(entries)
@@ -667,6 +681,12 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		return Stats{Failed: 1}
 	}
 
+	if r.recent() {
+		if _, ok := src.(sources.RecentSource); !ok {
+			return Stats{RecentUnsupported: 1, SkippedBoards: skippedBoard(e)}
+		}
+	}
+
 	// Independent of which Fetch variant this board takes below: a company-level
 	// description is a fact about the board, not about any one posting.
 	r.fillCompanyDescription(ctx, e, src)
@@ -674,7 +694,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 	// A streaming adapter persists postings as it crawls, so a long rate-limited board's
 	// progress is saved incrementally (and survives an interrupted run) rather than buffered
 	// until the whole board finishes.
-	if ss, streaming := src.(sources.StreamingSource); streaming {
+	if ss, streaming := src.(sources.StreamingSource); streaming && !r.recent() {
 		st, listed := r.ingestStream(ctx, e, ss)
 		// A streaming board that made no progress at all AND failed is a true outage;
 		// partial progress is a success signal, not a board failure. A rejected posting is
@@ -1267,6 +1287,14 @@ func (r Runner) save(ctx context.Context, dj job.Job, form *applyform.Form) erro
 // write. A non-hydrating board has no seen-set and returns nil, which reads as "no evidence" for
 // every lookup — harmless, because such a board yields no refreshes.
 func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sources.Source) (fetchedBoard, error) {
+	if r.recent() {
+		rs, ok := src.(sources.RecentSource)
+		if !ok {
+			return fetchedBoard{}, fmt.Errorf("provider %q has no recent-only listing", e.Provider)
+		}
+		jobs, err := rs.FetchRecent(ctx, e, r.RecentWindow)
+		return fetchedBoard{jobs: jobs}, err
+	}
 	hs, hydrating := src.(sources.HydratingSource)
 	sl, canLookUp := r.Store.(SeenLookup)
 	if !hydrating || !canLookUp {
@@ -1478,7 +1506,7 @@ func healthContext(ctx context.Context) (context.Context, context.CancelFunc) {
 // cool every board in flight at once on a provider whose run regularly meets its deadline.
 // Recording nothing leaves the row as it was, which is what the board earned this run.
 func (r Runner) recordSuccess(ctx context.Context, e sources.CompanyEntry, ingested int, reached bool, fingerprint string) {
-	if r.BoardHealth == nil {
+	if r.BoardHealth == nil || r.recent() {
 		return
 	}
 	hctx, cancel := healthContext(ctx)
@@ -1489,7 +1517,7 @@ func (r Runner) recordSuccess(ctx context.Context, e sources.CompanyEntry, inges
 }
 
 func (r Runner) recordFailure(ctx context.Context, e sources.CompanyEntry, msg string) {
-	if r.BoardHealth == nil {
+	if r.BoardHealth == nil || r.recent() {
 		return
 	}
 	if ctx.Err() != nil {

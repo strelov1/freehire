@@ -1499,6 +1499,12 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **`Врста рада`**: "Уговор о делу", "Привремени и повремени послови" and "Рад на пројекту" are contract work (3 of 510). "Неодређено" (permanent, 162) and "Одређено" (fixed term, 216) say nothing about working time and are not mapped, nor is "Волонтирање".
 - **The country is the source's (`rs`)**: the places are Serbian municipalities (one multi-place vacancy listed Priština among eight Serbian cities). Measured over all 510: the title dictionary resolved a category for 436 (85%), the location dictionary a country for 463 (91%) — the misses are small municipalities (Čajetina, Irig, Paraćin), which the structural country covers.
 
+## Recent-only crawls (`RecentSource`)
+
+An adapter whose platform documents a publication-date filter implements `RecentSource.FetchRecent(ctx, e, window)`, which `cmd/ingest` calls instead of `Fetch` when the run sets `INGEST_RECENT_DAYS`. It returns only postings published inside the window and never signals a removal; the pipeline treats the result as no evidence of what is gone (no sweep, no board-health writes). An adapter without it is skipped and counted (`recent_unsupported`), never crawled in full. Adzuna is the only adopter: it sends the window as `max_days_old`.
+
+Adding another adapter takes its own change, citing the source's documented date parameter and checking it against the live API by hand: fixtures prove only the request shape. Do not adopt it by sorting newest-first and stopping early, which is a guess about the source's ordering rather than a filter.
+
 ## Limitations
 - The ingest sweep has a trade-off: a missed run can leave an orphan open until a future reconcile; the change window is sized wide enough to absorb a skipped cron.
 - Self-closing sources: a missed `removed` event from the feed can leave a vacancy open until the next reindex.
