@@ -370,7 +370,8 @@ mail is never held.
 
 ## Engagement tracking
 
-Campaigns (`cmd/broadcast`) and the saved-search digest (`cmd/notify`) can be measured; nothing
+Campaigns (`cmd/broadcast`) and the saved-search digest (`cmd/notify`) can be measured for delivery
+and clicks; nothing
 else can. A message is tracked only when it names a `Campaign` and its client was given a
 configuration set (`WithEngagementTracking`, from `SES_ENGAGEMENT_CONFIGURATION_SET`), so account,
 security and application mail cannot pick up an open pixel by accident.
@@ -384,8 +385,10 @@ security and application mail cannot pick up an open pixel by accident.
 - **A set SES does not know is caught before sending.** `CheckEngagementTracking` needs
   `ses:GetConfigurationSet`. `cmd/broadcast` refuses to start, because recorded failures would
   spend the audience; `cmd/notify` falls back to untracked mail, because a digest is retried.
-- **Opens overcount.** Apple Mail Privacy Protection and security scanners fetch the pixel without a
-  person reading anything, typically soon after delivery. Judge send times by clicks.
+- **Clicks only, no open pixel.** The configuration set publishes no Open event, which is what
+  keeps SES from adding the pixel. Opens would overcount anyway: Apple Mail Privacy Protection and
+  security scanners fetch it without a person reading anything. The owner chose this on 2026-11-05.
+  Scanners can follow links too, so a click within seconds of delivery deserves suspicion.
 - **Comparing two send times:** run `./broadcast -campaign <name> -half a` at one time and
   `-half b` at the other. The sides are hashed with the campaign name and stable across runs. Then:
 
