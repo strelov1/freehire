@@ -18,6 +18,7 @@ built over the proxied client. The adapter fans out detail fetches via
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One full careerspage run collects every posting across all boards, without 429
   starvation of later boards.
 - The rate cap is aggregate (shared across boards + listing + detail in a run) and
@@ -25,6 +26,7 @@ built over the proxied client. The adapter fans out detail fetches via
 - Reusable seam: any provider could adopt the same pacing later with one wiring line.
 
 **Non-Goals:**
+
 - Not auto-discovering careers-page.com's true budget — the rate is a conservative
   constant, tunable later from observed convergence.
 - Not applying pacing to any other provider now (eightfold/djinni/2gis stay as-is).
@@ -43,6 +45,7 @@ boilerplate; widening to other request kinds later is a trivial addition when a 
 provider needs pacing. It stays provider-agnostic (any HTML-detail adapter can wrap its
 getter) and is testable in isolation via an injected fake waiter asserting the gate fires
 before each fetch.
+
 - *Alternative rejected — full `HTTPClient` decorator:* nine method wrappers careerspage never
   calls, all boilerplate, for no present benefit.
 - *Alternative rejected — a `time.Sleep` inside `careerspage.detail`:* couples pacing to one
@@ -60,6 +63,7 @@ Wrap careerspage's client once where the adapter is registered, so the limiter's
 matches a registry (one worker run). Mirror the `proxiedProviders` opt-in shape: careerspage
 is the only opted-in provider, but the helper takes any `HTTPClient`, so adding another is
 one line. The wrap must sit *outside* the proxy swap so a proxied careerspage is still paced.
+
 - *Alternative rejected:* a global process-wide limiter — wrong lifetime and couples
   unrelated providers.
 

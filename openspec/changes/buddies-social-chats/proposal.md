@@ -22,6 +22,7 @@ a messenger and gives each conversation its context — what the two people have
 ## Capabilities
 
 ### Modified Capabilities
+
 - `buddies-social-space`: the chats page.
 
 ## Impact

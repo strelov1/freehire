@@ -38,10 +38,12 @@ Spec: `docs/superpowers/specs/2026-10-18-search-query-operators-design.md`.
 ### Task 1: Query parser
 
 **Files:**
+
 - Create: `internal/search/search/query_syntax.go`
 - Test: `internal/search/search/query_syntax_test.go`
 
 **Interfaces:**
+
 - Produces: `type Alternative struct { Text string; Fields []string }`, `func ParseQuery(q string) ([]Alternative, error)`, `var ErrTooManyAlternatives error`, `const maxAlternatives = 5`.
 
 - [ ] **Step 1: Write the failing test**
@@ -222,6 +224,7 @@ git commit -m "search: parse OR and title: operators in q"
 ### Task 2: Federated Search for hits
 
 **Files:**
+
 - Create: `internal/search/search/federated.go`
 - Create: `internal/search/search/federated_test.go`
 - Modify: `internal/search/search/testhelpers_test.go`
@@ -229,9 +232,9 @@ git commit -m "search: parse OR and title: operators in q"
 - Modify: `internal/api/handler/errors.go` (`classify`, the `ErrBadQuery` case, ~line 159)
 
 **Interfaces:**
+
 - Consumes: `ParseQuery`, `Alternative`, `ErrTooManyAlternatives` (Task 1); `buildSearchRequest(SearchParams) *meilisearch.SearchRequest` and `facetIndexUID` (existing).
 - Produces: `func buildFederatedSearch(p SearchParams, alts []Alternative) *meilisearch.MultiSearchRequest`; `type fakeManager` in `testhelpers_test.go` with field `multiFn func(ctx context.Context, req *meilisearch.MultiSearchRequest) (*meilisearch.MultiSearchResponse, error)`.
-
 - [ ] **Step 1: Add the fake manager to `testhelpers_test.go`**
 
 Append:
@@ -463,14 +466,15 @@ git commit -m "search: run an OR query as one federated multi-search"
 ### Task 3: Facet counts under OR
 
 **Files:**
+
 - Modify: `internal/search/search/federated.go`
 - Modify: `internal/search/search/facets.go` (`FacetCounts` ~line 41, `DisjunctiveFacetCounts` ~line 66)
 - Test: `internal/search/search/federated_test.go`
 
 **Interfaces:**
+
 - Consumes: `ParseQuery` (Task 1), `fakeManager` (Task 2), `facetSearcher`, `buildFacetResult`, `maxValuesPerFacet` (existing).
 - Produces: `func buildFederatedFacets(alts []Alternative, filter any, facets []string) *meilisearch.MultiSearchRequest`, `func federatedAsSearchResponse(*meilisearch.MultiSearchResponse) (*meilisearch.SearchResponse, error)`, `func (c *Client) facetSearch(ctx context.Context, query string, filter any, facets []string) (*meilisearch.SearchResponse, error)`.
-
 - [ ] **Step 1: Write the failing tests (append to `federated_test.go`)**
 
 ```go
@@ -657,9 +661,11 @@ git commit -m "search: count facets for an OR query over the merged set"
 ### Task 4: Real-engine test on the prod Meilisearch version
 
 **Files:**
+
 - Modify: `internal/search/search/search_integration_test.go` (the `startMeili` image at ~line 34; a new test at the end)
 
 **Interfaces:**
+
 - Consumes: `startMeili`, `enrichedJSON`, `FromJob`, `Client.Search`, `Client.FacetCounts`, `Client.DisjunctiveFacetCounts` (existing / Tasks 2–3).
 
 - [ ] **Step 1: Pin the test engine to prod's version**
@@ -776,9 +782,9 @@ git commit -m "search: pin test Meilisearch to v1.49 and test operators on it"
 ### Task 5: Docs
 
 **Files:**
+
 - Modify: `web/static/openapi.yaml` (`components.parameters.Q.description`, ~line 912)
 - Modify: `internal/search/search/AGENTS.md`
-
 - [ ] **Step 1: Replace the `Q` description in `openapi.yaml`**
 
 ```yaml

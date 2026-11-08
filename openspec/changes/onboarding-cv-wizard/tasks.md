@@ -40,6 +40,7 @@
 - [x] 7.2 Confirmed the overlay reappears (still no CV) after closing without a CV, correctly pre-filled from a profile saved on a prior "session" (page reload) once the pre-fill race (see below) was fixed. CV-present suppression (`resumeStore.present`) is exercised by the store's own logic and the gate's `$derived` condition; not re-verified live end-to-end since real CV upload needs LLM credentials this dev env lacks.
 
 **Two real bugs found and fixed by this live run** (not caught by `svelte-check`/lint/unit tests, since neither the guard logic nor the load-order race has a test harness in this repo for Svelte components):
+
 - `finish()`'s skip guard used `&&` (skip only if BOTH specializations and skills are empty) instead of `||` — a role-only selection (e.g. the skills dictionary offering nothing, as it does against an empty catalogue) fired a `PUT` that the save endpoint correctly rejected with `400`, right after the gate had already closed. Fixed to `||`; spec/design updated to match and a new scenario added.
 - The confirm/location pre-fill effect kept from `profileStore.profile` at the moment the gate became visible, but visibility depends only on `resumeStore` (CV presence) — `profileStore`'s own load frequently resolves a moment later, so the reseed sometimes ran against a still-`null` profile and never re-ran. Fixed to wait for `profileStore.loaded` and re-run when it (or the profile) changes, latching only once seeded per opening.
 

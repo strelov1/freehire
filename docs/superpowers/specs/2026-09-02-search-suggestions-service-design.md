@@ -74,7 +74,7 @@ survives regardless: when the search runs, and what an empty box shows.
 A new Meilisearch index `suggestions`, sibling to `jobs`. One document per
 suggestion:
 
-```
+```text
 {
   id:       "title:java-developer",
   text:     "Java Developer",

@@ -24,6 +24,7 @@ outbound connection (a Discord Gateway/WebSocket client) into that process.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a Discord user in the operator's existing server contribute a job/board link with the same
   outcome — import, dedup, review-queue fallback, AI-credit reward on first-of-board — as every
   other surface, once they've linked their Discord identity to their freehire account.
@@ -34,6 +35,7 @@ outbound connection (a Discord Gateway/WebSocket client) into that process.
   bypasses recording or authentication.
 
 **Non-Goals:**
+
 - Anonymous/unauthenticated contribution. Decided explicitly during design: `/contribute` from an
   unlinked Discord identity imports nothing, mirroring Telegram's current behavior and leaving
   `link-contributions`' "authenticated only" requirement untouched. (An earlier draft of this
@@ -55,6 +57,7 @@ outbound connection (a Discord Gateway/WebSocket client) into that process.
 ## Decisions
 
 ### Transport: HTTP interaction webhook, not a Gateway bot
+
 Discord offers two ways to receive slash-command invocations: a persistent Gateway (WebSocket)
 connection, or an HTTP endpoint Discord POSTs to per interaction ("Interactions Endpoint URL").
 The webhook model requires no third-party client library (`crypto/ed25519` + `net/http` suffice),
@@ -65,6 +68,7 @@ capability that requires it) is explicitly out of scope, and because `cmd/server
 pattern for a persistent outbound connection to maintain, retry, and shut down cleanly.
 
 ### Authentication: Ed25519 signature, not a shared secret
+
 Discord signs every interaction payload with Ed25519 over `timestamp + body`
 (`X-Signature-Ed25519` / `X-Signature-Timestamp` headers), verified against the application's
 public key. This differs from Telegram's shared-secret header compare
@@ -73,6 +77,7 @@ the only unauthenticated POST in the API is authenticated by what the platform i
 new dependency: `crypto/ed25519.Verify` is stdlib.
 
 ### Deferred response + follow-up PATCH, not a synchronous reply
+
 Discord requires an ACK within 3 seconds. Because `intakeService.Resolve` may fetch and parse a
 whole ATS board (the same reason `telegramContribTimeout` is a generous 60s), `/contribute` must
 respond immediately with a deferred-response interaction (type 5), then complete the intake in a
@@ -83,6 +88,7 @@ goroutine only needs to carry the token forward, the same way Telegram's gorouti
 `chatID` forward to `sendTelegram`.
 
 ### Linking: token-exchanged `/link <token>` command, not Discord OAuth2
+
 Telegram's deep link (`t.me/<bot>?start=<token>`) works because opening it both launches Telegram
 *and* pre-fills the `/start` command. Discord has no equivalent single-tap flow into a slash
 command with an argument attached. Two ways to close that gap: (a) mint a token on the site and
@@ -95,11 +101,13 @@ the bot exists. Chosen (a) — less new surface area, and the manual copy/paste 
 cost, not a per-contribution one.
 
 ### No anonymous contribution path
+
 See "Non-Goals" above. `link-contributions`' "authenticated only" requirement stays intentionally
 unmodified; this change adds a new requirement to it ("Contribute a board from Discord") that is
 structurally identical to the Telegram one, rather than carving out an exception.
 
 ### Data model: `discord_links` as a structural mirror of `telegram_links`
+
 ```sql
 CREATE TABLE discord_links (
     user_id    bigint NOT NULL,
@@ -108,6 +116,7 @@ CREATE TABLE discord_links (
 );
 -- PK(user_id), FK user_id -> users(id) ON DELETE CASCADE, no uniqueness on discord_id
 ```
+
 Matches `telegram_links`' actual constraints (verified against `migrations/0001_init.sql`) exactly:
 primary key on `user_id` only (so linking again overwrites in place, "most recent wins"), no
 separate uniqueness constraint on the external identity column. `GetUserIDByDiscordID` mirrors
@@ -117,6 +126,7 @@ user at a time — the ordering matters only in the same edge case it matters fo
 `discord_id` that was re-linked to a different user after an unlink).
 
 ### Command registration: a oneshot binary, not runtime auto-registration
+
 Slash-command definitions rarely change once shipped. Registering them at every `cmd/server`
 startup would mean every deploy makes a Discord API call for something that is almost always a
 no-op — and a failure there has no good failure mode inside a request-serving process's boot path.

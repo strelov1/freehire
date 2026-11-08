@@ -30,6 +30,7 @@ a new source plus a curated tenant list.
 ## Capabilities
 
 ### New Capabilities
+
 - `cleverstaff-source`: the `cleverstaff` adapter — its per-tenant JSON fetch, object→`Job`
   mapping, the drop rules for unusable objects, hub employer resolution, and its
   per-tenant-board classification.

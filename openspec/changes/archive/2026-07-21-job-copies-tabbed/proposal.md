@@ -18,6 +18,7 @@ block. It should be compact and consistent with Similar jobs.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `job-cluster-copies`: the copies are presented as a tab with a bounded preview and a
   dedicated full-list page, instead of a full inline list.
 

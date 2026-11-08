@@ -18,6 +18,7 @@ varying degrees, across every other aggregator provider.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Skip the write for an aggregator posting when its company already has an open posting from
   any non-aggregator source, before that write happens.
 - Apply uniformly to every `KindAggregator` provider, not just Himalayas.
@@ -27,6 +28,7 @@ varying degrees, across every other aggregator provider.
   leaves for the reindex pass to close.
 
 **Non-Goals:**
+
 - Not replacing `aggregator-ats-dedup` in `cmd/reindex`. It remains the correctness backstop
   for races this gate cannot close (see Risks).
 - Not per-title matching. `aggregator-ats-dedup` matches on (folded company, normalized
@@ -102,7 +104,7 @@ for confirming whether `MEILI_MASTER_KEY` already reaches them.
 distinct `company_slug` values from the adapter's raw fetch result, batch them (~500 per
 query, to keep payloads small), and for each batch:
 
-```
+```text
 filter: company_slug IN [batch] AND NOT source IN [aggregator list]
 facets: [company_slug]
 ```
@@ -174,7 +176,7 @@ type Stats struct {
 `Stats.add` gains `s.ATSCovered += o.ATSCovered`. Logging mirrors `rejections.log` — one line
 per board, only when `ATSCovered > 0`:
 
-```
+```text
 ingest: %s board %q (%s): skipped %d/%d postings — company already covered by a non-aggregator source
 ```
 
@@ -236,6 +238,7 @@ explicitly, not something to discover after the fact. This is task 6.1's job; do
 task 6.2's post-deploy check.
 
 Deploy order:
+
 1. Ship the code (new port defaults to nil — no behavior change until `MEILI_MASTER_KEY` is
    present in the environment `cmd/ingest` runs with).
 2. Confirm (per the note above) whether that activates the gate immediately or needs adding.

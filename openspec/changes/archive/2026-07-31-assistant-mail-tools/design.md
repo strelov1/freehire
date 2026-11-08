@@ -128,7 +128,7 @@ concern the table could not own, so a table would be half a rule.
 
 ### `mailPrompt` appended only to the chat prompt
 
-```
+```text
 SystemPrompt(chat)   = chatPrompt + mailPrompt
 SystemPrompt(browse) = chatPrompt + browsePrompt      // unchanged, no mail
 ```

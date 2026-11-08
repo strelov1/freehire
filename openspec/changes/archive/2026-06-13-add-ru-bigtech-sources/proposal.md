@@ -36,6 +36,7 @@ reusable seams.
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: register 14 new single-company providers; relax the board requirement
   so a `boardless` provider's entries may omit `board` (Yandex still requires it); allow
   an adapter to send a per-request custom header through the shared client; allow an

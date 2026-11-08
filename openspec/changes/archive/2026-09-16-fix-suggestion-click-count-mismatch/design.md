@@ -30,6 +30,7 @@ facet and falls back to a free-text query (`apiSuggestions.ts`'s `facetFor` map)
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make a title suggestion's click-through result count closely approximate its
   displayed count, using only existing search mechanisms.
 - Leave `cmd/build-suggestions` and the nightly dictionary build untouched — the count
@@ -38,6 +39,7 @@ facet and falls back to a free-text query (`apiSuggestions.ts`'s `facetFor` map)
   search under the same key an equivalent typed search would use.
 
 **Non-Goals:**
+
 - Exact-phrase (word-adjacency) matching, or byte-exact parity between the suggestion
   count and the click-through total. Quoting a title-scoped query requires every word
   to be present, not that they are adjacent or in order — a title like "Engineer,

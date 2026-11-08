@@ -1,8 +1,11 @@
 # corruption-resilience Specification
 
 ## Purpose
+
 TBD - created by archiving change resilient-toast-corruption. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Full-scan reads survive corrupted rows
 
 A full-catalogue keyset scan SHALL NOT abort when an individual row cannot be read due to Postgres data corruption. When a batch read fails with SQLSTATE `XX001` (data corruption, e.g. a missing TOAST chunk), the scan SHALL degrade to reading the affected batch row-by-row, skip only the rows that still fail with `XX001`, log each skipped row's id, advance the keyset past them, and continue the scan to completion.
@@ -100,4 +103,3 @@ would end the scan at the first corrupted row and report a complete pass.
 - **WHEN** the scan's read fails with an error that is not data corruption
 - **THEN** the run fails with that error, exactly as before — the resilience is narrow to
   corruption and hides nothing else
-

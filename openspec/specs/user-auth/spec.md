@@ -9,7 +9,9 @@ logout, and a guarded `me` endpoint, plus a reusable `RequireAuth` middleware
 future protected routes can adopt — without gating any existing public read
 endpoint. The model is email-keyed and password-nullable so future passwordless
 sign-in (OAuth/magic-link) is additive.
+
 ## Requirements
+
 ### Requirement: User registration
 
 The system SHALL allow a new user to register with an email and password,
@@ -436,4 +438,3 @@ request is checked against.
 
 - **WHEN** the request presents no session cookie, or authenticates with an API key
 - **THEN** the system responds `401` and bumps nothing
-

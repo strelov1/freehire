@@ -30,6 +30,7 @@ scope it with a curated set of IT keywords.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add the requirement that a keyed, keyword-scoped aggregator
   source (Reed) is supported — registered only when its API key is configured, and
   enumerating a topical slice via a curated keyword set rather than a board id.

@@ -18,6 +18,7 @@ only, "incomplete application" tells the user to *do* something.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `email-body-classification`: add `incomplete_application` to the classified
   status vocabulary.
 

@@ -5,7 +5,9 @@
 Self-serve, irreversible erasure of a member's account: what is erased across
 Postgres, object storage and Google, what deliberately survives, and the surface
 that fronts it.
+
 ## Requirements
+
 ### Requirement: Self-serve irreversible account deletion
 
 The system SHALL expose `DELETE /api/v1/me`, which permanently erases the calling
@@ -197,4 +199,3 @@ be restored, and what is erased.
 - **WHEN** the delete-account surface reopens after a provider round trip
 - **THEN** the typed email confirmation is empty and the delete action is disabled until it is
   typed again
-

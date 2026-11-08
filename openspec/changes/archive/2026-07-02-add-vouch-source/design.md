@@ -24,6 +24,7 @@ including a generic balanced-slice extractor (`bracketSlice`) and a flight decod
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A board-based `vouch` adapter that returns every live posting for one company from
   a single keyless page fetch.
 - Stable dedup identity from the listing cuid; structured work mode from
@@ -31,6 +32,7 @@ including a generic balanced-slice extractor (`bracketSlice`) and a flight decod
 - Reuse the existing flight primitives rather than re-implementing them.
 
 **Non-Goals:**
+
 - Per-job detail fetches or streaming — one page carries the whole board.
 - A harvest prober / company auto-discovery. Only one board is known today.
 - Parsing `salary`/`reward` into structured facets — enrichment owns that.

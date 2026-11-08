@@ -1,8 +1,11 @@
 # similar-jobs Specification
 
 ## Purpose
+
 TBD - created by archiving change add-similar-jobs. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Similar-documents query over the semantic index
 
 The system SHALL provide a way to retrieve the jobs whose embeddings are nearest
@@ -83,4 +86,3 @@ SHALL render nothing and SHALL NOT break or block the rest of the page.
   request fails)
 - **THEN** no "Similar jobs" section is shown and the rest of the page renders
   normally
-

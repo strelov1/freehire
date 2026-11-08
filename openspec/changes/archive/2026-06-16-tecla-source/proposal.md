@@ -28,6 +28,7 @@ board.
 <!-- none — this extends the existing source-ingest capability -->
 
 ### Modified Capabilities
+
 - `source-ingest`: adds the requirement that an **aggregator** provider derives each job's company
   from the posting itself rather than from the configured board entry, and registers `tecla` as a
   boardless provider.

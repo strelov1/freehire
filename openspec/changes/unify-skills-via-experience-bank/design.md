@@ -21,6 +21,7 @@ an existing profile, never profile creation.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Every atom write (create or update, from any caller) keeps `userprofile.skills` current
   with the bank's canonical skills, without any explicit action from the user or the caller.
 - Preserve the existing merge semantics exactly: case-insensitive de-dup, skip anything in
@@ -30,6 +31,7 @@ an existing profile, never profile creation.
   `cvedit.EvidenceGate` pattern.
 
 **Non-Goals:**
+
 - No outbox/reconciler. Skill sync is additive and idempotent — a missed or failed sync
   self-heals on the next atom write for that skill, or the next time any atom naming it is
   touched. The staleness window this leaves is accepted (see Risks).

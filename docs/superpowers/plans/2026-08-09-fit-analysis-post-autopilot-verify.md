@@ -5,7 +5,7 @@
 > `design.md`/`tasks.md` are the current record, including a context-cancellation fix (Decision 2)
 > found during review that this plan's Task 2 snippet does not show. Kept here for the original
 > task-by-task rationale, not as the up-to-date implementation reference.
-
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the Tailor autopilot run a self-check loop against the free deterministic
@@ -51,12 +51,13 @@ Pure refactor, no behavior change — a prerequisite for Task 2, which needs to 
 fit-chain `Input` once and reuse it after the fiber ctx is gone.
 
 **Files:**
+
 - Modify: `internal/api/handler/match_analysis.go:229-245` (`runAnalysis`)
 
 **Interfaces:**
+
 - Produces: `func (h *matchHandlers) buildAnalysisInput(c *fiber.Ctx, job db.Job, userID int64, profile userprofile.Profile, blockers []hardconstraint.Blocker) matchanalysis.Input` — Task 2 calls this directly.
 - `runAnalysis`'s own signature and behavior are unchanged; it now calls `buildAnalysisInput` internally.
-
 - [ ] **Step 1: Extract the input literal into its own method**
 
 Replace:
@@ -134,14 +135,15 @@ fill-if-empty pre-run behavior and (b) hands back a function that unconditionall
 recomputes and overwrites the cached analysis once the autopilot turn ends.
 
 **Files:**
+
 - Modify: `internal/api/handler/match_analysis.go` (add `prepareAutopilotRun`, near `ensureCachedAnalysis`)
 - Modify: `internal/api/handler/assistant.go:744-781` (`PostAssistantAutopilot`, replace `ensureAnalysisForRun`)
 - Test: `internal/api/handler/assistant_autopilot_integration_test.go`
 
 **Interfaces:**
+
 - Consumes: `buildAnalysisInput` (Task 1), `runAnalysis`'s existing helpers (`h.userProfile.Get`, `h.jobBlockers`, `h.cvUploadedAt`, `h.matchAnalysis.As`, `h.llm.bind`, `h.cacheAnalysis`), `ensureCachedAnalysis` (unchanged).
 - Produces: `func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.Job) func(context.Context)` — called once by `assistantHandlers.prepareAutopilotAnalysis`, which Task 3+ do not touch.
-
 - [ ] **Step 1: Rewrite the existing "must not recompute" test to assert the new "always refreshes" behavior**
 
 This test's current premise (`fitM.n != 0` after a run means failure) is exactly what
@@ -366,15 +368,16 @@ Instructs the tailoring agent to call the existing, already-wired `job_match` to
 finishing an unattended run, and to keep editing while something closeable remains.
 
 **Files:**
+
 - Modify: `internal/ai/assistant/prompt.go:152-162` (`tailorPrompt`'s `UNATTENDED RUNS` section)
 - Test: `internal/ai/assistant/prompt_test.go`
 
 **Interfaces:**
+
 - Consumes: nothing new — `job_match` (`internal/api/handler/assistant_cv_tools.go:210`) and
   `cv_context`'s `missing_have`/`missing_gap` vocabulary already exist and are already
   registered for the Tailor preset.
 - Produces: nothing new — this is a prompt-content-only change.
-
 - [ ] **Step 1: Write the failing test**
 
 Add to `internal/ai/assistant/prompt_test.go`:
@@ -450,6 +453,7 @@ Updates the live requirement that currently states the cached fit analysis is a 
 base-profile snapshot — false the moment Task 2 ships.
 
 **Files:**
+
 - Create: `openspec/changes/2026-08-09-fit-analysis-post-autopilot-verify/proposal.md`
 - Create: `openspec/changes/2026-08-09-fit-analysis-post-autopilot-verify/specs/tailor-workspace/spec.md`
 
@@ -555,6 +559,7 @@ memory notes on archive ordering).
 ### Task 5: Frontend copy — the Job Match tab no longer calls it a snapshot
 
 **Files:**
+
 - Modify: `web/src/lib/tailor/ArtifactPanel.svelte:5-9,58-59,247-256`
 
 **Interfaces:** none — copy and comments only, `MatchAnalysisFull`'s props are unchanged.
@@ -563,7 +568,7 @@ memory notes on archive ordering).
 
 Replace:
 
-```
+```text
   //  - Job Match — the live, deterministic score of the document being edited against this
   //    vacancy, with the cached LLM fit analysis beneath it, labelled as the snapshot of the
   //    base profile that it is.
@@ -571,7 +576,7 @@ Replace:
 
 with:
 
-```
+```text
   //  - Job Match — the live, deterministic score of the document being edited against this
   //    vacancy, with the cached LLM fit analysis beneath it — refreshed by every autopilot
   //    run, not a frozen snapshot.
@@ -581,14 +586,14 @@ with:
 
 Replace:
 
-```
+```text
     /** The last unattended run's log, shown in the Score tab. The fit analysis is untouched
      *  by a run — it measures the base profile, not this tailored copy. */
 ```
 
 with:
 
-```
+```text
     /** The last unattended run's log, shown in the Score tab. The fit analysis (Job Match
      *  tab) is refreshed by every run — see prepareAutopilotRun on the server. */
 ```

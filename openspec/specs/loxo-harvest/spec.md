@@ -1,8 +1,11 @@
 # loxo-harvest Specification
 
 ## Purpose
+
 TBD - created by archiving change add-loxo-adapter. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Loxo board discovery from the search footprint
 
 The system SHALL provide a `harvest-loxo` host tool that consumes operator-supplied
@@ -62,4 +65,3 @@ and does not itself decide the committed board set.
 
 - **WHEN** a candidate board id already appears in `sources/loxo.yml`
 - **THEN** it is filtered out and not emitted again
-

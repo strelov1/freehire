@@ -19,13 +19,15 @@ answers four — IDIAP's site is configured for `en-gb` only (confirmed by the p
 `hreflang="en-gb"`/`x-default` tags and no alternate-language link). This is the Dayforce-culture
 trap in a new platform: asking a site for a locale it does not publish in answers an empty list,
 not an error. Unlike Dayforce, though, a tenant configured for MULTIPLE locales (`broadpeak`, en
-+ fr) returns the exact SAME posting set — same ids, each posting stating its own full
+
+- fr) returns the exact SAME posting set — same ids, each posting stating its own full
 `Languages` array — under either of its configured locales; there is no per-locale SLICE of the
 catalogue the way Dayforce's translations are. So there is no "union the locales" question here:
 one valid locale already gives everything, and an invalid one gives nothing.
 
 **Posting shape** (listing fields actually used; per-posting custom question/answer fields and
 platform bookkeeping ids are irrelevant and omitted):
+
 ```json
 {
   "Id": "49895d7f-fe57-4d0d-92d7-126837be0ea3",
@@ -36,6 +38,7 @@ platform bookkeeping ids are irrelevant and omitted):
   "PublicationStartDate": "2026-08-20T15:07:34.2606458+00:00"
 }
 ```
+
 `Address_State` is a two-letter ISO COUNTRY code despite the "State" name (confirmed: `"FR"` on
 every French posting sampled, `"CH"` on IDIAP's), so it maps to `Countries` via
 `countryFromCode`, not a literal US state. `TimeTranslated` is "Full time"/"Part time" on every
@@ -55,6 +58,7 @@ wasteful).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl one werecruit board (`<locale>/<tenant>`) to the standard this catalogue holds detail-
   fetching adapters to: list once, hydrate every posting's body, map every field the platform
   states.
@@ -62,6 +66,7 @@ wasteful).
   tenant's actual catalogue rather than silently to an empty one.
 
 **Non-Goals:**
+
 - Locale auto-detection or a fallback chain across a tenant's configured locales. Every apply
   link the harvest sees already carries the tenant's correct, working locale (it is the URL the
   browser rendered), so there is no board-onboarding case this would need to solve.

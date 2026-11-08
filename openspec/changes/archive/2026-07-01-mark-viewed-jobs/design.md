@@ -7,6 +7,7 @@ public and unauthenticated, and the `jobview.Job` wire shape carries no per-user
 state — so a signed-in user cannot see which postings they already opened.
 
 Two architectural constraints shape the solution:
+
 - **"Public job reads stay unauthenticated"** is a standing project convention.
   We do not want to make `ListJobs`/`SearchJobs` auth-aware.
 - **Search runs through Meilisearch, not Postgres.** A per-job `viewed` flag
@@ -16,6 +17,7 @@ Two architectural constraints shape the solution:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A signed-in user can tell, at a glance, which jobs in the list and in search
   results they have already opened.
 - Keep the public read path unauthenticated and the `jobview.Job` wire shape
@@ -24,6 +26,7 @@ Two architectural constraints shape the solution:
   and reflects history recorded before this feature shipped.
 
 **Non-Goals:**
+
 - No per-job `viewed` field on the public job shape.
 - No SSR of viewed state (no extra request on every page load).
 - No new "mark unviewed" / clear-history affordance.
@@ -36,6 +39,7 @@ client-side.** A new `GET /api/v1/me/jobs/viewed` returns the set of
 `RequireAuthOrKey` like the other `/me` reads. The SPA loads it once when a
 signed-in user opens the browse view, holds it in a small reactive store, and a
 job card dims when its slug is in the set.
+
 - *Why over an auth-aware list:* keeps the public list/search endpoints
   untouched (honours the convention) and works identically for Postgres-backed
   list results and Meilisearch-backed search results, since the match is a pure

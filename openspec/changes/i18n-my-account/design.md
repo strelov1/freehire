@@ -24,6 +24,7 @@ See proposal.md - Why. Relevant existing plumbing this design builds on
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Resolve a per-request locale for `/my/**` from the existing `users.language`
   value, correct on the first SSR byte, with no new network round trip.
 - Provide a small, typed, synchronous message-lookup mechanism usable from
@@ -31,6 +32,7 @@ See proposal.md - Why. Relevant existing plumbing this design builds on
 - Keep every non-`/my/**` route's behavior byte-for-byte unchanged.
 
 **Non-Goals:**
+
 - Migrating any `/my/**` page beyond `/my/security` and the shared shell/nav
   (separate follow-up change).
 - Reviewing/refining Russian copy quality (separate follow-up).

@@ -30,6 +30,7 @@ a single navigational home and a single source of truth for its chrome.
 ## Capabilities
 
 ### New Capabilities
+
 - `account-navigation`: the persistent in-section navigation and shared chrome
   (width container, auth-gate, `noindex`) for the signed-in `my/*` account area,
   including its responsive sidebar/tab-strip behavior and the `/my` redirect.

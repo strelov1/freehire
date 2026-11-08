@@ -26,12 +26,14 @@ inferences standing in for a measurement.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Fill and submit a Lever application, using the data the preview already resolves.
 - Make adding a third platform a row in a table rather than a fourth copy of scan, select,
   click and verify.
 - Keep every existing Greenhouse behaviour byte-identical.
 
 **Non-Goals:**
+
 - Ashby, Workable, Recruitee. They have no fill path either; the browser-use fallback
   already in the code is a separate, metered decision.
 - Solving a rendered captcha challenge. Those still park.

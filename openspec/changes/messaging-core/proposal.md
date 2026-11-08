@@ -29,10 +29,12 @@ Company↔candidate chat and inbox broadcasts are NOT built here; they arrive la
 ## Capabilities
 
 ### New Capabilities
+
 - `messaging`: conversations of any kind between accounts — request/accept, messages, read
   state, account-wide blocks, reports to moderators, unread notices, deletion.
 
 ### Modified Capabilities
+
 None in `openspec/specs/`. The unarchived `interview-buddies` change's spec is edited in place:
 its chat, block/report and notification requirements move here, and its invitation
 requirement narrows to the buddy-only rules.

@@ -30,6 +30,7 @@ full, structured job objects in the flight.
 ## Capabilities
 
 ### New Capabilities
+
 - `vouch-source`: crawling one vouch.careers company page into the catalogue by
   decoding the Next.js RSC flight and mapping each inlined live listing to a `Job`.
 

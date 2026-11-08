@@ -51,12 +51,14 @@ the truth, and no place where it is assembled.
 ## Capabilities
 
 ### New Capabilities
+
 - `experience-bank`: the durable per-user store of employments and evidence atoms —
   its shape, its provenance rule, import reconciliation, retrieval, the assistant
   tools that read and write it, the `profile` preset, and the profile-page surface
   for reviewing and deleting what has been recorded.
 
 ### Modified Capabilities
+
 - `resume-structured-profile`: extraction stops being a read-only snapshot tied to
   the current résumé and becomes an additive import into the bank; the staleness
   and monotonic-write rules that existed to protect a cache no longer apply to

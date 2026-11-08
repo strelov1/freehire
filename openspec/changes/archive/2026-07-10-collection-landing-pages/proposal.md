@@ -31,6 +31,7 @@ collection its own server-rendered, self-canonical landing page.
 <!-- none: this surfaces existing collections through the existing SSR/SEO capability -->
 
 ### Modified Capabilities
+
 - `web-ssr-seo`: add indexable collection landing pages (per-collection metadata +
   visible `<h1>`), extend the sitemap to enumerate the collection pages and the
   `/collections` hub, and require a visible `<h1>` on the public list pages.

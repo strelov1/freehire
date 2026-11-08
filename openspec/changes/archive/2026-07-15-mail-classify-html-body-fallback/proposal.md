@@ -25,6 +25,7 @@ reaches the classifier. The fix is small and adds no new dependency
 ## Capabilities
 
 ### New Capabilities
+
 - `email-body-classification`: how the readable body is selected from an email's
   plain-text and HTML parts before it is classified.
 

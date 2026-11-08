@@ -17,12 +17,14 @@ in the same block.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A member publishes when they can run a mock; another member books it themselves.
 - One mock per person per instant, enforced by the database.
 - Reminders, cancellation, and a two-way review that cannot be used for retaliation.
 - No account detail reaches the other member through anything freehire sends.
 
 **Non-Goals:**
+
 - Automatic pairing by time and topic (Pramp's matcher). Later, fed by the availability
   this change collects.
 - A call room on freehire. The host supplies their own link.
@@ -35,6 +37,7 @@ in the same block.
 ## Decisions
 
 ### D1. Extract the engine into `internal/engage/slots`
+
 Move the pure files (including `calendar.go`, which calls the engine's unexported
 functions) and their tests verbatim, export `withID` as `WithID` for the repositories, rename the mentor-flavoured identifiers
 (`MentorZone` → `OwnerZone`, `ErrNoMentorZone` → `ErrNoOwnerZone`), and have mentorship
@@ -45,10 +48,12 @@ marketplace into buddy to compute times, and the engine's comments already argue
 general terms.
 
 ### D2. Fixed session parameters
+
 Mocks are 60 minutes, no buffers, 12 hours minimum notice, 30-day horizon. Constants in
 `buddy`, not columns. A peer mock has one shape; per-member tuning is a mentor feature.
 
 ### D3. Tables (migration `0215_buddy_mocks.sql` (the next free number at implementation time))
+
 - `buddy_mock_settings(user_id PK → buddy_members, timezone, meeting_url, topics text[],
   paused, created_at, updated_at)` — `topics` non-empty and within the vocabulary,
   `meeting_url` must start with `https://`.
@@ -73,12 +78,15 @@ Mocks are 60 minutes, no buffers, 12 hours minimum notice, 30-day horizon. Const
 Every `users` reference cascades and is indexed (`TestEveryUserForeignKeyIsIndexed`).
 
 ### D4. The meeting link is read live, not snapshotted
+
 A mentor booking snapshots the link. A mock shows the host's CURRENT link, so a host who
 fixes a typo reaches guests who already booked. Changing the link is the host's own act on
 their own sessions.
 
 ### D5. Booking path
+
 `Book(ctx, BookInput{HostHandle, GuestUserID, StartsAt, Topic, GuestZone})`:
+
 1. Both are active members; neither has blocked the other; host has settings and is not
    paused; topic is one the host offers; guest is not the host.
 2. Guest has fewer than 3 future confirmed mocks as guest (spam bound).
@@ -93,6 +101,7 @@ The slot listing reads availability and busy rows the same way, without a cache:
 traffic is members-only and small.
 
 ### D6. Blind review
+
 A participant may review once, between the mock's end and 7 days after it, and only a
 confirmed mock. A member page shows rating, comment, topic and day, never the author's
 handle, so the page does not publish who practised with whom. A review is revealed when the counterpart's review exists or the window
@@ -100,9 +109,11 @@ has closed. Reveal is computed in the read query, not stored. The member page ag
 only revealed reviews.
 
 ### D7. Cancellation triggers
+
 Either participant, before `starts_at`. A leave and a block both cancel the member's (or
 the pair's) future mocks in the same statement, so a mock can never outlive the
 relationship that allowed it:
+
 - **Leave:** the existing `LeaveBuddyMember` statement also cancels the member's mocks.
 - **Block:** the block is written by the messaging core (`BlockFromConversation`), which
   must never import a feature. The buddy migration adds an `AFTER INSERT` trigger on
@@ -116,6 +127,7 @@ calls it after the buddy leave and after the conversation block route. A cancell
 leave or block tells the other side only "the mock was cancelled".
 
 ### D8. Reminders inside `cmd/mentorship-remind`
+
 Add `buddy.SendDueMockReminders` with the same claim → send → release-on-failure order
 and the same one-hour window per offset. The command calls both passes; a failure in one
 does not skip the other, and the run exits non-zero if either failed.
@@ -123,12 +135,14 @@ does not skip the other, and the run exits non-zero if either failed.
 in `freehire-ops` for the same schedule.
 
 ### D9. Notifications
+
 Email (SES transport) plus a notification-center row, worded with handles only. Kinds:
 `buddy_mock_booked`, `buddy_mock_cancelled`, `buddy_mock_reminder`. Times are rendered in
 each recipient's own zone (the host's from settings, the guest's from the booking), falling
 back to UTC and saying so — the mentorship rule.
 
 ### D10. Shared Svelte components
+
 `MentorScheduleEditor.svelte` and `MentorBookingView.svelte` take their data-loading and
 saving functions as props. Mentorship pages pass the mentor API; buddy pages pass the mock
 API. No behaviour change for mentors.

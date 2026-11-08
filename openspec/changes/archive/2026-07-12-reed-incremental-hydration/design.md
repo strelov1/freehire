@@ -7,6 +7,7 @@ currently implements `StreamingSource` (`FetchStream`), so the pipeline persists
 incrementally as they resolve.
 
 Two facts collide:
+
 - The Reed API enforces a **per-hour request quota**, signalled with HTTP 403
   (`"exceeded your per-hour request limit"`) — verified live against the prod key.
 - The crawl re-fetches detail for all ~1700 live postings every run, and the ingest
@@ -24,11 +25,13 @@ adapter re-lists but marks `SeenRefresh`, refreshes liveness by identity via `to
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Bound reed's per-run request volume so it stays under the Reed per-hour quota.
 - Eliminate the intermittent "no progress" board_health failures for reed.
 - Reuse the existing hydrating seam with zero pipeline changes.
 
 **Non-Goals:**
+
 - Reducing the keyword-search (listing) request count — the search still pages all
   curated keywords each run. That is the irreducible listing cost; only detail is cut.
 - A generic per-source rate limiter or 403-retry (a per-hour quota can't be ridden out

@@ -88,7 +88,7 @@ under test.
 
 ### Changes in `hire`
 
-```
+```text
 cmd/queue-metrics/main.go        new run-once worker
 internal/platform/db/queries/metrics.sql  the aggregate queries
 internal/platform/worker/metrics.go       extract the atomic write into an exported helper
@@ -107,7 +107,7 @@ rule 7 below depends on.
 
 ### Metrics published
 
-```
+```text
 freehire_queue_depth{queue="search_outbox|enrichment_outbox|semantic_outbox"}
 freehire_queue_dead_letters{queue="..."}
 freehire_queue_oldest_age_seconds{queue="..."}
@@ -124,7 +124,7 @@ aggregate are free.
 
 ### Changes in `freehire-ops`
 
-```
+```text
 provision/host2/systemd/freehire-queue-metrics.service
 provision/host2/systemd/freehire-queue-metrics.timer          OnUnitActiveSec=1min
 provision/litellm-host/grafana/provisioning/dashboards/provider.yaml

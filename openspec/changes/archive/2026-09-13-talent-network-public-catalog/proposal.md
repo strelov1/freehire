@@ -99,6 +99,7 @@ server still using it, whatever its header says. The follow-up ships it when tha
 is no longer a question.
 
 **Go.**
+
 - `internal/candidate/resumeextract/visibility.go` — add `Catalog()` beside `Anonymous()`
   and `Public()`. `Public()` becomes unreachable from production code once the mode is
   retired; it is removed in the same change rather than left as a projection nothing may
@@ -112,6 +113,7 @@ is no longer a question.
 - `internal/api/handler/` — the two public routes, wired through `internal/api/ratelimit`.
 
 **Web.**
+
 - New `web/src/routes/talent/` (list) and a restyle of the existing
   `web/src/routes/talent-network/[publicId]/` to the catalogue card.
 - `web/src/routes/my/talent-network/+page.svelte` loses the three-way picker.

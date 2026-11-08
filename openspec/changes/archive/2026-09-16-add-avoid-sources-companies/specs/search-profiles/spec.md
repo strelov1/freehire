@@ -21,22 +21,27 @@ field later added to the structured résumé is withheld until it is explicitly
 projected. Contact details remain available only through `GET /api/v1/me/resume`.
 
 #### Scenario: Fetch an existing profile
+
 - **WHEN** an authenticated user who has a saved profile sends `GET /api/v1/me/profile`
 - **THEN** the system responds `200` with `{"data": {...}}` containing that user's `specializations`, `skills`, `excluded_skills`, `excluded_sources`, `excluded_companies` (each the saved set or an empty array), `location_preferences` (the saved block or `null`), `cv`, and timestamps
 
 #### Scenario: Fetch when no profile exists
+
 - **WHEN** an authenticated user who has never saved a profile sends `GET /api/v1/me/profile`
 - **THEN** the system responds `200` with `{"data": null}`
 
 #### Scenario: The profile read accepts an API key
+
 - **WHEN** a request carrying a valid API key as a bearer credential, and no session cookie, sends `GET /api/v1/me/profile`
 - **THEN** the system responds `200` with the key owner's profile
 
 #### Scenario: The cv block carries the structured résumé without contacts
+
 - **WHEN** an authenticated user who has a saved profile and a current structured résumé sends `GET /api/v1/me/profile`
 - **THEN** the response's `cv` carries the résumé's professional content — headline, location, summary, total years, experience, education, languages, skills, certifications and projects — and contains no `full_name`, `email`, `phone` or `links`
 
 #### Scenario: The cv block is null without a structured résumé
+
 - **WHEN** an authenticated user who has a saved profile but no current structured résumé sends `GET /api/v1/me/profile`
 - **THEN** the response's `cv` is `null` and the rest of the profile is served as usual
 
@@ -64,46 +69,57 @@ The response SHALL be the same representation the read serves, `cv` included, so
 client that saves and a client that fetches see one shape for one resource.
 
 #### Scenario: Create the profile on first save
+
 - **WHEN** an authenticated user with no profile sends `PUT /api/v1/me/profile` with a non-empty `specializations` array drawn from the category vocabulary and a non-empty `skills` array
 - **THEN** the system stores the profile for that user and responds `200` with `{"data": {specializations, skills, excluded_skills, excluded_sources, excluded_companies, location_preferences, cv, updated_at}}`
 
 #### Scenario: Overwrite an existing profile
+
 - **WHEN** an authenticated user who already has a profile sends `PUT /api/v1/me/profile` with new valid `specializations`, `skills`, `excluded_skills`, `excluded_sources`, `excluded_companies`, and `location_preferences`
 - **THEN** the system replaces the stored values (including the excluded-skills, excluded-sources and excluded-companies sets and the location block), bumps `updated_at`, and responds `200`
 
 #### Scenario: Specializations are deduplicated
+
 - **WHEN** an authenticated user saves a profile whose `specializations` contain duplicate categories
 - **THEN** the system stores each category once, preserving first-seen order
 
 #### Scenario: Skills are normalized
+
 - **WHEN** an authenticated user saves a profile with skills containing mixed case, surrounding whitespace, or duplicates
 - **THEN** the system stores each skill lowercased, trimmed, and deduplicated
 
 #### Scenario: Excluded skills are normalized
+
 - **WHEN** an authenticated user saves a profile with `excluded_skills` containing mixed case, surrounding whitespace, or duplicates
 - **THEN** the system stores each excluded skill lowercased, trimmed, and deduplicated
 
 #### Scenario: Excluded sources are normalized
+
 - **WHEN** an authenticated user saves a profile with `excluded_sources` containing mixed case, surrounding whitespace, or duplicates
 - **THEN** the system stores each excluded source lowercased, trimmed, and deduplicated
 
 #### Scenario: Excluded companies are normalized
+
 - **WHEN** an authenticated user saves a profile with `excluded_companies` containing mixed case, surrounding whitespace, or duplicates
 - **THEN** the system stores each excluded company slug lowercased, trimmed, and deduplicated
 
 #### Scenario: A skill present in both sets is dropped from excluded skills
+
 - **WHEN** an authenticated user saves a profile whose `skills` contain `go` and whose `excluded_skills` contain `go` and `php`
 - **THEN** the system stores `excluded_skills` as `[php]` (the overlapping `go` is dropped) and the save succeeds
 
 #### Scenario: Excluded skills may be empty
+
 - **WHEN** an authenticated user saves a profile with valid `specializations` and `skills` and no `excluded_skills`
 - **THEN** the system stores an empty `excluded_skills` set and the save succeeds
 
 #### Scenario: Excluded sources may be empty
+
 - **WHEN** an authenticated user saves a profile with valid `specializations` and `skills` and no `excluded_sources`
 - **THEN** the system stores an empty `excluded_sources` set and the save succeeds
 
 #### Scenario: Excluded companies may be empty
+
 - **WHEN** an authenticated user saves a profile with valid `specializations` and `skills` and no `excluded_companies`
 - **THEN** the system stores an empty `excluded_companies` set and the save succeeds
 
@@ -129,30 +145,37 @@ longer than 100 characters SHALL be dropped from its set the same way, rather th
 rejecting the save.
 
 #### Scenario: Empty skills rejected
+
 - **WHEN** an authenticated user saves a profile whose `skills` are absent, empty, or reduce to empty after trimming
 - **THEN** the system responds `400` and stores nothing
 
 #### Scenario: Too many skills rejected
+
 - **WHEN** an authenticated user saves a profile with more than 200 distinct skills, in either the wanted or the avoided set
 - **THEN** the system responds `400` and stores nothing
 
 #### Scenario: Too many excluded sources rejected
+
 - **WHEN** an authenticated user saves a profile with more than 200 distinct `excluded_sources`
 - **THEN** the system responds `400` and stores nothing
 
 #### Scenario: Too many excluded companies rejected
+
 - **WHEN** an authenticated user saves a profile with more than 200 distinct `excluded_companies`
 - **THEN** the system responds `400` and stores nothing
 
 #### Scenario: A skill set at the bound is stored whole
+
 - **WHEN** an authenticated user saves a profile with exactly 200 distinct skills
 - **THEN** the profile is stored with all 200
 
 #### Scenario: An over-long value is dropped, not rejected
+
 - **WHEN** an authenticated user saves a profile whose skills include a value longer than 64 characters alongside valid ones
 - **THEN** the profile is stored with the over-long value omitted and the valid skills kept
 
 #### Scenario: An over-long excluded source or company is dropped, not rejected
+
 - **WHEN** an authenticated user saves a profile whose `excluded_sources` or `excluded_companies` include a value longer than 100 characters alongside valid ones
 - **THEN** the profile is stored with the over-long value omitted and the valid values kept
 
@@ -178,25 +201,31 @@ The "Skills" tab SHALL NOT present a "skills to avoid" control — that control 
 only on the Avoid tab.
 
 #### Scenario: Add an excluded skill and save
+
 - **WHEN** a signed-in user opens the Avoid tab, adds `php` to the "skills to avoid" control, and saves
 - **THEN** the app calls `PUT /api/v1/me/profile` with `php` in `excluded_skills` and the saved profile reflects it
 
 #### Scenario: Add an excluded source and save
+
 - **WHEN** a signed-in user opens the Avoid tab, adds a source to the "sources to avoid" control, and saves
 - **THEN** the app calls `PUT /api/v1/me/profile` with that source in `excluded_sources` and the saved profile reflects it
 
 #### Scenario: Add an excluded company and save
+
 - **WHEN** a signed-in user opens the Avoid tab, adds a company to the "companies to avoid" control, and saves
 - **THEN** the app calls `PUT /api/v1/me/profile` with that company's slug in `excluded_companies` and the saved profile reflects it
 
 #### Scenario: Excluded values are pre-seeded when reopening the tab
+
 - **WHEN** a signed-in user who has saved `excluded_skills` `[php]`, `excluded_sources` `[greenhouse]`, and `excluded_companies` `[acme]` reopens the Avoid tab
 - **THEN** the three controls are pre-seeded with `php`, `greenhouse`, and `acme` respectively
 
 #### Scenario: Excluded values do not gate saving
+
 - **WHEN** a signed-in user has at least one specialization and one skill but no excluded skills, sources, or companies
 - **THEN** the Save control is enabled
 
 #### Scenario: The Skills tab no longer shows an avoid control
+
 - **WHEN** a signed-in user opens the "Skills" tab of their profile
 - **THEN** it shows only the wanted-skills control, with no "skills to avoid" control on that tab

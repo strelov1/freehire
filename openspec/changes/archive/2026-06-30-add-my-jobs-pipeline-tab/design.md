@@ -5,12 +5,14 @@
 ## Goals / Non-Goals
 
 **Goals:**
+
 - An at-a-glance Pipeline tab: current application distribution as a Sankey snapshot + Interview/Offer rate donuts.
 - Correct aggregates over **all** of the user's applications (not a paginated page).
 - Keep the stage→bucket mapping and rate definitions as a single source of truth in Go.
 - Zero new dependencies; reuse the existing `/me/jobs` auth and response conventions.
 
 **Non-Goals:**
+
 - Historical funnel / true conversion (would need transition tracking).
 - Import/Export/Template/Columns/Add-job from the reference mockup; Board redesign; date-range filters; codegen for the bucket vocabulary.
 

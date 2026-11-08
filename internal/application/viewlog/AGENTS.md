@@ -30,6 +30,7 @@ SSR→backend boundary) — lets us filter bots and cover anonymous + API unifor
 change. It tolerates both formats, so parser-first is a no-op until nginx catches
 up; nginx-first would feed lines the old pattern cannot match, and a day that
 parses as nothing silently counts nothing.
+
 - `Aggregate(reader) map[day]map[slug]Counts` — dedups by the raw `(IP, UA, slug, day)`
   tuple (NUL-joined, no hashing), the day taken from each line's timestamp (UTC);
   page opens from known bots are dropped, API reads are not bot-filtered.

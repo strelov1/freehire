@@ -7,11 +7,13 @@ Prod measurement (2026-07-21): within `(company, title)` groups that already car
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make `role_fingerprint` compare the **visible text** of title and description, not their markup, so markup-only duplicates collapse.
 - Reuse the project's existing sanitizer stack; add no new dependency and no new heuristic threshold.
 - Keep the change to a single pure function (`normalizeRoleText`) so `UpsertJob`, `cmd/ingest`, and `cmd/backfill-role-fingerprint` all pick it up unchanged.
 
 **Non-Goals:**
+
 - No fuzzy / Jaccard / similarity-threshold matching — the fingerprint stays an exact-match on normalized visible text (separate future change).
 - No change to `stripTrailingClause` (title city-suffix), the two-word guard, the field delimiter, or the geography-union reindex behavior.
 - No re-sanitizing or rewriting of the stored `description` column — normalization happens only inside the fingerprint computation.
@@ -23,7 +25,8 @@ Prod measurement (2026-07-21): within `(company, title)` groups that already car
 
 **2. Strip tags with a `<[^>]*>` regex replaced by a SPACE, then decode entities with `html.UnescapeString`.**
 The tag strip replaces each tag with a space (not the empty string) so words separated only by a block element keep their boundary; entity decoding then converts `&amp;`→`&`, `&#39;`→`'`, and `&nbsp;`→U+00A0 (which `strings.Fields` folds to a space). Order: **strip tags first on the raw HTML, then unescape** — so an escaped angle bracket in visible text (`a &lt; b`) is decoded to a literal only after real tags are gone and is never mistaken for a tag. This matches the prod measurement exactly (which inserted spaces at tag positions and yielded ~29k), so the shipped collapse equals the measured one.
-- _Alternative — `bluemonday.StrictPolicy().Sanitize()`:_ the project's existing text-extraction idiom (`internal/sources/gupy.go`), but empirically it **deletes** tags without inserting a boundary, gluing words across blocks (`word1<br>word2`→`word1word2`, `<li>a</li><li>b</li>`→`ab`). That both diverges from the measurement and would *fail* to collapse the very markup-only dupes this change targets (a `<br>`-separated posting would not match its space-separated twin). Rejected.
+
+- _Alternative — `bluemonday.StrictPolicy().Sanitize()`:_ the project's existing text-extraction idiom (`internal/sources/gupy.go`), but empirically it **deletes** tags without inserting a boundary, gluing words across blocks (`word1<br>word2`→`word1word2`, `<li>a</li><li>b</li>`→`ab`). That both diverges from the measurement and would _fail_ to collapse the very markup-only dupes this change targets (a `<br>`-separated posting would not match its space-separated twin). Rejected.
 - _Alternative — `html2text.FromString`:_ preserves boundaries but adds layout opinions (table formatting, inline link URLs) that widen the hash surface for no dedup benefit. Rejected; the regex is a pure, boundary-preserving text projection.
 - _Over-strip safety:_ a greedy `<…>` could in principle eat visible text between a stray unescaped `<` and a later `>`. This vector does not exist here: descriptions are **already** sanitized at ingest (`internal/sources.SanitizeHTML`, a bluemonday prose allowlist), so stored HTML is well-formed and any `<`/`>` in visible text is entity-escaped. Titles are plain text and do not contain `<…>`.
 

@@ -1,9 +1,11 @@
 # identity/username-claim Specification
 
 ## Purpose
+
 Gives every account a single, account-level username: a short, unique, user-visible name that other features (the hosted mailbox, and later the talent-network public profile) adopt instead of inventing their own naming scheme. Created by archiving change add-username-claim.
 
 ## Requirements
+
 ### Requirement: Username format
 
 A username SHALL be 3-30 characters, lowercase letters and digits with single internal hyphens only, and MUST start and end with a letter or digit (no leading, trailing, or consecutive hyphens).

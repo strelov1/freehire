@@ -37,6 +37,7 @@ reachable as structured JSON — no HTML scraping, no bot-wall.
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `join` is a registered provider — a JSON
   list-API-enumerated, JSON-detail adapter yielding the normalized job shape with a
   Markdown-rendered, sanitized-HTML description, consistent with the existing adapters.

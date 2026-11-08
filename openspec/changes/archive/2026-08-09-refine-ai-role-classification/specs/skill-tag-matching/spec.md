@@ -22,29 +22,36 @@ generation) on job postings whose category is `ai_engineering` or `ml_ai`, and
 SHALL remain résumé-scoped for résumé parsing regardless of any category.
 
 #### Scenario: Shared acronym resolves everywhere
+
 - **WHEN** any text contains "ML" as a standalone token
 - **THEN** the matcher emits "machine-learning"
 
 #### Scenario: Résumé-scoped acronym resolves in résumé mode
+
 - **WHEN** a résumé is parsed with the résumé option and contains "RAG"
 - **THEN** the matcher emits "rag" (retrieval-augmented generation)
 
 #### Scenario: Category-scoped acronym resolves for its allow-listed job category
+
 - **WHEN** job text in category `ai_engineering` contains "RAG" as a standalone token
 - **THEN** the matcher emits "rag"
 
 #### Scenario: Category-scoped acronym does not resolve outside its allow-list
+
 - **WHEN** job text in category `backend` contains "RAG" — including "RAG status"
 - **THEN** the matcher does NOT emit "rag"
 
 #### Scenario: Category-scoped acronym does not resolve when no category is supplied
+
 - **WHEN** default (job) parsing with no category option sees "RAG"
 - **THEN** the matcher does NOT emit "rag"
 
 #### Scenario: Ambiguous lowercase form does not resolve
+
 - **WHEN** the text contains the lowercase word "rag" or "ml"
 - **THEN** the matcher does NOT emit the corresponding canonical
 
 #### Scenario: Acronym matched as a whole word only
+
 - **WHEN** "ML" appears embedded in a larger token (e.g. "HTML")
 - **THEN** it does NOT emit "machine-learning"

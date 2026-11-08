@@ -16,12 +16,14 @@ follows it.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Resolve the specific title/skill/work-mode-phrase gaps the proposal
   measured, so the segment's postings re-enter the index.
 - Keep every dictionary dict-only: no new alias fires without a live-title or
   live-description sample behind it.
 
 **Non-Goals:**
+
 - Decomposing `assistant` as a general class (rejected in the design record —
   a taxonomy project, not an answer to this segment).
 - Routing non-tech postings through LLM enrichment (contradicts

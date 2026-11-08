@@ -12,11 +12,13 @@ the tailoring agent authenticates with a short-lived owner-scoped API key — bo
 ## Goals / Non-Goals
 
 **Goals:**
+
 - The raw CV reaches an external model in exactly one place: résumé extraction on upload (masked
   by the local detector). Every other surface uses de-identified derived data.
 - Keep the published guarantee ("PII does not leave the service") true across all CV surfaces.
 
 **Non-Goals:**
+
 - Changing résumé extraction (`resume-structured-profile`) — it stays the single masked point.
 - Masking the tailoring agent's prompts token-by-token — the structured `Header`/body split makes
   that unnecessary.

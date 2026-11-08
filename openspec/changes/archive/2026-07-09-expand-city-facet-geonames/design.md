@@ -17,6 +17,7 @@ existing rows is the documented re-derive + reindex procedure.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Broad, deterministic city coverage (~25k GeoNames `cities15000` places) feeding
   the `cities` facet, sourced offline with no runtime dependency on the LLM.
 - A single generated source of truth for city → canonical-name + country/region,
@@ -25,6 +26,7 @@ existing rows is the documented re-derive + reindex procedure.
   conservatively at generation time.
 
 **Non-Goals:**
+
 - A live geocoder or fuzzy matching. Resolution stays exact alias lookup.
 - Removing the LLM `enrichment.cities` serve-time fallback in the same change
   (it can stay as a last resort; the generated dictionary shrinks its role).
@@ -53,7 +55,8 @@ sorted for a stable diff. Committed output; `make gen-cities` re-runs it.
 
 **4. City name only — never a guessed country (the key correctness decision).**
 `location.Parse` resolves a city token against the merged dictionary (generated base
-+ curated overrides) and emits the city's canonical display name to the `cities`
+
+- curated overrides) and emits the city's canonical display name to the `cities`
 facet. It does **not** take a country/region from the dictionary: country/region
 stay the curated deterministic dictionaries' job (and the LLM's, at serve time). This
 honours the parser's "never guesses" contract — an ambiguous bare city (`Birmingham`,

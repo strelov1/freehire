@@ -39,6 +39,7 @@ screen becomes dead code.
 ## Scope
 
 **In scope:**
+
 - `internal/candidate/cv`: the `Tailor()`/`Store` bootstrap no longer requires a cached fit
   analysis. It seeds/creates the base CV as today, then — instead of stopping there —
   kicks off the autopilot curation run as part of the SAME cold start, before handing
@@ -53,6 +54,7 @@ screen becomes dead code.
   once the backend never 409s for "no analysis").
 
 **Out of scope, deferred:**
+
 - Capping bullet count in `experienceFromBank()` for the *base* (vacancy-less) CV —
   a base CV still has no JD to curate against, so it keeps the current unfiltered
   seed (a real remaining gap, not solved by this change — noted for a future pass).
@@ -85,7 +87,8 @@ implementation-shaped, not architecture-shaped:
 
 ## Relationship to PR #1658
 
-#1658 is not wasted work — it fixed a real thing (no `/match` page hop, redirects,
+## 1658 is not wasted work — it fixed a real thing (no `/match` page hop, redirects
+
 the retry race-condition bug) and should merge on its own merits. This design's
 frontend piece (dropping the `'analyzing'` branch) is a small, mechanical follow-up
 *on top of* #1658, once it's landed — not a reason to hold #1658 back or unwind it.

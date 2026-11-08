@@ -1,7 +1,8 @@
 ## Context
 
 `internal/engage/companyfeedback` already lets a signed-in user post a 1-5 star rating
-+ closed category + free text about a company, shown under their site-wide
+
+- closed category + free text about a company, shown under their site-wide
 pseudonymous persona. `interview` is already one of the seven categories
 (`vocab.CompanyFeedbackTypeValues`). What it doesn't do: capture the shape of
 an interview process (how many rounds, what each covered), or reduce the
@@ -239,6 +240,7 @@ bending `Redactor`'s restore-half to a use case it was never shaped for.
 ### 5. Job page: a new aggregate section, company page: an extended card style
 
 **Choice:**
+
 - Company page (`web/src/routes/companies/[slug]/`): the existing feedback
   dialog's list gains a card variant for `feedback_type === 'interview'` —
   role badge, numbered round list, italic pull-quote (`body`), then a

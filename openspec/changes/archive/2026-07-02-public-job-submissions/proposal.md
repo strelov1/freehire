@@ -42,6 +42,7 @@ moderator approves it. The work must be reachable both from the web UI and the
 ## Capabilities
 
 ### New Capabilities
+
 - `job-submission`: the user-facing submission queue — the `job_submissions` staging
   table, the authenticated `POST /submissions` + `GET /me/submissions` endpoints, the
   controlled `pending`/`approved`/`rejected` status, the one-pending-row-per-URL
@@ -49,6 +50,7 @@ moderator approves it. The work must be reachable both from the web UI and the
   mints a live job through the existing `moderation` use case on approval.
 
 ### Modified Capabilities
+
 - `user-auth`: the user read shape now includes `role` so clients can gate
   moderator-only UI (authorization itself is unchanged — `RequireRole` still loads the
   role from the database per request).

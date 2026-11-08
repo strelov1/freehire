@@ -41,11 +41,13 @@ Deployment Engineer).
 ## Capabilities
 
 ### New Capabilities
+
 - `ai-role-archetype`: derives a dict-only `ai_archetype` facet from a job's
   skills and category, for the six AI-engineering skill-signature archetypes;
   exposed as a filterable Meilisearch facet.
 
 ### Modified Capabilities
+
 - `role-facet`: `internal/roletag`'s named-role table gains broader
   `forward_deployed_engineer` aliases and two new named roles
   (`applied_ai_engineer`, `deployment_engineer`).

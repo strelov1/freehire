@@ -11,6 +11,7 @@ end of that wire, plus the one rule the Go side must hold up (naming the scope i
 field from). Sibling to `browser-tool-page-read`, which covers `read_page`.
 
 ## Requirements
+
 ### Requirement: A fill addresses one control by label and the scope it was read from
 
 The `fill_simple` primitive SHALL accept, on each fill, the `label` naming the question and

@@ -11,11 +11,13 @@ tab, and add a thin frontend shortcut to a call path that already exists.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - The experience bank is reachable and actionable from inside the Tailor workspace, without a
   navigation away from the session.
 - Confirming an assistant-inferred claim is one click, not edit-then-save.
 
 **Non-Goals:**
+
 - No backend changes — this design deliberately avoids touching `internal/handler/me_experience.go`
   or `internal/experience` at all.
 - No live interaction between confirming an atom and the currently-open tailoring session or

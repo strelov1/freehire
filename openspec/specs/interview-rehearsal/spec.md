@@ -1,8 +1,11 @@
 # interview-rehearsal Specification
 
 ## Purpose
+
 TBD - created by archiving change interview-rehearsal-preset. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: An opened application offers a rehearsal
 
 The opened application SHALL offer a rehearsal whatever its stage, and starting one
@@ -142,4 +145,3 @@ No rehearsal report, readiness score or per-round progress SHALL be persisted.
 
 - **WHEN** the candidate returns to the assistant after a rehearsal
 - **THEN** the rehearsal is listed among their sessions and can be continued
-

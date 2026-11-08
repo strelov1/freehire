@@ -21,11 +21,13 @@ Contract confirmed live against `jobs.tetrapak.com`:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `successfactors` adapter that enumerates a site's sitemap and yields normalized jobs with
   sanitized-HTML descriptions, reusing the list→detail pattern and helpers.
 - A reusable `GetHTML` on `HTTPClient` so future HTML-scraping adapters share one transport.
 
 **Non-Goals:**
+
 - Structured location/department extraction (left empty → enrichment fills it).
 - Locale negotiation — read the site's default-locale pages.
 - The JS widget / `tile-search-results` API.

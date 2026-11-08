@@ -1,8 +1,11 @@
 # company-follow Specification
 
 ## Purpose
+
 TBD - created by archiving change add-company-follow-button. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Company page exposes a follow-for-updates action
 
 The company page SHALL present a "Subscribe to updates" control that lets a user
@@ -93,4 +96,3 @@ is not configured server-side, the control SHALL be hidden.
 - **WHEN** a signed-in user opens a company page and the Telegram bot is not
   configured server-side
 - **THEN** the follow control is not rendered
-

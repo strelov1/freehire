@@ -20,6 +20,7 @@ for a requirement it simply cannot read would be guessing.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One number in the workspace that moves when the candidate edits the document, computed against
   the vacancy and nothing else.
 - Every category explains itself: weight visible, line items expandable, missing skills named.
@@ -27,6 +28,7 @@ for a requirement it simply cannot read would be guessing.
 - The two scores in the workspace stop competing for the same heading.
 
 **Non-Goals:**
+
 - Re-running the fit analysis against the tailored document. That is a real feature and a different
   change: it needs `matchanalysis.Input` to accept a document instead of the experience bank, and it
   costs three LLM stages per edit. The snapshot label is the honest interim.

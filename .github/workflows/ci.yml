@@ -402,6 +402,20 @@ jobs:
           tar -xzf /tmp/typos.tar.gz -C /tmp ./typos
           /tmp/typos
 
+      # Markdown structure over every tracked .md: .rumdl.toml argues what is off. `rumdl fmt`
+      # fixes the fixable findings locally. Same digest rule as agnix: a bump changes
+      # RUMDL_VERSION and RUMDL_SHA256 together, and .mise.toml moves with them.
+      - name: Lint Markdown
+        env:
+          RUMDL_VERSION: v0.3.2
+          RUMDL_SHA256: f527d1374765d826c1627ceab3d1f46e548268731a495b5b12a3af529b3d79e8
+        run: |
+          curl -fsSL -o /tmp/rumdl.tar.gz \
+            "https://github.com/rvben/rumdl/releases/download/${RUMDL_VERSION}/rumdl-${RUMDL_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${RUMDL_SHA256}  /tmp/rumdl.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/rumdl.tar.gz -C /tmp rumdl
+          /tmp/rumdl check .
+
   # The version of every package whose TYPES cross the design system's `link:` boundary.
   # design-system is symlinked into web and extension rather than copied, so each of the
   # three installs its own node_modules and a shared package lands on disk more than once —

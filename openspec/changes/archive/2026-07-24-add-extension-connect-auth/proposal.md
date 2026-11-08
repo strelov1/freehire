@@ -28,6 +28,7 @@ without the user re-typing a password when they already have a live hire session
 ## Capabilities
 
 ### New Capabilities
+
 - `extension-auth`: the browser-extension connect flow — a cookie-only endpoint
   that validates an extension `redirect_uri`, obtains user consent, mints a
   named API key, and redirects the token back to the extension via the URL

@@ -1,10 +1,12 @@
 # ATS board recognition conventions
 
 ## Scope
+
 Turning a job URL into the company board it belongs to — `(source, board, canonical)` — using
 nothing but the URL. No network, no database.
 
 ## Always true
+
 - **One definition, three consumers.** `internal/ingest/contribution` uses it to decide which board a
   pasted link would onboard, `internal/ingest/linksource` (board coverage) uses it to find the ingest
   adapter that can fetch that board, and `internal/ingest/boardresolve` uses it to identify an ATS
@@ -78,6 +80,7 @@ nothing but the URL. No network, no database.
   everywhere would drop a real board.
 
 ## Limitations
+
 - **Vanity domains are invisible here.** Recognition keys on host, so a supported ATS behind a
   company's own domain (`careers.peraton.com` on iCIMS, `jobs.ea.com` on Avature) yields
   nothing — the largest category in the review queue. `internal/ingest/boardresolve` fetches the page

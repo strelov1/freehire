@@ -11,11 +11,13 @@ remote jobs.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Derive `remote_regions` from open remote jobs, in the existing recompute.
 - Delete the curated machinery (package, worker, dataset, query) — net simpler.
 - Preserve the column, API facet, and UI pill unchanged.
 
 **Non-Goals:**
+
 - Including `hybrid` jobs (decision: `remote` only — a clean "fully remote" signal).
 - Guessing a region for a remote job whose geography did not resolve (unchanged
   "never guess" stance — such jobs contribute nothing, exactly like the `regions`

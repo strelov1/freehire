@@ -24,6 +24,7 @@ suffixes during slug normalization.
 ## Capabilities
 
 ### New Capabilities
+
 - `companies`: storing companies as a slug-keyed entity, linking jobs to a
   company via a denormalized key, and serving company list + company-detail
   reads without joining `jobs`.

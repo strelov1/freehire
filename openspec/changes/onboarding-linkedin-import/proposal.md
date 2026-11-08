@@ -18,6 +18,7 @@ That is enough, because the headline is conventionally "level + role + stack" an
 ## Capabilities
 
 ### New Capabilities
+
 - `onboarding-linkedin-import`: importing a public LinkedIn profile by URL as an alternative to CV upload — what is fetched, what is derived from it, what is deliberately not obtainable and how that is disclosed, how the result pre-fills the wizard, and how failures degrade.
 
 ### Modified Capabilities

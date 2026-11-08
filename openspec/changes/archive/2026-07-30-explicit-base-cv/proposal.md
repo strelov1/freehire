@@ -50,9 +50,11 @@ Not in this change, deliberately:
 ## Capabilities
 
 ### New Capabilities
+
 None.
 
 ### Modified Capabilities
+
 - `cv-tailoring`: tailored-ness is recorded at creation, so a pruned vacancy no longer promotes its
   copy into the pool the base CV is chosen from.
 - `tailor-ats-delta`: the baseline is a non-tailored CV; an orphaned copy is refused as a tailored

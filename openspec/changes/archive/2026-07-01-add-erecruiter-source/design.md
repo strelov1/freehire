@@ -26,12 +26,14 @@ each company's `cfg` from its own careers page.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A keyless, board-based `erecruiter` adapter (list + per-offer detail) that ingests one
   company board per configured entry, deduping on the stable `externalJobOfferId`.
 - A `cmd/harvest-erecruiter` tool that turns a list of company careers URLs (or domains)
   into validated `sources/erecruiter.yml` entries.
 
 **Non-Goals:**
+
 - Automatically mapping every justjoin `WebID` to a `cfg` (no such mapping exists) —
   discovery is domain/careers-page driven, run by the harvester, not the adapter.
 - Ingesting via the recruiter-side authenticated eRecruiter API.

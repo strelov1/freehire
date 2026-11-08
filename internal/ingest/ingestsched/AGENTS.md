@@ -1,6 +1,7 @@
 # Ingest scheduling
 
 ## Scope
+
 What decides that a provider's crawl is due, how a due run is claimed exactly once, how a
 stuck run is reclaimed, and how the fleet's concurrency is bounded. Replaces
 `freehire-ops' provision/host2/gen-ingest-timers.sh` and the ~279 static systemd units it materialised.

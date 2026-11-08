@@ -47,7 +47,7 @@ and wrong under failure, but changing it is a separate concern.
 
 ### New Capabilities
 
-_None._
+*None.*
 
 ### Modified Capabilities
 

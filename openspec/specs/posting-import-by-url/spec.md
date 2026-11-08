@@ -1,8 +1,11 @@
 # posting-import-by-url Specification
 
 ## Purpose
+
 TBD - created by archiving change import-posting-by-url. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: A page already in the catalog is answered without importing
 
 The system SHALL, before any outbound fetch, resolve the requested URL against the catalog
@@ -186,4 +189,3 @@ extension, and the CLI, so the outcome depends on the link and not on where it w
 - **WHEN** a Telegram user sends a link to a vacancy that can be imported
 - **THEN** the bot replies with a link to the posting rather than only acknowledging the
   board
-

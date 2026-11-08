@@ -22,6 +22,7 @@ APNs `.p8` key or Firebase service account needed on freehire's side.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Store one row per registered device, reassignable when a different account
   signs in on the same device.
 - A `Notifier` that reliably sends one push through the Expo Push API.
@@ -32,6 +33,7 @@ APNs `.p8` key or Firebase service account needed on freehire's side.
   2), not assumed answerable from the immediate send response alone.
 
 **Non-Goals:**
+
 - Wiring push into `notify`/`reminder`/`nudge` as a delivery channel (a
   follow-up change).
 - The mobile app registering a *real* token (needs `expo-notifications` +

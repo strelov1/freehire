@@ -11,11 +11,13 @@ runs under an `IS DISTINCT FROM` change-guard, so this is a one-CTE change.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - `company_sizes` = `employee_count` bucket when known, else the current
   enrichment union — a dict-then-LLM hybrid, in place, more accurate.
 - Zero new column/field/filter/frontend; reuse the recompute + guard.
 
 **Non-Goals:**
+
 - A separate size field or a new filter (the `company_size` facet/param/pill are
   unchanged).
 - Changing the `company_size` *vocabulary* or the per-job `enrichment.company_size`
@@ -26,7 +28,8 @@ runs under an `IS DISTINCT FROM` change-guard, so this is a one-CTE change.
 - **Compute the final `company_sizes` in a CTE** (mirroring the `mat` CTE added by
   the maturity change) so both the `SET` and the `IS DISTINCT FROM` guard reference
   one value, no `CASE` duplication:
-  ```
+
+  ```text
   csize_final AS (
     SELECT co.slug AS company_slug,
       CASE WHEN co.employee_count IS NULL THEN COALESCE(cs.arr, '{}')
@@ -39,6 +42,7 @@ runs under an `IS DISTINCT FROM` change-guard, so this is a one-CTE change.
     FROM companies co LEFT JOIN csize cs ON cs.company_slug = co.slug
   )
   ```
+
   Then `SET company_sizes = csize_final.arr`, guard
   `c.company_sizes IS DISTINCT FROM csize_final.arr`, and `LEFT JOIN csize_final`.
 - **Single-element array.** The `company_sizes` filter is array-overlap (`&&`), so

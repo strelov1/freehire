@@ -49,6 +49,7 @@ today, and each carries a regression test naming the title it must NOT take.
 ## Capabilities
 
 ### New Capabilities
+
 - `it-title-coverage`: the IT titles the catalogue carries that the category
   dictionary had no word for — the Russian software vocabulary, the Systems
   Engineer family and its non-IT lookalikes, the vendor-platform titles, and

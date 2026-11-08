@@ -14,12 +14,14 @@ a smaller but consistent cost on top.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Cut per-batch indexing cost for both `cmd/reindex` and `cmd/search-drain` by
   eliminating the most expensive, skippable indexing phase.
 - Keep the change to index *settings* only — no new dependency, no schema/migration,
   no change to `internal/searchdrain`'s or `cmd/reindex`'s own logic.
 
 **Non-Goals:**
+
 - Not attempting to fix the *architectural* cause (Meilisearch re-merges structures
   across the whole live index on most writes) — that is upstream and out of scope.
 - Not changing `SEARCH_DRAIN_BATCH_SIZE` or any queue/worker tuning knob; this

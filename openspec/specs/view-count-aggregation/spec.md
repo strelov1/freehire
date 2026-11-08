@@ -1,8 +1,11 @@
 # view-count-aggregation Specification
 
 ## Purpose
+
 TBD - created by archiving change view-count-from-nginx-logs. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Offline aggregation of job views from nginx access logs
 
 The system SHALL count job views by aggregating completed nginx access-log
@@ -180,4 +183,3 @@ SHALL exit cleanly without error and without modifying counters.
 
 - **WHEN** the configured access-log path does not exist
 - **THEN** the worker logs that it found nothing to process and exits successfully
-

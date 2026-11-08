@@ -7,11 +7,13 @@ This change widens `extract` to return the dictionary-derived seniority + catego
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Pre-fill the wizard's focus/seniority/stack from a résumé, deterministically, reusing the existing dictionaries — no LLM, no new endpoint, no DB change.
 - Keep it best-effort and non-blocking: unresolved fields stay empty, failures fall back to manual.
 - One refactor improves two surfaces (wizard + profile form).
 
 **Non-Goals:**
+
 - No LLM CV parser (deliberately — the deterministic dictionaries are the project's doctrine and stay instant/free).
 - No work-mode/region from résumés (not stated on a CV). No `user_profiles` auto-write beyond the profile form's existing merge. No new résumé formats (PDF/text only, as today). No change to résumé storage/embedding or auth.
 
@@ -36,6 +38,7 @@ The résumé endpoint is cookie-only (it stores + embeds to the account). The wi
 On a successful extraction the wizard merges `categories`/`seniority`/`stack` into `sel` (dedup, keeping any manual picks) and **stays on the current step** with a note — so the user reviews and corrects the pre-filled pills rather than being advanced past the "What do you do?" step. Focus and Seniority are **multi-select** (a person can be several specializations; a search can span a grade range), so the extraction's several categories all light up. A generation counter drops a parse that resolves after the wizard was reset. *Earlier alternative:* advancing to step 2 on success — rejected, it skips review of the fields just filled.
 
 **D5 — Component boundaries.**
+
 - Backend: `resumeHeadline` + `looksLikeContactToken` + `resumeProfile(text) → {skills, seniority, categories}` in `internal/handler` composing `skilltag` + `classify` (incl. the new `classify.Categories`); `ExtractResumeProfile` calls it and serializes. Unit-tested against sample text (contact-first, one-token-per-line, multi-category, buried-grade).
 - Frontend: `api.ts` `extractResumeProfile` returns the widened type; `OnboardingWizard.svelte` owns the CV affordance + `parsing`/`error`/note state, the multi-select Focus/Seniority (`toggleIn`/`multiPills` over `specializations[]`/`seniorities[]`), and the result→`sel` merge; `ProfileForm.svelte` merges `categories` into specializations. The wizard's manual flow is otherwise untouched.
 
@@ -53,7 +56,8 @@ Additive backend refactor + frontend feature — no schema, no new endpoint, no 
 
 ## Open Questions
 
-_Resolved during implementation:_
+*Resolved during implementation:*
+
 - Full text vs. a leading slice for the title dictionaries → a `resumeHeadline` slice (D1a), after full-text scanning over-promoted the grade from career-history mentions.
 - One category vs. several → several (D1b); the wizard's Focus (and Seniority) became multi-select (D4).
 - Advance after pre-fill vs. stay for review → stay on the step (D4).

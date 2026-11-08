@@ -28,10 +28,12 @@ TLS trust-store problem rather than an anti-bot one, and is out of scope.)
 ## Capabilities
 
 ### New Capabilities
+
 - `scrapling-fetch-tier`: the self-hosted fetch service, its Go transport, and the per-provider
   allowlist that routes the sources no plain client can reach through it.
 
 ### Modified Capabilities
+
 - `wellfound-source`: its pages are fetched through the Scrapling tier instead of the hosted
   Firecrawl tier.
 

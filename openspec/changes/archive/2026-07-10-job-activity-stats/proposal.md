@@ -27,6 +27,7 @@ or surfaced.
 ## Capabilities
 
 ### New Capabilities
+
 - `job-activity-stats`: A materialized daily rollup of vacancies added vs.
   removed, a public granularity-aware read API over it, and the public
   dashboard page that visualises it.

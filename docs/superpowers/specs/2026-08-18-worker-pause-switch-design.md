@@ -8,7 +8,7 @@ Status: approved, not implemented
 host-2 is disk-bound, not CPU-bound. Measured on 2026-08-18 at 04:15 UTC while a full
 Meilisearch rebuild was running:
 
-```
+```text
 io  full avg60 = 28%
 cpu full avg60 =  0%
 ```
@@ -86,7 +86,7 @@ initialized and the pgx pool is never opened.
 
 Two keys are consulted, and either one holds the worker:
 
-```
+```text
 freehire:pause:all         # every worker
 freehire:pause:<job>       # one binary, e.g. freehire:pause:ingest
 ```

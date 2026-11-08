@@ -9,11 +9,13 @@ The user brainstormed and approved the target visual design interactively (mocku
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Every "See also" card gets a circular visual mark, sourced from the most specific thing available: a real brand logo for technology, the country's flag for a country collection, or a color-coded family icon otherwise.
 - Reuse existing building blocks (`CountryFlag.svelte`, `@lucide/svelte`, the `backers.ts` pattern) rather than inventing new infrastructure.
 - Keep mark resolution server-side, in the same place (`buildSeeAlso()`) it already happens — no client-side fetch, no new API surface.
 
 **Non-Goals:**
+
 - No change to which collections are selected for a job's "See also" row.
 - No change to the row's layout (still a horizontal-scroll strip of fixed-width cards) — this is a mark/detail change only.
 - No change to `backers.ts`, the `/collections` hub page, or the Go-side `job-collections` capability (company-level collection membership is a separate, unrelated concept from the frontend's `FilterCollection` registry).

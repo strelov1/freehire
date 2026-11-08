@@ -42,6 +42,7 @@ vocabulary.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `hrmos` is a registered board-based provider — a
   paginated HTML-listing + ld+json-detail adapter over `hrmos.co`, yielding the normalized job
   shape including a mapped `employment_type`.

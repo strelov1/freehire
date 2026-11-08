@@ -19,9 +19,11 @@ The most demoralizing part of a tech job search is not finding links — it is n
 ## Capabilities
 
 ### New Capabilities
+
 - `job-reality-signal`: deterministic classification of a job's likelihood of being a real, active opening (`fresh`/`stale`/`likely-evergreen`) from ingest history + text, served as a job-view field and a Meilisearch `reality` facet with a facts-backed badge.
 
 ### Modified Capabilities
+
 - `source-ingest`: the `UpsertJob` write path additionally computes and persists a narrow `role_fingerprint` (excluding volatile fields) so reposts of the same role under new `external_id`s are countable.
 
 ## Impact

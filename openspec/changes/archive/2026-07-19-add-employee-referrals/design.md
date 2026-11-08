@@ -13,6 +13,7 @@ infrastructure.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let members offer to refer into a company, gated by manual moderation of an
   uploaded proof CV.
 - Surface an "ask for a referral" affordance on company/job pages only when an
@@ -24,6 +25,7 @@ infrastructure.
 - Keep it free but spam-resistant.
 
 **Non-Goals:**
+
 - Email-domain verification / "verified employee" badge.
 - Status pings to the seeker on referrer action.
 - Credit/paywall gating of requests.

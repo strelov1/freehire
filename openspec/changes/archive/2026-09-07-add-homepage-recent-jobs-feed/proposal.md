@@ -38,11 +38,13 @@ already produces.
 ## Capabilities
 
 ### New Capabilities
+
 - `recent-jobs-feed`: a live, SSE-delivered feed of recently ingested jobs on
   the homepage, grouped by role when many postings of the same role arrive in
   one polling window.
 
 ### Modified Capabilities
+
 (none — this introduces a new capability and does not change the documented
 behavior of `source-ingest`, `job-search`, or `web-frontend`; the new outbox
 enqueue is an internal implementation detail of the ingest write path, not a

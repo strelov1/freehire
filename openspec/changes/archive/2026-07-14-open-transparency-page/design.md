@@ -12,6 +12,7 @@ route, one new read endpoint, and reuse of existing components.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One public `/open` page proving the "open, free search engine" claim with live data.
 - Reuse existing building blocks (`ActivityBars`, the HomeView stat-strip idiom,
   `serverApi`, the `/trends` load pattern) — no new chart library, no redesign.
@@ -19,6 +20,7 @@ route, one new read endpoint, and reuse of existing components.
 - Each figure links to the API endpoint that produced it (API-first proof).
 
 **Non-Goals:**
+
 - Traffic/analytics (GA4), revenue/burn, third-party metric verification (jitsu-style).
 - A rollup table or worker for member growth — computed on the fly.
 - Realtime/streaming updates; SSR-on-request freshness is enough.

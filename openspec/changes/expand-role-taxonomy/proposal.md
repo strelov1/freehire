@@ -17,6 +17,7 @@ This change defines the **full** role-category and industry-domain vocabularies 
 ## Capabilities
 
 ### New Capabilities
+
 - `role-category-taxonomy`: the canonical, fully-defined role-category vocabulary — every category (existing + new) with a one-line definition, its tech/business partition membership, and the alias-ordering doctrine that keeps specific role titles from being stolen by the terminal fall-throughs.
 - `industry-domain-taxonomy`: the canonical industry-domain vocabulary — every domain value with a one-line definition and the per-value gloss supplied to the enrichment LLM, plus the fold/rename/drop rules against the previous list.
 

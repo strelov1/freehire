@@ -13,12 +13,14 @@ once on first volume init only. This is the first schema change after init.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `companies` table with a natural `slug` key (no surrogate id).
 - A denormalized `jobs.company_slug` link key beside the display `company`.
 - Join-free reads for company list and company detail.
 - The write path keeps the company table populated automatically.
 
 **Non-Goals:**
+
 - Denormalized `job_count` counter (counts computed on the fly for now).
 - Company metadata (logo, website, description).
 - Stripping legal suffixes (LLC, Inc, ООО) during normalization.

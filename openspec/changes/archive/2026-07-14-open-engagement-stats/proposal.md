@@ -20,6 +20,7 @@ separately.
 ## Capabilities
 
 ### New Capabilities
+
 - `engagement-stats`: a public `GET /api/v1/stats/engagement` endpoint returning
   aggregate `user_jobs` interaction counts (saved / applied / viewed), computed
   directly from the table with no rollup and no personal fields.

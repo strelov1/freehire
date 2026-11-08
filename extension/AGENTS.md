@@ -26,7 +26,7 @@ No local server, and no separate agent service.
 
 ## Layout
 
-```
+```text
 extension/            WXT + Svelte MV3 extension (npm-managed; the repo's other
                        JS packages, web/ and design-system/, are pnpm)
   entrypoints/
@@ -89,7 +89,7 @@ silently.
 
 Read-a-page flow — note that the panel is not the one deciding:
 
-```
+```text
 hire's agent --read_page--> relay --> panel
 panel --GET_PAGE_SNAPSHOT--> background --(active tab)--> content
 content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-turn

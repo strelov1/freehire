@@ -30,12 +30,14 @@ patterns ("react jobs", "remote jobs germany") it could cover.
 ## Capabilities
 
 ### New Capabilities
+
 - `related-collections`: the job-detail-page "see also" block — matching a
   viewed job's own facets and company collections against the two existing
   collection registries to produce a bounded, deduped, always-full list of
   internal links into `/collections/[slug]`.
 
 ### Modified Capabilities
+
 - `web-ssr-seo`: the "Collection landing pages are indexable" requirement's
   `<title>`/`<h1>`/OG-title format changes from a static collection name to
   include the collection's live, exact job count.

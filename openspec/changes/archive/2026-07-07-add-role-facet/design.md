@@ -17,12 +17,14 @@ precedent for an index-only derived field with no column or backfill.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A natural, multi-select "Role" picker backed by a single `roles` facet.
 - Precise multi-role selection with no cross-product garbage.
 - Live busiest-first counts and typeahead, reusing the existing `skills` path.
 - Minimal footprint: no schema change, additive to the existing filters.
 
 **Non-Goals:**
+
 - A `jobs.roles` column, migration, or `backfill-derive` support (follow-up).
 - Removing the seniority/category controls (follow-up once the picker proves out).
 - Query-time title→facet decomposition of the `q` box.
@@ -46,6 +48,7 @@ retire the old facets, promoting to a column is a clean follow-up.
 
 **Derivation rules (`internal/roletag`).** `Derive(seniority, category, title)
 []string`:
+
 - the **bare category role** `{category}` whenever the category resolves (any
   `enrich.CategoryValues` except `other`) — this is the dominant case: on the
   live prod catalogue only ~18% of open jobs carry a seniority, so requiring one

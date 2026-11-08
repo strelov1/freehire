@@ -30,6 +30,7 @@ Three things reported from using the tailoring workspace on production:
 <!-- none -->
 
 ### Modified Capabilities
+
 - `tailor-workspace`: the opening actions follow an empty conversation rather than a fresh
   workspace, and the active tab is legible.
 - `account-navigation`: the tailoring section's name, and which sections the header menu repeats.

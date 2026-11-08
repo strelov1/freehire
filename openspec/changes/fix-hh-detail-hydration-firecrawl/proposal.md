@@ -20,6 +20,7 @@ a `<p>Зарплата: ...</p>` stub.
 
 Two working alternatives were spiked and measured on the exact URLs that are
 failing in production right now:
+
 - The direct datacenter IP serves hh.ru detail pages cleanly today (80/80 success
   at the adapter's own production pace, ~4 req/s sustained).
 - Firecrawl (`internal/platform/firecrawl`, already configured with
@@ -56,9 +57,11 @@ place, per the adapter's own history) or the current proxy (already burned).
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 (none — this is a transport-tier swap behind the existing `hh` adapter contract:
 same `Job` shape, same `ExternalID`/dedup identity, same seen/hydrate/list-only
 fallback behavior. No spec currently tracks `hh` as its own capability, and

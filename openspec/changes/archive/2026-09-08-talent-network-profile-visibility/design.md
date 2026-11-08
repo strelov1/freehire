@@ -19,6 +19,7 @@ rendering a structured CV.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a candidate opt into three states — Off / Public / Anonymous — from
   `my/profile`.
 - Serve a public, unauthenticated page per candidate at a stable, unguessable
@@ -28,6 +29,7 @@ rendering a structured CV.
   identity.
 
 **Non-Goals:**
+
 - Employer accounts, search, or browse (no consumer of this page exists yet
   beyond a candidate manually sharing their own link).
 - Intro-request flow, contact reveal, or any consent-gated disclosure.

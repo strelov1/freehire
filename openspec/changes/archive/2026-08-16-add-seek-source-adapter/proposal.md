@@ -28,6 +28,7 @@ raised does not exist on the path we would actually crawl.
 ## Capabilities
 
 ### New Capabilities
+
 - `seek-source`: crawling SEEK's AU and NZ catalogues — market and slice selection, the listing
   walk and its result-window cap, description hydration, employer resolution, and the sweep-grace
   contract that keeps the unreachable tail from churning.

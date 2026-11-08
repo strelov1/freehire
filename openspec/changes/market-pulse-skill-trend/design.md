@@ -16,6 +16,7 @@ rather than changing how `insights_skill_stats` itself is computed.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Retain roughly 6 months of weekly skill-demand snapshots, keyed by
   canonical skill.
 - Let a signed-in user read their own profile skills' history + trend in one
@@ -24,6 +25,7 @@ rather than changing how `insights_skill_stats` itself is computed.
   no second full scan of `jobs`.
 
 **Non-Goals:**
+
 - Category- or country-scoped history (the existing `insights_skill_stats`
   table already carries `(skill, category, '')` and `(skill, '', country)`
   rows in addition to the global `(skill, '', '')` bucket; this change only

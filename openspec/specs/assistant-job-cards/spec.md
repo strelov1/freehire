@@ -1,6 +1,7 @@
 # assistant-job-cards Specification
 
 ## Purpose
+
 How a vacancy reaches the user inside the in-app assistant. The agent never writes
 a job link into its reply: it calls `present_jobs` with the vacancies it chose, in
 its own ranking, each carrying the rationale only it knows. The chat renders that
@@ -8,6 +9,7 @@ call as one contiguous deck and fetches every card's facts by slug, so the vacan
 own data is always ours and never model-authored.
 
 ## Requirements
+
 ### Requirement: Cards are hydrated from the structured job API
 
 A job card SHALL fetch the posting's structured jobview by slug
@@ -145,4 +147,3 @@ for the result means the user never sees a deck that the backend rejected.
 
 - **WHEN** a `present_jobs` call fails because none of its slugs resolve, and the model retries with corrected slugs
 - **THEN** only the corrected deck is ever shown
-

@@ -24,6 +24,7 @@ Separately, `internal/sources/http.go:493-519` returns immediately on any HTTP 4
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A single Workday crawl retrieves every posting on a board, including ones where the
   board's own `total` is capped at 2,000.
 - No extra "probe" requests beyond what listing already returns — the facet counts
@@ -34,6 +35,7 @@ Separately, `internal/sources/http.go:493-519` returns immediately on any HTTP 4
 - Boards that were never capped see zero behavior change.
 
 **Non-Goals:**
+
 - Not fixing the general "total reported only on page one, `total:0` thereafter" case
   — that is already handled by the existing latch and is a different failure mode.
 - Not building a generic cross-provider facet-subdivision abstraction. Nothing today

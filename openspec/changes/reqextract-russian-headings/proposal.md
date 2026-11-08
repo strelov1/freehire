@@ -15,9 +15,11 @@
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `posting-requirements-derivation`: gains an ADDED requirement describing that the heading vocabulary recognizes headings in more than one language (existing behavior for Hungarian, now also Russian), via the same transliteration the vocabulary already uses — not a new mechanism, a wider vocabulary.
 
 ## Impact

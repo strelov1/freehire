@@ -1,8 +1,11 @@
 # cv-pii-masking Specification
 
 ## Purpose
+
 TBD - created by archiving change add-cv-pii-masking. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: PII detection combines a regex floor with a local model
 
 The system SHALL detect PII spans in CV text by unioning a deterministic regex layer with
@@ -83,4 +86,3 @@ without its contact block). This keeps the raw CV → external-model hop to a si
 
 - **WHEN** the fit analysis or the ATS review runs
 - **THEN** it does not invoke the PII detector and does not depend on its availability
-

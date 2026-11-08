@@ -6,7 +6,7 @@ company + normalized title + compatible country. The normalization already drops
 title that way never finds its twin and both cards stay in the catalogue — a shape `whatjobs`
 produces constantly:
 
-```
+```text
 whatjobs «Senior Software Engineer: Full-Stack with TypeScript»  ↔  greenhouse «Senior Software Engineer»
 whatjobs «Senior Lead Software Engineer: Golang, Kubernetes…»    ↔  workday «Senior Lead Software Engineer»
 ```

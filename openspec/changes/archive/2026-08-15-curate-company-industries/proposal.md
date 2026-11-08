@@ -34,10 +34,12 @@ bucket at 42% of tagged companies. Those companies do have a describable industr
 ## Capabilities
 
 ### New Capabilities
+
 - `industry-vocabulary`: the curated alias→canonical industry dictionary, its
   dict-only resolution rule, and the canonical/display split.
 
 ### Modified Capabilities
+
 - `company-info`: `industries` becomes a controlled vocabulary rather than free
   text, and the company-info write path stops overwriting values owned by other
   sources.

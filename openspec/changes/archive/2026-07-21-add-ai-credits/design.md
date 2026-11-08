@@ -14,6 +14,7 @@ The existing pre-LLM gate location is the natural seam.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One auditable points balance per user, drawn by both match and tailor.
 - Monthly grant (default 20), use-it-or-lose-it, lazy reset — no cron.
 - Per-action costs (match 1, tailor 3), configurable via env.
@@ -22,6 +23,7 @@ The existing pre-LLM gate location is the natural seam.
 - Ledger shaped to accept a future purchase grant with no migration.
 
 **Non-Goals:**
+
 - Stripe / paid purchase flow (only the ledger shape must be forward-compatible).
 - Metering `resume-extract` (background, not user-invoked).
 - Unused-credit rollover between periods.
@@ -73,6 +75,7 @@ ever-growing ledger is needless cost; the cache is trivially reconstructable.
 
 A small `Store` holding `*db.Queries` (and a `*pgxpool.Pool` for the debit
 transaction), exposing:
+
 - `Balance(ctx, userID) (Balance, error)` — read `{Remaining, ResetsAt}`,
   applying a lazy reset in-memory for display (does not need to write).
 - `Debit(ctx, userID, feature, ref) (Balance, error)` — atomic; returns the
@@ -84,6 +87,7 @@ Costs and the monthly grant come from `internal/config` (`CREDITS_MONTHLY_GRANT`
 ### Atomic debit: single transaction, row lock, lazy reset inside
 
 `Debit` runs one transaction:
+
 1. `SELECT ... FROM credit_balances WHERE user_id=$1 FOR UPDATE` (serializes per
    user; `NULL` row → treat as fresh).
 2. If the row's `period` ≠ current period (or no row): the period rolled over —

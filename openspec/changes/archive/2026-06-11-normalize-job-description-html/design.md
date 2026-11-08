@@ -11,12 +11,14 @@ The decision (made with the user) is to make `description` **sanitized formatted
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Every adapter yields description as sanitized HTML from the platform's authoritative HTML field(s).
 - Server-side sanitization closes the `{@html}` XSS surface; unsanitized markup is never persisted.
 - SPA renders descriptions as formatted HTML with readable prose styling.
 - Existing rows backfilled via idempotent re-ingest.
 
 **Non-Goals:**
+
 - No schema/migration change (`description` column already exists).
 - No change to the jobview wire shape (still a `description` string).
 - Not touching enrichment, search indexing semantics, or other adapters' fields beyond description.

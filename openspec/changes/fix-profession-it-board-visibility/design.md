@@ -36,6 +36,7 @@ in the current code (not from the issue's own analysis):
 ## Goals / Non-Goals
 
 **Goals:**
+
 - New Profession `itdev`/`itops` postings get `is_tech = true` at ingest, so
   they enter the enrichment queue instead of stalling forever.
 - Existing stuck Profession `itdev`/`itops` rows (`is_tech` unknown today) get
@@ -46,6 +47,7 @@ in the current code (not from the issue's own analysis):
   once it is persisted as a single tri-state column.
 
 **Non-Goals:**
+
 - Not touching `internal/ingest/sources/infojobs.go`, which the investigation
   found has the same latent defect shape (single dedicated-IT-category source,
   no structured category signal). Out of scope for this issue; the mechanism
@@ -76,10 +78,11 @@ structured scalars fully replace the dictionary rather than merely seeding it.
 flag.** Once `is_tech` is a bare tri-state column, the search layer cannot
 tell whether it became `true` via the source hint or via `classify.IsTech`
 matching the title with no sub-category. Two ways to close the reported gap:
-  - (a) Widen `CategoryUnresolved` to admit any `is_tech = true` job, from any
-    source.
-  - (b) Add a second column/flag carrying "source asserted this, not just the
-    dictionary" and only that flag bypasses the gate.
+
+- (a) Widen `CategoryUnresolved` to admit any `is_tech = true` job, from any
+  source.
+- (b) Add a second column/flag carrying "source asserted this, not just the
+  dictionary" and only that flag bypasses the gate.
   We pick (a). The `tech-classification` spec already requires the
   tech-title dictionary to be conservative and never guess (`internal/dict/classify/AGENTS.md`,
   spec's "MUST NOT contain generic terms dominated by non-software roles"), so

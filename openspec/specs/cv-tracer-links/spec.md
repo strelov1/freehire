@@ -1,8 +1,11 @@
 # cv-tracer-links Specification
 
 ## Purpose
+
 TBD - created by archiving change cv-tracer-links. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Link tracing is opt-in per CV and off by default
 
 A CV SHALL carry a `tracer_links_enabled` flag defaulting to false. The flag SHALL be settable
@@ -273,4 +276,3 @@ matters most.
 
 - **WHEN** an application has no traced CV, or its traced CV has no non-automated clicks
 - **THEN** the card carries no CV-opened marker
-

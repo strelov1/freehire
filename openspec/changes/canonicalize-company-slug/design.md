@@ -115,7 +115,7 @@ failure with a bigger surface.
 
 So the resolution map is computed once per run and both consumers read it:
 
-```
+```text
 board's company names
       │  normalize.CompanySlug            (pure — class 1a)
       ▼

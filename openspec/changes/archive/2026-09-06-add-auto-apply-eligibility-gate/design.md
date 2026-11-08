@@ -30,6 +30,7 @@ of those and reaches the LLM drafter, saved from a wrong submission today only b
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Refuse to enqueue an auto-apply attempt when the candidate's known evidence positively
   conflicts with the job's stated work-authorization or location/work-mode requirement.
 - Stop a required, unmapped geography/residency form question from ever reaching the LLM
@@ -38,6 +39,7 @@ of those and reaches the LLM drafter, saved from a wrong submission today only b
   second evidence pipeline.
 
 **Non-Goals:**
+
 - Changing `hardconstraint`'s own contract, its "never emit a false blocker" discipline,
   or any of its existing advisory call sites (`JobMatch`, match-analysis scoring stay
   exactly as advisory as they are today).

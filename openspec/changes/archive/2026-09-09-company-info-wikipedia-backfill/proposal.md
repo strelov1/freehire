@@ -13,9 +13,11 @@ A large share of companies in the catalog carry no `tagline`/`company_info` at a
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `company-info`: adds a new run-once backfill source (Wikipedia/Wikidata, matched by name with a typed-entity confidence gate) that fills `tagline` and a `company_info.summary` key under the same gap-filling rules already specified for the YC and company-info-dump backfills.
 
 ## Impact

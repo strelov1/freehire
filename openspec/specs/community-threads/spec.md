@@ -1,13 +1,16 @@
 # community-threads Specification
 
 ## Purpose
+
 An anonymous discussion primitive: a signed-in user opens a topic attached to a
 subject — a company or a vacancy — and any signed-in user replies, everyone
 shown only through a stable pseudonymous handle. The subject is polymorphic and
 deliberately unconstrained by a foreign key, so a thread outlives what it is
 about and a future subject kind needs no schema change. Threads are readable by
 anyone; writing needs a session, and is rate-limited per user.
+
 ## Requirements
+
 ### Requirement: Create a discussion thread on a subject
 
 A signed-in user SHALL create a discussion thread attached to a subject. A

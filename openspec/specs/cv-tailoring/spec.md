@@ -1,8 +1,11 @@
 # cv-tailoring Specification
 
 ## Purpose
+
 TBD - created by archiving change add-cv-tailoring. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Tailoring starts a job-bound copy of the base CV
 
 The system SHALL, on a tailoring bootstrap request for a vacancy, reach exactly ONE tailored CV per
@@ -453,4 +456,3 @@ the rule already exempts them — but it SHALL NOT be reachable from any agent w
 - **WHEN** the gate is asked whether a claim is publishable and its backing bank is absent
 - **THEN** the answer is not "permitted" — the absence is a wiring error the assembly
   cannot express, rather than a silent pass
-

@@ -11,6 +11,7 @@ adapters.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Discover a board's jobs from its listing page and any requisition groups it links to, one
   level deep.
 - Reuse existing shared helpers (`jobLinks`, `ldJobPosting`, `fetchDetails`) rather than writing
@@ -19,6 +20,7 @@ adapters.
   posting HERP no longer lists.
 
 **Non-Goals:**
+
 - A bespoke `cmd/harvest-boards` prober. `herp` has no cheap count endpoint (unlike, say,
   `joinProber`'s `rowCount`) — the only way to check liveness is to run the same listing walk
   the adapter itself does, which is exactly what `adapterProber`'s fallback already provides

@@ -33,6 +33,7 @@ GitHub API; the page degrades per-section so a failing upstream never breaks it.
 ## Capabilities
 
 ### New Capabilities
+
 - `open-transparency-page`: the public `/open` page that aggregates live catalogue
   scale, catalogue movement, facet distributions, open-source stats, and member
   growth into one SSR transparency dashboard, with each figure linking to its API

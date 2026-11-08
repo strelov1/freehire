@@ -12,11 +12,13 @@ here is open for re-litigation without going back to them.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Show a 90-day daily history strip for the site's own status, matching the
   visual convention of real status pages.
 - Never claim to know about a day nothing was actually observed on.
 
 **Non-Goals:**
+
 - Ingest-fleet history — `overall`/`providers` are unaffected.
 - An uptime-percentage figure — only day-tile coloring by worst status.
 - A new deployable (cron binary, systemd unit, `freehire-ops` change).

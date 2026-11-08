@@ -9,10 +9,12 @@ board `<tenant>`, canonical collapses to the bare tenant host).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Recognize Keka's standard multi-tenant host, matching how every other `subdomain`-mode entry
   already behaves.
 
 **Non-Goals:**
+
 - Eightfold and Gupy (see proposal.md's revision note — their ingest adapters key on something
   other than the bare subdomain label, so `subdomain` mode would derive a board id neither
   adapter can ever crawl).

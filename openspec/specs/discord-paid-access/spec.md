@@ -1,12 +1,14 @@
 # discord-paid-access Specification
 
 ## Purpose
+
 A members-only space on the community Discord, gated on one role that follows the
 subscription: granted when an account pays, revoked when it stops, without an operator
 moving anybody by hand. Which channels the role opens is configured in Discord itself and
 appears nowhere here — the system manages exactly one role.
 
 ## Requirements
+
 ### Requirement: A signed-in user can link one Discord account
 
 The system SHALL let an authenticated user bind their Discord account to their freehire

@@ -11,12 +11,14 @@ is flat-neutral (semantic tokens, system fonts); no web test runner.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Mobile menu reads as a proper full-screen drawer: brand/close top bar, sectioned
   scrollable links with ≥44px tap targets, theme+auth pinned to a bottom bar.
 - Desktop dropdown unchanged in look and behavior.
 - No change to menu items, gating, or close/scroll-lock behavior.
 
 **Non-Goals:**
+
 - No new deps, animation library, colors, or fonts.
 - No change to the search field/dropdown, the header layout, or account routes.
 

@@ -10,12 +10,14 @@ without polluting the credit ledger.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Persist every well-formed unrecognized link as a `review` row instead of dropping it.
 - Keep credit exclusive to recognized novel boards; a review row credits nothing at submit.
 - Surface review rows in the contribute UI with an explicit "not credited yet" state.
 - Dedup the review queue by URL.
 
 **Non-Goals:**
+
 - No automated adapter generation or ingestion of review links.
 - No new binary/worker/CLI. Manual promotion + credit top-up is a human step, documented in
   the `onboard-contributions` skill.

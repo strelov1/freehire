@@ -25,6 +25,7 @@ ever compared by hash) already have a home: `internal/platform/tokencrypt.Cipher
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Add `webhook` as a fourth channel inside the existing subscription
   match/delivery engine, reusing its ledger, retry, and dead-letter behavior
   unchanged.
@@ -33,6 +34,7 @@ ever compared by hash) already have a home: `internal/platform/tokencrypt.Cipher
   settings screen.
 
 **Non-Goals:**
+
 - No replay protection (timestamp/nonce in the signature) — the payload is a
   read-only digest, not a state-changing action, and this can be added later
   without a spec or schema change if a receiver needs it.

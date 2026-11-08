@@ -1,8 +1,11 @@
 # cv-edit-revisions Specification
 
 ## Purpose
+
 TBD - created by archiving change cv-revision-history. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Every change to a stored CV is a recorded revision
 
 The system SHALL record every change to a stored CV as a revision carrying the operations that
@@ -124,4 +127,3 @@ page.
 
 - **WHEN** a CV accumulates more revisions than the cap
 - **THEN** the oldest are removed and the newest are retained
-

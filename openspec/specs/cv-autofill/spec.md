@@ -1,8 +1,11 @@
 # cv-autofill Specification
 
 ## Purpose
+
 TBD - created by archiving change cv-autofill-onboarding. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Résumé extraction returns a structured profile from dictionaries
 
 The system SHALL derive a résumé's skills, seniority, and the categories it spans from the uploaded résumé using only the existing deterministic dictionaries, and MUST NOT guess — a grade it cannot resolve is omitted and the category set is empty when nothing resolves.

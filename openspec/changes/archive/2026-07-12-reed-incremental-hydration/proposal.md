@@ -34,6 +34,7 @@ postings (dozens), keeping `reed` under the per-hour quota and eliminating the
 <!-- none -->
 
 ### Modified Capabilities
+
 - `source-ingest`: The "Reed is a registered keyed, keyword-scoped aggregator provider"
   requirement changes from "fetch each unique job's detail" (all postings) to hydrating
   detail only for postings not already ingested, refreshing liveness for the rest — reed

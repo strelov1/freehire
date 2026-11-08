@@ -27,6 +27,7 @@ one.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Recognize, within a bounded and short window, that a rendered Greenhouse-provider form does
   not match the known DOM shape, and return `StatusParked` with a specific reason instead of
   an error.
@@ -36,6 +37,7 @@ one.
   before the attempt is given up on.
 
 **Non-Goals:**
+
 - Building a second DOM scanner that can actually fill/submit through GoDaddy's (or any other
   employer's) white-label form shape. One employer's bespoke id scheme does not generalize,
   and extending fill coverage to it needs its own live verification — a separate, later

@@ -19,6 +19,7 @@ it introduces no new locale-resolution logic.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Every call site of the four `utils.ts` helpers passes the page's resolved
   locale explicitly.
 - The compiler catches any call site this change misses or any new call site
@@ -27,6 +28,7 @@ it introduces no new locale-resolution logic.
   a session.
 
 **Non-Goals:**
+
 - Extending `TRANSLATED_LOCALES` or formatting dates in `es`/`pt`/`de`/`fr`
   for accounts set to those languages. `page.data.locale` collapses those to
   `'en'` today (per `isTranslatedLocale`), same as UI text; giving dates a

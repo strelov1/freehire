@@ -23,6 +23,7 @@ Decisions.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make each of the five qualifying adapters (`neogov`, `edjoin`, `workstream`, `peopleforce`,
   `gusto`) fail `Fetch` loudly instead of silently truncating, exactly when they cannot
   structurally prove the walk reached the board's end — proving emptiness from the RAW per-page
@@ -34,6 +35,7 @@ Decisions.
   skipping it.
 
 **Non-Goals:**
+
 - Raising any adapter's page-cap constant. No live measurement in this change shows any of the
   five qualifying boards is actually being truncated by its existing cap today — the fix is to the
   failure mode around the cap, not the cap's size. (Contrast `teamtailor-listing-cap-fix`, which

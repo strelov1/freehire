@@ -11,7 +11,7 @@ that date and the article must say so.
 SELECT provider, count(*) FROM apply_forms GROUP BY provider ORDER BY 2 DESC;
 ```
 
-```
+```text
 greenhouse|283363
 lever|117424
 ashby|87988
@@ -41,7 +41,7 @@ GROUP BY provider
 ORDER BY avg_fields DESC;
 ```
 
-```
+```text
   provider  | forms  | avg_fields | median_fields | max_fields 
 ------------+--------+------------+---------------+------------
  greenhouse | 283363 |       19.9 |            19 |        113

@@ -1,8 +1,11 @@
 # backend-br-ats-adapters Specification
 
 ## Purpose
+
 TBD - created by archiving change backend-br-ats-adapters. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Quickin per-company crawl
 
 The system SHALL provide a `quickin` source adapter that crawls a single Quickin account
@@ -77,4 +80,3 @@ the generated `SOURCE_VALUES`) like the other ATS adapters.
 - **WHEN** `FilterableProviders()` is enumerated
 - **THEN** each new provider key is present, and `web/src/lib/generated/contracts.ts`
   `SOURCE_VALUES` includes it after regeneration
-

@@ -1,8 +1,11 @@
 # assistant-sessions Specification
 
 ## Purpose
+
 TBD - created by archiving change assistant-multi-session. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: The assistant page lists the caller's held sessions
 
 The `/my/assistant` page SHALL show a sidebar listing the signed-in user's
@@ -246,4 +249,3 @@ step in the user's history.
 
 - **WHEN** the URL names a conversation the caller cannot open on this surface — deleted, another user's, a tailoring conversation that belongs to a CV, or a browsing conversation held from the extension
 - **THEN** the page says the chat is unavailable and offers a way back to the chat list, rather than silently opening a different conversation or opening it here with reduced capability
-

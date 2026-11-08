@@ -44,11 +44,13 @@ already uses for a near-identical site (flat sitemap + per-page ld+json JobPosti
 ## Capabilities
 
 ### New Capabilities
+
 - `techtree-source`: crawling TechTree's sitemap-enumerated job postings over the plain HTTP
   client and parsing each posting's server-rendered ld+json JobPosting plus its DOM
   description into the catalogue.
 
 ### Modified Capabilities
+
 (none — `source-ingest` and `board-harvest`'s existing requirements already cover "a new
 provider is an adapter plus a registry line plus boards added via `cmd/add-board`"; adding
 one more conforming provider does not change what either capability requires.)

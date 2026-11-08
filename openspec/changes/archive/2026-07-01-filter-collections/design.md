@@ -17,6 +17,7 @@ the existing search.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A general mechanism: any browsable `/jobs` filter can become a collection card
   with a one-line data entry.
 - Filter collections appear on `/collections` as cards visually identical to
@@ -24,6 +25,7 @@ the existing search.
 - Zero backend surface: no Go, no DB, no migration, no reindex, no API change.
 
 **Non-Goals:**
+
 - No dedicated per-collection landing page (parity with company collections; the
   `/jobs` feed is the single rendering).
 - No exposure of filter collections through the public API or notifications /

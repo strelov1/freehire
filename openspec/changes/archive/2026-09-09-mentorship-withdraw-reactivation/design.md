@@ -17,12 +17,14 @@ See proposal.md - Why. The relevant existing shapes:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Withdrawal stops writing `paused`; a repeat withdrawal succeeds instead of 404ing.
 - A withdrawn mentor can resubmit into the ordinary moderation queue.
 - The owner-facing status badge reflects `status` and `paused` as the independent
   signals they are.
 
 **Non-Goals:**
+
 - No auto-approval path for a resubmission, and no different queue or priority for a
   returning mentor — it is exactly a first-time submission's `pending` state.
 - No change to the public directory or public-read predicates (`approved AND NOT

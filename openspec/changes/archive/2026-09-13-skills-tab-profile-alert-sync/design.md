@@ -11,10 +11,12 @@ the one autosaving profile section that skips this wiring entirely.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Skill add/remove/avoid/unavoid triggers the same resync Role/Location edits do.
 - Match the existing prop shape and call site exactly — no new abstraction.
 
 **Non-Goals:**
+
 - Changing `syncProfileAlert`, `filtersFromProfile`, or the derived-search model.
 - Deduplicating the repeated "autosave + notify parent" shape across
   Role/Location/Skills — three call sites is not enough to justify extraction, and
@@ -37,7 +39,6 @@ the one autosaving profile section that skips this wiring entirely.
   reach their success path when the `profileStore` call resolves; the callback
   goes there, same as `RoleCard.toggleSpecialization`'s `await ...; onProfileChanged?.();`
   placement.
-
 - **Test infrastructure: add `@testing-library/svelte` + jsdom to `web/`, as a new,
   separate vitest project.** `web/vitest.config.ts` currently runs every test in
   plain Node deliberately ("Nothing tested here needs Svelte compilation"), and
@@ -59,7 +60,6 @@ the one autosaving profile section that skips this wiring entirely.
   as clickable chips, independent of its debounced search) rather than mocking
   `SkillsPicker` itself. Only `profileStore` (real HTTP calls) and
   `loadSkillDistribution` (real HTTP fetch of the skill dictionary) are mocked.
-
 - **Relocate `syncProfileAlert` to `$lib`, don't thread a prop through `JobMatch.svelte`'s
   five call sites.** `RoleCard`/`LocationCard`/`SkillsCard` all live under
   `/my/profile` already, so `onProfileChanged` wired to the route's own

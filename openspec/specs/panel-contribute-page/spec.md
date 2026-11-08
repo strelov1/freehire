@@ -1,8 +1,11 @@
 # panel-contribute-page Specification
 
 ## Purpose
+
 TBD - created by archiving change panel-contribute-page. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: The panel offers the current page when no catalog job backs it
 
 The panel SHALL show an "Add to freehire" action whenever the signed-in user is on a page
@@ -46,4 +49,3 @@ attempt. A failure SHALL leave the previous card intact.
 
 - **WHEN** the request fails
 - **THEN** the panel reports the failure and the previous card stays
-

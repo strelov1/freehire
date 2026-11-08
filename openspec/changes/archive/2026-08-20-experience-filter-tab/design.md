@@ -25,6 +25,7 @@ experience requirement. Of those, 7,440 are `0`, 65,857 are `1`, 101,638 are `2`
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make experience a first-class pane in the filter rail, with seniority living there.
 - Let a candidate express "I have N years" and see what they can apply to.
 - Detect the prose form of "no prior experience required" so the entry-level
@@ -32,6 +33,7 @@ experience requirement. Of those, 7,440 are `0`, 65,857 are `1`, 101,638 are `2`
 - Ship without a migration, a `cmd/backfill-derive` run, or a reindex.
 
 **Non-Goals:**
+
 - The `role_type` facet (Individual Contributor vs People Manager). Separate change.
 - A lower-bound years control in the UI. `experience_years_min` stays API-only; the
   seniority pills already serve "not a junior posting" for the browsing case.

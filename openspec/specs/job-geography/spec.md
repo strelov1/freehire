@@ -1,8 +1,11 @@
 # job-geography Specification
 
 ## Purpose
+
 TBD - created by archiving change ingest-job-geography. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Job geography is derived deterministically from the location string
 
 The system SHALL provide a deterministic parser that maps a job's free-text

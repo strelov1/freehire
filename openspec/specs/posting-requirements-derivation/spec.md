@@ -19,6 +19,7 @@ it**, because the extractor fires exactly when the description already shows tha
 list. See `internal/job/reqextract/AGENTS.md`.
 
 ## Requirements
+
 ### Requirement: A posting's requirements are derived deterministically from its description markup
 
 The system SHALL derive a posting's stated requirements from its description

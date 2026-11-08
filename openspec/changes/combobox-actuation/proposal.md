@@ -42,6 +42,7 @@ the panel's report is dominated by what the agent could not do.
 ## Capabilities
 
 ### New Capabilities
+
 - `combobox-actuation`: the extension opens a custom-widget dropdown, reports the
   options it offers, selects one, and verifies what was committed — the primitives
   the agent composes.
@@ -49,6 +50,7 @@ the panel's report is dominated by what the agent could not do.
   observed and filled as one field with options, rather than as separate fields.
 
 ### Modified Capabilities
+
 - `browser-tool-wire`: `read_form` gains the shape a widget needs — the options a
   combobox offers, and the grouping of a multi-control question. The wire's
   framing and ownership rules do not change.

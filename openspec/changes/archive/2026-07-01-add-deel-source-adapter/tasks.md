@@ -45,7 +45,7 @@
 - [x] 6.1 Register `NewDeel(c)` in `sources.All`; confirm `reg`'s duplicate-provider guard passes
   and `deel` appears among the filterable providers (board-based, not boardless)
 - [x] 6.2 Harvest live tenants into `sources/deel.yml`: seed slugs (Google `site:jobs.deel.com`
-  + confirmed brands: klarna, deel, dott, dfns, airbase, mako, cardo, cablex, syone, …),
+  - confirmed brands: klarna, deel, dott, dfns, airbase, mako, cardo, cablex, syone, …),
   validate each via `GET /<slug>/sitemap.xml` (XML = live tenant), keep the live ones with a
   human-readable company name per entry
 

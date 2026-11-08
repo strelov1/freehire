@@ -36,6 +36,7 @@ city/qualifier clause is safe for the tech catalogue.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `ingest-content-dedup`: the role fingerprint that keys the collapse ignores a
   location-bearing title suffix; the canonical job unions its cluster's geography
   for search/filtering.

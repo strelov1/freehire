@@ -5,6 +5,7 @@
 **Symptom:** on `/my/profiles` the "Create profile" button never enables.
 
 **Mechanism (traced in `web/src/lib/components/SearchProfilesView.svelte`):**
+
 - The button is disabled unless
   `canSubmit = name.trim() !== '' && specialization !== '' && skills.length > 0`.
 - Skills can only be added by `toggleSkill`, which is called by the `SearchSelect` pill
@@ -32,6 +33,7 @@ Brought up the worktree's Postgres on a fresh volume (migration 0029 ran automat
 `\d search_profiles` shows `specializations text[]`, no `specialization` column, and the
 `cardinality BETWEEN 1 AND 5` CHECK) and ran the Go server on host. Round-trip via the API
 with a cookie session:
+
 - create `{"specializations":["backend","devops"],"skills":["Go","Docker","go"]}` → 201,
   stored `["backend","devops"]` + normalized `["go","docker"]`.
 - rename-only PATCH `{"name":...}` → 200, **specializations/skills unchanged** (empirically

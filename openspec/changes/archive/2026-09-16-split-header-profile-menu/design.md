@@ -11,6 +11,7 @@ proposal.md - Why/What Changes for the motivation and desired end state.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Desktop signed-in users get a second, independent dropdown off the profile
   icon, scoped to their own account, with `Log out` visible without scrolling.
 - Mobile behavior (single combined drawer) is pixel-for-pixel unchanged.
@@ -18,6 +19,7 @@ proposal.md - Why/What Changes for the motivation and desired end state.
   click/Escape patterns rather than inventing new ones.
 
 **Non-Goals:**
+
 - No change to `TopBar.svelte`'s three-slot composition (logo | search |
   menu) — the new trigger is composed inside the menu slot's existing
   component, not a fourth slot.

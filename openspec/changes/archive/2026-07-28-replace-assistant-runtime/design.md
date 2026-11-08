@@ -61,7 +61,7 @@ native tool-calling support is the `llms.Tool` / `ContentChoice.ToolCalls` layer
 on `GenerateContent`. The loop we need is small and its stopping rules are the
 whole point:
 
-```
+```text
 for step := 0; step < maxSteps; step++ {
     choice := llm.GenerateContent(ctx, history, WithTools(tools), WithStreamingFunc(...))
     if len(choice.ToolCalls) == 0 { return final text }

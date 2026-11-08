@@ -1,6 +1,6 @@
 ## Purpose
 
-Crawls LiveHire-hosted career sites (www.livehire.com/careers/<segment>) into the job catalogue
+Crawls LiveHire-hosted career sites (<https://www.livehire.com/careers/><segment>) into the job catalogue
 via LiveHire's public `/careers-api` JSON API — segment-scoped listing, pagination, per-posting
 detail hydration.
 

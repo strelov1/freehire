@@ -15,9 +15,11 @@ The `/my/inbox` mail feature and the `/my/tracking` application tracker are two 
 ## Capabilities
 
 ### New Capabilities
+
 - `email-application-linking`: resolve an inbox email to one of the caller's applications and classify its status; the outbox+worker pipeline, the deterministic-then-LLM match cascade, the status vocabulary, the confidence-tiered auto/suggested linking, and the monotonic-forward stage advancement.
 
 ### Modified Capabilities
+
 - `email-inbox`: an email now carries its resolved/suggested application and status signal; the reading pane renders an inline link-confirmation chip and a link to the application.
 - `user-job-tracking`: a new per-application detail view exposes the application's linked emails with status badges; a high-confidence classified email may advance the application stage forward.
 

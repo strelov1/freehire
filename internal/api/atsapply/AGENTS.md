@@ -1,6 +1,7 @@
 # ATS browser-driver conventions
 
 ## Scope
+
 Drives a headless Chrome (`chromedp`) against one job's live application-form page: scan the
 rendered DOM, reconcile it against the platform's own declared schema
 (`internal/ingest/applyform.Form`, reused — not re-fetched), resolve the merged fields against a
@@ -18,6 +19,7 @@ decision for the measurements and its caveats.
 `openspec/changes/add-browseruse-atsapply-fallback`). This does not reopen the decision
 above — it is a plain HTTP client (`internal/platform/browseruse`), no second language or
 process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
+
 - **`browserUseProviders` is Ashby, Workable, Lever and Greenhouse; `fillProviders` is
   empty.** Ashby and Workable have no chromedp fill path at all. Lever (2026-09-10) and
   Greenhouse (2026-10-25) have one and were moved anyway: this host's Chrome lost their
@@ -68,6 +70,7 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   it grows persisted state.
 
 ## Always true
+
 - **The DOM decides what exists; required is the union of DOM and API.** A field the API
   declares but the DOM never renders is dropped (filling it would write into a control that
   isn't on the page); a field the DOM renders but the API never declares is kept regardless.
@@ -260,6 +263,7 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   agreeing option cannot be told apart (none, or two) parks rather than having one picked.
 
 ## How it works
+
 `Client.Submit`: captcha short-circuit → fetch the platform's schema via
 `applyform.Fetchers` → (only when `layoutFor` describes the platform) launch a browser,
 render the page via `renderedHTML` (the layout's own selector, or — on that wait's own

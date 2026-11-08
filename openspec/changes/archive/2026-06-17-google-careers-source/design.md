@@ -13,11 +13,13 @@ the data is located on the page (an embedded JSON blob rather than schema.org mi
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `google` boardless adapter that yields the normalized `Job` shape for the whole catalogue.
 - Extract jobs from the embedded `ds:1` payload with no per-job detail fetch.
 - A fixture-backed unit test that pins the brittle positional mapping.
 
 **Non-Goals:**
+
 - No headless browser, proxy, or auth.
 - No new env vars, DB columns, or migrations.
 - No search-by-query support — the crawl walks the full catalogue (empty query), which is

@@ -40,12 +40,14 @@ what's actually selected.
 ## Capabilities
 
 ### New Capabilities
+
 - `filter-modal`: the two-pane hierarchical filter modal, its deferred-apply
   (staged vs applied) model, the sidebar-as-selected-summary, chip-based controls,
   grouped specialization, the location tree, the merged salary pane, and per-facet
   search.
 
 ### Modified Capabilities
+
 - `job-geography`: the location dictionary gains a canonical **city → country**
   association over its beacon-city set, and the existing **country → region** grouping
   plus the new city→country map are exported to the frontend contracts so the client

@@ -19,10 +19,12 @@ differences are where company/location and the id live.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A keyless, boardless, aggregator `jobspresso` adapter that maps the RSS feed to `Job`s.
 - Reuse the existing `XMLGetter` + `sanitizeHTML` machinery; no new shared helper.
 
 **Non-Goals:**
+
 - A generalized WordPress Job Manager adapter. The `dc:creator`/`⚲` conventions are jobspresso's;
   generalize only when a second live WPJM board appears (noted as a seam, not built now).
 - Backlog pagination. The feed is a recent window; incremental crawls keep the catalogue fresh

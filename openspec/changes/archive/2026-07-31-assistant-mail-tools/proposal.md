@@ -34,12 +34,14 @@ Gmail connect/disconnect, opening a single message by id, mail in the `tailor`/`
 ## Capabilities
 
 ### New Capabilities
+
 - `assistant-mail-triage`: what the in-app assistant may do with the candidate's mail — the
   orientation-then-search read path, the triage and linking actions, the bounds that keep a
   tool result small, and the reason the assistant is denied the read-marking single-message
   endpoint.
 
 ### Modified Capabilities
+
 - `assistant-agent-runtime`: the tool surface gains the mail tools; the preset requirement
   gains a third scoped group (mail, beside CV and page) and the rule that a preset's prompt
   and its tool set are chosen by one shared decision rather than two parallel switches.

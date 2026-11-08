@@ -34,11 +34,13 @@ as the correctness backstop for races this ingest-time gate does not close (see 
 ## Capabilities
 
 ### New Capabilities
+
 - `aggregator-ats-coverage-skip`: an ingest-time, company-level gate that skips writing an
   aggregator posting when the company already has open coverage from any non-aggregator
   source.
 
 ### Modified Capabilities
+
 (none — `aggregator-ats-dedup`'s requirements are unchanged; this change adds a new,
 independent gate earlier in the pipeline rather than altering the reindex pass)
 

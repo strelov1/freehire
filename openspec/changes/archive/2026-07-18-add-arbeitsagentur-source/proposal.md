@@ -37,6 +37,7 @@ first-party IT slice widens German-market coverage — a market we otherwise rea
 ## Capabilities
 
 ### New Capabilities
+
 - `arbeitsagentur-source`: the `arbeitsagentur` adapter — its keyed `berufsfeld` search + pagination,
   first-party (`externeUrl`-drop) filter, SSR jobdetail description fetch, posting→`Job` mapping, and
   board-as-`berufsfeld` classification.

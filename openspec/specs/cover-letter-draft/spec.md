@@ -3,13 +3,13 @@
 The cover letter a vacancy's application form asks for, written from the achievement atoms the
 candidate has actually asserted.
 
-### Requirement: A cached fit analysis is a precondition of drafting
+## Requirement: A cached fit analysis is a precondition of drafting
 
 Drafting SHALL require a fit analysis already cached for the (candidate, vacancy) pair, and
 SHALL NOT produce one. When none is cached the request SHALL be refused with a state the
 candidate can act on, and no model SHALL be called.
 
-#### Scenario: No analysis has been run for the vacancy
+### Scenario: No analysis has been run for the vacancy
 
 - **WHEN** a candidate asks for a letter on a vacancy they have never analysed
 - **THEN** the request is refused with guidance to run the fit analysis first, and no model is called

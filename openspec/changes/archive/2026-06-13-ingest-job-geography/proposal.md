@@ -29,12 +29,14 @@ adds zero LLM latency.
 ## Capabilities
 
 ### New Capabilities
+
 - `job-geography`: the deterministic `location` → (`countries`, `regions`)
   parser, its controlled output vocabularies (reusing the enrichment region
   vocabulary + ISO‑3166 country codes), the read‑time union with LLM‑derived
   geography, and the public top‑level geography contract.
 
 ### Modified Capabilities
+
 - `source-ingest`: the ingest write path now parses the location string and
   persists `jobs.countries`/`jobs.regions` alongside the raw posting.
 - `job-enrichment`: `regions` is redefined as geographic area (any work mode),

@@ -29,6 +29,7 @@ foundation.
 ## Capabilities
 
 ### New Capabilities
+
 - `user-auth`: User accounts and stateless authentication — registration, login,
   password hashing, JWT issuance/validation, the authenticated-identity
   middleware, and the `GET /me` endpoint.

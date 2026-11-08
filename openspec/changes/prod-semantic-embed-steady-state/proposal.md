@@ -45,9 +45,11 @@ exist in the live facet index. TEI is alive, idle, with real host headroom.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 (none — no application-code requirement changes; this restores an already-designed
 worker to its intended steady-state operation and cleans up its live index.)
 

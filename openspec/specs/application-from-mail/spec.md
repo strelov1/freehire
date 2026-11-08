@@ -1,8 +1,11 @@
 # application-from-mail Specification
 
 ## Purpose
+
 TBD - created by archiving change inbox-link-triage. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Recording an application from a piece of mail
 
 The system SHALL let an authenticated caller record a tracked application from
@@ -131,4 +134,3 @@ silently overwrite it would make the resulting link's provenance ambiguous.
 
 - **WHEN** the caller rejects the pending suggestion and invokes the action again
 - **THEN** the application is created and the email is linked to it
-

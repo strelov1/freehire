@@ -5,12 +5,14 @@ freehire derives deterministic facets (geography, skills, seniority, category) f
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Deterministically flag confidently non-tech titles beyond the 4 blacklist categories, never guessing.
 - Derive a tri-state `is_tech` (`true`/`false`/unknown) that stays honest about coverage.
 - Expose `is_tech` as a search facet with a Tech / Non-tech filter in the web UI.
 - Persist `is_tech` on the job row so the split is measurable with plain SQL on prod.
 
 **Non-Goals:**
+
 - Excluding non-tech from the catalogue or search index (a later decision, made on the measured split).
 - Gating `cmd/enrich` / `cmd/embed` on `is_tech` (the existing category blacklist still gates them).
 - Description-based non-tech detection (title-only first; add prose later only if the numbers demand it).

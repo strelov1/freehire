@@ -23,6 +23,7 @@ the 202 classification bug lives.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Harvest clinch descriptions where the per-run WAF budget allows, with zero new
   dependency, proxy, or config.
 - Make the challenge-aware layer reusable — any AWS-WAF-challenged source can opt
@@ -30,6 +31,7 @@ the 202 classification bug lives.
 - Guarantee non-regression: clinch output is a strict superset of today's.
 
 **Non-Goals:**
+
 - Solving the WAF challenge / minting `aws-waf-token` (free solver rejected;
   CapSolver deferred).
 - Full description coverage in a single run — partial, back-filling coverage is

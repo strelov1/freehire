@@ -32,10 +32,12 @@ with `internal/location`/`skilltag`/`classify`.
 ## Capabilities
 
 ### New Capabilities
+
 - `skill-bundles`: a curated dictionary grouping skills into market-recognised
   bundles, and the coverage of each bundle by a CV's parsed skills.
 
 ### Modified Capabilities
+
 - `resume-verdict`: add per-skill `adjacent` status (curated adjacency), typed
   status advice, and the skill-bundle coverage rows to the verdict.
 - `cv-ats-score`: add a deterministic summary keyword-density line item.

@@ -27,6 +27,7 @@ full-scope key; only the write side is missing.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `experience-bank`: gains the ability to create an employment or an atom through the
   owner-facing HTTP surface, alongside the existing read/correct/remove.
 

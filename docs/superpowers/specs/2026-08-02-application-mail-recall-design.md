@@ -23,7 +23,7 @@ row records that it was ever seen.
 
 One button, in the Emails tab of an application's drawer. It runs a three-step pass:
 
-```
+```text
 [Find this application's mail]
    │
    ▼  POST /me/tracking/:slug/mail-recall

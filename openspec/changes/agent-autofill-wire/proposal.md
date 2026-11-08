@@ -34,6 +34,7 @@ primitives, and an agent filling standard fields end-to-end.
 ## Capabilities
 
 ### New Capabilities
+
 - `browser-tool-wire`: a JWT-authenticated, harness-agnostic tool channel between
   a harness and the extension, relayed by hire — carrying `read_form` and
   `fill_simple` calls and their results.

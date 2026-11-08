@@ -39,9 +39,11 @@ no API discovery needed at all.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `recruiterflow` is a registered board-based
   provider — a single-page listing (embedded as a JS variable, not fetched separately) plus
   per-posting ld+json detail-hydration adapter over `recruiterflow.com/<board>`, yielding

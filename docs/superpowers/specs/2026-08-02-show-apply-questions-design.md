@@ -14,7 +14,7 @@ a store that is already full.
 
 A block on the job detail page listing the questions the employer will ask:
 
-```
+```text
 What this application asks                        Greenhouse
 
   Name, email, phone, CV

@@ -5,6 +5,7 @@ The codebase already has a near-identical per-user, owner-scoped, named-entity f
 This change deliberately implements only the **entity and its management**. How a profile is later consumed (match scoring, ranked feeds, badges, Telegram) is out of scope and intentionally absent, so this slice ships independently.
 
 Relevant existing facts:
+
 - Next migration number is `0028`.
 - The category vocabulary is `enrich.CategoryValues` (`internal/enrich/enrichment.go`).
 - Skills across the app are canonical lowercase tokens; the *closed* canonical set is not enumerated in code — the web skills facet is **dynamic**, driven by live Meilisearch facet values. The existing skills filter trusts the picker rather than validating against a fixed list.
@@ -13,12 +14,14 @@ Relevant existing facts:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `search_profiles` table and generated sqlc access.
 - An `internal/searchprofile` service mirroring `internal/savedsearch` (validation, per-user cap, sentinel errors).
 - Cookie-only CRUD handlers under `/api/v1/me/profiles`.
 - A web view to create, list, rename, edit, and delete profiles, reusing existing category and skill selectors.
 
 **Non-Goals:**
+
 - Match scoring, per-job match badges, ranked "my matches" feed.
 - Telegram notifications.
 - A `seniority`/level field on the profile (deferred).

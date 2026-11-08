@@ -49,6 +49,7 @@ caller (today, only the candidate's own browser) records the review decision.
   account.
 
 Explicitly **not** part of this change:
+
 - **What emits `auto-apply/submit` in the first place** — still `auto-apply-tailored-resume`
   tasks.md's own deferred item (2.1): a candidate-facing trigger, its own future change.
 - **True mid-run, per-requirement pause inside the tailoring LLM loop** (the candidate hits
@@ -63,11 +64,13 @@ Explicitly **not** part of this change:
 ## Capabilities
 
 ### New Capabilities
+
 - `auto-apply-orchestration`: the durable event-driven sequencing of an auto-apply queue
   entry's tailor call and its candidate-review call, and what happens on failure or timeout
   at each step.
 
 ### Modified Capabilities
+
 (none — `auto-apply-cv-tailoring` and `atsapply-resume-upload`'s own requirements are
 unchanged; this only adds a caller for the first one's endpoints and a best-effort event
 publish alongside the second one's own review-decision write, neither of which changes what

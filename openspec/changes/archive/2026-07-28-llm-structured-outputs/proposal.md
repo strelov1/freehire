@@ -54,12 +54,14 @@ mode reproduced all three defect classes the shims were written against
 ## Capabilities
 
 ### New Capabilities
+
 - `llm-structured-outputs`: schema-constrained JSON generation — how a contract type
   becomes a request schema, how controlled vocabularies reach it, what the client
   guarantees per call, and how the system behaves when a provider does not honour
   the schema.
 
 ### Modified Capabilities
+
 - `ai-enrichment`: the requirement that the provider "instructs the LLM with the
   controlled vocabularies … so that the enum fields are constrained" becomes a
   constraint enforced by the request schema rather than by prompt text, and

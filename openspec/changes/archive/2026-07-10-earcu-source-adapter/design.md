@@ -20,6 +20,7 @@ eArcu differs only in that the board is the full host rather than a subdomain sl
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One keyless feed request per board yields all open postings with inline bodies.
 - Reuse existing transport (`XMLGetter` + `HTMLGetter`) and helpers (`sanitizeHTML`,
   `ldJobPosting`, `parseRFC…`, `isRemote`) — no new HTTP-client capability.
@@ -27,6 +28,7 @@ eArcu differs only in that the board is the full host rather than a subdomain sl
 - Ship a `sources/earcu.yml` seeded only with **live-validated** hosts.
 
 **Non-Goals:**
+
 - Bulk harvest of the full eArcu customer roster (follow-up discovery; this change seeds
   what validates live, starting from `careers.cambridge.org`).
 - Structured facet extraction (WorkMode/Seniority/Category/Skills) from the feed's

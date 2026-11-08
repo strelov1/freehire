@@ -1,6 +1,7 @@
 # duplicate-marker-ownership Specification
 
 ## Purpose
+
 Keep the three dedup passes from overwriting each other's verdicts. Each writes its own
 marker column — `duplicate_of_aggregator`, `duplicate_of_role`, `duplicate_of_fuzzy` — and
 `jobs.duplicate_of`, the column every reader consumes, is derived from them by a trigger.
@@ -14,7 +15,9 @@ for a scheduled rebuild to index them. Ownership took it to 13,385 rows a cycle.
 
 Ordering between the passes survives as a cost and merge-quality rule, not as what makes the
 end state correct.
+
 ## Requirements
+
 ### Requirement: Each dedup pass owns exactly one marker column
 
 Each dedup pass SHALL write its verdict to a column no other pass writes, so that a pass
@@ -90,4 +93,3 @@ retained as a cost optimization, but SHALL NOT be load-bearing for correctness.
 - **WHEN** a full facet rebuild scans the catalogue while a marker refresh is running
 - **THEN** no posting is indexed as canonical solely because a pass had cleared its marker
   and not yet restored it
-

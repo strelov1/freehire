@@ -15,6 +15,7 @@ heuristic over free text.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make the Projects-vs-Experience placement rule a structural refusal for the one case that is
   both common and detectable with low false-positive risk: a project name carrying a job's
   `<start> - <end>` tenure span.
@@ -24,6 +25,7 @@ heuristic over free text.
   `ErrEvidenceRequired` already honor: the error names the fix ("use `experience[]]` instead").
 
 **Non-Goals:**
+
 - Catching every misfile. A project named "Freelance Consulting, Acme Corp" (no date span) is not
   caught — there is no comparably precise signal for "names a company" without false-positives on
   real client-named portfolio projects (e.g. "Redesign for Acme Corp").

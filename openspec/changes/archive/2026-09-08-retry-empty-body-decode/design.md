@@ -19,12 +19,14 @@ needing to special-case them.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Retry an empty-bodied `2xx` exactly like a `5xx`, reusing the existing budget/backoff state
   machine rather than adding a parallel one.
 - Leave every other branch of `Client.do` (WAF challenge, `429`, `5xx`, `403` refusal-egress,
   other `4xx`, non-empty decode failure) behaviorally untouched.
 
 **Non-Goals:**
+
 - Distinguishing WHY the body was empty (rate-limiting vs. a genuine CDN glitch vs. something
   else) — out of scope, and not observable from this side regardless.
 - Retrying decode failures that are not `io.EOF` (a present-but-malformed body). Widening the

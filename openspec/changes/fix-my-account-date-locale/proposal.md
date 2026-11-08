@@ -50,11 +50,13 @@ the same bug to every newly translated page and then having to revisit it.
 ## Capabilities
 
 ### New Capabilities
+
 - `date-locale-formatting`: date and relative-time strings rendered anywhere
   in the application resolve to the same locale as the surrounding page's UI
   text, never the visitor's browser/runtime default.
 
 ### Modified Capabilities
+
 (none — `account-interface-i18n` has no synced spec under `openspec/specs/`
 yet; it exists only as an unmerged delta inside the still-unarchived
 `i18n-my-account` / `i18n-my-account-fanout` changes, both already shipped to

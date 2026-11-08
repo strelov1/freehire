@@ -33,6 +33,7 @@ that point. Once a profile exists (`editing`), those two blocks are removed from
 `ProfileForm`; the `main` form-tab's label changes from "Skills & role" to "Role".
 
 CV upload (`analyzeResume`):
+
 - `!editing` (creation flow): unchanged — extracted skills merge into the local
   `skills` buffer, persisted together with Role on the next explicit Save.
 - `editing`: extracted skills are written straight to the profile via

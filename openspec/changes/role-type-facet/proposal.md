@@ -71,6 +71,7 @@ scan this design does not otherwise need. The seam stays open.
 ## Impact
 
 **Go:**
+
 - `internal/roletype/` — new package: the marker dictionary, the blind-phrase mask,
   and `Derive(title) string`.
 - `internal/vocab/vocab.go` — `RoleTypeValues`.
@@ -79,6 +80,7 @@ scan this design does not otherwise need. The seam stays open.
 - `internal/search/query_filter.go`, `query_params.go` — the facet param.
 
 **Web:**
+
 - `web/src/lib/facets.ts` — the `role_type` `FacetDef` and its option labels.
 - `web/src/lib/components/filters/FilterModal.svelte` — the pills in the Experience
   pane, and the pane's staged count.

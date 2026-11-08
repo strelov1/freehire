@@ -40,9 +40,11 @@ Latin-American market) with no client-side rendering or API call required at all
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `staffy` is a registered boardless provider —
   a static-HTML listing-enumerates/detail-hydrates adapter over `jobs.wearestaffy.com`,
   yielding the normalized job shape including a seniority level mapped from the detail

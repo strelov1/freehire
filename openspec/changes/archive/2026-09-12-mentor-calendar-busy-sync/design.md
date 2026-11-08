@@ -17,11 +17,13 @@ feature (the interview calendar). This matters for the first decision below.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Keep `mentor_busy_intervals` current for every mentor who opts in, on a schedule.
 - Never store more than an interval's bounds.
 - Make one mentor's broken grant invisible to every other mentor's sync.
 
 **Non-Goals:**
+
 - Any UI to manage or disconnect the grant beyond the connect card (same non-goal
   `mentor-google-meet-link` already carries for its own grant).
 - Syncing anything other than the primary calendar.

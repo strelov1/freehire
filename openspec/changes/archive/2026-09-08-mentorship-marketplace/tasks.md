@@ -257,7 +257,6 @@ unit tests plus the function they drive; none of it needs Docker or Postgres.
       the wire never says which party is reading — what it says is that `seeker_email`
       reaches the mentor alone, so its absence identifies the reader. Indirect, and
       therefore tested rather than assumed.
-
 - [x] 8.8 Act on the two-axis review. Five findings fixed:
       **(a)** `MentorBlock` sat INSIDE the company page's `{#if referralAvailable}`, so a
       company with a mentor and no referral offer showed nothing — both reviewers found

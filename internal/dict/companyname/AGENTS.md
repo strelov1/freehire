@@ -64,7 +64,6 @@ a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 com
 - **`AcceptPlaceholder`** — no confidence match: the lookup is by the exact board id, so there
   is no slug to compare against and nothing an unrelated page could slip through (join's
   argument in `Accept`). It refuses only what is no improvement — empty, junk, the placeholder.
-
 - **`GroundedName`** — the guard for the one resolver that uses a model. ADP's career center
   names the client nowhere (checked 2026-10-25 in a headless browser, all six configuration
   requests included), so `cmd/backfill-company-names` wires a resolver that has the model read

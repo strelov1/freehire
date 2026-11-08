@@ -1,8 +1,11 @@
 # tbank-source Specification
 
 ## Purpose
+
 TBD - created by archiving change tbank-crawl-all-categories. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: T-Bank careers-API crawl across all categories
 
 The system SHALL provide a `tbank` source adapter that crawls T-Bank's public
@@ -45,4 +48,3 @@ future category is a one-line change.
 
 - **WHEN** one vacancy's `getVacancyDescription` request fails
 - **THEN** the adapter omits just that vacancy and still returns the rest of the crawl
-

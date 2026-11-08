@@ -11,6 +11,7 @@ mining-equipment "Design Engineer" under product design — 39554 jobs where `fi
 sat in the same facet as `autocad`, `revit` and `verilog`.
 
 ## Requirements
+
 ### Requirement: Engineering design is a category of its own, distinct from product design
 
 The system SHALL resolve engineering draughting and design work — mechanical,
@@ -260,4 +261,3 @@ carry the product instead.
   solutions with the team"
 - **THEN** no skill is derived from either phrase — the verb reading is not tagged,
   and it does not lift the gate off the word beside it
-

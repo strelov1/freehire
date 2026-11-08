@@ -33,6 +33,7 @@ completes.
 ## Identity Resolution
 
 `user_identities (provider, provider_user_id) → user_id`; resolution is:
+
 1. **Identity-first** — a later provider-email change never re-keys the account
 2. **Verified-email link** to existing account
 3. **New passwordless user** (`password_hash` NULL) — last two in one transaction

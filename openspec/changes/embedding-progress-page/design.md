@@ -21,11 +21,13 @@ broadcaster behind an SSE route, `recent_feed_stream.go`).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A public, honest figure for how much of the catalogue is embedded and how fast the
   rest is going, updated live.
 - A route a volunteer can watch move while their client runs.
 
 **Non-Goals:**
+
 - Per-volunteer statistics or a leaderboard (the broker owns that data; a later change
   could read it).
 - Alerting — `cmd/queue-metrics` already exports the outbox depth to Prometheus.

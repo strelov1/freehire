@@ -1,8 +1,11 @@
 # facet-display-labels Specification
 
 ## Purpose
+
 TBD - created by archiving change unify-facet-display-labels. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: A facet code renders as one string on every surface
 
 The SPA SHALL resolve a closed-vocabulary facet code to its display text through the
@@ -107,4 +110,3 @@ its own label on those pages.
 - **WHEN** the change is applied
 - **THEN** the set of categories that clear the publication floor, and the auto-intro
   sentences generated for them, are exactly what they were before
-

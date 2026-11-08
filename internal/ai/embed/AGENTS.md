@@ -1,13 +1,14 @@
 # Semantic embedding conventions
 
 ## Scope
+
 Incremental semantic embedding via the `semantic_outbox` queue, mirroring the enrichment pipeline.
 The worker stores description vectors in `job_semantic_chunks`; Meilisearch index writers
 copy them into the jobs index for semantic and similar-job search. It does not precompute
 similarity lists. The legacy `jobs.semantic_embedding` column was dropped in migration 0235.
 
-
 ## Always true
+
 - Work flows through `semantic_outbox` — a reference-only queue (`job_id` + `target_model` + lease/retry, not a copy of the job).
 - Paired with `jobs.semantic_embedded_model`/`semantic_embedded_hash` provenance stamps (the "done" marker, like `enriched_at`/`enrichment_version`).
 - `EnqueuePendingSemanticJobs` enqueues open jobs where `semantic_embedded_model IS DISTINCT FROM target_model OR semantic_embedded_hash IS DISTINCT FROM content_hash` (one predicate covers add + content-update + model-migration) and unindexable-but-still-embedded jobs (closed OR a non-canonical repost — for state clearing), gated on `is_tech IS TRUE` (replaced the earlier category-based `NonTechCategories` exclusion on 2026-07-22 — only 35% of the (now-removed) `jobs_semantic`'s docs carried an is_tech tag, the same undifferentiated bulk the facet-index and enrichment gates were tightened against).
@@ -20,6 +21,7 @@ similarity lists. The legacy `jobs.semantic_embedding` column was dropped in mig
 - At-least-once like enrich (a crash between the TEI call and the PG txn re-embeds, idempotent by primary key).
 
 ## How it works
+
 `cmd/embed` fills the semantic_outbox queue the same way `cmd/enrich` fills enrichment. `ClaimSemanticBatch` is the enrichment claim with one deliberate divergence — it does not filter unindexable jobs out, returning a `closed` flag so the worker branches between embedding open jobs and clearing closed ones' state. The runner lives in `internal/ai/embed` behind `Store` + `Indexer` ports (unit-tested with fakes); `cmd/embed` wires the concrete adapters (`dbStore`, `searchIndexer`). `Indexer` has exactly one method, `IndexOpen` — there is no "remove closed" counterpart, since `Store.CompleteClosed` alone is the whole closed-job side effect now that there is no search index to remove a document from. A change concurrent with the embed is stamped current with the NEW `content_hash` while the vector/chunks still reflect the old content — the enqueue predicate sees a match and does NOT re-enqueue, so the job carries one-revision-stale embeddings until its content changes AGAIN (accepted: the window is one embed-duration and the drift self-corrects on the next real change). Tuning via `EMBED_BATCH_SIZE`/`EMBED_LEASE_SECONDS`/`EMBED_MAX_ATTEMPTS`/`EMBED_CALL_TIMEOUT_SECONDS`/`EMBED_MAX_RUN_SECONDS` (`config.LoadEmbed`; `EMBED_CONCURRENCY` chunks the embed calls inside a batch and belongs to `config.LoadEmbedClient`). For the one-time catalogue backfill (bumping `search.CurrentEmbedderModel()` re-enqueues the whole open catalogue), point `EMBED_URL` at a fast GPU endpoint to shorten the drain — there is no separate PG-only mode anymore (`EMBED_PG_ONLY` was removed alongside the Meili write it used to skip; every run was always Postgres-only in effect once that write was the only one left).
 
 **A scheduled run must end itself, not be ended.** `freehire-embed.service` is a oneshot with `TimeoutStartSec=50min`; on a backlog the drain outlasts it, and systemd's SIGTERM lands mid-wave — the wave is left claimed until its lease expires, its TEI work is thrown away, and the unit goes red every hour (2026-10-22). `EMBED_MAX_RUN_SECONDS` (unset = unbounded, which the catch-up supervisor relies on) makes the runner stop claiming once elapsed time — the enqueue included — plus `EMBED_CALL_TIMEOUT_SECONDS` would pass the budget, so the last wave finishes and the run exits 0 with the rest queued. Set it below the unit's timeout by the enqueue's duration plus some slack; a value no larger than the call timeout is refused at startup, because it would claim nothing and exit green forever. The bound covers a wave's batch path; a wave that falls back to per-item processing is bounded per item, not as a whole.
@@ -41,4 +43,5 @@ that window starts to matter.
 `cmd/embed` no longer requires `MEILI_MASTER_KEY` at startup — it never touches Meilisearch. `search.NewClient` still takes `cfg.MeiliURL`/`cfg.MeiliKey` positionally (unused for I/O here) purely to keep one constructor shape across callers.
 
 ## Limitations
+
 None currently listed.

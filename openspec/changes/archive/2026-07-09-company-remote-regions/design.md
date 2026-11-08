@@ -18,12 +18,14 @@ first-class facet users filter on.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Persist per-company "hires remotely in region X" as a filterable macro-region
   array that survives the facet recompute.
 - Reproducible, source-documented backfill (checked-in dataset + pure mapping).
 - Expose it as a company-list facet param and a UI filter.
 
 **Non-Goals:**
+
 - Creating reference rows for PDF companies absent from our DB (annotate existing
   only). If we later want a remote-employer directory, that is a separate change.
 - Website/domain matching. Slug-only; the domain fallback is a noted seam.

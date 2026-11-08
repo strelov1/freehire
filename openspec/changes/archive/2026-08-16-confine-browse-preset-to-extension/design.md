@@ -19,6 +19,7 @@ See `proposal.md` - Why for the motivation. Two facts shape the approach:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Close the leak at both the layer that causes it (backend tool registration) and the
   layer that surfaces it (the website's session rail), per the confirmed direction.
 - Keep the fix mechanically small: no new tables, no new capability, reuse the
@@ -26,6 +27,7 @@ See `proposal.md` - Why for the motivation. Two facts shape the approach:
   session.
 
 **Non-Goals:**
+
 - Preserving cross-surface continuity for browsing conversations. The proposal marks
   this **BREAKING** on purpose — restoring it safely (e.g., only when the extension is
   provably NOT the caller's) is future scope, not this change.
@@ -136,7 +138,6 @@ reuses the exact primitives Decision 3 already added; no new auth surface.
   answers the API-key question independently; introducing an enum type would touch more
   of `internal/auth`'s public surface than this change needs. If a third caller needs the
   distinction, consolidate then.
-
 - **[Risk, accepted]** The fix is applied at each caller's own site (`streamSSE` for
   `read_current_page`, `RunAgentAutofill` for autofill — Decision 5), not inside
   `internal/browsertools.Hub` itself. Both of today's harnesses now carry the check,

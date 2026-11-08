@@ -25,6 +25,7 @@ should also be presented in fuller detail than the compact bar.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `job-fit-analysis`: the scored verdict gains a sixth Location & work-mode fit dimension over the
   profile's location preferences, the overall weighting is rebalanced, and the SPA presents the
   result in fuller detail.

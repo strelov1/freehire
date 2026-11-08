@@ -15,11 +15,13 @@ whole-document replace), and `cvStore.Tailor` copies the base document into the 
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Per-side page margins (inches) on a CV, applied identically to preview and PDF.
 - Preview rendered as discrete A4 sheets with block-aware page breaks.
 - A margins settings panel in the workspace editor.
 
 **Non-Goals:**
+
 - Pixel-perfect parity between HTML preview breaks and Typst's break algorithm — the preview is an
   honest approximation; the PDF is the source of truth.
 - Splitting a single section that is itself taller than a page (rare); it spills on its own sheet.

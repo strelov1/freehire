@@ -48,6 +48,7 @@ re-aggregation of our own ATS), and the LinkedIn/Indeed/Glassdoor giants (ToS).
 <!-- none — this extends the existing source-ingest capability -->
 
 ### Modified Capabilities
+
 - `source-ingest`: registers four new **aggregator** (boardless, company-per-posting)
   providers — `workingnomads`, `himalayas`, `remotive`, `justjoin` — each crawling a single
   public JSON API. Reinforces the existing aggregator requirement (company derived from the

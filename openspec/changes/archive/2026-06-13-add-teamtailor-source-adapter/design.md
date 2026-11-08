@@ -23,11 +23,13 @@ Contract confirmed live against `jobs.tibber.com` and `careers.normative.io`:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `teamtailor` adapter that enumerates a board's listing pages and yields normalized jobs
   with sanitized-HTML descriptions, reusing the list→detail pattern and existing helpers.
 - A small, reusable JobPosting `ld+json` extractor over `html.Node`.
 
 **Non-Goals:**
+
 - Department/team extraction (left to enrichment).
 - The authenticated Teamtailor JSON:API (`api.*.teamtailor.com`, needs a key).
 - Sitemap-based enumeration (rejected — incomplete/stale, see Context).

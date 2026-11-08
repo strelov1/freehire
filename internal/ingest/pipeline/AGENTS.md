@@ -1,9 +1,11 @@
 # Pipeline conventions
 
 ## Scope
+
 The ingest pipeline runner — fetch → normalize → dedup → upsert — and the incremental search indexing and job-lifecycle close that follow.
 
 ## Always true
+
 - `jobs.UNIQUE (source, external_id)` is the dedup key; `UpsertJob` is `ON CONFLICT` on it.
 - `cmd/ingest` processes one PROVIDER per run (its name as the first argument — cron passes it — or `INGEST_PROVIDER`), reading that provider's live boards from the `boards` catalog; it is a run-once-and-exit worker, never a long-lived process.
 - Validate every entry against the registry and fail fast — a misconfigured board never starts a run.
@@ -50,6 +52,7 @@ The ingest pipeline runner — fetch → normalize → dedup → upsert — and 
 - The capture enqueue for `greenhouse`/`ashby`/`workable`/`lever` (gated by `applyform.NeedsRequestCapture`, which reads the same `fetcherFor` registry the drain worker uses) runs AFTER the commit and only logs on failure. Inside the transaction a failed statement aborts the whole thing, so a queue hiccup would discard the posting; failing a crawl over a field nothing yet reads is the wrong trade. The gap that opens — a crash between commit and enqueue — closes by itself because the enqueue is gated on the job having no stored form rather than on it being new, so the next crawl re-queues it.
 
 ## How it works
+
 Boards live in the `boards` table (`internal/ingest/boardcatalog`), one row per (provider, board, region) carrying its `company`; `cmd/ingest` crawls the `pending` and `active` ones. `sources.All` maps each `provider` string to a registered adapter, all speaking the `Source` interface over a shared HTTP client. The `pipeline.Runner` fetches each board once, normalizes postings, and `UpsertJob`s them (idempotent on the dedup key, so re-running is safe). Adding a company is one catalog row (the site's contribute form, or `cmd/add-board`); adding an ATS platform is a new adapter in `internal/ingest/sources` plus one line in `sources.All`.
 
 `board_health (provider, board, region)` remembers each board's last outcome (`consecutive_failures`, `cooldown_until`, `last_error`, timestamps, `last_ingested_count`) — the `region` column (`text NOT NULL DEFAULT ''`) separates a board id repeated across regional slices (Adzuna) into one health row per slice — so a repeatedly-failing board backs off instead of being hammered every run. The `pipeline.Runner` records each crawl's board-level outcome through an optional `BoardHealth` port (nil = feature off, so unit tests and non-DB callers are unaffected). The backoff (`pipeline.CooldownFor`) is Go-owned and unit-tested. `cmd/ingest` logs a per-run summary of unhealthy boards, **capped at the worst `unhealthyBoardsCap` (20) plus the full count** — the list is fleet-wide rather than scoped to the crawled provider, and every one of the ~200 hourly units prints it, so an uncapped line once turned a 7000-board backlog into gigabytes of syslog a day and starved the disk `cmd/reindex` needs to rebuild. The table is directly SQL-queryable for the rest. This is Slice-0 over the existing cron (no daemon/queue).
@@ -61,4 +64,5 @@ Role-cluster dedup is two-tier, and the tiers must agree on the canon or they un
 Job lifecycle is one soft-close column (`closed_at`) written by three mechanisms. (1) Ingest sweep (`CloseUnseenJobs`): for board sources, `UpsertJob` stamps `last_seen_at` every crawl and the post-run sweep closes a provider's jobs unseen for 48h; a reappearing posting reopens via the upsert. (2) Stream-driven self-close (`CloseJobBySourceExternalID`): a self-closing source (a streaming aggregator like `jobtech`/Arbetsförmedlingen that consumes an incremental change feed) emits a `Job{Removed: true}` for a posting its feed reports taken down; `pipeline.ingestStream` routes that to the Store's optional `closer` (the ingest `dbStore`), closing by `(source, external_id)`. (3) Liveness probe (`cmd/liveness`): jobs from non-board sources are never re-crawled, so the sweep can't reach them; the liveness worker URL-probes those orphans and closes dead ones.
 
 ## Limitations
+
 - A missed self-closing source run can leave an orphan open until a future reconcile; the change window is sized wide enough to absorb a skipped cron.

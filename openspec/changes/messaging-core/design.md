@@ -10,11 +10,13 @@ taken migrations 0199–0201, so the buddy migrations must be renumbered anyway.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One messaging core that any feature uses by declaring a kind.
 - The buddy chat runs on it with no behaviour change visible to members.
 - Adding company↔candidate threads or announcements later needs a new kind, not a new schema.
 
 **Non-Goals:**
+
 - Company↔candidate threads, mentor conversations, announcements, group conversations,
   attachments, realtime push. Mentor chat is the next kind on this core, with its own short
   design (who may write first, whether a request step applies).
@@ -23,6 +25,7 @@ taken migrations 0199–0201, so the buddy migrations must be renumbered anyway.
 ## Decisions
 
 ### D1. Package `internal/engage/messaging`, imported by kinds, importing none of them
+
 The core lives in the `engage` block. `buddy` imports `messaging`; `messaging` never imports
 `buddy`. A later company kind lives in `ingest` (employer accounts), which shares layer 7 with
 `engage` and therefore cannot import it — that thread will be orchestrated in `internal/api`,
@@ -31,7 +34,9 @@ so `ingest` could import it. Rejected: messaging is not identity, and the api la
 composes cross-block flows.
 
 ### D2. Participants are rows, not columns
+
 Tables:
+
 - `conversations (id, kind, pair_key NULL, status, starter_id, created_at, accepted_at,
   closed_at)` with `UNIQUE (kind, pair_key)` and a `kind` CHECK listing known kinds.
 - `conversation_participants (conversation_id, user_id, persona, last_read_message_id,
@@ -51,6 +56,7 @@ Every query that used `user_low`/`user_high` is rewritten over participants; the
 "other participant" is the participant row whose `user_id` differs from the caller.
 
 ### D3. Kinds plug in through an interface registered at the composition root
+
 ```go
 type Kind interface {
     Name() string
@@ -63,6 +69,7 @@ type Kind interface {
     Notice(conversationID int64, pending bool) Notice
 }
 ```
+
 `Counterpart` is `{Reachable bool; Detail any}` — `Detail` is the kind's own value (for buddy:
 handle and card summary), and the core blanks it whenever `Reachable` is false. Starting a conversation is NOT on the interface: the kind's own
 service decides who may start (buddy: active members, the 10-per-24h limit) and then calls
@@ -73,6 +80,7 @@ the new starter — the buddy "re-invite after leaving" rule — keeping earlier
 for both and the new message unread for the recipient.
 
 ### D3a. Participants speak as a persona; personas are never joined
+
 One account has several identities: the member (real account), a buddy (anonymous handle),
 later a mentor and an employer. Each participant row records the persona it speaks as, and the
 counterpart a viewer sees is resolved from the OTHER participant's persona — not from the
@@ -88,11 +96,13 @@ Alternative considered: deriving the counterpart from the kind alone. Rejected: 
 conversation has a mentor on one side and a mentee on the other, so the two sides differ.
 
 ### D4. Blocks are account-wide
+
 A block from any conversation inserts into `user_blocks` and closes every conversation between
 the pair. Buddy's feed, similar list and profile read the same table. Reason: someone blocked
 as a buddy must not reappear as a recruiter.
 
 ### D5. One notice worker for all kinds
+
 `cmd/message-notify` replaces `cmd/buddy-notify` with the same claim/deliver/release logic,
 moved to per-participant `notified_at`. The release uses `context.WithoutCancel` plus its own
 timeout. Notice wording and link come from `Kind.Notice`; the in-app notification-center kinds
@@ -100,6 +110,7 @@ stay `buddy_message` / `buddy_invitation` for the buddy kind. `MESSAGE_NOTIFY_MA
 replaces `BUDDY_NOTIFY_MAX_PER_RUN`.
 
 ### D6. API
+
 - `GET /me/conversations`, `GET|POST /me/conversations/:id/messages`,
   `POST /me/conversations/:id/{read,accept,decline,block,report}`.
 - `POST /me/buddies/invite` starts a buddy conversation (body: `handle`, `body`).
@@ -115,6 +126,7 @@ replaces `BUDDY_NOTIFY_MAX_PER_RUN`.
   reported, messages: [{sender, body, created_at}]}`, names as the kind draws them.
 
 ### D7. Web
+
 `BuddyMessagingDock`, `BuddyConversationPane`, `BuddyConversationRow`, `BuddyUnreadBadge`
 become `MessagingDock`, `ConversationPane`, `ConversationRow`, `UnreadBadge`. Each draws the
 counterpart through a per-persona snippet; only `buddy` exists. `BuddyReportsQueue` becomes
@@ -126,6 +138,7 @@ no conversation yet therefore sees no dock until the first one exists, and a mem
 keeps their closed conversations in it.
 
 ### D8. Migrations
+
 The unreleased buddy migration is split and renumbered after `main`: `0202_messaging.sql`
 (core tables), `0203_buddies.sql` (members, hidden applications), and the feed index moves to
 `0204_application_events_feed_idx.sql`. That index already exists on production, built by hand

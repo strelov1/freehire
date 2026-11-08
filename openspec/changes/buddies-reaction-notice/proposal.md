@@ -19,6 +19,7 @@ one person it is for.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `buddies-social-space`: the author hears about a reaction.
 
 ## Impact

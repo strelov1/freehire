@@ -29,12 +29,14 @@ a policy one.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Submit through browser-use only what the existing deterministic pipeline already
   decided — the backend is a typist, never a decision-maker.
 - Bound cost per execution and in aggregate before it is ever exposed to real traffic.
 - Treat an ambiguous outcome as unconfirmed, never as success.
 
 **Non-Goals:**
+
 - Widening coverage to white-label Greenhouse (needs a scan-then-fill two-phase design —
   see proposal.md's excluded scope) or to captcha-protected postings (out of scope by
   policy, not by capability).

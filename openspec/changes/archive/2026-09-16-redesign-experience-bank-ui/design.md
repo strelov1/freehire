@@ -16,6 +16,7 @@ Accordion/Disclosure or Checkbox primitive in the design system.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Collapse achievement lists behind an in-place expand, without breaking cross-employment
   selection for Merge / Tailor with assistant.
 - Remove borders and hand-rolled tag markup; adopt `Chip` where it already fits.
@@ -25,6 +26,7 @@ Accordion/Disclosure or Checkbox primitive in the design system.
   change, not a feature change.
 
 **Non-Goals:**
+
 - No new design-system primitive (no Accordion, no Checkbox) — one call site does not justify
   adding one; the expand/collapse is local component state, and the selection checkbox stays a
   styled native `<input type="checkbox">` as it is today.
@@ -35,6 +37,7 @@ Accordion/Disclosure or Checkbox primitive in the design system.
 ## Decisions
 
 **Componentization.** Split `ExperienceBankView.svelte` into:
+
 - `ExperienceBankView.svelte` — retains all state and mutation logic (load, save, delete,
   merge, confirm, selection), renders the page shell, the unconfirmed banner, and the two
   sections (jobs, projects) plus unplaced achievements.

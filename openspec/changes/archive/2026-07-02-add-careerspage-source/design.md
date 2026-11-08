@@ -22,12 +22,14 @@ This matches the existing JSON-LD detail adapters (`icims`, `freshteam`,
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A board-based `careerspage` adapter that returns every live posting for one
   tenant, keyless, reusing existing helpers.
 - Stable dedup identity from the job UUID.
 - Robust pagination and per-detail isolation (one bad page never fails the board).
 
 **Non-Goals:**
+
 - A harvest prober / tenant auto-discovery (`cmd/harvest-boards`). Only one board
   is known today; a prober is a later seam if the board list grows.
 - Streaming ingest (`StreamingSource`) — the boards are small; the buffered

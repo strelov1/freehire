@@ -15,6 +15,7 @@ and preserves Unicode letters/digits.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Expose every job by a stable, non-enumerable `public_slug`; stop exposing the
   numeric `id` in any public response or route.
 - Keep `id` as the internal `BIGINT` PK and FK target (`user_jobs.job_id`) — no
@@ -23,6 +24,7 @@ and preserves Unicode letters/digits.
   idempotent on the slug.
 
 **Non-Goals:**
+
 - Native `external_id` from a source (no parsers/ingest yet).
 - Hiding `source`/`external_id` themselves — out of scope; only the numeric `id`
   is a stated leak. (Noted seam if we later want fully opaque public jobs.)

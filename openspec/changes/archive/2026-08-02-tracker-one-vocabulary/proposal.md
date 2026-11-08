@@ -34,12 +34,14 @@ stage by hand without ever learning why.
 ## Capabilities
 
 ### New Capabilities
+
 - `tracking-stage-vocabulary`: one owner for the stage vocabulary, its human labels and its
   group membership; generated into the frontend contracts so no surface may hold a second copy.
 - `mail-stage-suggestion`: the mail signal → stage relationship shown where mail is read, and
   the candidate-confirmed resolution when a message and the stage disagree.
 
 ### Modified Capabilities
+
 - `application-pipeline`: the response shape changes from seven buckets to per-stage counts;
   the stage→bucket mapping requirement is replaced by stage→group membership owned by
   `internal/userjob`; the two rates are derived from stages; the funnel renders four bands with

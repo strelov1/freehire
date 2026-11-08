@@ -23,11 +23,13 @@ Directory measured 2026-08-01 (`/api/v1/companies?source=freehire`): 876 compani
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A third collection kind whose members render as the backing brand's own logo.
 - a16z membership covering the fund's real portfolio, not the ATS-less remainder.
 - Badges on every surface where a company is named, plus the collection filter chips.
 
 **Non-Goals:**
+
 - Badges for the seven remaining editorial collections — no logo of their own.
 - OG-image rendering. Committed SVGs would work with satori, but no OG surface was
   requested; `$lib/brands` is the seam if one is later.
@@ -82,6 +84,7 @@ mutually exclusive form keeps the "exactly one source" invariant and puts the
 pagination where it belongs — in the source that knows it is paginated.
 
 Alternatives rejected:
+
 - **`ResolveURL` returning the first page.** Would silently import 100 of 876
   companies. The failure is invisible: a successful fetch that parses fine.
 - **A `Pages func(int) string` field.** Encodes one pagination dialect into the

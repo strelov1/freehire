@@ -30,9 +30,11 @@ are allowed or how to find the exact company slug.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `mentor-profile`: submitting a profile with no explicit URL slug SHALL succeed with a
   system-derived, unique slug instead of being refused; an explicitly supplied slug's
   validation and collision handling are unchanged.

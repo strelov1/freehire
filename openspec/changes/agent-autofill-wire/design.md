@@ -12,12 +12,14 @@ loop — deferred to a later change. This change is the foundation.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A JWT-authed, harness-agnostic tool channel relayed by hire.
 - `read_form` + `fill_simple` primitives that reliably fill standard controls with
   **label** addressing (no positional-index drift).
 - An agent that maps profile → form and fills standard fields end-to-end.
 
 **Non-Goals (deferred to the next change):**
+
 - CDP / `debugger` permission, `combobox.*` primitives, the react-select agent
   loop. Multi-select country groups and autocomplete widgets.
 - MCP wrapping of the wire (harness-facing).

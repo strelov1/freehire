@@ -43,6 +43,7 @@ analogy with the platforms already mapped:
 ## Capabilities
 
 ### Modified Capabilities
+
 - `apply-form-capture`: `workable` joins the providers whose form is fetched per
   posting. The capability's existing requirements — the queue, the gate, the
   worker's isolation and retry — are unchanged and already cover it.

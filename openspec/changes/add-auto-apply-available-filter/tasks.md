@@ -135,7 +135,7 @@
       just the unit tests. Verified live via `make up` + `docker compose run
       --entrypoint /app/migrate|/app/reindex app` (empty catalogue, index
       created with 0 docs) + a throwaway Playwright script driving headless
-      Chromium against http://localhost:8090/jobs: checkbox renders under
+      Chromium against <http://localhost:8090/jobs>: checkbox renders under
       the Relocation rail entry with its caption, checking it and clicking
       Show stages+applies `?auto_apply_available=true` in the URL, the
       sidebar shows an "AUTO-APPLY / Available ×" chip, and clicking its ×

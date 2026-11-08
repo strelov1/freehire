@@ -18,6 +18,7 @@ are deliberately decoupled write paths.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Populate `countries` + `regions` for every job deterministically from its
   `location` string, independent of enrichment.
 - Redefine `regions` as the geographic area of a job (any work mode), so the
@@ -28,6 +29,7 @@ are deliberately decoupled write paths.
   jobs that never re-crawl.
 
 **Non-Goals:**
+
 - A full geocoder. The parser is a curated dictionary seeded from real prod
   locations; unresolvable single cities are omitted, not guessed.
 - Changing `work_mode`/`remote` detection — that stays the LLM's job.

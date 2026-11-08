@@ -9,11 +9,13 @@ already-sanitized Stage-2 verdict. The verdict card in `MatchAnalysisFull.svelte
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Prompt and sanitizer describe the same recommendation length story (budget vs safety ceiling).
 - Ordinary multi-paragraph verdicts survive end-to-end and render as separate paragraphs.
 - One sanitizer module owns every untrusted-model markup sink on the SPA.
 
 **Non-Goals:**
+
 - Reordering Stage-2 sanitize relative to Stage 3 (load-bearing for the interim stream event and
   the audit merge seed — see proposal).
 - Invalidating or migrating cached `user_job_analysis` rows.

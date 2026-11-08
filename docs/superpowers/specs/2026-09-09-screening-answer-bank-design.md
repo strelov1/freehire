@@ -48,7 +48,7 @@ been bitten by exactly this shape of hand-maintained list before.
 
 `screening_answers` is not empty and not legacy. Measured on production the same day:
 
-```
+```text
 users:                     1913
 screening_answers rows:     322
   ...with a desired salary: 290
@@ -63,7 +63,7 @@ into free text would lose both properties to buy uniformity nobody consumes.
 So: **typed facts stay typed; the bank holds everything else.** The two are read through one
 interface, so the resolver never learns which it got an answer from.
 
-```
+```text
 screening_answers (typed facts)   ─┐
                                    ├─→ AnswerSource ─→ resolve.go
 screening_answer_bank (free Q&A)  ─┘

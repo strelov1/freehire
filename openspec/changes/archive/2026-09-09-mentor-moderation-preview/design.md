@@ -18,10 +18,12 @@ See proposal.md - Why. Relevant existing shapes:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A moderator can see when a profile was submitted and preview its opted-in photo.
 - The public photo/profile routes keep refusing an unapproved profile exactly as today.
 
 **Non-Goals:**
+
 - No shared component with the public `/mentors/[slug]` page — the moderation preview is
   a separate, purpose-built rendering (no booking widget, no rating display worth
   showing on a profile with zero reviews).

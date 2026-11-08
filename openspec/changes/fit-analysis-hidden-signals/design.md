@@ -14,12 +14,14 @@ existing one.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Surface up to 5 short, JD-quote-grounded interpretive signals about pace, ownership
   expectations, team stage, or culture, as part of the existing fit analysis.
 - Zero additional LLM calls, zero new cache-invalidation logic, zero new endpoints.
 - Degrade cleanly to nothing when the posting is too generic to read anything from.
 
 **Non-Goals:**
+
 - Not a standalone feature usable without a fit analysis (no bank/résumé, no signals) — see the
   brainstorming decision already made with the user.
 - Not a fixed-vocabulary classification (no enum of signal "types"). Each signal is freeform

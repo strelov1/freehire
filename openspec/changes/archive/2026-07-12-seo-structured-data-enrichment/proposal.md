@@ -29,6 +29,7 @@ pages, meta-description rewrites, and Core Web Vitals work.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `web-ssr-seo`: the "JobPosting structured data" requirement's `Organization`
   clause is strengthened (company `Organization` carries its known company-info
   facts), and a new requirement adds `CollectionPage` + `ItemList` structured

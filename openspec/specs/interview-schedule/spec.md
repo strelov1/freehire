@@ -1,6 +1,7 @@
 # interview-schedule Specification
 
 ## Purpose
+
 Capturing when an interview is, and attaching it to the application it belongs to: the
 calendar grant, what may and may not be stored, and the single identifier allowed to link
 a meeting without asking. Introduced by the interviews-from-google-calendar change.

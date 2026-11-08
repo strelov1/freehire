@@ -1,11 +1,14 @@
 # application-pipeline Specification
 
 ## Purpose
+
 Reading where the caller's applications stand: the per-stage aggregate behind the tracking
 section's Pipeline tab, and the two rates derived from it. The stage vocabulary and the group
 membership it is drawn with belong to `tracking-stage-vocabulary`; this capability is the
 aggregate over them.
+
 ## Requirements
+
 ### Requirement: Pipeline aggregate endpoint
 
 The system SHALL expose `GET /api/v1/me/tracking/pipeline`, authenticated with `RequireAuthOrKey` (session cookie or API key), returning the signed-in user's application counts aggregated server-side over **all** of their tracked applications. The response envelope SHALL be `{"data": {"applications": <int>, "stages": {"applied","screening","responded","interview","offer","accepted","rejected","withdrawn"}}}` where every stage key from the `internal/application/userjob` vocabulary is always present (zero when empty). The response SHALL NOT carry a `buckets` object: grouping is static and belongs to the vocabulary owner, so returning it would place the mapping in two places.

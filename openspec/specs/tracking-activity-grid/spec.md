@@ -1,6 +1,7 @@
 # tracking-activity-grid Specification
 
 ## Purpose
+
 The tracking section's activity view: a year of the caller's own job-search actions drawn as a
 contribution grid, the streaks under it, and the rule that decides which of the ledger's events
 a square is allowed to count. That rule is the point — a square measures what the CANDIDATE
@@ -8,6 +9,7 @@ did, never what an employer or the platform did on their behalf, because a strea
 somebody else's work rewards nothing. Introduced by the tracking-activity-grid change.
 
 ## Requirements
+
 ### Requirement: The year of effort is readable as a grid
 
 The tracking section SHALL offer an activity view of the caller's own job-search actions at
@@ -212,4 +214,3 @@ enough margin that no square the reader draws falls outside it.
 - **WHEN** the server load fails
 - **THEN** the page still renders and the view fetches the window itself, showing a friendly
   error if that also fails
-

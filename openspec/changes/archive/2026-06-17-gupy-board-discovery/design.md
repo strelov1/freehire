@@ -32,6 +32,7 @@ type discoverer interface {
 ```
 
 `run()` chooses the candidate source:
+
 - 3 args (`<provider> <seed.json>`) → seed path, unchanged.
 - 2 args (`<provider>`) **and** the prober implements `discoverer` → candidates =
   `discover(...)`.
@@ -86,6 +87,7 @@ run-once host tool with 16 workers and client 429-backoff.
 ## Testing
 
 `prober_test.go`-style fake `httpClient` (routed by URL substring):
+
 - `discover`: multi-page feed with repeated companies → distinct ids in order;
   empty page stops paging; `gupyMaxOffset` bound respected.
 - `probe`: `companyId` → `(careerPageName, total)`; empty/zero → `("",0,nil)`;

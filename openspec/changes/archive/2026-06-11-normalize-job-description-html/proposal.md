@@ -24,6 +24,7 @@ There is no normalization step reconciling each platform's description format wi
 <!-- none -->
 
 ### Modified Capabilities
+
 - `source-ingest`: the "Adapter maps a posting to the normalized job shape" requirement is strengthened — the description an adapter yields SHALL be sanitized HTML assembled from the platform's authoritative HTML fields, not raw or entity-encoded source content, and not a partial plain-text field.
 
 ## Impact

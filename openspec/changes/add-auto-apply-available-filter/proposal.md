@@ -44,11 +44,13 @@ that page).
 ## Capabilities
 
 ### New Capabilities
+
 - `auto-apply-availability-facet`: what "auto-apply available" means, the fixed
   provider set, where and how it is computed (index-build time, not a stored
   column), and how it is served/filtered/rolled out.
 
 ### Modified Capabilities
+
 - `filter-modal`: adds the "Auto-apply available" checkbox alongside the
   existing bespoke boolean checkboxes.
 

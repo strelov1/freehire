@@ -13,12 +13,14 @@ gap is purely which column the classifier query reads.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - The classifier always receives the actual message text when it exists in
   either part, so HTML-only rejections are no longer misread as `screening`.
 - Keep the change surgical: no prompt/vocabulary/stage-rule changes, no change to
   what `body_text`/`body_html` mean at rest, no new top-level dependency.
 
 **Non-Goals:**
+
 - Re-classifying already-stored, already-misclassified emails (an ops re-enqueue,
   tracked separately).
 - Fixing the same latent gap in the SES/hosted-mailbox ingest path

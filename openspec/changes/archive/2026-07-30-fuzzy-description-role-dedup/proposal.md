@@ -38,6 +38,7 @@ embedding failed. Crucially, amazon's 228-card "SDE" bucket correctly does NOT c
 ## Capabilities
 
 ### New Capabilities
+
 - `fuzzy-description-role-dedup`: collapse near-identical-description reposts that exact
   matching misses, using a normalized-description word-similarity within a company+title bucket.
 

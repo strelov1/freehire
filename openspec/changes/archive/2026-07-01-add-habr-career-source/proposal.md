@@ -29,6 +29,7 @@ public, keyless JSON API.
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `habr_career` is a registered boardless aggregator
   provider — it enumerates Habr Career from the public `/api/frontend/vacancies` JSON feed
   (paginated, per-vacancy employer), fetches each vacancy's full HTML description from its

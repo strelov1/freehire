@@ -35,6 +35,7 @@ how many referral requests the platform has ever received.
 <!-- none: this changes how an existing capability addresses its resources -->
 
 ### Modified Capabilities
+
 - `employee-referrals`: offers and requests are addressed by unguessable ids, and
   a malformed id is reported as missing.
 

@@ -21,10 +21,12 @@ nothing; the reply-rate fact is served but buried in the company payload.
 ## Capabilities
 
 ### New Capabilities
+
 - `company-hiring-tab`: the Hiring tab page and the `/companies/:slug/hiring` endpoint
   that feeds it.
 
 ### Modified Capabilities
+
 - `company-hiring-signal`: adds the per-company posting-lifetime rollup beside the
   existing velocity, growth and response rollups.
 

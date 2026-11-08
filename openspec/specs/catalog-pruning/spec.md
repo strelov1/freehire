@@ -1,8 +1,11 @@
 # catalog-pruning Specification
 
 ## Purpose
+
 TBD - created by archiving change prune-non-it-catalog. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Catalogue-fit rule decides which jobs are removed
 
 The system SHALL decide a job's catalogue fit from three independent rules, evaluated live against the current non-tech dictionary rather than from the stored `is_tech` column, so an iteration needs no prior re-derivation pass. A job MUST be removed when the non-tech title detector flags its title, when its category is one of the non-technical categories AND its company has never shown any technical evidence, or when its `is_tech` is unknown AND its company has never shown any technical evidence nor any tagged skill. A job from a source that is never re-crawled — Telegram extraction, user submissions, link-source imports — MUST NOT be removed by any rule, because a dictionary mistake there cannot be undone by a later crawl.
@@ -50,7 +53,6 @@ A company's technical evidence MUST be evaluated over its entire history includi
 
 - **WHEN** a job originates from Telegram extraction, a user submission, or a link-source import and would otherwise match a removal rule
 - **THEN** the job is kept
-
 
 ### Requirement: Company-scoped removal requires retiring the board
 
@@ -199,4 +201,3 @@ catalogue-hygiene campaign has the standing to delete it.
 
 - **WHEN** a run deletes its full capped batch
 - **THEN** no application anywhere is deleted as part of that batch
-

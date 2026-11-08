@@ -11,6 +11,7 @@ Nothing in the system can submit a job application without the candidate present
 - On an unresolved (parked) attempt, the queue row is marked with the unmapped reasons; `user_jobs.stage` is deliberately left untouched, since "parked, needs more answers" is not part of that table's controlled stage vocabulary.
 
 Explicitly **not** part of this change (captured in the design doc, `docs/superpowers/specs/2026-09-02-auto-apply-worker-design.md`):
+
 - What populates `auto_apply_queue` (a candidate action vs. a standing per-user rule) — the worker only drains it.
 - Persisting the DOM-scan/reconciled form schema — this change scans live, on every run, and stores nothing new; `internal/applyform`'s own stored schema is not read by this worker.
 - Automatically retrying a parked attempt once the candidate supplies the missing answer.
@@ -19,9 +20,11 @@ Explicitly **not** part of this change (captured in the design doc, `docs/superp
 ## Capabilities
 
 ### New Capabilities
+
 - `auto-apply-submit`: unattended submission of a job application through a queued (user, job) attempt — claiming the queue, resolving the candidate's known answers against the job's live rendered form, and submitting only when every required field is answered, recording the outcome through the existing application-tracking path.
 
 ### Modified Capabilities
+
 (none — `apply-form-capture` and `extension-autofill` are unchanged; this worker reads neither)
 
 ## Impact

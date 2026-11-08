@@ -30,6 +30,7 @@ one combined message (each keeps sending its own, just delayed).
 ## Capabilities
 
 ### New Capabilities
+
 - `notification-delivery-timing`: the account's timezone, the digest
   frequency/time setting (and how `internal/notify`'s DELIVER phase gates
   on it), the quiet-hours window and how all three delivery engines
@@ -37,6 +38,7 @@ one combined message (each keeps sending its own, just delayed).
   the settings/profile UI for both.
 
 ### Modified Capabilities
+
 - `filter-subscriptions`: "Digest delivery with retry and dead-letter" gains
   the daily-mode timing gate and the quiet-hours gate as additional
   conditions on when a pending digest is claimed for delivery.

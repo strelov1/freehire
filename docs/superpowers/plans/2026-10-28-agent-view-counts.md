@@ -27,6 +27,7 @@ Spec: `docs/superpowers/specs/2026-10-28-agent-view-counts-design.md`.
 ### Task 1: The `agentview` package
 
 **Files:**
+
 - Create: `internal/application/agentview/agentview.go` (Event, Kind, viewer key, file naming, scope/context, Record)
 - Create: `internal/application/agentview/writer.go` (Writer)
 - Create: `internal/application/agentview/aggregate.go` (Aggregate, ListFiles)
@@ -35,6 +36,7 @@ Spec: `docs/superpowers/specs/2026-10-28-agent-view-counts-design.md`.
 - Modify: `internal/platform/arch/layering/blocks.go` — add `"agentview"` to the `application` package list next to `"viewlog"`.
 
 **Interfaces — Produces:**
+
 ```go
 type Kind string
 const KindSearch Kind = "search"; const KindDetail Kind = "detail"
@@ -52,11 +54,13 @@ func ListFiles(dir string, now time.Time) ([]DayFile, error) // days < today UTC
 type Stats struct { Lines, Bad int }
 func Aggregate(r io.Reader) (map[time.Time]map[int64]int, Stats, error) // day -> job id -> uniques
 ```
+
 Surfaces (constants in agentview.go): `SurfaceMCP = "mcp"`, `SurfaceMCPAccount = "mcp_account"`, `SurfaceOJCP = "ojcp"`, `SurfaceAgentAPI = "agent_api"`.
 
 - [ ] **Step 1: Write the failing tests**
 
 `agentview_test.go`:
+
 ```go
 package agentview
 
@@ -128,6 +132,7 @@ func TestFileNameIsTheEventsUTCDay(t *testing.T) {
 ```
 
 `writer_test.go`:
+
 ```go
 package agentview
 
@@ -192,6 +197,7 @@ func TestAFullBufferDropsInsteadOfBlocking(t *testing.T) {
 ```
 
 `aggregate_test.go`:
+
 ```go
 package agentview
 
@@ -266,6 +272,7 @@ Expected: FAIL — package does not compile (undefined: Record, NewWriter, …).
 - [ ] **Step 3: Implement**
 
 `agentview.go`:
+
 ```go
 // Package agentview records the job postings served to agents — over the hosted MCP
 // servers, OJCP and the agent search endpoint — as a JSON Lines log, and aggregates
@@ -360,6 +367,7 @@ func Record(ctx context.Context, kind Kind, ids []int64) {
 Note on `s.sink == nil`: a nil `*Writer` stored in the interface is non-nil as an interface, so `Writer.Write` must itself be nil-receiver safe (below).
 
 `writer.go`:
+
 ```go
 package agentview
 
@@ -474,6 +482,7 @@ func (w *Writer) run() {
 ```
 
 `aggregate.go`:
+
 ```go
 package agentview
 
@@ -564,6 +573,7 @@ func Aggregate(r io.Reader) (map[time.Time]map[int64]int, Stats, error) {
 ```
 
 `AGENTS.md` (short — the package's contract):
+
 ```markdown
 # internal/application/agentview
 
@@ -609,6 +619,7 @@ printf 'Add agentview: log job postings served to agents\n' > /tmp/m && git comm
 ### Task 2: Schema and query
 
 **Files:**
+
 - Create: `migrations/0212_agent_daily_views.sql`
 - Modify: `internal/platform/db/queries/viewlog.sql` (new query; refresh the `ApplyDailyView` comment's claim that `view_count` reads from `uniques` alone)
 - Generated: `internal/platform/db/*` via `make sqlc`
@@ -663,6 +674,7 @@ printf 'Add job_daily_views.agent_uniques\n' > /tmp/m && git commit -F /tmp/m
 ### Task 3: The rollup pass
 
 **Files:**
+
 - Create: `cmd/rollup-views/agent.go`
 - Modify: `cmd/rollup-views/main.go` (run both passes; stop the early return when nginx has no files)
 - Test: `cmd/rollup-views/agent_test.go` (unit) and `cmd/rollup-views/agent_integration_test.go` (`//go:build integration`)
@@ -950,6 +962,7 @@ printf 'Roll up agent views into job_daily_views and view_count\n' > /tmp/m && g
 ### Task 4: Record at the agent call sites
 
 **Files:**
+
 - Create: `internal/api/handler/agent_views.go` (the middleware)
 - Modify: `internal/api/handler/handler.go` (`Config.AgentViews agentview.Sink`; pass it to the mounts)
 - Modify: `internal/api/handler/mcpapp.go` (`register` adds middleware; `SearchJobs`, `JobDetail` record)
@@ -1030,7 +1043,9 @@ func TestAnMCPSearchThroughTheMountedRouteIsRecorded(t *testing.T) {
 Before writing these, open `mcpapp_test.go`/the `fakeSearcher` definition and adjust field names (`res`, `search.Result`, `search.JobDocument{ID: …}`) to the real ones; a stateless `tools/call` without `initialize` is what `Stateless: true` accepts — if the SDK refuses it, send the `initialize` body from `TestTheMountedRouteSpeaksMCPOverHTTP` first in the same test.
 
 Add one test per remaining surface in the same file, each asserting one event with the right `kind`/`surface`:
+
 - OJCP REST detail: `app.Get("/ojcp/v1/jobs/:slug", agentViews(sink, agentview.SurfaceOJCP), h.OJCPJobDetail)` with an `ojcpHandlers` whose fake store returns a published job row (copy the store setup from `ojcp_test.go`'s detail test) → `KindDetail`, `JobIDs == [row.ID]`.
+
 - Account viewer key: a request through `agentViews(sink, agentview.SurfaceMCPAccount)` carrying header `mcpapp.AccountUserIDHeader: 42` and a handler that calls `agentview.Record(c.Context(), agentview.KindDetail, []int64{1})` → `Viewer == "user:42"`.
 
 - [ ] **Step 2: Run** — `go test ./internal/api/handler/ -run 'Agent|MCPSearchThroughTheMounted|SameSearchWithout'` → FAIL (undefined: agentViews).
@@ -1080,26 +1095,28 @@ Check: `auth.UserID(c)`'s real signature in `internal/identity/auth/middleware.g
 **Nil-interface trap:** `Config.AgentViews` is typed `agentview.Sink`. In `cmd/server`, assign it only when the writer is non-nil (`if w := agentview.NewWriter(dir); w != nil { cfg.AgentViews = w }`) so an unset directory leaves a true nil interface and the middleware short-circuits.
 
 - [ ] **Step 4: Mount the middleware**
-
 - `mcpapp.go` `register`: `api.All("/mcp", chatAgentLimiter(mw.public), agentViews(h.agentViews, agentview.SurfaceMCP), adaptor.HTTPHandler(...))`. Add field `agentViews agentview.Sink` to `mcpappHandlers`, set in `Register` (`mcpappH.agentViews = cfg.AgentViews`).
 - `mcpapp_account.go` `mountMCPAccount`: add a `sink agentview.Sink` parameter; insert `agentViews(sink, agentview.SurfaceMCPAccount)` after `mcpAccountAuthenticate(...)`. Update the call in `handler.go:1065` to pass `cfg.AgentViews`.
 - `ojcp.go` `register`: `views := agentViews(h.agentViews, agentview.SurfaceOJCP)` and add it after `limit` on `/ojcp/v1/search`, `/ojcp/v1/jobs/:slug` and `/ojcp/mcp` only (not employers/manifest/keys). Field + `Register` assignment as for mcpapp.
 - `/agent/jobs/search`: find its route (`grep -n "AgentSearchJobs" internal/api/handler/*.go`) and add `agentViews(<sink>, agentview.SurfaceAgentAPI)` before the handler; give `searchHandlers` an `agentViews` field set in `Register`.
-
 - [ ] **Step 5: Record at the call sites**
-
 - `mcpapp.go` `SearchJobs`, after the hits loop:
+
   ```go
   	agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
   ```
+
   `JobDetail`, after `publishedToAgents` passes and before returning:
+
   ```go
   	agentview.Record(ctx, agentview.KindDetail, []int64{row.ID})
   ```
+
 - `ojcp.go` `SearchJobs` / `JobDetail`: the same two lines at the same points.
 - `assistant_tools.go` `search_jobs` Run: `agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))` after the search succeeds; `get_job` Run: `agentview.Record(ctx, agentview.KindDetail, []int64{job.ID})` after `GetJobBySlug` succeeds.
 - `agent_search.go` `AgentSearchJobs`: `agentview.Record(c.Context(), agentview.KindSearch, hitIDs(res.Hits))` after `runJobSearch` succeeds.
 - Add the shared helper to `agent_views.go`:
+
   ```go
   // hitIDs is the job ids of a search answer, in order.
   func hitIDs(hits []search.JobDocument) []int64 {
@@ -1110,6 +1127,7 @@ Check: `auth.UserID(c)`'s real signature in `internal/identity/auth/middleware.g
   	return ids
   }
   ```
+
   If `semanticSearch.search` returns a different hit type, adapt `hitIDs`' parameter to it.
 
 `GET /api/v1/jobs/:slug` (`jobs.go`) is deliberately NOT touched: nginx already counts it.
@@ -1119,6 +1137,7 @@ Check: `auth.UserID(c)`'s real signature in `internal/identity/auth/middleware.g
 `internal/platform/config/config.go`: add `AgentViewLogDir string` to the settings struct with a doc comment ("AgentViewLogDir is where the server writes internal/application/agentview's day files. Unset, nothing is written."), read from `os.Getenv("AGENT_VIEW_LOG_DIR")` beside the other plain reads (e.g. `MetricsPort`).
 
 `cmd/server/main.go`, before `handler.Register`:
+
 ```go
 	// Postings served to agents, logged for cmd/rollup-views (internal/application/agentview).
 	var agentViews agentview.Sink
@@ -1127,12 +1146,15 @@ Check: `auth.UserID(c)`'s real signature in `internal/identity/auth/middleware.g
 		agentViews = w
 	}
 ```
+
 and `AgentViews: agentViews,` in the `handler.Config` literal. In `handler.Config` add:
+
 ```go
 	// AgentViews receives the postings served to agents (internal/application/agentview).
 	// Optional: nil records nothing.
 	AgentViews agentview.Sink
 ```
+
 Check that `defer w.Close()` runs on the server's real shutdown path (if `main` exits via `os.Exit` or a `run()` helper, place the `Close` where other shutdown cleanups live).
 
 - [ ] **Step 7: Run everything**
@@ -1153,9 +1175,9 @@ printf 'Record job postings served to agents\n\nMCP, OJCP and the agent search e
 ### Task 5: Docs and the PR
 
 **Files:**
+
 - Modify: `AGENTS.md` (root) — in the worker list, extend the view-count story: add a bullet for `rollup-views` if none exists, or append to the **View counts** convention: "`job_daily_views.agent_uniques` counts postings served to agents (MCP, OJCP, `/agent/jobs/search`, via `internal/application/agentview`); `jobs.view_count` = `uniques` + `agent_uniques`. Never rank or publish a human figure on either." Add the module-table row: `| **Agent views** (postings served to agents, the day-file log, the scope that keeps people out) | [internal/application/agentview/AGENTS.md](internal/application/agentview/AGENTS.md) |`.
 - Modify: `internal/application/viewlog/AGENTS.md` — one line under Shape: "`jobs.view_count` also accrues agent views from `internal/application/agentview`; this package's `uniques` does not."
-
 - [ ] **Step 1:** Edit the two files as above.
 - [ ] **Step 2:** `pnpm check:links` → all resolve.
 - [ ] **Step 3:** Commit (`printf 'Document agent view counts\n' > /tmp/m && git commit -F /tmp/m`).

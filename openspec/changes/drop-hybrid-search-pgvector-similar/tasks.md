@@ -88,6 +88,7 @@
 - [x] 5.3 Update `similar_integration_test.go` and unit tests for the new data path.
 
 ## 6. Remove `/me/recommendations` entirely (mid-implementation reversal — see
+
       design.md Context; NOT migrated to pgvector)
 
 - [x] 6.1 Backend: delete `internal/handler/recommendations.go`, its route

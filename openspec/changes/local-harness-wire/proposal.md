@@ -38,6 +38,7 @@ extension side already exposes `read_form`, `fill_simple` and the four
 ## Capabilities
 
 ### New Capabilities
+
 - `harness-wire-client`: what a local harness must do to hold the wire open —
   connect and authenticate with the API key, answer or refuse a call, survive a
   drop, and shut down without stranding the browser end.

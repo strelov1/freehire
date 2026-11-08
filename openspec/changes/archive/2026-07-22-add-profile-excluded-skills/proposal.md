@@ -29,7 +29,7 @@ profiles and API clients are unaffected.
 
 ### New Capabilities
 
-_None._
+*None.*
 
 ### Modified Capabilities
 

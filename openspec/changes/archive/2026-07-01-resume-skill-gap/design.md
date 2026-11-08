@@ -12,12 +12,14 @@ cookie-only (`RequireAuth`).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Extract skills from an uploaded resume (PDF or pasted text) using the existing dictionary.
 - Merge extracted skills into a profile without clobbering user-entered skills.
 - Show, per profile, how many of the top-20 market skills for its specialization(s) are missing.
 - Add exactly one new backend endpoint; compute the gap on the frontend.
 
 **Non-Goals:**
+
 - No LLM extraction and no Hirable-style "coherence score" (skills vs experience).
 - No storage/history of resumes; no re-analysis from DB.
 - No auto-detection of specialization from the resume — the user picks it.

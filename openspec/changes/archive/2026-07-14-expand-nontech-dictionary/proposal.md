@@ -10,6 +10,7 @@ Post-classification measurement shows the `is_tech=unknown` bucket is 58% of the
 ## Capabilities
 
 ### Modified Capabilities
+
 - `tech-classification`: broaden the non-tech title dictionary that feeds the `is_tech=false` branch (no requirement wording change — the existing "Deterministic non-tech title detection" requirement already governs it; this widens coverage under the same rules).
 
 ## Impact

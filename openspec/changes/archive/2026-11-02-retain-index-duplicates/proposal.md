@@ -13,6 +13,7 @@ Duplicate transitions still physically delete Meilisearch documents after ordina
 ## Capabilities
 
 ### Modified Capabilities
+
 - `job-search`: duplicate visibility and retained-document lifecycle.
 
 ## Impact

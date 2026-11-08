@@ -29,12 +29,14 @@ Existing conventions this design follows (see `internal/ingest/sources/AGENTS.md
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl any Firefish-hosted career site into the catalogue with one request per board, the
   whole posting from the feed.
 - Recognize `<tenant>.firefishsoftware.com` URLs for board-contribution intake without
   misreading the vendor's own hosts.
 
 **Non-Goals:**
+
 - Discovering Firefish tenants automatically (no tenant directory; boards are added one at a
   time via `board_submissions`/`cmd/add-board`, the tenant's careers host being the board id).
 - Crawling the vendor's own jobs site as a board of its own (it is declined as a platform host;

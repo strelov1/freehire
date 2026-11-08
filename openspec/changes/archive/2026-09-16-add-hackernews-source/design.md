@@ -30,11 +30,13 @@ two earlier drafts. Summary of what changed and why, for whoever reads this late
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Land a correctly-reviewed version of the contributor's adapter, current against `main` (it
   forked at `09076f3e`, main has moved), with the same test coverage.
 - Nothing beyond the adapter + registration + docs + generated contracts.
 
 **Non-Goals:**
+
 - No board-contribution code in this change (see Context #3) — that's
   `harvest_boards.py --hn`, already shipped.
 - No re-verification of the "hiring.cafe traps" / "GitHub lists traps" sections from the
@@ -49,6 +51,7 @@ pass, not a rubber stamp — but the intent is to land the same design, fixing o
 review finds wrong or stale against current `main`.
 
 **Review checklist** (what "review, not blind copy" concretely means here):
+
 - Does `Fetch`'s signature/error handling still match current `Source`/`CompanyEntry`
   shapes? (`internal/ingest/sources/source.go`)
 - Does `routedHTTP` (the test fixture helper, defined in `smartrecruiters_test.go`, shared

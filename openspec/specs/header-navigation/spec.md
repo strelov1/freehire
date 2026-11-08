@@ -7,7 +7,9 @@ consolidated menu), the search field's behavior (dropdown sections, keyboard
 navigation, hotkeys, result targets), and the single menu's contents (nav links,
 signed-in account items, theme toggle, auth actions) including mobile overlay
 behavior.
+
 ## Requirements
+
 ### Requirement: Unified header layout
 
 The site-wide header SHALL present three slots in a single row — the logo
@@ -127,14 +129,17 @@ selecting it SHALL close the menu and navigate there. For a signed-out user no
 identity row SHALL be shown.
 
 #### Scenario: Signed-in identity row links to the profile
+
 - **WHEN** a signed-in user opens the menu
 - **THEN** it shows an avatar (initial-in-a-circle) next to the user's email as a single clickable row, and selecting it closes the menu and navigates to `/my/profile`
 
 #### Scenario: Avatar placeholder without an image
+
 - **WHEN** a signed-in user with no uploaded picture opens the menu
 - **THEN** the avatar shows the first character of their email on a colour derived from the email, and no broken/empty image is shown
 
 #### Scenario: No identity row when signed out
+
 - **WHEN** a signed-out user opens the menu
 - **THEN** no avatar or email identity row is shown
 
@@ -348,4 +353,3 @@ account's tier is `pro` or `ultra` respectively, and SHALL show no badge when th
 
 - **WHEN** a signed-out visitor views any page on a desktop viewport
 - **THEN** the header shows the sign-in control with no tier badge
-

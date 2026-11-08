@@ -9,10 +9,12 @@ Checking what follows each "Требования" heading — the thing that act
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Recognize the measured, real Russian headings, the same way Hungarian ones are already recognized — closing the specific gap `AGENTS.md` names.
 - Be honest, in the proposal, in `AGENTS.md`, and in the test suite, about what this does and does not change for the one real large source measured.
 
 **Non-Goals:**
+
 - Making `Derive` extract from a `<p>`-per-item section. That's a change to the shared walk every language and source goes through — larger, riskier, and a different problem than vocabulary coverage. Left as an open limitation.
 - Adding Ukrainian, or any language beyond what was actually measured. `AGENTS.md`'s own new limitations bullet says to measure before adding, not to translate the four entries here into other languages speculatively.
 - Adding "Обязанности" (duties/responsibilities) to `requiredHeadings`, despite it being the single most common heading in the sample after "Требования"/"Мы предлагаем". It answers "what will you do", not "what is required of you" — the same category the vocabulary already excludes for English ("what you'll do" is not in `requiredHeadings` either).

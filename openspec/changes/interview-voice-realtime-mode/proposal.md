@@ -32,12 +32,14 @@ time pressure, which is the actual skill being trained.
 ## Capabilities
 
 ### New Capabilities
+
 - `interview-voice-mode`: hands-free spoken rehearsal over OpenAI's Realtime API for an
   existing `interview` session — the token-minting endpoint, the WebRTC entry point, the
   turn-by-turn transcript persistence into session history, and the v1 no-tool-calls
   constraint.
 
 ### Modified Capabilities
+
 (none — existing `interview-rehearsal` requirements about session creation and the
 opening brief are unchanged; voice mode is an additional way to converse inside a
 session that already exists)

@@ -31,9 +31,11 @@ disallows `CCBot` site-wide, so Common Crawl carries no board-path data for it a
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `board-harvest`: adds a new requirement describing Common Crawl CDX discovery for Greenhouse
   and Ashby, alongside the existing Gupy and OpenCATS discovery requirements.
 

@@ -1,8 +1,11 @@
 # apply-form-display Specification
 
 ## Purpose
+
 TBD - created by archiving change show-apply-questions. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: A posting's stored application form is served for display
 
 The system SHALL serve, for one posting identified by its public slug, the
@@ -288,4 +291,3 @@ in the mark's place.
 
 - **WHEN** the page renders a form read from a platform no mark is known for
 - **THEN** the platform's name appears alone, and the line is otherwise unchanged
-

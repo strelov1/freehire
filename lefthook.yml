@@ -34,6 +34,17 @@ pre-commit:
           exit 0
         fi
         govulncheck ./...
+    # Markdown lint over staged .md files; .rumdl.toml decides what is checked (its excludes
+    # apply to files named explicitly too). `rumdl fmt <file>` fixes what it reports as
+    # fixable. Steps aside when the binary is missing: the docs CI job is the gate.
+    rumdl:
+      glob: "*.md"
+      run: |
+        if ! command -v rumdl >/dev/null 2>&1; then
+          echo "rumdl not installed (mise install) - skipping"
+          exit 0
+        fi
+        rumdl check {staged_files}
     # Spelling over every staged file; _typos.toml decides what is checked, and
     # --force-exclude makes it honour that for files named explicitly. Steps aside when the
     # binary is missing: the docs CI job is the gate.

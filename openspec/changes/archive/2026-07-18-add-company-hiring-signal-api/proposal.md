@@ -16,6 +16,7 @@ Out of scope (later slice): the single-company detail/time-series endpoint (`GET
 <!-- none -->
 
 ### Modified Capabilities
+
 - `market-insights`: add a new public `GET /api/v1/insights/companies` leaderboard endpoint (existing `/insights/*` endpoints unchanged).
 - `company-hiring-signal`: add a precomputed per-company open/growth scalar (`insights_company_growth`) produced by the rollup worker, alongside the existing per-day `insights_company_stats`.
 

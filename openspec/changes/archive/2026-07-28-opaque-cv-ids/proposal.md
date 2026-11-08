@@ -43,6 +43,7 @@ class of resource and the remaining place where a sequential id is exposed.
 <!-- none: this changes how an existing capability addresses its resource -->
 
 ### Modified Capabilities
+
 - `cv-builder`: a CV is addressed by an unguessable id rather than a sequential
   one, and a malformed id is reported as missing.
 - `cv-tailoring`: the tailoring bootstrap returns UUID CV ids, and the CV tools

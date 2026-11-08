@@ -33,6 +33,7 @@ adapters.
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `google` is a registered boardless provider — a
   server-rendered list adapter that extracts the embedded `ds:1` JSON payload and yields the
   normalized job shape with a sanitized-HTML description, paging until the catalogue is

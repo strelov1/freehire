@@ -24,6 +24,7 @@ list filter and the `clearJobStage` "keep the saved mark" semantics already exis
 <!-- none — reusing existing account-navigation + user-job-tracking capabilities -->
 
 ### Modified Capabilities
+
 - `account-navigation`: the section-navigation item list gains an **Activity** entry; the "Tracking sub-navigation preserved" requirement is reduced to Board + Pipeline (History/Matches no longer sub-tabs of Tracking).
 - `user-job-tracking`: a new requirement for the **Activity** section (Saved/History/Matches tabs) and its Saved list; the frontend Tracking-section requirement is updated to Board + Pipeline only; the board's Saved-column removal and the "No stage removes from board" behavior are specified.
 

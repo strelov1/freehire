@@ -69,12 +69,14 @@ None. Every behaviour here extends an existing capability.
 ## Impact
 
 **Go (backend):**
+
 - `internal/search/query_params.go` — allow `experience_years_max`.
 - `internal/search/query_filter.go` — emit `enrichment.experience_years_min <= N`.
 - `internal/jobfacts/jobfacts.go` — the no-experience phrase list feeding
   `ExperienceYearsMin`.
 
 **Web (SPA):**
+
 - `web/src/lib/filterSections.ts` — the new `experience` rail entry and its kind.
 - `web/src/lib/facets.ts` — the years-range and no-experience controls.
 - The filter modal pane component rendering `kind: 'experience'`.

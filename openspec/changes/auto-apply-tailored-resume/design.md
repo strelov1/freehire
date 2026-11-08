@@ -8,6 +8,7 @@ recorded.
 
 Relevant existing pieces (see `internal/ai/assistant/AGENTS.md`, `internal/candidate/cv/AGENTS.md`,
 `internal/application/autoapply/AGENTS.md`, `internal/api/atsapply/AGENTS.md`):
+
 - `cv.Store.Tailor` bootstraps or reuses the tailored CV for (user, vacancy) — already usable
   outside HTTP, it takes a plain `context.Context`.
 - `assistant.Runner.Run(ctx, sess, reg, system, brief, TurnConfig{MaxSteps}, emit)` is the turn
@@ -25,17 +26,18 @@ Relevant existing pieces (see `internal/ai/assistant/AGENTS.md`, `internal/candi
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let the external pipeline trigger tailoring and record a review decision for one queue entry,
   by API key, without widening any existing session-level surface.
 - Keep the daily `tailor` allowance a single counter regardless of which surface spent it.
 - Attach the approved CV to a real ATS file-upload field, rendered on demand.
-
 - File-upload resolution stays Greenhouse-only, matching `internal/api/atsapply`'s existing
   scope (Lever always parks on captcha; every other provider merges from `applyform.Form`
   alone with no live DOM fill path at all — see that package's AGENTS.md). Widening the DOM
   fill path to another provider is that package's own known, separate gap, not this change's.
 
 **Non-Goals:**
+
 - The pipeline's own definition (its automations, its approval-step configuration, Claude
   Code's role in it) — that lives in the separate repository and is out of scope here.
 - A review UI beyond linking into the existing `/tailor/[slug]?cv=<id>` workspace — the
@@ -104,6 +106,7 @@ asking nothing mid-run. This is why the review endpoint links into the real work
 than a read-only summary: "fix it and rerun" has to be a real, already-built action away.
 
 **Alternatives considered:**
+
 - *Flip `/autopilot`'s route to `mw.key` for this case.* Rejected outright per the user's own
   instruction and the reasoning above — this is a new way in, not a change to the existing one.
 - *A second table for review state.* Rejected: one row per (user, vacancy) already exists on

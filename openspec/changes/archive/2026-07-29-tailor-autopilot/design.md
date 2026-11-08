@@ -24,12 +24,14 @@ Three facts of the current system shape the design:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One click turns an empty tailoring chat into a tailored CV plus an honest list of what is still missing.
 - The run is observable while it happens and legible after it: the panel says what was closed and how.
 - The run is reversible in one move, so pressing the button is not a gamble.
 - The provenance wall (`evidence_id` or no bullet) holds identically in autonomous mode.
 
 **Non-Goals:**
+
 - Recomputing the fit verdict from the tailored document. Expensive, and it would either take a second
   cache slot or overwrite the base-CV analysis the candidate came in with.
 - Per-item undo. One snapshot per run; a candidate who wants surgical control uses the editor.

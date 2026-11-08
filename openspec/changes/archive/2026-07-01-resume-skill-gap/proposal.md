@@ -25,11 +25,13 @@ and the `/jobs/facets` market-count endpoint), so this is high value at low cost
 ## Capabilities
 
 ### New Capabilities
+
 - `resume-skill-extraction`: a stateless endpoint that turns an uploaded resume (PDF or text)
   into canonical skill slugs via the existing deterministic dictionary, without persisting the
   resume.
 
 ### Modified Capabilities
+
 - `search-profiles`: profiles can now be populated from a resume and display a live skill-gap
   analysis (coverage + missing market skills) against their specialization(s).
 

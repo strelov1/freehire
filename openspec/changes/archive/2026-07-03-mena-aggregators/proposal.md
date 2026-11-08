@@ -31,6 +31,7 @@ geolocation-dictionary change.
 ## Capabilities
 
 ### New Capabilities
+
 - `bayt-source`: Bayt.com aggregator adapter — paginated per-country listing crawl plus
   JSON-LD detail parsing over the shared Chrome-fingerprint transport.
 - `gulftalent-source`: GulfTalent aggregator adapter — sitemap-index enumeration plus

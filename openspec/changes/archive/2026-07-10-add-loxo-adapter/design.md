@@ -18,6 +18,7 @@ huntflow for agency/hub boards, and the `harvest-boards` live-validation pattern
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One `loxo` adapter that crawls any Loxo agency board regardless of host variant.
 - Employer attribution that uses the real client when the posting reveals it and
   falls back to the agency otherwise — never guessed.
@@ -25,6 +26,7 @@ huntflow for agency/hub boards, and the `harvest-boards` live-validation pattern
   `sources/loxo.yml` entries.
 
 **Non-Goals:**
+
 - The paid Loxo Open API (bearer-token gated) — the keyless careers page is the
   source of truth here.
 - Cross-source deduplication of agency reposts vs. clients' own ATS postings

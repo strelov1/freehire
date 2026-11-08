@@ -54,6 +54,7 @@ the page's larger tabs (`ExperienceBankView`, `ProfileForm`,
 ## Capabilities
 
 ### New Capabilities
+
 - `account-interface-i18n`: `/my/**` renders in the account's resolved
   locale (English or Russian today). No spec file exists yet under
   `openspec/specs/` for this capability — it has only ever been proposed as
@@ -63,6 +64,7 @@ the page's larger tabs (`ExperienceBankView`, `ProfileForm`,
   the three deltas is a pre-existing archival gap, out of scope here.
 
 ### Modified Capabilities
+
 (none)
 
 ## Impact

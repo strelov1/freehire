@@ -66,7 +66,7 @@ commands fail with "not found" — visible, immediate, and fixed by an update.
 The new ids are generated in the same statement that adds the column, then the two
 referencing tables are backfilled through the old key before it is dropped:
 
-```
+```text
 ADD cvs.new_id uuid DEFAULT gen_random_uuid()
 ADD referral_requests.new_cv_id / assistant_sessions.new_cv_id
 UPDATE both FROM cvs via the OLD bigint

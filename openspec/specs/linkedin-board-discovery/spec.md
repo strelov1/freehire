@@ -1,8 +1,11 @@
 # linkedin-board-discovery Specification
 
 ## Purpose
+
 TBD - created by archiving change mine-ats-boards-from-linkedin. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: A query worklist drives the public job search
 
 The discovery tool SHALL take its search worklist from a file of queries kept in the
@@ -114,4 +117,3 @@ requests per second.
 - **WHEN** the tool runs with its default settings
 - **THEN** the outgoing request rate is capped by the rate limiter, and the operator can
   cap it lower
-

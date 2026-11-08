@@ -21,6 +21,7 @@ one day fold into one post, and the feed is split by day.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `buddies-social-space`: the feed's posts and job links.
 
 ## Impact

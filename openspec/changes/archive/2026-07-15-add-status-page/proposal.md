@@ -22,6 +22,7 @@ at a glance, rolled up per ATS provider.
 ## Capabilities
 
 ### New Capabilities
+
 - `ingest-status-page`: A public status surface — a per-provider health rollup
   over `board_health`, a status-derivation policy, a public `GET /api/v1/status`
   endpoint, and a `/status` web page.

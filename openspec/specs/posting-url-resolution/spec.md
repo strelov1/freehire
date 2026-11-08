@@ -1,8 +1,11 @@
 # posting-url-resolution Specification
 
 ## Purpose
+
 TBD - created by archiving change find-job-by-page-url. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: A page URL resolves to the catalog posting stored under that URL
 
 The system SHALL resolve the URL of a job page to a catalog posting when no source
@@ -59,4 +62,3 @@ answered with regardless of whether its stored `url` matches the requested URL.
 - **WHEN** the requested URL yields an identity but no posting exists under it
 - **THEN** the URL comparison runs, and the response is `{"data": null}` unless a posting
   stores that URL
-

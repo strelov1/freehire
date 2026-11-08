@@ -17,12 +17,14 @@ view-tracking endpoint. The job detail page is a SvelteKit route under
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Surface semantically nearest open jobs for a given job through a public
   per-job endpoint and a job-detail section.
 - Reuse the existing semantic index and embedder with zero indexing/settings
   changes.
 
 **Non-Goals:**
+
 - No change to the embedder, document template, index settings, or reindex.
 - No personalization, no cross-filtering by category/region (a plain nearest-
   neighbour list, per the agreed scope).

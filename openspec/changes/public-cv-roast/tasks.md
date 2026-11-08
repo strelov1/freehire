@@ -40,15 +40,16 @@ answers for the same question. Split the fetch off so one result feeds both.
 Pure refactor: no behaviour change, and `coverageFor` keeps its signature and its callers.
 
 **Files:**
+
 - Modify: `internal/api/handler/resume_verdict.go:61-94`
 - Test: `internal/api/handler/market_coverage_test.go`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks.
 - Produces: `func (h *resumeHandlers) coverageWithRole(ctx context.Context, roleFilter any,
   role search.FacetResult, coverageSkills, declared, body, all []string) (verdict.Verdict,
   error)` — Task 3 calls it.
-
 - [ ] **Step 1: Write the failing test**
 
 In `internal/api/handler/market_coverage_test.go`, append:
@@ -179,15 +180,16 @@ junior-only postings is a smaller number that says nothing about their skills, a
 are what this page reads.
 
 **Files:**
+
 - Create: `internal/api/handler/cv_roast.go`
 - Create: `internal/api/handler/cv_roast_test.go`
 
 **Interfaces:**
+
 - Consumes: `queryValues(c) url.Values`, `stripSkillParams(url.Values)`,
   `hasNonEmpty([]string) bool` — all existing in `resume_verdict.go`.
 - Produces: `func roastRoleValues(c *fiber.Ctx, categories []string) (vals url.Values,
   role string)` — Task 3 calls it. `role` is `""` when nothing resolved.
-
 - [ ] **Step 1: Write the failing test**
 
 Create `internal/api/handler/cv_roast_test.go`:
@@ -331,10 +333,12 @@ git commit -m "feat(handler): infer the roast's market role from the CV itself"
 ### Task 3: The handler — one upload, two readings, nothing stored
 
 **Files:**
+
 - Modify: `internal/api/handler/cv_roast.go`
 - Modify: `internal/api/handler/cv_roast_test.go`
 
 **Interfaces:**
+
 - Consumes: `roastRoleValues` (Task 2), `coverageWithRole` (Task 1), and the existing
   `readResumeUpload(c) (resumeUpload, error)`, `resumeProfile(text) cvProfile`,
   `cvsection.Parse(text) (declared, body, all []string)`, `topRoleSkills(map[string]int64,
@@ -342,7 +346,6 @@ git commit -m "feat(handler): infer the roast's market role from the CV itself"
   `dataResponseWithIgnored`.
 - Produces: `func (h *resumeHandlers) RoastCV(c *fiber.Ctx) error` — Task 5 registers it,
   and the `roastResponse` shape Task 6 renders.
-
 - [ ] **Step 1: Write the failing test**
 
 Append to `internal/api/handler/cv_roast_test.go` (add `"encoding/json"`,
@@ -558,13 +561,14 @@ Three situations the spec calls out. Each returns 200 with a real answer, and ea
 kind of thing that quietly turns into a 500 or a zero if nobody pins it.
 
 **Files:**
+
 - Modify: `internal/api/handler/cv_roast_test.go`
 
 **Interfaces:**
+
 - Consumes: `roastApp`, `doPostJSON`, `recordingFacetCounter`, `roastResponse`'s JSON
   field names — all from Tasks 1–3.
 - Produces: nothing.
-
 - [ ] **Step 1: Write the failing tests**
 
 Append to `internal/api/handler/cv_roast_test.go` (add `"errors"` to its imports):
@@ -788,16 +792,17 @@ rules." This is a POST that runs a subprocess, so it is one of the others. Addin
 does not share.
 
 **Files:**
+
 - Modify: `internal/api/handler/cv_roast.go` (the limiter and its constant)
 - Modify: `internal/api/handler/resume.go:103-106` (the register block)
 - Modify: `internal/api/handler/AGENTS.md`
 - Test: `internal/api/handler/cv_roast_test.go`
 
 **Interfaces:**
+
 - Consumes: `RoastCV` (Task 3), `middleware.throttler`, `ratelimit.Middleware`,
   `ratelimit.KeyByIP`.
 - Produces: the mounted route `POST /api/v1/cv/roast`, which Task 6 calls.
-
 - [ ] **Step 1: Write the failing test**
 
 Append to `internal/api/handler/cv_roast_test.go`:
@@ -918,22 +923,25 @@ git add internal/api/handler/ && git commit -m "feat(api): expose the public CV 
 ### Task 6: The public page
 
 **Files:**
+
 - Create: `web/src/routes/roast/+page.svelte`
 - Modify: `web/src/lib/api.ts` (the client call)
 - Test: `web/src/routes/roast/page.test.ts`
 
 **Interfaces:**
+
 - Consumes: `POST /api/v1/cv/roast` and the `roastResponse` shape from Task 3 —
   `{report, role, market_scoped, market_available, market}`.
 - Produces: the `/roast` route the articles will link to.
-
 - [ ] **Step 1: Read the existing surfaces before writing anything**
 
 Run:
+
 ```bash
 sed -n '1,80p' web/src/routes/my/profile/cv-readiness/+page@my.svelte
 grep -n "atsReport\|ats-report\|marketCoverage" web/src/lib/api.ts
 ```
+
 The signed-in ATS page already renders `atscheck.Report`'s categories and line items. Reuse
 its components rather than writing a second renderer — `LineItem`/`Status` is the shared
 wire shape `cmd/gen-contracts` excludes cvmatch's `lineitem.go` for, precisely so one
@@ -994,21 +1002,23 @@ Expected: FAIL — the route does not exist.
 5. The CTA into sign-in for the model review and tailoring.
 
 Constraints from this repo's own traps, all of which have bitten before:
+
 - Any `class` prop goes through `cn`, never string interpolation.
 - No `Object.hasOwn` / `toSorted` — the build target does not polyfill them and they kill
   the whole module in Safari.
 - No `replaceState` in `onMount` — use `onRouterReady`.
 - Do not touch `localStorage` at module scope.
 - An `{#each}` key must be a stable value, never a composed signature.
-
 - [ ] **Step 5: Run tests and lint**
 
 Run:
+
 ```bash
 pnpm --dir web test -- roast
 pnpm --dir web lint
 pnpm --dir web check
 ```
+
 Expected: PASS on all three. `pnpm --dir web lint` is the one to run rather than relying on
 the pre-commit hook — CI additionally runs oxlint.
 

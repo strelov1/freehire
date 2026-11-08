@@ -11,6 +11,7 @@ The `is_tech` signal is asymmetric: `false` is set by two mechanisms (the non-te
 ## Capabilities
 
 ### Modified Capabilities
+
 - `tech-classification`: add the positive tech-title detector and fold it into the `is_tech` derivation (an additional `true` source), tightening the definition of the tri-state.
 
 ## Impact

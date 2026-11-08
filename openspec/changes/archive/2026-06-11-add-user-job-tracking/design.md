@@ -9,6 +9,7 @@ larger personal application tracker (stage pipeline, dedicated page) that is
 designed-for but not built here.
 
 Constraints that shape the design:
+
 - sqlc is the only DB layer — schema lives in `migrations/`, access in
   `internal/db/queries/*.sql`, generated code committed.
 - Response envelopes are `{"data": ...}` / `{"error": msg}`; handlers signal
@@ -18,6 +19,7 @@ Constraints that shape the design:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Record a view automatically when a signed-in user opens a job.
 - Let a signed-in user mark a job applied via an explicit, idempotent action.
 - Show an "already applied" badge on a job the user returns to.
@@ -27,6 +29,7 @@ Constraints that shape the design:
   existing rows.
 
 **Non-Goals:**
+
 - No application **stage** column/pipeline (No Response → … → Offer) yet.
 - No "Applications / My jobs" listing page or listing endpoints.
 - No bulk interaction status for the job list (`JobRow`) — the badge is on the
@@ -36,6 +39,7 @@ Constraints that shape the design:
 ## Decisions
 
 ### One table `user_jobs`, composite PK `(user_id, job_id)`
+
 A single row per `(user, job)` pair holds both `viewed_at` (NOT NULL, defaulted)
 and `applied_at` (NULL until applied). View history is "all rows"; the
 application tracker is "rows where `applied_at IS NOT NULL`".
@@ -54,6 +58,7 @@ application tracker is "rows where `applied_at IS NOT NULL`".
   is removed.
 
 ### Two idempotent upsert endpoints, both `RETURNING *`
+
 `RecordJobView` and `MarkJobApplied` are `INSERT … ON CONFLICT (user_id, job_id)
 DO UPDATE …` returning the row. Idempotency means the SPA can call view on every
 open and apply on every confirm without special-casing "already exists", and the
@@ -61,12 +66,14 @@ returned row always carries the current `applied_at` so the client learns the
 applied state from the same call that records the view.
 
 ### Reads stay public; only writes require auth
+
 `GET /jobs/:id` is unchanged and needs no auth. The two new write endpoints sit
 behind the existing `RequireAuth`. The SPA only calls them when a session exists
 (`auth.user` set). This avoids building optional-auth middleware (YAGNI) — the
 client, which already knows the auth state, gates the calls.
 
 ### "No" writes nothing
+
 The apply prompt's **No** is a pure client-side dismissal: the job must not enter
 the tracker. Only **Yes, save** hits `MarkJobApplied`. This keeps the tracker a
 record of real applications, not of prompts seen.

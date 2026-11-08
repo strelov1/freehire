@@ -17,12 +17,14 @@ rows) confirmed these fields are dict-served across the catalogue.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Stop asking the LLM for the nine dict-backed fields, cutting per-call output
   tokens with zero change to any served value.
 - Keep the change forward-only and contract-stable: no `enrich.Version` bump, no
   re-enrichment, no struct/DB/frontend change.
 
 **Non-Goals:**
+
 - Dropping `relocation` — it is a live search facet (`enrichment.relocation` in
   `internal/search`) and a profile-match input (`web/src/lib/facetModel.ts`) with
   no dictionary backing; removing it would break a user filter for a single

@@ -20,6 +20,7 @@ public API, as a static reference with curl examples.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One typed data source (`api-spec.ts`) → rendered page **and** generated
   `docs/API.md`; no drift between the two.
 - The job-search filter table derives from existing generated contracts +
@@ -28,6 +29,7 @@ public API, as a static reference with curl examples.
 - SSR page for SEO, consistent with existing content-page styling.
 
 **Non-Goals:**
+
 - No OpenAPI/Swagger spec, no interactive "try-it" console, no markdown renderer
   in the SPA.
 - No backend/API behavior changes.
@@ -38,6 +40,7 @@ public API, as a static reference with curl examples.
 ## Decisions
 
 ### Docs-as-data: one typed source, two renderers
+
 Describe the API in `web/src/lib/docs/api-spec.ts` as typed structures
 (`Group → Endpoint → Param`, with `auth`, `curl`, and `responseExample` as
 strings so they drop verbatim into Markdown). The Svelte page renders from it;
@@ -48,6 +51,7 @@ guaranteed drift); markdown-first with an in-SPA renderer (rejected — pulls a
 markdown dependency into the SPA and renders interactive facet tables poorly).
 
 ### Filter vocabulary sourced from generated contracts
+
 `web/src/lib/docs/filters.ts` builds the facet table from
 `web/src/lib/generated/contracts.ts` value arrays and `facets.ts` labels, plus a
 small hand-written list of the non-facet modifiers (`_mode`, `_exclude`, numeric
@@ -56,6 +60,7 @@ generated counterpart. This keeps the closed-vocabulary part lock-stepped with
 Go while documenting the modifiers that only live in `query_filter.go`.
 
 ### Generator runs on the existing Vite toolchain
+
 `api-spec.ts` is TypeScript, so the generator imports it via `vite-node` (Vite is
 already a dependency) rather than adding `tsx`. Wire it as `"gen:api-docs"` in
 `web/package.json`, mirroring `make gen-contracts`. The generated `docs/API.md`
@@ -66,6 +71,7 @@ spec content is TS-native and has no Go origin; keeping it in the web toolchain
 avoids a Go↔TS round-trip).
 
 ### Page structure
+
 Route `web/src/routes/docs/api/+page.svelte` + `+page.ts` (title/meta) rendering
 a new `DocsApiView.svelte`: sticky table-of-contents, anchored sections per
 group, parameter tables, and code blocks with the existing copy button. Styling

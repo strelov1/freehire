@@ -1,8 +1,11 @@
 # application-record Specification
 
 ## Purpose
+
 TBD - created by archiving change applications-outlive-jobs. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: An application is a record of the person's act, not of a catalogue row
 
 The system SHALL store a tracked application as its own record carrying the applicant, the
@@ -182,4 +185,3 @@ a card it cannot open, route to, or key a list by.
 
 - **WHEN** a row's posting is still in the catalogue
 - **THEN** the posting's fields are present exactly as before
-

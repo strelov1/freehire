@@ -20,11 +20,13 @@ the body, hydrated per-posting via a detail endpoint, using the pipeline's `Hydr
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A keyless, boardless, aggregator `nofluffjobs` adapter mirroring justjoin's hydrating pattern.
 - Structured facets (skills, seniority) taken from the **listing** — no detail request needed for them.
 - Reuse `GetStream`, `skilltag.Parse`, `enrich.SeniorityValues`, `sanitizeHTML`; no new shared helper.
 
 **Non-Goals:**
+
 - A freshness/keyword filter. The user chose full detail hydration; `FetchNew`'s seen-set already
   bounds steady-state cost to new postings, and the standard sweep soft-closes anything that ages out.
 - Structured salary mapping. justjoin does not map salary either; the description + enrichment cover it.

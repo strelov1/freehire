@@ -24,6 +24,7 @@ part this design reuses. See proposal.md - Why for the product motivation.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Bridge "a job was ingested" from `cmd/ingest` to open SSE connections on
   `cmd/server` using infrastructure the project already runs (Postgres), with
   a-few-seconds latency being acceptable.
@@ -33,6 +34,7 @@ part this design reuses. See proposal.md - Why for the product motivation.
   never a dependency other features rely on for correctness.
 
 **Non-Goals:**
+
 - Sub-second delivery. This is a "the catalogue is alive" signal, not a
   monitoring or alerting feed.
 - Durability across restarts. The ring buffer and any in-flight grouping
@@ -44,8 +46,10 @@ part this design reuses. See proposal.md - Why for the product motivation.
 ## Decisions
 
 ### Poll-based outbox instead of Postgres LISTEN/NOTIFY or Redis pub/sub
+
 Reuses the existing `search_outbox` shape (table + periodic drain) instead of
 introducing a new transport. Alternatives considered:
+
 - **Postgres LISTEN/NOTIFY**: near-instant, but needs a dedicated long-lived
   listen connection with its own reconnect handling, and buys precision the
   product doesn't need (aggregation already implies waiting for a window to
@@ -56,6 +60,7 @@ introducing a new transport. Alternatives considered:
   table. Rejected in favor of the pattern already proven at this write site.
 
 ### Poller runs inside `cmd/server`, not as a separate `cmd/*-drain` binary
+
 Every existing outbox drain (`cmd/search-drain`, enrichment) is its own
 run-once-and-exit binary on a systemd timer. This feed instead needs its
 drain loop to live inside the same long-lived process that holds the SSE
@@ -65,6 +70,7 @@ hop to reach `cmd/server`. The poller is a ticker goroutine started at
 `cmd/server` boot, not a new binary under `cmd/`.
 
 ### Grouping key: normalized title text, not `role_fingerprint` or raw title
+
 `role_fingerprint` was the first candidate — it is already computed and
 stored on every job — but it hashes `company_slug` into the same digest
 (`internal/job/jobhash.RoleFingerprint`), so it clusters one company's own
@@ -91,11 +97,13 @@ reason `NormalizedRoleTitle` reuses `RoleFingerprint`'s text normalization
 rather than a plain string comparison.
 
 ### Aggregation threshold is a code constant, not an env var
+
 Unlike the repo's `BACKFILL_*`/`*_MAX_PER_RUN` operational knobs, this
 threshold is product behavior (what a visitor sees), not an operational
 safety valve for a one-off run. It belongs in code review, not prod config.
 
 ### In-process ring buffer + fan-out, no persistence
+
 Since `cmd/server` runs as a single active instance, an in-process broadcaster
 is sufficient for the common case. The accepted gap: a freshly-flipped
 blue/green instance starts with an empty ring buffer until the first poll
@@ -103,12 +111,14 @@ tick (~10s) repopulates it — purely cosmetic, no data is lost (the outbox
 rows themselves are durable in Postgres until claimed).
 
 ### Aggregated entries do not attribute a single company
+
 An aggregated entry represents postings from potentially many different
 companies. The design explicitly requires the UI not to present the one
 sample logo/company as if all N postings came from it — the entry names the
 role and a count, with the shown company clearly one representative example.
 
 ### Logos: reuse `EntityLogo` + `companyLogoUrl`, no `logo_url` on the wire
+
 `companies` has no `logo_url` column at all — `JobRow.svelte` already
 resolves a company's mark client-side via `companyLogoUrl(name)`
 (`web/src/lib/logo.ts`, a proxy keyed by company name) rendered through the

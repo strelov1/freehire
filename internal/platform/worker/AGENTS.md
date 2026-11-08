@@ -1,11 +1,13 @@
 # Worker conventions
 
 ## Scope
+
 The shared bootstrap and run-outcome plumbing for the run-once-and-exit cron workers under
 `cmd/` (~40+ binaries): config + pool + signal-bound context setup, exception reporting,
 the exit-code convention, a progress heartbeat, and a corruption-tolerant keyset scanner.
 
 ## Always true
+
 - **`Main(run func() int)` wraps every worker's run, and Bootstrap's cleanup is deferred
   INSIDE run** (main.go:14-26). On the normal path Main reports a non-zero status, flushes the
   exception exporter, and exits with run's status. On a panic, the deferred `capturePanic`
@@ -289,6 +291,7 @@ measurement of zero must never be omitted — while a zero *timestamp* would rea
 i.e. an infinitely stale catalogue, which a fresh install is not.
 
 ## Usage sketch
+
 Every `cmd/<worker>/main.go` is a variation on:
 
 ```go

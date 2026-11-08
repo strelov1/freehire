@@ -18,12 +18,14 @@ including inside one OR-group — `withOpenJobs` already appends
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Express "remote anywhere + hybrid/onsite within the chosen geography" in one
   query, on every surface that parses the canonical query string (search, saved
   searches, digest alerts).
 - Keep the modifier inspectable in the filter UI, not a hidden profile side effect.
 
 **Non-Goals:**
+
 - Per-mode geographies beyond the two-way split (e.g. separate city lists for
   hybrid vs on-site). The profile's `base` is one place; the split it motivates is
   exactly remote-vs-physical.

@@ -12,9 +12,11 @@ Job-search filter URLs grow one query pair per selected value (`skills=go&skills
 ## Capabilities
 
 ### New Capabilities
+
 - `filter-query-encoding`: how list-valued job-filter params are encoded in a query string and decoded on read — accepts both comma-separated and repeated-key forms, on both the web app's own URL state and the public `/jobs*` API.
 
 ### Modified Capabilities
+
 - `api-documentation`: the filter vocabulary documentation (`Filter vocabulary is documented in depth` requirement in `api-documentation`) now shows the compact comma-separated form as the documented convention alongside the existing repeated-key form.
 
 ## Impact

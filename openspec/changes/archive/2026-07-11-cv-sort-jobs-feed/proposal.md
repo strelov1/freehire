@@ -30,6 +30,7 @@ redundant page.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `cv-recommendations`: the CV feed moves from a dedicated `/my/recommendations` page
   to a sort mode on the main jobs feed. The page-presentation requirement is removed
   and replaced by a feed-integration requirement (sort selector, endpoint routing,

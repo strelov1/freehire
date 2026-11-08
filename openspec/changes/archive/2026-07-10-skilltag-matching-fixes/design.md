@@ -2,6 +2,7 @@
 
 `internal/skilltag.Parse` resolves a curated technology vocabulary from free
 text in two passes (`skilltag.go`):
+
 1. **Phrase pass** — for each `phraseAliases` entry (multi-word/punctuated, e.g.
    `distributed systems`, `c++`, `node.js`), `wordmatch.Contains(norm, alias,
    ASCIIBoundary)` tests for a whole-token occurrence.
@@ -19,6 +20,7 @@ preserve that; embeddings/fuzzy matching are explicitly out.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - `distributed-systems` / `distributed_systems` resolve exactly like
   `distributed systems`.
 - Curated uppercase acronyms (`RAG`, `ETL`, `ELT`, `gRPC`, …) resolve while their
@@ -27,6 +29,7 @@ preserve that; embeddings/fuzzy matching are explicitly out.
   still match; no new false positives; dedup+sort invariant intact.
 
 **Non-Goals:**
+
 - Embeddings, semantic similarity, or any fuzzy/probabilistic matching.
 - Growing the general vocabulary (that is the separate LLM-mining track).
 - Changing consumers (`jobderive`, `ExtractResumeSkills`) or the facet schema.
@@ -109,7 +112,7 @@ tiering is the disambiguator.
 
 ### D4 — `Parse` structure
 
-```
+```text
 func Parse(text string, opts ...Option) []string
 htmlStripped := stripHTML(text)           // case preserved
 acronyms := sharedAcronyms                 // + resumeAcronyms if WithResumeAcronyms()

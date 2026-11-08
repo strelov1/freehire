@@ -18,6 +18,7 @@ the vocabulary work that surfaced this gap.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Read a `<p>`-per-item requirements section the same way a `<ul>`/`<ol>`
   section is read today: gated by the same heading vocabulary, same priority
   rule, same bound.
@@ -29,6 +30,7 @@ the vocabulary work that surfaced this gap.
   new vocabulary and no heuristic tunable beyond the existing "≥2 items" rule.
 
 **Non-Goals:**
+
 - Clustering or ordering paragraph items by any signal beyond document order.
 - Reading a `<p>`-per-item PREFERRED section differently from a required one —
   the same buffer and the same priority rule apply to both.

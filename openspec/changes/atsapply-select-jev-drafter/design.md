@@ -26,6 +26,7 @@ spike validated) and was deliberately spiked first as the riskiest unknown.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Answer a `select`-kind draftable field with Jev when `TYPESAFE_API_KEY` is configured,
   preserving `Drafter`'s exact contract: an offered option's `Label` verbatim, or `ok=false`.
 - Preserve the categorical exclusion for identity/demographics/compensation/legal-status
@@ -37,6 +38,7 @@ spike validated) and was deliberately spiked first as the riskiest unknown.
   when `TYPESAFE_API_KEY` is unset.
 
 **Non-Goals:**
+
 - Touching `text`/`textarea` drafting, `isSensitiveLabel`/`isGeographyLabel` gating,
   `matchOption`, the cover-letter-reuse path (`answerFor`'s cover-letter branch only ever
   applies to `text`/`textarea` fields carrying `isCoverLetterTextField`, so it is

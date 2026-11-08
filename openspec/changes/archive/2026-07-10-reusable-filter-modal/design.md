@@ -52,7 +52,7 @@ Key facts that shape the design:
   `pane: Snippet<[RailEntry]>` for the active pane body. The seed source and commit
   target are closed over by the wrapper, so the shell stays domain-agnostic.
 - **`FilterModal.svelte`** (job wrapper) — creates `StagedFilters`, passes job `RAIL`
-  + job `entryCount` + the current if/else as the `pane` snippet. Keeps its public
+  - job `entryCount` + the current if/else as the `pane` snippet. Keeps its public
   props (`store/seed/counts/exclude/railKeys/plain/extra/applyLabel/onApply/canApply/
   previewCount`) so `JobsView` and the profile change minimally. Adds the "My filters"
   rail entry (first, `SAVED` section) unless `railKeys` restricts the rail or no

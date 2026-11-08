@@ -1,9 +1,11 @@
 # AI fit analysis conventions
 
 ## Scope
+
 On-demand, cached, three-stage LLM prompt-chain for job-fit analysis per (user, job). Backend `internal/candidate/matchanalysis`; frontend embedded in the Tailor workspace (`web/src/routes/tailor/[slug]/`), with `web/src/routes/match/[slug]/` kept only as a 308 redirect to it.
 
 ## Always true
+
 - **Fixed prompt-chain, NOT an autonomous agent.** Deterministic, typed, cacheable. Runs over the shared `internal/platform/llm` client — provider-agnostic, no vendor baked in.
 - **Stage 1 Extract & Match:** extract posting requirements, classify each against CV as `covered`/`synonym-only`/`missing-have`/`missing-gap`, and grade the cited evidence of the two positive statuses as `evidence_strength` `metric`/`scope`/`responsibility`/`keyword` (coerced to `keyword` when unknown; empty for `missing-*`). Never fabricate a skill. **This stage alone asks the model not to deliberate** (`reasoningForStage`, `reasoning.go`): it is the ATS lens, close to transcription, and deliberation is what crossed its deadline — production showed every failure as `dur=1m30.000s`, twice per analysis, three minutes spent to return nothing, while a 6000-character prompt through the same alias answers in ~35s. Stages 2 and 3 are judgement and keep whatever deliberation the model would do.
 - **Stage 2 Recruiter verdict:** six scored dimensions (title alignment, experience relevance, seniority fit, skills coverage, company context, location & work-mode fit). Model only scores dimensions — the server computes `overall_score` and `verdict`. **It scores under the same evidence rule the audit checks** (`evidenceStrengthRule`, `evidence_rule.go`): a `synonym-only` match, or a `covered` one graded `keyword`, is adjacent exposure and cannot by itself sustain a high `skills_coverage`. The rule lived in Stage 3's prompt alone, and production measured what that cost — over three vacancies on 2026-09-08 Stage 2 scored skills coverage 95, 100 and 93 and the audit pulled each to 62, 70 and 74. Same direction, near-identical magnitude, every time: not two models disagreeing, one stage re-deriving a rule the other was never given, at the price of a model call.
@@ -35,6 +37,7 @@ On-demand, cached, three-stage LLM prompt-chain for job-fit analysis per (user, 
 **Code generation:** wire shape generated to TS via `cmd/gen-contracts`.
 
 ## Limitations
+
 - A live company web-research stage (Stage 2a) is where a real tool-using agent would fit later; company context is `company_info`-only for now.
 - Migration numbering: parallel branches produced several `0009_*` files (job-analysis, daily-stats, profile-location→renamed `0010_`); harmless because Postgres initdb runs by filename, but a versioned runner is the real fix.
 - `user_job_analysis` migration (`0009`) must be applied to prod manually before deploy.

@@ -11,12 +11,14 @@ as a second section on the verdict page.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A concrete ATS score (0-100) + a fix checklist, computed from the CV text.
 - Deterministic spine (reproducible, free); LLM layer strictly optional/nil-safe.
 - Reuse the verdict's facet machinery and the fixed `skilltag` matcher.
 - Keep `internal/atscheck` pure and unit-tested, like `internal/verdict`.
 
 **Non-Goals:**
+
 - Layout-aware PDF parsing (multi-column/table hard-detection) — the extractor is
   plain-text; we detect what text allows and let the LLM flag garbled text.
 - Re-scoring market-coverage (unchanged).
@@ -84,6 +86,7 @@ profiles. Per-user keyed to the CV is correct and cheaper.
 ### D5 — Endpoint, reuses verdict machinery
 
 `GET /me/profiles/:id/ats-report` (owner-scoped 404; 503 when `facets == nil`):
+
 1. resolve profile; read stored CV text (`resume.Text(userID)`).
    - No CV stored (storage on, none present) ⇒ 200 with `{ has_cv: false }` so the
      SPA shows the upload control (not an error).

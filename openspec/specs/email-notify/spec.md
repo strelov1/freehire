@@ -1,7 +1,9 @@
 # email-notify Specification
 
 ## Purpose
+
 TBD - created by archiving change email-notification-channel. Update Purpose after archive.
+
 ## Requirements
 
 ### Requirement: Render a subscription digest to an email

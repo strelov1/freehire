@@ -1,9 +1,11 @@
 # Company facets conventions
 
 ## Scope
+
 The denormalized facet columns on `companies` — job-derived `remote_regions` and curated `yc_*` columns — their maintenance, and the separation between the two.
 
 ## Always true
+
 - `companies.remote_regions` (text[], values from `vocab.RegionValues`) is job-derived: the distinct union of `jobs.regions` over the company's open, **searchable** jobs with `work_mode = 'remote'`.
 - `remote_regions ⊆ regions` always holds.
 - Every job-derived column — `job_count` included — is scoped to the postings the JOB SEARCH INDEX holds, not to the `jobs` table: on top of open and non-duplicate, `RefreshCompanyFacets` excludes private jobs, jobs with no body, and jobs whose category no dictionary resolved, matching `cmd/reindex`'s `splitJobs`. Keep the two in step. A company whose only openings fail that test therefore has `job_count = 0`, which is what keeps it out of `ListCompaniesForReindex`, the companies index and the sitemap — the page would otherwise render "0 open jobs", because its list is served by that same search.
@@ -15,6 +17,7 @@ The denormalized facet columns on `companies` — job-derived `remote_regions` a
 - `yc_flags` holds `top_company`/`hiring`; all `yc_*` columns are filterable by overlap on `GET /api/v1/companies`.
 
 ## How it works
+
 Company facets fall into two distinct ownership models that must never bleed into each other.
 
 The rule is about **writes**. No worker may write a column the other model owns: the recompute must not touch a curated column, and an importer must not touch a job-derived one. Reading across the line is fine and one facet does it deliberately — the `industries` filter matches a company through the curated `industries` column **or** through `industries_derived`, a job-derived column `RefreshCompanyFacets` fills by translating the company's own `domains` through `internal/dict/industrytag`'s domain→industry mapping (`internal/dict/industrytag.DomainIndustryPairs()`, passed into the query as parameters rather than duplicated in SQL). `industries_derived` is a second-order derivation — it READS the curated `industries` column (empty there is a precondition, alongside a domain-count threshold of two) but does not write it, so the ownership boundary holds. Both query backends (`search.CompanyFilterFromValues`, `ListCompanies`/`CountCompanies`) filter `industries` as a plain OR between the two columns, with no runtime precedence check — precedence and the threshold are baked in at materialization time instead. It exists because the two columns answer the same question from different sources, and the curated one alone reaches about a quarter of the catalogue. Consequently there is no separate "Domain" control in the companies filter modal; `domains` remains an accepted query parameter for the raw job-derived value, including the ones (`other`, `media`, `mobility`) that map to no industry.
@@ -26,6 +29,7 @@ The rule is about **writes**. No worker may write a column the other model owns:
 **Curated facets (`yc_*`):** populated by `cmd/import-yc` from the yc-oss directory (`yc-oss.github.io/api/companies/all.json`). `internal/job/ycdir.Map` turns each entry into company-info (one_liner→tagline, long_description→`company_info.description`, `industry`+`industries`+`subindustry` leaf+`tags`→industries, team_size→employee_count, launched_at→year_founded, all_locations→hq_country via `internal/dict/location`) plus the four curated facet columns. `UpsertYCCompany` updates matched companies and inserts the rest as reference rows. Because the `yc_*` columns are importer-owned, `RefreshCompanyFacets` must never touch them — the recompute references only job-derived data, and a test guards this boundary. The company page shows YC badges (top-company/hiring/stage) from `company_info`; logos come from logo.dev (not the yc-oss logo). Re-run `cmd/import-yc` to refresh.
 
 ## Limitations
+
 - A dictionary change to `internal/dict/location` affects `hq_country` derivation for YC entries only on the next `cmd/import-yc` run, not automatically.
 - `remote_regions` lags behind a job's geography change until the next `RefreshCompanyFacets`/`cmd/recount-companies` recompute.
 - The searchable scope reproduces `search.DescriptionMissing` only approximately: that helper strips the body to plain text before testing it and the SQL cannot, so a posting whose body is empty markup still counts. The residual is small and self-limiting — such a company reaches the sitemap, and its page answers `noindex` off the same search that dropped the row.

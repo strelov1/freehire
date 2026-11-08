@@ -9,6 +9,7 @@ text (title, company, description, location), the filterable facets, the
 sortable fields, and the display fields returned to clients.
 
 The index SHALL declare:
+
 - **searchable attributes**: title, company, description, location.
 - **filterable attributes**: source, company_slug, work_mode, employment_type,
   seniority, category, domains, regions, countries, company_type, company_size,

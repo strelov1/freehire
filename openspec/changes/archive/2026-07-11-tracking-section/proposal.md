@@ -17,6 +17,7 @@
 <!-- none -->
 
 ### Modified Capabilities
+
 - `user-job-tracking`: adds the analysed-jobs list endpoint (with quota in meta), renames the tracking surface to `/me/tracking` (retaining `/me/jobs` aliases), and renames the frontend `/my/jobs` section to `/my/tracking` with redirects from the old URLs.
 
 ## Impact

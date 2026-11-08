@@ -25,6 +25,7 @@ board-catalog `(provider, board)` model, and the `apply_forms` queue-drain fetch
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl any Dover-hosted company board (one board = one company slug) into the catalogue with full
   posting detail, following the existing hydrating-adapter shape.
 - Recognize Dover board/job URLs for board-contribution intake without misfiring on the rest of
@@ -32,6 +33,7 @@ board-catalog `(provider, board)` model, and the `apply_forms` queue-drain fetch
 - Capture Dover application forms through the existing `apply_forms` queue-drain path.
 
 **Non-Goals:**
+
 - Discovering Dover companies automatically (no public directory/search exists on Dover, same as
   greenhouse/ashby/lever — boards are added one at a time via `board_submissions`/`cmd/add-board`).
 - Submitting applications through Dover (Cloudflare Turnstile gates that flow; out of scope, and

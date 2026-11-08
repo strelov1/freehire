@@ -1,8 +1,11 @@
 # job-aggregate Specification
 
 ## Purpose
+
 TBD - created by archiving change job-domain-aggregate. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: A Job is constructed only through the aggregate factory
 
 The system SHALL expose a single construction path for a `Job` domain value — a
@@ -169,4 +172,3 @@ afterwards, which would fingerprint a posted time other than the one written.
 - **WHEN** two write paths persist postings with identical mapped content
 - **THEN** both rows carry the same `content_hash` and the same `role_fingerprint`,
   because a single mapping computed them
-

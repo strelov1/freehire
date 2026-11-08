@@ -11,7 +11,7 @@ loop between "saved" and "applied" without becoming spam.
   reminder can be scheduled to fire after a delay, delivered over the user's chosen
   channels (Telegram / email), reusing the existing `internal/notify` delivery engine.
 - **Hybrid scheduling model:** an account-level default rule (enabled + default delay
-  + channel selection) governs new saves; each save can override the delay or opt out
+  - channel selection) governs new saves; each save can override the delay or opt out
   for that one job at save time.
 - **Non-intrusive save affordance:** after saving a job the UI offers quick reminder
   choices (default / tomorrow / +week / don't remind) — no modal, no forced decision;
@@ -28,6 +28,7 @@ loop between "saved" and "applied" without becoming spam.
 ## Capabilities
 
 ### New Capabilities
+
 - `saved-job-reminders`: scheduling, cancellation, and delivery of one-shot reminders
   for saved-but-not-applied jobs, with an account-level default rule and per-job
   overrides, delivered via the existing notification channels.
@@ -43,7 +44,7 @@ loop between "saved" and "applied" without becoming spam.
   new sqlc queries.
 - **Backend:** new `internal/reminder` package (settings + scheduling use case and the
   firing engine, mirroring `internal/subscription` + `internal/notify`); reminder settings
-  + per-job reminder HTTP endpoints under `/api/v1/me`; the save/apply/unsave handlers
+  - per-job reminder HTTP endpoints under `/api/v1/me`; the save/apply/unsave handlers
   orchestrate `reminder.Service` alongside `jobtracking` (which is left untouched); job
   closure is handled lazily by the worker's fire-time re-check.
 - **Worker:** new `cmd/remind` run-once binary, scheduled on prod like the other cron

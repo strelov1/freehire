@@ -77,7 +77,6 @@ Two producer paths:
 - **Later (seam):** the ingest path inserts into `enrichment_outbox` in the **same
   transaction** as the job upsert — the transactional-outbox guarantee that a newly
   ingested job is never lost from enrichment.
-
 - **Honest caveat:** the transactional-outbox payoff (atomic ingest+enqueue) only
   materializes when ingest exists. Until then the backfill bridges existing rows. We
   accept building the queue ahead of its in-transaction producer because it is the
@@ -124,7 +123,6 @@ so no row lock or DB connection is held across the slow call.
   again. An invalid payload is **never** written to `jobs`. The lease is *not* cleared
   on failure — its expiry gates the retry to a later run and doubles as the crash
   reaper, so a failed entry is never reprocessed within the same run (no hot loop).
-
 - **Why delete on success:** the user chose a lean table; pending + dead-letter only.
   Provenance on `jobs` already records that the job was enriched and at what version, so
   the outbox needs no "done" history.

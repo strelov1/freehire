@@ -16,9 +16,11 @@ Auditing `teamtailor` specifically surfaced something beyond a marker-eligibilit
 ## Capabilities
 
 ### New Capabilities
+
 - `full-board-listing-marker`: the observable contract behind `sources.fullBoardListing` — what a marked provider's crawl must prove about a board's completeness, and that only a marked provider's boards are eligible for the per-run board-scoped unseen-job close.
 
 ### Modified Capabilities
+
 (none)
 
 ## Impact

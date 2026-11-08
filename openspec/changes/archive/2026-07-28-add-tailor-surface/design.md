@@ -6,6 +6,7 @@ layout, boxed in rounded cards, CV preview bolted on. The user wants a dedicated
 surface with a tabbed artifact panel (CV / Job description / Verdict), styled like roy-web.
 
 Current state:
+
 - `/my/assistant/+page.svelte` (~940 lines) holds ALL chat logic inline: `RoyClient` transport,
   session lifecycle (`openSession`/`createAndOpen`/`selectSession`), message list rendering,
   composer + queue, labels, and (recently) the CV preview panel + collapsible rail.
@@ -15,12 +16,14 @@ Current state:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Dedicated `/tailor/[slug]` route with its own full-width layout.
 - One reusable `<AssistantChat>` component, shared by `/tailor` and `/my/assistant`.
 - Tabbed, resizable artifact panel: CV | Job description | Verdict.
 - Bootstrap + auto-start on load.
 
 **Non-Goals:**
+
 - Any backend / API / DB change.
 - Reworking the roy agent or the tailoring persona (already deployed).
 - A general artifacts framework — just these three fixed tabs.

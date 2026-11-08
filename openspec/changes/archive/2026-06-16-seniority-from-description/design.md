@@ -11,10 +11,12 @@ have a description-stated grade the title misses.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A deterministic, high-precision `seniority` derivation from the description.
 - Description is the lower-priority source: title → description.
 
 **Non-Goals:**
+
 - `category` from the description (its prose signal — tech-stack mentions — is too
   noisy; deferred to its own careful change).
 - Years-of-experience → grade banding (the boundaries are a judgment call, not a

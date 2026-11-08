@@ -1,6 +1,7 @@
 # Résumé identity
 
 ## Scope
+
 `internal/candidate/resume` — one stored CV per user, the structured extract stamped to that
 upload, and `Owned` — the candidate-owned override block that outlives the file and now
 covers identity *and* the flat/scalar part of the semantic body (headline, summary,
@@ -43,6 +44,7 @@ A reader that needs “is the file-owned parse current?” uses stamp-gated `Str
 `GET /me/resume` composes Profile: owned contacts field + `ProfileReadForUser` + bank `SeedHistory`. That composition must match `StructureForSeed` + `bankedSeeder` for identity and for “stale ⇒ no superseded body.”
 
 ## Always true
+
 - **Stamp gate is not identity.** A pending extract is not a current structure. Provisional contacts may still fill a name.
 - **Owned contacts win as a block** on compose. Mixing a typed email with a stale extract name is the bug this table exists to prevent.
 - **Delete clears the file and the extract, not owned contacts.**

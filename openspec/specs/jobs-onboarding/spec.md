@@ -1,8 +1,11 @@
 # jobs-onboarding Specification
 
 ## Purpose
+
 TBD - created by archiving change jobs-onboarding-wizard. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Onboarding wizard captures feed preferences
 
 The system SHALL present a skippable multi-step wizard that captures a visitor's job-feed preferences — role, seniority, work mode, region, and stack — without requiring an account.

@@ -12,6 +12,7 @@ eArcu is a multi-tenant UK ATS behind the career sites of large employers (Cambr
 ## Capabilities
 
 ### New Capabilities
+
 - `earcu-source`: crawl a per-company eArcu career site via its keyless `/jobs/rss` feed (board = careers host) and normalize its open vacancies into the job catalogue, with detail-page JSON-LD as a body fallback.
 
 ### Modified Capabilities

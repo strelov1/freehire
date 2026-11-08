@@ -56,7 +56,7 @@ only — the letter is still useful there, but by hand.
 
 ## How it works
 
-```
+```text
 bank ──► Gather (missing-have only) ──► Publishable ──► offered
                                                           │
    stage 1 select ──► stage 2 draft ──► stage 3 audit ──► Sanitize ──► Store

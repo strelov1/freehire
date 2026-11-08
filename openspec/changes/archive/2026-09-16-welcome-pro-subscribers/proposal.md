@@ -24,10 +24,12 @@ currently require a person to notice and act by hand.
 ## Capabilities
 
 ### New Capabilities
+
 - `pro-welcome-email`: detecting a first-ever transition into a paying tier and sending a
   one-time, personal welcome email for it.
 
 ### Modified Capabilities
+
 - `header-navigation`: the header's profile icon (desktop) gains a tier badge for a paying
   account.
 

@@ -15,6 +15,7 @@ way to obtain a same-space CV vector is to have Meili embed it.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `/my/recommendations` feed of jobs ranked by semantic similarity to the
   user's CV.
 - A **persisted** CV embedding that is guaranteed same-space with the jobs.
@@ -22,6 +23,7 @@ way to obtain a same-space CV vector is to have Meili embed it.
 - Graceful degradation (no CV / no vector / no storage / no semantic index).
 
 **Non-Goals:**
+
 - Changing the swipe deck (`job-swipe`).
 - Skill-based ranking (already cheap via facet filters).
 - Behavior/taste vectors; CV-summary embedding to beat input truncation.

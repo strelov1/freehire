@@ -1,8 +1,11 @@
 # job-swipe Specification
 
 ## Purpose
+
 TBD - created by archiving change add-job-swipe-mode. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Entering swipe mode from the jobs page
 
 The system SHALL provide a swipe-mode entry point in the `/jobs` toolbar,
@@ -159,4 +162,3 @@ back to the `/jobs` list to widen filters.
 
 - **WHEN** the deck has no remaining cards and no further jobs match
 - **THEN** an empty state is shown with a link back to `/jobs`
-

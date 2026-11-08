@@ -15,11 +15,13 @@ mechanism does not fit; the hub property must be **per board entry**, not per pr
 ## Goals / Non-Goals
 
 **Goals**
+
 - Attribute AlumniHub vacancies to their real employer (Fluently, Mirai, Sparkland, …).
 - Leave every non-hub board (Banki.ru, Flowwow, …) completely unchanged.
 - No new source, schema, env var, migration, or dedup change.
 
 **Non-Goals**
+
 - Generalising the hub mechanism to non-huntflow providers (none need it yet).
 - Making the `Partners` container folder name configurable (YAGNI — one hub today).
 - Mapping salary or other new fields.
@@ -27,6 +29,7 @@ mechanism does not fit; the hub property must be **per board entry**, not per pr
 ## Decisions
 
 ### Per-entry opt-in flag (`CompanyEntry.Hub bool`), not a provider marker or heuristic
+
 - **Chosen**: add an optional `Hub bool` field (`yaml:"hub"`) to `CompanyEntry`, set only on the
   `alumnihub-career` entry. The adapter branches on it.
 - **Why**: explicit, safe (untouched boards behave identically), and follows the existing
@@ -43,6 +46,7 @@ mechanism does not fit; the hub property must be **per board entry**, not per pr
     the single hub we have. Deferred as the documented seam (see Risks).
 
 ### Employer = segment immediately before the `Partners` folder
+
 - **Chosen**: split `division` on either separator (`·`/`•`), find the `Partners` segment, take
   the segment before it; fall back to the configured company otherwise.
 - **Why**: robust against the real data. The naive "first segment" breaks on
@@ -53,6 +57,7 @@ mechanism does not fit; the hub property must be **per board entry**, not per pr
   (`Mirai · Partners · Vacancies` → `Partners`). Rejected.
 
 ### Read `division` in `detail()` where the `Job` is already built
+
 - The detail payload (already fetched per vacancy) carries `division`; extract it there
   alongside the existing fields and branch the `Company` assignment. No extra request.
 

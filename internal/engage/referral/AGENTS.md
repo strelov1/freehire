@@ -1,6 +1,7 @@
 # Employee-referral conventions
 
 ## Scope
+
 The employee-referral marketplace. Members offer to refer into a company (proof CV +
 LinkedIn profile, manual moderation); seekers file a request that company's approved
 referrers all see. Domain service and ports in referral.go, the sqlc adapter in
@@ -9,6 +10,7 @@ routes `/me/referrals/*` behind cookie-or-key auth, the moderation queue under
 `/referrals/offers/*` behind the moderator gate (referrals.go:37-53).
 
 ## Always true
+
 - **A built CV must fit the request.** `ListReferralCVs` is both what the form offers and
   what `CreateRequest` checks: a CV the seeker tailored for the request's vacancy, or — with
   no vacancy (asked from the company page) — for any vacancy at the company. A base CV or one
@@ -47,6 +49,7 @@ routes `/me/referrals/*` behind cookie-or-key auth, the moderation queue under
   `/in/<handle>` path, on both the offer and the request side (referral.go:444-461).
 
 ## How it works
+
 Wiring is in handler.go:484-513: the SES client (reusing the notify worker's AWSRegion +
 `NotifyEmailFrom`) and the Telegram bot are both optional — nil disables that channel, and
 a referrer with no enabled channel still sees requests in-cabinet. Proof CVs go through

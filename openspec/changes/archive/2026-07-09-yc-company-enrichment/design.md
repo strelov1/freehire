@@ -10,12 +10,14 @@ from yc-oss is a mapping + two curated facet columns, not new infrastructure.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Hold the full YC directory: update matched companies, insert the rest as
   reference rows.
 - Map yc-oss's descriptions/industry/size/founded/HQ into existing company-info.
 - Add `yc_batch` + `yc_status` as filterable company facets.
 
 **Non-Goals:**
+
 - LLM enrichment — yc-oss is authoritative, deterministic.
 - Touching job-derived facets or the recompute (the new columns are curated).
 - A batch-code normalizer beyond what the source gives (store `Winter 2012` /

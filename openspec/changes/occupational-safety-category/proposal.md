@@ -59,6 +59,7 @@ through `is_tech` derivation and the search index with no further code change.
 ## Capabilities
 
 ### New Capabilities
+
 - `occupational-safety-category`: the category exists as a facet value with a defined
   membership — which title families resolve to it, which lookalike words must NOT, that
   its block outranks the bare `manager` fall-through, and that a resolved posting
@@ -68,6 +69,7 @@ through `is_tech` derivation and the search index with no further code change.
   that keep three-letter HSE credentials from claiming IT postings.
 
 ### Modified Capabilities
+
 - `design-taxonomy`: its "A resolved engineering-design category vetoes deletion"
   requirement closes with "Non-technical categories other than `engineering_design` MUST
   keep their current behaviour" — a sentence a second vetoing category contradicts. The

@@ -7,7 +7,9 @@ chat and the fit-analysis verdict — read job descriptions, browsed pages, and 
 attacker controls end to end, so anything the model writes may be an attacker's words in the
 model's mouth. Two layers keep that from becoming a request the viewer never asked to make:
 the sanitizer applied to model markdown before `{@html}`, and the CSP image allowlist behind it.
+
 ## Requirements
+
 ### Requirement: Assistant model output renders as inert markup
 
 The assistant SHALL render model output through a sanitizer policy that strips every element and

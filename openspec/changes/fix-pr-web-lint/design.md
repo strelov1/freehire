@@ -5,11 +5,13 @@ See proposal.md — Why. PR #1737 is red on three independent jobs from the same
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make `pnpm run lint` (web), `gofmt -l` on changed Go files, and `pnpm check:tokens` (design-system) exit 0 on this branch tip.
 - Keep the fit-verdict markdown path DOMPurify-sanitized; only align ESLint with peers.
 - Leave changes as local commits until the user asks to push.
 
 **Non-Goals:**
+
 - Broader oxlint warning cleanup across `web/`.
 - Changing `renderMarkdown` / DOMPurify policy.
 - Teaching the token detector about regex character classes in general (optional follow-up).

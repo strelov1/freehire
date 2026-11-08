@@ -1,6 +1,7 @@
 # LLM-client conventions
 
 ## Scope
+
 A thin provider-agnostic wrapper over langchaingo for OpenAI-compatible endpoints: JSON
 generation with fence-stripping and optional schema constraints, streaming, tool-calling
 chat, Langfuse tracing, and per-user spend attribution via gateway credentials and
@@ -10,6 +11,7 @@ backfills, and `internal/ai/enrich`, `matchanalysis`, `resumeextract`, `atscheck
 `mailclassify`, `mailrecall`, `telegram`, `autofillagent`, `assistant`, `cv`.
 
 ## Always true
+
 - **`NewClient(Settings, source)` is the single construction path** (llm.go:158). It builds
   the client, attaches a Langfuse tracer when the three `Langfuse*` fields are set, and
   returns `(client, flush, err)`. **Always defer the flush func** — it drains buffered
@@ -56,6 +58,7 @@ backfills, and `internal/ai/enrich`, `matchanalysis`, `resumeextract`, `atscheck
   the test enforcing the background rule).
 
 ## Surface
+
 - `GenerateJSON` (llm.go:203) / `GenerateJSONStream` (llm.go:257) — system+user prompt in
   JSON mode; the stream sibling forwards reasoning tokens to `onThinking` and returns the
   accumulated content. Output is raw — the caller unmarshals into its own contract type.

@@ -41,6 +41,7 @@ change ports that pattern onto `internal/atsapply`'s existing pipeline.
   allowlist is part of this change, not a side effect — see design.md's Decisions.
 
 Explicitly **not** part of this change:
+
 - Any change to the deterministic `Resolve`/`labelAnswerKeyFor` path from `auto-apply-worker`
   — this change only adds a fallback for what that path leaves unmapped.
 - The alternative agentic architecture (`internal/autofillagent.Tools` driving a headless
@@ -54,12 +55,14 @@ Explicitly **not** part of this change:
 ## Capabilities
 
 ### New Capabilities
+
 - `auto-apply-question-drafting`: LLM-drafted free-text answers for custom application
   questions the deterministic resolver leaves unmapped, strictly grounded in the candidate's
   own stored data, gated by a sensitive-field check that runs before drafting and always
   wins.
 
 ### Modified Capabilities
+
 (none in `openspec/specs/` — `auto-apply-submit` was proposed by `auto-apply-worker`, which
 is not archived yet, so there is no main spec to delta against. This change's behavior
 change to `Resolve`'s unmapped path — try the drafter first, park only if it also cannot

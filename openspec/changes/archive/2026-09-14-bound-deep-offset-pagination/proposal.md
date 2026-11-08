@@ -86,7 +86,6 @@ and the page does not. See tasks §5.1.
 - **nginx gains no new `limit_req` zone.** The app limiter already throttles these paths and
   did fire; a second copy of the same ceiling in a second place is a second answer to
   maintain. The defect was the unbounded cost, not the missing throttle.
-
 - **No Cloudflare rule either**, though the edge is live and terraform-managed
   (`freehire-ops/infra/cloudflare`) and its rate-limit ruleset exempts `/api/` — which is
   genuinely where this crawler walked in. Three reasons not to close it there:

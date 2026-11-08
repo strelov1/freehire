@@ -14,6 +14,7 @@ The onboarding wizard turns a fresh `/jobs` visit into a personalized feed, but 
 ## Capabilities
 
 ### New Capabilities
+
 - `cv-autofill`: Derive a résumé's seniority, categories, and skills via the existing deterministic dictionaries and pre-fill them into the onboarding wizard (and the profile form), so a signed-in visitor can configure their feed from a CV upload instead of by hand.
 
 ### Modified Capabilities

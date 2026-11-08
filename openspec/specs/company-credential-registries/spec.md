@@ -1,6 +1,7 @@
 # company-credential-registries Specification
 
 ## Purpose
+
 Company tags drawn from authoritative public registers rather than editorial
 judgement — currently the UK Skilled Worker sponsor licence, the Dutch
 recognised-sponsor licence, and USCIS's approved-H-1B-petition history. Covers
@@ -11,6 +12,7 @@ Distinct from the job-level `enrichment.visa_sponsorship` signal, which
 reports what a posting says rather than what the employer is licensed to do.
 
 ## Requirements
+
 ### Requirement: A credential is a company fact sourced from an authoritative public register
 
 The system SHALL model a **credential** as a collection whose membership comes from

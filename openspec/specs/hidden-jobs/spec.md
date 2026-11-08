@@ -1,8 +1,11 @@
 # hidden-jobs Specification
 
 ## Purpose
+
 TBD - created by archiving change hide-jobs-from-list. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Hiding a job from the browse feed
 
 The system SHALL let an authenticated user hide a job directly from a job card in
@@ -100,4 +103,3 @@ user has no hidden jobs the tab SHALL show an empty state.
 
 - **WHEN** an authenticated user with no hidden jobs opens the "Hidden" tab
 - **THEN** the system shows an empty state indicating nothing is hidden
-

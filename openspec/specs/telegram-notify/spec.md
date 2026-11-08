@@ -1,8 +1,11 @@
 # telegram-notify Specification
 
 ## Purpose
+
 TBD - created by syncing change filter-subscriptions. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Link a Telegram chat to a user account
 
 The system SHALL let an authenticated user link their Telegram chat so the bot
@@ -76,4 +79,3 @@ reach a state where the bot is live but the webhook is unauthenticated.
 
 - **WHEN** the bot token is configured but the webhook secret is absent
 - **THEN** the feature stays disabled — the linking endpoints report it off, the webhook responds `404`, and the server logs why
-

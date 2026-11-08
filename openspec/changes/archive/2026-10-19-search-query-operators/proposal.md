@@ -25,6 +25,7 @@ order changes the result.
 ### New Capabilities
 
 ### Modified Capabilities
+
 - `job-search`: the public search query gains `OR` and `title:` operators.
 
 ## Impact

@@ -26,11 +26,13 @@ top of, unchanged:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let an eligible candidate start exactly one auto-apply attempt per job from the job page.
 - Reuse the existing queue table, its unique constraint, and the existing event-publish
   shape — no new schema, no new publish mechanism.
 
 **Non-Goals:**
+
 - Any change to `cmd/auto-apply-orchestrate`, the tailor/review endpoints, or
   `internal/application/autoapply` — all already handle everything from a fresh queue
   entry onward.
@@ -111,6 +113,7 @@ absent-or-set) the tailor/review endpoints already read — no fourth status col
 enum duplicated between Go and the database.
 
 **Alternatives considered:**
+
 - *A general "enable auto-apply" account-level toggle instead of a per-job button.*
   Rejected: the product direction decided before this change (recorded in
   `auto-apply-tailored-resume`'s own deferred task 2.1) is a per-posting button on the JD

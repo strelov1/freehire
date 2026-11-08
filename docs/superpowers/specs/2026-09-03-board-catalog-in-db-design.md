@@ -151,7 +151,7 @@ the row's job is already done.
 
 Drops `SOURCES_FILE`/path-argument loading. Takes a provider name:
 
-```
+```text
 go run ./cmd/ingest greenhouse
 ```
 

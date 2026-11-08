@@ -1,8 +1,11 @@
 # ghost-jobs-feature-landing Specification
 
 ## Purpose
+
 TBD - created by archiving change ghost-jobs-landing-redesign. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Public ghost-jobs feature landing page
 
 The frontend SHALL serve a public, unauthenticated page at `/features/ghost-jobs` that
@@ -166,4 +169,3 @@ data, so the two cannot disagree.
 - **WHEN** a FAQ entry is added, edited or removed
 - **THEN** both the visible FAQ and the page's FAQ structured data change together, because
   they render from the same array
-

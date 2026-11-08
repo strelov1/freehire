@@ -13,11 +13,13 @@ it returns 401 against live portals. The real, validated endpoint is the candida
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A keyless `crelate` adapter that crawls one portal's published jobs in a single request.
 - Map the structured fields the feed provides (location, posted date, per-job employer, human job URL).
 - Fit the existing `Source` interface and board-file conventions; no new infrastructure.
 
 **Non-Goals:**
+
 - No salary ingestion (the `Job` contract has no salary field; enrichment derives it).
 - No work-mode facet — the feed exposes no structured remote flag; the pipeline's location/text
   dictionaries decide.

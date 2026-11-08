@@ -34,10 +34,12 @@ They have no logo of their own and stay filters.
 ## Capabilities
 
 ### New Capabilities
+
 - `backer-badges`: what a backer collection is, which brands qualify, how a badge
   is presented on each surface, and why it carries no monogram fallback.
 
 ### Modified Capabilities
+
 - `job-collections`: the `kind` contract gains a third value; a dataset gains a
   fourth payload form (self-fetching, for paginated sources).
 

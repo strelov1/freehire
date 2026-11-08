@@ -43,12 +43,14 @@ on every save and costs no AI credits.
 ## Capabilities
 
 ### New Capabilities
+
 - `tailor-job-match`: deterministic, job-anchored scoring of a tailored CV against the vacancy it is
   bound to — the four categories, their weights and line items, the requirement re-derivation and
   its unverifiable fallback, the endpoint's ownership and degradation rules, and the workspace tab
   that surfaces it live.
 
 ### Modified Capabilities
+
 - `tailor-workspace`: the right-hand context panel's tab set changes from three tabs to four, split
   by what each measures; the workspace gains a link to the vacancy's own page.
 - `tailor-ats-delta`: the delta is no longer surfaced under a tab named Verdict alongside the fit

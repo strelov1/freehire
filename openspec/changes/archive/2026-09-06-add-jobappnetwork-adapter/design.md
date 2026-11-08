@@ -7,6 +7,7 @@ there.
 
 **Vendor and hosts.** `apply.jobappnetwork.com` serves talentReef's applicant-facing React SPA
 (`<title>talentReef</title>` in the served HTML). The SPA's own bundle names the real API hosts:
+
 - `https://prod-kong.internal.talentreef.com/apply` — the REST API (its "internal" name is
   misleading: it resolves publicly and answers unauthenticated requests from any origin,
   `access-control-allow-origin: *`).
@@ -25,6 +26,7 @@ issue's scope and every other adapter's default-locale convention (e.g. Dayforce
 `dayforceDefaultCulture`).
 
 **Posting shape** (fields actually observed; irrelevant styling/tracking fields omitted):
+
 ```json
 {
   "jobId": 7216553,
@@ -39,6 +41,7 @@ issue's scope and every other adapter's default-locale convention (e.g. Dayforce
   "url": "/apply/c_mdm/l_en/Shift-Leader-job-Houston-TX-US-7216553.html"
 }
 ```
+
 `description` is the full posting body (rich HTML), not a preview — no separate detail request is
 needed, the same shape Dayforce's listing carries.
 
@@ -68,6 +71,7 @@ non-tech-title rejection every crawled board already goes through.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl a single jobappnetwork board (client id) to the same standard every other single-employer
   adapter meets: paginate to the platform's own exact total, map every field the listing states,
   never fabricate one.
@@ -76,6 +80,7 @@ non-tech-title rejection every crawled board already goes through.
   board without a person naming the provider by hand.
 
 **Non-Goals:**
+
 - Alias-based onboarding (`/careerPages/alias/<name>` → clientId). Every apply link the harvest
   actually sees already carries the numeric clientId directly (issue #2080's own sample), so
   resolving a human-readable alias adds a request and a second board-identity question

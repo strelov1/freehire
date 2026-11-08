@@ -20,6 +20,7 @@ scheme/host noise.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Resolve a page URL to its catalog posting for any source whose stored `url` is the
   posting's own detail page, without a parser per provider.
 - Keep the exact-identity path first and unchanged.
@@ -28,6 +29,7 @@ scheme/host noise.
 - Stay a single indexed equality lookup — no scan, no fetch, no LIKE.
 
 **Non-Goals:**
+
 - Resolving a page whose posting we do not carry (that is the contribute/import change).
 - Resolving to a closed or duplicate posting.
 - Fuzzy URL matching (path prefixes, id extraction from arbitrary paths).

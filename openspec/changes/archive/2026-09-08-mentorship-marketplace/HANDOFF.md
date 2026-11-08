@@ -8,7 +8,7 @@ have to rediscover.
 ## Where the work is
 
 - **Branch**: `worktree-mentorship-marketplace`
-- **PR**: https://github.com/strelov1/freehire/pull/2626 — 16 commits, 65 files, all 18 CI
+- **PR**: <https://github.com/strelov1/freehire/pull/2626> — 16 commits, 65 files, all 18 CI
   checks green, `mergeStateStatus: CLEAN`. Not merged; merging is the user's call.
 - **Worktree**: `.claude/worktrees/mentorship-marketplace` (created with EnterWorktree)
 - **Reference implementation read while designing**: `/Users/i_strelov/Projects/cal.com`,
@@ -34,7 +34,7 @@ was deliberate.
 
 Public (no auth, rate-limited on their own budget):
 
-```
+```text
 GET  /api/v1/mentors                    ?company= &topic= &language= &limit=
 GET  /api/v1/mentors/:slug
 GET  /api/v1/mentors/:slug/slots        ?from= &to= &timezone=
@@ -42,7 +42,7 @@ GET  /api/v1/mentors/:slug/slots        ?from= &to= &timezone=
 
 Seeker (cookie or API key):
 
-```
+```text
 POST /api/v1/mentors/:slug/bookings     {starts_at, timezone, note, job_id}
 GET  /api/v1/me/mentorship/sessions
 GET  /api/v1/me/mentorship/sessions/:id
@@ -52,7 +52,7 @@ PUT  /api/v1/me/mentorship/sessions/:id/review   {rating, comment}
 
 Mentor cabinet:
 
-```
+```text
 GET    /api/v1/me/mentorship/profile
 POST   /api/v1/me/mentorship/profile             {company_slug, slug, name, headline, bio,
                                                   topics[], languages[], timezone,
@@ -71,7 +71,7 @@ GET    /api/v1/me/mentorship/bookings
 
 Moderation (moderator gate):
 
-```
+```text
 GET  /api/v1/mentorship/profiles
 POST /api/v1/mentorship/profiles/:id/decide      {status: approved|rejected}
 ```

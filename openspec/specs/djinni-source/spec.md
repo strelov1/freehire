@@ -1,8 +1,11 @@
 # djinni-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-djinni-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Djinni listing crawl over embedded JSON-LD
 
 The system SHALL provide a `djinni` source adapter that crawls the anonymous listing
@@ -116,4 +119,3 @@ the company, title, and country the suppression pass keys on.
 - **WHEN** a Djinni posting has no matching first-party ATS twin (a role posted only on
   Djinni, even for a company otherwise crawled via an ATS)
 - **THEN** the posting is not suppressed and remains in search, embedding, and enrichment
-

@@ -15,11 +15,13 @@ needed bet) to a future slice.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Persist per-board outcome so a failing board is remembered across runs.
 - Back a repeatedly-failing board off (skip it) with a capped, self-healing cooldown.
 - Make unhealthy boards visible (run summary + a queryable table).
 
 **Non-Goals:**
+
 - No daemon, no queue, no River — cron and its cadence are untouched.
 - No catalog move — boards + cadence stay in YAML/git; the table is runtime state only.
 - No change to how a board crawls, normalizes, upserts, or to the stale sweep.
@@ -29,7 +31,7 @@ needed bet) to a future slice.
 
 ### D1. `board_health` is a runtime-state sidecar keyed by `(provider, board)`
 
-```
+```text
 board_health(
   provider text, board text,           -- PK; boardless/aggregator entries use board=''
   consecutive_failures int not null default 0,
@@ -55,7 +57,7 @@ orchestration slice, not now.
 `pipeline.Runner` gains an optional `BoardHealth` port (nil = disabled, so unit tests
 and non-DB callers are unaffected, mirroring the optional `closer`):
 
-```
+```text
 type BoardHealth interface {
     Cooldown(ctx, provider, board string) (time.Time, bool, error)   // is it cooled, until when
     RecordSuccess(ctx, provider, board string, ingested int) error
@@ -76,7 +78,7 @@ the adapter call inside the Runner's per-board loop, so the port belongs to the 
 The hourly cron is the natural retry, so the first two failures apply **no** cooldown.
 From the third consecutive failure:
 
-```
+```text
 consecutive_failures < 3   → no cooldown (eligible next run)
 consecutive_failures >= 3  → cooldown_until = now + min(24h, 6h * 2^(f-3))
       f=3 → 6h    f=4 → 12h    f=5 → 24h    f>=6 → 24h (capped)

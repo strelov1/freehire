@@ -14,12 +14,14 @@ lack a resolvable logo, so degradation is a first-class concern, not an edge.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A per-job 1200×630 PNG preview, on demand, in the freehire brand.
 - Card design and degradation live in the web tier, in TypeScript, reusing the
   generated `Job` contract and the existing `formatSalary`.
 - `og:image` + `summary_large_image` on the job page; other routes unaffected.
 
 **Non-Goals:**
+
 - OG images for company or list pages (same module extends later).
 - Dark-theme image variants (OG images are static; platforms ignore theme).
 - Pre-generation/storage, CDN or nginx caching config (ops-tier, separate repo).
@@ -28,9 +30,11 @@ lack a resolvable logo, so degradation is a first-class concern, not an edge.
 ## Decisions
 
 ### Render on demand in SvelteKit with satori + resvg
+
 Endpoint `web/src/routes/jobs/[slug]/og.png/+server.ts` (same routing idiom as the
 existing `sitemap.xml/+server.ts`, `robots.txt/+server.ts`). It fetches the job
 via `serverApi(fetch).getJob(slug)`, renders, and returns `image/png`.
+
 - **Why:** keeps brand/design/contract in the web tier; `satori` + `@resvg/resvg-js`
   is the proven `@vercel/og` pipeline; iterating the visual is TypeScript.
 - **Alternatives:** render in Go (no satori-equivalent; hand-rolled text layout,
@@ -38,7 +42,9 @@ via `serverApi(fetch).getJob(slug)`, renders, and returns `image/png`.
   every edit/enrichment/close) — premature; noted as a future seam.
 
 ### Module split keeps the layout pure
+
 `web/src/lib/server/og/` (server-only):
+
 - `card.ts` — **pure** `buildCard(job, { logo }) => string`: the card HTML and all
   degradation logic. Sync, no I/O — so it is reviewable/verifiable in isolation
   even without a unit runner.
@@ -53,6 +59,7 @@ via `serverApi(fetch).getJob(slug)`, renders, and returns `image/png`.
   stand-in. `font-weight: 500` maps to SemiBold.
 
 ### Logo via logo.dev, monogram fallback
+
 Reuse the publishable logo.dev token the SPA already uses (extract the literal
 from `CompanyLogo.svelte` into a shared `$lib` constant rather than duplicating
 it). Fetch `name/<company>?token=…&fallback=404` server-side; on `200` embed the
@@ -60,6 +67,7 @@ bytes as a `data:` URI; on `404`/timeout/error fall back to a monogram tile. Log
 failure is never a render failure.
 
 ### Optional `image` prop on Seo.svelte
+
 `Seo.svelte` gains an optional `image?: string` (absolute URL). When set it emits
 `og:image` (+ width/height/alt) and switches `twitter:card` to
 `summary_large_image` with `twitter:image`; when absent, behaviour is unchanged.
@@ -67,6 +75,7 @@ The job page passes `${origin}/jobs/${slug}/og.png` (og:image must be absolute;
 `origin` is already derived from `page.url.origin`).
 
 ### Caching
+
 `Cache-Control: public, max-age=3600, stale-while-revalidate=86400`. Job content
 changes (enrichment, close) so the URL is not immortal, but crawlers refetch
 rarely. No in-process LRU and no nginx proxy_cache in v1 — noted as seams.

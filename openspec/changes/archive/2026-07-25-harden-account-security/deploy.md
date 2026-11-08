@@ -43,7 +43,7 @@ reasoning that prod runs a single origin. That was checked against `/opt/freehir
 alone — but the API also reads `/opt/freehire/env/hire-api.env`, and the cookie domain
 lives there:
 
-```
+```text
 COOKIE_DOMAIN=.freehire.dev,.freehire.me
 FRONTEND_ORIGIN=https://freehire.dev
 ```
@@ -56,7 +56,7 @@ with `state mismatch`.
 
 Set it to every host the app serves (nginx `server_name`s minus the sibling services):
 
-```
+```text
 SERVED_HOSTS=freehire.dev,www.freehire.dev,freehire.me,www.freehire.me
 ```
 

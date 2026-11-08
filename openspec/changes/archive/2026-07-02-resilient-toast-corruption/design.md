@@ -5,6 +5,7 @@
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One corrupted (`XX001`) row cannot abort a full-scan worker; it is skipped and logged, the scan completes.
 - `reindex` reaches its swap with corrupted rows present (this also closes the live `/facets` 500 once deployed).
 - `enrich` dead-letters a corrupted row immediately instead of burning retries.
@@ -12,6 +13,7 @@
 - Operators can find and repair corrupted rows.
 
 **Non-Goals:**
+
 - Recovering the corrupted field's data (it is unrecoverable; re-ingest/re-enrich repopulates).
 - Enabling Postgres data checksums (requires a cluster rebuild via dump/restore — tracked separately).
 - Changing the batch/keyset design or any API/schema.
@@ -19,6 +21,7 @@
 ## Decisions
 
 **1. Resilient page helper (shared).** Add `resilientPage(ctx, r ResilientReader, afterID, batchSize) (rows []db.Job, lastID int64, skipped []int64, err error)`:
+
 1. Fast path: `ListJobsByIDAfter(afterID, batchSize)`.
 2. On error classified as `XX001` (via `errors.As` → `*pgconn.PgError`, `Code == "XX001"`): call a new `ListJobIDsAfter(afterID, batchSize)` (projects `id` only — no toasted columns, so it never faults), then `GetJob(id)` per id; readable rows collected, `XX001` ids appended to `skipped` and logged, keyset advanced to the last listed id.
 3. Any non-`XX001` error returned unchanged.

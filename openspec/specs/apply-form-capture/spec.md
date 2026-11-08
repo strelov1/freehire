@@ -1,8 +1,11 @@
 # apply-form-capture Specification
 
 ## Purpose
+
 TBD - created by archiving change collect-ats-apply-forms. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: A job's application form is stored as the ATS published it
 
 The system SHALL store, for a job whose platform exposes one, the application
@@ -173,4 +176,3 @@ an education entry has five parts.
 - **WHEN** Workable describes an Education group containing school, field of study,
   degree and two dates
 - **THEN** the capture holds one control for the group and none for its parts
-

@@ -48,12 +48,14 @@ title→facet decomposition. Each is a follow-up if the picker proves out.
 ## Capabilities
 
 ### New Capabilities
+
 - `role-facet`: the `roletag` deterministic role dictionary (composite +
   named-role derivation, never-guess), its curated catalog (slug/label/group)
   exported to the web contracts, and the rule that `roles` is derived at index
   time and served as an additive search facet.
 
 ### Modified Capabilities
+
 - `job-search`: the jobs index gains a filterable + facetable `roles` attribute
   derived at index time, and the search / facets endpoints gain a `role` filter
   param (with `_exclude` / `_mode`) and `roles` facet distribution.

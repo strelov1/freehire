@@ -31,7 +31,7 @@
   Meilisearch request (q, filter expression from facet groups — OR within a
   facet, AND across facets — sort, limit/offset, `Hybrid{Embedder:"default",
   SemanticRatio}`). Always set `Embedder` explicitly. `SearchResult` carries hits
-  + `estimatedTotalHits`. Unit-test the filter-expression builder.
+  - `estimatedTotalHits`. Unit-test the filter-expression builder.
 
 ## 3. cmd/reindex batch worker
 

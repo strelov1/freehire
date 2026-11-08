@@ -1,8 +1,11 @@
 # job-public-identity Specification
 
 ## Purpose
+
 TBD - created by archiving change add-job-public-slug. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Public slug identifier
 
 Every job SHALL carry a `public_slug`: a URL-safe, human-readable identifier that
@@ -72,4 +75,3 @@ numeric id. A request for an unknown slug SHALL return 404.
 - **WHEN** an authenticated client sends `POST /api/v1/jobs/:slug/apply`
 - **THEN** the slug is resolved to the job's internal id and `applied_at` is set
   in `user_jobs` for that (user, job)
-

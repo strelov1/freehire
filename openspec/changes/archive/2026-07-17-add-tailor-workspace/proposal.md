@@ -22,6 +22,7 @@ tailored CV and its agent session, a resume mode, and the CV editor moved into t
 ## Capabilities
 
 ### New Capabilities
+
 - `tailor-workspace`: the `cvs.agent_session_id` link + its set/read endpoints, the `/tailor`
   resume mode, the in-workspace CV editor tab, and the `/my/cvs` re-open list (no create).
 

@@ -1,11 +1,13 @@
 # source-stats-rollup Specification
 
 ## Purpose
+
 The measurement behind the public source catalogue: what the `source_stats` snapshot
 holds, how its two job counts are taken together, and how a degraded measurement is
 reported rather than silently zeroed.
 
 ## Requirements
+
 ### Requirement: Per-source snapshot table
 
 The system SHALL maintain a `source_stats` table holding, per source key, the figures the

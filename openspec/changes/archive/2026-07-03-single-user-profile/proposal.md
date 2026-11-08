@@ -39,7 +39,7 @@ negligible production data, avoids paying migration cost later.
 
 ### New Capabilities
 
-_None._
+*None.*
 
 ### Modified Capabilities
 

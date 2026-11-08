@@ -25,7 +25,7 @@ pattern already established by `/my/tracking` and `/my/activity`.
 
 ### Route layout
 
-```
+```text
 web/src/routes/my/profile/
   +layout.svelte        # NEW — status load gate, setup branch, tab strip
   +page.ts              # NEW — ?tab= compat redirect (see below)

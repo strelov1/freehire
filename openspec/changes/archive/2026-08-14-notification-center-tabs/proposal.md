@@ -28,11 +28,13 @@ been sent and adjust everything that controls it.
 ## Capabilities
 
 ### New Capabilities
+
 - `notification-center-navigation`: the shared tab strip and route structure
   for `/my/notifications` (history/searches/settings), including the
   redirects from the two retired URLs.
 
 ### Modified Capabilities
+
 - `account-navigation`: the account section nav list drops the standalone
   "Search notifications" item (merged into "Notifications").
 - `saved-searches`: the "Saved searches section in the account area"

@@ -12,6 +12,7 @@ layer, migrations apply via Postgres initdb, and response shapes follow
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `users` identity with secure password storage (bcrypt).
 - Stateless JWT auth delivered in an httpOnly cookie, XSS-safe under the
   same-origin deployment.
@@ -20,6 +21,7 @@ layer, migrations apply via Postgres initdb, and response shapes follow
 - Stay within existing conventions (sqlc, config-from-env, `handler.Register`).
 
 **Non-Goals:**
+
 - Roles/authorization tiers (admin vs user) — not needed until a mutating or
   privileged endpoint exists. Noted as a seam.
 - Refresh tokens / token revocation — out of scope; the trade-off is accepted
@@ -70,6 +72,7 @@ is the simpler, proven default for an MVP.
 ### New `internal/auth` package, separate from handlers
 
 A focused package owns the security primitives behind small interfaces:
+
 - password hashing/verification (`HashPassword`, `CheckPassword`),
 - token issue/verify (`Issuer` wrapping secret + TTL: `Issue(userID)` /
   `Parse(token) → userID`),
@@ -88,13 +91,15 @@ parameters for the JWT secret/TTL and the cookie-secure flag (mirroring how
 ### Data model
 
 `migrations/0005_users.sql`:
-```
+
+```text
 id            bigint generated always as identity primary key
 email         text not null
 password_hash text                       -- NULLABLE: passwordless users have none
 created_at    timestamptz not null default now()
 unique (lower(email))   -- case-insensitive uniqueness
 ```
+
 Queries in `internal/db/queries/users.sql`: `CreateUser`, `GetUserByEmail`,
 `GetUserByID`. The `password_hash` column is selected only where needed
 (login/registration) and never serialized into a handler response — the API
@@ -122,6 +127,7 @@ new sign-in methods land.
 
 The model is shaped so the next iteration is purely additive — nothing in
 `users` needs reworking:
+
 - **Google OAuth / external identities** → a future `user_identities` table
   (`user_id`, `provider`, `provider_user_id`, ...). Linking, not a `users`
   change.

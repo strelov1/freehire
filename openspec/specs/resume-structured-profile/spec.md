@@ -1,8 +1,11 @@
 # resume-structured-profile Specification
 
 ## Purpose
+
 TBD - created by archiving change resume-structured-profile. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Structured résumé is extracted best-effort on upload
 
 The system SHALL, on every résumé upload (both the `PUT /api/v1/me/resume` storage path and the `POST /api/v1/me/resume/extract` path), derive a typed **structured résumé** from the uploaded CV text and persist it per user. The **contact fields** (`full_name`, `email`, `phone`, `links`) SHALL be filled from deterministic PII detection over the CV, NOT from the LLM; only the **redacted** CV text SHALL be sent to the LLM, which extracts the semantic fields (summary, experience, education, skills, …). The extraction SHALL run **off the upload response path** (in the background, like the existing CV embedding) and SHALL be **best-effort**: when the LLM is not configured, when the PII detector is unconfigured or unavailable, or when extraction fails, the upload, the CV embedding, and the deterministic extractors (`cv-autofill`, skilltag) MUST be unaffected and no structured résumé is persisted for that attempt. The CV bytes and text MUST NOT be logged.
@@ -158,7 +161,6 @@ cannot be confused with "this value serialized to nothing".
 - **WHEN** the caller has no current structured résumé
 - **THEN** the reader reports absence explicitly and the consumer skips the model call, rather
   than the consumer inferring absence from empty content
-
 
 ### Requirement: A failed structured-résumé extraction can be retried without re-uploading
 

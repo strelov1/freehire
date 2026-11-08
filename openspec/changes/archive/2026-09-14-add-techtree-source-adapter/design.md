@@ -42,6 +42,7 @@ full rich-text body (`<h2>Why Telepatia</h2><p>...</p><h2>What you'll do</h2><ul
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Ingest TechTree's ~100 postings into the catalogue via the plain HTTP transport every
   unmetered adapter already uses, with the full rich-text description, not the page's short
   summary.
@@ -49,6 +50,7 @@ full rich-text body (`<h2>Why Telepatia</h2><p>...</p><h2>What you'll do</h2><ul
   reader recognizes the pattern immediately rather than learning a one-off structure.
 
 **Non-Goals:**
+
 - A TechTree-specific non-technical title vocabulary — use the generic
   `classify.ConfirmedNonTech` gate until measurement shows a gap.
 - Cross-source dedup against a posting's first-party ATS copy — same deferral `wellfound`

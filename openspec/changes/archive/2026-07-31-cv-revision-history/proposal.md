@@ -48,10 +48,12 @@ while the same claim as a bullet is refused.
 ## Capabilities
 
 ### New Capabilities
+
 - `cv-edit-revisions`: every change to a stored CV is a recorded, addressable, individually
   reversible revision.
 
 ### Modified Capabilities
+
 - `cv-builder`: the document is written only through committed revisions; `PATCH /me/cvs/:id`
   takes path operations instead of the named-op patch.
 - `cv-tailoring`: the agent edits by path operations under an explicit policy, and the evidence

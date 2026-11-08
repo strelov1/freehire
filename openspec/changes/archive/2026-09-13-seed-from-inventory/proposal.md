@@ -25,10 +25,12 @@ already owns and tests.
 ## Capabilities
 
 ### New Capabilities
+
 - `board-inventory-seed`: converting an external `name,slug,url` ATS-company inventory CSV
   into per-provider `harvest-boards` seed JSON files via `atsboard.Recognize`.
 
 ### Modified Capabilities
+
 (none — `harvest-boards`' own seed-consumption and validation behavior is unchanged)
 
 ## Impact

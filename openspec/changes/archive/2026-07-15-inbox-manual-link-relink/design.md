@@ -2,6 +2,7 @@
 
 The inbox reading pane (`InboxView.svelte`) renders one of three link states from
 the selected email's `linked_slug` / `suggested_slug` fields:
+
 - **linked** → "Linked to X ↗" + Unlink
 - **suggested** → "Looks like X · Link · Not this"
 - **neither** → nothing (the gap this change fills)
@@ -14,11 +15,13 @@ applications are available via `api.listTracked` (`GET /me/tracking`).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let the user link an unlinked email to one of their tracked applications.
 - Make Unlink reversible with a one-click Undo to the same application.
 - Reuse the existing endpoint/client; no backend change.
 
 **Non-Goals:**
+
 - Changing the link of an already-linked email in place (Unlink → link again
   covers it).
 - Linking to a job the user does not track (picker is scoped to tracked apps).

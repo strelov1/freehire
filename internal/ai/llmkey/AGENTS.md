@@ -1,6 +1,7 @@
 # Per-user LLM spend attribution
 
 ## Scope
+
 `internal/ai/llmkey` — minting, reading and retiring the credential the LLM gateway knows an
 account by, and the resolver that hands it out. The clone that actually spends under it
 lives in `internal/platform/llm` (`Client.As`); the one place per-user calls resolve through is
@@ -8,6 +9,7 @@ lives in `internal/platform/llm` (`Client.As`); the one place per-user calls res
 `cmd/auto-apply` became a second caller with no reason to import `internal/api/handler`.
 
 ## Always true
+
 - **The credential is invisible to the user.** No page, no field, no setting, and it
   appears in no API response. Minted lazily on an account's first AI call.
 - **Attribution can never fail a call.** An unmintable credential, an unreachable admin
@@ -26,6 +28,7 @@ lives in `internal/platform/llm` (`Client.As`); the one place per-user calls res
   it produces are refused everything, which is a worse failure than not minting at all.
 
 ## The endpoints are not where you would guess
+
 Administration lives under **`/api`**, inference under `/v1`. Every call this client makes
 — `POST /api/governance/virtual-keys`, `PUT` and `DELETE` on
 `/api/governance/virtual-keys/{id}`, and `GET /api/logs/stats` — authenticates as the
@@ -34,6 +37,7 @@ configured separately and never derived from `LLM_BASE_URL` — which also allow
 the admin API off the public host.
 
 ## A credential is two values, and both are load-bearing
+
 `Credential` carries a secret and an id. The secret is a bearer token and the only thing a
 model call needs; the id is opaque and the only thing block and delete accept — aimed at
 the secret they answer 404. Storing one without the other yields a credential that can
@@ -45,6 +49,7 @@ fault: they keep working for inference, and the first refusal sends them through
 existing forget-and-re-mint path, which replaces them with a pair. Nothing backfills.
 
 ## A key with no provider policy is a dead key
+
 This gateway denies every provider to a virtual key that carries no `provider_configs`, so
 minting without one produces credentials refused on their first call. `Mint` therefore
 reads the policy from the virtual key named by `LLM_ADMIN_TEMPLATE_KEY` and copies it.
@@ -115,6 +120,7 @@ blocking still buys is legibility — a retired key stays in the gateway's listi
 the loser of a minting race, seconds old and never stored.
 
 ## Minting races
+
 Two concurrent first calls both mint. The conditional claim
 (`WHERE id = $1 AND llm_key IS NULL`) admits exactly one; the loser adopts the winner's value
 and **deletes the one it minted**, which would otherwise sit at the gateway forever spending
@@ -135,6 +141,7 @@ account had no attribution and no budget for good. `Mint` now retries a taken na
 by the `freehire-user-<id>` prefix, not the exact name.
 
 ## Where the spend actually lands
+
 In the gateway's own request log, one row per call, keyed by the credential's id.
 `GET /api/logs/stats` aggregates it over a window; that is what `/me/usage` reads and why
 this package writes no cost table of its own.
@@ -160,6 +167,7 @@ the pool behind it runs on mixed upstream keys. They compare features and period
 other honestly and must never be quoted as a bill.
 
 ## Adding a per-user LLM call
+
 1. Resolve through `Bind` (this package, `bind.go`) — the single identifier to grep for.
    `internal/api/handler`'s `llmBinding.bind` is a thin per-request wrapper over it, not a
    second implementation.

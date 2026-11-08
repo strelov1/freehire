@@ -40,6 +40,7 @@ riskier fuzzy-title follow-up, out of scope here.
 ## Capabilities
 
 ### New Capabilities
+
 - `aggregator-ats-dedup`: a reindex-reconcile pass that suppresses an aggregator job
   posting as a duplicate of a first-party ATS posting of the same company, title, and
   country, keeping the ATS copy canonical.

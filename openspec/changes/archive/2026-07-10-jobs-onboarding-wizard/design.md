@@ -7,12 +7,14 @@ The onboarding wizard therefore has a clean insertion surface: it can produce a 
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Reconfigure the existing feed from a captured preference set in one confirm, reusing the existing filter store, persistence, and facet counts.
 - Keep the wizard a thin front-door: its output is a standard filter query, fully editable/clearable through the existing FilterModal.
 - Surface onboarding non-intrusively (banner + persistent entry point) and make it skippable.
 - Handle the narrow-feed case honestly (count + relax action), since this slice has no semantic fallback.
 
 **Non-Goals:**
+
 - CV-upload auto-fill, semantic "similar-by-meaning" expansion, Telegram saved-search alert, account/DB persistence, cross-device sync. Each is a later change; their seams are already identified (`/me/resume/extract`, `semantic_ratio`, `/me/searches` + `/me/subscriptions`, `user_profiles`).
 - Any change to filter, search, or persistence *requirements*. The wizard consumes them unchanged.
 
@@ -31,6 +33,7 @@ Per product decision, the entry is one unobtrusive banner above the feed (not an
 With no semantic fallback in this slice, a narrow selection can empty the feed. The relax action removes the single narrowest applied preference and re-applies, surfacing the change in both feed and filter state. Fixed order beats "remove last-added" (unpredictable) and beats auto-broadening (violates "never silently broaden"). Role is intentionally never auto-dropped — it's the user's primary intent.
 
 **D5 — Component boundaries.**
+
 - `OnboardingWizard.svelte` — owns staged selection + steps; emits `onComplete(query)` / `onSkip()`. Ignorant of URL/localStorage. Pickers built from `facets.ts` vocabularies.
 - `OnboardingBanner.svelte` — presentational; knows only shown/hidden and emits open/dismiss.
 - `onboarding.ts` — the only impure unit: `selectionsToQuery(selection)` (over `filtersToParams`), the narrowest-facet resolver for relax, and `hire.onboarding` state read/write.

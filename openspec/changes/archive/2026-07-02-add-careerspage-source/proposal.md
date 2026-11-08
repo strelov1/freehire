@@ -29,6 +29,7 @@ are keyless and machine-readable.
 ## Capabilities
 
 ### New Capabilities
+
 - `careerspage-source`: crawling one careers-page.com tenant's server-rendered
   job listing into the catalogue, mapping each posting's schema.org `JobPosting`
   detail into a normalized `Job`.

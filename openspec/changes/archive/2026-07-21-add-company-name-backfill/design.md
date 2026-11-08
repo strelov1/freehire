@@ -7,12 +7,14 @@ Pinpoint was fixed manually (PR #825): 105 names harvested from careers-page tit
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Replace slug-like company names with real display names sourced deterministically from each ATS's native title/API.
 - Scale across ATSes via a small per-ATS resolver interface; make adding a resolver cheap.
 - Be safe: touch only slug-like names on boards with live jobs; never invent a name; require a confidence match; be idempotent.
 - Be observable: report resolved / skipped / rejected counts.
 
 **Non-Goals:**
+
 - No change to display, `companies` table shape, or logo-resolution logic — only the stored name value improves.
 - No prettify-the-slug fallback (`afcb` → "Afcb"): out of scope, violates dict-only spirit.
 - No adapter refactor to read API names at ingest time — that is a separate, complementary change; this worker is the backfill for boards where the API gives nothing (Lever/BambooHR) and a catch-up for the rest.

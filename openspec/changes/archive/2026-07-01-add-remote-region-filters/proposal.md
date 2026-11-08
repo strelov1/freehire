@@ -32,11 +32,13 @@ search filter and UI pill. It is covered by the backfill only.
 ## Capabilities
 
 ### New Capabilities
+
 - `remote-region-filters`: the `remote_unspecified` derived facet — its
   derivation rule, deterministic storage, dict-only serving, search filterability,
   and SPA filter surface.
 
 ### Modified Capabilities
+
 - `job-geography`: the location parser additionally resolves `International` (and
   close worldwide synonyms) to the `global` region.
 

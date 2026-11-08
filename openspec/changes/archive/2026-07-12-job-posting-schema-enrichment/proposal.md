@@ -30,6 +30,7 @@ Out of scope (deliberately deferred): `directApply`, `identifier`, `jobBenefits`
 <!-- none -->
 
 ### Modified Capabilities
+
 - `web-ssr-seo`: the "JobPosting structured data" requirement is strengthened —
   the `JobPosting` object additionally carries the company logo, skills, and
   experience/education requirements it has data for.

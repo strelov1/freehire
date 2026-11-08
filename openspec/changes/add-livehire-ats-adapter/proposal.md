@@ -24,11 +24,13 @@ straightforward boarded-ATS addition alongside greenhouse/ashby/lever.
 ## Capabilities
 
 ### New Capabilities
+
 - `livehire-source`: crawling LiveHire-hosted career sites into the job catalogue via LiveHire's
   public `/careers-api` JSON API (segment-scoped listing, pagination with cross-page dedup,
   per-posting detail hydration, posting normalization).
 
 ### Modified Capabilities
+
 (none — `board-harvest`'s existing requirements already cover "one more recognized platform";
 only its recognizer registry gains an entry, no requirement changes)
 

@@ -13,6 +13,7 @@ Job filters live only in the URL query string. When a user navigates back to a b
 ## Capabilities
 
 ### New Capabilities
+
 - `filter-persistence`: Remembering the standalone `/jobs` filter set in browser storage and restoring it when the user returns to a bare `/jobs`, cleared only by an explicit filter change or reset.
 
 ### Modified Capabilities

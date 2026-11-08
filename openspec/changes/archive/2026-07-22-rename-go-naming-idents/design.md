@@ -8,11 +8,13 @@ declaration plus its references; the only one that crosses a module boundary is
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Bring the four identifiers in line with the project's Go naming conventions.
 - Keep the change purely mechanical — no behavior change, verified by the
   existing tests that already reference these fields.
 
 **Non-Goals:**
+
 - The wider set of borderline boolean fields (mostly external-API DTOs whose
   names mirror a foreign JSON schema) — left untouched deliberately.
 - Any change to JSON wire tags or HTTP responses.

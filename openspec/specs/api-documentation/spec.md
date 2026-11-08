@@ -16,7 +16,9 @@ credential. The documentation is split along exactly that line into an external
 reference (`/docs/api`) and an internal one (`/docs/api/internal`), generated
 from the same source so the two can never disagree about which endpoint belongs
 where.
+
 ## Requirements
+
 ### Requirement: Single typed source of truth for API docs
 
 The system SHALL describe the whole API as typed data in a single module
@@ -45,7 +47,6 @@ document.
   `auth: 'cookie-or-key'`
 - **THEN** it appears only in the external document (`/docs/api`,
   `docs/API.md`) and never in the internal one
-
 - **WHEN** an endpoint is added with `auth: 'cookie'`, `auth: 'moderator'`, or
   `auth: 'extension'`
 - **THEN** it appears only in the internal document (`/docs/api/internal`,
@@ -253,4 +254,3 @@ with the rest of the site in both light and dark mode.
 - **THEN** the embedded reference's colors are drawn from the same
   design-system tokens the rest of the site uses, not a Scalar built-in
   preset palette
-

@@ -52,7 +52,7 @@ remains the sole source of truth for the **catalog and the cadence**, while
 
 ### Modified Capabilities
 
-_None._ The existing `source-ingest` guarantees still hold — per-run failure
+*None.* The existing `source-ingest` guarantees still hold — per-run failure
 isolation is unchanged; board-health is an additive overlay, not a change to how
 adapters, the write path, or scheduling behave.
 

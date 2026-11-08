@@ -8,7 +8,9 @@ aggregate-only read APIs served from precomputed rollups. This turns the
 structured enrichment facets already stored per job into answers to catalogue-wide
 questions ("which roles are hiring", "what skills are in demand", "what does this
 role pay") without exposing any record-level field.
+
 ## Requirements
+
 ### Requirement: Role demand insights
 
 The system SHALL expose a public, unauthenticated `GET /api/v1/insights/roles`
@@ -328,4 +330,3 @@ not geography-scoped.
 - **THEN** `open_count` and `growth` are scoped to `DE`, the `skills` array is the
   country-agnostic distribution, and `meta` states that the skill distribution is not
   geography-scoped
-

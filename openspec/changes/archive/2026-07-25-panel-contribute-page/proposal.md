@@ -26,6 +26,7 @@ when an adapter can parse it, and queues the link for a maintainer when none can
 ## Capabilities
 
 ### New Capabilities
+
 - `panel-contribute-page`: offering the current page to the catalog from the side panel
   when freehire does not carry it.
 

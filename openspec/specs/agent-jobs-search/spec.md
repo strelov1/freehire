@@ -1,12 +1,15 @@
 # agent-jobs-search Specification
 
 ## Purpose
+
 Provide a dedicated public search endpoint for programmatic/agent consumers that
 runs the same query as the website search but returns full job descriptions in a
 selectable format (HTML, plain text, or Markdown), so machine consumers get the
 complete description without a per-result follow-up fetch — while the SPA-facing
 `/jobs/search` stays lean and preview-only.
+
 ## Requirements
+
 ### Requirement: Agent job search endpoint
 
 The system SHALL expose `GET /api/v1/agent/jobs/search` as a public
@@ -93,4 +96,3 @@ unchanged.
 - **WHEN** a client requests `GET /api/v1/agent/jobs/search?description_format=xml`
 - **THEN** the response is served with the default `html` representation rather
   than failing
-

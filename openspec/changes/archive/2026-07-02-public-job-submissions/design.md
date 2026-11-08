@@ -8,6 +8,7 @@ and it goes live only after a moderator approves it. Both the web SPA and the `f
 CLI must drive the flow.
 
 The codebase already has the pieces this leans on:
+
 - `internal/moderation.Service.Create(ctx, actorID, CreateInput)` mints a live `manual`
   vacancy: it validates, derives geo/skills/slugs via `jobderive`, sanitizes the
   description, upserts on `(source, external_id=url)`, and enqueues enrichment — all in
@@ -20,6 +21,7 @@ The codebase already has the pieces this leans on:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Any authenticated user can submit a vacancy; it is invisible publicly until approved.
 - A moderator can review a queue and approve (→ live job) or reject (with a reason).
 - A submitter can see the status of their own submissions.
@@ -28,6 +30,7 @@ The codebase already has the pieces this leans on:
   derivation/dedup/enrichment path.
 
 **Non-Goals:**
+
 - Anonymous submission (submission requires a logged-in account).
 - Self-service role management (roles stay granted out of band, as today).
 - Notifying submitters out of band (email/push) — they poll "My submissions".

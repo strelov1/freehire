@@ -30,6 +30,7 @@ temp-dir sandbox — no user data on argv) and runs `pdftotext -nopgbrk <in> -`,
 stdout.
 
 Error mapping preserves the current handler contract:
+
 - **non-zero exit** (corrupt/undecodable PDF) → error → handler renders `400 invalid PDF`.
 - **exit 0, empty stdout** (image-only PDF, no text layer) → `("", nil)` → handler's
   `TrimSpace(text) == ""` check renders `400 errResumeNoText` ("scan or image").

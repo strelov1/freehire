@@ -16,9 +16,11 @@ A signed-in member can create an account, upload a CV, connect their Gmail, and 
 ## Capabilities
 
 ### New Capabilities
+
 - `account-deletion`: self-serve, irreversible erasure of a member's account — confirmation, transactional ordering across Postgres/S3/Google, what is erased, what deliberately survives (moderator audit trails, de-authored community content), and the account-settings surface that fronts it.
 
 ### Modified Capabilities
+
 - `user-auth`: the stateless cookie session gains an existence check — a token for a deleted user is unauthenticated rather than merely stale.
 - `community-threads`: authored content survives its author's deletion; the author identity of an authorless thread or reply is a deleted-member marker, distinct from the AI persona.
 - `gmail-connection`: revocation at Google, today specified only for an explicit disconnect, is also required when the owning account is erased.

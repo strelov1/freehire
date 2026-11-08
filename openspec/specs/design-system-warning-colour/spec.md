@@ -1,8 +1,11 @@
 # design-system-warning-colour Specification
 
 ## Purpose
+
 TBD - created by archiving change adopt-ds-dialog-and-warning-token. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Caution has one colour, and it is a token
 
 The design system SHALL define a `warning` colour family for caution — the meaning carried
@@ -40,4 +43,3 @@ overrides the token.
 - **WHEN** a call site reads `text-amber-700 dark:text-amber-400`
 - **THEN** it becomes a single token utility, and the dark variant is removed rather than
   translated
-

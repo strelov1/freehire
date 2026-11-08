@@ -17,7 +17,7 @@
 
 ## 4. Field mapping (TDD)
 
-- [x] 4.1 Test mapping: `ExternalID` = numeric id parsed from the `<loc>` path; `URL` = `<loc>`; `Title` from `itemprop="title"` (fallback `og:title`); `Company = e.Company`; `Description = sanitizeHTML(inner HTML of itemprop="description")` (active content stripped, structure kept); `Location` = "" 
+- [x] 4.1 Test mapping: `ExternalID` = numeric id parsed from the `<loc>` path; `URL` = `<loc>`; `Title` from `itemprop="title"` (fallback `og:title`); `Company = e.Company`; `Description = sanitizeHTML(inner HTML of itemprop="description")` (active content stripped, structure kept); `Location` = ""
 - [x] 4.2 Test `PostedAt` derived from the entry's `<lastmod>` (`2006-01-02`); nil when absent/unparseable
 - [x] 4.3 Test `Remote` via `isRemote(title)`
 

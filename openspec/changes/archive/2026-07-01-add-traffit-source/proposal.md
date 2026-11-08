@@ -30,6 +30,7 @@ is thin.
 ## Capabilities
 
 ### New Capabilities
+
 - `traffit-source`: crawling one Traffit tenant's public job list into the catalogue,
   and validating candidate Traffit tenant slugs during harvest.
 

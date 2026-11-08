@@ -56,7 +56,7 @@ judge 6.
 
 ### The query, and both halves of its gate
 
-```
+```text
 after:<applied−7d> before:<applied+90d>
 ("<company>" OR "<company without spaces>")
 (<hiring vocabulary> OR filename:ics OR "<role title>")

@@ -46,6 +46,7 @@ ship a weaker UI and revisit it later.
 ## Capabilities
 
 ### New Capabilities
+
 - `talent-network-entry-ui`: the candidate-facing entry point and public
   profile page presentation for the Talent Network feature — the
   status-reflecting entry button, the overlay panel's always-visible
@@ -55,6 +56,7 @@ ship a weaker UI and revisit it later.
   semantics, masking rules, API shape) without changing any of it.
 
 ### Modified Capabilities
+
 (none — `talent-network-profile` has not been archived into
 `openspec/specs/` yet, since the change that introduces it (PR #1727) is
 still open, so there is no existing spec folder to delta against. This

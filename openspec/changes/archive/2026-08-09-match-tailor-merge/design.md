@@ -25,11 +25,13 @@ Both are recorded here so the tasks phase doesn't quietly reopen them.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One entry point for "how do I match this job and tailor my CV for it": `/tailor/[slug]`.
 - No page hop required to produce a first fit analysis for a vacancy.
 - Old `/match/[slug]` and `/jobs/[slug]/fit` links keep working (redirect, not 404).
 
 **Non-Goals:**
+
 - Changing the Job Match tab's internal layout (live score + labelled snapshot stays as-is).
 - Changing the Score/ATS-delta tab in any way — it keeps its own top-level tab, unchanged.
 - Colored underline overlay of analysis findings on the CV preview (separate, later change — the

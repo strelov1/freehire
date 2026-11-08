@@ -71,7 +71,7 @@ company-level kill candidates: zero technical evidence across their whole histor
 Evaluated per row in `cmd/prune`, live against the current dictionary (not from
 the stored `is_tech` column, so an iteration needs no `backfill-derive` pass):
 
-```
+```text
 DELETE if any of:
   (1) classify.IsNonTech(title)                        -- blue-collar blocklist, every company
   (2) category ∈ NonTechCategories AND bucket ∈ {A,B}  -- business role at a non-IT company
@@ -165,7 +165,7 @@ Nothing changes in the database schema except one new archive table.
 
 ## Iteration loop
 
-```
+```text
 1. cmd/mine-titles --limit=100        top residual unknown, reviewed by eye
 2. PR: anchored terms → classify.nonTechTitleTerms + a test per term
 3. release.sh freehire

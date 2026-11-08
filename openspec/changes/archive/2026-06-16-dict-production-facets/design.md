@@ -22,6 +22,7 @@ each rewrite one facet column and each need a reindex. They are collapsed into o
 ## Goals / Non-Goals
 
 **Goals:**
+
 - `jobview.FromRow` sources the six facets from the `jobs` columns only (dict-only).
 - The LLM's values for the six facets are excluded from the served wire shape but
   left intact in the `jobs.enrichment` JSONB.
@@ -29,6 +30,7 @@ each rewrite one facet column and each need a reindex. They are collapsed into o
   `jobderive.Derive`, replacing the three per-facet commands.
 
 **Non-Goals:**
+
 - Relaxing the LLM / dropping `Sanitize`/`Validate` / capturing discovery output.
 - Enriching the dictionaries (more aliases/coverage).
 - Any normalization tooling for the captured LLM variability.

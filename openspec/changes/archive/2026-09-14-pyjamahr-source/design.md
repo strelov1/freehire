@@ -32,11 +32,13 @@ trap `jobs.recrutei.com.br` had).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl a PyjamaHR tenant's open postings via a paginated listing (enumeration +
   location/workplace-type) walked to a proven end (`next` becomes `null`), plus one detail
   fetch per posting for description and the richer structured fields.
 
 **Non-Goals:**
+
 - No `Seniority` mapping. The detail's `seniority` array uses PyjamaHR's own vocabulary
   (`"entry-level"`, `"associate"` confirmed live), neither of which is an unambiguous match
   to `vocab.SeniorityValues` (`intern`/`junior`/`middle`/`senior`/`lead`/`staff`/

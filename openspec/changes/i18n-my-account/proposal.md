@@ -43,6 +43,7 @@ strings — all are noted as deliberate follow-ups, not built now.
 ## Capabilities
 
 ### New Capabilities
+
 - `account-interface-i18n`: locale resolution (cookie sync, path-gated
   SSR/CSR locale, `<html lang>`), the message-catalog + `t()` rendering
   mechanism, and the scope boundary rule (only `/my/**` and its exclusive
@@ -51,6 +52,7 @@ strings — all are noted as deliberate follow-ups, not built now.
   shell/nav.
 
 ### Modified Capabilities
+
 (none — `account-navigation`'s structural/gating requirements are unchanged;
 this change only adds locale-aware rendering of its existing labels, which is
 new capability behavior, not a change to what that shell already guarantees)

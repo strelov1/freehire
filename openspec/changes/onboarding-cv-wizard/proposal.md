@@ -15,9 +15,11 @@ New accounts land in the app with no CV and no profile, and nothing today prompt
 ## Capabilities
 
 ### New Capabilities
+
 - `post-registration-onboarding`: the gated full-screen wizard page — trigger condition, step behavior, skip semantics, persistence-across-visits, and how it hands off to the existing profile save.
 
 ### Modified Capabilities
+
 - `search-profiles`: adds an optional `seniorities` field (multi-select, drawn from the seniority vocabulary) to the profile read/write contract.
 
 ## Impact

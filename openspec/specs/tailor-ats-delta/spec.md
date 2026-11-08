@@ -1,6 +1,7 @@
 # tailor-ats-delta Specification
 
 ## Purpose
+
 Tell a candidate what tailoring did to their CV's ATS readiness, measured on the artifact an ATS
 actually parses — the rendered PDF's text layer — rather than on the document we meant to render.
 The tailored copy is compared against the base CV it was copied from with the template, the page
@@ -9,6 +10,7 @@ contribution and nothing else. The signal is informational: it gates nothing, an
 only to the candidate, never to the tailoring agent whose output it measures.
 
 ## Requirements
+
 ### Requirement: A tailored CV is scored from its rendered artifact
 
 The system SHALL score a tailored CV by rendering it to PDF with its own template and page
@@ -20,12 +22,14 @@ The CV's own skill set SHALL be parsed from the same extracted text (the existin
 skill tagging), so the score describes the artifact and nothing outside it.
 
 #### Scenario: The score reads the rendered text layer
+
 - **WHEN** a tailored CV is scored
 - **THEN** the score is computed from text extracted from the rendered PDF, and a document whose
   rendered text layer is empty (a template producing no extractable text) fails machine-readability
   rather than scoring as if the JSON had been read
 
 #### Scenario: The stored document is not the scoring input
+
 - **WHEN** the stored document contains a field the active template does not render
 - **THEN** that field contributes nothing to the score
 
@@ -44,21 +48,25 @@ change how much text lands on a page and therefore what the rendered text layer 
 out would let a candidate move their own ATS delta by changing a font, with the content untouched.
 
 #### Scenario: A template difference does not leak into the delta
+
 - **WHEN** the base CV's stored template differs from the tailored copy's
 - **THEN** both sides are rendered with the tailored copy's template, so the delta reflects content
   only
 
 #### Scenario: A typography difference does not leak into the delta
+
 - **WHEN** the base CV's stored typography differs from the tailored copy's
 - **THEN** both sides are rendered with the tailored copy's font, size, and line height, so the delta
   reflects content only
 
 #### Scenario: Both sides share one keyword baseline
+
 - **WHEN** the delta is computed for a CV bound to a vacancy
 - **THEN** the vacancy's canonical skills are the keyword baseline for both the base and the
   tailored score
 
 #### Scenario: Scoring the base CV leaves it untouched
+
 - **WHEN** the delta is computed
 - **THEN** the base CV's stored document, template, margins, and typography are unchanged afterwards
 
@@ -70,11 +78,13 @@ the ones the ATS score already defines — this change introduces no new categor
 weighting.
 
 #### Scenario: Every category carries before, after and difference
+
 - **WHEN** a delta is served
 - **THEN** the overall and each of the five categories report base, tailored, and a signed delta,
   and each category's delta equals its tailored value minus its base value
 
 #### Scenario: An unchanged document reports a zero delta
+
 - **WHEN** the tailored CV's content is identical to the base CV's
 - **THEN** every reported delta is zero
 
@@ -89,15 +99,18 @@ action because of it — rendering, downloading, or exporting the tailored CV SH
 it does without the delta.
 
 #### Scenario: A regression names its worst category
+
 - **WHEN** the tailored overall score is below the base overall score
 - **THEN** the response is marked as a regression and names the category with the most negative
   delta
 
 #### Scenario: An improvement is not a regression
+
 - **WHEN** the tailored overall score is equal to or above the base overall score
 - **THEN** the response is not marked as a regression and names no category
 
 #### Scenario: A regression gates nothing
+
 - **WHEN** the delta is a regression
 - **THEN** the tailored CV's PDF still renders and downloads without confirmation
 
@@ -108,10 +121,12 @@ current scoring rules, and no part of it SHALL be persisted. A subsequent scorin
 document edit SHALL therefore be reflected on the next read with no migration or invalidation step.
 
 #### Scenario: A repeated read of an unchanged CV is identical
+
 - **WHEN** the delta is read twice with no edit in between
 - **THEN** both responses are identical
 
 #### Scenario: An edit is reflected on the next read
+
 - **WHEN** the tailored CV is edited and the delta is read again
 - **THEN** the new response reflects the edit, and no stored delta had to be invalidated
 
@@ -130,18 +145,22 @@ The baseline SHALL be the CV marked as the user's base. A vacancy-less tailored 
 used as the baseline, however recently it was edited.
 
 #### Scenario: Another account's CV is not found
+
 - **WHEN** a caller reads the delta for a CV owned by a different account
 - **THEN** the response is the same not-found as for a CV id that does not exist
 
 #### Scenario: A base CV has no delta
+
 - **WHEN** a caller reads the delta for the base CV
 - **THEN** the response is a conflict saying it is the base, and no score is computed
 
 #### Scenario: A tailored copy whose vacancy was pruned has no delta
+
 - **WHEN** a caller reads the delta for a tailored copy whose vacancy row has been deleted
 - **THEN** the response is a conflict saying the vacancy no longer exists, and no score is computed
 
 #### Scenario: An orphan is never the baseline
+
 - **WHEN** the user has a base CV and an orphaned tailored copy edited more recently, and a delta
   is read for a third, live tailored CV
 - **THEN** the comparison is against the base CV, and the response names it as the baseline
@@ -154,10 +173,12 @@ with a reason, with a success status. It MUST NOT return a server error and MUST
 tailoring workspace from loading or the CV from being edited.
 
 #### Scenario: A missing renderer yields an unavailable delta
+
 - **WHEN** the CV renderer is not configured in the running environment
 - **THEN** the response reports the delta as unavailable with a reason and a success status
 
 #### Scenario: A failed render does not fail the workspace
+
 - **WHEN** rendering either side fails
 - **THEN** the delta is reported unavailable and the workspace continues to load and edit the CV
 

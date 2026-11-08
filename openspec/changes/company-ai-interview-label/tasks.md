@@ -55,7 +55,6 @@
 - [x] 8.4 Deployed 7de312ca8 and verified the empty state on prod: `POST /api/v1/companies/:slug/process-reports` answers 401 (route live), `/jobs/facets` and its disjunctive path 200, `ai_interview=false` returns the whole catalogue (2,045,297) and `ai_interview=true` returns 0, with `meta.ignored_params` absent — the param is read, not silently dropped. The company payload omits the count at zero, as required.
 - [x] 8.5 **Resolved by fixing the cause instead.** The first real report showed the gap: the sync wrote the column but queued nothing, so the badge reached the job page (Postgres) and no card, and the filter matched nobody. `SyncJobsAIInterviewReports` now enqueues the changed open postings into `search_outbox`, so `search-drain` carries every future report within a minute or two. The one existing report's 813 open postings were enqueued by hand; the filter now returns 202 (the de-duplicated figure search serves). No full reindex is owed.
 
-
 ## 9. What the rollout actually cost
 
 Recorded because the plan above was wrong twice, and both corrections are reusable.

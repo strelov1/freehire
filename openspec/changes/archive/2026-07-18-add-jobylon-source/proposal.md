@@ -37,6 +37,7 @@ across every Jobylon employer in one adapter — and, because each posting carri
 ## Capabilities
 
 ### New Capabilities
+
 - `jobylon-source`: the `jobylon` adapter — its sitemap enumeration, per-job `JobPosting` ld+json
   mapping, `<id>` extraction from the job URL, drop rules for unusable postings, boardless-
   aggregator classification, and HydratingSource incremental (seen → `SeenRefresh`) crawl.

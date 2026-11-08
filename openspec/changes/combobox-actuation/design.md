@@ -14,12 +14,14 @@ substantive answers live.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Fill a custom-widget dropdown by choosing from the options it actually offers.
 - Observe a multi-control question (a checkbox group) as one field with options.
 - Never leave a widget in a state nobody asked for: every write is verified, and
   an unverified write is reported as failed.
 
 **Non-Goals:**
+
 - `chrome.debugger` / CDP. Kept as a named seam, not built.
 - Typeahead widgets that fetch options over the network while you type
   (Greenhouse's "Location (City)"). They need a debounce-and-wait model of their

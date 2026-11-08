@@ -26,6 +26,7 @@ stays exactly as it is.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `header-location-filter`: the quick-filter is no longer jobs-feed-only — it also
   filters the companies list (region + remote-hiring) and appears on listless pages
   as a launcher that scopes the jobs feed.

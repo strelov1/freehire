@@ -11,11 +11,13 @@ clause. It does not strip a trailing `: …` clause.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Treat a trailing colon clause as decoration, so an aggregator that appends technologies to an
   otherwise identical title finds its ATS twin.
 - Keep the two-hash-join shape; no new join, no new scan.
 
 **Non-Goals:**
+
 - Stripping parentheticals or comma clauses — measured, and both merge distinct roles.
 - Any similarity/fuzzy matching. A normalization rule cannot bridge titles that differ by more than
   a trailing clause.

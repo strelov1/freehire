@@ -1,10 +1,12 @@
 # Answer topics
 
 ## Scope
+
 `internal/dict/answertopic` — keys an employer's screening question by what it asks, so one
 banked answer serves every phrasing of it.
 
 ## Always true
+
 - **The dictionary is an accelerator, never the only route.** A question it does not know
   still keys, from the fold alone. This ordering is deliberate: `internal/api/atsapply`'s
   own `labelAnswerKeyFor` was a sole-route list, and its missing salary rule was invisible

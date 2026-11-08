@@ -18,6 +18,7 @@ cards, and the companies the viewer shares with them — who else applied where 
 ## Capabilities
 
 ### Modified Capabilities
+
 - `buddies-social-space`: the network page.
 
 ## Impact

@@ -22,6 +22,7 @@ preview of what the unattended submission would send.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Surface auto-apply's live status inside the tracker the candidate already uses, via the same
   "action needed" interaction shape the tracker already has (mail-derived stage suggestions).
 - Give the candidate an exact preview — not a guess — of the application-form answers before they
@@ -29,6 +30,7 @@ preview of what the unattended submission would send.
 - Make triggering auto-apply immediately visible on the board.
 
 **Non-Goals:**
+
 - No retry/unpark mechanism for a `blocked` or `failed` entry — none exists in the backend today
   (no `Unpark`/requeue query or handler), and `auto_apply_queue`'s own `UNIQUE (user_id, job_id)`
   plus `PostJobAutoApply`'s permanent-decline check mean there is no recovery path regardless of

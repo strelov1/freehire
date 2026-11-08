@@ -7,12 +7,14 @@ Constraint: freehire is a job board, not a gatekeeper. A wrong "you're blocked" 
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A pure, deterministic, unit-testable `internal/hardconstraint` evaluator shared by three surfaces (jobmatch bar, matchanalysis, tailor).
 - Structured-first: compare typed enrichment fields against the typed résumé; the only new extraction is certifications, added as typed fields on both sides (approach B).
 - Explainable output: every blocker carries a human `Reason` and an anti-hallucination `Action`.
 - A deterministic ceiling on the server-owned `overall_score` that the LLM cannot override.
 
 **Non-Goals:**
+
 - No hiding, gating, downranking, or filtering of jobs (warn + cap only). A user-facing "hide hard-blocked" filter is explicitly deferred.
 - No regex extraction of requirements from raw text (structured-first; the credential vocabulary normalizes structured LLM outputs, it does not scrape).
 - No Meilisearch facet for `required_certifications` in v1 (no reindex).

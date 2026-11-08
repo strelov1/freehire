@@ -24,11 +24,13 @@ signal.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Collapse near-identical-description reposts that exact matching misses.
 - Zero regression to the deterministic exact pass; strictly additive.
 - Bounded cost; reversible; measurable before enabling.
 
 **Non-Goals:**
+
 - Merging genuinely distinct jobs under a generic title (amazon SDE) — the threshold must
   leave those split.
 - Cross-company/cross-bucket merging.
@@ -37,19 +39,23 @@ signal.
 ## Decisions
 
 ### D1 — Signal: word-Jaccard of the normalized description (not embeddings)
+
 Spike-proven to separate dupes from distinct roles where embeddings could not (boilerplate
 dominates embeddings; word-overlap captures the specialty-specific body). This is the exact-md5
 guard relaxed to ≥T word overlap.
 
 ### D2 — Bucket by (company_slug, stripped-title); cluster within
+
 Same bucketing as the exact pass bounds comparison and prevents cross-role merges. Within the
 bucket, cluster by Jaccard ≥ threshold, `min(id)` canon.
 
 ### D3 — After the exact pass, additive only
+
 Reads only exact-pass leftover canons (`duplicate_of IS NULL`), only adds markers. Reuses the
 column, reindex exclusion, `/copies`, geo-union unchanged.
 
 ### D4 — Efficient signature, not naïve O(n²)
+
 Pairwise Jaccard per bucket is O(n²); large buckets (amazon 261, speechify 305) need a
 signature: MinHash/LSH banding, a shingle simhash, or a `pg_trgm` GIN with `similarity()`.
 Pick during implementation after the spike sizes bucket distribution. Conservative threshold
@@ -75,7 +81,7 @@ ACROSS titles; this pass never does. Adding it here would be a check that can ne
 
 Measured over open canonical rows on prod, bucketing by `(company_slug, normalized title)`:
 
-```
+```text
 buckets with >1 canon    210 319        median bucket size     2
 rows in them             851 920        p99                   27
 largest bucket            16 745        naive pairwise    165.4M

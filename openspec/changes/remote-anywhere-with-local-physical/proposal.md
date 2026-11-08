@@ -39,6 +39,7 @@ if I choose all 3, I see on-site jobs from other countries".
 ## Capabilities
 
 ### Modified Capabilities
+
 - `job-search`: the filter language gains the `work_mode_remote_anywhere` modifier
   and its disjunction semantics.
 - `remote-region-filters`: unaffected directly, but the spec's "the SPA exposes the

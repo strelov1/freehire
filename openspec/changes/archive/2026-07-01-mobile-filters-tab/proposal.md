@@ -20,6 +20,7 @@ contains only a spacer). The result is a cramped, overlapping header area.
 ## Capabilities
 
 ### New Capabilities
+
 - `mobile-filter-access`: How mobile users open the filters panel on the jobs list —
   the pinned left-edge tab, its active-count badge, and its coexistence with the
   swipe tab and page content.

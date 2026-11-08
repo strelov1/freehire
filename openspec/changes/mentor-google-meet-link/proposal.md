@@ -34,10 +34,12 @@ storage) that a new, narrower consent can reuse rather than duplicate.
 ## Capabilities
 
 ### New Capabilities
+
 - `mentor-calendar-link`: a mentor's own opt-in Google Calendar write consent — the
   OAuth flow, its scope, and where its encrypted grant is stored.
 
 ### Modified Capabilities
+
 - `mentor-profile`: the meeting link is required only for a mentor who has not
   connected Google Calendar.
 - `mentor-booking`: a connected mentor's booking gets an auto-generated Google Meet

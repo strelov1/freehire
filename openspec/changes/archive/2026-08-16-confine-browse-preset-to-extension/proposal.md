@@ -42,9 +42,11 @@ from the browser extension") and is a real capability leak, not a hypothetical o
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `assistant-sessions`: the session list SHALL no longer include `browse` sessions —
   only `chat`, `profile`, `interview` and `debrief` remain listed; `browse` joins
   `tailor` as excluded.

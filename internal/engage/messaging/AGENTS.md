@@ -1,6 +1,7 @@
 # Messaging core
 
 ## Scope
+
 Conversations between accounts for every feature that lets people write to each other
 (openspec/changes/messaging-core). A conversation carries a `kind`; today the only kind is
 `buddy` ([internal/engage/buddy](../buddy/AGENTS.md)). Tables `conversations`,
@@ -9,6 +10,7 @@ Conversations between accounts for every feature that lets people write to each 
 `internal/api/handler/conversations.go`; the worker is `cmd/message-notify`.
 
 ## Always true
+
 - **Every participant speaks as a persona** (`conversation_participants.persona`): one
   account has several — its real self, an anonymous buddy handle, later a mentor or an
   employer. The other side is drawn from the persona it speaks as, never from the

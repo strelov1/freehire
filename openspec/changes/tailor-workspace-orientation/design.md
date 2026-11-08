@@ -13,11 +13,13 @@ nobody presses anything.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - An empty conversation always shows the way in, however it was reached.
 - The current pane is obvious at a glance.
 - The three sections people open mid-task are reachable without a detour.
 
 **Non-Goals:**
+
 - A general tab component. Two panels share a pattern; a third would be the time to extract one.
 - Renaming routes. `/my/cvs` stays — the label changes, the address does not.
 - Reordering the account navigation.

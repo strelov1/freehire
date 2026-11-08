@@ -3,6 +3,7 @@
 `jobs_semantic` (userProvided/768-dim e5 `multilingual-e5-base`) is the hybrid/`/similar`/CV-recommendation index. Today its only writer is `cmd/reindex --semantic`, a swap-rebuild from zero: `Prepare` drops+recreates `jobs_semantic_rebuild`, `Push` streams every open job (embedding each batch via `internal/search/embed.go`), and `Promote` swaps atomically. This re-embeds the whole open catalogue every run, monopolizes Meilisearch's single task queue (deadlocking the facet reindex), and on the shared-CPU/CPU-TEI embedder takes days — so in practice only a fresh window is embedded and ~2.4M open jobs have no vector. `--since` is defeated because `UpsertJob` bumps `updated_at` every crawl, so its delta ≈ the whole table, and it never covers old un-embedded jobs.
 
 Key existing pieces this change reuses unchanged:
+
 - `search.Client.IndexSemanticJobs(ctx, docs)` — embeds a batch (`passage:`) and upserts documents with `_vectors` **in place** into live `jobs_semantic`. Already the `--since` in-place path.
 - `search.Client.DeleteSemanticJobs(ctx, ids)` — removes docs from `jobs_semantic`.
 - `search.FromJob(db.Job)` — builds the document from a persisted row (keeps enrichment facets).
@@ -14,6 +15,7 @@ Key existing pieces this change reuses unchanged:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Embed only outstanding open jobs (missing, content-changed, or model-stale) — no re-embedding of already-current jobs.
 - Keep `jobs_semantic` fresh going forward (new + changed jobs) via a cron worker, without a swap.
 - Remove closed jobs from the index so `/similar` and recommendations don't surface dead postings between rebuilds.
@@ -21,6 +23,7 @@ Key existing pieces this change reuses unchanged:
 - Reuse the established enrichment-outbox mechanics verbatim (lease, SKIP LOCKED, retry, dead-letter, concurrency wave).
 
 **Non-Goals:**
+
 - Changing `reindex --semantic` — it stays the reconciler (settings, at-scale model migration, compaction, full closed-doc reconciliation).
 - Embedding on the ingest hot path — embedding stays decoupled from `UpsertJob` (mirrors `SetJobEnrichment`).
 - Improving embed quality/throughput (model choice, CV-summary embedding, truncation) — orthogonal, tracked elsewhere.
@@ -55,6 +58,7 @@ Key existing pieces this change reuses unchanged:
 2. Deploy `cmd/embed` image + cron (sibling of `cmd/enrich`), with `MEILI_*` and `EMBED_*` env wired (freehire-ops compose).
 3. One-time backfill: run `cmd/embed` pointed at a fast `EMBED_URL` (GPU endpoint) to drain the ~2.4M gap; **stop `freehire-reindexw.timer` during a large drain** only if it contends (small in-place batches generally coexist). Re-enable after.
 4. Steady state: schedule `cmd/embed` on a cron; each run enqueues the day's new/changed jobs + any closed removals and drains them.
+
 - **Rollback**: stop the `cmd/embed` cron. The migration is additive and inert without the worker; `jobs_semantic` reverts to being maintained solely by `reindex --semantic`.
 
 ## Open Questions

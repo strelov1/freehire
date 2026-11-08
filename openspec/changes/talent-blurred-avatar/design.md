@@ -28,6 +28,7 @@ getting its own.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Serve a heavily, irreversibly blurred rendering of a member's stored headshot from a
   new public route, computed fresh on every request.
 - Never let the original image bytes reach any public route or cache.
@@ -38,6 +39,7 @@ getting its own.
   budget) rather than inventing new ones.
 
 **Non-Goals:**
+
 - No per-member opt-in/opt-out control (explicit user decision).
 - No stored blurred derivative, no new blobstore key, no backfill.
 - No change to the private `/me/photo/image` route or the Mentors directory's photo

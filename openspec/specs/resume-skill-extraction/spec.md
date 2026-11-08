@@ -1,8 +1,11 @@
 # resume-skill-extraction Specification
 
 ## Purpose
+
 TBD - created by archiving change resume-skill-gap. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Extract skills from an uploaded resume
 
 The system SHALL provide `POST /api/v1/me/resume/extract`, open to signed-in and signed-out callers alike (an optional session: a cookie session is attached when present, its absence is not a rejection), that turns an uploaded resume into a list of canonical skill slugs using the existing deterministic `internal/dict/skilltag` dictionary. Signed-out callers SHALL be limited to 20 extractions per hour per client IP. The endpoint SHALL accept either a PDF file via `multipart/form-data` (field `file`) or plain text via `application/json` (`{"text": "..."}`), dispatched by `Content-Type`. PDF text extraction SHALL decode any text-bearing PDF regardless of font encoding — including CID fonts with `Identity-H` encoding mapped through an embedded `ToUnicode` CMap (as produced by Canva and similar builders). Oversize uploads are rejected by the server's existing global request-body limit (413). The resume file and text SHALL NOT be persisted to disk or database, and SHALL NOT be logged; only the resulting skill slugs are returned. The extraction SHALL call no language model.

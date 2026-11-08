@@ -1,8 +1,11 @@
 # company-hiring-signal Specification
 
 ## Purpose
+
 TBD - created by archiving change add-company-hiring-signal-rollup. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Per-company daily hiring-velocity rollup
 
 The system SHALL maintain a precomputed rollup table `insights_company_stats` keyed by `(company_slug, day)` that records, for each company and each UTC day the company had activity, the number of jobs `added` (jobs whose `created_at` falls on that day), `removed` (jobs whose current `closed_at` falls on that day), and `open` (jobs open as of the end of that day).
@@ -213,6 +216,7 @@ compress every past reply into the day the mailbox was connected.
 - **THEN** that application counts as unanswered in both the rate and the median
 
 ### Requirement: Per-company posting lifetime rollup
+
 The system SHALL maintain `insights_company_lifetime`, one row per company with the
 number of its postings closed within the last 180 days by an employer-side closure and
 the median days from `created_at` to `closed_at` over those postings. Only canonical,
@@ -222,22 +226,27 @@ only closures whose `closed_reason` is one of `unseen`, `employer_closed`,
 the same transaction as the other per-company rollups.
 
 #### Scenario: Employer-side closures are measured
+
 - **WHEN** a company has postings open 10, 20 and 30 days, each closed 5 days ago with `closed_reason = 'unseen'`
 - **THEN** its row has `closed = 3` and `median_days = 20`
 
 #### Scenario: Closures caused by our own access are excluded
+
 - **WHEN** a company's only closed postings carry `closed_reason` `board_unreachable`, `feed_empty`, `source_misattributed` or `moderated`
 - **THEN** the company has no row
 
 #### Scenario: Old closures and duplicates are excluded
+
 - **WHEN** a posting closed 200 days ago, or a posting with `duplicate_of` set closed yesterday
 - **THEN** neither contributes to the company's row
 
 #### Scenario: The rebuild is atomic with its siblings
+
 - **WHEN** `cmd/rollup-company` runs
 - **THEN** `insights_company_lifetime` is cleared and rebuilt in the same transaction as `insights_company_stats`, `insights_company_growth` and `insights_company_response`
 
 ### Requirement: Per-company posting views rollup
+
 The system SHALL maintain `insights_company_views`, one row per company with the sum of
 `job_daily_views.page_uniques` over its postings for the last 30 days (`views`) and for
 the 30 days before that (`views_prev`). It SHALL read `page_uniques` and never `uniques`,
@@ -248,14 +257,16 @@ rebuilt by `cmd/rollup-company` in the same transaction as the other per-company
 rollups.
 
 #### Scenario: Two windows
+
 - **WHEN** a company's postings have 10 page views 3 days ago and 4 page views 40 days ago
 - **THEN** its row has `views = 10` and `views_prev = 4`
 
 #### Scenario: Unfiltered reads are not views
+
 - **WHEN** a posting's day carries `uniques = 500` and `page_uniques = 7`
 - **THEN** that day contributes 7
 
 #### Scenario: Nothing older than 60 days
+
 - **WHEN** a company's only views are 70 days old
 - **THEN** the company has no row
-

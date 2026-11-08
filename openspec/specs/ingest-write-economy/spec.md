@@ -1,8 +1,11 @@
 # ingest-write-economy Specification
 
 ## Purpose
+
 TBD - created by archiving change cut-ingest-write-amplification. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: An unchanged re-ingest writes only the liveness timestamp
 
 When a crawl re-sees an open posting that matches the stored row on every column the write
@@ -162,4 +165,3 @@ pointless search-index push on every crawl.
 
 - **WHEN** a provider re-crawls postings whose content fingerprint differs on every run
 - **THEN** its run reports a zero cheap-path share, rather than reporting nothing
-

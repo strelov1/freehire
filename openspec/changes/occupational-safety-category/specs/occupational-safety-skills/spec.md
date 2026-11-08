@@ -115,4 +115,3 @@ prefix of "aspects" and "aspiring".
 
 - **WHEN** a posting's text contains "aspects", "aspiring" or the word "dot"
 - **THEN** no occupational-safety skill or certification resolves from it
-

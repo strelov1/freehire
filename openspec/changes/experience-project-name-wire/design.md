@@ -5,11 +5,13 @@ See proposal.md. Storage already parks the project title in `experience_employme
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Kind-aware wire: project → `name`, job → `company`.
 - Write accept `name` or legacy `company` for projects.
 - TS + Experience UI aligned.
 
 **Non-Goals:**
+
 - Renaming the DB column or Go field `Company`.
 - Splitting projects into a separate table.
 - Changing CV `Document.Projects` (already name-shaped).

@@ -13,9 +13,11 @@ The résumé is uploaded twice today — once on the profile form (to extract sk
 ## Capabilities
 
 ### New Capabilities
+
 - `resume-storage`: uploading, storing, retrieving, and deleting a user's résumé in S3 object storage (per-user key), plus the generic S3 blob abstraction (`internal/blobstore`) and its config/degradation.
 
 ### Modified Capabilities
+
 - `resume-verdict`: the coherence analysis now reads the user's **stored** résumé from S3 (no per-verdict upload); the verdict page gains a "Re-run coherence" affordance and stops asking for a fresh upload when a résumé is already stored.
 - `resume-skill-extraction`: the profile-form upload now **stores** the résumé to S3 in addition to returning extracted skills (the single upload point), when storage is configured.
 

@@ -24,7 +24,7 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   batch_size`, which reads as "oldest first" and is really "lowest subscription id
   first". Measured on prod 2026-09-04, reported as "I get no Telegram notifications":
 
-  ```
+  ```text
   subscription  26 ->    1 118 pending
   subscription  95 ->  248 147   <- saved search with an EMPTY query
   subscription  97 ->  104 069
@@ -37,14 +37,12 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   had `attempts = 0` since the day it was created: not retried, not dead-lettered, never
   in a batch. **`failed=0` is not evidence that delivery works**; `delivered` far below
   the number of subscriptions with pending matches is what says it does not.
-
 - **A subscription must carry a filter.** An empty saved search is legitimate — it is the
   "show all" view, and `internal/search/savedsearch` says so. SUBSCRIBING to one asks to
   be notified about every posting in the catalogue, which is never what anyone means, and
   is where the 248k above came from. `subscription.Service.Create` refuses it with
   `ErrUnfilteredSearch` (400). The guard is at subscribe time, not at save time, because
   that is where the meaning changes.
-
 - **A subscription must carry a query the search can RUN, and stays that way.** Create
   and resume (`subscription.Service.SetActive(true)`) share one gate (`admit`): the
   query parses (`search.ParseQuery` — e.g. at most 5 OR alternatives), narrows, and the
@@ -57,12 +55,10 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   who fixed it meanwhile keeps the alert on. Measured 2026-11-05, one such subscription had failed every pass for a week
   while its owner received nothing. Paused, not deleted, so the owner can fix the
   search and resume.
-
 - **A non-positive per-subscription cap claims nothing and reports success.** It becomes
   `LIMIT 0` inside the `LATERAL`: no rows, no error, the worker quietly idle. It is
   floored at the call site for the same reason `SEARCH_DRAIN_BATCH_SIZE` is — a silent
   no-op is worse than a crash.
-
 - **All three engines deliver in GROUPS, and a group is the unit of everything.**
   `notify` groups a subscription's matched jobs; `internal/engage/reminder` groups an
   account's due reminders; `internal/engage/nudge` groups an account's due nudges **of one

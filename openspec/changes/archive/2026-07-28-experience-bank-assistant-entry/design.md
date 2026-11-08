@@ -53,7 +53,7 @@ what the frontend asserts. The kickoff exists to make a turn start at all — no
 
 Passing `kickoff` from the current entry page does not work. The sequence is:
 
-```
+```text
 boot() → createAndOpen() → openSession() → onSessionChange(id)
        → goto('/my/assistant/<id>', {replaceState:true})   [async]
        → phase = 'ready' → dispatch(kickoff)               [SSE turn starts]

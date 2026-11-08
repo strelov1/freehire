@@ -19,12 +19,14 @@ This is the same list+detail shape as `oracle`, differing only in the endpoint s
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A reusable `eightfold` board-based adapter that yields the normalized `Job` shape for a
   tenant's whole catalogue.
 - Page the `/api/pcsx/search` list and fetch each position's detail for the description.
 - A fixture-backed unit test that pins the list and detail JSON shapes and the mapping.
 
 **Non-Goals:**
+
 - No headless browser, proxy, or auth (both endpoints are public GET JSON).
 - No new env vars, DB columns, or migrations.
 - No search-by-query/work-site filtering — the crawl walks the full catalogue (empty query),

@@ -65,11 +65,13 @@ gains a 301 outcome where it previously only had 200/404.
 ## Capabilities
 
 ### New Capabilities
+
 - `company-slug-canonicalization`: the canonical company-slug rule (legal-form strip), the
   frozen-canonical alias registry for spelling variants, how a new posting's slug resolves
   through it, and the merge worker that collapses the existing catalogue in waves.
 
 ### Modified Capabilities
+
 - `companies`: the slug is derived by `normalize.CompanySlug` rather than `normalize.Slug`,
   and a slug retired by a merge resolves to a 301 to its canonical company rather than a 404.
 - `aggregator-ats-coverage-skip`: the gate's exact-match comparison SHALL be made against the
@@ -79,6 +81,7 @@ gains a 301 outcome where it previously only had 200/404.
 ## Impact
 
 **Go**
+
 - `internal/normalize` — `CompanySlug` regains field-level tokenization; the module's single
   legal-form token set lives here.
 - `internal/collections/register.go` — `RegisterSlug` delegates; `legalSuffixes`,
@@ -95,6 +98,7 @@ gains a 301 outcome where it previously only had 200/404.
 - `cmd/merge-companies` — new worker.
 
 **Schema**
+
 - New migration: `company_slug_aliases (alias_slug PK, canonical_slug, folded_key, reason,
   created_at)` plus an index on `folded_key`. New empty table, so a plain `CREATE INDEX` —
   no `CONCURRENTLY`, no lock worth naming.
@@ -102,10 +106,12 @@ gains a 301 outcome where it previously only had 200/404.
   The existing guard (`internal/db/folded_slug_rule_test.go`) applies to the new write path.
 
 **Web**
+
 - `web/src/routes/companies/[slug]/+page.server.ts` — propagate the redirect instead of
   `error(404)`.
 
 **Prod rollout**
+
 - Migration deploys ahead of the code. The code ships against an empty table, so behaviour is
   unchanged on day one except that new postings stop creating 1a duplicates.
 - Waves: `--min-jobs 1000`, then 100, 10, 1, each dry-run and reviewed first.

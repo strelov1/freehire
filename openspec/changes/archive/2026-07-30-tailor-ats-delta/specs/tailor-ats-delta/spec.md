@@ -11,12 +11,14 @@ The CV's own skill set SHALL be parsed from the same extracted text (the existin
 skill tagging), so the score describes the artifact and nothing outside it.
 
 #### Scenario: The score reads the rendered text layer
+
 - **WHEN** a tailored CV is scored
 - **THEN** the score is computed from text extracted from the rendered PDF, and a document whose
   rendered text layer is empty (a template producing no extractable text) fails machine-readability
   rather than scoring as if the JSON had been read
 
 #### Scenario: The stored document is not the scoring input
+
 - **WHEN** the stored document contains a field the active template does not render
 - **THEN** that field contributes nothing to the score
 
@@ -31,16 +33,19 @@ The base CV's own template and margins SHALL NOT be used, and the base CV SHALL 
 any way by scoring it.
 
 #### Scenario: A template difference does not leak into the delta
+
 - **WHEN** the base CV's stored template differs from the tailored copy's
 - **THEN** both sides are rendered with the tailored copy's template, so the delta reflects content
   only
 
 #### Scenario: Both sides share one keyword baseline
+
 - **WHEN** the delta is computed for a CV bound to a vacancy
 - **THEN** the vacancy's canonical skills are the keyword baseline for both the base and the
   tailored score
 
 #### Scenario: Scoring the base CV leaves it untouched
+
 - **WHEN** the delta is computed
 - **THEN** the base CV's stored document, template and margins are unchanged afterwards
 
@@ -52,11 +57,13 @@ the ones the ATS score already defines — this change introduces no new categor
 weighting.
 
 #### Scenario: Every category carries before, after and difference
+
 - **WHEN** a delta is served
 - **THEN** the overall and each of the five categories report base, tailored, and a signed delta,
   and each category's delta equals its tailored value minus its base value
 
 #### Scenario: An unchanged document reports a zero delta
+
 - **WHEN** the tailored CV's content is identical to the base CV's
 - **THEN** every reported delta is zero
 
@@ -71,15 +78,18 @@ action because of it — rendering, downloading, or exporting the tailored CV SH
 it does without the delta.
 
 #### Scenario: A regression names its worst category
+
 - **WHEN** the tailored overall score is below the base overall score
 - **THEN** the response is marked as a regression and names the category with the most negative
   delta
 
 #### Scenario: An improvement is not a regression
+
 - **WHEN** the tailored overall score is equal to or above the base overall score
 - **THEN** the response is not marked as a regression and names no category
 
 #### Scenario: A regression gates nothing
+
 - **WHEN** the delta is a regression
 - **THEN** the tailored CV's PDF still renders and downloads without confirmation
 
@@ -90,10 +100,12 @@ current scoring rules, and no part of it SHALL be persisted. A subsequent scorin
 document edit SHALL therefore be reflected on the next read with no migration or invalidation step.
 
 #### Scenario: A repeated read of an unchanged CV is identical
+
 - **WHEN** the delta is read twice with no edit in between
 - **THEN** both responses are identical
 
 #### Scenario: An edit is reflected on the next read
+
 - **WHEN** the tailored CV is edited and the delta is read again
 - **THEN** the new response reflects the edit, and no stored delta had to be invalidated
 
@@ -105,10 +117,12 @@ one that does not exist. A CV that is not a tailored copy — one with no base C
 baseline.
 
 #### Scenario: Another account's CV is not found
+
 - **WHEN** a caller reads the delta for a CV owned by a different account
 - **THEN** the response is the same not-found as for a CV id that does not exist
 
 #### Scenario: A base CV has no delta
+
 - **WHEN** a caller reads the delta for a CV that is not a tailored copy
 - **THEN** the response is a conflict naming the reason, and no score is computed
 
@@ -120,10 +134,12 @@ with a reason, with a success status. It MUST NOT return a server error and MUST
 tailoring workspace from loading or the CV from being edited.
 
 #### Scenario: A missing renderer yields an unavailable delta
+
 - **WHEN** the CV renderer is not configured in the running environment
 - **THEN** the response reports the delta as unavailable with a reason and a success status
 
 #### Scenario: A failed render does not fail the workspace
+
 - **WHEN** rendering either side fails
 - **THEN** the delta is reported unavailable and the workspace continues to load and edit the CV
 
@@ -137,13 +153,16 @@ SHALL NOT have to trigger a check to be told their CV got worse.
 An unavailable delta SHALL render as an absence, not as an error state.
 
 #### Scenario: Opening the workspace shows the delta
+
 - **WHEN** the tailoring workspace opens for a tailored CV
 - **THEN** the delta is requested and its overall change and per-category breakdown are displayed
 
 #### Scenario: A completed run refreshes the delta
+
 - **WHEN** an autopilot run finishes
 - **THEN** the delta is requested again and the displayed values reflect the run's edits
 
 #### Scenario: An unavailable delta shows nothing rather than an error
+
 - **WHEN** the delta is reported unavailable
 - **THEN** the workspace displays no delta and no error state

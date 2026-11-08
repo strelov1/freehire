@@ -16,6 +16,7 @@ guard `internal/ingest/atsdetect`'s `TestLocalShapesStayOutsideTheSharedTable` e
 **Revision note (post-review):** this change originally also proposed adding Eightfold
 (`eightfold.ai`) and Gupy (`gupy.io`) alongside Keka, on the same "same shape as ~15 other
 subdomain entries" reasoning. A code review caught that the reasoning was wrong for both:
+
 - `internal/ingest/sources/eightfold.go`'s board id is `"<host>/<domain>"` — a career-site host
   paired with an Eightfold tenant domain configured per board — never a bare `eightfold.ai`
   subdomain label. `internal/ingest/atsdetect` already documents Eightfold as NOT
@@ -46,6 +47,7 @@ label — a regression test for it was added). What shipped is Keka only.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `link-contributions`: the "Supported-ATS board recognition" requirement's accept-set now
   includes Keka.
 

@@ -1,8 +1,11 @@
 # micro1-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-micro1-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: micro1 job board crawl
 
 The system SHALL provide a `micro1` source adapter that crawls the micro1 job
@@ -54,4 +57,3 @@ Next.js RSC flight to a `Job`.
   no `client_job_id`
 - **THEN** that posting is skipped and the rest of the crawl still returns their
   Jobs
-

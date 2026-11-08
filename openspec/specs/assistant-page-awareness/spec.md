@@ -8,7 +8,9 @@ preset a conversation held from the extension's side panel runs under, the
 
 Every other preset is blind by design: the tool is registered for `browse` alone,
 because nothing is attached to any other session's browser-tool channel.
+
 ## Requirements
+
 ### Requirement: A browsing preset gives the assistant eyes on the current page
 
 The assistant SHALL offer a `browse` preset alongside its other presets, for a
@@ -127,4 +129,3 @@ a CV binding already follows.
 
 - **WHEN** a turn for a `browse`-preset session is submitted authenticated by a Bearer session JWT
 - **THEN** the registry built for that turn contains `read_current_page`
-

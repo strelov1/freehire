@@ -15,10 +15,12 @@ MCP clients (Claude, Cursor, ChatGPT) can only act as a freehire account today b
 ## Capabilities
 
 ### New Capabilities
+
 - `mcp-oauth-authorization`: the OAuth 2.1 authorization server — dynamic client registration, metadata discovery, the consent-page authorize flow, the PKCE token exchange, and the Connected devices list/revoke.
 - `mcp-account-server`: the signed-in MCP tool surface at `/api/v1/mcp/account`, bearer-gated by `mcp-oauth-authorization`'s grants, exposing the account-acting tools (search, job/company reads, market fit, save/unsave, mark applied, stage/note, list tracked jobs).
 
 ### Modified Capabilities
+
 (none — `api-keys` is not changing requirements; the new grant-management surface is a sibling feature on the same page, captured entirely under `mcp-oauth-authorization`.)
 
 ## Impact

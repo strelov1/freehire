@@ -34,11 +34,13 @@ new embedding pipeline.
 ## Capabilities
 
 ### New Capabilities
+
 - `agent-semantic-search`: the opt-in hybrid mode of `search_jobs` — the request flag, the
   query embed and its timeout, the keyword-only fallback, and how the response reports which
   of the two the agent received.
 
 ### Modified Capabilities
+
 - `ojcp-provider`: `search_jobs` gains the `semantic` input extension and the `semantic`
   response extension; the manifest/tool input schema declares the field so an agent can
   discover it.

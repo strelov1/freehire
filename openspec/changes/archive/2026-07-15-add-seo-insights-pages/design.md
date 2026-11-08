@@ -15,6 +15,7 @@ queries/params are missing.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Hub + per-category salary/skills/roles pages under `/insights`, server-rendered.
 - Substantive, indexable pages (auto-intro, tables, internal links, JSON-LD) gated on
   real data so no thin pages ship.
@@ -22,6 +23,7 @@ queries/params are missing.
 - Two minimal API additions, served from the existing rollups (no schema change).
 
 **Non-Goals:**
+
 - Geo/country page matrix, editorial prose/FAQ, charts, velocity pages (later).
 - Any rollup/worker/migration change — the rows already exist.
 - New auth or non-public surface.

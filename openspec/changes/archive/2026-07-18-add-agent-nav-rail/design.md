@@ -16,12 +16,14 @@ compile error.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Restore account section navigation on the Agent page as a compact, icon-only
   rail on the right edge.
 - Reuse the existing navigation model and icon set verbatim — no second source of
   truth for the item list or the icons.
 
 **Non-Goals:**
+
 - No expand/collapse, no label text, no persisted state.
 - No change to `/tailor` or any other `my/*` page.
 - No change to the account model's ordering, gating, or active rule.

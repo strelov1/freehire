@@ -16,17 +16,21 @@ the save, the same treatment blanks and duplicates receive: a per-value problem 
 an otherwise valid save, and no canonical skill the dictionary emits approaches that length.
 
 #### Scenario: Empty skills rejected
+
 - **WHEN** an authenticated user saves a profile whose `skills` are absent, empty, or reduce to empty after trimming
 - **THEN** the system responds `400` and stores nothing
 
 #### Scenario: Too many skills rejected
+
 - **WHEN** an authenticated user saves a profile with more than 200 distinct skills, in either the wanted or the avoided set
 - **THEN** the system responds `400` and stores nothing
 
 #### Scenario: A skill set at the bound is stored whole
+
 - **WHEN** an authenticated user saves a profile with exactly 200 distinct skills
 - **THEN** the profile is stored with all 200
 
 #### Scenario: An over-long value is dropped, not rejected
+
 - **WHEN** an authenticated user saves a profile whose skills include a value longer than 64 characters alongside valid ones
 - **THEN** the profile is stored with the over-long value omitted and the valid skills kept

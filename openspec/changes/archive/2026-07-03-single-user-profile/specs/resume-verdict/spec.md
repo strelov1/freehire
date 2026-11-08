@@ -10,17 +10,21 @@ SHALL be addressed without a profile id in the path: the verdict as
 When the caller has no profile, these endpoints SHALL respond 404.
 
 #### Scenario: Owner reads their verdict
+
 - **WHEN** a signed-in user who has a profile requests `GET /me/profile/verdict`
 - **THEN** the response is 200 with the verdict for their profile
 
 #### Scenario: Owner reads their ATS report
+
 - **WHEN** a signed-in user who has a profile requests `GET /me/profile/ats-report`
 - **THEN** the response is 200 with the report for their profile
 
 #### Scenario: No profile yet
+
 - **WHEN** a signed-in user who has not saved a profile requests `GET /me/profile/verdict` or `GET /me/profile/ats-report`
 - **THEN** the response is 404
 
 #### Scenario: Unauthenticated request refused
+
 - **WHEN** a request without a valid session cookie hits `GET /me/profile/verdict` or `/me/profile/ats-report`
 - **THEN** the response is 401

@@ -6,6 +6,7 @@ restates the decisions in OpenSpec's shape and adds the concrete touch points fo
 research.
 
 Today, everything downstream of "start tailoring" is keyed on a real `jobs.id`:
+
 - `internal/handler/match_analysis.go` (`GetMatchAnalysis`/`PostMatchAnalysis`/
   `StreamMatchAnalysis`, the `job-fit-analysis` capability) each independently look up
   `GetJobBySlug`, then read/run the three-stage LLM chain and cache `matchanalysis.Analysis` for
@@ -20,6 +21,7 @@ Today, everything downstream of "start tailoring" is keyed on a real `jobs.id`:
 - None of the above has any path that accepts raw text instead of a job.
 
 Reusable building blocks:
+
 - `internal/jobderive.Derive` (`jobderive.go:90`) is a pure, DB-free function — title, company,
   description, etc. in, skills/facets/category/seniority out (via `skilltag.Parse` and
   `classify.Parse`). It already runs against in-memory structs with no `jobs` row backing them
@@ -39,6 +41,7 @@ Reusable building blocks:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a signed-in user reach the existing `/tailor/[slug]` workspace starting from a URL or from
   pasted text, with zero changes to the workspace itself.
 - Reuse the existing URL-resolution stack for anything a recognized ATS adapter can parse — no
@@ -49,6 +52,7 @@ Reusable building blocks:
   one tailoring session.
 
 **Non-Goals:**
+
 - Deduplicating private submissions against each other or against the public catalog. Every
   paste/unrecognized-URL submission is its own row.
 - A UI to browse/manage a user's own past private submissions beyond what the tailored-CV list
@@ -66,6 +70,7 @@ Reusable building blocks:
 AI-credit rewards) — semantics that don't belong to "I'm tailoring a CV against this link." The
 new endpoint calls the resolution step directly (host-scoped adapters → board coverage →
 generic), and branches on whether the winning adapter was `GenericSource`:
+
 - Not generic → hand the parsed job to the same `pipeline.UpsertJob` call the contribution flow
   uses. Public, enriched, indexed. No new code path for the write itself.
 - Generic (or the fetch/parse fails) → private row (decision 3).
@@ -77,6 +82,7 @@ arbitrary site is unverified content, the same trust tier as hand-typed text —
 the public catalog or the search index.
 
 **3. Private rows: new `jobs.is_private` column, synthetic `external_id`, no enrichment queue.**
+
 - `is_private boolean not null default false`, new migration.
 - `source` = `'weblink'` (URL) or a new `'pasted'` (plain text) — reusing `'weblink'` for the URL
   case keeps it consistent with how the generic resolver already tags non-adapter-matched
@@ -108,6 +114,7 @@ Revised model: a private job behaves exactly like a **closed job** for read acce
 by anyone holding its exact slug (fit analysis, tailoring, vote, copies, …, all unchanged), but
 never surfaced through search, listing, or reindex. Two places must actively keep it unsurfaced,
 because they don't require already knowing the slug to reach:
+
 - Meilisearch's job-indexing query (`internal/search`) — `WHERE NOT is_private` alongside the
   existing open/closed handling.
 - The DB-backed `GET /api/v1/jobs` list query and its `estimate_open_jobs()` total — same

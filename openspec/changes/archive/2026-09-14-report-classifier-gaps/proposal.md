@@ -38,10 +38,12 @@ in this repo already works.
 ## Capabilities
 
 ### New Capabilities
+
 - `dict-gap-reporting`: read-only reporting that mines LLM enrichment output to rank
   candidate gaps in the deterministic skill-tagging and title-classification dictionaries.
 
 ### Modified Capabilities
+
 (none — `skilltag`'s and `classify`'s own matching behavior is unchanged; this change only
 adds a consumer that reads their existing output)
 

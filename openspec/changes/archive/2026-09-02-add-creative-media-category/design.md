@@ -103,6 +103,7 @@ resolves — `UGC Creator` already demonstrates this. So the game titles get
 `game_developer` while keeping whatever category they resolve to today.
 
 ### Ambiguous skills are gated, dropped, or kept from vouching — and which one
+
 ### depends on WHICH TABLE the entry sits in
 
 `skilltag` has three tiers, and an entry lands in one of them by where it is

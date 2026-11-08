@@ -21,6 +21,7 @@ eslint) — use `svelte-check` as the green gate.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Server-render the public read pages (`/`, `/jobs/:slug`, `/companies`,
   `/companies/:slug`) so full content is in the initial HTML.
 - Per-route `<title>`/`<meta>`/canonical/OG + `JobPosting`/`Organization` JSON-LD.
@@ -29,6 +30,7 @@ eslint) — use `svelte-check` as the green gate.
 - Keep the same dev ergonomics (one origin, `/api` proxied) and prod same-origin.
 
 **Non-Goals:**
+
 - No backend API changes beyond, if needed, a lightweight slug+timestamp listing
   for the sitemap. No product/UX redesign. No change to enrichment/ingest.
 - No SEO content strategy (copywriting, keyword targeting) — only the technical
@@ -38,6 +40,7 @@ eslint) — use `svelte-check` as the green gate.
 ## Decisions
 
 ### D1 — SvelteKit + `adapter-node`, SSR with hydration
+
 Migrate to SvelteKit and ship `adapter-node` (the frontend becomes a long-lived
 Node server). *Why:* canonical SSR with per-route `load` and `<svelte:head>`,
 one source of markup, progressive hydration; matches the chosen approach.
@@ -46,6 +49,7 @@ unbounded — can't fully prerender a live board); a Go-side SSR endpoint (would
 duplicate the job render in Go and Svelte).
 
 ### D2 — Same-origin topology: nginx fronts both Node and the Go API
+
 Keep nginx as the single public origin: `/api` (and `/health`) → Go `app:8080`;
 everything else → the SvelteKit Node server. *Why:* preserves the `SameSite=Lax`
 same-origin contract with zero auth changes, and isolates the migration to the
@@ -56,6 +60,7 @@ issues); browser hydration keeps calling same-origin `/api`.
 `/api` — more moving parts in the web app for no cookie benefit.
 
 ### D3 — Data loading via `load` + `event.fetch` cookie forwarding
+
 Public pages load data in `+page.server.ts` (or universal `+page.ts` where no
 secrets/cookies are needed) using SvelteKit's `event.fetch`, which forwards the
 incoming request's cookies on same-origin calls — so an authenticated SSR
@@ -64,6 +69,7 @@ injected `fetch` so the same client works on server and client.
 *Why:* one API client, correct cookie behavior, no duplicate fetch logic.
 
 ### D4 — Auth & theme without FOUC under SSR
+
 Auth: a root `+layout.server.ts` resolves the current user from `/me` (cookie
 forwarded) so the server renders the correct signed-in/out chrome; the user is
 exposed via `page.data.user` (NOT a module-level `$state` singleton, which would
@@ -83,6 +89,7 @@ byte or we trade one flash for another.
 — simpler but reintroduces a visible auth flash on every load.
 
 ### D5 — Routing & URL-synced filters → SvelteKit primitives
+
 Map routes 1:1 to `src/routes/**` (`+page.svelte`). Replace `router.navigate`
 with `<a>`/`goto`, and the filter URL-sync (`setQuery`/`replaceState`,
 `query`/`search`) with `$page.url.searchParams` + `replaceState`/`goto({replaceState})`.
@@ -91,6 +98,7 @@ prior bug: a separate `$effect` made the controlled input revert each keystroke)
 *Why:* SvelteKit owns navigation; the hand-rolled router is retired, not wrapped.
 
 ### D6 — SEO artifacts
+
 - `JobPosting` JSON-LD built from the job-view shape on `/jobs/:slug`;
   `Organization` on company pages. Emitted server-side in `<svelte:head>`.
 - `/robots.txt` as a static route (allow all, point at the sitemap).

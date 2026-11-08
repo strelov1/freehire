@@ -5,10 +5,12 @@ See proposal.md - Why. `web/` currently has Vitest only (`web/package.json`'s `"
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One Playwright test proving the real SSR → Go API → Postgres/Meili pipeline renders job cards in a real browser, running locally against `make up`.
 - Minimal, reusable scaffolding (`playwright.config.ts`, one `data-testid`) so a second e2e test is cheap to add later.
 
 **Non-Goals:**
+
 - Not a full e2e suite (no search/filter, auth, or apply-flow coverage).
 - No CI integration — this is a local-only check for now; wiring it into CI (spinning up docker-compose in GitHub Actions) is a separate, larger decision left for a future change.
 - No Playwright-managed `webServer` — the test does not attempt to boot the app/DB/Meili itself.

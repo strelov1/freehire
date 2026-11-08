@@ -31,6 +31,7 @@ to attach those future surfaces without reshaping the core.
 ## Capabilities
 
 ### New Capabilities
+
 - `community-threads`: anonymous, polymorphic discussion threads attached to a
   company or vacancy, with stable pseudonymous personas, flat replies, per-user
   rate limiting, and moderator close.

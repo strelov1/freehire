@@ -18,6 +18,7 @@ as distinct jobs today.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Suppress an open aggregator posting when an open first-party ATS posting of the same
   company, title, and compatible country exists, keeping the ATS copy canonical.
 - Reuse the existing `duplicate_of` column and every surface that already filters it — no
@@ -27,6 +28,7 @@ as distinct jobs today.
 - No schema change, no migration.
 
 **Non-Goals:**
+
 - Fuzzy / partial title matching for aggregators that mangle titles (gulftalent's Marriott
   copies). That is a separate, riskier follow-up.
 - Changing the role-cluster repost dedup or its `role_fingerprint`.

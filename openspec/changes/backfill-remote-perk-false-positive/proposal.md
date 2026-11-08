@@ -1,6 +1,7 @@
 ## Why
 
-#2710 (freehire#2696) fixed `WorkModeFromDescription` so a bounded travel/PTO perk
+# 2710 (freehire#2696) fixed `WorkModeFromDescription` so a bounded travel/PTO perk
+
 phrase ("work from anywhere ... for up to a month") no longer fills
 `work_mode=remote` on a hybrid or onsite posting. That fix only reaches postings
 ingested from now on.
@@ -22,10 +23,12 @@ fix:
   posting.
 
 Measured against production (read-only Meilisearch queries, the same 143/61 figures
-#2710's proposal.md cites): the affected population is real and will stay wrong
+
+## 2710's proposal.md cites): the affected population is real and will stay wrong
+
 indefinitely without a dedicated pass.
 
-## What Changes
+### What Changes
 
 - Add `cmd/backfill-remote-perk-false-positive`, a one-off pass: gathers candidate
   jobs from Meilisearch (`work_mode = "remote"` and the text query "work from
@@ -43,7 +46,7 @@ indefinitely without a dedicated pass.
   `make reindex` — the same gap `cmd/backfill-clearance`'s own docs describe. Run
   one after this pass.
 
-## Known limitation
+### Known limitation
 
 A row whose current `work_mode=remote` came from a genuine, structured ATS signal
 that also happens to be a Meilisearch hit for "work from anywhere" cannot be told

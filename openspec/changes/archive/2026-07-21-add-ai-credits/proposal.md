@@ -30,11 +30,13 @@ into.
 ## Capabilities
 
 ### New Capabilities
+
 - `ai-credits`: the per-user points balance, monthly grant + lazy reset,
   append-only ledger, materialized balance cache, atomic idempotent debit, and
   the balance/insufficient-points contract exposed to callers.
 
 ### Modified Capabilities
+
 - `job-fit-analysis`: the match quota requirement changes — the distinct-job
   (10 / 30-day) meter is replaced by a points debit (cost = match) enforced via
   the `ai-credits` capability; over-limit response changes from 429 to 402.

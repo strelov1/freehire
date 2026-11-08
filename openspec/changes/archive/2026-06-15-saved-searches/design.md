@@ -9,11 +9,13 @@ This change adds saved searches as another such per-user resource.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a signed-in user save, list, re-apply, overwrite, and delete named filter sets, synced server-side across devices.
 - Reuse the existing canonical filter query string as the stored representation — no new filter format.
 - Follow the existing service + repository + thin handler pattern and response/error conventions.
 
 **Non-Goals:**
+
 - Job alerts / email notifications on new matches (deferred; would add scheduling, last-run state, delivery).
 - AI-assisted filter generation from natural language.
 - Anonymous / localStorage saved searches (auth-gated only; no client-side store, no login-time merge).
@@ -22,18 +24,23 @@ This change adds saved searches as another such per-user resource.
 ## Decisions
 
 ### Store the canonical query string (TEXT), not structured JSON
+
 The stored `query` is the same string `filtersToParams` produces. Applying a saved search is `filtersFromParams(new URLSearchParams(query))` then a URL commit. **Alternative considered:** a JSONB column mirroring `JobFilters`. Rejected — it duplicates the filter shape in a second place and adds serialization on both ends, while the query string is already the canonical wire format both the URL and the search API speak. Both formats share the same long-term risk (a renamed facet param could orphan old saves); the query string is the simpler choice with no extra mapping layer.
 
 ### Cookie-only `RequireAuth`
+
 Saved searches are a browser convenience, not a scripting primitive, so the four endpoints use `RequireAuth` (cookie) — mirroring API-key management. **Alternative:** `RequireAuthOrKey` (as `/me/jobs` uses). Rejected for now; there is no script use case and cookie-only keeps the surface minimal. The seam is trivial to widen later if a CLI need appears.
 
 ### Service-layer validation; DB as backstop
+
 Name length/blank, per-user 50 cap, and duplicate-name checks live in the `savedsearch.Service`, returning typed errors the handler maps to `400`/`409`. The DB still carries `CHECK (length(trim(name)) BETWEEN 1 AND 100)` and `UNIQUE (user_id, name)` as backstops so the invariant holds even if a future caller bypasses the service. **Rationale:** matches the project's "never persist an out-of-vocabulary value" posture (validate in code, enforce in schema).
 
 ### Active-set detection is client-side, by string comparison
+
 "Which saved set is currently applied" is derived by comparing the current canonical query string to each saved `query` — there is no server-side "selected" state. **Rationale:** selecting a set is just applying its filters to the URL; persisting a selection would add state with no benefit and could drift from the actual URL.
 
 ### REST shape under `/api/v1/me/searches`
+
 `GET` list, `POST` create, `PATCH /:id` (partial: name and/or query), `DELETE /:id`. Responses use the project envelope (`{"data": ...}`); errors flow through the central `ErrorHandler` (dup/cap → `409`, missing/foreign id → `404`, bad name → `400`). PATCH-partial (omitted field unchanged) mirrors the `TrackJob` nil-field convention.
 
 ## Risks / Trade-offs

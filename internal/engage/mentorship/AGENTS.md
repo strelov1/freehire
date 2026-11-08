@@ -1,6 +1,7 @@
 # Mentorship conventions
 
 ## Scope
+
 The mentorship marketplace: a named, moderated insider at a company in the catalogue
 publishes when they are free, and a seeker books half an hour of it. The slot engine lives
 in [internal/engage/slots](../slots/doc.go) (shared with buddy mock interviews; the rules

@@ -7,7 +7,9 @@ in a durable outbox queue, extract enrichment from each job's description via a
 provider-agnostic LLM, and write validated results back with provenance — safely
 under concurrency, with retries and dead-lettering — run by a standalone batch
 command.
+
 ## Requirements
+
 ### Requirement: Jobs needing enrichment are tracked in a durable outbox queue
 
 The system SHALL maintain an `enrichment_outbox` table holding one entry per
@@ -377,4 +379,3 @@ schema-level constraint is not available.
 
 - **WHEN** the model returns a `requirements` entry whose `priority` is not schema-constrained and does not exactly match `required` or `preferred`
 - **THEN** the enrichment write-back path sanitizes the entry's `priority` into the controlled vocabulary rather than dead-lettering the job over it
-

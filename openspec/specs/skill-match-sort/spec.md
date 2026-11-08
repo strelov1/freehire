@@ -1,8 +1,11 @@
 # skill-match-sort Specification
 
 ## Purpose
+
 TBD - created by archiving change skill-match-sort. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Permanent skill vector positions
 
 The system SHALL assign every canonical skill slug a position in a fixed-width
@@ -153,4 +156,3 @@ many skills the posting asks for. That component is what turns the cosine into c
 - **WHEN** a vector is built for a reader's profile
 - **THEN** the component the job side uses for sizing is zero, so it contributes nothing
   to any comparison
-

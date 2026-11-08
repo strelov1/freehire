@@ -12,6 +12,7 @@ The production datacenter IP is now IP-reputation-blocklisted by some ATS anti-b
 ## Capabilities
 
 ### New Capabilities
+
 - `source-proxy-egress`: opt-in per-provider routing of ingest HTTP requests through a configured egress proxy, so IP-blocklisted ATS sources can be crawled from a non-datacenter IP while all other sources stay on the direct connection.
 
 ### Modified Capabilities

@@ -28,6 +28,7 @@ No backend behavior changes — this is documentation of the existing API only.
 ## Capabilities
 
 ### New Capabilities
+
 - `api-documentation`: a public, server-rendered reference for the freehire HTTP
   API generated from a single typed data source, rendered both as a website page
   and a repo `docs/API.md`, covering endpoints, the response envelope, and the

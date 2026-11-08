@@ -1,8 +1,11 @@
 # earcu-source Specification
 
 ## Purpose
+
 TBD - created by archiving change earcu-source-adapter. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: eArcu per-company RSS crawl
 
 The system SHALL provide an `earcu` source adapter that crawls a single eArcu career
@@ -93,4 +96,3 @@ files require a board id, and it appears in the source facet like the other ATS 
 - **WHEN** a board file names provider `earcu` with a board host
 - **THEN** config validation accepts it, and an `earcu` entry that omits its board is
   rejected
-

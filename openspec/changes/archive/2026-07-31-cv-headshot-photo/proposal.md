@@ -29,11 +29,13 @@ and a structured extraction, but no portrait.
 ## Capabilities
 
 ### New Capabilities
+
 - `profile-headshot`: the per-user profile photo — upload with server-side normalization,
   owner-scoped retrieval and removal, storage-disabled degradation, and the privacy boundary
   that keeps the image out of the CV document and out of LLM prompts.
 
 ### Modified Capabilities
+
 - `cv-builder`: the template registry gains a `photo` flag exposed on the templates endpoint;
   two photo-bearing templates join the registry; rendering a photo-bearing template composes
   the stored headshot (or the silhouette placeholder) into the PDF.

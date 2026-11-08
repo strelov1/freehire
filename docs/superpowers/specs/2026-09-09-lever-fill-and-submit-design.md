@@ -13,7 +13,7 @@ string inside a CSS rule.
 With the refusal gone, the preview pass reached Lever's schema for the first time. Queue
 entry 6 came back with **every field answered and nothing pending**:
 
-```
+```text
 Full name         Ilya Strelov
 Email             strelov1@gmail.com
 Phone             +55 48 99653-6547

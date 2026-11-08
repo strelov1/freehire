@@ -25,6 +25,7 @@ Chosen over localStorage for cross-device durability.
 metadata, not document content.
 
 **D3 — `/tailor/[slug]` has two modes.**
+
 - No `?cv`: bootstrap (create tailored CV + session + kickoff), then `PUT` the session id.
 - `?cv=<id>`: GET the CV (`agent_session_id`, `job_id`) + the job + the analysis; attach the
   existing session with NO kickoff. Resume needs no new token — the session already holds the

@@ -1,9 +1,11 @@
 # Telegram conventions
 
 ## Scope
+
 Telegram-channel crawl (web preview → `telegram_posts`) and LLM vacancy extraction into the job catalogue.
 
 ## Always true
+
 - The `telegram_channels` table lists channels (each with a `kind` that steers the extraction prompt); `active=false` retires one without losing its posts.
 - `cmd/tg-ingest` crawls each channel's web preview into the `telegram_posts` queue.
 - `cmd/tg-extract` drains pending posts through the LLM into the job catalogue.
@@ -11,9 +13,11 @@ Telegram-channel crawl (web preview → `telegram_posts`) and LLM vacancy extrac
 - Crawl is cheap and LLM-free; extraction is the metered, retryable stage.
 
 ## How it works
+
 Public Telegram channels carry vacancies as free-form posts, so unlike the structured ATS adapters they need an extraction step. The work is split into two stages mirroring the ingest/enrich shape: `cmd/tg-ingest` is the cheap crawl that fetches each channel's web preview and enqueues raw posts, and `cmd/tg-extract` is the LLM-driven extraction that drains the queue into normalized jobs. The `kind` field on each channel entry steers which extraction prompt is used, so different channel formats (e.g. a pure-vacancy channel vs a mixed discussion channel) get the right parsing strategy.
 
 ## Limitations
+
 - The prefilter's marker set is per-language and hand-maintained (RU, EN, UA, ES). Adding a
   channel that publishes in a language the markers do not cover silently rejects all of its
   vacancies — the failure looks like a weak channel, not a blind filter. Extend
@@ -60,6 +64,7 @@ Public Telegram channels carry vacancies as free-form posts, so unlike the struc
   evidence: a vacancy still open at 46 days is closed anyway.
 
 ## The admission rule has exactly one home
+
 `telegram.AdmitsPost(text, links, matcher)` — the text carries a marker, OR the post links
 out to a vacancy a destination adapter resolves — is called by BOTH `CrawlRunner` and
 `cmd/backfill-telegram-prefilter`. It was a line inside the crawl until the backfill needed
@@ -68,6 +73,7 @@ crawl refuses, or leave behind the ones it now admits. Add a marker and both rea
 together. A nil matcher (no registry configured) means only the text can admit.
 
 ## The judge: what the markers have no word for
+
 The markers are a hand-kept list, and measured 2026-10-21 they were losing more than they
 kept out: of 150 posts declined in the previous 30 days, a model reading each one called 90
 real vacancies — "RUST DEVELOPER | REMOTE", "B2B Marketing Director … Job description", a
@@ -90,6 +96,7 @@ did admit it would have declined one.
   judge and the markers alone decide.
 
 ## A job's URL: the apply link, else the post
+
 An LLM-extracted job's identity is always the post (`<channel>/<msg>/<i>`), but its URL is
 where an applicant goes: `applyURL` picks the post's own apply link when the post yields
 exactly ONE vacancy and the post's layout says which link that is. Three readings, in order:
@@ -100,7 +107,7 @@ exactly ONE vacancy and the post's layout says which link that is. Three reading
    saying anything else is not guessed at: measured, those are company homepages and adverts
    as often as vacancies.
 2. **A label in front of a link says apply** — the last words before it on its line, or on
-   the nearest non-empty line above when it opens its line: "Link: https://jobs.ea.com/…",
+   the nearest non-empty line above when it opens its line: "Link: <https://jobs.ea.com/…>",
    "Apply here: …", "See full details and apply:". Only the label's END is read, and the bare
    noun labels ("Link", "Ссылка") must be the label's only words, because "WhatsApp community
    link:" ends in the same noun.

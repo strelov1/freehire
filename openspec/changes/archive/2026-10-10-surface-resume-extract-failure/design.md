@@ -23,6 +23,7 @@ storage-layer code.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Give the candidate the SAME signal the onboarding wizard already shows, wherever they actually
   manage experience (`/my/profile/experience`, Tailor's Experience tab) — not a new signal, the
   existing one, finally reaching the place that matters for this issue.
@@ -30,6 +31,7 @@ storage-layer code.
   the bytes are already stored, so the fix should use them.
 
 **Non-Goals:**
+
 - No change to the extraction's fail-closed behavior itself (PII-detector-unavailable stays
   fail-closed; LLM-unconfigured stays a no-op). This change is about VISIBILITY and RETRY, not
   about making extraction succeed more often or loosening what it requires to run at all.

@@ -26,6 +26,7 @@ never round-trips through any of our servers.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Hands-free spoken rehearsal for an existing `interview` session, indistinguishable in
   outcome from the text mode: same vacancy context, same transcript storage, readable
   the same way whether a candidate switches between voice and typed turns mid-session.
@@ -33,6 +34,7 @@ never round-trips through any of our servers.
   directly over WebRTC once it holds a scoped, short-lived credential.
 
 **Non-Goals:**
+
 - No tool calls inside a voice turn. `experience_add` and every other `interview` tool
   stay text-only for v1; a voice session can reference what the bank already holds
   (baked into the opening `instructions`, the same way `interview_context` feeds the

@@ -1,8 +1,11 @@
 # jobspresso-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-jobspresso-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Jobspresso maps its RSS feed to jobs
 
 The system SHALL provide a `jobspresso` source adapter that fetches the WordPress Job Manager
@@ -57,4 +60,3 @@ public slug. A single dropped item SHALL NOT abort the crawl.
 
 - **WHEN** an item's `<dc:creator>` resolves to an empty company
 - **THEN** the adapter yields no `Job` for that item and continues mapping the rest
-

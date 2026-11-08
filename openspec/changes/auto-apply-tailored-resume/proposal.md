@@ -45,6 +45,7 @@ posture — see design.md's "why not widen `/autopilot`" decision.
 ## Capabilities
 
 ### New Capabilities
+
 - `auto-apply-cv-tailoring`: the queue-scoped tailoring trigger and its review gate — what
   starts a run for one queue entry, what the candidate sees and decides, and what a decision
   does to the entry's eligibility for submission.
@@ -52,6 +53,7 @@ posture — see design.md's "why not widen `/autopilot`" decision.
   tailored CV during a live submission attempt.
 
 ### Modified Capabilities
+
 (none — `auto_apply_queue`'s existing lifecycle, `internal/application/autoapply`'s runner,
 and the interactive tailoring/autopilot surface are all unchanged in their existing
 requirements; this only adds new ones.)

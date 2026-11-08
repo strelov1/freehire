@@ -28,11 +28,13 @@ same session shows firing after nearly every exchange.
 ## Capabilities
 
 ### New Capabilities
+
 - `tailor-claim-confirmation`: the tailoring agent requests confirmation of an unbanked
   claim through a dedicated tool and button UI instead of free-text prose, so confirming
   is a click that always produces a verbatim-matching transcript message.
 
 ### Modified Capabilities
+
 - `assistant-follow-ups`: every requirement in this capability is removed — the feature
   it specifies no longer exists.
 

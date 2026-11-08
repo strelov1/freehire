@@ -24,6 +24,7 @@ the project owner wants removed outright, unrelated to the confirmation bug.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let the candidate confirm a claim with one click, producing a transcript message that
   satisfies the *existing, unchanged* verbatim-quote check — not a new, weaker path to
   `stated_in_chat`.
@@ -32,6 +33,7 @@ the project owner wants removed outright, unrelated to the confirmation bug.
   `internal/followup/`.
 
 **Non-Goals:**
+
 - Changing `provenanceFor`, `UserSaid`, or any other part of the evidence gate itself.
 - A new REST endpoint or a new provenance category for "confirmed via UI click." The
   design deliberately produces an ordinary chat message instead, so no new trust

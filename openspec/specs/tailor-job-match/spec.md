@@ -1,6 +1,7 @@
 # tailor-job-match Specification
 
 ## Purpose
+
 Tell a candidate how well the CV they are editing right now matches the vacancy it was written
 for — measured on the artifact a parser reads (the rendered PDF's text layer), against that
 vacancy and nothing else. Deterministic and dictionary-only, so it calls no model, costs no AI
@@ -10,6 +11,7 @@ numerator, because a check we could not run is not a failure the candidate cause
 informational and gates nothing.
 
 ## Requirements
+
 ### Requirement: The job-match score measures the tailored document against its vacancy alone
 
 The system SHALL score a tailored CV against the vacancy it is bound to, using only that vacancy

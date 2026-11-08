@@ -23,11 +23,13 @@ sampled posting; `remote` (a plain boolean) was populated (`false` on both sampl
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl a HumanBit tenant's open postings via one listing fetch (enumeration + company
   name) plus one detail fetch per posting (structured fields), following the
   `hiringthing`/`topco` "cheap list, per-item hydrate" shape.
 
 **Non-Goals:**
+
 - No `work_mode` string-enum mapping. The field exists in the detail schema but was null on
   every sampled posting, so there is no confirmed example of its real spelling to map from
   — mapping it would be a guess, not a reading. `Remote` (a confirmed boolean) drives the

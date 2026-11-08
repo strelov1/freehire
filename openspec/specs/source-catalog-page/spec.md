@@ -1,11 +1,13 @@
 # source-catalog-page Specification
 
 ## Purpose
+
 The public source catalogue: what `/sources` states, what `GET /api/v1/sources`
 serves, and the honesty rules that govern the figures on it — in particular what the
 ATS-overlap figure measures and how it may be worded.
 
 ## Requirements
+
 ### Requirement: Public source catalogue endpoint
 
 The system SHALL serve `GET /api/v1/sources` without authentication, returning every

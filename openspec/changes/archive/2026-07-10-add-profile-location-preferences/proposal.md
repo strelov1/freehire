@@ -23,6 +23,7 @@ Not breaking: the block is additive and optional; existing profiles (specializat
 <!-- none -->
 
 ### Modified Capabilities
+
 - `search-profiles`: the profile entity gains an optional `location_preferences` block; save-validation and the fetch/save wire shape extend to cover it.
 - `filter-modal`: the **Apply my profile** action additionally seeds the jobs-filter location facets (work_mode, regions, countries, cities, relocation) from the profile's location preferences.
 

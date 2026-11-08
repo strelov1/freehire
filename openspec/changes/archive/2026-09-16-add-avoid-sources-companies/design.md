@@ -17,6 +17,7 @@ change — no unrelated refactor).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Persist `excluded_sources` and `excluded_companies` on the profile with the same
   normalize/cap/optional semantics `excluded_skills` already has.
 - Give the user one place (`/my/profile/avoid`) to manage all three exclusion
@@ -26,6 +27,7 @@ change — no unrelated refactor).
   (`api.listCompanies`) already used by the job-search company filter.
 
 **Non-Goals:**
+
 - No change to how `excluded_skills` (or the new fields) are consumed — the digest
   exclusion, the match-analysis avoid action, and the assistant profile tool keep
   their current scope. Wiring `excluded_sources`/`excluded_companies` into those

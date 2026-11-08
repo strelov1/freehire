@@ -46,7 +46,7 @@ No backend work is required. The next `Compute` call reclassifies the claimed sk
 
 Pressing a Missing or Close chip expands a single row directly beneath that chip group:
 
-```
+```text
 ● Missing
 [bash] [chatgpt] [confluence] [entra-id] …
 ┌────────────────────────────────────────┐

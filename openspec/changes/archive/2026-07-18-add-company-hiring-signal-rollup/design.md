@@ -11,11 +11,13 @@ This change adds one more rollup of the same kind, keyed by company.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Precompute a per-`(company_slug, day)` velocity series (`added`, `removed`, running `open`) from current `jobs`.
 - Make it fully retroactive and a pure function of `jobs` — no snapshot dependency.
 - Match the existing rollup conventions exactly (atomic rebuild worker, same idioms).
 
 **Non-Goals:**
+
 - No HTTP API/read endpoint (a later change).
 - No daily company-attribute snapshot (`employee_count`/`maturity` history stays lossy for now).
 - No stored "previous-window" column — growth is derived from the `open` series.
@@ -31,6 +33,7 @@ This change adds one more rollup of the same kind, keyed by company.
 - Growth over any window is a read-time carry-forward lookup on `open` (see spec), so **no `open_count_prev` column** is stored.
 
 **Alternatives considered:**
+
 - *Scalar-per-company table* (`open_count`, `open_count_prev`) like `insights_role_stats`: smaller, but throws away the time series that is the actual signal. Rejected — the series is the product.
 - *Two tables* (per-day velocity + scalar growth): more surface for no gain, since `open` per day already yields growth. Rejected.
 - *Store `open` for every company on every day*: gap-free per-company calendar explodes row count. Rejected in favour of activity-days + carry-forward.

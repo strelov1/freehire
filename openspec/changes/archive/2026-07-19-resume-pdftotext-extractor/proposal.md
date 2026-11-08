@@ -27,6 +27,7 @@ good, selectable text layer. `poppler`'s `pdftotext` extracts these files cleanl
 <!-- none -->
 
 ### Modified Capabilities
+
 - `resume-skill-extraction`: the PDF-extraction requirement now succeeds for text-based
   PDFs regardless of font encoding (including CID/`Identity-H` embedded-font exports such
   as Canva); the empty-text rejection applies only to image-only PDFs.

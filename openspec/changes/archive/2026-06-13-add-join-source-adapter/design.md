@@ -23,11 +23,13 @@ Contract confirmed live against company `167291` (Just Hiring, slug `justhiringd
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `join` adapter that enumerates a company's jobs from the public list API (full pagination)
   and yields normalized jobs with Markdown-rendered, sanitized-HTML descriptions, reusing the
   list→detail pattern and `fetchDetails`.
 
 **Non-Goals:**
+
 - HTML / `__NEXT_DATA__` scraping (rejected — the public JSON API is cleaner and stable).
 - Structured department/category mapping (left to enrichment).
 - The authenticated `/api/companies/<id>/jobs` endpoint (401; the public one suffices).

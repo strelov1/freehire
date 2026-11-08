@@ -1,8 +1,11 @@
 # tailor-workspace Specification
 
 ## Purpose
+
 TBD - created by archiving change add-tailor-workspace. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: A tailored CV remembers its agent session
 
 The system SHALL persist the agent session id bound to a tailored CV and return it on the CV

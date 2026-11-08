@@ -9,7 +9,9 @@ LLM's copies were paid-for output tokens nobody read.
 `skills` is different from the other eight: `internal/skilltag`'s dictionary
 covers a genuinely open-ended domain (new frameworks/tools/languages appear
 continuously), unlike the other eight closed, slow-changing taxonomies. Before
-#659, `skills` was one of the discovery facets the prompt deliberately let the
+
+# 659, `skills` was one of the discovery facets the prompt deliberately let the
+
 model answer outside the dictionary, specifically to surface vocabulary the
 dictionary is missing. We want that discovery signal back to drive future
 `internal/skilltag` dictionary expansion — the other eight stay dropped, since

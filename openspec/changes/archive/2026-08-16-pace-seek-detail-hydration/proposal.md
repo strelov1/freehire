@@ -33,6 +33,7 @@ dominant case.
 <!-- None: this changes how an existing capability behaves. -->
 
 ### Modified Capabilities
+
 - `seek-source`: the detail-hydration requirement changes on two points — the fetch is rate-paced,
   and a posting whose detail fails is dropped rather than ingested body-less.
 

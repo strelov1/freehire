@@ -27,11 +27,13 @@ from four facets. The figures move slowly and do not need to be live.
 ## Capabilities
 
 ### New Capabilities
+
 - `facet-distribution-rollup`: a precomputed daily snapshot of selected job
   facet distributions, recomputed by a run-once worker with an atomic swap and
   exposed read-only over a public aggregate endpoint.
 
 ### Modified Capabilities
+
 - `open-transparency-page`: the "what's inside" facet distributions are sourced
   from the precomputed `/api/v1/stats/facets` snapshot instead of the live
   `/api/v1/jobs/facets` count.

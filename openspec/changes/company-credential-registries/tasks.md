@@ -40,7 +40,7 @@
 
 ## 7. UI
 
-- [x] 7.1 Verify whether the filter machinery tolerates two facet specs on the `collections` param; if not, render one spec whose options carry group headings  — VERDICT: it does not. filtersToParams iterates FACETS and would append every value twice, activeFilterCount would double. Shipped as one facet whose options carry a `group`, with a sub-heading in PillGroup; a test pins the single-entry invariant
+- [x] 7.1 Verify whether the filter machinery tolerates two facet specs on the `collections` param; if not, render one spec whose options carry group headings — VERDICT: it does not. filtersToParams iterates FACETS and would append every value twice, activeFilterCount would double. Shipped as one facet whose options carry a `group`, with a sub-heading in PillGroup; a test pins the single-entry invariant
 - [x] 7.2 Split the collection facet options by `kind` into "Collections" and "Credentials" groups in the FilterModal
 - [x] 7.3 Add the credential badge to the job card and the company page, naming the issuing register and carrying the disclaimer that the licence belongs to the employer and is not a promise of sponsorship for that role
 - [x] 7.4 Verify the `/collections/uk-skilled-worker-sponsor` landing page renders server-side with its canonical and breadcrumb JSON-LD, as the existing landing-page machinery should give for free

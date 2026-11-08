@@ -16,7 +16,7 @@ Two modes, both from [Scrapling](https://github.com/D4Vinci/Scrapling):
 
 ## API
 
-```
+```text
 POST /fetch   Authorization: Bearer $SCRAPLING_FETCH_TOKEN
   {"url": "...", "method": "GET", "headers": {...}, "body": "<base64>", "mode": "http"|"browser", "proxy": false}
   -> 200 {"status": 403, "url": "<final url>", "headers": {...}, "body": "<base64>"}   upstream answer, as data
@@ -77,7 +77,7 @@ sticky template `http://<user>-{n}:<pass>@p.webshare.io:80`, one fixed IP per `n
 
 ## Run
 
-```
+```text
 docker build -t freehire/scrapling-fetch services/scrapling-fetch
 docker run --network host -e SCRAPLING_FETCH_TOKEN=... -e SOURCES_PROXY_URL=... freehire/scrapling-fetch
 curl -s 127.0.0.1:8098/fetch -H "Authorization: Bearer $TOKEN" \
@@ -89,7 +89,7 @@ does not build or restart it: an image bump is a manual `docker build` and unit 
 
 ## Test
 
-```
+```text
 pip install -r requirements-test.txt
 python -m pytest -q
 ```

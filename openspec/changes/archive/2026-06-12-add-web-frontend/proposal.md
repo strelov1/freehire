@@ -16,6 +16,7 @@ browsable and gives the project a usable surface on top of the existing API.
 ## Capabilities
 
 ### New Capabilities
+
 - `web-frontend`: A browser SPA that lists and shows jobs and companies over the
   existing read-only API, including the API's CORS support that enables direct
   browser access.

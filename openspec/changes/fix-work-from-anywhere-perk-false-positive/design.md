@@ -28,6 +28,7 @@ it (see proposal.md's Impact / the "not comparable" note below).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Stop "work from anywhere" from filling `work_mode=remote` when it is describing a
   bounded travel/PTO allowance rather than the posting's actual arrangement.
 - Keep the fix scoped to exactly the phrase(s) measurement showed are ambiguous —
@@ -36,6 +37,7 @@ it (see proposal.md's Impact / the "not comparable" note below).
   were tried and rejected on the same basis).
 
 **Non-Goals:**
+
 - Detecting hybrid from phrasings like "hybrid culture" or "in person 3 to 4 days a
   week" that the current `hybrid` phrase family misses. Investigated during triage;
   sampling production data found real false-positive risk in the most obvious

@@ -20,11 +20,13 @@ itself once the reindex it made redundant finishes.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - After a successful full facet reindex, remove `search_outbox` rows that are
   provably redundant — their job's content is already in the newly-swapped live index.
 - Never remove a row that might still represent real, un-pushed work.
 
 **Non-Goals:**
+
 - Not touching `semantic_outbox` or the semantic reindex path — that queue and index
   are unrelated to this one.
 - Not changing `cmd/search-drain`'s own claim/complete/fail logic — the purge is purely

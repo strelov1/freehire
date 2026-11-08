@@ -29,11 +29,13 @@ directory.
 ## Capabilities
 
 ### New Capabilities
+
 - `company-info`: authoritative company-info attributes on a company and the
   one-time backfill that imports them from an external dataset, matching by slug and
   inserting unmatched companies as reference rows.
 
 ### Modified Capabilities
+
 - `companies`: companies may exist as reference rows with no jobs; the orphan cleanup
   preserves reference rows instead of deleting them.
 

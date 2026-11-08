@@ -35,11 +35,13 @@ uploaded one — would never see a new question. Collection would start from zer
 ## Capabilities
 
 ### New Capabilities
+
 - `candidate-survey`: the self-reported segmentation questionnaire — job-search stage,
   biggest challenge, current income — its storage, its closed vocabularies, and its
   owner-scoped partial-update API.
 
 ### Modified Capabilities
+
 - `jobs-onboarding`: the wizard's step set expands; the completion gate becomes an explicit
   server-side marker instead of an inference from CV presence; each step persists as it is
   answered instead of all at the end.

@@ -25,12 +25,14 @@ can reuse.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Give `tailoring` and `approved` their own read-only banner in the tracker drawer.
 - Make the three outcome notifications' single-application case deep-link to that application.
 - Let the candidate narrow the board to only applications needing an auto-apply decision, and
   make that state more visible on the card itself.
 
 **Non-Goals:**
+
 - Changing `follow_up`/`interview_prep` link targets, or push notification click behavior.
 - Adding a retry/cancel action to any terminal status — `blocked`/`declined`/`failed` remain
   read-only, unchanged by this design.

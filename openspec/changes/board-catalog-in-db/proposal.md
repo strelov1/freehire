@@ -46,10 +46,12 @@ no PR, no separate onboarding step.
 ## Capabilities
 
 ### New Capabilities
+
 - `board-catalog`: the `boards` table, its `pending`/`active`/`rejected`/`retired`
   lifecycle, insert-time validation, and the `cmd/add-board` curator worker.
 
 ### Modified Capabilities
+
 - `source-ingest`: "Boards to crawl are configured in a file" becomes "configured in the
   `boards` table"; `cmd/ingest`'s invocation contract changes from a file path /
   `SOURCES_FILE` to a provider-name argument.

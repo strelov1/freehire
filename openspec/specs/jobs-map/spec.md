@@ -1,8 +1,11 @@
 # jobs-map Specification
 
 ## Purpose
+
 TBD - created by archiving change jobs-map. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: The job list opens a map of the current search
 
 The `/jobs` list toolbar SHALL show a **Map** button at its left edge. It SHALL open a dialog that draws the jobs matching the list's current filters on a world map: one bubble per country, its area proportional to the country's job count, with the busiest places listed beside the map. The map SHALL zoom to fit what it draws and SHALL show the whole inhabited world when the drawn places span most of it. The counts SHALL come from the facets endpoint for the same filters the list uses.
@@ -67,4 +70,3 @@ The dialog SHALL not scroll at a 1280×720 laptop viewport or a 390×844 phone v
 
 - **WHEN** the visitor clicks two countries in quick succession and the first response arrives last
 - **THEN** the map shows the second country's counts
-

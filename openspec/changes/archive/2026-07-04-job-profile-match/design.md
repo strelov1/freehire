@@ -7,11 +7,13 @@ Auth and profile state are already first-class in the SPA: `isAuthenticated()` (
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Answer "how much of this job do I cover, and what's missing?" at the top of the job sidebar.
 - Deterministic, no LLM; reuse the canonical adjacency dictionary rather than duplicating it.
 - Four clear UI states (real match / guest teaser / no-profile teaser / not-enough-data) with no redundant network calls.
 
 **Non-Goals:**
+
 - Caching, match history, or persistence of match results.
 - Any influence on search ranking or facets.
 - LLM-based similarity or "coherence" scoring.

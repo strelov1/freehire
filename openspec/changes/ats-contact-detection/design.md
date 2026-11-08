@@ -16,11 +16,13 @@ Both halves of that sentence are defects, and they are independent: widening the
 ## Goals / Non-Goals
 
 **Goals**
+
 - Recognize a phone number written in the conventions candidates outside the US actually use.
 - Report email and phone independently, so the advice names the detail that is absent.
 - Keep contact information's total weight at 4 points, so no CV's score inflates.
 
 **Non-Goals**
+
 - Validating that a number is dialable, or parsing it into country/area components. The check asks "does this document present a phone number to a recruiter", not "is this number real". No phone-number library is warranted for a boolean.
 - Extracting the contact details for use elsewhere. `internal/resumeextract` already gets contact fields from deterministic PII detection; this check must not become a second source of truth for them.
 - Touching `linkedinRE`, `emailRE`, or any other line item. Both matched correctly on the reproducing CV.
@@ -34,6 +36,7 @@ A single pattern that accepts a bare 11-digit run while rejecting the digit runs
 So: a permissive pattern finds *candidates* (a digit group, optionally repeated with single separators between groups, optionally prefixed by `+` or `00` and allowing one parenthesized group), and a small validator decides. The validator strips everything but digits, drops a leading country prefix, and accepts a length in the plausible band.
 
 **Alternatives considered**
+
 - *Add a fourth branch for the bare 11-digit case.* Fixes this one CV and leaves the next convention broken. The reported bug is that the pattern encodes US conventions, not that it is missing one entry.
 - *Adopt a phone-number library.* Correct for parsing, disproportionate for a boolean line item, and a new dependency for a check that must stay pure and I/O-free.
 

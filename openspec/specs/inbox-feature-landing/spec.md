@@ -1,12 +1,14 @@
 # inbox-feature-landing Specification
 
 ## Purpose
+
 The public `/features/inbox` page: what it explains about the mail stack, the
 claims it is allowed to make about classification and stage advance, its SEO
 payload, and the links that lead to it. Also covers the `/features` space the
 referrals landing moved into.
 
 ## Requirements
+
 ### Requirement: Public inbox feature landing page
 
 The frontend SHALL serve a public, unauthenticated page at `/features/inbox`

@@ -10,12 +10,14 @@ Meilisearch, with filter state mirrored to the URL via `FilterStore` +
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Find a company by typing part of its name on `/companies`.
 - Keep the search shareable/bookmarkable via the URL (`?q=`) and correct under
   back/forward.
 - Mirror the jobs page's interaction pattern so the UI feels consistent.
 
 **Non-Goals:**
+
 - No Meilisearch index for companies.
 - No fuzzy/typo-tolerant ranking — a substring name match is enough.
 - No new filters beyond name (no facets, no sort options).

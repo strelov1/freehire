@@ -26,6 +26,7 @@ queue's `Fail` call entirely (neither logged nor counted).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One shared bootstrap helper: config + pool + signal-bound context + cleanup.
 - A uniform, testable exit-code contract: non-zero when a run finished with any
   `Failed`/`DeadLettered` > 0; zero otherwise.
@@ -34,6 +35,7 @@ queue's `Fail` call entirely (neither logged nor counted).
 - Fix the swallowed `store.Fail` error so bookkeeping failures count.
 
 **Non-Goals:**
+
 - No change to the run-once-and-exit cadence, cron entries, flags, or env vars.
 - No change to per-item failure isolation (one bad board/post still must not
   abort the rest).

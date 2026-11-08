@@ -20,18 +20,22 @@ resolve to a role resolves to the specialization it was built from, to a mined p
 title, or to both as separate rows.
 
 #### Scenario: Selecting a specialization applies the facet and keeps the text
+
 - **WHEN** the user chooses `Data Analytics` from the dropdown
 - **THEN** `category=data_analytics` is applied and the typed text remains in the input
 
 #### Scenario: The specialization reads as a normal filter afterwards
+
 - **WHEN** a specialization has been applied from a suggestion
 - **THEN** it appears as an active filter chip and can be removed like any other facet
 
 #### Scenario: A composed suggestion applies both of its parts
+
 - **WHEN** the user chooses a row naming a title and a company
 - **THEN** the free-text query and `company_slug` are both applied
 
 #### Scenario: No pick applies a role
+
 - **WHEN** any suggestion is chosen
 - **THEN** the resulting filters carry no `role` parameter
 

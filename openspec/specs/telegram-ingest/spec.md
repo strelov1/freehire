@@ -1,8 +1,11 @@
 # telegram-ingest Specification
 
 ## Purpose
+
 TBD - created by archiving change add-telegram-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Channels to crawl are configured in a file
 
 The system SHALL read the set of Telegram channels to crawl from a
@@ -141,4 +144,3 @@ configuration.
 - **WHEN** the extraction command is run with pending posts
 - **THEN** it claims and processes a bounded batch, reports processed, job, and
   failure counts, and exits
-

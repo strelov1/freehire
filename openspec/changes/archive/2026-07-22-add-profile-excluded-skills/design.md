@@ -15,6 +15,7 @@ layer changes.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Persist an optional `excluded_skills` set on the profile, normalized exactly like
   `skills` (canonical lowercase, trimmed, deduplicated), empty allowed.
 - Guarantee the wanted and excluded sets never overlap (a skill in both is dropped
@@ -26,6 +27,7 @@ layer changes.
   control mirroring the wanted-skills control.
 
 **Non-Goals:**
+
 - Feeding excluded skills into AI match analysis or the résumé verdict (future seam).
 - Any change to the search/filter/exclude serialization or Meili filter builder.
 - Excluding by category, company, or any facet other than `skills`.

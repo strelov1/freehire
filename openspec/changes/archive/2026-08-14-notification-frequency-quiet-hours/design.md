@@ -20,6 +20,7 @@ path, at the same call sites, using the same mechanism.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - `instant`/`daily` frequency for saved-search digests, gated at
   `internal/notify`'s existing per-item delivery decision.
 - A quiet-hours window that defers delivery (never drops it) across all
@@ -27,6 +28,7 @@ path, at the same call sites, using the same mechanism.
 - A `users.timezone` field, defaulting to UTC when unset.
 
 **Non-Goals:**
+
 - Any change to the bulk `ClaimXXX` leasing queries or their `SKIP LOCKED`
   concurrency guarantee.
 - Any change to reminder/nudge's own `enabled`/`channels` gate

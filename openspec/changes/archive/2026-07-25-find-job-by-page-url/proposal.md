@@ -8,7 +8,7 @@ understands exactly one ATS: Greenhouse. Every other host answers `{"data": null
 
 The catalog has 175 source adapters. Measured on prod today:
 
-```
+```text
 find?url=…himalayas.app/companies/mindera/jobs/staff-java-backend-developer  → null
 ```
 
@@ -39,6 +39,7 @@ for most sources that is the very page the user is standing on.
 ## Capabilities
 
 ### New Capabilities
+
 - `posting-url-resolution`: resolving the URL of a job page in the wild to the catalog
   posting it is, by exact source identity first and by the posting's stored detail URL
   second.

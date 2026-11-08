@@ -9,6 +9,7 @@ undercount reality by the overwhelming majority.
 
 Key facts that shape the design (verified from code and the `freehire-ops` nginx
 config):
+
 - The job detail page is server-rendered: `GET /jobs/<slug>` triggers a SvelteKit
   SSR that fetches the backend. So every anonymous page open passes through the
   public nginx as a `/jobs/<slug>` line.
@@ -23,6 +24,7 @@ config):
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Count anonymous + signed-in web + external API job views with **zero added work
   on the read path** — no per-request DB write, no in-handler side effect, so the
   read stays cheap and fully cacheable.
@@ -34,6 +36,7 @@ config):
 - Yield per-job daily view trends as a byproduct for later insights use.
 
 **Non-Goals:**
+
 - Real-time / strongly-consistent view counts. Daily granularity is acceptable;
   a few miscounted views never matter.
 - Per-user-accurate visitor identity or cross-device dedup. IP+UA is a documented
@@ -45,8 +48,10 @@ config):
 ## Decisions
 
 ### D1: Aggregate offline from nginx logs, not in the app
+
 The read path does nothing new. A daily cron worker parses the completed access
 log and updates counters in batch.
+
 - *Why over an in-app counter (in-memory batched or direct UPDATE):* any counting
   inside the Go handler forces every request to reach the app to be counted, which
   is incompatible with caching `GET /jobs/:slug` upstream. Logs are written even on
@@ -55,6 +60,7 @@ log and updates counters in batch.
   bots *and* covers anonymous + API uniformly.
 
 ### D2: Process whole rotated files; derive the day from each line; dedup per day
+
 The worker processes each **rotated** (non-live) access-log file exactly once,
 skipping the currently-written `access.log`. The default Debian/Ubuntu nginx
 logrotate uses **numeric suffixes without dates** (`access.log.1`,
@@ -63,6 +69,7 @@ label and a calendar day can straddle two files. Therefore the day is taken from
 each line's `[time_local]` timestamp (converted to UTC), and views are bucketed by
 that day. The dedup key is `(hash(client-IP + User-Agent), slug, day)` — a visitor
 counts once per job per UTC day.
+
 - *Why derive the day from the line, not the filename:* filenames carry no date
   and shift on every rotation; the line timestamp is the only reliable day source
   and lets the worker run on the **current** log immediately (so backfill works now,
@@ -75,10 +82,12 @@ counts once per job per UTC day.
   in two files — acceptable for a transparency metric.
 
 ### D3: Cursor = a processed-file marker keyed by a content signature
+
 `processed_view_logs(signature, filename, processed_at)` records which files are
 done, keyed by a signature of the file's **decompressed content** (an FNV-64 hash
 computed in the same read pass as aggregation). A signature already present is
 skipped.
+
 - *Why a content signature over inode or filename:* numeric-suffix rotation renames
   files (`.1` → `.2`) and later gzip creates a **new inode** for the same bytes, so
   neither the inode nor the filename is stable across a file's whole life. The
@@ -91,21 +100,25 @@ skipped.
   and inspectable, and avoids fragile host-local disk state.
 
 ### D4: Two counted signals, asymmetric bot handling
+
 - `GET /jobs/<slug>` (HTML page open, status 200): web views; skip requests whose
   User-Agent matches a small known-bot list.
 - `GET /api/v1/jobs/<slug>` (status 200): API views; no bot filtering.
 Both feed the same per-job daily unique count.
 
 ### D5: Redefine `view_count`; drop the POST bump
+
 `view_count` becomes "distinct daily visitors across all traffic," maintained by
 the worker as a running sum. `RecordJobView` drops its `bump` CTE; `POST /view`
 still records `user_jobs.viewed_at` for per-user tracking (`/me/tracking`).
+
 - *Why redefine rather than add `page_views`:* the card already renders
   `view_count` and signed-in users' page opens are already in the log, so the
   widened `view_count` already includes them — a parallel column would duplicate
   the same concept and split the UI.
 
 ### D6: Daily rollup table alongside the counter
+
 Each processed file contributes per-`(day, slug)` uniques. These are applied with
 an **additive** upsert into `job_daily_views(day, job_id, uniques)`
 (`ON CONFLICT (day, job_id) DO UPDATE SET uniques = uniques + EXCLUDED.uniques`) and
@@ -115,6 +128,7 @@ file. Additivity is what makes a boundary day spanning two files sum correctly.
 (60s module + 300s CDN) so the aggregate is cheap.
 
 ### D7: Backfill as a flag on the same worker
+
 A `--backfill` run walks all retained rotated files, processing each unmarked file
 via the same per-file path (aggregate → additive apply → mark file). It shares the
 per-file idempotency, so it composes with ongoing daily runs and can run on the

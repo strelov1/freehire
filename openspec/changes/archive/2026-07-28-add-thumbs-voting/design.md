@@ -103,7 +103,7 @@ runs after the other commits, keeping the counter exact.
 
 ### 3. Endpoints mirror the save/dismiss pair
 
-```
+```text
 POST   /api/v1/jobs/:slug/vote        body {"vote":"up"|"down"}   keyAuth
 DELETE /api/v1/jobs/:slug/vote                                    keyAuth
 POST   /api/v1/companies/:slug/vote   body {"vote":"up"|"down"}   keyAuth

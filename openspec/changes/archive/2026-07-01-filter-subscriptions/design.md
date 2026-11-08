@@ -13,12 +13,14 @@ This document is the OpenSpec-scoped distillation.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Subscribe a saved search to notifications; deliver matching jobs to Telegram.
 - Matching cost per pass = O(distinct filter queries), independent of jobs/subscribers.
 - Never deliver a job to a subscription twice; survive worker crashes and overlapping cron runs.
 - Leave a clean seam for webhook/email channels and for digest-frequency options.
 
 **Non-Goals:**
+
 - Instant (sub-cron-interval) delivery; cadence = the cron interval for now.
 - Per-subscription digest frequency (instant/hourly/daily) — deferred.
 - Telegram inbound commands beyond `/start` (`/stop`, `/list`) — deferred.
@@ -40,7 +42,7 @@ This document is the OpenSpec-scoped distillation.
   per distinct query), only the page size — marginal benefit for real
   bookkeeping cost. Re-scanning recent jobs additionally *catches* enrich-late
   matches that a cursor would skip. *Alternative considered:* persisted `filters`
-  + per-filter `cursor_at` — rejected as added complexity for no net gain.
+  - per-filter `cursor_at` — rejected as added complexity for no net gain.
 
 - **`created_at` as the recency signal, not `updated_at`.** *Why:* re-crawls bump
   `updated_at`, which would resurface old jobs as "new" and spam users. `created_at`
@@ -110,11 +112,13 @@ env only (never in the repo).
    - `TELEGRAM_BOT_USERNAME=free_hire_bot`.
    - `TELEGRAM_WEBHOOK_SECRET` — a random 32-byte hex string.
 4. Register the webhook (once), pointing at the public API origin:
-   ```
+
+   ```text
    curl -F "url=https://<api-origin>/api/v1/telegram/webhook" \
         -F "secret_token=$TELEGRAM_WEBHOOK_SECRET" \
         https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook
    ```
+
 5. Add the `notify` cron entry (e.g. every 15–30 min) under flock, as the other
    workers run: `flock -n /tmp/notify.lock docker compose run --rm app /app/notify`.
 

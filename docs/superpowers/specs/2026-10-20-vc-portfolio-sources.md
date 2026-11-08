@@ -39,6 +39,7 @@ All findings below were checked with live curl requests on 2026-10-20. Scratch f
 ## 3. Recommendation
 
 **Do first (structured JSON, domains, status; one request each):**
+
 1. **Greylock**, **USV** and **Accel**: one Sanity GROQ GET each. They share one parser shape, so a small `sanityQuery(project, groq)` helper is a reasonable shared seam *if* all three land.
 2. **BOND**: one static JSON file. Take only `investments_bond`.
 3. **Sequoia**: one gzipped JSON, URL resolved from the page HTML (`ResolveURL`). Domain and exit status are present.
@@ -49,6 +50,7 @@ All findings below were checked with live curl requests on 2026-10-20. Scratch f
 **Weak or none:** **Founders Fund** (64 notable names, no domains; easy but small). **Benchmark** publishes no portfolio, so the only honest option is a hand-written embedded list (`Dataset.Data`, like `eastern_roots.txt`), or skip it.
 
 **Minimal way to plug in:** add one `collections.All` entry per firm with `Kind: KindBacker` and a `Dataset`:
+
 - `URL` + `Parse` for BOND, and for Sanity using the GROQ URL as a pinned `URL`.
 - `ResolveURL` + `Parse` for Sequoia.
 - `Records` for the HTML-scraped and multi-request ones.
@@ -56,6 +58,7 @@ All findings below were checked with live curl requests on 2026-10-20. Scratch f
 Each `Parse`/`Records` emits `Record{Name, Meta{status, website}}`. Nothing else changes: `cmd/import-collections` picks new entries up automatically. Follow it with `-dry-run`, the real run, then `reindex` + `reindex-companies`. The web needs a brand mark per new backer slug.
 
 Two decisions to make while doing this:
+
 - **Exited companies:** decide whether to drop acquired/inactive ones with a `Gate`, or in the parser, using `Meta["status"]`. Acquired companies usually now hire under the acquirer's slug, so name matching would just miss them anyway.
 - **Domain matching:** today matching is name-only. Every good source here carries a website. Matching on domain (e.g. against `companies.company_info` website, which `publish-logo-domains` already reads) would cut false positives for short names like "Found", "Enter", "Until", "River" (Founders Fund) or "Because" and "Bird" (Index). Note it as the seam; it is not required for a first cut.
 

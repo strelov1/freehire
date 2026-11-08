@@ -22,11 +22,13 @@ per-vacancy detail fetch → map `JobPosting` ld+json, over the shared `fetchDet
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A keyless, boardless, single-company `onstrider` adapter that emits only open vacancies.
 - Reuse the existing sitemap + ld+json machinery; no new helper unless a field shape forces it.
 - Enroll in `proxiedProviders` so a blocked prod IP is a config flip, not a code change.
 
 **Non-Goals:**
+
 - Recovering the hidden real employer (not exposed anywhere pre-application).
 - A dedicated liveness probe. Closed vacancies simply stop being emitted; the standard 48h
   ingest sweep soft-closes them. `cmd/liveness` would be useless here anyway (closed pages 200).

@@ -42,6 +42,7 @@ for this reason.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `it-title-coverage`: adds a requirement that the German fused-compound IT
   titles above resolve to a category, matching the coverage doctrine this spec
   already states for the Russian and English title families it documents.

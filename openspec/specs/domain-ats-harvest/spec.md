@@ -1,8 +1,11 @@
 # domain-ats-harvest Specification
 
 ## Purpose
+
 TBD - created by archiving change add-domain-ats-harvest. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: ATS detection from page HTML
 
 The system SHALL provide a pure function that detects a supported ATS board from a
@@ -149,4 +152,3 @@ evidence rather than on a name resemblance.
 
 - **WHEN** candidate slugs are derived for a company
 - **THEN** no HTTP request is made for the derivation itself
-

@@ -65,6 +65,7 @@ has.
   exists.
 
 **Deliberately not done, flagged for a separate change:**
+
 - **Centralizing the resync in `profileStore` itself** (every mutator already
   funnels through one `save()`) instead of one call at each writer. Now five
   known call sites have needed the same fix by hand across two review passes —

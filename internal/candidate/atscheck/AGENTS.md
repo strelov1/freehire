@@ -1,6 +1,7 @@
 # ATS-readiness scoring conventions
 
 ## Scope
+
 A deterministic 0–100 ATS-readiness score for a CV's plain text: five weighted categories
 with per-item point attribution (atscheck.go). An optional LLM layer refines the Content
 Quality category (analyzer.go), and `Compare` builds the Delta between a base and a
@@ -9,6 +10,7 @@ tailored CV's reports (delta.go). Consumers: `GET`/`POST /me/profile/ats-report`
 `GET /me/cvs/:id/ats-delta` (cv_ats_delta.go, route at cv.go:205).
 
 ## Always true
+
 - **Text-only input.** The CV text comes from a plain-text PDF extractor, so layout facts
   (multi-column, tables, images) are NOT detectable — only what text allows. The strongest
   readable signal is emptiness: a scanned/image CV yields almost no text and fails
@@ -43,6 +45,7 @@ tailored CV's reports (delta.go). Consumers: `GET`/`POST /me/profile/ats-report`
   before/after checklist is a diff nobody asked for (delta.go:33-37).
 
 ## How it works
+
 `POST /me/profile/ats-report` runs the LLM review under the caller's own gateway
 credential — `h.atsAnalyzer.As(h.llm.bind(...))` (ats_report.go:89) — so the spend is
 attributed per-user per internal/ai/llmkey; `cfg.LLM` nil means deterministic only

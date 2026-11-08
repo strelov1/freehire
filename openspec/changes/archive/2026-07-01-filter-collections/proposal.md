@@ -31,6 +31,7 @@ card with a one-line definition.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `job-collections`: the discovery hub gains a second kind of collection whose
   membership is an arbitrary job-search filter (not company membership); its card
   links to `/jobs?<query>` and its count is a job-search total. Company-collection
@@ -48,4 +49,4 @@ card with a one-line definition.
 - `web/src/routes/collections/+page.svelte` — render from the unified card list
   (`href` + `count` per card); adjust the hub subtitle copy.
 - No backend, DB, or API changes. Verification is `svelte-check` + `npm run build`
-  + manual load of `/collections` (the `web/` package has no test runner).
+  - manual load of `/collections` (the `web/` package has no test runner).

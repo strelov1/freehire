@@ -24,6 +24,7 @@
 ## File Structure
 
 **Create:**
+
 - `internal/dict/answertopic/answertopic.go` — the fold and the topic dictionary. Pure, no I/O.
 - `internal/dict/answertopic/answertopic_test.go`
 - `internal/dict/answertopic/AGENTS.md` — what a topic is and why the dictionary is not the only route.
@@ -39,6 +40,7 @@
 - `web/src/lib/answerBank.test.ts`
 
 **Modify:**
+
 - `internal/platform/arch/layering/blocks.go` — register both new packages.
 - `internal/api/candidateprofile/profile.go` — a new nil-able `BankReader` source; `Profile.BankAnswers`; `Fields()` merges them under `topic:` keys.
 - `internal/api/atsapply/resolve.go` — `resolveOne` falls back to a topic lookup.
@@ -54,15 +56,16 @@
 ### Task 1: The topic fold
 
 **Files:**
+
 - Create: `internal/dict/answertopic/answertopic.go`
 - Create: `internal/dict/answertopic/answertopic_test.go`
 - Create: `internal/dict/answertopic/AGENTS.md`
 - Modify: `internal/platform/arch/layering/blocks.go`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `answertopic.Of(question string) (topic string, ok bool)` — `ok` is false when the question folds to nothing (a label of pure punctuation), which callers must refuse rather than store.
-
 - [ ] **Step 1: Write the failing test**
 
 Create `internal/dict/answertopic/answertopic_test.go`:
@@ -311,14 +314,15 @@ git commit -m "Key a screening question by what it asks, not how it is worded"
 ### Task 2: The table and its queries
 
 **Files:**
+
 - Create: `migrations/0155_screening_answer_bank.sql`
 - Create: `internal/platform/db/queries/screening_answer_bank.sql`
 - Modify: generated — `internal/platform/db/` (via `make sqlc`)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `db.Queries` methods `UpsertScreeningAnswer(ctx, UpsertScreeningAnswerParams{UserID int64, Topic, Question, Answer, Provenance string}) error`, `ListScreeningAnswers(ctx, userID int64) ([]db.ScreeningAnswerBank, error)`, `DeleteScreeningAnswer(ctx, DeleteScreeningAnswerParams{ID int64, UserID int64}) (int64, error)`.
-
 - [ ] **Step 1: Write the migration**
 
 Create `migrations/0155_screening_answer_bank.sql`:
@@ -430,6 +434,7 @@ git commit -m "Add the screening answer bank's table and queries"
 ### Task 3: The store and its provenance gate
 
 **Files:**
+
 - Create: `internal/candidate/answerbank/answerbank.go`
 - Create: `internal/candidate/answerbank/repository.go`
 - Create: `internal/candidate/answerbank/answerbank_test.go`
@@ -437,6 +442,7 @@ git commit -m "Add the screening answer bank's table and queries"
 - Modify: `internal/platform/arch/layering/blocks.go`
 
 **Interfaces:**
+
 - Consumes: `answertopic.Of` (Task 1); `db.Queries` methods (Task 2).
 - Produces:
   - `answerbank.Provenance` with `AuthorCandidate` and `AuthorAgent`.
@@ -447,7 +453,6 @@ git commit -m "Add the screening answer bank's table and queries"
   - `(*Store).Delete(ctx, userID, id int64) error` returning `ErrNotFound` when nothing matched.
   - `(*Store).Sendable(ctx, userID int64) (map[string]string, error)` — topic → answer, candidate-authored only.
   - `answerbank.ErrEmptyAnswer`, `ErrUnkeyable`, `ErrTooLong`, `ErrNotFound`.
-
 - [ ] **Step 1: Write the failing test**
 
 Create `internal/candidate/answerbank/answerbank_test.go`:
@@ -888,6 +893,7 @@ git commit -m "Add the answer bank's store and its provenance gate"
 ### Task 4: Reaching the resolver
 
 **Files:**
+
 - Modify: `internal/api/candidateprofile/profile.go`
 - Modify: `internal/api/atsapply/resolve.go`
 - Modify: `internal/api/atsapply/resolve_test.go`
@@ -895,9 +901,9 @@ git commit -m "Add the answer bank's store and its provenance gate"
 - Modify: `cmd/auto-apply/main.go`
 
 **Interfaces:**
+
 - Consumes: `(*answerbank.Store).Sendable` (Task 3); `answertopic.Of` (Task 1).
 - Produces: answers map entries keyed `"topic:" + topic`; `candidateprofile.BankReader` interface with `Sendable(ctx context.Context, userID int64) (map[string]string, error)`.
-
 - [ ] **Step 1: Write the failing test**
 
 Append to `internal/api/atsapply/resolve_test.go`:
@@ -1096,14 +1102,15 @@ git commit -m "Let a banked answer reach the form resolver"
 ### Task 5: The three routes
 
 **Files:**
+
 - Create: `internal/api/handler/me_answer_bank.go`
 - Create: `internal/api/handler/me_answer_bank_integration_test.go`
 - Modify: `internal/api/handler/handler.go` (register the routes)
 
 **Interfaces:**
+
 - Consumes: `*answerbank.Store` (Task 3).
 - Produces: `GET /api/v1/me/answer-bank`, `PUT /api/v1/me/answer-bank`, `DELETE /api/v1/me/answer-bank/:id`.
-
 - [ ] **Step 1: Write the failing test**
 
 Create `internal/api/handler/me_answer_bank_integration_test.go`:
@@ -1380,6 +1387,7 @@ git commit -m "Serve the answer bank over its own three routes"
 ### Task 6: Answering from the review screen
 
 **Files:**
+
 - Create: `web/src/lib/answerBank.ts`
 - Create: `web/src/lib/answerBank.test.ts`
 - Modify: `web/src/lib/types.ts`
@@ -1387,9 +1395,9 @@ git commit -m "Serve the answer bank over its own three routes"
 - Modify: `web/src/lib/components/JobDrawer.svelte`
 
 **Interfaces:**
+
 - Consumes: the routes from Task 5.
 - Produces: `answerableQuestions(pending)` in `answerBank.ts`; `api.saveBankedAnswer(question, answer)` in `api.ts`.
-
 - [ ] **Step 1: Write the failing test**
 
 Create `web/src/lib/answerBank.test.ts`:
@@ -1598,12 +1606,13 @@ git commit -m "Let the candidate answer a blocking question from the review scre
 ### Task 7: Prove the loop end to end
 
 **Files:**
+
 - Modify: `internal/api/atsapply/resolve_test.go`
 
 **Interfaces:**
+
 - Consumes: everything above.
 - Produces: nothing new — this task adds only the test that the feature actually works.
-
 - [ ] **Step 1: Write the failing test**
 
 Append to `internal/api/atsapply/resolve_test.go`:

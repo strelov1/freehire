@@ -35,6 +35,7 @@ harvest-githublists-boards' deferred group 3), not new code.
 ## Capabilities
 
 ### New Capabilities
+
 - `hackernews-source`: a boardless, aggregator, `fullCatalog` source reading the two newest
   "Ask HN: Who is hiring?" threads via the Algolia HN API, yielding one job per top-level
   comment whose header follows the "Company | Role | ..." convention.

@@ -1,8 +1,11 @@
 # api-keys Specification
 
 ## Purpose
+
 TBD - created by archiving change add-api-keys. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Creating an API key
 
 The system SHALL let a signed-in user with a **proven email address** create a named API key,
@@ -203,4 +206,3 @@ AI credits.
 
 - **WHEN** the same requests are made with a `full`-scoped key
 - **THEN** they are served exactly as before this change
-

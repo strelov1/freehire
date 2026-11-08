@@ -1,11 +1,13 @@
 # profile-headshot Specification
 
 ## Purpose
+
 The member's profile photo: one headshot per account, normalized on upload and stored as an
 object, printed by the CV templates that show a portrait. Created by archiving change
 cv-headshot-photo.
 
 ## Requirements
+
 ### Requirement: One stored headshot per user
 
 The system SHALL let an authenticated user store at most one headshot: uploading a new image replaces the previous one. The image SHALL be held as an object in the configured S3 bucket under a key derived from the authenticated user id — never from client input — with a pointer (object key plus upload time) recorded on the user's row.

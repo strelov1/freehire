@@ -17,6 +17,7 @@ first volume init; prod applies them manually before deploy).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Exactly one profile per user, enforced at the DB level (`UNIQUE (user_id)`).
 - A singleton REST surface with no id and no `name`.
 - Header surfaces the profile: an avatar placeholder + a clickable identity row
@@ -25,6 +26,7 @@ first volume init; prod applies them manually before deploy).
   feature — only their addressing changes.
 
 **Non-Goals:**
+
 - Real avatar images / uploads (placeholder initials only).
 - Any change to the enrichment vocabulary, job search, or auth primitives.
 - Backfilling or reconciling discarded extra profiles (we keep newest, drop
@@ -50,6 +52,7 @@ The Go package `internal/searchprofile` → `internal/userprofile` and
 `me_profiles.go` → `me_profile.go` follow, keeping code and concept aligned.
 
 **D3 — Singleton REST semantics.**
+
 - `GET /api/v1/me/profile` → `200 {"data": <profile>}` or `200 {"data": null}`
   when the user has no profile yet.
 - `PUT /api/v1/me/profile` → upsert (create-or-replace) with the existing

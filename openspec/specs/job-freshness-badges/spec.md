@@ -13,6 +13,7 @@ On production, six of the eight most-viewed postings carry a `posted_at` of
 `New` off all six.
 
 ## Requirements
+
 ### Requirement: The freshness badge pair and its thresholds
 
 The system SHALL offer two freshness badges on a posting: `New` and `Be an early

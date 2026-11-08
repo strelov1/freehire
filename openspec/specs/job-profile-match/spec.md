@@ -1,8 +1,11 @@
 # job-profile-match Specification
 
 ## Purpose
+
 TBD - created by archiving change job-profile-match. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Per-job match endpoint
 
 The system SHALL expose `GET /api/v1/jobs/:slug/match` behind `RequireAuthOrKey` (session cookie or API key), addressed by a job's public slug. It SHALL classify each skill of the open job against the caller's profile skills and return the classification plus a coverage percent in the standard `{"data": ...}` envelope. The computation SHALL be deterministic and MUST NOT call an LLM.
@@ -455,4 +458,3 @@ endpoint.
 
 - **WHEN** the job detail page renders its CTA row and its sidebar match block
 - **THEN** the match-analysis endpoint is called at most once for that posting
-

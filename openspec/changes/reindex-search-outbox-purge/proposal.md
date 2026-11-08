@@ -33,9 +33,11 @@ search-drain ran continuously and error-free.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 (none — this is an internal efficiency fix to the reindex worker's own pipeline, not a
 change to any capability's request/response contract or observable behavior other than
 a smaller queue backlog.)

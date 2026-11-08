@@ -25,11 +25,13 @@ This is the DataArt/onstrider two-stage shape — enumerate, then per-item detai
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A keyless (public static key), board-per-`berufsfeld`, multi-company `arbeitsagentur` adapter that
   emits only first-party postings with a scraped description.
 - Reuse `GetJSONWithHeaders`, `GetHTML`, and `fetchDetails`; no new shared helper unless a shape forces it.
 
 **Non-Goals:**
+
 - Ingesting `externeUrl` re-lists. They duplicate other boards and apply off-site; dropped.
 - Following `externeUrl` to its destination (a linksource job); out of scope for this change.
 - Full-backlog crawl. Each run is a `veroeffentlichtseit` window; the standard sweep soft-closes

@@ -26,6 +26,7 @@ DataArt) *and* a multi-employer aggregator (like Bayt/GulfTalent).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl every EnergyJobline posting via its sitemap index into the catalogue, filed under
   each posting's real employer.
 - Reuse existing helpers/markers end to end (`sitemapJobLocs`/`resolveSubSitemap`,
@@ -33,6 +34,7 @@ DataArt) *and* a multi-employer aggregator (like Bayt/GulfTalent).
   `boardless`/`aggregator`) — no new shared mechanism.
 
 **Non-Goals:**
+
 - Rigzone/Oilcareers, NaukriGulf, OilAndGasJobSearch, Laimoon — excluded per the linked
   design doc; not touched by this change.
 - Any change to `CompanyEntry`, `Hub`/`Tenants`, or the `aggregator`/`boardless` interfaces

@@ -10,12 +10,14 @@ The catalogue already retains closed jobs (`jobs.closed_at` is set, never delete
 - The rollup is **retroactive**: on first run it reconstructs the full history back to the earliest `created_at`, using retained closed rows — no wait to accumulate data.
 
 Out of scope for this change (deliberately, one change at a time):
+
 - No HTTP API endpoint to read the rollup.
 - No daily company-attribute snapshot table (accepting that `employee_count`/`maturity` history stays lossy for now).
 
 ## Capabilities
 
 ### New Capabilities
+
 - `company-hiring-signal`: a precomputed per-company, per-day rollup of hiring velocity (jobs added/removed/open) and 30-day open-count growth, derived from the retained `jobs` lifecycle, produced by a standalone rollup worker.
 
 ### Modified Capabilities

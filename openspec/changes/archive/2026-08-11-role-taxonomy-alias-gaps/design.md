@@ -19,6 +19,7 @@ Engineer) that didn't exist when the category was first stocked.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Route the ~20 sampled title clusters (and their close variants) to their correct existing
   category, following the alias-ordering doctrine exactly.
 - Add SAFe/CSM/PSM/PMP as skill tags via the existing category-scoped acronym mechanism
@@ -28,6 +29,7 @@ Engineer) that didn't exist when the category was first stocked.
   not just future ingests.
 
 **Non-Goals:**
+
 - No new category values, no changes to `CategoryValues`/`TechCategories`/`NonTechCategories`.
 - No attempt at exhaustive coverage of every possible IT title — this closes the specific
   gaps the research surfaced, not a general-purpose title-parsing rewrite.

@@ -13,9 +13,11 @@ The "See also" row on a job page (`web/src/lib/components/JobSeeAlso.svelte`) li
 ## Capabilities
 
 ### New Capabilities
+
 - `see-also-marks`: resolving and rendering a circular visual mark (brand logo, country flag, or family icon) for each card in a job page's "See also" row, given the card's underlying collection.
 
 ### Modified Capabilities
+
 (none — `job-collections` covers company-level collection membership on the Go side and is unaffected; this change is presentation-only for the frontend's separate `FilterCollection` registry, which today carries no spec of its own)
 
 ## Impact

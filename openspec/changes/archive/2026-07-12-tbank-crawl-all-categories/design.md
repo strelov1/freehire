@@ -11,10 +11,12 @@ in the adapter — offset pagination, per-vacancy detail fan-out, block assembly
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl all three top-level categories so IT and back-office vacancies are ingested.
 - Keep the change surgical: only the list request's filter and the stale comment.
 
 **Non-Goals:**
+
 - No prod DB surgery (existing client rows stay; their category is still crawled).
 - No dynamic category discovery, no per-role config, no new endpoint.
 

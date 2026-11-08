@@ -36,9 +36,11 @@ provider level because each provider's OTHER boards keep `Ingested > 0` on every
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `ingest-board-health`: adds a chronic-board classification and surfaces it distinctly
   in the existing unhealthy-board reporting.
 - `job-lifecycle`: adds a safety-net close for jobs whose board has been chronic long

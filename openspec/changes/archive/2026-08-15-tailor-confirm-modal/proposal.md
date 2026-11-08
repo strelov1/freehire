@@ -33,11 +33,13 @@ show up before the click commits.
 ## Capabilities
 
 ### New Capabilities
+
 - `tailor-preflight-check`: the client-side confirmation modal shown before starting a CV
   tailoring session, presenting the existing deterministic skill/blocker check and requiring
   an explicit confirm.
 
 ### Modified Capabilities
+
 (none — the endpoints and evaluators this reads are unchanged; only a new client-side
 capability consumes their existing output)
 

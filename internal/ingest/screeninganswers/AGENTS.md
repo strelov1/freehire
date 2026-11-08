@@ -1,6 +1,7 @@
 # Screening answers
 
 ## Scope
+
 `internal/ingest/screeninganswers` — the candidate's own answers to the six screening questions
 that repeat across ATS application forms and no CV can supply: which countries they are
 authorized to work in, whether they need visa sponsorship, their desired salary, their
@@ -10,6 +11,7 @@ fields and demographic/EEO questions are excluded (see the `screening-answers-pr
 OpenSpec change).
 
 ## Always true
+
 - **Not `internal/identity/userprofile`, not `internal/candidate/experience`, not `internal/candidate/resumeextract`.**
   `userprofile` is search/targeting preferences — a different lifecycle. `experience` is an
   accumulating evidence bank for CV content. `resumeextract` is CV-derived, and none of
@@ -53,12 +55,14 @@ OpenSpec change).
   Never defaulted. Which fields it may answer is decided in `internal/api/atsapply/consent.go`.
 
 ## How it works
-```
+
+```text
 Sanitize (normalize country codes + currency case)
   → Validate (reject malformed input, naming the bad value)
     → Store.Update: Repository.UpdateLocked(userID, merge) — one transaction:
         Ensure row exists → SELECT ... FOR UPDATE → merge → Upsert → commit
 ```
+
 `screeninganswers.go` holds the wire shape (`Answers`) and the pure `Sanitize`/`Validate`/
 `Merge` functions — no database, unit-testable without one. `store.go` is the owner-scoped
 `Store` over a narrow `Repository`; `repository.go` adapts `*db.Queries` + the pool to it,

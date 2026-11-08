@@ -42,12 +42,14 @@ that bucket).
 ## Capabilities
 
 ### New Capabilities
+
 - `eligible-for-me-filter`: the toggle's behavior — which facet values it stages, the
   country/region source precedence (profile country → CF-IPCountry-derived region →
   unavailable), the always-included `global`/`none` safety values, and the strictly
   opt-in default.
 
 ### Modified Capabilities
+
 - `filter-modal`: the Location pane gains the "Eligible for me" pill alongside the
   existing `Global` / `Not specified` flat pills.
 

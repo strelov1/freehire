@@ -19,12 +19,14 @@ only via `cmd/backfill-derive` + `make reindex`.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Recognize `International` (and close worldwide synonyms) as `global`.
 - Add a `remote_unspecified` facet (remote + no resolved geography), filterable in
   the API and selectable in the SPA, with a facet count like other Region pills.
 - Reach existing rows through the existing re-derive + reindex path.
 
 **Non-Goals:**
+
 - Mapping a bare `Remote` to `global` (explicitly rejected — keeps `global` clean).
 - `EMEA` handling (deferred).
 - Any `Contractor` code change (already implemented; backfill-only).

@@ -13,6 +13,7 @@ Users tracking many applications on `/my/jobs` can see individual jobs on the Bo
 ## Capabilities
 
 ### New Capabilities
+
 - `application-pipeline`: the user's job-application pipeline snapshot — the server-side per-bucket aggregation of their tracked applications, the stage→bucket mapping and rate definitions, the `GET /me/jobs/pipeline` endpoint contract, and the Pipeline tab visualization (Sankey + rate donuts).
 
 ### Modified Capabilities

@@ -13,12 +13,14 @@ The package already provides `innerHTML(node)`, `sanitizeHTML(s)`, `firstByClass
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Store the full NEOGOV posting body as sanitized HTML, replacing the teaser snippet.
 - Keep one board's detail fetches bounded and resilient — a per-card failure degrades
   to the snippet, never a blank description or a dropped job.
 - Backfill existing rows through the normal ingest path, no new worker.
 
 **Non-Goals:**
+
 - Parsing the detail page's Benefits/Questions tabs (`#details-benefits`,
   `#details-questions`) — only `#details-info` is the job description.
 - Extracting the absolute posted date from the detail page (a separate concern the

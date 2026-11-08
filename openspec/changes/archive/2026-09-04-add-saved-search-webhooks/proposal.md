@@ -28,11 +28,13 @@ that requires an outbound HTTP callback the platform doesn't offer today.
 ## Capabilities
 
 ### New Capabilities
+
 - `webhook-notifications`: account-level webhook destination (URL + HMAC secret,
   encrypted at rest, create/rotate/disable), the signing `Notifier` that delivers
   a subscription digest as a signed HTTP POST, and the settings UI to manage it.
 
 ### Modified Capabilities
+
 - `filter-subscriptions`: the set of supported subscription channels grows from
   (`telegram`, `email`) to (`telegram`, `email`, `webhook`); recipient resolution
   gains a `webhook` case that reads the account's webhook destination instead of

@@ -55,7 +55,7 @@ Untouched: the header, the tagline, the counts, and every source table.
 Five sections following the funnel. Per feature: a heading, 2–3 sentences of
 what it does and why it is built that way, then one pointer line.
 
-```
+```text
 ### CV tailoring
 
 Rewrites one CV against one vacancy, requirement by requirement, and invents

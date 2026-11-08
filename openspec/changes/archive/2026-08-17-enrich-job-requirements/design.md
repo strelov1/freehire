@@ -19,6 +19,7 @@ LLM calls don't use structured-output schemas the way `internal/enrich` does.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Extract a job-only, freeform, structured requirements list at enrich time
   and store it in the existing JSONB payload.
 - Reuse the established bounding/sanitizing pattern for free-text enrichment
@@ -27,6 +28,7 @@ LLM calls don't use structured-output schemas the way `internal/enrich` does.
   between the two packages.
 
 **Non-Goals:**
+
 - Wiring the new field into `internal/hardconstraint` or
   `internal/matchanalysis` (a deliberate, separate follow-up).
 - Any change to `internal/jobfacts`' deterministic category matchers.

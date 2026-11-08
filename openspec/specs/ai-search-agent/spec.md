@@ -1,8 +1,11 @@
 # ai-search-agent Specification
 
 ## Purpose
+
 TBD - created by archiving change talent-agent-ai-search. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: The AI search modal is a describe → plan → results flow
 
 The AI search modal, opened from "Describe with AI" in the filter modal, SHALL present three steps in order — **Describe**, **Search plan**, **Results** — with a step indicator naming the current one. Describe SHALL offer a free-text description, an optional CV upload (PDF) and example searches. Submitting SHALL move to Search plan; running the plan SHALL move to Results. Closing the modal (close button, backdrop, Escape) SHALL leave the job list's filters untouched unless the plan was applied.
@@ -149,4 +152,3 @@ On the Describe step a visitor, signed in or not, MAY attach a PDF CV. The CV SH
 
 - **WHEN** the attached PDF has no text layer
 - **THEN** the attachment area shows the extraction error and nothing is submitted
-

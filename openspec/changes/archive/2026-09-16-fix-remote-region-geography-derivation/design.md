@@ -37,6 +37,7 @@ trap `AGENTS.md` documents for `backfill-remote-perk-false-positive`.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Stop emitting `global` for a bare-remote posting with no actual open-anywhere/eligibility
   signal, without disturbing the genuinely-open cases (`Anywhere`, `Worldwide`, a stated
   `Global` marker).
@@ -47,6 +48,7 @@ trap `AGENTS.md` documents for `backfill-remote-perk-false-positive`.
 - Reach already-stored jobs currently holding the incorrect `global` value.
 
 **Non-Goals:**
+
 - Replacing or restructuring `EligibilityFromDescription`'s existing citizenship-phrase rules
   — they stay as they are; the new description signal is additive, not a rewrite.
 - Reading `offices[]`/`departments` from the Greenhouse adapter — confirmed empty of usable
@@ -113,6 +115,7 @@ unions their results, same as it does today for the one existing function.
 ### 4. Backfill follows the `backfill-remote-perk-false-positive` pattern exactly
 
 New one-off `cmd/backfill-remote-region-restriction`:
+
 - Candidates from Meilisearch (`regions=global`), the same over-fetch-and-let-the-dictionary-
   decide shape `backfill-clearance`/`backfill-remote-perk-false-positive` already use — cheap,
   broad, and correct because the recompute step decides, not the candidate query.

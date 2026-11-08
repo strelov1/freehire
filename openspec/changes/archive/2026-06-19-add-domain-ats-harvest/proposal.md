@@ -13,6 +13,7 @@ The curated-collection datasets (yc-oss, Techstars, European startups, Fortune 5
 ## Capabilities
 
 ### New Capabilities
+
 - `domain-ats-harvest`: discover the ATS board of a company by following its website to its careers page and detecting the embedded ATS link — the discovery half of a harvest pipeline whose validation half is the existing `harvest-boards`.
 
 ### Modified Capabilities

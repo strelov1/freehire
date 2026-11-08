@@ -10,10 +10,12 @@ expose them yet. `facets.ts` already has `countryLabel(code)` (ISO alpha-2 → E
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Show the company's authoritative facts on its page, degrading gracefully as fields are
   missing.
 
 **Non-Goals:**
+
 - No backend/API/schema change (data already served).
 - No `industries` search facet or company-list changes (a separate change).
 - No JSON-LD enrichment (foundingDate/numberOfEmployees) — noted as a later refinement.

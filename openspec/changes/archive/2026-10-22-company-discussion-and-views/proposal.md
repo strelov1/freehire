@@ -23,6 +23,7 @@ Hiring tab says nothing about attention: how many people look at the company's p
 <!-- none -->
 
 ### Modified Capabilities
+
 - `company-hiring-tab`: Discussion joins the tabs; the endpoint and the tab serve views.
 - `company-hiring-signal`: adds the per-company posting-views rollup.
 

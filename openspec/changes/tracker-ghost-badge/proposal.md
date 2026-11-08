@@ -12,9 +12,11 @@ The tracked-jobs listing (`GET /me/tracking`) never shows the ghost-job badge, e
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `user-job-tracking`: the "Listing a user's job interactions" requirement's card-carries list gains `ghost`, and the listing gains a scenario for it — without changing the existing "no description" guarantee.
 
 ## Impact

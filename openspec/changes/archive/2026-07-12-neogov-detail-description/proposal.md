@@ -26,6 +26,7 @@ fetches, so every NEOGOV job on freehire ships a truncated description
 ## Capabilities
 
 ### New Capabilities
+
 - `neogov-source`: the NEOGOV career-site adapter's ingest contract — board shape,
   listing pagination, and detail-fetched full description.
 

@@ -97,11 +97,13 @@ mechanism for it (`expireDespiteRegisteredPrefixes`). Adzuna joins it. No new ma
 ## Capabilities
 
 ### New Capabilities
+
 - `adzuna-source`: the Adzuna Job Search API adapter — how a board addresses a country and
   category, what request order and freshness window bound a crawl, and what request budget
   the platform's terms allow.
 
 ### Modified Capabilities
+
 - `job-lifecycle`: the age rule is restated to cover a source the sweep *does* otherwise
   close on evidence, for the tail its crawl budget structurally cannot re-reach — the rule
   `whatjobs` has followed unspecified, and which `adzuna` now joins.

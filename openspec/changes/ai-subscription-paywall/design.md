@@ -12,6 +12,7 @@ See proposal.md - Why for the product motivation.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Flip `DefaultConfig()`'s `free`/`enforce` fields for `tailor`, `match`, `assistant`,
   `dictation`, `cover-letter` to match `auto-apply`'s existing shape.
 - Keep every existing lever (`PLAN_FREE_DAILY_<FEATURE>`, `PLAN_ENFORCE`) working exactly
@@ -27,6 +28,7 @@ See proposal.md - Why for the product motivation.
   true (`DefaultConfig()` being non-enforcing).
 
 **Non-Goals:**
+
 - Unsetting `STRIPE_ULTRA_PRICE_IDS` on the production host — an operational deploy
   action outside this repo's code, left to the user.
 - Reconciling the stale, unsynced `openspec/specs/job-fit-analysis` (still describes the
@@ -55,6 +57,7 @@ Several tests in `decide_test.go`, `tier_test.go`, `session_test.go` and
 `enforcing()` helper) as a generic stand-in with room to consume partway into an
 allowance — not because `match`'s specific number matters to what they're testing.
 Two changes keep this working without inventing a parallel feature:
+
 - `enforcing()` (in `decide_test.go`, already the single helper every enforcing-config
   test in the package uses) pins `FeatureFit`'s free daily to a fixed test value via the
   already-existing `Config.WithFreeDaily` — the exact mechanism

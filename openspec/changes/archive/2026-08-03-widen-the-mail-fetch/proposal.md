@@ -41,6 +41,7 @@ No change to linking, stages, or the ledger.
 <!-- None. -->
 
 ### Modified Capabilities
+
 - `gmail-ats-sync`: the fetch is scoped to hiring-shaped mail rather than to ATS senders,
   and excludes the caller's own messages.
 - `email-inbox`: the listing hides mail classified `other` by default, reports the count it

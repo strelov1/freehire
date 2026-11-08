@@ -23,12 +23,14 @@ The extension already has the pieces this change composes: frame-aware form read
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Place an already-tailored CV's rendered PDF into a detected file upload field, triggered
   by an explicit click, with the debugger attached for the shortest window that achieves it.
 - Fail loudly and cleanly: a placement that doesn't succeed reports why, and never leaves
   `chrome.debugger` attached.
 
 **Non-Goals:**
+
 - Generating or choosing *which* tailored CV to use — this reads whatever `cv-tailoring`
   already produced for the job in view; it does not create one.
 - Filling any other control on the form — that remains the existing deterministic/agent
@@ -70,6 +72,7 @@ per tab) — that failure is caught before any banner appears and reported as a 
 DevTools on this tab and try again," rather than a generic error.
 
 **Alternatives considered:**
+
 - *DataTransfer + synthetic `drop` dispatch, no debugger.* Rejected — this is what both the
   live-form spike and Auto-Apply-Helper's own failure log rule out for the ATS forms this
   extension actually meets.

@@ -40,6 +40,7 @@ search index; until then existing jobs keep their old region codes.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `job-geography`: the controlled region vocabulary is now a single macro level;
   country codes are no longer emitted as regions.
 - `web-frontend`: open/high-cardinality facet filters (skills, countries) are

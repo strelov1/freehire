@@ -27,6 +27,7 @@ coverage.
 ## Capabilities
 
 ### New Capabilities
+
 - `market-coverage`: a stateless, API-key endpoint that scores a supplied skill
   list against the live open-vacancy market for a facet-filtered role and returns
   coverage, ranked skill gaps, and the role's top in-demand skills.

@@ -1,8 +1,11 @@
 # clinch-source Specification
 
 ## Purpose
+
 TBD - created by archiving change clinch-detail-via-paced-challenge-layer. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: clinch hydrates job descriptions through a paced challenge-aware getter
 
 The clinch adapter SHALL attempt to fetch each posting's detail page through a
@@ -53,4 +56,3 @@ the sitemap-only adapter produced today SHALL still be produced, with the same
 - **WHEN** a single posting's detail fetch errors (non-challenge, e.g. a 404 or timeout)
 - **THEN** that posting is still emitted with its slug-derived fields and an empty `Description`
 - **AND** the run continues to the next posting
-

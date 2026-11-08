@@ -23,12 +23,14 @@ baseline is already red), so verification is `svelte-check` plus a manual pass.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One-click follow/unfollow of a company's new postings from its page.
 - Reuse existing saved-search + subscription primitives with zero backend change.
 - Never destroy a user's manually-saved filter for the same company.
 - Match the established Telegram connect UX (parity with `SavedSearches.svelte`).
 
 **Non-Goals:**
+
 - No in-app "followed companies" feed or in-app notifications (delivery stays
   Telegram-only, as today).
 - No new backend tables, endpoints, or `cmd/notify` logic.
@@ -39,6 +41,7 @@ baseline is already red), so verification is `svelte-check` plus a manual pass.
 ## Decisions
 
 ### D1: Compose existing primitives instead of a new "follow" entity
+
 A company follow is modelled as `saved_search(query="company_slug=<slug>")` +
 `subscription(telegram)`. Alternative: a dedicated `followed_companies` table +
 endpoints + notify path. Rejected — it duplicates the subscription machinery and
@@ -47,6 +50,7 @@ built canonically (`canonicalQuery` over `company_slug=<slug>`) so it matches th
 same way the filters panel and `cmd/notify` produce/consume it.
 
 ### D2: New focused component, stores unchanged
+
 Add `CompanyFollowButton.svelte`, mounted in the `CompanyView` header. It reads
 `savedSearches.items` + `notifications` to derive follow state and calls the
 existing store methods. Alternative: inline the logic into `CompanyView`.
@@ -54,6 +58,7 @@ Rejected — keeps `CompanyView` a thin composition and isolates the follow
 state-machine in one testable-by-inspection unit.
 
 ### D3: Reuse-or-create on follow; name-guarded delete on unfollow
+
 Follow finds a saved search whose canonical query equals the company query and
 reuses it; otherwise creates one named exactly the company name. Unfollow always
 deletes the subscription, and deletes the saved search **only if its name equals
@@ -64,6 +69,7 @@ filters"). The name-guard is the correct middle: clean toggle for our own rows,
 safe for the user's.
 
 ### D4: Precondition handling mirrors SavedSearches
+
 - Signed-out → `openAuthDialog()`, no write attempted.
 - `telegram.enabled === false` (bot unconfigured server-side) → render nothing.
 - Signed-in, Telegram not linked → open deep link (`notifications.link()`) and

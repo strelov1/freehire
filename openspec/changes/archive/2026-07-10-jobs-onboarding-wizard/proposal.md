@@ -14,6 +14,7 @@ The `/jobs` page greets every visitor with a reverse-chronological wall of the w
 ## Capabilities
 
 ### New Capabilities
+
 - `jobs-onboarding`: A skippable, anonymous onboarding wizard on `/jobs` that captures role/seniority/work-mode/region/stack (or is dismissed), reconfigures the existing job feed through the existing facet filters, persists the result to `localStorage`, and is surfaced by a banner plus a persistent entry point. Includes the narrow-feed "relax filter" affordance.
 
 ### Modified Capabilities

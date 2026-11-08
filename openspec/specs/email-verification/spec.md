@@ -1,8 +1,11 @@
 # email-verification Specification
 
 ## Purpose
+
 TBD - created by archiving change harden-account-security. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Email ownership is proven by a mailed code
 
 The system SHALL record, per account, whether control of its email address has been proven,
@@ -93,4 +96,3 @@ configured, and SHALL NOT pretend a code was delivered.
 
 - **WHEN** a caller requests a verification code while no mail transport is configured
 - **THEN** the system responds `503` and states that email delivery is unavailable
-

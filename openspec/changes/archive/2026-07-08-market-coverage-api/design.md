@@ -11,6 +11,7 @@ and an API key — it needs a stateless entry into the same computation.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A stateless `POST /api/v1/market/coverage` (API key or cookie) taking skills in
   the body and a market filter in the query, returning the coverage verdict.
 - Reuse `verdict.Compute` unchanged; extract the shared three-query step so the
@@ -20,6 +21,7 @@ and an API key — it needs a stateless entry into the same computation.
   `market-fit` and `search`.
 
 **Non-Goals:**
+
 - No coverage segmentation into per-facet-value buckets.
 - No CV parsing / `coherence` / `hidden` status in this path.
 - No new market data, LLM, DB migration, or reindex.

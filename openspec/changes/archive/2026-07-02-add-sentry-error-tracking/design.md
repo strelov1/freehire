@@ -8,6 +8,7 @@ run-once-and-exit cron workers (`cmd/*` that call `internal/worker.Bootstrap`), 
 SvelteKit frontend (`web/`).
 
 Constraints from the codebase:
+
 - Optional integrations follow a consistent pattern: an env var gates them, and their
   absence causes no regression (Meili/LLM/S3/Telegram in `internal/config`).
 - Config is centralized in `internal/config` (`Settings` + `Load`); the server reads it
@@ -23,6 +24,7 @@ Constraints from the codebase:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One env-gated Sentry init reused by the server and every cron worker.
 - Capture unhandled panics and unexpected 5xx on the backend; capture panics and
   reported errors in workers with guaranteed flush before exit.
@@ -30,6 +32,7 @@ Constraints from the codebase:
 - No regression when unconfigured; no PII by default.
 
 **Non-Goals:**
+
 - Performance tracing / spans (sample rate 0). Can be a later change.
 - Session replay.
 - Structured breadcrumb/user-context enrichment beyond environment + process tags.
@@ -98,6 +101,7 @@ its `flush` after `app.ShutdownWithTimeout`, next to the existing `tracerShutdow
 ### D4 — Frontend: `@sentry/sveltekit`, gated on `PUBLIC_SENTRY_DSN`
 
 Create `web/src/hooks.client.ts` and `web/src/hooks.server.ts` (neither exists yet):
+
 - Both call `Sentry.init({ dsn: PUBLIC_SENTRY_DSN, environment, tracesSampleRate: 0 })`
   **only when the DSN is set**, and export `handleError = handleErrorWithSentry(...)`.
 - `hooks.server.ts` also composes `sentryHandle()` into the `handle` sequence.
@@ -139,6 +143,7 @@ regression risk.
 3. In `freehire-ops`, inject `SENTRY_DSN`/`SENTRY_ENVIRONMENT` into server + worker
    containers and `PUBLIC_SENTRY_DSN`/`PUBLIC_SENTRY_ENVIRONMENT` into the web build/runtime.
 4. Deploy; verify a test error appears in each project.
+
 - **Rollback:** unset the DSNs — the integration goes fully dormant with no redeploy of code
   required (though clearing build-time `PUBLIC_SENTRY_DSN` needs a web rebuild).
 

@@ -93,7 +93,6 @@ Data collected — declare all four:
   touched. And every read is named in the conversation itself — the panel shows
   which page it read, without the query string, so a read the user did not expect
   is one they can see.
-
 - **User activity** — anonymous usage events (`extension/lib/analytics.ts`):
   the panel opened, a sign-in, a chat message sent, Autofill run, a plan limit
   shown and its upgrade link clicked. Sent to Google Analytics under a random

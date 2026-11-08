@@ -1,8 +1,11 @@
 # crelate-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-crelate-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Keyless Crelate portal crawl
 
 The system SHALL crawl a Crelate candidate portal's published jobs through its keyless public API,
@@ -67,4 +70,3 @@ an empty `Id` SHALL be dropped so it cannot collide on the dedup key.
 
 - **WHEN** a posting has an empty `Id`
 - **THEN** it produces no `Job`
-

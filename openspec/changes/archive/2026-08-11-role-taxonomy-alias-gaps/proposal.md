@@ -40,6 +40,7 @@ candidates and companies in these sub-roles without touching the category vocabu
 ## Capabilities
 
 ### New Capabilities
+
 - `role-category-alias-coverage`: the coverage contract for title-alias phrasing within
   already-existing role categories — which sub-role clusters the classify dictionary must
   resolve, the alias-ordering doctrine that keeps them from being stolen by generic
@@ -47,6 +48,7 @@ candidates and companies in these sub-roles without touching the category vocabu
   deliberately.
 
 ### Modified Capabilities
+
 - (none — `skill-tag-matching`'s category-scoped acronym mechanism already covers adding
   new acronyms like SAFe/CSM/PSM/PMP as data, not a new normative rule; `tech-classification`
   is unaffected since no category's tech/non-tech partition membership changes)

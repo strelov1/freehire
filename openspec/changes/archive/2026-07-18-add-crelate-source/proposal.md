@@ -12,6 +12,7 @@ Crelate is a recruiting/staffing ATS whose candidate portals expose a keyless pu
 ## Capabilities
 
 ### New Capabilities
+
 - `crelate-source`: crawl a Crelate candidate portal's published jobs through its keyless public API and normalize them into the catalogue, resolving each posting's employer from the feed.
 
 ### Modified Capabilities

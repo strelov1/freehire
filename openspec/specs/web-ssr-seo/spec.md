@@ -1,8 +1,11 @@
 # web-ssr-seo Specification
 
 ## Purpose
+
 TBD - created by archiving change web-sveltekit-ssr. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Public pages are server-rendered
 
 The frontend SHALL render the public read pages — the jobs list (`/jobs`), job
@@ -377,4 +380,3 @@ linked: a footer is the worst place to advertise a 404.
 - **WHEN** any public page is requested
 - **THEN** its HTML contains `<a href>` anchors to several distinct
   `/collections/:slug` landing pages
-

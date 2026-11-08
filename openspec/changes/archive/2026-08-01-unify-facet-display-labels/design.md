@@ -121,7 +121,7 @@ which is the shape of problem this change exists to remove.
 `insights.ts` keeps exporting its own `seniorityLabel`, because it alone must answer for the
 empty-string category-wide band. It delegates for every real code:
 
-```
+```text
 seniority === '' ? 'All levels' : (SENIORITY_LABELS[seniority] ?? titleCase(seniority))
 ```
 

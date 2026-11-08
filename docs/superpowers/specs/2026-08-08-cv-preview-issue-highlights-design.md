@@ -53,6 +53,7 @@ other check's `LineItem` simply carries an empty `Path` — unaffected, backward
 Regenerate the TS contract so the SPA sees the new field.
 
 **Frontend:**
+
 - `AtsDelta.svelte` (Score tab) passes every line item's non-empty `path`, tagged with
   its severity (`fail`/`warn`, already how `atscheck` grades a check — no new vocabulary),
   into `CvHtmlPreview`'s `highlightPaths`.

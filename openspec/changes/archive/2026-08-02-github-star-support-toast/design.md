@@ -50,7 +50,7 @@ failure mode for a surface that does not need it.
 
 **Gate on the Product Hunt key plus the clock.**
 
-```
+```text
 show = !selfDismissed && (phBannerDismissed || launchPhase(now) === 'over')
 ```
 

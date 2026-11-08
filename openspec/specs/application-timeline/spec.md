@@ -1,6 +1,7 @@
 # application-timeline Specification
 
 ## Purpose
+
 Reading the application-event ledger as a dated series for one caller: the range read
 behind `GET /me/timeline`, what each event carries to the wire, how the provenance of a
 date is reported, and what happens to an event whose message was deleted. Introduced by

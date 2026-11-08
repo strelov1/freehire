@@ -32,11 +32,13 @@ CV, off by default, and its surfaces report clicks as evidence rather than proof
 ## Capabilities
 
 ### New Capabilities
+
 - `cv-tracer-links`: per-CV opt-in link tracing — the toggle and who may set it, token minting
   and its idempotency, the redirect endpoint and its click record, bot classification,
   visitor hashing and retention, and the two read surfaces.
 
 ### Modified Capabilities
+
 - `cv-builder`: the on-demand PDF render consults the CV's tracer toggle and may substitute
   link hrefs while preserving visible text; every registered template must emit clickable
   links.

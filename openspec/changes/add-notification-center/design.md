@@ -15,6 +15,7 @@ copy verbatim rather than inventing a second wording for the same event.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One durable, readable-by-the-owner record per delivery event, regardless of
   channel.
 - Read/unread state with a badge count, on both web and mobile.
@@ -23,6 +24,7 @@ copy verbatim rather than inventing a second wording for the same event.
   and the Gmail inbox's `GetEmail`/`MarkAllReadInbox`), not invent new ones.
 
 **Non-Goals:**
+
 - Deduplicating `internal/notify`'s per-(saved_search, channel) subscription
   model. A user subscribed to the same saved search on both Telegram and push
   gets two `deliverOne` calls for the same matched jobs today, and will get two
@@ -46,7 +48,7 @@ copy verbatim rather than inventing a second wording for the same event.
 
 ### 1. One `user_notifications` table, minimal columns
 
-```
+```text
 id, user_id, kind (text), title, body, public_slug (nullable), created_at, read_at (nullable)
 ```
 

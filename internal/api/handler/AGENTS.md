@@ -115,6 +115,7 @@ It is the **harness** surface, not "the agent surface": there are two agents on 
 - `renderMutation` is the shared tail of every mutation that returns the message it changed (link, unlink, confirm, reject, triage, create-application), so those cannot drift from one another or from `GetEmail`. Unlike `GetEmail` it does not mark the message read: the caller is acting on the message, not opening it.
 - **`?link=` partitions the mailbox** into `linked` / `suggested` / `unlinked` — `suggested` is the confirmation queue, `unlinked` the mail with nowhere to go yet. The predicate must go into `ListEmails` **and** `CountEmails` together or a filtered page reports an unfiltered total. A message that is both linked and carrying a stale suggestion reads as `linked`: the resolved answer wins over the proposal it superseded.
 - `CreateApplicationFromEmail` records an application from mail and links it in one call. It **borrows `jobtracking`** rather than writing its own apply, so the `applied_count`-increments-once rule stays in one place; the application is dated by the email's `received_at`, never `now()`. Mail carrying a pending suggestion is a **409** — the matcher already proposed an answer, and overwriting it silently would make `link_source = 'manual'` a lie about a decision the caller never saw.
+
 ## Assistant (`assistant.go`, `assistant_*_tools.go`)
 
 The OAuth account MCP also exposes `suggest_dictionary_term`. It reuses
@@ -125,7 +126,6 @@ installs a filter. Agents submit a term the user wanted but the dictionary canno
 resolve, without a separate suggestion request; zero search results alone do not
 prove a dictionary gap. Like the cookie-only dictionary endpoint, it is unavailable to
 full-scope API keys. `handler.go` constructs one dictionary handler for both surfaces.
-
 
 Routes (all on `mw.key` — the session cookie, the session JWT the extension's
 connect flow minted, or a full-scope API key — and nothing else). Authentication

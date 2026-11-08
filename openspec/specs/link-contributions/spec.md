@@ -1,8 +1,11 @@
 # link-contributions Specification
 
 ## Purpose
+
 TBD - created by archiving change add-link-contributions. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Authenticated board contribution
 
 The system SHALL accept a board contribution only from an authenticated user, identified by
@@ -202,4 +205,3 @@ ingestable and promotes the row.
 
 - **WHEN** a review-queue row is created
 - **THEN** no AI-credits reward is applied — credit remains exclusive to recognized novel boards
-

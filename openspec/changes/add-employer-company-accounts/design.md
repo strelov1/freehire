@@ -33,6 +33,7 @@ the existing code, not from a green field:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A verified employer can manage their own company's curated profile and publish, edit, and
   close their own vacancies, without a moderator in the ordinary path.
 - Reuse every existing write path, dictionary, and code-verification mechanism that already
@@ -44,6 +45,7 @@ the existing code, not from a green field:
   involved (`company_accounts`, `jobs.source = 'employer'`).
 
 **Non-Goals:**
+
 - Claiming or editing a company's existing crawler-ingested postings.
 - Team/multi-seat access to one company account.
 - Any billing/paywall gate.
@@ -157,11 +159,11 @@ express the same action would be two paths to keep in sync for no benefit.
 3. `internal/identity/accounts`: add the purpose constant and the two generic methods (no
    `CodeMailer` change needed — see Decisions).
 3a. **Found only once the end-to-end HTTP test ran against real Postgres**: migration to
-    widen `user_email_codes.purpose`'s own CHECK constraint (added in 0041, before this
-    package existed) to admit `'verify_work_email'` — every `Claim` call 500'd without it.
-    Same DROP/ADD pattern as 2, sized for a small, short-lived table (no `NOT VALID` split
-    needed). No fake-repository unit test could have caught this; it lives entirely in a
-    constraint neither `internal/identity/accounts` nor `internal/ingest/employer` declares.
+   widen `user_email_codes.purpose`'s own CHECK constraint (added in 0041, before this
+   package existed) to admit `'verify_work_email'` — every `Claim` call 500'd without it.
+   Same DROP/ADD pattern as 2, sized for a small, short-lived table (no `NOT VALID` split
+   needed). No fake-repository unit test could have caught this; it lives entirely in a
+   constraint neither `internal/identity/accounts` nor `internal/ingest/employer` declares.
 4. New `internal/ingest/employer` package (service + repository + sqlc queries for the
    actor-scoped update/close, the public-webmail-domain check, and the authoritative
    curated-profile write — `SetCompanyAccountProfile`, nil-means-unchanged via `sqlc.narg`).

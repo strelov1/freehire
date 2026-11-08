@@ -32,6 +32,7 @@ typeahead ("search with autosuggestions") so the required inputs are always reac
 <!-- none -->
 
 ### Modified Capabilities
+
 - `search-profiles`: the profile entity gains a multi-valued `specializations` set in place
   of the single `specialization`; specialization validation, the create/list/update wire
   shapes, and the management-UI requirement change accordingly.

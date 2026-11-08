@@ -12,6 +12,7 @@ exist; what's missing is turning job links in the reply into those cards.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Render freehire job links in an assistant reply as real `JobRow` cards,
   hydrated from the structured jobview by slug.
 - Keep the reply's prose as markdown, interleaved with cards, in order.
@@ -20,6 +21,7 @@ exist; what's missing is turning job links in the reply into those cards.
 - Nudge the agent (skill) to emit canonical job URLs.
 
 **Non-Goals:**
+
 - No new/changed backend API (jobview already suffices). A batch endpoint is a
   noted optimization, not built now.
 - No unfurl for company/board/external links (jobs only).

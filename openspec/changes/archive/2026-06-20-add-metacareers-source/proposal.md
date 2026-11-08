@@ -42,6 +42,7 @@ the existing `successfactors` adapter already handles.
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `meta` is a registered, boardless provider — a
   sitemap-enumerated, ld+json-detail adapter served over a Chrome-fingerprint (`tls-client`)
   transport scoped to this adapter, yielding the normalized job shape with a sanitized-HTML

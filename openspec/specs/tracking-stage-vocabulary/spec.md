@@ -1,10 +1,13 @@
 # tracking-stage-vocabulary Specification
 
 ## Purpose
+
 One owner for the application-stage vocabulary: which stages exist, what each is called, and
 which coarse group it shows as. Introduced by the tracker-one-vocabulary change, which collapsed
 three competing vocabularies (8 stages, 4 board columns, 7 pipeline buckets) onto this one.
+
 ## Requirements
+
 ### Requirement: One owner for the stage vocabulary, its labels and its groups
 
 The system SHALL define the application-stage vocabulary, the human label of each stage, and
@@ -125,4 +128,3 @@ cannot resurrect it.
 
 - **WHEN** employer mail arrives for an application already at stage `expired`
 - **THEN** the automatic advance declines, exactly as it does for the other terminal stages
-

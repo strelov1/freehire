@@ -7,11 +7,13 @@ The existing per-job "save" (`internal/application/jobtracking`, `user_jobs.save
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Replace board sharing with a strictly simpler primitive: a named set of specific jobs, optionally shared read-only by slug.
 - Reuse the slug-minting approach (transliteration + random suffix + collision retry) that boards already proved out, rather than inventing a new scheme.
 - Keep the new feature fully independent of the existing "save" flag and of `saved_searches`.
 
 **Non-Goals:**
+
 - No per-job curator notes/comments on a shared list (rejected in brainstorming as unnecessary scope).
 - No manual ordering of jobs within a list (sort is `added_at DESC`); no drag-to-reorder.
 - No migration path from an existing shared board into a job list — a query and a job set are different data, so there is nothing meaningful to auto-convert.

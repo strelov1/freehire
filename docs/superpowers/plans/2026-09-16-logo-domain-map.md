@@ -52,23 +52,24 @@
 
 ---
 
-# Part A — `hire`: publish the map
+## Part A — `hire`: publish the map
 
-## Task A1: The pure `logodomain` package
+### Task A1: The pure `logodomain` package
 
 **Files:**
+
 - Create: `internal/job/logodomain/logodomain.go`
 - Create: `internal/job/logodomain/logodomain_test.go`
 - Modify: `internal/platform/arch/layering/blocks.go` (the `"job"` block list, around line 153-186)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces:
   - `func NormalizeName(name string) string`
   - `func Domain(website string) string`
   - `type Spelling struct { Slug, Name string }`
   - `func Build(websites map[string]string, spellings []Spelling) (entries map[string]string, dropped int)`
-
 - [ ] **Step 1: Write the failing test**
 
 Create `internal/job/logodomain/logodomain_test.go`:
@@ -354,18 +355,19 @@ belonging to the other."
 
 ---
 
-## Task A2: The two reads
+### Task A2: The two reads
 
 **Files:**
+
 - Create: `internal/platform/db/queries/logodomain.sql`
 - Modify: generated files under `internal/platform/db/` (via `make sqlc`, never by hand)
 
 **Interfaces:**
+
 - Consumes: nothing from Task A1.
 - Produces:
   - `func (q *Queries) ListCompanyWebsites(ctx context.Context) ([]ListCompanyWebsitesRow, error)` with `Slug string; Website string`
   - `func (q *Queries) ListOpenJobCompanySpellings(ctx context.Context) ([]ListOpenJobCompanySpellingsRow, error)` with `CompanySlug string; Company string`
-
 - [ ] **Step 1: Write the queries**
 
 Create `internal/platform/db/queries/logodomain.sql`:
@@ -434,13 +436,15 @@ seq scan's sequential read of the same heap. The caller filters in Go."
 
 ---
 
-## Task A3: The snapshot format
+### Task A3: The snapshot format
 
 **Files:**
+
 - Create: `internal/job/logodomain/snapshot.go`
 - Create: `internal/job/logodomain/snapshot_test.go`
 
 **Interfaces:**
+
 - Consumes: `NormalizeName` from Task A1 (only as documentation of the contract).
 - Produces:
   - `const Version = 1`
@@ -448,7 +452,6 @@ seq scan's sequential read of the same heap. The caller filters in Go."
   - `type Snapshot struct { Version int; Normalization string; GeneratedAt time.Time; Entries map[string]string }`
   - `func NewSnapshot(entries map[string]string, now time.Time) Snapshot`
   - `func WriteFile(path string, s Snapshot) error`
-
 - [ ] **Step 1: Write the failing test**
 
 Create `internal/job/logodomain/snapshot_test.go`:
@@ -661,16 +664,17 @@ them is indistinguishable from the map not covering a company."
 
 ---
 
-## Task A4: The `publish-logo-domains` worker
+### Task A4: The `publish-logo-domains` worker
 
 **Files:**
+
 - Create: `cmd/publish-logo-domains/main.go`
 - Create: `cmd/publish-logo-domains/main_test.go`
 
 **Interfaces:**
+
 - Consumes: `logodomain.{Build,Spelling,NewSnapshot,WriteFile}` (Tasks A1, A3); `db.Queries.{ListCompanyWebsites,ListOpenJobCompanySpellings}` (Task A2).
 - Produces: the binary `publish-logo-domains`.
-
 - [ ] **Step 1: Write the failing test**
 
 Create `cmd/publish-logo-domains/main_test.go`:
@@ -849,18 +853,19 @@ every logo on the site to a name guess at once."
 
 ---
 
-## Task A5: Ship it — unit, timer, build list, docs
+### Task A5: Ship it — unit, timer, build list, docs
 
 **Files:**
+
 - Create: `deploy/systemd/freehire-publish-logo-domains.service`
 - Create: `deploy/systemd/freehire-publish-logo-domains.timer`
 - Modify: `deploy/bin/release.sh:307` (the `for w in ...` build list)
 - Modify: `CLAUDE.md` (the worker-gotchas list)
 
 **Interfaces:**
+
 - Consumes: the `publish-logo-domains` binary from Task A4.
 - Produces: nothing other code reads.
-
 - [ ] **Step 1: Read a neighbouring unit to copy its conventions**
 
 Run: `cd /tmp/wt-logo-domain && cat deploy/systemd/freehire-build-suggestions.service deploy/systemd/freehire-build-suggestions.timer`
@@ -957,7 +962,7 @@ so it yields to everything."
 
 ---
 
-# Part B — `freehire-logo`: consult the map
+## Part B — `freehire-logo`: consult the map
 
 All paths in Part B are relative to `~/Projects/freehire-logo`. Work on a branch:
 
@@ -968,20 +973,21 @@ cd ~/Projects/freehire-logo && git fetch origin && git switch -c feat/domain-map
 If `origin/main` does not exist, check `git branch -a` — the README says the service was
 implemented on `feat/logo-proxy`; branch from whatever is deployed.
 
-## Task B1: The `domainmap` package
+### Task B1: The `domainmap` package
 
 **Files:**
+
 - Create: `internal/domainmap/domainmap.go`
 - Create: `internal/domainmap/domainmap_test.go`
 
 **Interfaces:**
+
 - Consumes: `store.Normalize` (existing, `internal/store`).
 - Produces:
   - `type Map struct { ... }`
   - `func Load(path string, reloadEvery time.Duration) *Map`
   - `func (m *Map) Lookup(normalizedName string) string`
   - `func (m *Map) Size() int`
-
 - [ ] **Step 1: Write the failing test**
 
 Create `internal/domainmap/domainmap_test.go`:
@@ -1303,17 +1309,18 @@ good map rather than blanking every logo on the site."
 
 ---
 
-## Task B2: Consult the map in the handler
+### Task B2: Consult the map in the handler
 
 **Files:**
+
 - Modify: `internal/server/server.go` (the `handler` struct, `New`, and `ServeHTTP` around lines 37-90)
 - Modify: `internal/server/server_test.go`
 - Modify: `cmd/logo-proxy/main.go`
 
 **Interfaces:**
+
 - Consumes: `domainmap.Map` from Task B1.
 - Produces: `func New(s *store.Store, r *resolve.Resolver, domains *domainmap.Map, pools ...*resolve.Pool) http.Handler`
-
 - [ ] **Step 1: Write the failing test**
 
 Append to `internal/server/server_test.go`. Read the file's existing helpers first
@@ -1527,9 +1534,10 @@ changes, which is the rollback."
 
 ---
 
-## Task B3: Document the map
+### Task B3: Document the map
 
 **Files:**
+
 - Modify: `README.md`
 
 - [ ] **Step 1: Add a section**
@@ -1544,8 +1552,10 @@ unrelated leadership-training firm's mark, at HTTP 200, which no caller can dete
 `?domain=` removes the ambiguity, and `../hire` now publishes the domains it knows:
 
 ```
+
 LOGO_DOMAIN_MAP=/var/lib/freehire-logo-map/domains.json
-```
+
+```text
 
 The file is written daily by `../hire`'s `cmd/publish-logo-domains` and holds normalized
 company names against bare domains. `internal/domainmap` reloads it when its mtime moves.
@@ -1567,9 +1577,9 @@ git commit -m "Document the domain map and its rollback"
 
 ---
 
-# Part C — Verify against production
+## Part C — Verify against production
 
-## Task C1: Prove the fix on real data
+### Task C1: Prove the fix on real data
 
 **Files:** none — this task changes nothing and produces evidence.
 
@@ -1578,6 +1588,7 @@ git commit -m "Document the domain map and its rollback"
 ```bash
 curl -s -o /dev/null -w "%{http_code} %{size_download}\n" https://logo.freehire.me/g2i
 ```
+
 Expected today: `200 1814` — the wrong company.
 
 - [ ] **Step 2: Prove the correct answer is reachable**
@@ -1585,6 +1596,7 @@ Expected today: `200 1814` — the wrong company.
 ```bash
 curl -s -o /dev/null -w "%{http_code} %{size_download}\n" "https://logo.freehire.me/g2i?domain=g2i.co"
 ```
+
 Expected: `200 2984` — the correct mark. This is the target state for step 5.
 
 - [ ] **Step 3: Run the publisher once on the host, by hand**
@@ -1655,11 +1667,12 @@ ssh root@89.167.94.146 'systemctl daemon-reload && systemctl enable --now freehi
 ```bash
 cd /tmp/wt-logo-domain && ./deploy/check-drift.sh
 ```
+
 Expected: the new unit and timer match. Anything else it reports was already there.
 
 ---
 
-## Self-review notes
+### Self-review notes
 
 **Spec coverage**
 

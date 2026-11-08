@@ -34,7 +34,6 @@ behind authentication, failing the adapter bar (`AGENT.md`: adapters are read-on
   RSC-rendered (no ld+json / `__NEXT_DATA__`). Covers 1 company (Stefanini).
 - **Strider** (`app.onstrider.com`): a Clerk-authenticated CRA SPA; `.../api/*` returns
   `401 "User not authenticated"`. A US talent marketplace (not a company ATS), 1 recruiter.
-
 - [x] 4.1 Confirm neither exposes a keyless public jobs API; document the block and descope.
 
 ## 5. Cross-cutting verification

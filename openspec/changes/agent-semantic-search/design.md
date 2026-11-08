@@ -29,12 +29,14 @@ The query-side embed (`query: ` prefix) was deleted with
 ## Goals / Non-Goals
 
 **Goals:**
+
 - An agent can opt into meaning-based ranking per request; everyone else sees no change.
 - Every filter, the visibility rules and pagination apply to a semantic search unchanged.
 - A slow or absent embedding backend never fails or stalls an agent's search.
 - No vector is recomputed to populate the index.
 
 **Non-Goals:**
+
 - Semantic search on the public `/jobs/search`, the SPA, or the ChatGPT app.
 - Embedding non-`is_tech` postings. They stay keyword-reachable inside a hybrid query.
 - A dedicated query-only TEI. The fallback makes it optional; add it if the `unavailable` rate

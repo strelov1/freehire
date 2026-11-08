@@ -20,6 +20,7 @@ Federal Employment Agency board.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Add the missing German fused-compound aliases so the affected titles
   resolve a `category`, which is both what `CategoryUnresolved` reads and
   what feeds `is_tech` derivation (tech-classification's category-based
@@ -29,6 +30,7 @@ Federal Employment Agency board.
   never guess, emit nothing for unknowns" (AGENTS.md).
 
 **Non-Goals:**
+
 - Splitting `Fachinformatiker` into every possible qualifier
   (`Daten- und Prozessanalyse`, `Digitale Vernetzung`, support-flavored
   postings, etc.) — the two dominant, unambiguous tracks

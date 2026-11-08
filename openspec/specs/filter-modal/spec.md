@@ -6,7 +6,9 @@ The job-search filters are edited in a two-pane modal ("All filters") that group
 facets into sections and gives each facet room for hierarchy and search, while the
 sidebar shows only what is currently selected. Selections in the modal are deferred and
 applied on a single **Show results** action; the sidebar edits apply immediately.
+
 ## Requirements
+
 ### Requirement: The job filters are edited in a two-pane modal grouped into sections
 
 The web client SHALL provide a filter modal opened from an **All filters** control.
@@ -485,6 +487,7 @@ user has no saved profile, the header SHALL instead present a link to create one
 `/my/profile`. When no user is signed in, neither the action nor the link SHALL appear.
 
 #### Scenario: Applying the profile resets and seeds the staged filters
+
 - **WHEN** a signed-in user with a saved profile (specializations `A`, `B`; skills `x`,
   `y`) has some unrelated staged filters and activates **Apply my profile**
 - **THEN** the previously staged filters are cleared, the `category` facet is staged with
@@ -492,24 +495,28 @@ user has no saved profile, the header SHALL instead present a link to create one
   unchanged until **Show results** is activated
 
 #### Scenario: Applying a profile with excluded skills seeds the skills exclude set
+
 - **WHEN** a signed-in user whose profile has skills `[go]` and excluded skills `[php]`
   activates **Apply my profile**
 - **THEN** the `skills` facet is staged with `go` included and `php` excluded, and on
   **Show results** the committed filter carries `?skills=go` and `?skills_exclude=php`
 
 #### Scenario: Applying a profile with avoided sources seeds the source exclude set
+
 - **WHEN** a signed-in user whose profile avoids the sources `[smartrecruiters]` activates
   **Apply my profile**
 - **THEN** the `source` facet is staged with `smartrecruiters` excluded, and on **Show
   results** the committed filter carries `?source_exclude=smartrecruiters`
 
 #### Scenario: Applying a profile with avoided companies seeds the company exclude set
+
 - **WHEN** a signed-in user whose profile avoids the companies `[acme]` activates
   **Apply my profile**
 - **THEN** the `company_slug` facet is staged with `acme` excluded, and on **Show
   results** the committed filter carries `?company_slug_exclude=acme`
 
 #### Scenario: Applying a profile with location preferences seeds the location facets
+
 - **WHEN** a signed-in user whose profile has `work_modes` `[remote, onsite]`,
   `remote.regions` `[latam]`, `base` `{country: br, city: "Florianópolis"}`, and
   `relocation` `{open: true, cities: ["Berlin"]}` activates **Apply my profile**
@@ -518,6 +525,7 @@ user has no saved profile, the header SHALL instead present a link to create one
   `[supported, required]`, and the job list is unchanged until **Show results** is activated
 
 #### Scenario: A remote-only user's base does not narrow their search
+
 - **WHEN** a signed-in user whose `work_modes` are `[remote]` alone, with `base`
   `{country: co, city: "Manizales"}` and `remote.regions` `[latam]`, activates
   **Apply my profile**
@@ -525,23 +533,27 @@ user has no saved profile, the header SHALL instead present a link to create one
   empty — their home country is not staged as a job-country filter
 
 #### Scenario: Applying a profile without location preferences seeds no location facets
+
 - **WHEN** a signed-in user whose profile has no `location_preferences` block activates
   **Apply my profile**
 - **THEN** only the `category` and `skills` facets are staged and the location facets
   (`work_mode`, `regions`, `countries`, `cities`, `relocation`) remain empty
 
 #### Scenario: Show results commits the profile-derived filters
+
 - **WHEN** the user has applied their profile in the modal and then activates **Show
   results**
 - **THEN** the staged selections become the live (URL-synced) filter state and the modal
   closes
 
 #### Scenario: No profile shows a create-profile link instead
+
 - **WHEN** a signed-in user who has no saved profile opens the jobs filter modal
 - **THEN** the header shows a link to create a profile at `/my/profile` and no
   **Apply my profile** action
 
 #### Scenario: Signed-out users see neither action nor link
+
 - **WHEN** a signed-out user opens the jobs filter modal
 - **THEN** the header shows neither the **Apply my profile** action nor the
   create-profile link
@@ -657,4 +669,3 @@ direction no test was watching.
 - **WHEN** a facet's controls are rendered inside another entry's pane
 - **THEN** it appears on the exception list with the hosting pane recorded, and
   the test passes
-

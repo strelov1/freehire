@@ -17,10 +17,12 @@ The AI search today is a small "Describe your search" dialog that only signed-in
 ## Capabilities
 
 ### New Capabilities
+
 - `ai-search-agent`: the AI search modal's describe → plan → results flow, its applied-filter preview, refinement in chat, the results overview, and applying the plan to the job list — including guest access to search interpretation.
 - `job-facet-company-count`: an opt-in exact distinct-company count and top-companies distribution on the job facets endpoint.
 
 ### Modified Capabilities
+
 - `resume-skill-extraction`: the extraction endpoint admits signed-out callers under a per-IP limit instead of rejecting them.
 
 ## Impact

@@ -7,6 +7,7 @@ There is no per-user rate limit, so one account can run the chain indefinitely a
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Cap each user at 10 *distinct-job* AI analyses per rolling 30-day window.
 - Enforce the cap before any LLM call, on both compute paths.
 - Keep recompute of an already-analysed job free.
@@ -14,6 +15,7 @@ There is no per-user rate limit, so one account can run the chain indefinitely a
 - No schema migration.
 
 **Non-Goals:**
+
 - A hard, race-free reservation (see Risks — the limit is intentionally soft).
 - Per-plan / configurable-per-user limits, billing, or an env-tunable limit (noted as future seams).
 - Counting the deterministic `jobmatch` bar — that stays free and instant.
@@ -22,6 +24,7 @@ There is no per-user rate limit, so one account can run the chain indefinitely a
 ## Decisions
 
 ### Reuse `user_job_analysis` as the usage ledger (no new table)
+
 Under "distinct jobs, rolling 30 days", the quota is exactly *the number of distinct jobs a user first analysed in the last 30 days* — which is the count of that user's `user_job_analysis` rows whose first-analysis timestamp is within the window. The table already holds one row per `(user, job)`, written only on a successful compute. So it is the ledger; no separate events table is warranted (YAGNI).
 
 Required change: `UpsertUserJobAnalysis` currently sets `created_at = now()` in its `ON CONFLICT DO UPDATE`, which would make a recompute look like a fresh analysis and mis-count the window. Drop `created_at` from the `SET` list so it keeps the *first*-analysis time; the analysis blob, model, and both staleness stamps still update. `created_at` is not read by any current logic (only returned), so preserving it is safe and is the more correct meaning for a "first analysed" marker.
@@ -29,7 +32,9 @@ Required change: `UpsertUserJobAnalysis` currently sets `created_at = now()` in 
 New query: `CountRecentUserJobAnalyses(user_id, since) :one` → `bigint`, counting rows with `created_at >= since`.
 
 ### Enforce before the LLM call; recompute detected by row existence
+
 In both `PostJobFit` and `StreamJobFit`, before building/running the chain:
+
 1. Look up the existing `(user, job)` row (`GetUserJobAnalysis`). A hit ⇒ recompute ⇒ **allow** (skip the quota check entirely).
 2. A miss (`pgx.ErrNoRows`) ⇒ new job ⇒ `used := CountRecentUserJobAnalyses(user, now-30d)`; if `used >= limit` ⇒ reject.
 
@@ -38,6 +43,7 @@ Rejection is `fiber.NewError(fiber.StatusTooManyRequests, msg)` rendered by the 
 The limit and window are package constants in `handler` (`fitAnalysisLimit = 10`, `fitAnalysisWindow = 30 * 24h`). The `jobFitStore` interface gains `CountRecentUserJobAnalyses`; the DB-less handler-test fake implements it.
 
 ### Quota on the read response
+
 `jobFitResponse` gains a `Quota` field `{ used, limit, remaining }` (`remaining = max(0, limit-used)`), populated in `GetJobFit` from `CountRecentUserJobAnalyses`. This read stays LLM-free. The frontend `JobFitResponse` type gains the matching `quota` object; the fit sidebar and page render "N/10" and block a *new*-job compute (never a recompute) when `remaining == 0`. The server-side check remains the authority; the client block is UX only.
 
 ## Risks / Trade-offs

@@ -1,8 +1,11 @@
 # company-info Specification
 
 ## Purpose
+
 TBD - created by archiving change company-info-backfill. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Companies carry authoritative company-info attributes
 
 The system SHALL store authoritative company-info attributes on the `companies`

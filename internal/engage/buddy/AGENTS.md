@@ -1,6 +1,7 @@
 # Interview buddies
 
 ## Scope
+
 The opt-in peer network (openspec/changes/interview-buddies): membership under a generated
 handle, similar members, a feed of other members' search progress, and the invitation that
 starts a one-to-one chat. The chat itself — conversations, messages, blocks, reports, the
@@ -18,6 +19,7 @@ arithmetic is the shared engine in [internal/engage/slots](../slots/doc.go), the
 second pass of `cmd/mentorship-remind`, HTTP `internal/api/handler/buddy_mocks.go`.
 
 ## Always true
+
 - **Anonymity.** A member is a handle. Nothing they typed into their CV reaches another
   member, except role titles through `talentnetwork.ProjectCard`. The buddy handle is
   minted separately from the Talent Network and community handles so that no two of them

@@ -7,12 +7,14 @@ Constraints: sqlc-only DB access (edit `internal/db/queries/*.sql` → `make sql
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Classify each job `fresh` / `stale` / `likely-evergreen` deterministically, with `likely-evergreen` gated on signal *convergence*.
 - See through fake freshness using `created_at`, and cluster reposts under new `external_id`s via a narrow `role_fingerprint`.
 - Serve the class as a job-view field + `reality` Meilisearch facet, with facts-backed evidence for the badge.
 - Fit the existing derive/backfill/reindex machinery with no new worker.
 
 **Non-Goals:**
+
 - No company-level "this employer posts fake jobs" verdict — only per-posting, per convergence.
 - No LLM/ML classifier; enrichment's `enrichment.*` is never a source for this facet.
 - No new liveness/probe mechanism (the existing `liveness_strikes` orphan path is untouched).

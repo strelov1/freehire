@@ -17,6 +17,7 @@ reusing the existing pane, store, and counts — adding UI, not filter behavior.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One-click access to work-format and full location filtering from the header on
   jobs-backed lists.
 - Zero new filter logic, backend, API, or facet-count request — reuse the store,
@@ -24,6 +25,7 @@ reusing the existing pane, store, and counts — adding UI, not filter behavior.
 - Gate visibility to jobs-backed lists without coupling `TopBar` to the feature.
 
 **Non-Goals:**
+
 - The global search launcher (`HeaderSearch`) and the company list (`/companies`).
 - A mobile bottom-sheet treatment (MVP is an anchored, scrollable popover).
 - Any other `FilterModal` facet (employment type, salary, seniority, etc.).
@@ -31,6 +33,7 @@ reusing the existing pane, store, and counts — adding UI, not filter behavior.
 ## Decisions
 
 ### Capability-gated bridge, not a `TopBar`/route check
+
 Extend `ListSearchTarget` with an **optional** `filterScope?: { store: FacetStore;
 counts(): FacetCounts | null }`. `JobsView` registers an adapter object that bundles
 its `filters` store and a reactive `counts()` getter; `CompaniesView` keeps
@@ -44,6 +47,7 @@ Rejected — it couples the header shell to this feature and to route shape, and
 would need a second path to obtain counts.
 
 ### Reuse `JobsView` counts via a reactive getter
+
 The counts live in `JobsView` as `$state.raw<FacetCounts | null>`, already fetched
 for the modal. Passing `counts: () => counts` in the adapter (read through the
 getter inside the header template) keeps Svelte 5 reactivity flowing and avoids a
@@ -55,6 +59,7 @@ pre-fetch race is harmless.
 request and a second source of truth that can drift from the modal's counts.
 
 ### New self-contained component + pure summary helper
+
 `HeaderLocationFilter.svelte` owns the trigger, the popover chrome (title + "Clear
 all"), the Work format pill row (reusing `../facets/pill` `pillClass`/`pillTitle`
 over `WORK_MODE_OPTIONS` + `store.cycle('work_mode', …)`), and an embedded

@@ -1,8 +1,11 @@
 # yc-company-enrichment Specification
 
 ## Purpose
+
 TBD - created by archiving change yc-company-enrichment. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: yc-oss entries map to company-info fields
 
 The system SHALL provide a pure mapping from a yc-oss directory entry
@@ -110,4 +113,3 @@ empty (`'{}'`).
 
 - **WHEN** a company the importer never matched is read
 - **THEN** its `yc_batch`, `yc_status`, `yc_stage`, and `yc_flags` are all empty
-

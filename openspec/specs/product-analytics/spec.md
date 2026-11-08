@@ -1,8 +1,11 @@
 # product-analytics Specification
 
 ## Purpose
+
 TBD - created by archiving change add-posthog-analytics. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Env-gated PostHog initialization
 
 The frontend SHALL initialize the PostHog client only when `PUBLIC_POSTHOG_KEY`
@@ -204,4 +207,3 @@ scope here and left as a seam until those features land.
 
 - **WHEN** the flag cannot be resolved (PostHog inert or flags not loaded)
 - **THEN** the reader returns the caller-supplied fallback with no error
-

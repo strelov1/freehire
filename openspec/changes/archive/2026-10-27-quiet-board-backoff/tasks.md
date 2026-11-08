@@ -16,6 +16,7 @@
 ## 4. Runner
 
 - [x] 4.1 Collect the listed external ids in both paths (buffered `raw`, streaming emit sink). Pass a fingerprint only for a complete crawl (no Failed, no Interrupted, the context not ended, not `selfClosing`), otherwise neutral. Runner tests against the fake BoardHealth.
+
 - [x] 4.2 Skip a board whose quiet pause is in the future (fail open), count it in a new `Stats.Quiet` (merged like `Cooled`), and log "skipped N quiet boards" in the run summary. Runner tests.
 
 - [x] 4.3 Record every skipped board (quiet or cooled) in `Stats.SkippedBoards` as its `externalid.BoardPattern`, merged across boards. Exclude them from `CloseUnseenJobs`, `UnseenJobIDs`, `CloseUnseenJobsBySource` and `UnseenJobIDsBySource` with `NOT (external_id LIKE ANY(...))`, and pass them from `cmd/ingest`'s sweep. Tests: an integration test that the excluded board's stale rows survive both scopes, and a unit test that skipped boards reach the sweep.

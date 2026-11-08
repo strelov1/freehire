@@ -4,7 +4,7 @@ Opening `/my/tracking` server-loads 500 rows in one call, and each row carries t
 its job posting — which the board renders nowhere. Measured against a seeded 500-application
 board with 5 KB descriptions (`TestMeasureBoardLoad`):
 
-```
+```text
 payload:               2.83 MB
 of which descriptions: 2.37 MB  (84%)
 scan WITH description:    18.8 ms
@@ -52,6 +52,7 @@ bytes we choose to send, not work the database cannot avoid.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `user-job-tracking`: the listing returns a card projection of the job rather than the full
   public job view; the full view remains on the single-application read.
 
@@ -71,7 +72,7 @@ bytes we choose to send, not work the database cannot avoid.
 
 Measured the same way, after the change:
 
-```
+```text
 payload:  2.83 MB → 0.23 MB   (-92%)
 scan with description 6.5 ms → without 0.8 ms
 query:    2.79 ms      endpoint: 4.61 ms

@@ -1,8 +1,11 @@
 # nofluffjobs-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-nofluffjobs-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: NoFluffJobs maps its streamed listing to jobs
 
 The system SHALL provide a `nofluffjobs` source adapter that reads the
@@ -57,4 +60,3 @@ posting SHALL NOT abort the crawl.
 
 - **WHEN** a posting has an empty `name`
 - **THEN** the adapter yields no `Job` for it and continues mapping the rest
-

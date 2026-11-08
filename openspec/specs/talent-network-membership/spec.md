@@ -1,8 +1,11 @@
 # talent-network-membership Specification
 
 ## Purpose
+
 TBD - created by archiving change talent-network-public-catalog. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Membership is a single opt-in with two states
 
 A candidate SHALL be either a member of the Talent Network or not. The system SHALL NOT

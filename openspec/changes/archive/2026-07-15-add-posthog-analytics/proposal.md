@@ -29,6 +29,7 @@ PostHog Cloud (EU) closes all three gaps with one client SDK.
 ## Capabilities
 
 ### New Capabilities
+
 - `product-analytics`: client-side product analytics via PostHog — env-gated init
   behind a same-origin reverse proxy, SPA pageview capture, identity binding,
   privacy-scoped session replay, explicit funnel events, and a client feature

@@ -1,8 +1,11 @@
 # company-og-images Specification
 
 ## Purpose
+
 TBD - created by archiving change og-brand-cards. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Per-company Open Graph preview image endpoint
 
 The web tier SHALL expose `GET /companies/:slug/og.png` that returns a 1200×630
@@ -71,4 +74,3 @@ or placeholder content, and no literal null/undefined SHALL appear.
 - **WHEN** a company has no tagline, no industry, and no HQ country
 - **THEN** the card renders cleanly with the logo, name, and open-jobs count, and
   shows no empty chips and no literal null text
-

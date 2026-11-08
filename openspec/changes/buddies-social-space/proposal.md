@@ -32,6 +32,7 @@ chat redesigns follow as separate changes on top of it.
 ## Capabilities
 
 ### New Capabilities
+
 - `buddies-social-space`: the `/buddies` space, its addresses and redirects, the generated
   avatar, and the member profile's contents.
 

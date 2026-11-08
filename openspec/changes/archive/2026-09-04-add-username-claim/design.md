@@ -5,11 +5,13 @@ Today `internal/application/mailbox` (block `application`, layer 6) owns the onl
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Move the claim/collision/reserved-word logic from `mailbox` (layer 6) down into `identity` (layer 3), as an account-level concept both `application` and (later) `api`/`candidate`-adjacent talent-network code can depend on.
 - Preserve every currently-claimed mailbox address across the migration wherever the existing handle is already valid under the new, stricter `username` format (the common case). A legacy handle that used a character the new format disallows (only `.`, since `mailbox.Handle`'s charset was `[a-z0-9.-]`) is sanitized (`.` → `-`) rather than left broken — seeing their address gain a hyphen where a dot was is a smaller surprise than the mailbox silently stopping working.
 - Keep the mailbox address always in sync with the account's current username, with no separate mailbox-level claim step.
 
 **Non-Goals:**
+
 - Wiring `/u/<username>` into the talent-network public profile (future change).
 - Any `web/` UI.
 - Dropping the now-unused `mailboxes.address` column — kept as dead data this change, removed in a later cleanup migration once the new code path has run in production for a while (see Migration Plan).

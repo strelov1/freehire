@@ -5,10 +5,12 @@ See proposal.md for the full diagnosis. In short: `web/src/routes/my/profile/exp
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Show the backend's specific refusal reason when the caught error carries one.
 - Keep the existing generic message as a fallback for a failure with no useful message of its own.
 
 **Non-Goals:**
+
 - No backend changes — the message the server sends is already correct.
 - No new error-message component or pattern — this is a one-line change using a helper (`errorMessage` in `web/src/lib/utils.ts`) already established and already used by sibling catch blocks in the same file's parent component (`ExperienceBankView.svelte`).
 

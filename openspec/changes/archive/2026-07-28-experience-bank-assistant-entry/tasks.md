@@ -56,7 +56,6 @@
   ARRIVAL, and this component now outlives the rewrite that strips the query; left
   reactive, the kickoff raced the rewrite, and left standing, a later boot() minted a
   second interview and "New chat" inherited the interviewer preset.
-
 - 4.3 was run against a local stack with no LLM credentials, so the agent's reply itself
   could not be observed: the turn reached the backend and was refused there with 503 "the
   assistant is not available". That is the part this change is responsible for — the

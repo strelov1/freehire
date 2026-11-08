@@ -20,6 +20,7 @@
 ### Task 1: Classifier and vocabulary
 
 **Files:**
+
 - Modify: `internal/dict/vocab/vocab.go` — add `SourceTypeValues = []string{"ats", "company", "aggregator", "social"}`.
 - Modify: `internal/ingest/sources/source.go` — add `type social interface{ social() }` marker.
 - Modify: `internal/ingest/sources/hackernews.go` — `func (hackernews) social() {}`.
@@ -32,6 +33,7 @@ Tests: hackernews → social, telegram → social, employer → company, greenho
 ### Task 2: Index document and filter
 
 **Files:**
+
 - Modify: `internal/search/search/document.go` — `SourceType string \`json:"source_type,omitempty"\``; `FromJob(j, desc, sourceType string)`.
 - Modify: `internal/search/search/query_filter.go` — `"source_type": "source_type"` in `StringFacets`.
 - Modify: `internal/search/search/query_values.go` — `"source_type": oneOf(vocab.SourceTypeValues)`.
@@ -42,6 +44,7 @@ Tests: hackernews → social, telegram → social, employer → company, greenho
 ### Task 3: Web
 
 **Files:**
+
 - `cmd/gen-contracts/main.go` — emit `SourceType` / `SOURCE_TYPE_VALUES`; `make gen-contracts`.
 - `web/src/lib/labels.ts` — `SOURCE_TYPE_LABELS`: ATS, Company site, Aggregator, Social.
 - `web/src/lib/facets.ts` — `{ param: 'source_type', label: 'Source type', control: 'pills', options: SOURCE_TYPE, excludable: true }` before `source`.

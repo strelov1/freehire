@@ -44,6 +44,7 @@ button and the endpoint behind it.
 ## Capabilities
 
 ### New Capabilities
+
 - `auto-apply-enqueue`: the candidate-facing trigger that creates one durable
   auto-apply attempt for a `(candidate, job)` pair and starts the already-built tailor/
   review sequence — the gate (Greenhouse-only, PRO-only, requires a base CV), the
@@ -51,6 +52,7 @@ button and the endpoint behind it.
   `cmd/auto-apply-orchestrate`.
 
 ### Modified Capabilities
+
 (none — `auto-apply-cv-tailoring`, `atsapply-resume-upload`, and `auto-apply-orchestration`'s
 own requirements are unchanged; this only adds the missing caller those capabilities already
 assumed existed.)

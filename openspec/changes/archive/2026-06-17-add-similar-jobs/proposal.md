@@ -27,6 +27,7 @@ discovery without any new indexing infrastructure.
 ## Capabilities
 
 ### New Capabilities
+
 - `similar-jobs`: surface vacancies semantically close to a given job — the
   similar-documents query against the semantic index, the public per-job
   `/similar` endpoint, and the job-detail "Similar jobs" section.

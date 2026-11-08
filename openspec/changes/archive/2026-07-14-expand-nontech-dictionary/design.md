@@ -5,10 +5,12 @@
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Move the obvious non-tech out of `unknown` into `non_tech` so "exclude Non-tech" cleans the catalogue.
 - Keep zero false positives: a tech role must never be mislabelled non-tech.
 
 **Non-Goals:**
+
 - No change to the derivation, `is_tech` semantics, schema, wire, facet, or UI.
 - No attempt to classify genuinely ambiguous titles — they stay `unknown`.
 - No catalogue exclusion of non-tech (a separate, deferred product decision).

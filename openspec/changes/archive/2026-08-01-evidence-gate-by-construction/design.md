@@ -4,7 +4,7 @@
 service-path enforcement of the tailoring capability's central rule. The enforcement is
 correct. The *wiring* of the collaborator it needs is not:
 
-```
+```text
 internal/handler/cv.go:92        cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil)
 internal/handler/assistant.go:96 if cvH != nil && cvH.editor != nil { cvH.editor.WithEvidenceGate(bankGate{...}) }
 internal/handler/cv_tailor.go:241 actor = cvedit.ActorAgent   // for any API-key caller

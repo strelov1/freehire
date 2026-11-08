@@ -2,7 +2,7 @@
 
 See proposal.md for motivation. Today the seed path is:
 
-```
+```text
 resume_structured (stamped)  +  experience bank (unstamped)
                 │
                 ▼
@@ -22,11 +22,13 @@ Agent redaction (`GetForModel` / policy denials) is unrelated to this bug and st
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Location round-trips through detection → `Contacts` → `Structured` → `cv.Seed` → CV header / geography derivation.
 - Structure-absent / bank-only compositions cannot create or replace a CV document.
 - Applying a seed onto an existing CV cannot blank header fields the seed left empty.
 
 **Non-Goals:**
+
 - Backfilling already-blanked `cvs` rows, or rewriting historical `resume_structured` blobs.
 - Changing what the tailoring agent may read or patch (contact strip + path policy stay).
 - Broadening phone regex / ATS contact scoring (owned by `ats-contact-detection`).

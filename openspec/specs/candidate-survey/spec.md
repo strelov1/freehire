@@ -1,6 +1,7 @@
 # candidate-survey Specification
 
 ## Purpose
+
 The candidate's self-reported segmentation answers — how far along their job search is,
 the single biggest thing in its way, and what they earn today. These describe the
 candidate to US and to nobody else: they reach no employer, no job search and no

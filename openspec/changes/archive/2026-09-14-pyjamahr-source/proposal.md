@@ -28,9 +28,11 @@ against `app.pyjamahr.com` all turned out to be the platform's own SPA catch-all
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `pyjamahr` is a registered board-based provider —
   a paginated listing-enumerates/detail-hydrates adapter over `jobs.pyjamahr.com/<board>`,
   yielding the normalized job shape including structured job type, workplace type, remote

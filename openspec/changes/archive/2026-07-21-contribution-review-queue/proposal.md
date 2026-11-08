@@ -26,6 +26,7 @@ credit honest — only boards we actually crawl earn a credit.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `link-contributions`: the submit contract gains a third outcome — an unrecognized valid
   link is recorded for manual review (status `review`, no credit) rather than rejected;
   credit is awarded only for recognized novel boards.

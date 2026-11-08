@@ -12,7 +12,7 @@ detection endpoint, not on the litellm proxy request path.
 
 Pull the weights **only** from the official repo (a malicious typosquat has existed):
 
-```
+```text
 huggingface-cli download openai/privacy-filter \
   config.json tokenizer.json onnx/model_q4.onnx onnx/model_q4.onnx_data \
   --local-dir "$PII_FILTER_MODEL_DIR"
@@ -24,7 +24,7 @@ a BIOES PII taxonomy. We keep `private_person/address/email/phone/url` and drop
 
 ## Run
 
-```
+```text
 pip install -r requirements.txt
 PII_FILTER_MODEL_DIR=/path/to/privacy-filter PII_FILTER_ADDR=127.0.0.1:8099 python server.py
 curl -s localhost:8099/detect -d '{"text":"Jane Doe jane@doe.com"}'

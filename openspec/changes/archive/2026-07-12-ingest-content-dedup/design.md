@@ -14,10 +14,12 @@ sit in the same similarity band as different roles), so they are out of scope he
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Show one canonical job per role cluster in list + search; skip reposts in enrichment.
 - Reuse the existing fingerprint and cluster counts; do not disturb the reality signal.
 
 **Non-Goals:**
+
 - Reworded / cross-source near-duplicates (Track 2).
 - Dropping inserts (the reality signal needs the rows) — collapse is read/enqueue-time.
 - Backfilling existing rows in this change (a follow-up `cmd`).

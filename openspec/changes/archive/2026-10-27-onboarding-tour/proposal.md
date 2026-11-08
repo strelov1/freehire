@@ -16,9 +16,11 @@ A new user told us they could not find how to sign in and that the site would no
 ## Capabilities
 
 ### New Capabilities
+
 - `onboarding-tour`: the signed-in account's first-run tour — its steps, what each saves, and when it is shown.
 
 ### Modified Capabilities
+
 - `header-navigation`: a signed-out visitor sees a labelled Sign in control in the header on every viewport.
 
 ## Impact

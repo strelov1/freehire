@@ -30,9 +30,11 @@ that benefit; one bounded extra step in the same agent does.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `cv-tailoring`: adds a requirement that a claim-shaped edit citing evidence can be checked, by
   the agent itself, for fidelity to that evidence's own wording — extending the existing
   evidence-citation requirement's honesty rule from "cites something real" to "stays inside what

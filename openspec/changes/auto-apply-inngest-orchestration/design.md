@@ -5,6 +5,7 @@ real endpoints and a real LLM call: a run paused on `step.WaitForEvent`, a signa
 minutes later resumed the same run, the decision landed in Postgres).
 
 Relevant existing pieces:
+
 - `POST /me/auto-apply/:queueId/{tailor,review}` (`internal/api/handler/auto_apply_tailor.go`,
   `auto-apply-tailored-resume`) — both `mw.key` (cookie or full-scope Bearer API key), both
   scoped by ownership: `GetAutoApplyQueueEntryForReview` resolves by `(id, user_id)`, so a
@@ -21,6 +22,7 @@ Relevant existing pieces:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make `auto-apply/submit` → tailor → durable wait → review a real, running sequence, not
   documentation of an assumed caller.
 - Keep the tailor/review HTTP endpoints themselves completely unchanged — the orchestrator is
@@ -29,6 +31,7 @@ Relevant existing pieces:
   cloud dependency.
 
 **Non-Goals:**
+
 - Mid-run, per-requirement pause inside the tailoring LLM loop (proposal.md's own Non-Goal —
   restated here because it is the design-level reason `step.Run("tailor", ...)` is one opaque
   call rather than several).
@@ -62,6 +65,7 @@ itself (`GetAutoApplyQueueEntryByID`, no owner filter) rather than from `(id, us
 ownership — see below for what replaces that check.
 
 **Alternatives considered:**
+
 - *A per-user credential, hashed like `api_keys`.* Abandoned for the unrecoverable-secret
   reason above — discovered mid-implementation of exactly this table and its resolver.
 - *A per-user credential, stored reversibly (plaintext like `internal/ai/llmkey`, or

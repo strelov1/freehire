@@ -23,6 +23,7 @@ incremental hydration.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A keyless, boardless, aggregator `jobylon` adapter mapping the global jobs sitemap to `Job`s.
 - Complete coverage of every Jobylon employer, including large ones the embed cannot serve.
 - Incremental crawls: detail-fetch only new postings (HydratingSource), refresh the rest.
@@ -30,6 +31,7 @@ incremental hydration.
   shared helper.
 
 **Non-Goals:**
+
 - A per-company board model / embed parsing. Rejected: the embed's ~32 cap loses a large
   employer's postings, and company ids are not uniformly exposed (some tenants use custom domains
   like `jobs.hema.com`). The global sitemap supersedes it.

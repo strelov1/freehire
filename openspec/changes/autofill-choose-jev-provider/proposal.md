@@ -34,11 +34,13 @@ acts on that validated result for `Choose` only.
 ## Capabilities
 
 ### New Capabilities
+
 - `autofill-choice-provider`: governs which backend answers a combobox `Choose` question
   (Jev when configured, LLM otherwise or on Jev failure) and the fallback/decline
   semantics that must hold regardless of which backend answers.
 
 ### Modified Capabilities
+
 (none — `Plan`'s behavior, the extension-autofill contact block, and every other
 autofill-agent capability are unchanged)
 

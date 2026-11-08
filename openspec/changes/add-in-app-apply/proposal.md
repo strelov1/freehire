@@ -35,11 +35,13 @@ statuses, payment for posting, auto-apply onto these forms.
 ## Capabilities
 
 ### New Capabilities
+
 - `employer-direct-apply`: an employer-authored vacancy that accepts applications on
   freehire — its question form, the candidate's application, delivery to the employer,
   the daily cap, and how the job page and its structured data present it.
 
 ### Modified Capabilities
+
 - `ojcp-provider`: an on-site vacancy reports a `platform_native` apply path instead of an
   `external_redirect` with no URL.
 

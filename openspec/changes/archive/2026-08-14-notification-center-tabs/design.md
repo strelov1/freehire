@@ -14,6 +14,7 @@ Full prior write-up: `docs/superpowers/specs/2026-08-13-notification-center-tabs
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One section, `/my/notifications`, with three real sub-routes sharing a tab
   strip: history (landing), search alerts, settings.
 - Old URLs (`/my/searches`, `/my/notifications/history`) keep working via
@@ -22,6 +23,7 @@ Full prior write-up: `docs/superpowers/specs/2026-08-13-notification-center-tabs
   the shared layout, and nav entries move.
 
 **Non-Goals:**
+
 - No change to notification frequency, delivery timing, or a profile timezone
   field (separate, already-scoped follow-up).
 - No new "profile match" notification kind (separate, already-scoped

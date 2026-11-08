@@ -63,4 +63,3 @@ Three shapes were considered:
 1. Add independent paid checks to each handler. This is locally straightforward but leaves every new call site vulnerable to omission.
 2. Add a daily ledger quota for every AI call group. This gives more product controls, but requires inventing new Pro/Ultra limits and is broader than the request.
 3. Use a shared server-side paid-entitlement check for all user-attributed model calls, preserving existing per-action ledgers where already present. This is the selected approach: it enforces the invariant once at the shared user-call boundary without inventing new quotas.
-

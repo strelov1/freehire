@@ -19,6 +19,7 @@ answer `cmd/resolve-url` gives an operator today.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One HTTP call takes a page URL and returns the catalog posting for it — found or
   imported.
 - Never mint a duplicate of a posting we already carry.
@@ -26,6 +27,7 @@ answer `cmd/resolve-url` gives an operator today.
 - A page we cannot parse is not lost: it lands in the existing triage queue.
 
 **Non-Goals:**
+
 - Rewriting the credit economy, or gating imports behind moderation.
 - Teaching new ATS adapters — that stays the per-provider work `linksource` was built for.
 

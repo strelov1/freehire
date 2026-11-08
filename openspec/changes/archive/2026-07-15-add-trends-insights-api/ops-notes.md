@@ -16,7 +16,7 @@ Order: **migrate → deploy → populate → schedule.**
 After deploy, run the rollup worker once so the endpoints return data instead of
 empty sets:
 
-```
+```text
 go run ./cmd/rollup-stats   # now also rebuilds insights_* alongside job_daily_stats
 ```
 

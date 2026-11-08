@@ -21,6 +21,7 @@ Relevant existing state:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Serve one global (all-companies) response rate, reusing the existing per-company rollup's
   numbers rather than a second, independent computation.
 - Serve one personal response rate for the pipeline endpoint's caller, using the exact same
@@ -31,6 +32,7 @@ Relevant existing state:
   over zero.
 
 **Non-Goals:**
+
 - No segmentation (by category, seniority, source, or ATS channel) — out of scope per the
   proposal's MVP framing.
 - No time-based metric (median days to reply) on the personal side — the per-company page already

@@ -1,8 +1,11 @@
 # llm-observability Specification
 
 ## Purpose
+
 TBD - created by archiving change add-langfuse-llm-tracing. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Tracing is gated on complete configuration
 
 The system SHALL enable Langfuse tracing only when all of `LANGFUSE_BASE_URL`,
@@ -108,4 +111,3 @@ worker exits, so no trace is lost when the process terminates normally.
 
 - **WHEN** a run-once worker completes and shuts the tracer down
 - **THEN** all buffered generations are sent before the process exits
-

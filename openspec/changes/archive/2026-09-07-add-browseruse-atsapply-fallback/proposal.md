@@ -36,6 +36,7 @@ implementation — see the excluded-scope list below.)
   threshold `cmd/auto-apply` checks before invoking it.
 
 **Explicitly out of scope** (found during design/implementation, deferred to later changes):
+
 - Recruitee — found during implementation to be structurally unreachable, not merely
   deferred: `internal/ingest/applyform.Fetchers` has no registered `Fetcher` for it at
   all (its form arrives free with the ingest crawl and is written directly), so
@@ -60,11 +61,13 @@ implementation — see the excluded-scope list below.)
 ## Capabilities
 
 ### New Capabilities
+
 - `atsapply-browseruse-fallback`: executes an already-resolved application `Plan` for
   Ashby/Workable postings via the browser-use cloud agent when chromedp has no fill path
   for that platform, under a cost cap and a strict confirmation contract.
 
 ### Modified Capabilities
+
 (none — `Client.Submit`'s existing behavior for every other case is unchanged, and this
 adds a new caller/branch rather than a new requirement on the existing pipeline)
 

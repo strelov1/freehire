@@ -11,10 +11,12 @@ buckets), which does not use `industries` at all. YC's `subindustry` (a single p
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let users filter companies by their clean YC subindustry via a searchable facet.
 - Keep the noisy tags out of the filter while leaving the display bag untouched.
 
 **Non-Goals:**
+
 - Classifying non-YC companies into the taxonomy (an LLM project deliberately avoided);
   coverage is YC-only.
 - Touching `companies.industries` (display) or the job-derived `domains` facet's data.

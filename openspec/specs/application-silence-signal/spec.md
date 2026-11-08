@@ -1,8 +1,11 @@
 # application-silence-signal Specification
 
 ## Purpose
+
 TBD - created by archiving change application-ghosting-signal. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Deriving an application's last activity
 
 The system SHALL derive, for each tracked application, a last-activity timestamp

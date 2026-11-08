@@ -23,6 +23,7 @@ editor a real date-picker.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One shared value type for a CV/work-history period boundary, used by all three
   Go packages and reflected in all three frontend type declarations.
 - `experience_employments` (the only *accumulating* store among the three) gets
@@ -36,6 +37,7 @@ editor a real date-picker.
   loss beyond the explicitly-approved backfill fallback below.
 
 **Non-Goals:**
+
 - No day-of-month precision — CVs never carry one, and none of the three existing
   free-text conventions or their tests ever show one.
 - No new free-text precision beyond year/month (no quarters, seasons, or custom

@@ -39,11 +39,13 @@ not JSON, and only looked like a hit by status code alone):
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl a Recrutei tenant's open postings via one listing POST (enumeration + company name
-  + location + employment type, all from the listing's own fields) plus one detail fetch
+  - location + employment type, all from the listing's own fields) plus one detail fetch
   per posting (description + post date only, via the shared `ldJobPosting` decoder).
 
 **Non-Goals:**
+
 - No use of the detail page's `employmentType` or `jobLocation` fields — both are unreliable
   per the Context above (a platform-side constant and a template-leak placeholder,
   respectively). The listing's own `regime` and `location` fields are used instead.

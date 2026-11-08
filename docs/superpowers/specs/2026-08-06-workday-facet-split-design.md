@@ -68,7 +68,7 @@ means adding a **different**, not-yet-applied facet dimension (e.g. `workerSubTy
 
 Algorithm (`listPostings` becomes recursive):
 
-```
+```text
 fetchSlice(appliedFacets, usedDimensions, depth):
     page 1 of the slice (offset=0)
     if total < workdayCapTotal or depth == maxFacetDepth:

@@ -6,7 +6,9 @@ Crawl Wellfound (formerly AngelList Talent) into the catalogue by reading its ow
 role-taxonomy search pages through the hosted Firecrawl tier and parsing the structured job
 payload each page already embeds, rather than scanning rendered DOM or scraping the general
 marketplace firehose.
+
 ## Requirements
+
 ### Requirement: Wellfound role-scoped search crawl
 
 The system SHALL provide a `wellfound` source adapter that crawls one of Wellfound's own
@@ -124,4 +126,3 @@ that page's contribution to the crawl rather than silently returning zero postin
 - **WHEN** a role-slice page cannot be fetched, or its embedded payload cannot be parsed at
   all
 - **THEN** the adapter reports that page as failed rather than as a page with zero postings
-

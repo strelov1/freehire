@@ -68,11 +68,13 @@ Recorded so later work can dedupe related skills without re-litigating scope:
 ## Capabilities
 
 ### New Capabilities
+
 - `jd-surface-align`: deterministic alignment of a tailored CV's skill surface
   forms to the vacancy's preferred spellings, applied before tailor/autopilot LLM
   turns.
 
 ### Modified Capabilities
+
 - `tailor-autopilot`: autopilot start SHALL run (or confirm) surface alignment on
   the bound tailored CV before the unattended turn begins.
 - `cv-tailoring`: tailor bootstrap SHALL surface-align a newly minted tailored

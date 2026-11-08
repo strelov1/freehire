@@ -8,11 +8,13 @@ The prior change shipped `insights_company_stats` (per-day velocity + running op
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Public `GET /api/v1/insights/companies` leaderboard (ramping / freezing / size).
 - Back it with a precomputed scalar so reads never aggregate ~155k companies per request.
 - A `min_open` floor so ingest-artifact spikes don't dominate the default view.
 
 **Non-Goals:**
+
 - Single-company detail/time-series endpoint (later slice).
 - Any auth/API-key gating (public, like the rest of `/insights/*`).
 - Smoothing/deduping ingest churn beyond the blunt `min_open` floor.
@@ -24,6 +26,7 @@ The prior change shipped `insights_company_stats` (per-day velocity + running op
 `insights_company_growth(company_slug text PRIMARY KEY, open_count int, open_count_prev int)`, rebuilt from `jobs` (not from `insights_company_stats`) with the same `count(*) FILTER (…)` idiom as `insights_role_stats`: `open_count` = open canonical jobs now, `open_count_prev` = open as of `now − 30d`. Ranked read = `ORDER BY (open_count − open_count_prev)` or `open_count`, `LIMIT`.
 
 **Alternatives considered:**
+
 - *Read-time `DISTINCT ON (company_slug)` over `insights_company_stats` per request*: a full sort/dedup over ~681k rows / ~155k groups on every call. Rejected — that is exactly the read-time aggregation `insights_role_stats` exists to avoid.
 - *Derive the scalar from `insights_company_stats` (carry-forward)*: more complex than counting `jobs` directly, and couples the two tables. Rejected — counting `jobs` is one simple aggregate, same as the sibling rollups.
 

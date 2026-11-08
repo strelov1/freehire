@@ -42,6 +42,7 @@ the `insights` leaderboard, and the `GET /companies/subindustries` facet vocabul
 <!-- none -->
 
 ### Modified Capabilities
+
 - `companies`: the "Company list is served without joining jobs" requirement
   changes how the `q` search matches and ranks — from a Postgres `ILIKE` substring
   ordered by `job_count DESC, name` to a Meilisearch-backed ranked search (exact →

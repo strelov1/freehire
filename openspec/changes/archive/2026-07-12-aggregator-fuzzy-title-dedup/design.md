@@ -27,6 +27,7 @@ title) — confirming a blanket similarity join is the wrong tool here.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Catch the two deterministic title-mangling classes — undecoded HTML entities and an
   appended ` - <suffix>` — with a better normalization key, as an additive OR path beside
   the exact key.
@@ -36,6 +37,7 @@ title) — confirming a blanket similarity join is the wrong tool here.
 - No schema change, no Postgres extension.
 
 **Non-Goals:**
+
 - Fuzzy/similarity matching for reworded or partially-dropped titles (`Waiter` vs
   `Waiter/ Waitress`) — a separate trigram (`pg_trgm`) follow-up.
 - Changing the exact key or any downstream `duplicate_of` consumer.

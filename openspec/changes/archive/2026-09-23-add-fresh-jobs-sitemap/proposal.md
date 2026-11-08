@@ -43,7 +43,7 @@ hours for the postings that do get fetched.
 
 ### New Capabilities
 
-_None._ This restores behaviour an existing capability already requires.
+*None.* This restores behaviour an existing capability already requires.
 
 ### Modified Capabilities
 

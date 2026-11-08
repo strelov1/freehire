@@ -1,12 +1,14 @@
 # catalog-scale-snapshot Specification
 
 ## Purpose
+
 Every public figure describing how big the catalogue is — the open-job count, the
 company count, the platforms and channels crawled — comes from one periodically
 recomputed snapshot, so no two surfaces can disagree about it and no request path ever
 counts the catalogue.
 
 ## Requirements
+
 ### Requirement: Catalogue scale is served from one periodically recomputed snapshot
 
 The system SHALL compute the public catalogue-scale figures — the open-job

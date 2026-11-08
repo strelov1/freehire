@@ -1,6 +1,7 @@
 # Application-form capture conventions
 
 ## Scope
+
 Capturing the application form an ATS published for a posting — the questions a candidate
 must answer and the identifiers the platform expects back — and projecting it for display
 on the job page. Providers: greenhouse, ashby, workable, lever, dover. Queue drain is
@@ -8,6 +9,7 @@ on the job page. Providers: greenhouse, ashby, workable, lever, dover. Queue dra
 (`internal/api/handler/apply_form.go:25`); wire shapes go to TypeScript via `cmd/gen-contracts`.
 
 ## Always true
+
 - **One provider is not captured: `freehire`.** Its rows are the questions a verified
   employer WROTE for a vacancy that takes applications on freehire (`FreehireForm`,
   freehire.go; written by `internal/ingest/employer`). Nothing enqueues such a vacancy for
@@ -76,6 +78,7 @@ on the job page. Providers: greenhouse, ashby, workable, lever, dover. Queue dra
   structurally, so the worker passes the same client the crawl uses.
 
 ## How it works
+
 `cmd/ingest` enqueues a capture when `applyform.NeedsRequestCapture(source)`
 (`cmd/ingest/store.go:266`). `cmd/capture-apply-form` runs `applyform.Run`, which delegates
 the claim/process loop to `internal/platform/outbox.RunPool` (runner.go:115-133): claim a leased

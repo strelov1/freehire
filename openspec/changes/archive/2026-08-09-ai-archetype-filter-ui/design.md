@@ -19,12 +19,14 @@ values, so it fits the `category`/`domains` shape, not `role`'s.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make `ai_archetype` selectable in the filter modal and sidebar, with live
   counts, using the existing generic facet machinery.
 - Keep the frontend's valid-value list generated from the Go source of
   truth, so it cannot silently drift from what the backend actually derives.
 
 **Non-Goals:**
+
 - No backend behavior change (PR #1673 already wired the API/index side).
 - No `roletag.Catalog()`-style generated label map — six values don't
   warrant it; see Decisions.

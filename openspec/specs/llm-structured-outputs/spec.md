@@ -1,6 +1,7 @@
 # llm-structured-outputs Specification
 
 ## Purpose
+
 How a model's JSON response is constrained by a schema derived from the Go contract
 it will be decoded into: where that schema comes from, how controlled vocabularies
 reach it, what a call guarantees, and what still holds when a provider stops honouring

@@ -33,6 +33,7 @@ settings/schema changes).
 <!-- none -->
 
 ### Modified Capabilities
+
 - `job-search`: add a requirement that the live index is kept fresh incrementally
   — new and content-changed open jobs are indexed at ingest time, between batch
   reindexes, without waiting for the scheduled full rebuild.

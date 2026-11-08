@@ -15,10 +15,12 @@ in the raw payload); the adapter's `sberVac` struct simply does not parse it tod
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Emit a working apply URL for every Sber vacancy, built from `internalId`.
 - Preserve the dedup key (`ExternalID` = `requisitionId`) so no rows re-key or duplicate.
 
 **Non-Goals:**
+
 - No liveness/closure changes — a corrected URL merely unblocks a future liveness probe;
   that is out of scope here.
 - No SEO-slug reconstruction. Bare `search/<internalId>` 302s to the slug page, which is

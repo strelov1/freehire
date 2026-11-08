@@ -14,6 +14,7 @@ A search profile already tells a user which skills they have and a one-line "Mar
 ## Capabilities
 
 ### New Capabilities
+
 - `resume-verdict`: computing and serving a per-profile résumé verdict — the deterministic market skill-gap scoring (stack match, must-haves, per-gap unlock) plus the optional, privacy-preserving LLM coherence score and gap advice, persisted as a derived analysis on the profile.
 
 ### Modified Capabilities

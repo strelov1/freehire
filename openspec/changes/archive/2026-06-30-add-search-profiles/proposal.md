@@ -13,6 +13,7 @@ Job seekers want to describe themselves once — their specialization and skill 
 ## Capabilities
 
 ### New Capabilities
+
 - `search-profiles`: A user-owned profile (name + specialization + skills) with create/list/update/delete, cookie-only and owner-scoped.
 
 ### Modified Capabilities

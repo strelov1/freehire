@@ -33,6 +33,7 @@ candidate sees the vacancy, the verdict, and their CV update live as the agent r
 ## Capabilities
 
 ### New Capabilities
+
 - `tailor-surface`: the dedicated `/tailor/[slug]` route and its full-width own layout, the
   reusable `<AssistantChat>` component (shared with `/my/assistant`), the tabbed + resizable
   artifact panel (CV / Job description / Verdict), and the bootstrap-and-autostart entry flow.

@@ -1,11 +1,13 @@
 # orphan-company-seed Specification
 
 ## Purpose
+
 Deriving a candidate-board worklist from the companies the catalogue holds only through
 aggregators: which companies qualify, what candidate board ids each proposes, and the seed
 shape handed to the board-harvest tool.
 
 ## Requirements
+
 ### Requirement: Companies held only through aggregators are the harvest worklist
 
 The `harvest-orphans` host tool SHALL derive its worklist from the catalogue itself: a

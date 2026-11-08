@@ -21,6 +21,7 @@ a complete, structured payload, so it is a low-cost, high-signal source to inges
 ## Capabilities
 
 ### New Capabilities
+
 - `micro1-source`: crawl the micro1 job board (sitemap enumeration + per-posting
   RSC-flight detail parse) and normalize its postings into the job catalogue.
 

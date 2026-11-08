@@ -25,6 +25,7 @@ grows, which rules out testing every new job against every filter.
 ## Capabilities
 
 ### New Capabilities
+
 - `filter-subscriptions`: subscribing a saved search to notifications, the
   windowed matching engine, the `(subscription, job)` dedup ledger, digest
   delivery with retry/dead-letter, the `Notifier` channel abstraction, and the

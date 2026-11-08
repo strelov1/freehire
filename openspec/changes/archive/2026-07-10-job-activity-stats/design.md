@@ -7,6 +7,7 @@ a time series. We want a public dashboard showing, per period, how many jobs
 were added vs. removed, scalable across day/week/month.
 
 Constraints from the codebase:
+
 - **No versioned migration runner** — a new table ships as a `migrations/` file
   applied manually before deploy (per the migrations gotcha).
 - **sqlc is the only DB layer** — queries go in `internal/db/queries/*.sql`,
@@ -21,12 +22,14 @@ Constraints from the codebase:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A materialized daily rollup that reads fast and is cheap to keep current.
 - A public API that serves the rollup at day/week/month granularity.
 - A public `/trends` page with a green-added / red-removed grouped bar chart and
   a granularity toggle.
 
 **Non-Goals:**
+
 - Per-source / per-provider / per-region breakdowns (global totals only for v1).
 - An event log of every open/close transition (we count by *current* state).
 - Real-time/live updates — once-a-day freshness for past days, plus today's live

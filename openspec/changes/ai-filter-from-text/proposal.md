@@ -38,6 +38,7 @@ second call to refine it, with no transcript and nothing stored.
 ## Capabilities
 
 ### New Capabilities
+
 - `ai-filter-intent`: turning a natural-language search description (or a saved profile)
   into canonical, filter-ready facet values — the grounding rule that no value reaches the
   filter unresolved, the unresolved report, the summary sentence, and the refine round.

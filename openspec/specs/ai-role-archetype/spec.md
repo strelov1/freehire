@@ -1,8 +1,11 @@
 # ai-role-archetype Specification
 
 ## Purpose
+
 TBD - created by archiving change refine-ai-role-classification. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: A deterministic rule set derives a job's AI skill-signature archetype
 
 The system SHALL provide `internal/ai/aiarchetype`, a curated deterministic rule

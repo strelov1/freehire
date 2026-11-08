@@ -20,6 +20,7 @@ not the tenant. The codebase already models exactly this with the `CompanyEntry.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `cleverstaff` adapter mapping one tenant's JSON `objects` to normalized `Job`s, keyed by
   the tenant `alias` as `board`.
 - Correct employer attribution: honor `Hub` so an agency tenant's vacancies carry their
@@ -28,6 +29,7 @@ not the tenant. The codebase already models exactly this with the `CompanyEntry.
 - A pre-wired proxy egress path so a prod-IP block is an ops toggle, not a code change.
 
 **Non-Goals:**
+
 - No salary extraction (the feed carries only a currency, never amounts) — enrichment owns it.
 - No geo parsing beyond the structured `workCondition` hint — the geography dictionary derives
   country/region downstream as for every source.
@@ -68,6 +70,7 @@ job keeps the configured company. The board file flags agency tenants with `hub:
 
 Per the `Job` struct contract, an adapter sets a structured facet only when the platform states
 it unambiguously. CleverStaff gives two clean signals:
+
 - `workCondition` → `WorkMode` via the existing `workplaceTypeMode` helper (remote/hybrid/onsite).
 - `employmentType` → `EmploymentType` via a small explicit map (`fullEmployment`→`full_time`,
   `partEmployment`→`part_time`, `contract`/`freelance`→`contract`, `internship`→`internship`),

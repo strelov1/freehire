@@ -13,6 +13,7 @@ This is Phase 1 of three (facets now; trends, cross-tabs later — see Non-Goals
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A public `GET /api/v1/jobs/facets` returning per-value counts for every facet
   (+ numeric min/max) under the same filters as `/jobs/search`.
 - A public `/analytics` page with interactive, URL-synced drill-down, reusing the
@@ -20,6 +21,7 @@ This is Phase 1 of three (facets now; trends, cross-tabs later — see Non-Goals
 - Near-zero backend cost: one Meili query per page state, no DB aggregation.
 
 **Non-Goals:**
+
 - Trends over time (Phase 2 — Postgres `date_trunc`).
 - Cross-tabulation / two-dimension breakdowns (Phase 3).
 - "Self-exclude" facet counting (a facet not narrowing itself) — deferred seam.

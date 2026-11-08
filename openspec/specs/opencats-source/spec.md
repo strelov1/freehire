@@ -1,8 +1,11 @@
 # opencats-source Specification
 
 ## Purpose
+
 TBD - created by archiving change opencats-source-adapter. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Self-hosted OpenCATS portal crawl
 
 The system SHALL crawl a self-hosted OpenCATS career portal over HTTPS, reading the portal's
@@ -100,4 +103,3 @@ fetched concurrently through the shared detail-fetch helper.
 
 - **WHEN** one posting's detail page cannot be fetched or carries no usable id
 - **THEN** that posting is skipped and every other posting on the board is still returned
-

@@ -51,6 +51,7 @@ the other three). It is deliberately narrow:
 submits a real application or leaves it untouched and says why not.
 
 **Out of scope, decided explicitly:**
+
 - **What populates the queue** — whether a candidate clicks "Auto Apply" on one posting, or a
   standing per-user rule queues anything above a score threshold. The worker only drains
   whatever is there.
@@ -66,7 +67,7 @@ submits a real application or leaves it untouched and says why not.
 
 ## Architecture
 
-```
+```text
 cmd/auto-apply (Go, cron, run-once-and-exit)
   └─ internal/outbox.RunPool over auto_apply_queue
         for each claimed (user_id, job_id):

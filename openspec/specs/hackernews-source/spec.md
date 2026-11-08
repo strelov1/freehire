@@ -1,10 +1,13 @@
 # hackernews-source Specification
 
 ## Purpose
+
 Crawls Hacker News' monthly "Ask HN: Who is hiring?" threads into the catalogue through the
 Algolia HN Search API, one posting per top-level comment that follows the thread's own
 "Company | Role | ..." header convention.
+
 ## Requirements
+
 ### Requirement: Hiring threads are found by the posting account, not by free text
 
 The system SHALL provide a boardless `hackernews` source that finds hiring threads by
@@ -49,7 +52,7 @@ yield a job.
 #### Scenario: A canonical post is mapped
 
 - **WHEN** a comment reads "Modash.io | Senior Product Engineer | Remote (Europe) | ... |
-  https://modash.io"
+  <https://modash.io>"
 - **THEN** a job is yielded with company "Modash.io", title "Senior Product Engineer",
   location "Remote (Europe)", flagged remote, and its URL is that link
 
@@ -102,4 +105,3 @@ falling back to the comment's own permalink on Hacker News when the comment has 
 
 - **WHEN** a comment names a company and role but contains no link
 - **THEN** the yielded job's URL is that comment's own Hacker News permalink
-

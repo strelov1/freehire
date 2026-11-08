@@ -27,9 +27,11 @@ top of the existing primitive, not a new decoding problem.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `scalis` is a registered board-based provider —
   a paginated RSC-flight listing adapter over `<board>.scalis.ai`, yielding the normalized
   job shape including structured employment type, work mode, skills, and salary.

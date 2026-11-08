@@ -33,11 +33,13 @@ tradeoff deserves its own change with its own evidence.
 ## Capabilities
 
 ### New Capabilities
+
 - `tailor-ats-delta`: scoring a tailored CV from its rendered artifact's text layer, comparing it
   against the base CV under identical rendering and keyword conditions, and reporting the overall
   and per-category change (including the warning when readability fell).
 
 ### Modified Capabilities
+
 None. `cv-ats-score`'s requirements are about the profile's uploaded CV and stay true as written;
 this change adds a second, separately-specified subject rather than altering the first.
 `tailor-workspace`'s existing requirements (the three-column surface, the preview, the template

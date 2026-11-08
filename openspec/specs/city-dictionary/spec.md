@@ -1,8 +1,11 @@
 # city-dictionary Specification
 
 ## Purpose
+
 TBD - created by archiving change expand-city-facet-geonames. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: The city dictionary is generated from GeoNames at build time
 
 The system SHALL derive its city dictionary from the GeoNames `cities15000`
@@ -68,4 +71,3 @@ override SHALL win over a generated entry for the same alias.
 
 - **WHEN** a location names a curated city alias absent from `cities15000`
 - **THEN** the parser resolves it to the curated canonical name and country
-

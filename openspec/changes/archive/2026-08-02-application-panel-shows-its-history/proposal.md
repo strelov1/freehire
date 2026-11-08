@@ -2,7 +2,7 @@
 
 The application panel's header carries a strip that reads as a timeline and is not one:
 
-```
+```text
 ● Viewed yesterday ————————————— ● Applied 6 days ago
 ```
 
@@ -43,6 +43,7 @@ link anywhere; the Emails tab is one click away and does that job properly.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `application-timeline`: the ledger becomes readable for a single application, not only as a
   dated range, and that read is what the application panel renders as its history.
 

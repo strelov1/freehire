@@ -25,10 +25,12 @@ PRs before it.
 ## Capabilities
 
 ### New Capabilities
+
 - `account-interface-i18n`: extends the same not-yet-synced capability the
   four earlier fan-out changes in this series declared.
 
 ### Modified Capabilities
+
 (none)
 
 ## Impact

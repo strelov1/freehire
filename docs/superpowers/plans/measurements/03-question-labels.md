@@ -53,7 +53,7 @@ LIMIT 70;
 
 `36086.119 ms (00:36.086)`. Raw output, unedited:
 
-```
+```text
 resume/cv|650461|3
 email|625151|5
 phone|550638|5

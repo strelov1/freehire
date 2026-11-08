@@ -26,6 +26,7 @@ only widens.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `mentor-profile`: adds the optional `seniority` field to what a profile carries, and
   extends "The public directory lists approved mentors and can be narrowed" with the
   three new parameters (`q`, `seniority`, `no_reviews`) alongside the existing three.

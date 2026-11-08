@@ -1,8 +1,11 @@
 # web-frontend Specification
 
 ## Purpose
+
 TBD - created by archiving change add-web-frontend. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: API permits cross-origin browser access
 
 The HTTP API SHALL respond with CORS headers that allow a browser running on a
@@ -626,4 +629,3 @@ SHALL NOT present the "My filters" (saved-search) tab.
 - **WHEN** a signed-in user opens `/my/profile`
 - **THEN** the tab strip offers Settings, Skills, Profile, Experience, and CV
   readiness, with no Market coverage tab
-

@@ -35,12 +35,14 @@ consistent without leaning on the LLM.
 ## Capabilities
 
 ### New Capabilities
+
 - `city-dictionary`: A GeoNames-derived, build-time-generated, embedded city
   dictionary and its generator (`cmd/gen-cities`) — coverage threshold,
   multilingual aliases, canonical display name, most-populous disambiguation, and
   the common-word collision stoplist.
 
 ### Modified Capabilities
+
 - `job-geography`: The deterministic location parser resolves cities from the
   generated dictionary and emits the `cities` facet value; country/region stay the
   curated dictionaries' job (never guessed from an ambiguous city), replacing the

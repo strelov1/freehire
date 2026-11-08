@@ -30,6 +30,7 @@ timeout or redeploy hard-kills a worker mid-transaction.
 ## Capabilities
 
 ### New Capabilities
+
 - `worker-lifecycle`: how standalone run-once-and-exit cron workers bootstrap
   (shared config/pool/context setup), handle termination signals (graceful
   cancellation via a signal-bound context), and report run outcome through the

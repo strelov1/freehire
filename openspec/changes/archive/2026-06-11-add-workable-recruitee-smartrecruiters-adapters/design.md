@@ -11,11 +11,13 @@ All adapters implement the existing `Source` interface and reuse the shared `HTT
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Three registered adapters, each yielding sanitized HTML descriptions.
 - SmartRecruiters fully crawled (pagination + per-posting detail) with bounded concurrency.
 - TDD with `fakeHTTP`-style tests like the existing adapters.
 
 **Non-Goals:**
+
 - No schema/migration change; no jobview/pipeline change.
 - No auto-detect-provider (separate change).
 - The OpenJobs harvest + `sources.yml` growth is a data follow-up, not adapter code.
@@ -27,6 +29,7 @@ All adapters implement the existing `Source` interface and reuse the shared `HTT
 **2. SmartRecruiters relaxes "no detail request".** The list has no description, so the adapter MUST fetch detail per posting. This is the spec relaxation. Alternative — store list-only data without description — rejected: it violates the description convention and defeats the point. Detail fetches run with bounded concurrency (a small worker pool, e.g. 8) so one board cannot fan out unboundedly; ordering of the returned slice is not significant.
 
 **3. Description assembly per platform.**
+
 - workable: `sanitizeHTML(description)`.
 - recruitee: `sanitizeHTML(description + requirements)` (skip empties), mirroring the lever multi-field assembly.
 - smartrecruiters: `sanitizeHTML(jobDescription + qualifications + additionalInformation)` (and optionally `companyDescription`); skip empty sections, wrap none in extra headings (the sections are already self-contained HTML).

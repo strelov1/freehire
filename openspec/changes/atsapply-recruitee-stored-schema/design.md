@@ -13,12 +13,14 @@
 ## Goals / Non-Goals
 
 **Goals:**
+
 - `Client.fetchSchema` tries a stored form before giving up on a provider with no live fetcher — matching the spec's own scope, not `PreviewClient.schemaFor`'s storage-first order (see Decisions: the two deliberately differ).
 - The existing `dbApplyFormReader` is reused as-is — no new adapter, no new query.
 - No change to `fillProviders`, `browserUseProviders`, or any park-reason string.
 - No change to `fetchSchema`'s observable behavior for a provider that already has a live fetcher (Greenhouse, Ashby, Workable, Lever) — every one of those also has a row in `apply_forms` today, so this matters, not a hypothetical to guard against.
 
 **Non-Goals:**
+
 - Making Recruitee (or any provider) actually submit. Out of scope, per proposal.md.
 - Touching `PreviewClient` itself — it already does this correctly; nothing here changes it.
 - Touching `autoApplyEnqueueSources` or any enqueue-time eligibility gate.

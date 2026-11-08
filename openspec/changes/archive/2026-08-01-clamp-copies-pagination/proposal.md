@@ -2,7 +2,7 @@
 
 `GET /api/v1/jobs/:slug/copies?offset=3000000000` answers **500**. Verified on production:
 
-```
+```text
 offset=0           -> 200
 offset=3000000000  -> 500
 ```

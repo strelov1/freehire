@@ -34,11 +34,13 @@ generate, and every answer the candidate gives is new evidence the bank keeps.
 ## Capabilities
 
 ### New Capabilities
+
 - `interview-rehearsal`: the mock-interview session — its entry point from an application,
   the context it reasons from, the shape of the rehearsal, and the rule that governs what
   reaches the experience bank.
 
 ### Modified Capabilities
+
 - `assistant-agent-runtime`: the preset requirement enumerates which presets carry which
   tools; it gains the interview preset, its bound vacancy, and the exclusions above.
 

@@ -1,8 +1,11 @@
 # company-info-display Specification
 
 ## Purpose
+
 TBD - created by archiving change company-info-display. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Company page surfaces authoritative company facts
 
 The company detail page SHALL render the company's authoritative company-info facts in a
@@ -208,4 +211,3 @@ country code; duplicates SHALL be collapsed, keeping first-seen order.
 - **WHEN** the recorded offices include an entry with no country code, or one whose code
   is not two letters
 - **THEN** that entry is omitted and the remaining offices are shown
-

@@ -18,6 +18,7 @@ only one with real columns rather than a jsonb blob.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One shared `perioddate.PeriodDate{Year, Month}` type used by all three Go
   packages and reflected in all three frontend type declarations.
 - `experience_employments` gets structured, natively-sortable columns;
@@ -30,6 +31,7 @@ only one with real columns rather than a jsonb blob.
   the approved backfill fallback.
 
 **Non-Goals:**
+
 - No day-of-month precision, no free-text precision beyond year/month (no
   quarters/seasons) — confirmed absent from real data via
   `period_sort_test.go`'s fixtures.

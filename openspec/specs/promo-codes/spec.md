@@ -1,11 +1,13 @@
 # promo-codes Specification
 
 ## Purpose
+
 A named discount stored in the database that an account may redeem once, bounded by
 seats and expiry, applied to the first invoice of a new subscription. Codes are created
 by an operator's INSERT and never by code, because this repository is public.
 
 ## Requirements
+
 ### Requirement: A promo code is data, never source
 
 Every promo code, its discount, its seat limit and its expiry SHALL live in the

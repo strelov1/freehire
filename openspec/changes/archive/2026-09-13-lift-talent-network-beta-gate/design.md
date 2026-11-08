@@ -13,11 +13,13 @@ own comment.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Every signed-in candidate, not only beta testers, can join and appear in the catalogue.
 - The catalogue list becomes indexable.
 - One entry point into membership (the profile page) instead of two.
 
 **Non-Goals:**
+
 - Changing anything about the catalogue projection, the handle, or the card page itself.
 - Touching `users.beta_tester`, `IsBetaTester`, or any other feature still gated on it
   (Mentorship's nav entry, `visibleAccountNav`'s `betaOnly` mechanism itself).

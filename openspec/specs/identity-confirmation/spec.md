@@ -1,8 +1,11 @@
 # identity-confirmation Specification
 
 ## Purpose
+
 TBD - created by archiving change consistent-identity-confirmation. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Actions gated on recent credential control
 
 Certain account actions SHALL require, in addition to a valid session, a short-lived proof
@@ -145,4 +148,3 @@ a generic failure.
 - **WHEN** a member submits a gated action without supplying the confirmation asked of them
 - **THEN** nothing is sent to the server, and the surface says what is missing
 - **AND** the member is never told their answer was wrong when they gave none
-

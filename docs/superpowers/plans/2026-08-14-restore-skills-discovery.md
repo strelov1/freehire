@@ -21,13 +21,14 @@
 ### Task 1: Prompt — re-request `skills` in `buildSystemPrompt`
 
 **Files:**
+
 - Modify: `internal/ai/enrich/langchain.go:128-134` (the "Other keys" line inside `buildSystemPrompt`)
 - Test: `internal/ai/enrich/langchain_test.go`
 
 **Interfaces:**
+
 - Consumes: nothing new — `buildSystemPrompt(askGeo bool) string` keeps its existing signature.
 - Produces: the string returned by `buildSystemPrompt` now contains the substring `"skills"` (and the fuller phrase `"skills (array of lowercase tokens, e.g. go, postgresql)"`) regardless of `askGeo`. `Task 2` and `Task 3` depend on this exact phrase existing in the prompt.
-
 - [ ] **Step 1: Edit `TestSystemPromptOmitsDictBackedFacets` to drop `skills`**
 
 Current test body (`internal/ai/enrich/langchain_test.go:60-71`):
@@ -168,13 +169,14 @@ git commit -m "enrich: re-request skills in the LLM prompt as a discovery facet"
 ### Task 2: Schema — stop omitting `skills` from the request schema
 
 **Files:**
+
 - Modify: `internal/ai/enrich/schema.go:23-27` (`unaskedFields`)
 - Test: `internal/ai/enrich/schema_test.go`
 
 **Interfaces:**
+
 - Consumes: `requestSchema(askGeo bool) (llmschema.Schema, string, error)` (unchanged signature) and `schemaProps(t *testing.T, askGeo bool) map[string]any` test helper (unchanged, `internal/ai/enrich/schema_test.go:10-23`).
 - Produces: `schemaProps(t, true)["skills"]` now exists. `unaskedFields` no longer contains `"skills"` — `Task 3`'s comment fix references this list.
-
 - [ ] **Step 1: Add `skills` to `TestRequestSchema_CarriesTheFieldsThePromptAsksFor`**
 
 Current test body (`internal/ai/enrich/schema_test.go:67-80`):
@@ -278,9 +280,11 @@ git commit -m "enrich: stop omitting skills from the request schema"
 ### Task 3: Comment fix — `Validate`'s doc comment no longer describes `skills` as unrequested
 
 **Files:**
+
 - Modify: `internal/ai/enrich/enrichment.go:113-121` (the doc comment on `Validate`)
 
 **Interfaces:**
+
 - Consumes: nothing (comment-only change).
 - Produces: nothing new — no behavior, signature, or test changes. `Validate`'s actual logic is untouched (it already never validates `skills`, which stays correct).
 

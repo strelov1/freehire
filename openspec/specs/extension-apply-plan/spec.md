@@ -14,6 +14,7 @@ types. It does not cover what may be written into a form or where those values c
 the page at all (`extension-auth` for the session, the browser-tool wire for the transport).
 
 ## Requirements
+
 ### Requirement: The panel accounts for the application form on the open page
 
 The side panel SHALL show a checklist of the questions the open page's application form

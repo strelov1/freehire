@@ -69,11 +69,13 @@ named design roles, so 85% of the sampled titles fall through to the bare
 ## Capabilities
 
 ### New Capabilities
+
 - `design-taxonomy`: the split between product/visual design and engineering
   design — which category each title resolves to, which named roles the two sides
   expose, and the curated design/CAD skill vocabulary.
 
 ### Modified Capabilities
+
 - `tech-classification`: the known non-technical category set gains
   `engineering_design`, so an engineering-design title derives `is_tech=false`
   instead of the `true` it currently inherits from `design`. Silicon design keeps

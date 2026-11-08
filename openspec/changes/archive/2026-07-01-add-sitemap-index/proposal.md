@@ -30,6 +30,7 @@ page directly.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `web-ssr-seo`: the "robots.txt and sitemap" requirement changes — the sitemap
   becomes a sitemap index over sub-sitemaps that enumerate the entire open
   catalogue (no cap), served via keyset-paginated slim endpoints.

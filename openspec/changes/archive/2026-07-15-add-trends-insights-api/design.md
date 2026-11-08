@@ -13,6 +13,7 @@ state and swaps it in so readers never see a partial rebuild. This change extend
 exactly that pattern to market-insight aggregates.
 
 Constraints:
+
 - Endpoints are public and unauthenticated → aggregate-only, no PII, and no
   unbounded scans (existing `maxRangeDays` discipline in `stats.go`).
 - Salary must never mix currencies or pay periods (the project's salary-currency
@@ -23,12 +24,14 @@ Constraints:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Four public reads under `/api/v1/insights` (roles, skills, velocity, salary).
 - Cheap, abuse-safe reads backed by precomputed rollups.
 - Reuse the `job_daily_stats` / `cmd/rollup-stats` architecture and the
   `stats.go` handler conventions (validated window, dense series, list envelope).
 
 **Non-Goals:**
+
 - SEO landing pages / SSR over these insights (explicit follow-up change).
 - Authentication, quotas, or paid tiering.
 - Cross-currency salary normalization (FX conversion) — out of scope; report per

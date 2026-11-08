@@ -24,6 +24,7 @@ See proposal.md - Why / What Changes for the motivation and scope.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Match the talent card page's container width/padding and two-column grid mechanics
   to the job view page's, reusing the same Tailwind classes rather than inventing new
   sizing tokens.
@@ -33,6 +34,7 @@ See proposal.md - Why / What Changes for the motivation and scope.
   Skills last — not copy the job page's own mobile order verbatim.
 
 **Non-Goals:**
+
 - No change to what data is fetched, computed, or sent to the client (`+page.server.ts`
   and the `CandidateCard` payload are untouched).
 - No avatar/photo work (explicitly deferred by the user).

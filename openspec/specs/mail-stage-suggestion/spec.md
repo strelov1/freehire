@@ -1,12 +1,14 @@
 # mail-stage-suggestion Specification
 
 ## Purpose
+
 Making the mail→stage relationship visible where mail is read, and offering the candidate a
 one-press resolution when a classified message and the application stage disagree. It changes no
 automatic rule: mail still never settles an application. Introduced by the tracker-one-vocabulary
 change.
 
 ## Requirements
+
 ### Requirement: A classified message says what it implies for the stage
 
 The system SHALL show, for every classified message linked to an application, both its status

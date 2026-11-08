@@ -12,7 +12,7 @@
   shared `nextFlightTextRows`/`nextFlightTextRowMarker`; repoint deel's call site;
   keep deel tests green
 - [x] 2.2 Parse the RSC-flight `data` object from a post page (via `decodeNextFlight`
-  + `bracketSlice(flight, "data":, …)`) into a typed struct (`client_job_id`,
+  - `bracketSlice(flight, "data":, …)`) into a typed struct (`client_job_id`,
   `job_role_name`, `required_skills`, `location_type`, `location_name`, `job_status`,
   `create_datetime`, `job_description` ref); resolve the `$N` description via the
   shared `nextFlightTextRows`

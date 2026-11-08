@@ -16,6 +16,7 @@ then returns that URL to the extension.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let the extension obtain a hire credential with no password re-entry when a
   session already exists, and a normal login when it does not.
 - Never expose the `HttpOnly` session cookie to extension code.
@@ -23,6 +24,7 @@ then returns that URL to the extension.
 - Bound where tokens can be delivered (no open redirect).
 
 **Non-Goals:**
+
 - The extension client (`launchWebAuthFlow`, token storage, authed fetch) —
   separate repo, driven by this endpoint.
 - The agent/chat, page context, form-filling — later specs.
@@ -32,6 +34,7 @@ then returns that URL to the extension.
 ## Decisions
 
 ### D1: The credential is an ordinary named API key
+
 Reuse `api_keys` + `GenerateAPIKey`/`HashAPIKey`/`CreateAPIKey`. The minted key
 is created with a recognizable, constant `name` (e.g. `"Browser extension"`) so
 it is obvious in `/me/api-keys`. **Why:** the key is already hashed-at-rest,
@@ -40,7 +43,9 @@ duplicate all of that. Alternative (opaque short-lived + refresh) rejected as
 premature — no requirement forces rotation yet, and it multiplies surface area.
 
 ### D2: Server-rendered consent, backend-only
+
 Two cookie-only routes under the auth surface:
+
 - `GET /api/v1/auth/extension/connect?redirect_uri=…&state=…` — validates the
   redirect, then renders a minimal consent page ("Allow the freehire extension
   to access your account?" with Allow / Cancel).
@@ -54,12 +59,14 @@ hire-backend-only (as scoped) and avoids coupling to the SvelteKit SPA build. A
 prettier SPA route can replace the page later without changing the contract.
 
 ### D3: Token travels in the URL fragment, never the query
+
 The `302` target is `redirect_uri#token=<plaintext>&state=<state>`. **Why:**
 fragments are not sent to servers, not written to access logs, and not leaked via
 `Referer`. `launchWebAuthFlow` still delivers the full URL (fragment included) to
 the extension, which parses the token client-side.
 
 ### D4: Strict `redirect_uri` allowlist
+
 Accept only `https://<extension-id>.chromiumapp.org/…` where `<extension-id>` is
 on a server-configured allowlist (`EXTENSION_REDIRECT_ALLOWLIST`, parsed in
 `internal/config`). Validation happens **before** consent or minting. **Why:**
@@ -68,6 +75,7 @@ gadget. Alternative (any `chromiumapp.org`) rejected — any published extension
 could then harvest tokens for a tricked user.
 
 ### D5: CSRF posture inherits hire's model
+
 The consent `POST` is same-origin (form served by hire, submitted to hire), so
 the `SameSite=Lax` session cookie rides it; a cross-site forced POST carries no
 cookie and gets `401`. No CSRF token is added, consistent with the rest of hire.

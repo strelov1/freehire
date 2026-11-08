@@ -1,6 +1,7 @@
 # aijobs-source Specification
 
 ## Purpose
+
 The aijobs.net adapter: a large AI/ML job aggregator (~47k postings) crawled as a single
 boardless, multi-company feed behind a Django CSRF-protected listing endpoint. The capability
 covers the CSRF session flow, the seen-based pagination stop plus per-run detail-fetch budget

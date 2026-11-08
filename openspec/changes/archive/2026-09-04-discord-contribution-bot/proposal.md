@@ -32,6 +32,7 @@ divergent intake path or weakening the existing authenticated-only contribution 
 ## Capabilities
 
 ### New Capabilities
+
 - `discord-account-link`: linking a Discord identity to a freehire account via a one-time token
   exchanged through the bot's `/link` command, plus the interaction webhook's Ed25519 signature
   authentication and the feature's all-or-nothing config gate. The Discord-specific counterpart
@@ -39,6 +40,7 @@ divergent intake path or weakening the existing authenticated-only contribution 
   scope for this capability.
 
 ### Modified Capabilities
+
 - `link-contributions`: add a "Contribute a board from Discord" requirement mirroring the existing
   "Contribute a board from Telegram" requirement — same intake sequence, same authenticated-only
   rule, new surface tag and unlinked-identity prompt.

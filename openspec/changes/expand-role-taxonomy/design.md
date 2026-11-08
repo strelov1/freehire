@@ -5,6 +5,7 @@
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Define the full role-category and industry-domain vocabularies with per-value meaning.
 - Add the 10 IT-company role categories with curated EN+RU title aliases and skills.
 - Keep the single tech/business partition serving both `is_tech` and the enrich cost-gate.
@@ -12,6 +13,7 @@
 - Re-derive existing rows deterministically.
 
 **Non-Goals:**
+
 - Dropping non-IT industry *sources* (the complementary focus lever) — separate change.
 - Repurposing `is_tech` as an in-scope flag — it stays an honest tech/business signal.
 - Backfilling historical `domains` beyond re-enrichment (domains are LLM-only).
@@ -19,15 +21,19 @@
 ## Decisions
 
 ### D1 — Partition placement doubles as the enrich-gate (no decoupling)
+
 Place the four IT-product-adjacent roles (`business_analysis`, `solutions_engineering`, `developer_relations`, `technical_writing`) in `TechCategories` and the six back-office roles (`recruiting`, `hr`, `finance`, `legal`, `operations`, `customer_success`) in `NonTechCategories`. This is consistent with `design`/`product`/`project_management` already being tech, gives an honest `is_tech` (a recruiter is not tech), and — because `NonTechCategories` also gates LLM enrichment off — keeps the six business roles out of the enrich budget while the four tech-adjacent roles get enriched. One list, two uses, no new decoupling needed. *Alternative considered:* a separate `is_in_scope` column — rejected as over-engineering for a flag that becomes redundant once sources are IT-curated.
 
 ### D2 — Ordering is load-bearing
+
 `categoryTable` is precedence-ordered. All new blocks go **above** the terminal fall-throughs `{"analyst","data_analytics"}`, `{"manager","management"}`, `{"1c","backend"}`; `sales engineer` above `{"sales","sales"}`; `ux writer`/`content designer` above `{"ux",…}`/`{"designer",…}`; functional-ops (`sales operations`/`marketing operations`) inside their own sales/marketing blocks so they never leak into `operations`. `csm` is never added (Certified Scrum Master collision).
 
 ### D3 — Fold, don't proliferate
+
 BI → existing `data_analytics`; RevOps/Sales Ops → existing `sales`; `solutions architect` stays in `architecture` (documented ambiguity, no regression). Domain synonyms fold into one canonical (web3→crypto, insurtech→fintech, martech→adtech, etc.).
 
 ### D4 — Gloss the domain prompt
+
 The single highest-precision change for domains is giving the LLM a one-line definition per value (today it gets a bare list). `ai` is scoped to core-product-AI only.
 
 ## Role-category aliases (title → canonical), EN + RU
@@ -81,7 +87,7 @@ Confident whole-word aliases only; place per D2. Condensed from the research; fu
 
 Drop `saas`. Keep 13, add 6 (+`mobility`). Ship this gloss into `internal/enrich/langchain.go`:
 
-```
+```text
 fintech       payments, banking, lending, wealth/trading, insurtech, regtech (traditional financial rails)
 crypto        blockchain, web3, DeFi, tokens/NFTs, exchanges, on-chain infra
 ecommerce     online retail, marketplaces, D2C, retail/checkout/fulfillment tech

@@ -131,7 +131,7 @@ Layering: `internal/api/handler` is layer 8 and already imports `candidate` (4),
 `web/src/routes/roast/+page.svelte` — public, no `/my` layout. One drop zone, then the
 result:
 
-```
+```text
 Your CV: 62 / 100                        [ Re-run with AI review → sign in ]
 
   Keyword strength      22 / 40   ← the role's top skills you don't name

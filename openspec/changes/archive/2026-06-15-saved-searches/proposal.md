@@ -14,6 +14,7 @@ Job seekers reuse the same filter combinations every visit (e.g. "remote backend
 ## Capabilities
 
 ### New Capabilities
+
 - `saved-searches`: per-user CRUD over named job-search filter snapshots — the `saved_searches` table, the `/api/v1/me/searches` API (cookie-only), the service-layer validation (name 1–100 chars, unique per user, 50-set cap), and the web "My filters" select/save/update/delete UI.
 
 ### Modified Capabilities

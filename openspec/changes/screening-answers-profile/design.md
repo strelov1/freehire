@@ -18,6 +18,7 @@ directly.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a candidate state these six answers once, edit them any time, and have the browser
   extension's agent-driven autofill (`/me/autofill/run`) use them to fill matching questions
   on real application forms.
@@ -25,6 +26,7 @@ directly.
   building two independent write paths.
 
 **Non-Goals:**
+
 - Wiring these answers into `internal/hardconstraint`'s job-compatibility blockers or
   match-analysis scoring. The candidate side of a visa check does not exist after this
   change either — only the vacancy side does today. Connecting them is a follow-up change.
@@ -47,6 +49,7 @@ read than a generic key-value store would be, and matches the shape `cv`/`resume
 already use for one-row-per-user domain data.
 
 Columns:
+
 - `authorized_countries text[]` — ISO-3166 alpha-2 codes, reusing `internal/location`'s
   existing country dictionary (dict-only: an unrecognized code is rejected, never stored).
   Empty/null means unstated, not "authorized nowhere".

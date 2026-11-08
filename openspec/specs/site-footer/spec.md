@@ -1,8 +1,11 @@
 # site-footer Specification
 
 ## Purpose
+
 TBD - created by archiving change add-site-footer. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Global footer component
 
 The web app SHALL render a single global site footer on every route, implemented as
@@ -92,4 +95,3 @@ both light and dark themes.
 - **WHEN** the app is in dark mode
 - **THEN** the footer uses the dark-theme tokens (foreground/muted/border) and remains
   legible
-

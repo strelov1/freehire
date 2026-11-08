@@ -11,12 +11,14 @@ that a NULL column value can never satisfy. See proposal.md for the "why."
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a profile be submitted with no company, with the existing company-supplied path
   (validation, catalogue check, display, filtering) completely unchanged.
 - Reuse the exact `optionalText`/`pgconv.TextString` idiom this same package already uses
   for `company_name` and `seniority` — no new nullable-string pattern.
 
 **Non-Goals:**
+
 - No way to ADD or CHANGE a company on an existing profile. Company is, and remains,
   create-time-only; retrofitting an edit path is a separate, larger change (it would need
   to decide what happens to `mentors_company_published_idx` re-indexing, moderation

@@ -21,6 +21,7 @@ writes, `RefreshCompanyFacets`, and the `insights` leaderboard do not search.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Relevance-ranked, typo-tolerant, prefix-aware company search with an exact-name
   match first and `job_count` as the tiebreaker.
 - Cover every company-search surface by migrating the single `/companies` endpoint —
@@ -29,6 +30,7 @@ writes, `RefreshCompanyFacets`, and the `insights` leaderboard do not search.
 - No new failure point for `/companies`: Postgres path stays as fallback.
 
 **Non-Goals:**
+
 - Real-time (per-write) index freshness for companies — eventual consistency via a
   scheduled rebuild is sufficient (companies change slowly).
 - Moving point lookups, sitemap, writes, `insights`, or `GET /companies/subindustries`

@@ -16,12 +16,14 @@ the `onboard-contributions` skill, which generates a PR against the YAML.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Every read/write path currently touching `sources/*.yml` or `link_contributions` moves
   to the tables in this design, with no interim dual-write period.
 - `pipeline.Runner` and every `Source` adapter are touched by nothing — they already
   consume `[]CompanyEntry`, agnostic to where it came from.
 
 **Non-Goals:**
+
 - Changing `board_health`'s schema, queries, or consumers (`/status`,
   `cmd/queue-metrics`). See proposal.md's Non-Goals for the ingest-scheduling exclusion.
 

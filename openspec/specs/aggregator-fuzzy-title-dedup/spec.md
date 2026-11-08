@@ -1,8 +1,11 @@
 # aggregator-fuzzy-title-dedup Specification
 
 ## Purpose
+
 TBD - created by archiving change aggregator-fuzzy-title-dedup. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Suppression also matches on an entity-decoded, suffix-stripped title
 
 The system SHALL suppress an open aggregator posting as `duplicate_of` an open canonical
@@ -58,4 +61,3 @@ lost because the ATS twin closed SHALL release the aggregator copy on the next r
   and the reindex runs again
 - **THEN** the aggregator copy's `duplicate_of` is cleared and it re-enters search,
   embedding, and enrichment
-

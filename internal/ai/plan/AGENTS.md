@@ -1,6 +1,7 @@
 # Plan and allowance conventions
 
 ## Scope
+
 The plan a user is on and the per-day allowance each metered feature draws from. Five of the
 six are AI features whose cost is a model call; the sixth, auto-apply, is a headless browser
 submitting an application, and it is shaped differently for that reason wherever it differs.

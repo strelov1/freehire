@@ -23,11 +23,13 @@ currently express — it only reports names it has never heard of.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a caller restrict `q` matching to a subset of the four searchable fields,
   query-time, with no index/reindex change.
 - Document `q`'s actual matching semantics so a caller can predict results.
 
 **Non-Goals:**
+
 - Contiguous exact-phrase matching. Confirmed out of scope by two local spikes (see
   "Spike findings" below) — it requires `ProximityPrecision: byWord` plus a full catalog
   reindex, and the indexing-cost regression that `byAttribute` exists to avoid (`#1637`)

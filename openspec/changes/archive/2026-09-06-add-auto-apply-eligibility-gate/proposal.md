@@ -34,12 +34,14 @@ never into anything that refuses to act.
 ## Capabilities
 
 ### New Capabilities
+
 - `auto-apply-eligibility-gate`: refuses to enqueue an auto-apply attempt, and refuses to
   let a required unmapped geography/residency question reach the LLM drafter, whenever
   the candidate's known work-authorization or location-and-work-mode evidence conflicts
   with what the job requires.
 
 ### Modified Capabilities
+
 (none — `hard-constraint-matching`'s own evaluator and existing advisory call sites are
 unchanged; this adds a new caller of `hardconstraint.Evaluate`, not a new requirement on
 it)

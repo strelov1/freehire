@@ -11,12 +11,14 @@ the `ldJobPosting` helper in `internal/sources/jsonld.go` are the reuse seam.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - An `icims` `Source` adapter yielding the normalized job shape (title, url,
   location, description, native id, posted_at, remote/work-mode) with rich data.
 - A `cmd/harvest-boards` `icimsProber` that live-validates a slug (sitemap lists
   ≥1 job) so dead candidates never enter `sources/icims.yml`.
 
 **Non-Goals:**
+
 - Running the harvest over the ~9,937 seed slugs, ingesting, deploying.
 - Parsing sitemap-index (nested) sitemaps — not observed in sampling.
 - Resolving a "pretty" company display name (slug fallback, per lever/ashby).

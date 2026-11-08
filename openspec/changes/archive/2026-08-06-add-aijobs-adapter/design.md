@@ -10,6 +10,7 @@ real company name behind a "PRO" paywall (rendered as `@ M...`), recoverable onl
 This shape — boardless, multi-company, cheap listing / expensive per-posting detail, first-run
 backlog far larger than any single run should fetch — already has two precedents in
 `internal/sources`:
+
 - `justjoin.go` implements `HydratingSource.FetchNew(ctx, e, seen)`, where `seen(externalID)`
   is a pipeline-supplied predicate ("is this posting already in the catalogue") so detail
   fetches happen only for postings the catalogue does not already have.
@@ -27,6 +28,7 @@ aijobs.net combines all three pressures at once, at a larger scale than any exis
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl aijobs.net's listing and yield normalized `Job` records for postings not already in
   the catalogue, fetching each new posting's detail page exactly once.
 - Bound both dimensions of cost a large, continuously-growing aggregator creates: how many
@@ -34,6 +36,7 @@ aijobs.net combines all three pressures at once, at a larger scale than any exis
 - Reuse the CSRF/cookie session for the whole run rather than re-authenticating per page.
 
 **Non-Goals:**
+
 - Solving cross-source company-identity matching. The adapter derives a display name from
   a URL slug; whether that string collides with an existing company row is entirely the
   existing `role_fingerprint` dedup's job (see proposal.md's Impact section) — this change

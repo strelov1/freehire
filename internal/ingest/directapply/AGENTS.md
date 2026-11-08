@@ -1,6 +1,7 @@
 # On-site applications
 
 ## Scope
+
 `internal/ingest/directapply` — a candidate's application to an employer vacancy that takes
 applications on freehire (`job.IsDirectApply`: source `employer`, external id
 `freehire:<uuid>`, no URL). Checking it against the employer's questions, recording it, and
@@ -9,6 +10,7 @@ questions are authored in [internal/ingest/employer](../employer/AGENTS.md); the
 record is [openspec/changes/add-in-app-apply](../../../openspec/changes/add-in-app-apply).
 
 ## Always true
+
 - **Recorded first, stamped sent after.** `Apply` writes the `direct_applications` row,
   sends the mail, and only then sets `sent_at`. A failed send returns `ErrDelivery` and
   leaves the row unsent; the candidate applying again REPLACES its content and retries. The

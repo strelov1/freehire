@@ -16,6 +16,7 @@ shapes.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A generic thread primitive keyed on `(subject_type, subject_id)` that supports
   `company` and `job` subjects at launch.
 - Anonymous authorship: a stable per-user persona handle is the only identity
@@ -26,6 +27,7 @@ shapes.
 - A discussion section on the company and job detail pages.
 
 **Non-Goals (explicit seams, not built):**
+
 - CV-roast subjects, CV snapshots, AI seeding, market-coverage verdicts,
   revisions.
 - Employer/experience verification and badges.

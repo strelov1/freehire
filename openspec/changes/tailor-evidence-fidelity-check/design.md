@@ -19,6 +19,7 @@ after a batch of edits, soft-capped, no server-side gate.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Give the tailoring agent a forced checkpoint to re-compare its own just-written wording against
   the atom it cited, and revise via `cv_edit` if the wording claims more than the atom supports.
 - Reuse the existing evidence-read path (`bank.GetAtom`, the same call `bankGate.Publishable`
@@ -27,6 +28,7 @@ after a batch of edits, soft-capped, no server-side gate.
   self-check: soft-capped rounds, the agent's own judgment to stop, no forced convergence.
 
 **Non-Goals:**
+
 - No second LLM pass, no separate critic process, no CrewAI or new service.
 - No change to the citation-enforcement gate itself — it stays exactly as strict as it is today.
 - No new server-side refusal path in `cvedit`: fidelity is a semantic judgment a deterministic

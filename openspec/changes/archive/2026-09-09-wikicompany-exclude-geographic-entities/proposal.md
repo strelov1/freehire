@@ -25,9 +25,11 @@ silently corrupt a real company's `tagline`.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `company-info`: tightens the existing "confidently typed as company or
   organization" requirement to also exclude geographic/administrative entities
   reachable through the same multi-parent hierarchy.

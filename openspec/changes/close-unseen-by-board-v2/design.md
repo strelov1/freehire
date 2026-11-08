@@ -20,6 +20,7 @@ Two things changed since that document was written, both relevant to this design
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Close the 91%-of-rows leak (board still crawled, one company's postings stop appearing) without
   reproducing the solidjobs false-close.
 - Make the safety structural: an adapter that cannot prove full-board listing must be unable to
@@ -27,6 +28,7 @@ Two things changed since that document was written, both relevant to this design
 - Land a first, bounded wave of adapters carrying the marker, chosen for measured impact.
 
 **Non-Goals:**
+
 - Auditing all ~191 registered adapters. Phase 1 covers the large ATS platforms; a long-tail
   adapter stays on the company scope until a later pass earns it the marker.
 - Closing postings when a board's `boards` row moves to `status='retired'`. Separate mechanism,
@@ -39,9 +41,11 @@ Two things changed since that document was written, both relevant to this design
 ### The `fullBoardListing` marker is a Go interface, not data
 
 Alongside `selfClosing`/`fullCatalog`/`sweepGrace` in `internal/ingest/sources/source.go`:
+
 ```go
 type fullBoardListing interface{ fullBoardListing() }
 ```
+
 An adapter type implements it (typically a zero-cost marker method) to opt in. `registry.go`
 gains `FullBoardListingProviders() map[string]bool` alongside the existing
 `SelfClosingProviders`/`FullCatalogProviders`/`SweepGraceWindows` helpers, built the same way —
@@ -56,6 +60,7 @@ reason, and mixing shapes for one new marker would be its own inconsistency.
 ### The bar for earning the marker is structural proof, not documentation
 
 An adapter earns `fullBoardListing` only when its `Fetch`, for every board it crawls:
+
 - verifies a fetched-count-vs-API-reported-total match and returns an error on mismatch, **or**
 - paginates to the API's own natural termination (empty page / `hasNext=false` / declared
   `TotalPages` reached) with no artificial page or offset cap in adapter code,

@@ -12,6 +12,7 @@ Wantapply (`wantapply.com`, mirror `wantapply.cy`) is a curated IT job aggregato
 ## Capabilities
 
 ### New Capabilities
+
 - `wantapply-source`: crawl the Wantapply site (`.cy` mirror) sitemap, filter vacancy slugs, hydrate only new postings, and map each `JobPosting` JSON-LD into the normalized job shape; participate in the board unseen-sweep for closes.
 
 ### Modified Capabilities

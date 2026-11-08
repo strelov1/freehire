@@ -7,11 +7,13 @@ There are many entry points to `/jobs` (`TopBar`, `HeaderMenu`, `Footer`, home C
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Filters on the standalone `/jobs` survive navigation to a bare `/jobs`, restored regardless of which entry point was used.
 - Filters are cleared only by an explicit user change or reset — never lost to an ordinary navigation.
 - Keep the URL as the source of truth; keep the `UrlSyncedState` primitive generic and its synchronous-write contract intact.
 
 **Non-Goals:**
+
 - Persistence for the company-embedded jobs list, analytics, or swipe (out of scope).
 - Expiry / TTL for stored filters.
 - Cross-tab synchronization (`storage` event).
@@ -20,24 +22,29 @@ There are many entry points to `/jobs` (`TopBar`, `HeaderMenu`, `Footer`, home C
 ## Decisions
 
 ### Persist on `#write` only, via an optional `onWrite` callback on the primitive
+
 `#write` is invoked by every explicit user mutation (`setNow`/`setSoon`) and by nothing else — `syncFromUrl` sets `value`/`applied` directly. That makes `#write` the exact "user changed the filters" signal. `UrlSyncedState` gains an optional `onWrite?(value)` callback fired inside `#write`; the primitive stays generic (it knows nothing about storage). `FilterStore` gains an opt-in `persist` flag that wires `onWrite` to save `filtersToParams(value).toString()` (empty string → remove the key).
 
 - Why this over persisting on `applied` changes: `applied` also settles empty when navigation re-seeds to a bare URL, so it can't distinguish "user cleared" from "navigated to empty" — the whole crux. `#write` fires for the former only.
 - Why store the serialized query string over a bespoke JSON shape: reuse the already unit-tested `filtersToParams`/`filtersFromParams`, so storage and URL share one codec with zero schema drift.
 
 ### The `/jobs` page is the single restore choke-point
+
 Restoration happens in `JobsView` (standalone only), not per nav link. It is wired via **`afterNavigate`** (not a URL-tracking `$effect`): on a navigation that lands on a bare `/jobs` (empty `location.search`) with a non-empty stored set, `filters.apply(stored)` restores it; otherwise `filters.syncFromUrl()` runs (unchanged). For the company-embedded list the branch is gated off and the original `syncOnNavigation(filters)` is used, so it behaves exactly as today.
 
 `apply(stored)` runs through `setNow` → `#write` → `replaceState`, rewriting the URL and re-persisting the same string (idempotent); shallow `replaceState` does not re-fire `afterNavigate`, so there is no loop.
 
 Two constraints, both surfaced by end-to-end verification, shaped this:
+
 - **`afterNavigate`, not `$effect`.** A restore `$effect` runs during hydration, *before* SvelteKit's client router is initialized, so `apply`'s `replaceState` throws "Cannot call replaceState before router is initialized". `afterNavigate` runs only after the router is ready and after the mount effects, so `replaceState` is safe and the restore's `applied` change lands after the reload effect's first pass (this also removes the effect-ordering fragility a `$effect` would carry).
 - **Skip the initial `enter`.** Even in `afterNavigate`, the very first (cold) load — `nav.type === 'enter'` — is still too early for `replaceState`, and the SSR already rendered that exact URL. So restore is skipped on `enter` (the URL as loaded is served) and applies only on client-side navigations — which is every restore-worthy case: the "Jobs" nav link, cross-route entry, and back/forward. `location.search` (not `page.url.search`) is the address-bar truth, since `page.url` can lag after shallow routing.
 
 ### Scope gating via a `persist` flag
+
 `FilterStore` persistence is opt-in; `JobsView` enables it only when `standalone` (no `scope`). The company-embedded list keeps `persist=false` so it never reads or writes the shared `hire.jobFilters` key.
 
 ### New `filterStorage.ts` module
+
 A small, pure, SSR-guarded module (`loadJobFilters()`, `saveJobFilters(qs)`). It **feature-detects `localStorage` (`typeof`)** rather than importing `browser` from `$app/environment`, so it is importable by the plain-Node vitest env (which has no SvelteKit runtime) — that is what makes it the unit-testable core. Access is wrapped in try/catch and failures are swallowed, like `theme.svelte.ts`/`github.svelte.ts`. This keeps the storage concern out of the runes-bound files.
 
 ## Risks / Trade-offs

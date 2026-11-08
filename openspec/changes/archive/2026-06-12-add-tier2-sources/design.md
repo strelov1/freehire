@@ -21,6 +21,7 @@ and as the basis for test fixtures):
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Register six new adapters that ingest real postings, each yielding a sanitized-HTML
   description consistent with existing adapters.
 - Reuse existing seams only: `Source` interface, `reg`/`All`, `HTTPClient`,
@@ -28,6 +29,7 @@ and as the basis for test fixtures):
 - Seed a few live-validated boards per provider into `sources.yml`.
 
 **Non-Goals:**
+
 - No pipeline, write-path, or `cmd/ingest` change.
 - No mass slug harvest / live-probe tooling, and no `sources.yml` → `sources/*.yml`
   split (separate, provider-agnostic changes).
@@ -38,6 +40,7 @@ and as the basis for test fixtures):
 **1. Three single-request adapters (personio, breezy, pinpoint) follow `recruitee.go`.**
 The list carries the full body, so one `GetJSON`/`GetXML` call per board suffices. Each
 maps platform fields into `Job` and runs the body HTML through `sanitizeHTML`.
+
 - *personio* parses XML. Add a small `GetXML` helper to `HTTPClient` (mirrors `GetJSON`,
   stdlib `encoding/xml`) rather than hand-rolling per adapter. Location = `office`;
   description = concatenated `jobDescriptions/jobDescription/value` CDATA. Remote inferred
@@ -48,6 +51,7 @@ maps platform fields into `Job` and runs the body HTML through `sanitizeHTML`.
 The list omits the description, so the adapter paginates/lists then fetches each posting's
 detail. Reuse smartrecruiters' bounded-concurrency pattern so a single board cannot issue
 unbounded concurrent detail requests (the spec requires this bound).
+
 - *rippling* `ExternalID = uuid`, detail at `…/board/{board}/jobs/{uuid}`.
 - *bamboohr* `ExternalID = id`, detail at `…/careers/{id}/detail`; location built from
   `detail.result.jobOpening.location` via `joinNonEmpty(city, state, country)`.

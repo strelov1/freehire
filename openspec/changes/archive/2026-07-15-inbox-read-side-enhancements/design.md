@@ -1,7 +1,8 @@
 ## Context
 
 `/my/inbox` is a read-only aggregator over the shared `emails` table (Gmail sync
-+ hosted SES intake). `ListEmails`/`CountEmails` already filter by `user_id`, an
+
+- hosted SES intake). `ListEmails`/`CountEmails` already filter by `user_id`, an
 optional `src`, and an optional `q`, ordered `received_at DESC`. `read` is
 derived (`read_at IS NOT NULL`), not a stored boolean; `status_signal` holds the
 mailclassify label. The frontend `InboxView.svelte` toolbar is `[account
@@ -11,12 +12,14 @@ unlink.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Triage controls over existing data: unread filter, label filter, bulk
   mark-all-read, and per-message soft-delete with Undo.
 - Reuse existing patterns (optional `sqlc.arg = '' OR ...` filters, the unlink
   Undo UX, the `emailStatus.ts` vocabulary). Minimal new surface.
 
 **Non-Goals:**
+
 - Priority sort, outbound mail (Reply/Forward/Sent), a folder dropdown, and a
   persistent "Deleted" folder view.
 

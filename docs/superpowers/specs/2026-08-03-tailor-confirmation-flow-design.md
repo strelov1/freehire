@@ -53,6 +53,7 @@ RETURNING id, user_id, employment_id, claim, claim_key, context, metrics, skills
 ```
 
 Behavior:
+
 - Existing case (nothing to upgrade — already confirmed, or the new call is
   itself still `agent_inferred`): `WHERE` is false, `DO UPDATE` performs no
   write, `RETURNING` yields no row, `pgx.ErrNoRows` fires exactly as today →
@@ -87,7 +88,7 @@ confirms an already-`stated_in_chat` atom is never downgraded by a later
 under the same `preset == assistant.PresetTailor` gate in
 `assistant_tools.go:359`).
 
-```
+```text
 Name: "request_confirmation"
 Args: { claim: string, question: string }
 Run: no side effect — returns {"status": "awaiting_candidate_response"}

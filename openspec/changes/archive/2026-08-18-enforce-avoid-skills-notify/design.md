@@ -18,12 +18,14 @@ comparable strings, no fuzzy matching needed. See proposal.md for the motivating
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Exclude jobs carrying an avoided skill from a subscription's matches, evaluated against the
   subscriber's *current* `excluded_skills` at match time — self-healing for subscriptions created
   before an avoid-list edit.
 - Preserve the O(distinct queries) search cost: no additional Meilisearch call per subscriber.
 
 **Non-Goals:**
+
 - Changing `internal/reminder` or `internal/nudge` (see proposal.md — out of scope).
 - Changing the skill-tag dictionary or job skill derivation.
 - Changing what "Apply my profile" seeds into a saved search's query string — that UI convenience

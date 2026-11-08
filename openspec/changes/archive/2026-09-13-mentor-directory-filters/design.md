@@ -17,12 +17,14 @@ This change follows that exact pattern rather than introducing a new one.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Three new directory filters (search text, seniority, no-reviews-yet), each following
   the existing "empty/false means unfiltered" rule.
 - Seniority stored on the profile using the platform's one seniority vocabulary, never a
   new one.
 
 **Non-Goals:**
+
 - No ranking or sort-order change to the directory — the three filters narrow the same
   unordered result the directory already returns.
 - No badges, no pricing signal, no "years of experience" as a free-text or numeric

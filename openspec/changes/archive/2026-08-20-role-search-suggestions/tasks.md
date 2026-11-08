@@ -19,7 +19,6 @@
   a role already present in `active` is not offered. Tests for all three.
 - [x] 1.4 Reject queries shorter than two characters with no matches, so the component
   has no threshold logic of its own. Test the one-character case.
-
 - [x] 1.5 Rank by match-quality tier before count (prefix → word-boundary → fuzzy),
   and collapse graded variants to one row per `baseRole`, keeping the best-ranked
   variant. Both rules exist because ranking by count alone was measured wrong on the

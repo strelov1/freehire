@@ -48,6 +48,7 @@ demands login is a personalized surface — the public feed lives at `/api/offer
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `getmatch` is a registered boardless aggregator
   provider — it enumerates the getmatch.ru marketplace from the public `/api/offers` feed
   (paginated, per-offer employer), fetches each offer's full HTML description from the

@@ -44,5 +44,5 @@ away, so where an editor placed a tag does not decide the answer.
 
 #### Scenario: Markup inside the phrase does not hide it
 
-- **WHEN** a description states "This is not a <strong>REMOTE POSITION</strong>"
+- **WHEN** a description states "This is not a `<strong>REMOTE POSITION</strong>`"
 - **THEN** the denial is recognised

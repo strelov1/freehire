@@ -5,7 +5,9 @@
 Store companies as a first-class, slug-keyed entity linked from jobs, so the API
 can serve a company catalog and a company-detail view (company + its jobs)
 without joining the `jobs` table on the hot read paths.
+
 ## Requirements
+
 ### Requirement: Companies are stored as a slug-keyed entity
 
 The system SHALL store companies in a `companies` table identified by a natural

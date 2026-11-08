@@ -14,7 +14,9 @@ primitive, so the document is downloaded by hand from the CV surface.
 
 Not to be confused with `cv-autofill`, which pre-fills the onboarding wizard and the profile
 form from an uploaded résumé.
+
 ## Requirements
+
 ### Requirement: The autofill profile is one canonical contact block
 
 The system SHALL serve the browser extension a fixed set of contact fields assembled
@@ -197,7 +199,7 @@ group unanswered even when the candidate has stated an answer.
 
 ### Requirement: A boolean work-authorization question is not answered from the country list
 
-A plain Yes/No "are you authorized to work [here]?" question SHALL NOT be matched to the
+A plain Yes/No "are you authorized to work \[here]?" question SHALL NOT be matched to the
 authorized-countries screening answer. That answer is a list of country codes, not a
 boolean, and the profile carries no boolean field stating plain work authorization — filling
 the question would put the wrong shape of value into a Yes/No control.
@@ -237,4 +239,3 @@ browser the caller on this surface never opened.
 
 - **WHEN** `POST /api/v1/me/autofill/run` is called authenticated by a Bearer session JWT
 - **THEN** the request proceeds to read the caller's browser-tool channel
-

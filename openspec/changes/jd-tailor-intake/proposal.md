@@ -41,11 +41,13 @@ sources (our own catalog, an external URL, or plain text) and turns all three in
 ## Capabilities
 
 ### New Capabilities
+
 - `jd-tailor-intake`: the `/api/v1/me/jd/resolve` endpoint, the URL-vs-text resolution branching,
   the `is_private` job concept (synthetic external_id, creator-only visibility, no enrichment
   queue), and the `/my/cvs` entry-point UI.
 
 ### Modified Capabilities
+
 - `job-search`: the Meilisearch index must exclude `is_private` jobs, and the separate DB-backed
   `GET /api/v1/jobs` list must also exclude them, so a private job never appears in any public
   listing or search surface.

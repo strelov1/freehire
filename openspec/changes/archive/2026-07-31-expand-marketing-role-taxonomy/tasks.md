@@ -58,7 +58,6 @@
       deliberately excluded as a PT/ES preposition collision)
 - [x] 3.6 Assert separator-insensitivity holds for the new multi-word canonicals
       ("paid-social" / "paid social" / "paid_social")
-
 - [x] 3.7 Matcher rule: `nonCorroboratingPhrases` + the `standalone` bucket in
       `Parse`, so a discipline phrase tags on its own but never rescues a gated
       single-word canonical (`ai`, `automation`). Named products keep corroborating

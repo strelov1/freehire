@@ -7,7 +7,7 @@
 
 # freehire
 
-### Every IT job, straight from the source.
+## Every IT job, straight from the source
 
 **4.7M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
@@ -189,7 +189,7 @@ hard-deletes jobs; the lifecycle only soft-closes them.
 
 ## Layout
 
-```
+```text
 cmd/                 entry points: server + the standalone workers above
 migrations/          SQL schema (source for both sqlc and initdb)
 web/                 the SvelteKit frontend

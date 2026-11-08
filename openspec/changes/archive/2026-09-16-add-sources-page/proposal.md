@@ -36,6 +36,7 @@ No breaking changes: every existing endpoint, page and table keeps its current s
 ## Capabilities
 
 ### New Capabilities
+
 - `source-catalog-page`: the public per-source catalogue — what the `/sources` page
   states, what `GET /api/v1/sources` serves, and the honesty rules that govern the
   figures on it (in particular the ATS-overlap figure's meaning and its labelling).

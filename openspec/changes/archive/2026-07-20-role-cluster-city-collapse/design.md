@@ -23,12 +23,14 @@ unless the canon's geography is widened.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Per-city title variants of one role collapse to one canonical card and one `/copies`
   cluster.
 - The canonical card stays findable by every city/country/region its cluster is open in.
 - Existing catalogue rows collapse without waiting for a re-crawl (backfill).
 
 **Non-Goals:**
+
 - Fuzzy/semantic dedup for cases where the city is embedded in the *description* (out of
   scope; descriptions differ → no collapse, unchanged).
 - Perfect handling of non-tech retail mass-posters whose title suffix is a shift /
@@ -39,6 +41,7 @@ unless the canon's geography is widened.
 ## Decisions
 
 ### D1 — Single city-agnostic `role_fingerprint` (not a second column)
+
 Strip the trailing clause inside `normalizeRoleText`, so all three consumers share one
 fingerprint. Chosen over a separate `cluster_fingerprint` column: simpler (one key, no
 migration, no dual backfill), and counting per-city variants together in the reality
@@ -47,6 +50,7 @@ side effect: `repost_count`/`mass_posting_count` rise for such clusters; likely-
 still needs convergence, so counts alone don't reclassify.
 
 ### D2 — Generic separator strip, description as the guard (no city dictionary)
+
 Strip the last clause after ` , ` / ` | ` / ` @ ` / spaced ` - ` ` — ` ` – `. Suffix only
 (prefix preserved → seniority safe). Guard: keep the original if stripping leaves < 2
 words. Safety comes from the description remaining in the key, not from proving the tail
@@ -54,6 +58,7 @@ is a city — the spike showed this holds for tech. A shared separator helper is
 so the (existing) aggregator-suppression suffix logic and this one can converge over time.
 
 ### D3 — Geo union is a full-reindex property
+
 Add `RoleClusterGeoAll` (one aggregate pass, `(company_slug, role_fingerprint) →
 union(countries,regions,cities,work_mode)` over open rows), mirroring `RoleClusterCountsAll`
 / `buildRealityLookup`. `cmd/reindex` builds the lookup once and `search.FromJob` merges
@@ -62,6 +67,7 @@ own row, so a freshly-pushed canon may be geo-incomplete until the next full rei
 accepted, exactly as the reality counts already behave.
 
 ### D4 — Backfill by recompute, not migration
+
 `role_fingerprint` is only written at ingest. Provide a one-shot backfill that recomputes
 it for open rows using the new function; then the standard reindex recomputes `duplicate_of`
 and re-indexes canons with unioned geography. RESOLVED: a dedicated
@@ -70,7 +76,9 @@ one, so folding it into `cmd/backfill-derive` would muddy that command's scope; 
 one-shot matches the existing `cmd/backfill-*` family).
 
 ### D5 — Parentheses are never a separator; strip one clause only
+
 A read-only survey of prod tech titles settled two edges of the strip rule:
+
 - **Parentheses are excluded.** A trailing `(...)` is almost never geography — it is
   `(all genders)`, `(w/m/x)`, `(m/w/d)`, `(GCP)`, `(MAKO)`. Stripping it would merge
   distinct specialties/variants, so `(` is deliberately NOT in the separator set (and

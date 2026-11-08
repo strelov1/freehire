@@ -10,7 +10,9 @@ post-Apply "Did you apply?" prompt. Writes require a session; the public job rea
 path is untouched. The model is the thin first slice of a personal application
 tracker: `applied_at` is the entry point for a future stage pipeline, and the
 composite key already guarantees at most one application per `(user, job)`.
+
 ## Requirements
+
 ### Requirement: Recording a job view
 
 The system SHALL let an authenticated user record that they viewed a job, keyed
@@ -621,4 +623,3 @@ The frontend personal-jobs section SHALL be presented as **Tracking** and served
 
 - **WHEN** a signed-in user opens the tracking section
 - **THEN** the navigation and heading read "Tracking", with tabs for Board, Pipeline, History, and AI fit
-

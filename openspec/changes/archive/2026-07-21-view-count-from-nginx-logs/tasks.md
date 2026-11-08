@@ -76,7 +76,7 @@
 - [x] 9.1 Add `internal/viewlog/AGENTS.md` and a `cmd/rollup-views` line to the
   root AGENTS.md command list + module map.
 - [x] 9.2 Document the required `freehire-ops` changes (dedicated JSON `log_format`
-  + scoped `access_log` for `/jobs/` and `/api/v1/jobs/`, and a systemd timer with
+  - scoped `access_log` for `/jobs/` and `/api/v1/jobs/`, and a systemd timer with
   its own flock) in the change/design so ops can land them; note dev is a no-op.
 
 ## 10. Verification

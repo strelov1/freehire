@@ -19,6 +19,7 @@ page's `ng-state` JSON — already fetched for the description — carries a per
 <!-- None. -->
 
 ### Modified Capabilities
+
 - `arbeitsagentur-source`: the job-mapping requirement now also derives the job's remote flag and
   work mode from the detail page's `homeofficemoeglich`.
 

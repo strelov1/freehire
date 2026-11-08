@@ -16,9 +16,11 @@ This complements, and does not replace, the existing deterministic `cv-autofill`
 ## Capabilities
 
 ### New Capabilities
+
 - `resume-structured-profile`: LLM-derived, typed, sanitized structured résumé — extracted best-effort on upload, persisted read-only per user (model-stamped, re-derived on re-upload, cleared on delete), and served on the résumé read surface for the profile UI.
 
 ### Modified Capabilities
+
 - `job-fit-analysis`: the fit prompt-chain additionally consumes the caller's stored structured résumé when present, as pre-normalized context beside the existing CV text; absence degrades to the current text-only analysis with no error.
 
 (The résumé lifecycle coupling — re-derive on re-upload, clear on delete — is owned by the new `resume-structured-profile` capability itself; `resume-storage`'s own file/pointer requirements are unchanged.)

@@ -1,8 +1,11 @@
 # gmail-connection Specification
 
 ## Purpose
+
 TBD - created by archiving change gmail-inbox. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Connect Gmail via incremental OAuth
 
 The system SHALL let a signed-in user grant `gmail.readonly` through Google's

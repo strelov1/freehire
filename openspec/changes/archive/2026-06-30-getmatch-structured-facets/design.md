@@ -20,12 +20,14 @@ freehire returns 73, because ~60% of getmatch jobs carry no seniority facet.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let adapters emit structured `Seniority`, `Category`, `Skills`,
   `ExperienceYearsMin` on `sources.Job`, mirroring `WorkMode`'s contract.
 - Give a structured source signal precedence over the dictionary in `jobderive`.
 - Map getmatch's detail fields into freehire's vocabularies, dropping unmappable values.
 
 **Non-Goals:**
+
 - Salary (`salary_min/max/currency`): no `jobs` columns exist and it crosses the
   LLM-owned `enrichment` JSONB boundary — a separate change.
 - Read-model changes: `jobview.FromRow` still serves the facets from `jobs`
@@ -36,6 +38,7 @@ freehire returns 73, because ~60% of getmatch jobs carry no seniority facet.
 ## Decisions
 
 ### General seam over getmatch-local override
+
 Extend `sources.Job` and `jobderive.Input` with the new fields and keep all
 derivation in `jobderive.Derive`. Rationale: one derivation path stays testable and
 reusable by future structured sources; it copies the working `WorkMode` pattern.
@@ -43,6 +46,7 @@ Alternative (writing derived values directly in the adapter, bypassing `jobderiv
 was rejected — it forks the derivation logic and does not generalize.
 
 ### Per-facet precedence
+
 - `seniority`: source → title dict → description (extends the existing two tiers).
 - `category`: source → title dict.
 - `experience_years_min`: source → `jobfacts` text parse.
@@ -50,6 +54,7 @@ was rejected — it forks the derivation logic and does not generalize.
   facts, so neither replaces the other — unlike the scalar facets where source replaces).
 
 ### getmatch mapping is gatekept by freehire's vocabularies
+
 - Grade: use the scalar `seniority`; pass through an explicit map to
   `SeniorityValues`; drop unknown grades.
 - `required_years_of_experience` → `*int` (nil when absent).

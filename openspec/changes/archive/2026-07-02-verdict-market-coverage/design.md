@@ -21,6 +21,7 @@ per-value facet distribution.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Coverage = count and percent of open role vacancies that list ≥1 profile skill.
 - Per missing skill: the number of *new* (currently-uncovered) vacancies it
   unlocks, ranked biggest-win-first.
@@ -31,6 +32,7 @@ per-value facet distribution.
 - Keep `internal/verdict.Compute` a pure, I/O-free, unit-tested function.
 
 **Non-Goals:**
+
 - Any AI/LLM in the verdict path (removed outright).
 - Touching the profile-form résumé→skills extraction (`POST /me/resume/extract`)
   or the résumé-storage subsystem it shares — out of scope, left intact.
@@ -95,7 +97,7 @@ already isolates the facet fetch.
 
 New `Verdict` shape (JSON, regenerated to TS via `cmd/gen-contracts`):
 
-```
+```text
 Verdict {
   total            int64
   covered          int64

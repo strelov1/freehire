@@ -11,6 +11,7 @@ numeric range filters) and apply them with identical semantics.
 
 The response SHALL use the single-item envelope `{"data": ...}` whose `data`
 object contains:
+
 - `total`: the estimated number of vacancies matching the filters,
 - `facets`: a map of facet → (value → count),
 - `stats`: a map of numeric facet → `{min, max}`.

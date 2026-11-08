@@ -1,6 +1,7 @@
 # remote-region-filters Specification
 
 ## Purpose
+
 Let users filter jobs to the "geography not specified" bucket — postings whose
 derived region set is empty — without materializing a redundant column. Combined
 with the existing `work_mode=remote` filter it reproduces the former
@@ -8,6 +9,7 @@ with the existing `work_mode=remote` filter it reproduces the former
 "region unspecified" filter.
 
 ## Requirements
+
 ### Requirement: The regions facet accepts an "unspecified" sentinel value
 
 The search API SHALL treat a reserved `regions` facet value (`none`) as a request

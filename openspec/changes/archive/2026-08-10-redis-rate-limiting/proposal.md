@@ -43,11 +43,13 @@ route-prefix bug to be fixed rather than silently carried forward.
 ## Capabilities
 
 ### New Capabilities
+
 - `api-rate-limiting`: a single Redis-backed rate-limiting facility used by every
   rate-limited HTTP route in the API — the shared `Throttler` contract, its Redis
   implementation, key-namespacing rules, and fail-open error handling.
 
 ### Modified Capabilities
+
 (none — existing routes keep their current limits/windows/behavior from the caller's
 perspective; only the backing implementation changes)
 

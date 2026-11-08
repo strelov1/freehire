@@ -53,6 +53,7 @@ categories is already the most that can be reviewed at once.
 ## Capabilities
 
 ### New Capabilities
+
 - `consumer-industry-taxonomy`: which titles resolve to `healthcare`,
   `skilled_trades`, `retail` and `hospitality`, the Russian vocabularies inside
   them, why they are non-technical WITHOUT being craft-protected from prune,

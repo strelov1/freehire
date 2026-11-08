@@ -1,8 +1,11 @@
 # deterministic-facets Specification
 
 ## Purpose
+
 TBD - created by archiving change dict-production-facets. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: The six dictionary facets are sourced solely from the deterministic dictionaries
 
 The system SHALL store the deterministic, dictionary-derived facets —

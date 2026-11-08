@@ -19,6 +19,7 @@ and apply URL, but they are only reachable by a slug nobody has.
 ## Capabilities
 
 ### New Capabilities
+
 - `job-cluster-copies`: the per-city openings list under a collapsed role — the copies
   endpoint and the detail-page section.
 

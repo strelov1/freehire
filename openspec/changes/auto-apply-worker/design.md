@@ -7,6 +7,7 @@ document restates only what a task breakdown needs to be unambiguous.
 
 **Already built, unchanged by this document's decisions** (tasks 1-5 of the OpenSpec task
 list; see there for what's still open):
+
 - `auto_apply_queue` (migration 0116) and its sqlc queries.
 - `internal/autoapply` — the queue-drain domain logic (`Store`/`AnswerSource`/`SidecarClient`
   ports, `Run`), unit-tested with fakes. `SidecarClient` is the seam this document's revision
@@ -20,6 +21,7 @@ list; see there for what's still open):
   assembler. `cmd/auto-apply`'s `AnswerSource` wraps it.
 
 Existing pieces this change builds on, unchanged in behavior:
+
 - `internal/outbox.RunPool` — the claim/process/lease loop `internal/applyform`'s
   `cmd/capture-apply-form` already runs on.
 - `db.Queries.MarkJobApplied` / `LockJobForApply` — the same statements
@@ -29,6 +31,7 @@ Existing pieces this change builds on, unchanged in behavior:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A working, narrow, end-to-end path: queued attempt in → submitted application or a named
   reason it could not be, out.
 - Reuse every existing piece that already does part of this job (profile data, tracking
@@ -38,6 +41,7 @@ Existing pieces this change builds on, unchanged in behavior:
   revision keeps the whole worker inside `cmd/auto-apply`'s existing binary.
 
 **Non-Goals** (design-level, beyond what proposal.md already excludes):
+
 - Concurrency/throughput tuning. `RunPool`'s existing batch/lease/concurrency parameters are
   reused as-is; no new tuning knobs are designed here.
 - Any UI surface. This change has no candidate-facing screen — `auto_apply_queue` rows are

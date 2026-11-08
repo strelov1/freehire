@@ -1,8 +1,11 @@
 # worker-lifecycle Specification
 
 ## Purpose
+
 TBD - created by archiving change reliable-worker-bootstrap. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Shared worker bootstrap
 
 Every standalone run-once-and-exit worker SHALL obtain its runtime dependencies
@@ -209,4 +212,3 @@ cannot silently overwrite the other's payload.
 
 - **WHEN** a worker publishes either a refused or a completed run
 - **THEN** the output is written to the same single filename that worker already owns
-

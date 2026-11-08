@@ -13,12 +13,14 @@ by `tecla`/`jobstash`.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Two new aggregator adapters (`bayt`, `gulftalent`) that lift MENA coverage.
 - One reusable Chrome-fingerprint transport shared by `meta`, `bayt`, `gulftalent` —
   no duplicated tls-client wiring, SSRF guard preserved.
 - Adapters unit-tested over recorded fixtures; live-validated before board data lands.
 
 **Non-Goals:**
+
 - Apply-link mining (the aggregators are self-contained — the company is in the posting).
 - Any geolocation-dictionary change (MENA resolution is already adequate).
 - Bayt sitemap (403-walled even for the fingerprint client in the spike) — use the

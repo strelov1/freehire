@@ -47,6 +47,7 @@ No breaking changes to any endpoint's shape.
 <!-- None. This changes how an existing capability finds its candidates. -->
 
 ### Modified Capabilities
+
 - `application-mail-recall`: candidates come from a gated Gmail search rather than the
   stored mail table; a proposal is an unstored message; the cap and ordering requirements
   are replaced.

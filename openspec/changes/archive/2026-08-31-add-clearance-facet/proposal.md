@@ -73,6 +73,7 @@ dict-only discipline.
 Nullable and additive, so it takes no table rewrite and no backfill lock.
 
 **Code:**
+
 - `internal/dict/location/clearance.go` (new) — the phrase dictionary and matcher,
   reusing the negation guard already in `eligibility.go`.
 - `internal/job/jobderive` — new `Derived.RequiresClearance`.

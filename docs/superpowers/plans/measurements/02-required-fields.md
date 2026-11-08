@@ -28,7 +28,7 @@ GROUP BY provider
 ORDER BY pct_zero_required DESC;
 ```
 
-```
+```text
   provider  | forms | pct_zero_required 
 ------------+-------+-------------------
  lever      |  2315 |              48.8
@@ -78,7 +78,7 @@ GROUP BY provider
 ORDER BY avg_required DESC;
 ```
 
-```
+```text
   provider  | forms  | avg_required | median_required | max_required 
 ------------+--------+--------------+-----------------+--------------
  greenhouse | 283363 |         13.2 |              13 |           76

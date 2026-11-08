@@ -1,8 +1,11 @@
 # search-suggestions Specification
 
 ## Purpose
+
 TBD - created by archiving change add-search-suggestions. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Titles are mined from the catalogue above a frequency floor
 
 The builder SHALL walk the open catalogue, normalise each posting title, count the
@@ -19,10 +22,12 @@ sample: the distribution is concentrated enough that a floor bounds the dictiona
 rather than merely trimming it.
 
 #### Scenario: A one-off title is not offered
+
 - **WHEN** exactly one open posting carries a given normalised title
 - **THEN** that title is absent from the index
 
 #### Scenario: A title is cut at its first separator
+
 - **WHEN** the posting title is `Senior Software Engineer, Infrastructure, Infra Spanner`
 - **THEN** the mined title is `senior software engineer`
 
@@ -38,10 +43,12 @@ The builder SHALL drop a normalised title that reduces to a bare seniority word
 role and category dictionaries carry those axes properly.
 
 #### Scenario: A bare grade word is dropped despite being frequent
+
 - **WHEN** the normalised title `manager` occurs far above the frequency floor
 - **THEN** it is absent from the index
 
 #### Scenario: The same word qualified by a craft is kept
+
 - **WHEN** the normalised title is `engineering manager`
 - **THEN** it is kept, because it names a craft
 
@@ -53,6 +60,7 @@ whose posting count has fallen to zero between rebuilds: a suggestion that leads
 to an empty result page is worse than no suggestion.
 
 #### Scenario: A drained suggestion is withheld
+
 - **WHEN** a suggestion in the index carries a posting count of zero
 - **THEN** it is not offered
 
@@ -65,10 +73,12 @@ separates one employer's spellings from each other — Google carries 3,187 whil
 Google India carries 19.
 
 #### Scenario: A company below the floor is not offered
+
 - **WHEN** a company slug carries fewer open postings than the floor
 - **THEN** no company suggestion is emitted for it
 
 #### Scenario: Distinct company slugs are offered separately with their counts
+
 - **WHEN** `google` and `google-india` are both above the floor
 - **THEN** both are offered, each naming its own posting count
 
@@ -79,6 +89,7 @@ the jobs index rebuild uses, so a reader never observes a partially built
 dictionary. It SHALL be a run-once-and-exit worker that exits non-zero on failure.
 
 #### Scenario: A failed build leaves the previous index serving
+
 - **WHEN** the builder fails part way through
 - **THEN** the previously built index continues to serve and the worker exits non-zero
 
@@ -99,10 +110,12 @@ phrase MUST fall through into the fragment rather than be silently consumed as
 recognised, because the fragment is where typos are forgiven.
 
 #### Scenario: A trailing fragment completes against a company
+
 - **WHEN** the query is `senior software engineer go`
 - **THEN** a row offers "Senior Software Engineer Google", naming both the role part and the company part
 
 #### Scenario: A mistyped phrase is not consumed as recognised
+
 - **WHEN** the query is `senior sofware enginer`
 - **THEN** the misspelled words are treated as the fragment, and the completion still reaches Senior Software Engineer
 
@@ -114,10 +127,12 @@ and one that has named a company SHALL NOT be offered a second company. Skills a
 the exception — several skills narrow a search sensibly, so that kind stays open.
 
 #### Scenario: A second role is not offered
+
 - **WHEN** the recognised prefix names a role and the fragment would match another role
 - **THEN** no role is among the completions
 
 #### Scenario: A second skill is offered
+
 - **WHEN** the recognised prefix names the skill Java and the fragment matches the skill Kubernetes
 - **THEN** Kubernetes is among the completions
 
@@ -133,10 +148,12 @@ how that query is built. Facets combine with AND, so applying several parts
 narrows rather than replaces.
 
 #### Scenario: A composed row applies both parts
+
 - **WHEN** the visitor chooses "Senior Software Engineer Google"
 - **THEN** the role facet and `company_slug=google` are both applied
 
 #### Scenario: A title row applies as a query
+
 - **WHEN** the visitor chooses "Java Developer" of kind `title`
 - **THEN** the query is built from `java developer` (quoted and restricted to
   the title field) and no facet is set
@@ -171,22 +188,27 @@ A category the distribution does not carry SHALL NOT be offered, and the catch-a
 question an empty box is asking.
 
 #### Scenario: The empty box leads with engineering
+
 - **WHEN** the query is empty
 - **THEN** the first suggestions come from the Engineering group, not from the highest-count categories
 
 #### Scenario: A leading group gets two rows before a later one is reached
+
 - **WHEN** the query is empty and every group has measured categories
 - **THEN** two Engineering categories and two Data & AI categories are offered before any Go-to-market category
 
 #### Scenario: A group that cannot fill two rows does not hold the others back
+
 - **WHEN** a leading group has only one measured category
 - **THEN** it contributes that one and the next group follows immediately
 
 #### Scenario: The catch-all is never a starting point
+
 - **WHEN** the query is empty and the `other` category has more postings than any named one
 - **THEN** `other` is not among the suggestions
 
 #### Scenario: The empty box is never empty
+
 - **WHEN** the query is empty
 - **THEN** at least one suggestion is returned
 
@@ -202,10 +224,12 @@ its `growth hacker` alias) above Backend Engineer for `backedn`. The index ranks
 by relevance to the fragment, so the reason no longer holds.
 
 #### Scenario: A transposition reaches its target
+
 - **WHEN** the query is `backedn`
 - **THEN** Backend Engineer is the first suggestion
 
 #### Scenario: A typo does not surface an unrelated large bucket
+
 - **WHEN** the query is `backedn`
 - **THEN** Marketing Specialist is not offered above Backend Engineer
 
@@ -216,10 +240,12 @@ open-posting count, then by shorter text. Demand orders what people actually ask
 for; supply breaks the tie among suggestions nobody has asked for yet.
 
 #### Scenario: A more-searched suggestion leads
+
 - **WHEN** two suggestions match equally well and one has been searched for more often
 - **THEN** the more-searched one is offered first
 
 #### Scenario: Supply breaks a tie with no demand recorded
+
 - **WHEN** two suggestions match equally well and neither has been searched for
 - **THEN** the one with more open postings is offered first
 
@@ -231,6 +257,7 @@ own bucket, keyed per client, so its volume cannot exhaust the allowance the oth
 public reads share.
 
 #### Scenario: Suggest volume does not throttle job search
+
 - **WHEN** a client exhausts its suggest allowance
 - **THEN** its requests to the job search endpoint are still served
 
@@ -248,14 +275,17 @@ would truncate the distribution and `title` is not a filterable attribute. Sugge
 are mined into a bounded dictionary offline instead.
 
 #### Scenario: A title suggestion carries no facet value
+
 - **WHEN** the index holds the suggestion "Java Developer" of kind `title`
 - **THEN** it carries no facet value, because no facet names that phrase
 
 #### Scenario: A category suggestion carries its slug
+
 - **WHEN** the index holds the suggestion "Backend" of kind `category`
 - **THEN** it carries the facet value `backend`
 
 #### Scenario: No suggestion names a role
+
 - **WHEN** the dictionary is built
 - **THEN** no document carries the kind `role`
 
@@ -339,4 +369,3 @@ produces and neither its application nor its count computation changes.
   was searched
 - **THEN** it reads as plain text with no quote marks, even though the
   request actually sent to search carries them
-

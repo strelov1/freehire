@@ -5,6 +5,7 @@ motivated it. This document resolves the three decisions the proposal left open 
 the migration order for all seven promotions plus the one exclusion (`StatusChip`).
 
 Two existing mechanisms constrain every decision here:
+
 - `internal` — n/a, this is `web`/`design-system` only.
 - `openspec/specs/design-system-verification/spec.md` already requires (1) app code reach
   primitives only through `web/src/lib/ui` (the single door), (2) every primitive with
@@ -15,12 +16,14 @@ Two existing mechanisms constrain every decision here:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Resolve, with rationale, whether `CompanyLogo`, `CountryFlag`, and `LoadMore` become new
   primitives, variants of existing ones, or stay as thin app-side wrappers.
 - Sequence the seven promotions so the adoption ratchet and contract-test requirement are
   satisfied by construction rather than patched after the fact.
 
 **Non-Goals:**
+
 - Redesigning `Tabs`, `Avatar`, or `Button`'s existing variants beyond what a decision below
   requires.
 - Auditing the rest of `web/src/lib/components` for further promotion candidates — the
@@ -38,6 +41,7 @@ broken-image icon). That gap is a strict improvement to fold into `Avatar` rathe
 reason to fork it.
 
 `Avatar` gains:
+
 - `shape?: 'circle' | 'square'` (default `'circle'`, so every existing call site is
   unaffected).
 - The `src`-present branch adopts `CompanyLogo`'s two-part broken-image recovery: an `onerror`

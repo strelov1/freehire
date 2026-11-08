@@ -1,6 +1,7 @@
 ## Why
 
-#2082 stopped the loud half of the derived-industry defect: a company an importer
+# 2082 stopped the loud half of the derived-industry defect: a company an importer
+
 has already classified is now answered from that classification alone, so Uber
 stopped matching `?industries=gaming`. It does nothing for the quiet half — a
 company with **no** curated industry at all, where the job-derived `companies.domains`
@@ -72,7 +73,7 @@ None.
 
 ## Related
 
-- Issue: https://github.com/strelov1/freehire/issues/2088
+- Issue: <https://github.com/strelov1/freehire/issues/2088>
 - Prior change: `openspec/changes/archive/2026-08-18-fix-derived-industry-precedence/`
   (fixed the curated-company case; its design.md records this remainder and the
   measurements above)

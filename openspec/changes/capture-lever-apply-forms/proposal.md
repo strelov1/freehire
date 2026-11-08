@@ -42,6 +42,7 @@ What the markup requires, none of which the JSON platforms did:
 ## Capabilities
 
 ### Modified Capabilities
+
 - `apply-form-capture`: `lever` joins the providers whose form is fetched per
   posting, and a form may now be read from HTML rather than a JSON API.
 - `apply-form-display`: the display projection learns which Lever controls are the

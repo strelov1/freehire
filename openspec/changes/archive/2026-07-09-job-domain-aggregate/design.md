@@ -23,6 +23,7 @@ A key finding shapes the design: the two shapes are not the same field set.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One guarded construction door: `job.New(Draft)` is the only way to build a fresh
   `Job`; it derives facets internally so all write paths are identical.
 - A domain `Job` type distinct from `db.Job`, loaded/persisted through a
@@ -33,6 +34,7 @@ A key finding shapes the design: the two shapes are not the same field set.
   paths and the enrichment predicate express their decision through the aggregate.
 
 **Non-Goals:**
+
 - Splitting the 119-method `db.Queries` per context. The port sits on top of it.
 - Rewriting the `UpsertJob`/outbox write-path transaction or moving closing into a
   single new transaction. The SQL queries stay; only the *decision* moves.
@@ -45,6 +47,7 @@ A key finding shapes the design: the two shapes are not the same field set.
 ### D1. One domain type, two entry points
 
 `job.Job` is a single struct. Two ways to obtain one:
+
 - `job.New(Draft) (Job, error)` — a *fresh* job for the write path. Runs `jobderive`
   internally; persistence-computed fields are zero (id 0, counts 0, not enriched,
   open).
@@ -62,7 +65,7 @@ into `job.Job` would make the aggregate own data it cannot enforce. So the domai
 `Job` carries intrinsic fields + facets + lifecycle + typed `enrichment`; the
 projection supplies the cross-aggregate extras:
 
-```
+```text
 jobview.FromDomain(j job.Job, x job.Extras) (jobview.Job, error)
    where job.Extras = { ViewCount, AppliedCount int32; Collections []string }
 ```

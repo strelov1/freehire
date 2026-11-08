@@ -1,8 +1,11 @@
 # job-facet-company-count Specification
 
 ## Purpose
+
 TBD - created by archiving change talent-agent-ai-search. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: The facets endpoint reports distinct companies on request
 
 `GET /api/v1/jobs/facets` SHALL accept `company_slug` in its `facets` parameter. When requested, the response SHALL include `companies_total` — the exact number of distinct `company_slug` values among the open postings matching the filter — and `top_companies` — at most 50 entries `{slug, name, count}` in descending job count (ties by slug), named from the `companies` table or by the slug when the company has no row yet. These are separate fields rather than a `company_slug` entry in `facets`, because a JSON object can carry neither the order nor the names. `company_slug` SHALL stay out of the default facet set, and SHALL be refused under `disjunctive` and for an `OR` query (which runs as a federated search and would count a company matched by two alternatives twice). The count SHALL be exact regardless of the facet value cap.
@@ -31,4 +34,3 @@ TBD - created by archiving change talent-agent-ai-search. Update Purpose after a
 
 - **WHEN** `q=go OR rust&facets=company_slug` is requested
 - **THEN** the endpoint responds 400
-

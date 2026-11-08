@@ -25,6 +25,7 @@ a mass format in US retail/logistics.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `ai-enrichment`: the requirement that enrichment is extracted from a job's
   description by an LLM provider gains a constraint — the provider MUST instruct
   the model to represent salary amounts as whole currency units and to preserve

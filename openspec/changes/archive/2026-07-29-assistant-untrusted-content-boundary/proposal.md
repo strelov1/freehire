@@ -34,10 +34,12 @@ before the rollout opens, not after.
 ## Capabilities
 
 ### New Capabilities
+
 - `assistant-output-rendering`: how untrusted model output reaches the DOM — the sanitizer policy
   the assistant chat applies to markdown, and the CSP image allowlist backing it.
 
 ### Modified Capabilities
+
 - `cv-tailoring`: the contact-block requirement is restated to bind on any read that puts the CV
   document in front of a model — the in-process tool path included — rather than only on reads made
   with the short-lived tailoring key.

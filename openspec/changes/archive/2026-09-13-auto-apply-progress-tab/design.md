@@ -17,6 +17,7 @@ data already in hand, with no backend change.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Give the auto-apply status/decision UI its own tab, driven by a small, independently testable
   progress-stage mapping.
 - Show the submitted outcome even after the live attempt's queue row is gone.
@@ -24,6 +25,7 @@ data already in hand, with no backend change.
   `cmd/auto-apply` or the queue schema.
 
 **Non-Goals:**
+
 - Any change to `cmd/auto-apply`, `auto_apply_queue`, or a migration — confirmed with the user
   that pause is purely cosmetic.
 - Syncing the pause marker across devices/browsers — confirmed acceptable as browser-local.

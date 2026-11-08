@@ -12,11 +12,13 @@ app has **no test runner** (memory: `hire web no test runner`) — verification 
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A dedicated, reusable `Footer.svelte` with a restrained multi-column layout.
 - Add the LinkedIn social link; keep GitHub + Telegram.
 - Faithful to the flat-neutral aesthetic; responsive (stacks on mobile); theme-safe.
 
 **Non-Goals:**
+
 - No new fonts, colors, or dependencies.
 - No newsletter form, language switcher, or extra pages beyond existing routes.
 - No changes to `ProviderIcon`, header, or any backend/API.

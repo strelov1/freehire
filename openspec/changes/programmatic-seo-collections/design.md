@@ -24,6 +24,7 @@ and an earlier draft of this design proposed rebuilding it as a new
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Interpolate the live, exact job count into `<title>`/`<h1>`/OG title on
   `/collections/[slug]`, for both collection kinds.
 - Grow `FILTER_COLLECTIONS` with more verified high-intent combinations.
@@ -32,6 +33,7 @@ and an earlier draft of this design proposed rebuilding it as a new
   facets and its `collections` field.
 
 **Non-Goals:**
+
 - No new page type, route, or backend endpoint. No cross-product / auto-generated
   combinations — every collection stays hand-curated with a verified live count.
 - No change to `internal/collections`, its registry, or the `jobs.collections`

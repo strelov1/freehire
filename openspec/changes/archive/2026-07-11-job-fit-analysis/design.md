@@ -7,6 +7,7 @@ job-title alignment or experience relevance, the two signals an ATS keyword-scre
 weigh most.
 
 The codebase already has the exact building blocks:
+
 - `internal/llm` — `Client.GenerateJSON(ctx, system, user) (string, error)`; nil client ⇒ feature dormant.
 - `internal/atscheck.Analyzer` + `handler.PostATSReport` — the proven "on-demand LLM review, sanitize
   untrusted output, cache per user, best-effort degrade" pattern. This change mirrors it, but keyed
@@ -19,6 +20,7 @@ The codebase already has the exact building blocks:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A high-quality analysis per explicit user action: a fixed three-stage prompt-chain
   (Extract&Match → Recruiter verdict → Adversarial audit) producing a five-dimension scored
   verdict centered on title alignment and experience relevance, plus the ATS-style
@@ -27,6 +29,7 @@ The codebase already has the exact building blocks:
 - Zero impact on the deterministic bar and on envs without an LLM configured.
 
 **Non-Goals:**
+
 - No **autonomous** LLM agent (see Decision 7) — the chain is a fixed, deterministic sequence.
 - No live web research of the company (company_info only; the live-research stage is a marked
   future seam — see Decision 8).
@@ -46,6 +49,7 @@ Each stage is a plain function taking typed input and returning a typed struct, 
 pure/deterministic/no-LLM; mixing an LLM dependency in would break that boundary.
 
 **1a. Three fixed stages, each a typed `GenerateJSON` call.**
+
 - **Stage 1 — Extract & Match** → `RequirementMatch{ Requirements: []Requirement{Text, Priority
   (required|preferred), Status (covered|synonym-only|missing-have|missing-gap), Evidence} }`.
   Input: job title+description + CV text + deterministic anchor. This is the ATS lens.

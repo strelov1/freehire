@@ -26,10 +26,12 @@ sync if the profile changes afterward.
 ## Capabilities
 
 ### New Capabilities
+
 - `profile-alert-toggle`: the `/my/profile` toggle, its create/sync/delete
   behavior, and the default-channel rule.
 
 ### Modified Capabilities
+
 - `saved-searches`: "Save a filter set" gains the optional
   `derived_from_profile` flag and the per-user at-most-one invariant it
   enforces.

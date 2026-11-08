@@ -27,6 +27,7 @@ still marked open.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `tailor-autopilot`: "A run records a per-requirement report on the tailored CV" gains a
   second way to update one entry — through `cv_edit` in the same call as the edit that closes
   it, not only through a whole-report `tailor_report` call.

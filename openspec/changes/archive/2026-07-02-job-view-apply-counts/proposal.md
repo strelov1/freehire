@@ -16,9 +16,11 @@ Semantics (accepted, signed-in-only): counts reflect **distinct signed-in users*
 ## Capabilities
 
 ### New Capabilities
+
 - `job-engagement-counts`: a job carries and publicly exposes materialized `view_count`/`applied_count`, displayed on the job detail page.
 
 ### Modified Capabilities
+
 - `user-job-tracking`: recording a view and marking applied now also increment the job's materialized counter, each on a first-time transition only.
 
 ## Impact

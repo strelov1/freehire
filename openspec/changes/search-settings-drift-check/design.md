@@ -11,6 +11,7 @@ reads those two functions back and compares them against what Meilisearch's
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make an already-drifted live index visible on a schedule, closing exactly the gap
   AGENTS.md names ("There is no operator script for this").
 - Reuse the existing settings source of truth (`facetSettings()`, `companySettings()`)
@@ -21,6 +22,7 @@ reads those two functions back and compares them against what Meilisearch's
   configuration, never a red unit for the condition it observes.
 
 **Non-Goals:**
+
 - Fixing the deploy-ordering hazard itself. Settings-before-binary stays a decision
   made when sequencing a deploy and a reindex; this worker is the read side, not an
   enforcement mechanism, and does not gate a deploy or block a rollout.

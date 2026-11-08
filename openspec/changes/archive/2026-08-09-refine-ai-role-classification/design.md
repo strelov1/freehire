@@ -26,6 +26,7 @@ produces a meaningful base to extend rather than a broken signal to replace.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Derive a new `ai_archetype` facet from a job's already-resolved `skills` and
   `category` — no new free-text parsing, no LLM call, no migration.
 - Close the two confirmed `skilltag` dictionary gaps (MCP, RAG) without
@@ -34,6 +35,7 @@ produces a meaningful base to extend rather than a broken signal to replace.
   field-guide-documented synonym titles as their own named roles.
 
 **Non-Goals:**
+
 - Not replacing or reweighting the existing `roles` facet — `ai_archetype` is
   additive, scoped to `category ∈ {ai_engineering, ml_ai}`.
 - Not reproducing the field guide's k-means clustering exactly — the six
@@ -82,6 +84,7 @@ shape), and reach historic jobs the next time `cmd/reindex` runs (unconditional
 full rebuild). `ai_archetype` follows the same shape: a field on
 `JobDocument`, set via `aiarchetype.Derive(doc.Skills, doc.Category)` inside
 `FromJob`, plus:
+
 - `internal/search/client.go` `facetSettings()`: add `"ai_archetype"` to
   `FilterableAttributes`.
 - `internal/search/query_filter.go` `StringFacets`: add

@@ -1,8 +1,11 @@
 # board-harvest Specification
 
 ## Purpose
+
 TBD - created by archiving change gupy-board-discovery. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: The harvest tool validates candidate boards against the live platform API
 
 The `harvest-boards` host tool SHALL expand a board file (`sources/<provider>.yml`)
@@ -205,4 +208,3 @@ detect.
 - **WHEN** discovery surfaces a host on the commercial CATS platform
 - **THEN** that host is excluded from the candidate list and never appended to
   `sources/opencats.yml`
-

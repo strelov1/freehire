@@ -1,6 +1,7 @@
 # PII-masking conventions
 
 ## Scope
+
 Fail-closed masking of personally-identifiable information in CV text before it reaches an
 LLM: a regex floor (email, URL, @handle, phone) unioned with name/address spans from the
 co-located privacy-filter model (`services/pii-filter`, reached over HTTP), producing a
@@ -8,6 +9,7 @@ reversible `Redactor` of numbered placeholders. Used on the CV→LLM path that s
 structured-CV parse in `internal/candidate/resumeextract`, entered via `cmd/server`.
 
 ## Always true
+
 - **Fail-closed, twice.** `Build(ctx, text, detector)` (redactor.go:50) returns an
   ERROR on a nil detector or a detector error rather than a partial regex-only redactor —
   callers refuse to send the CV at all. Then a post-build self-check (redactor.go:112-120)
@@ -63,6 +65,7 @@ structured-CV parse in `internal/candidate/resumeextract`, entered via `cmd/serv
   reader is about to see.
 
 ## Consumers
+
 - `internal/candidate/resumeextract` — redacts the stored CV before the structured-parse
   prompt, fills contact fields from `Contacts()`.
 - `internal/api/handler/handler.go`, `cmd/server` — wire the detector from config.

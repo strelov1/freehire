@@ -17,21 +17,24 @@ Suggestions SHALL come from `GET /api/v1/suggest`. The client SHALL NOT match
 against a shipped catalogue of its own.
 
 #### Scenario: Jobs feed offers suggestions
+
 - **WHEN** a user types `product man` into the header search on the jobs feed
 - **THEN** a dropdown offers `Product Manager` with its open-posting count
 
 #### Scenario: Companies list offers none
+
 - **WHEN** a user types `product man` into the header search on `/companies`
 - **THEN** no suggestion dropdown appears
 
 #### Scenario: The empty box suggests where to start
+
 - **WHEN** a user focuses the header search on the jobs feed without typing
 - **THEN** the dropdown opens with the curated specialization suggestions
 
 #### Scenario: One character offers nothing
+
 - **WHEN** the query is a single character
 - **THEN** no completions are offered — one letter names nothing, and the starting points are what an EMPTY box answers, not a barely-started one
-
 
 ### Requirement: Free-text search is never taken away
 
@@ -44,14 +47,17 @@ suggestion, so the list is not refetched on every keystroke while the visitor is
 still composing the query.
 
 #### Scenario: Enter without a highlighted suggestion searches text
+
 - **WHEN** the user types `revolut` and presses Enter without arrowing into the list
 - **THEN** the free-text search for `revolut` runs and no facet is touched
 
 #### Scenario: The text row is always present
+
 - **WHEN** the dropdown is open with matches
 - **THEN** a final row offers searching the typed text as text
 
 #### Scenario: Typing alone does not refetch the list
+
 - **WHEN** the user types four characters without pressing Enter
 - **THEN** the result list below is not refetched
 
@@ -65,18 +71,22 @@ close it. The dropdown SHALL expose its state to assistive technology using the
 combobox/listbox roles and `aria-activedescendant`.
 
 #### Scenario: Arrow keys and Enter select a role
+
 - **WHEN** the user presses Down until `Data Analyst` is highlighted and presses Enter
 - **THEN** the `data_analytics` role facet is applied
 
 #### Scenario: The highlight crosses section boundaries
+
 - **WHEN** the highlight is on the last completion row and the user presses Down
 - **THEN** the highlight moves to the first job row, not back to the top
 
 #### Scenario: Escape closes without losing the query
+
 - **WHEN** the dropdown is open and the user presses Escape
 - **THEN** the dropdown closes and the typed text remains in the input
 
 #### Scenario: Clicking away closes the dropdown
+
 - **WHEN** the dropdown is open and the user clicks elsewhere on the page
 - **THEN** the dropdown closes
 
@@ -97,17 +107,19 @@ A suggestion of kind `title` names no facet and SHALL be applied as the free-tex
 query instead.
 
 #### Scenario: Selecting a role applies the facet and keeps the text
+
 - **WHEN** the user chooses `Data Analyst` from the dropdown
 - **THEN** `role=data_analytics` is applied and the typed text remains in the input
 
 #### Scenario: The role reads as a normal filter afterwards
+
 - **WHEN** a role has been applied from a suggestion
 - **THEN** it appears as an active filter chip and can be removed like any other facet
 
 #### Scenario: A composed suggestion applies both of its parts
+
 - **WHEN** the user chooses a row naming a role and a company
 - **THEN** both the role facet and `company_slug` are applied
-
 
 ### Requirement: The dropdown shows completions, postings and companies
 
@@ -124,10 +136,12 @@ The job and company sections SHALL reuse the existing launcher's data sources an
 row rendering rather than introducing a second implementation.
 
 #### Scenario: A company name shows its postings
+
 - **WHEN** the user types `google`
 - **THEN** the dropdown shows Google job postings above the Google company rows
 
 #### Scenario: Each section is bounded
+
 - **WHEN** many results match
 - **THEN** the dropdown shows at most five completions, five postings and three companies
 
@@ -141,10 +155,12 @@ A suggestion naming no employer — a title, a skill, a category — SHALL carry
 kind glyph instead.
 
 #### Scenario: A company row shows its logo
+
 - **WHEN** the dropdown offers the company Google
 - **THEN** the row renders Google's logo beside the name
 
 #### Scenario: A skill row shows no logo
+
 - **WHEN** the dropdown offers the skill Java
 - **THEN** the row renders a kind glyph, not a company logo
 

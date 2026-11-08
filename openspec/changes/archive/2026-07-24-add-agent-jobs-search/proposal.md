@@ -34,6 +34,7 @@ lives on its own endpoint.
 ## Capabilities
 
 ### New Capabilities
+
 - `agent-jobs-search`: a dedicated public search endpoint for programmatic/agent
   consumers that returns full job descriptions with a selectable output format.
 

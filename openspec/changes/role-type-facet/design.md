@@ -28,11 +28,13 @@ Production measurement, 3,148,859 live postings:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make "is this a people-management role?" a filterable question.
 - Ship without a migration, a column, or a `cmd/backfill-derive` pass.
 - Be honest about what the signal can and cannot show.
 
 **Non-Goals:**
+
 - An `individual_contributor` value. See the decision below.
 - Description-derived signals (`direct reports`, `manage a team of`).
 - Resolving bare "Manager", or "Lead" in either direction.

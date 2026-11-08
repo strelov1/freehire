@@ -39,6 +39,7 @@ challenge (those still park); anything about which postings to apply to.
 ## Capabilities
 
 ### New Capabilities
+
 - `atsapply-form-layouts`: which application platforms this system can drive a browser
   against, and what it must know about each one's page to do so safely.
 

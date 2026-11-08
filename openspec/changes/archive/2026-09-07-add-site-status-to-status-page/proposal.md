@@ -31,11 +31,13 @@ enough signal to answer this without a new external dependency.
 ## Capabilities
 
 ### New Capabilities
+
 - `site-health-status`: in-process request-window tracking, DB-ping check, and
   the derived operational/degraded/down verdict for the site/API itself
   (independent of the ingest fleet's own status).
 
 ### Modified Capabilities
+
 - `ingest-status-page`: `GET /api/v1/status` response gains a `site` object;
   the `/status` page gains a "Site status" section above the existing
   provider list.

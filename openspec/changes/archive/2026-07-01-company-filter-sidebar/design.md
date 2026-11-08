@@ -18,6 +18,7 @@ and reusable per-facet controls (`FacetSection`, `PillGroup`, `SearchSelect`).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make the companies catalog browsable by collection, region, country, industry,
   company type, and company size.
 - Derive those facets onto the company from its open jobs and filter with plain
@@ -25,6 +26,7 @@ and reusable per-facet controls (`FacetSection`, `PillGroup`, `SearchSelect`).
 - Reuse the existing frontend filter machinery rather than inventing a parallel one.
 
 **Non-Goals:**
+
 - Live facet counts next to company options (jobs-style distribution). Options come
   from static vocabularies; counts are a later, separable addition.
 - A Meilisearch index for companies. The list stays plain SQL.
@@ -59,6 +61,7 @@ so unchanged rows aren't rewritten. `cmd/recount-companies` keeps its shape (loa
 pool → one query call → log affected rows).
 
 The aggregation subquery groups open jobs by `company_slug`:
+
 - `regions` / `countries`: `array_agg(DISTINCT r ORDER BY r)` over
   `unnest(jobs.regions|countries)`.
 - `domains`: `array_agg(DISTINCT d ORDER BY d)` over

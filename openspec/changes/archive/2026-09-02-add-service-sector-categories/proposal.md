@@ -43,11 +43,13 @@ resolve to nothing, because the aliases were written singular. `Optometrist`
 ## Capabilities
 
 ### New Capabilities
+
 - `service-sector-taxonomy`: which titles resolve to `logistics`, `education`,
   `personal_services` and `administration`, the Russian vocabularies inside
   them, and the named roles they expose.
 
 ### Modified Capabilities
+
 - `consumer-industry-taxonomy`: the trades vocabulary must reach the PLURAL
   spellings of its own titles. `wordmatch` has no morphology, and the shipped
   aliases are singular, so three of the largest automotive titles in the

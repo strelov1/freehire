@@ -14,18 +14,22 @@ aliases. When several aliases map a query to the same role slug, that role SHALL
 be offered once.
 
 #### Scenario: Query names a role by its label
+
 - **WHEN** the query is `data analyst`
 - **THEN** the `data_analytics` role is among the matches
 
 #### Scenario: Query names a role by an alias
+
 - **WHEN** the query is `swe`
 - **THEN** the `software_engineer` role is among the matches
 
 #### Scenario: Query is a prefix of a role name
+
 - **WHEN** the query is `data an`
 - **THEN** the `data_analytics` role is among the matches
 
 #### Scenario: One role matched through several aliases is offered once
+
 - **WHEN** the query matches two aliases that both resolve to `ai_engineering`
 - **THEN** `ai_engineering` appears exactly once in the matches
 
@@ -64,10 +68,12 @@ break a remaining tie by label so the list does not reshuffle between renders.
 The system SHALL offer at most five roles.
 
 #### Scenario: A mid-word prefix loses to a role the query names outright
+
 - **WHEN** the query is `data` and the Software Generalist alias "database developer" has more open vacancies than Data Analyst
 - **THEN** Data Analyst is offered first
 
 #### Scenario: A typo-only match is not offered
+
 - **WHEN** the query is `backedn`, which reaches roles only through typo tolerance
 - **THEN** no role is offered
 
@@ -87,18 +93,22 @@ that names a grade still reaches it: naming it makes that variant the better mat
 under tier 1, so it is the variant kept.
 
 #### Scenario: Grades of one role do not crowd out other roles
+
 - **WHEN** the query is `data analyst` and the distribution carries Data Analyst and its senior, lead, junior and intern grades alongside Data Engineer
 - **THEN** Data Analyst is offered once and Data Engineer is still offered
 
 #### Scenario: Naming a grade keeps that grade
+
 - **WHEN** the query is `senior data analyst`
 - **THEN** the row offered for that role is Senior Data Analyst, not Data Analyst
 
 #### Scenario: An unrelated role reached only by typo tolerance never leads
+
 - **WHEN** the query is `devops` and Sales Specialist (reached through its `revops` alias) has far more open vacancies than DevOps Engineer
 - **THEN** DevOps Engineer is offered first
 
 #### Scenario: A large fuzzy match does not outrank the named role
+
 - **WHEN** the query is `backend` and Marketing Specialist (reached through its `growth hacker` alias) has more open vacancies than Backend Engineer
 - **THEN** Backend Engineer is offered first
 
@@ -120,22 +130,27 @@ and it is zero".
 A role the user has already selected in the `role` facet SHALL NOT be offered.
 
 #### Scenario: More vacancies rank higher
+
 - **WHEN** `data_analytics` has more open vacancies than `data_engineering` and both match
 - **THEN** `data_analytics` is offered above `data_engineering`
 
 #### Scenario: At most five roles are offered
+
 - **WHEN** a query matches nine roles
 - **THEN** exactly five are offered
 
 #### Scenario: Counts have not loaded
+
 - **WHEN** the role facet distribution is unavailable and the query is `swe`
 - **THEN** Software Engineer is the first role offered, and no row carries a count
 
 #### Scenario: A role with no open vacancies is not offered
+
 - **WHEN** the distribution is loaded and a matched role has no entry in it
 - **THEN** that role is not among the offered roles
 
 #### Scenario: An already-selected role is not re-offered
+
 - **WHEN** `role=data_analytics` is active and the query matches `data_analytics`
 - **THEN** `data_analytics` is not among the offered roles
 
@@ -151,14 +166,17 @@ the page path — the same opt-in bridge pattern `filterScope` and `openFilters`
 already use.
 
 #### Scenario: Jobs feed offers suggestions
+
 - **WHEN** a user types `product man` into the header search on the jobs feed
 - **THEN** a dropdown offers `Product Manager` with its open-vacancy count
 
 #### Scenario: Companies list offers none
+
 - **WHEN** a user types `product man` into the header search on `/companies`
 - **THEN** no role dropdown appears
 
 #### Scenario: One character offers nothing
+
 - **WHEN** the query is a single character
 - **THEN** no role dropdown appears
 
@@ -172,10 +190,12 @@ chips, the result list, and the facet counts update the way any other facet
 selection does.
 
 #### Scenario: Selecting a role applies the facet and empties the box
+
 - **WHEN** the user chooses `Data Analyst` from the dropdown
 - **THEN** `role=data_analytics` is applied, the search input is empty, and the URL carries the role and no `q`
 
 #### Scenario: The role reads as a normal filter afterwards
+
 - **WHEN** a role has been applied from a suggestion
 - **THEN** it appears as an active filter chip and can be removed like any other facet
 
@@ -187,10 +207,12 @@ free-text search exactly as it does today — the dropdown SHALL NOT capture Ent
 by default.
 
 #### Scenario: Enter without a highlighted suggestion searches text
+
 - **WHEN** the user types `revolut` and presses Enter without arrowing into the list
 - **THEN** the free-text search for `revolut` runs and the role facet is untouched
 
 #### Scenario: The text row is always present
+
 - **WHEN** the dropdown is open with role matches
 - **THEN** a final row offers searching the typed text as text
 
@@ -203,13 +225,16 @@ outside the dropdown SHALL close it. The dropdown SHALL expose its state to
 assistive technology using the combobox/listbox roles and `aria-activedescendant`.
 
 #### Scenario: Arrow keys and Enter select a role
+
 - **WHEN** the user presses Down until `Data Analyst` is highlighted and presses Enter
 - **THEN** the `data_analytics` role facet is applied and the input is cleared
 
 #### Scenario: Escape closes without losing the query
+
 - **WHEN** the dropdown is open and the user presses Escape
 - **THEN** the dropdown closes and the typed text remains in the input
 
 #### Scenario: Clicking away closes the dropdown
+
 - **WHEN** the dropdown is open and the user clicks elsewhere on the page
 - **THEN** the dropdown closes

@@ -14,6 +14,7 @@ that convention, not a new one.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Every one of the 8 profile sections gets its own URL under `/my/profile/*`.
 - Preserve today's "no profile yet" behavior exactly: the setup form and
   `AccountPreferences` render on any of the 8 URLs, no tab strip, until a
@@ -24,6 +25,7 @@ that convention, not a new one.
 - Keep the very recent `?tab=<id>` links working via a redirect.
 
 **Non-Goals:**
+
 - No change to any section's own component or its save behavior.
 - No change to sibling `/my/**` areas.
 - No visual redesign of the tab strip.
@@ -93,6 +95,7 @@ that convention, not a new one.
 ## Migration Plan
 
 Frontend-only, no data migration. Deploy is a single frontend release:
+
 - No feature flag — the old `?tab=` links keep resolving via the compatibility
   redirect, so there is no broken-link window.
 - Rollback is a plain revert (no schema/state to unwind).

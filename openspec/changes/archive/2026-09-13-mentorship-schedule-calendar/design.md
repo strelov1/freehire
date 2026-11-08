@@ -14,12 +14,14 @@ that on `/my/mentorship/schedule`.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Give a mentor a single read that categorizes their own time (`booked` / `busy` /
   `free` / `closed`) for a month, computed by the same pipeline the public booking flow
   uses, so the two can never disagree.
 - Keep the existing weekly-hours/overrides form as the only way to edit availability.
 
 **Non-Goals:**
+
 - Editing availability by interacting with the calendar (dragging, clicking a cell to
   toggle it). That is a separate, larger feature and was explicitly ruled out for this
   change.

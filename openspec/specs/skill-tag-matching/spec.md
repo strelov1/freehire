@@ -1,8 +1,11 @@
 # skill-tag-matching Specification
 
 ## Purpose
+
 TBD - created by archiving change skilltag-matching-fixes. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Separator-insensitive multi-word matching
 
 The skill-tag matcher SHALL treat `-` and `_` between alphanumerics as equivalent
@@ -12,14 +15,17 @@ normalization SHALL apply consistently to both the input text and the phrase
 aliases.
 
 #### Scenario: Hyphenated multi-word term resolves
+
 - **WHEN** the text contains "distributed-systems"
 - **THEN** the matcher emits the same canonical ("distributed-systems") it emits for "distributed systems"
 
 #### Scenario: Underscored multi-word term resolves
+
 - **WHEN** the text contains "distributed_systems"
 - **THEN** the matcher emits the same canonical it emits for "distributed systems"
 
 #### Scenario: Space form still resolves
+
 - **WHEN** the text contains "distributed systems"
 - **THEN** the matcher emits its canonical (no regression from the normalization)
 
@@ -31,14 +37,17 @@ SHALL be left intact, so punctuated skills continue to resolve and do not gain
 false positives.
 
 #### Scenario: Plus/hash/dot canonicals still match
+
 - **WHEN** the text contains "c++", "c#", "node.js", or "asp.net"
 - **THEN** each resolves to its canonical (cpp, csharp, nodejs, dotnet) exactly as before
 
 #### Scenario: Suffix of a punctuated token is not a false match
+
 - **WHEN** the text contains "asp.net"
 - **THEN** it does NOT additionally emit a ".net"-only match that the leading-dot boundary guard forbids
 
 #### Scenario: Hyphen compound does not leak an ambiguous single-letter canonical
+
 - **WHEN** the text contains "objective-c" with no other C signal
 - **THEN** the matcher does NOT emit the "c" canonical
 
@@ -64,30 +73,37 @@ generation) on job postings whose category is `ai_engineering` or `ml_ai`, and
 SHALL remain résumé-scoped for résumé parsing regardless of any category.
 
 #### Scenario: Shared acronym resolves everywhere
+
 - **WHEN** any text contains "ML" as a standalone token
 - **THEN** the matcher emits "machine-learning"
 
 #### Scenario: Résumé-scoped acronym resolves in résumé mode
+
 - **WHEN** a résumé is parsed with the résumé option and contains "RAG"
 - **THEN** the matcher emits "rag" (retrieval-augmented generation)
 
 #### Scenario: Category-scoped acronym resolves for its allow-listed job category
+
 - **WHEN** job text in category `ai_engineering` contains "RAG" as a standalone token
 - **THEN** the matcher emits "rag"
 
 #### Scenario: Category-scoped acronym does not resolve outside its allow-list
+
 - **WHEN** job text in category `backend` contains "RAG" — including "RAG status"
 - **THEN** the matcher does NOT emit "rag"
 
 #### Scenario: Category-scoped acronym does not resolve when no category is supplied
+
 - **WHEN** default (job) parsing with no category option sees "RAG"
 - **THEN** the matcher does NOT emit "rag"
 
 #### Scenario: Ambiguous lowercase form does not resolve
+
 - **WHEN** the text contains the lowercase word "rag" or "ml"
 - **THEN** the matcher does NOT emit the corresponding canonical
 
 #### Scenario: Acronym matched as a whole word only
+
 - **WHEN** "ML" appears embedded in a larger token (e.g. "HTML")
 - **THEN** it does NOT emit "machine-learning"
 
@@ -99,10 +115,12 @@ it cannot resolve — it never guesses, and no fuzzy or semantic similarity is
 used. Results SHALL stay deduplicated and sorted.
 
 #### Scenario: Unknown term emits nothing
+
 - **WHEN** the text contains a term with no curated alias
 - **THEN** the matcher emits no canonical for it
 
 #### Scenario: Deterministic, deduplicated, sorted output
+
 - **WHEN** the same skill appears multiple times and in mixed separator/case forms
 - **THEN** its canonical appears exactly once and the result is sorted (identical across runs)
 

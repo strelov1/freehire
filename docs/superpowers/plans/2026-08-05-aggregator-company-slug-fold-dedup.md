@@ -36,16 +36,17 @@ scan per company in the reindex loop.
 ### Task 1: Fold the company_slug comparison in the suppression query
 
 **Files:**
+
 - Modify: `internal/platform/db/queries/jobs.sql:562-573` (doc comment), `:586` (the `ats` CTE filter),
   `:602` (the `agg` CTE filter)
 - Modify (generated, do not hand-edit): `internal/platform/db/jobs.sql.go`
 - Test: `internal/platform/db/aggregator_dedup_integration_test.go`
 
 **Interfaces:**
+
 - Consumes: `Queries.SuppressAggregatorDuplicatesForCompany(ctx, SuppressAggregatorDuplicatesForCompanyParams{Company, Aggregators})` — unchanged signature, only the query body changes.
 - Produces: the same method, now suppressing across `company_slug` values that fold to the
   same string. No new exported symbol.
-
 - [ ] **Step 1: Write the failing test**
 
 Add this test to `internal/platform/db/aggregator_dedup_integration_test.go` (after
@@ -127,7 +128,9 @@ Then change the `ats` CTE filter (currently at line 586):
 ```sql
     WHERE jobs.company_slug = sqlc.arg(company)
 ```
+
 to
+
 ```sql
     WHERE replace(jobs.company_slug, '-', '') = replace(sqlc.arg(company)::text, '-', '')
 ```
@@ -137,7 +140,9 @@ And the `agg` CTE filter (currently at line 602):
 ```sql
     WHERE a.company_slug = sqlc.arg(company)
 ```
+
 to
+
 ```sql
     WHERE replace(a.company_slug, '-', '') = replace(sqlc.arg(company)::text, '-', '')
 ```
@@ -193,13 +198,14 @@ equality, so the aggregator copy was never compared against its ATS twin."
 ### Task 2: Add the backing index and finish verification
 
 **Files:**
+
 - Create: `migrations/0074_jobs_open_company_slug_folded_idx.sql`
 
 **Interfaces:**
+
 - Consumes: nothing from Task 1's Go/SQL code directly — this is a standalone schema change
   that makes Task 1's new predicate index-backed instead of a per-company seq scan.
 - Produces: index `jobs_open_company_slug_folded_idx`, checked by name in Step 3 below.
-
 - [ ] **Step 1: Check the next free migration number**
 
 Run: `ls migrations/ | grep -oE '^[0-9]+' | sort -n | tail -3` to confirm `0074` is still free

@@ -30,6 +30,7 @@ pattern justjoin already uses.
 ## Capabilities
 
 ### New Capabilities
+
 - `nofluffjobs-source`: the `nofluffjobs` adapter — its streamed listing crawl, posting→`Job` mapping
   with structured facets, hydrating `FetchNew` detail description, drop rules, and boardless-aggregator
   classification.

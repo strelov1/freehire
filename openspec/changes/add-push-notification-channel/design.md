@@ -15,6 +15,7 @@ sign-in / notification-toggle and stores it in `user_push_tokens`, keyed by
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Deliver all three notification kinds (subscription digest, reminder, nudge) to a
   user's registered mobile device(s) as a push, alongside their existing
   Telegram/email options.
@@ -27,6 +28,7 @@ sign-in / notification-toggle and stores it in `user_push_tokens`, keyed by
   that job in the mobile app.
 
 **Non-Goals:**
+
 - Collapsing `notify`/`reminder`/`nudge` into one shared engine. `internal/notify`'s
   own docs defer that explicitly until a third *channel* shows which half
   generalises; this change lands that third channel but treats each engine's

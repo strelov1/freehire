@@ -38,6 +38,7 @@ UX, with the button retained as an accessible fallback.
 <!-- none — this reshapes existing frontend behavior, no new capability surface -->
 
 ### Modified Capabilities
+
 - `web-frontend`: the "Jobs list with pagination" requirement changes its paging
   control from an explicit "Load more" button to bottom-reach infinite scroll
   (button retained as fallback); a new requirement guarantees the search/filter

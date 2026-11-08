@@ -67,13 +67,13 @@ A bucket pass over 74,623 items from the 8,000 most recently enriched rows:
 
 > **This section was built, shipped, and removed.** The extractor fires exactly when
 > the description already displays the list, so it duplicated the text a few
-> centimetres above it. See  §10.
+> centimetres above it. See §10.
 > The rest of this design stands; only the display does not.
 
 `web/src/lib/components/JobView.svelte`, inside the `descriptionContent` snippet,
 between `<JobDescription>` and the Skills section:
 
-```
+```text
 ─── What they ask for ───
 Required
  • 5+ years of call center experience

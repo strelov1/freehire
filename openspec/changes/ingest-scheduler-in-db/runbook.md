@@ -22,7 +22,7 @@ that produced nginx 504s the last time it happened. So:
 and raise it roughly in step with the share of providers cut over, reaching 10 only when
 `ingest-slot.sh` is gone (§9). `INGEST_SCHEDULER_CAP` lives in `/opt/freehire/.env`.
 
-```
+```text
 # a rough guide, not a formula — measure /proc/pressure/io rather than trusting it
 #   first wave (~3 providers)   INGEST_SCHEDULER_CAP=2
 #   ~25% cut over              INGEST_SCHEDULER_CAP=3
@@ -39,7 +39,7 @@ Disarm the autodeploy poll, so the code deploy and the unit changes land in one 
 window instead of racing a 10-minute timer. (This is what the board-catalog cutover had to
 do mid-flight after discovering it was armed.)
 
-```
+```text
 systemctl stop freehire-autodeploy.timer
 ```
 
@@ -47,7 +47,7 @@ Re-arm it at the very end.
 
 ## 8.1 — Deploy, in shadow
 
-```
+```text
 /opt/freehire/bin/release.sh freehire
 ```
 
@@ -55,7 +55,7 @@ Re-arm it at the very end.
 of its build list now names them; **the host copy is a separate file and is what actually
 runs** — check it before releasing:
 
-```
+```text
 grep -c ingest-scheduler /opt/freehire/bin/release.sh   # must be 1
 ```
 
@@ -65,7 +65,7 @@ scheduler that launched on install would double-crawl every provider at once.
 
 Confirm one tick:
 
-```
+```text
 systemctl start freehire-ingest-scheduler.service
 journalctl -u freehire-ingest-scheduler.service -n 40 --no-pager -o cat
 ```
@@ -80,7 +80,7 @@ catalog read is wrong, not that the catalogue is empty.
 Every number below is a MEASUREMENT; the `--notes` are not decoration. The full reasoning
 is in `internal/ingest/ingestsched/AGENTS.md`. Run each without `--apply` first.
 
-```
+```text
 schedule-board --provider=paylocity  --shards=24 --cadence=24h --timeout=4500s --apply \
   --notes="~10.42s/board measured; 395 boards/shard = ~4117s, so 4500s not 3000s"
 schedule-board --provider=workday    --shards=6  --cadence=6h  --apply \
@@ -103,7 +103,7 @@ schedule-board --provider=adpmyjobs  --shards=8  --cadence=24h --timeout=4500s -
 The twelve 3h providers — measured 2026-07-31 at ≥25 min/run and together 65% of all ingest
 busy-time:
 
-```
+```text
 for p in bamboohr icims paycom gupy mycareersfuture ukg careerplug jibe jazzhr vagas apple taleo; do
   schedule-board --provider=$p --cadence=3h --apply \
     --notes="measured >=25min/run 2026-07-31; hourly never finished a sweep"
@@ -114,7 +114,7 @@ schedule-board --provider=reed --cadence=6h --apply \
 
 The two that must not crawl:
 
-```
+```text
 schedule-board --provider=bayt --disable --apply \
   --reason="fingerprint client has no proxy support; hard-403s the prod datacenter IP"
 schedule-board --provider=gulftalent --disable --apply \
@@ -128,7 +128,7 @@ drift from it later.
 Also retire the two zombies found while designing this. `custom` never named a real
 provider; `itechart` has no board in the catalogue:
 
-```
+```text
 systemctl disable --now freehire-ingest@custom.timer
 rm -f /etc/systemd/system/freehire-ingest@custom.timer
 systemctl disable --now freehire-ingest@itechart.timer
@@ -137,7 +137,7 @@ rm -f /etc/systemd/system/freehire-ingest@itechart.timer
 
 Read the result back:
 
-```
+```text
 schedule-board            # no --apply, no --provider: the whole table
 ```
 
@@ -146,7 +146,7 @@ schedule-board            # no --apply, no --provider: the whole table
 This is the cheap place to be wrong. Compare what the scheduler SAYS it would launch
 against what the timers actually launched:
 
-```
+```text
 journalctl -u freehire-ingest-scheduler.service --since "-24h" -o cat | grep "would launch" \
   | awk '{print $4}' | sort | uniq -c | sort -rn | head -40
 journalctl -u "freehire-ingest@*" --since "-24h" -o cat | grep "^Starting" \
@@ -166,7 +166,7 @@ The counts should track each provider's cadence. Investigate BEFORE cutting over
 
 Start with a handful of cheap, hourly, unsharded providers and watch them for an hour:
 
-```
+```text
 for p in arbeitnow remoteok weworkremotely; do
   systemctl disable --now freehire-ingest@$p.timer
   schedule-board --provider=$p --manage --apply
@@ -175,7 +175,7 @@ done
 
 Turn launches on once (this is the moment the scheduler stops being inert):
 
-```
+```text
 # add INGEST_SCHEDULER_APPLY=1 to /opt/freehire/.env, then
 systemctl start freehire-ingest-scheduler.service
 journalctl -u freehire-ingest-scheduler.service -n 30 --no-pager -o cat
@@ -184,7 +184,7 @@ systemctl list-units 'freehire-ingest-run-*' --all --no-pager
 
 **Rollback for any provider is the reverse pair**, and it is always available:
 
-```
+```text
 schedule-board --provider=<p> --unmanage --apply
 systemctl enable --now freehire-ingest@<p>.timer
 ```
@@ -193,7 +193,7 @@ Then widen in waves of ~20-40, checking `schedule-board` between waves for a pro
 `LAST RUN` has stopped advancing. **The seven shard families go LAST** — they carry the
 raised timeouts and the tightest pacing, so a mistake there costs the most.
 
-## 8.5 — Drop the rollout gate. NOT OPTIONAL.
+## 8.5 — Drop the rollout gate. NOT OPTIONAL
 
 Once every provider is managed, `managed` must go: a rollout default that outlives its
 rollout restores the exact failure this change removes (absence meaning unscheduled).
@@ -206,7 +206,7 @@ from `cmd/schedule-board`.
 Only after 8.5, and only after a full cycle of the slowest provider (paylocity: 24h) has
 completed under the scheduler.
 
-```
+```text
 rm -f /etc/systemd/system/freehire-ingest@*.timer
 rm -f /etc/systemd/system/freehire-ingest-*-shard@*
 rm -f /etc/systemd/system/freehire-ingest@.service /etc/systemd/system/freehire-ingest-*-shard@.service
@@ -216,7 +216,7 @@ systemctl daemon-reload
 
 Delete the same files from `deploy/systemd` and `deploy/bin` in git, then:
 
-```
+```text
 `freehire-ops`' scripts/host2/drift-check.sh     # from a checkout; must exit 0
 systemctl start freehire-autodeploy.timer
 ```
@@ -226,7 +226,7 @@ systemctl start freehire-autodeploy.timer
 The one check that proves the fleet did not quietly lose a provider — which is the whole
 reason this change exists. Every provider must have completed a run within its own cadence:
 
-```
+```text
 schedule-board | awk 'NR>1 && $6 != "disabled"'
 ```
 

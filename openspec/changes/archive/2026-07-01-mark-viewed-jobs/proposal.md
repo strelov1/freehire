@@ -14,6 +14,7 @@ A signed-in user browsing the job list has no way to tell which postings they ha
 <!-- none -->
 
 ### Modified Capabilities
+
 - `user-job-tracking`: adds a new requirement — the API exposes the set of viewed job slugs for the authenticated caller.
 - `web-frontend`: adds a new requirement — the job browse list and search results visually mark jobs the signed-in user has already viewed.
 

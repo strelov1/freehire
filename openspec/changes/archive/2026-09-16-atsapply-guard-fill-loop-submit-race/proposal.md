@@ -35,11 +35,13 @@ incomplete.
 ## Capabilities
 
 ### New Capabilities
+
 - `atsapply-fill-submit-safety`: guards the fill loop against an early, accidental submit
   triggered mid-fill, so a submission that may already be underway is verified rather than
   double-submitted or silently abandoned.
 
 ### Modified Capabilities
+
 (none — no existing capability spec describes fill-loop/submit-click behavior; see
 `atsapply-form-layouts` and `atsapply-browseruse-fallback` for the closest adjacent
 capabilities, neither of which covers this.)

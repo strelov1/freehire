@@ -6,6 +6,7 @@ point at a narrative companion under `docs/superpowers/specs/` that was never
 written, so the pointer promised a document that has never existed.
 
 Current state:
+
 - `internal/reminder` schedules a saved-job reminder at save time (`ScheduleOnSave`,
   taking an `*Override` for a per-job delay/disable), fires due reminders from
   `job_reminders` with a re-check-at-fire ("still saved and unapplied") cancellation.
@@ -30,6 +31,7 @@ Current state:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One decision layer driving three nudge kinds — saved-not-applied (existing),
   gone-silent (new), entered-interview (new) — off one account-level toggle.
 - Dedup that doesn't re-ping every cron pass, without a snooze or a notified-count
@@ -38,6 +40,7 @@ Current state:
   one channel choice, no per-job or per-stage granularity.
 
 **Non-Goals:**
+
 - Not a rewrite of the `notify`/`reminder` `Notifier` interface split — see
   `docs/agents/notifications.md`. `internal/nudge` is a third, independently small
   engine for a third distinct use case, not a shared abstraction across all three.
@@ -73,6 +76,7 @@ the live-recompute approach.
 `application_nudges` carries `UNIQUE (user_id, job_id, kind, episode_key)`. MATCH
 inserts `ON CONFLICT DO NOTHING`. `episode_key` is the fact that must change before
 a re-notify is warranted:
+
 - `follow_up`: `last_activity_at` at match time. Silence dragging on longer doesn't
   change it (no repeat nudge); new inbound mail does (a fresh episode — and the
   silence state will have left `silent` anyway, so it self-filters at MATCH time

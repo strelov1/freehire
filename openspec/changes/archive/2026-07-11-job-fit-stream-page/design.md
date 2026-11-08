@@ -19,6 +19,7 @@ tokens — live is SSE). No background precompute.
 ## Decisions
 
 **1. SSE event protocol (named events).** `GET /jobs/:slug/fit/stream` emits:
+
 - `stage` — `{n:1|2|3, phase:"start"|"done", label}` drives the stepper.
 - `thinking` — `{stage, text}` reasoning-token deltas; best-effort (absent on non-reasoning models).
 - `requirements` — the sanitized Stage-1 requirement match (after Stage 1).

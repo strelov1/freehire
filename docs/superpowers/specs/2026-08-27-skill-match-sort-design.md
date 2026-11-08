@@ -41,7 +41,7 @@ dictionary (`internal/dict/skilltag` — 534 word + 348 phrase aliases resolving
 The cosine of two such vectors expands to exactly the ranking the section above
 asks for:
 
-```
+```text
 cos(A, B) = Σ idf(s)² over s ∈ A∩B  /  (‖A‖ · ‖B‖)
 ```
 

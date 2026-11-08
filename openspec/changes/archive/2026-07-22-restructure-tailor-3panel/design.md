@@ -17,6 +17,7 @@ list, PDF endpoint) already exists and is recomposed. No backend work.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Three-column workspace: left-tabbed Editor/Chat, centre live HTML CV preview + Download PDF +
   zoom, right-tabbed Templates/Job description/Verdict.
 - The editor and the centre preview share one in-memory `Document`, so typing re-renders the
@@ -26,6 +27,7 @@ list, PDF endpoint) already exists and is recomposed. No backend work.
 - No Go/API/DB changes; no migration.
 
 **Non-Goals:**
+
 - No in-page PDF preview (centre is HTML only; PDF is a download).
 - No per-template HTML preview parity (the HTML preview is one clean layout; template choice only
   affects the downloaded PDF).
@@ -54,11 +56,11 @@ both read one object. The page owns load (`getCv`) and the debounced autosave (`
 
 `CvEditor.svelte` is used only by the panel's `Edit` tab, which this change removes (the editor
 moves into the left panel against the shared `doc`). So:
+
 - Lift the section markup + row helpers into a controlled `CvSectionForm.svelte` — `bind:doc`,
   `bind:title`, no fetch, no autosave.
 - Fold `CvEditor`'s load + debounced-autosave + save-state into the tailoring page (which now owns
   `doc`), then **delete `CvEditor.svelte`** as orphaned by this change.
-
 - **Why:** the editor and the centre preview must share one in-memory `doc` (decision 1), so the
   page — not a self-contained component — has to own load/save; `CvSectionForm` is the presentational
   seam both the left tab and (transitively) the preview read.
@@ -71,9 +73,9 @@ moves into the left panel against the shared `doc`). So:
 
 A Svelte component that takes `doc` (and `templateId`, currently unused for layout) and renders a
 clean, ATS-style resume: header (name, contacts, links), summary, experience (role/company/dates
-+ bullets + stack), education, skills groups, projects, languages, certifications — the same
-section set the form and Typst cover. Zoom via CSS `transform: scale`. No network, no PDF.
 
+- bullets + stack), education, skills groups, projects, languages, certifications — the same
+section set the form and Typst cover. Zoom via CSS `transform: scale`. No network, no PDF.
 - **Why client-side Svelte over a server HTML endpoint:** the user asked for HTML-only preview and
   the `Document` is already on the client; a server render would add an endpoint for no benefit.
 - **Fidelity:** models the `classic-ats` spirit, not pixel-parity with Typst. The download PDF is

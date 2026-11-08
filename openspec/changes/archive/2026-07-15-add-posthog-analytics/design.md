@@ -13,6 +13,7 @@ tracking PII).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Product funnel analytics (`search → job_view → apply/save/track`).
 - Session replay on public routes to debug filter/swipe UX.
 - One client feature flag as a demonstrator (non-tech default).
@@ -20,6 +21,7 @@ tracking PII).
 - Inert-by-default, mirroring the Sentry env-gating pattern.
 
 **Non-Goals:**
+
 - Removing GA4 (kept for SEO/traffic; the two do not merge).
 - Server-side flag evaluation or migrating the backend `beta_tester` gate to
   PostHog (noted as a seam; needs a server SDK + SSR flag reads).

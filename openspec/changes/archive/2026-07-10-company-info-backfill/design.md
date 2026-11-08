@@ -15,12 +15,14 @@ data. This change lands the data model, a one-time loader, and company-detail ex
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Authoritative company-info columns on `companies`, independent of the job-derived facets.
 - Enrich existing companies and import unmatched ones as visible reference rows that
   auto-upgrade when a job later appears for them.
 - Keep the loader and schema free of any reference to the dataset's origin.
 
 **Non-Goals:**
+
 - No recurring refresh / cron worker (one-time backfill; re-run manually).
 - No `industries` search facet or frontend beyond company-detail exposure (Phase 2).
 - No domain-based fuzzy matching in v1 (slug-only).

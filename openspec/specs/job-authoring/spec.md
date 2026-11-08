@@ -1,8 +1,11 @@
 # job-authoring Specification
 
 ## Purpose
+
 TBD - created by archiving change moderator-create-jobs. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Moderator creates a hand-curated vacancy
 
 The system SHALL allow a user with the `moderator` role to create a vacancy through
@@ -117,4 +120,3 @@ public job wire shape.
 
 - **WHEN** any job is returned over the API
 - **THEN** the response body contains no `created_by` or `updated_by` field
-

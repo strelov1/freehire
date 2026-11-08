@@ -49,6 +49,7 @@ API, no headless browser.
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `deel` is a registered provider — a board-based
   adapter that enumerates a Deel ATS org's postings from the board page's embedded Next.js
   flight payload (one request, no per-posting detail fetch), yielding the normalized job shape

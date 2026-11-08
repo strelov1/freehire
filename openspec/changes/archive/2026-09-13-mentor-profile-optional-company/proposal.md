@@ -31,6 +31,7 @@ to happen at submission, not as an editable toggle later.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `mentor-profile`: "A mentor profile is owned by one account and names one company" no
   longer requires a company; "A profile naming an unknown company is refused" gains a
   companion scenario for the no-company case; the public directory/entry-point

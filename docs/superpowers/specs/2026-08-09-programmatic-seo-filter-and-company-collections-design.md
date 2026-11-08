@@ -33,7 +33,6 @@ covered by the design below since the two kinds share one route.
 - No new company-collection page type or route — `/collections/yc` and its
   siblings already exist (`internal/job/collections`'s registry, unified with
   `FILTER_COLLECTIONS` through `collectionBySlug`). Nothing here duplicates that.
-
 - No auto-generated cross-product of every facet combination. Combinations stay
   hand-curated (same discipline as today's `FILTER_COLLECTIONS`: each entry is
   added because it has a healthy non-empty live count and a plausible real

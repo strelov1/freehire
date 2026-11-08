@@ -1,8 +1,11 @@
 # justjoin-source Specification
 
 ## Purpose
+
 TBD - created by archiving change justjoin-detail-hydration. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: JustJoin list-plus-detail crawl
 
 The system SHALL provide a `justjoin` source adapter that crawls the justjoin.it public
@@ -83,4 +86,3 @@ single posting's detail failure SHALL be isolated and counted, never aborting th
 
 - **WHEN** the detail fetch for one row fails or the posting is gone
 - **THEN** the worker logs and skips that row and continues with the rest
-

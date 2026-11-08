@@ -24,11 +24,13 @@
 ## File Structure
 
 **Create:**
+
 - `internal/api/atsapply/layout.go` — the provider registry: the `formLayout` type, the `addressing` values, the table, and its lookup. One responsibility, no I/O.
 - `internal/api/atsapply/layout_test.go`
 - `internal/api/atsapply/leverform_test.go` — the reduced real Lever DOM fixture and the scan/selector tests over it.
 
 **Modify:**
+
 - `internal/api/atsapply/domscan.go` — `ScanGreenhouseForm` becomes layout-driven; `scanControls` honours the addressing.
 - `internal/api/atsapply/fill.go` — `fieldSelector` and the submit click read the layout.
 - `internal/api/atsapply/client.go` — `fillProviders` gains `lever`; the `if provider == "greenhouse"` branch becomes a layout lookup.
@@ -39,16 +41,17 @@
 ### Task 1: The provider registry
 
 **Files:**
+
 - Create: `internal/api/atsapply/layout.go`
 - Create: `internal/api/atsapply/layout_test.go`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces:
   - `type addressing int` with `byID` and `byName`
   - `type formLayout struct { formSelector, submitSelector string; addressBy addressing }`
   - `func layoutFor(provider string) (formLayout, bool)`
-
 - [ ] **Step 1: Write the failing test**
 
 Create `internal/api/atsapply/layout_test.go`:
@@ -189,14 +192,15 @@ git commit -F <a file containing a message explaining the registry and why it is
 ### Task 2: Scanning by the layout
 
 **Files:**
+
 - Modify: `internal/api/atsapply/domscan.go`
 - Create: `internal/api/atsapply/leverform_test.go`
 - Modify: `internal/api/atsapply/browser.go` (the `greenhouseFormReadySelector` constant's callers)
 
 **Interfaces:**
+
 - Consumes: `formLayout`, `byName`, `layoutFor` (Task 1).
 - Produces: `func ScanForm(pageHTML string, layout formLayout) ([]DOMField, error)` — replaces `ScanGreenhouseForm`. `DOMField.ID` carries the field's identifier under the layout's addressing.
-
 - [ ] **Step 1: Capture the fixture**
 
 The fixture must be reduced from the real DOM, not written to match the code. These are the controls a live Lever posting renders, captured on 2026-09-09 from `jobs.lever.co/coderio/6ce0e52b-e7bc-462f-ac9e-1d31c8c0e037/apply` — copy them verbatim into `internal/api/atsapply/leverform_test.go`:
@@ -381,13 +385,14 @@ git commit -F <a file containing a message explaining that the scan now identifi
 ### Task 3: Selecting and submitting by the layout
 
 **Files:**
+
 - Modify: `internal/api/atsapply/fill.go`
 - Modify: `internal/api/atsapply/fill_test.go` (if one exists; otherwise add the test to `layout_test.go`)
 
 **Interfaces:**
+
 - Consumes: `formLayout`, `byName` (Task 1).
 - Produces: `func fieldSelector(id string, by addressing) string`; `fillAndSubmit(ctx, plan, layout)`.
-
 - [ ] **Step 1: Write the failing test**
 
 Add to `internal/api/atsapply/layout_test.go`:
@@ -467,13 +472,14 @@ git commit -F <a file containing a message explaining that the selector and the 
 ### Task 4: Turning Lever on
 
 **Files:**
+
 - Modify: `internal/api/atsapply/client.go`
 - Modify: `internal/api/atsapply/preview_client.go`
 
 **Interfaces:**
+
 - Consumes: everything above.
 - Produces: nothing new — this is the switch.
-
 - [ ] **Step 1: Write the failing test**
 
 Add to `internal/api/atsapply/layout_test.go`:
@@ -542,12 +548,13 @@ git commit -F <a file containing a message explaining that Lever can now be fill
 ### Task 5: The package's own account of itself
 
 **Files:**
+
 - Modify: `internal/api/atsapply/AGENTS.md`
 
 **Interfaces:**
+
 - Consumes: everything above.
 - Produces: nothing.
-
 - [ ] **Step 1: Read what it currently says**
 
 Run: `cat internal/api/atsapply/AGENTS.md`

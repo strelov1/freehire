@@ -33,12 +33,14 @@ boards.
 ## Capabilities
 
 ### New Capabilities
+
 - `source-ingest`: how jobs enter the catalogue — the modular source-adapter
   contract, config-driven board selection, the normalize/dedup write path, the
   namespaced dedup key, per-source failure isolation, and the standalone ingest
   command.
 
 ### Modified Capabilities
+
 - `ai-enrichment`: the durable outbox is now also fed transactionally by the ingest
   write path (previously: backfill-only from provenance), gated on the job not
   already being enriched to the target version.

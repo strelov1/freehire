@@ -12,6 +12,7 @@ A signed-in user browsing a job has no immediate signal of how well it fits thei
 ## Capabilities
 
 ### New Capabilities
+
 - `job-profile-match`: The per-job skill-coverage match between an open job and the signed-in user's profile — endpoint, classification rules (exact/adjacent/missing), coverage-percent formula, and the sidebar block with its authed/guest/no-profile/empty states.
 
 ### Modified Capabilities

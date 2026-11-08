@@ -37,11 +37,13 @@ initiative would have found it):
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl a RecruiterFlow tenant's open postings from the single listing page's embedded
   `window.jobsList` (enumeration + location/employment-type/remote-type/date, all from the
   listing's own fields) plus one detail fetch per posting for the description only.
 
 **Non-Goals:**
+
 - No completeness cross-check against a declared total. Unlike `scalis`/`recrutei`/
   `pyjamahr`, `window.jobsList` carries no `count`/`total` field at all. The completeness
   argument here is structural rather than a runtime check: there is no pagination

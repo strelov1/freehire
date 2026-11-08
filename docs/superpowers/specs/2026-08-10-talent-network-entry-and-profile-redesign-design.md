@@ -22,6 +22,7 @@ decision below was picked from mocked-up options, not asserted.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A prominent, unmissable entry point on `my/profile` instead of a buried
   settings row.
 - The entry point communicates current status at a glance once a candidate
@@ -30,6 +31,7 @@ decision below was picked from mocked-up options, not asserted.
   skill chips + narrative work history) instead of a plain field dump.
 
 **Non-Goals:**
+
 - No change to `off`/`public`/`anonymous` semantics, the masking rule, or
   any backend endpoint — this is presentation only.
 - No photo on the public page — still deferred (unchanged from the shipped

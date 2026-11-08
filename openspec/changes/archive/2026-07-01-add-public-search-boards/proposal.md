@@ -18,6 +18,7 @@ Saved searches today are private, cookie-scoped, and addressed by an internal nu
 <!-- none; this extends the existing saved-searches capability -->
 
 ### Modified Capabilities
+
 - `saved-searches`: adds share/unshare requirements, a nullable public slug and optional author label on the stored set, a public unauthenticated read-by-slug that never leaks owner identity, and the public board UI. Existing private behavior (create/list/update/delete, owner-scoping, name validation, per-user cap) is unchanged.
 
 ## Impact

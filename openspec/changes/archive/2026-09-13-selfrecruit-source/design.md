@@ -14,10 +14,12 @@ detail fetch needs here — DOM extraction by class, not a structured payload.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl a selfrecruit.ge tenant's open postings with a title, HTML description, and
   stable dedup id, paging the listing to exhaustion.
 
 **Non-Goals:**
+
 - No tenant-discovery/harvest prober. Only one live tenant (`dressup`) is known today;
   most of this codebase's `harvest` probers exist for platforms already carrying dozens
   of tenants (traffit, keka), which doesn't apply here yet. Add one later if more

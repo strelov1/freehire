@@ -51,6 +51,7 @@ board.
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `eightfold` is a registered board-based provider — a
   list+detail adapter over the Eightfold `/api/pcsx/search` and `/api/apply/v2/jobs/<id>`
   endpoints, keyed by a `"host/domain"` board, yielding the normalized job shape with a

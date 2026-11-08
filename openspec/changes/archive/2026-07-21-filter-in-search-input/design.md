@@ -16,6 +16,7 @@ is out of scope.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Host the All-filters trigger in the header search box on `/`, `/companies/[slug]`, and
   `/companies`, on all viewports, opening each page's existing modal with an active-count
   badge.
@@ -24,6 +25,7 @@ is out of scope.
 - Keep filter ownership (state, count, modal) in the page views; the header only triggers.
 
 **Non-Goals:**
+
 - No change to the filter modal internals, facet logic, or URL sync.
 - No change to `/my/profile` `FilterEdgeTab` or the desktop `FilterSummary` sidebar.
 - No backend/API/database change.
@@ -35,6 +37,7 @@ is out of scope.
 page. We add two optional fields to the registered target: `openFilters?: () => void` and
 `activeFilters?: () => number` (a getter, so Svelte 5 reactivity flows without copying
 state). The page views keep owning the modal and count; the header reads the callbacks.
+
 - *Alternative — a dedicated filter store:* rejected; it would duplicate state that
   already lives in each view and blur module boundaries.
 - *Alternative — pass props through TopBar:* rejected; TopBar is mounted in the layout and

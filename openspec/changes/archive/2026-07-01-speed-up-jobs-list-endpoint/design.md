@@ -20,11 +20,13 @@ list endpoint, so this is a latency landmine for API consumers.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - `GET /api/v1/jobs` responds fast (sub-100ms server-side) at catalogue scale.
 - The list page is served through an index (no per-request full sort).
 - `meta.total` is produced in O(1), not by counting millions of rows.
 
 **Non-Goals:**
+
 - Touching `/jobs/search`, the browse/company pages, or the response envelope.
 - A versioned migration runner (still absent — see the manual-apply note).
 - Exact `meta.total` for this endpoint (it becomes an approximate estimate).

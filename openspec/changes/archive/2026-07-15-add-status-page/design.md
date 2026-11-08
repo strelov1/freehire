@@ -16,6 +16,7 @@ a public `/health` endpoint the new route sits beside.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A public per-provider health rollup, derived entirely from the existing
   `board_health` snapshot — no new tables, no writes.
 - A clear operational/degraded/down signal per provider plus an overall banner,
@@ -23,6 +24,7 @@ a public `/health` endpoint the new route sits beside.
 - Sanitized output: no `last_error`, no board identifiers.
 
 **Non-Goals:**
+
 - Run-by-run history / time-series (that would need a new `ingest_run` table and
   a write on every crawl — deferred; noted as a future seam).
 - Per-board drill-down in the public page.

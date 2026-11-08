@@ -16,6 +16,7 @@ analysis existing. This design's central decision is how to reconcile that depen
 proposal's "no analysis-gated screen" goal.
 
 Two other facts from the codebase shape this design:
+
 - Autopilot is currently **unthrottled**: no rate-limiter middleware on
   `POST /assistant/sessions/:id/autopilot` (`internal/handler/assistant.go:151`) and no
   `credits.Debit` call anywhere in its handler, unlike the fit analysis (30/hour via
@@ -31,6 +32,7 @@ Two other facts from the codebase shape this design:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Every first-time `/tailor/[slug]` open builds a curated, JD-aware CV without the candidate ever
   seeing a screen gated on "run the analysis first."
 - The fit analysis still gets computed and lands in the Job Match tab without a separate,
@@ -41,6 +43,7 @@ Two other facts from the codebase shape this design:
   followed by a single swap.
 
 **Non-Goals:**
+
 - Making the analysis and the autopilot run literally concurrent at the LLM-call level. `cv_context`
   keeps reading a single source of truth (the cached analysis); this design changes *when that cache
   gets populated*, not the read path.

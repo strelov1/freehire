@@ -30,7 +30,7 @@ WHERE closed_at IS NULL AND is_tech IS TRUE AND category = 'backend'
 GROUP BY 1 ORDER BY 2 DESC LIMIT 25;
 ```
 
-```
+```text
 api|23167
 java|17964
 cloud|17096
@@ -75,7 +75,7 @@ FROM jobs
 WHERE closed_at IS NULL AND is_tech IS TRUE AND category = 'backend';
 ```
 
-```
+```text
  all_open | with_skills | top1  | top3  | top5  | top10 
 ----------+-------------+-------+-------+-------+-------
     45453 |       41712 | 23168 | 34198 | 35958 | 38742
@@ -105,7 +105,7 @@ WITH r AS (
 SELECT category, string_agg(s, ', ' ORDER BY rn) AS top5 FROM r WHERE rn <= 5 GROUP BY 1;
 ```
 
-```
+```text
  category |                     top5                     
 ----------+----------------------------------------------
  devops   | cloud, devops, ci-cd, kubernetes, automation
@@ -121,7 +121,7 @@ categories is enough to answer whether the shape is a backend accident.
 
 Then the curve, each category against its own top skills:
 
-```
+```text
  category | with_skills | top1  | top3  | top5  
 ----------+-------------+-------+-------+-------
  devops   |       74060 | 45836 | 60051 | 62363

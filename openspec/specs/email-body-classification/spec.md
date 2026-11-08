@@ -1,8 +1,11 @@
 # email-body-classification Specification
 
 ## Purpose
+
 TBD - created by archiving change mail-classify-html-body-fallback. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Classifier reads the readable email body
 
 The mail classifier SHALL be given the email's readable body, selected from its
@@ -88,4 +91,3 @@ application has not progressed).
 
 - **WHEN** an `incomplete_application` email is linked to an application
 - **THEN** the application's stage is not automatically advanced
-

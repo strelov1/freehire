@@ -9,9 +9,11 @@ skill set) and SHALL name the top missing role skills in the check's fix. The ro
 SHALL come from the request's facet params (Profile's CV readiness tab filter).
 
 #### Scenario: Keyword-match counts role skills present in the CV text
+
 - **WHEN** a role's top skills are {go, kubernetes, kafka} and the CV text contains "go" and "kafka" but not "kubernetes"
 - **THEN** keyword-match reflects 2 of 3 and the fix names "kubernetes" as missing
 
 #### Scenario: Role comes from the request filter
+
 - **WHEN** the caller requests the report with `?category=data`
 - **THEN** keyword-match uses the data role's top skills, independent of the profile's stored specializations

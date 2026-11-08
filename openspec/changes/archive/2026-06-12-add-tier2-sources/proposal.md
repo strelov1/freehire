@@ -27,6 +27,7 @@ the highest-leverage way to widen catalogue coverage without changing the pipeli
 <!-- none — this extends the existing source-ingest capability -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement registering `personio`, `pinpoint`, `rippling`, and
   `bamboohr` as providers, each yielding the normalized job shape with a sanitized-HTML
   description, consistent with the existing adapters (single-request where the list carries

@@ -1,8 +1,11 @@
 # ingest-status-page Specification
 
 ## Purpose
+
 TBD - created by archiving change add-status-page. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Per-provider health rollup
 
 The system SHALL provide a read-only rollup over `board_health` grouped by
@@ -137,4 +140,3 @@ SHALL be rendered as a visually distinct "no data" tile, never as if it were
 - **WHEN** the history tile row includes a day with no recorded sample
 - **THEN** that day's tile is rendered in the distinct "no data" treatment,
   not the "operational" color
-

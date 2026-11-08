@@ -34,7 +34,7 @@ with it, stays intact.
 
 Pure, testable, no clock beyond what Product Hunt already exposes:
 
-```
+```text
 show = !selfDismissed && (phBannerDismissed || launchPhase(now) === 'over')
 ```
 

@@ -1,9 +1,11 @@
 # SQL conventions
 
 ## Scope
+
 The `internal/platform/db` package — generated sqlc code, hand-written SQL queries, and the connection pool.
 
 ## Always true
+
 - `internal/platform/db/*.go` is **generated code** — never edit by hand. It is committed so the repo builds without sqlc installed.
 - To change DB access, edit `internal/platform/db/queries/*.sql` (or `migrations/` for schema), run `make sqlc`, and commit the result.
 - Handlers use `*db.Queries`, built once in `handler.Register`. Never construct `*db.Queries` inside a handler.
@@ -65,4 +67,5 @@ checks, after a no-transaction file applies, whether any index THAT FILE NAMES i
 and fails without recording rather than stepping over it.
 
 ## Limitations
+
 - Historical parallel branches produced duplicate number prefixes (`0009_*`×2, `0034_*`×4, …). Harmless: initdb and the runner both order by full filename, and `schema_migrations.version` is the filename, not the number. New files take the next free number; never renumber old files (their versions are already recorded on migrated databases).

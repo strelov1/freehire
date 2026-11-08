@@ -10,11 +10,13 @@ See `proposal.md` - Why. Current state, needed for the decisions below:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Single generation path from `api-spec.ts` to a new OpenAPI 3.1 document that Scalar renders, with no hand-maintained duplicate of endpoint data.
 - Preserve every requirement in the current `api-documentation` spec, including SSR (SEO) and the cross-cutting Overview/Filtering content.
 - Match the design system's visual language, not Scalar's default theme.
 
 **Non-Goals:**
+
 - Touching `web/static/openapi.yaml` or the ChatGPT Actions integration in any way.
 - Changing `docs/API.md`'s generation behavior beyond reading the new `deprecated` field where present.
 - Preserving exact per-endpoint SvelteKit routes (`/docs/api/<group>/<endpoint>`) — they redirect instead (see spec delta).
@@ -27,6 +29,7 @@ See `proposal.md` - Why. Current state, needed for the decisions below:
 Alternative considered: author the OpenAPI document directly (YAML/JSON) and drop `api-spec.ts`. Rejected — hand-authoring 253 operations directly in OpenAPI loses TS type-checking and the DRY helpers `api-spec.ts` presumably already has for repeated auth/pagination shapes; it would trade a maintenance problem for a worse one. A new generator script, sibling to `gen-api-docs.mjs`, produces the OpenAPI document; both scripts read the same `Endpoint`/`Group`/`Overview` data.
 
 `api-spec.ts`'s data model gains two structured additions needed by the generator (and usable by `gen-api-docs.mjs` too):
+
 - `deprecated?: { since: string; replacement: string }` on `Endpoint` — does not exist today; deprecation is currently only implied in free-text `description`.
 - Structured Overview/Filtering section data (heading + Markdown body) in place of whatever free-form shape the current landing page consumes, so the OpenAPI generator can assemble `info.description` from the same data the Markdown generator and the previous Svelte page used.
 

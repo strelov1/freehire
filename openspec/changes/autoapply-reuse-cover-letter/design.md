@@ -22,11 +22,13 @@ variant, so this change is scoped to the free-text one.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Recognize `cover_letter_text`-shaped free-text fields distinctly from ordinary drafted questions.
 - Reuse an existing `coverletter.Stored.Letter.Body` for that (user, job) pair verbatim when one exists.
 - Leave every other `draftable` field's behavior (including the file-kind `cover_letter` field, and any cover-letter field when no letter is drafted yet) exactly as it is today.
 
 **Non-Goals:**
+
 - Drafting a cover letter on demand during auto-apply when none exists yet — that stays the candidate's own explicit action via `internal/candidate/coverletter`, unchanged. `LLMDrafter` remains the fallback for that case, not a trigger to run the three-stage chain.
 - Changing `cover-letter-draft`'s own behavior, storage shape, or gating.
 - Handling the file-upload `cover_letter` field variant — out of scope, unchanged (`resolveOne` still never resolves file fields other than the résumé).

@@ -13,6 +13,7 @@ Most ATS adapters set `Job.Company = e.Company` straight from the board file, an
 ## Capabilities
 
 ### New Capabilities
+
 - `company-name-backfill`: A maintenance worker that resolves and applies real company display names for boards whose ingested company name is a slug, sourced deterministically from each ATS's native title/API with a confidence gate.
 
 ### Modified Capabilities

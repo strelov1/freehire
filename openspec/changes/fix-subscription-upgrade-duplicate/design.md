@@ -22,6 +22,7 @@ See `proposal.md` — Why. The relevant code today:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A signed-in customer with an active entitling subscription who requests a different price
   (a different tier, or a different interval of the same tier) ends the request with exactly
   one active entitling subscription, changed in place with proration.
@@ -32,6 +33,7 @@ See `proposal.md` — Why. The relevant code today:
   silently picking one and hiding the other.
 
 **Non-Goals:**
+
 - Cleaning up subscriptions that are *already* duplicated for existing customers. That is an
   operator action (Stripe dashboard or Customer Portal), out of scope for this change.
 - Applying a promo discount/coupon to an in-place tier change. `Discount` continues to apply

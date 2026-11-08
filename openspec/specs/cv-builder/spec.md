@@ -1,8 +1,11 @@
 # cv-builder Specification
 
 ## Purpose
+
 TBD - created by archiving change add-cv-builder. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: CV builder is restricted to beta testers
 
 The CV-builder feature SHALL be a restricted rollout: every `/api/v1/me/cvs` endpoint SHALL require an authenticated caller who is a beta tester (or a moderator). A signed-in caller who is neither SHALL receive `403`. The SPA SHALL only surface the CV-builder navigation and pages to eligible users.
@@ -429,4 +432,3 @@ target is reachable. A template MUST NOT print a link as inert text.
 
 - **WHEN** a template is added to the registry
 - **THEN** the registry-driven check covers it without being edited
-

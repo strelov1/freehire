@@ -5,11 +5,13 @@ See proposal.md for motivation. Today `Store.Structured` returns ok=false when t
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One shared provisional-contacts helper used by profile read, seed composition, and header heal.
 - Usable seed in the pending window when provisional contacts + seedable body (usually bank) exist.
 - Persist empty-header heal on tailored open (and base when empty) without full document replace.
 
 **Non-Goals:**
+
 - Auto-running full reset-from-résumé on every open once extract completes.
 - Feeding superseded summary/education/skills into seed.
 - Changing the agent redaction of contacts for the model.

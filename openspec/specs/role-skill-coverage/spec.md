@@ -1,8 +1,11 @@
 # role-skill-coverage Specification
 
 ## Purpose
+
 TBD - created by archiving change role-skill-profile. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Signed-in coverage of a role's skills
 
 When a request for a single role's skill demand carries an authenticated session, the
@@ -52,4 +55,3 @@ differs.
 - **WHEN** a response carries a coverage section
 - **THEN** its cache headers forbid shared caching, so one caller's coverage can never be
   served to another
-

@@ -11,11 +11,13 @@ kickoff, so the new conversation was never empty and a reload read as a restart.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Reloading the workspace keeps the CV and the conversation.
 - A reload is not a second debit.
 - Back behaves as it did.
 
 **Non-Goals:**
+
 - Cleaning up the duplicates already created. They are ordinary tailored CVs, they show in
   `/my/cvs`, and deleting a candidate's CVs is not something a bug fix should do quietly.
 - Making the workspace addressable by CV only. The vacancy-addressed URL is what the match CTA and

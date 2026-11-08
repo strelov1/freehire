@@ -12,9 +12,11 @@ When an ATS application form has a free-text cover-letter field (e.g. `cover_let
 ## Capabilities
 
 ### New Capabilities
+
 - `atsapply-cover-letter-reuse`: when resolving a free-text cover-letter field on an ATS application form, auto-apply prefers the candidate's existing drafted cover letter for that (candidate, job) pair over the generic grounded drafter, falling back to the generic drafter when no letter exists yet.
 
 ### Modified Capabilities
+
 (none — `cover-letter-draft` itself is unchanged; this only changes what auto-apply's field resolver does with an already-drafted letter)
 
 ## Impact

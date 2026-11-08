@@ -14,9 +14,11 @@ Closed postings remain searchable outside rebuild windows because one indexing p
 ## Capabilities
 
 ### New Capabilities
+
 - `search-drain-fairness`: Cooperative queue draining without starvation or tiny-wave loops.
 
 ### Modified Capabilities
+
 - `job-search`: Closed documents stop matching through status updates while text and vectors remain until rebuild.
 - `job-lifecycle`: Reopened postings return to search even when an earlier removal is pending or in flight.
 

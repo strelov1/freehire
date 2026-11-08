@@ -1,8 +1,11 @@
 # traffit-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-traffit-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Traffit tenant crawl
 
 The system SHALL provide a `traffit` source adapter that crawls one Traffit tenant's
@@ -58,4 +61,3 @@ any other candidate without aborting the harvest.
 
 - **WHEN** the prober probes a slug whose subdomain returns the HTML placeholder (no JSON)
 - **THEN** it skips the candidate silently and continues with the rest
-

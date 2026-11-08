@@ -1,6 +1,7 @@
 # Curated company collections conventions
 
 ## Scope
+
 The code-owned registry of curated company tags: editorial themes (Big Tech, Unicorn),
 credentials from authoritative public registers (UK/NL/US/CA/IE/DK visa sponsors), and backers (YC,
 Techstars, a16z, Sequoia, Accel, Greylock, USV, BOND, Lightspeed, Index Ventures, SoftBank Vision
@@ -9,6 +10,7 @@ are matched; `cmd/import-collections` writes `companies.collections`, and the se
 (`jobs.collections`) serves it.
 
 ## Always true
+
 - **The registry is code.** `All` (collections.go — 28 slugs, in display order) is
   the fixed set; adding a tag is one entry with exactly one membership source: a static
   `Slugs` hand list or a `Dataset`. `Kind` decides how the tag renders (editorial chip /
@@ -93,7 +95,6 @@ are matched; `cmd/import-collections` writes `companies.collections`, and the se
   everywhere on the next run (collections.go:561-586; `RetiredSlugs` collections.go:471-476;
   wired at cmd/import-collections/main.go:358). Tags the registry does not manage are
   preserved untouched.
-
 - **A register row naming a local subsidiary matches its parent** (`Collection.Country`,
   `withoutCountrySuffix` in register.go): when "Google (UK) Limited" finds no `google-uk`, the
   slug is retried without a trailing mention of the register's OWN country. Only that
@@ -117,6 +118,7 @@ are matched; `cmd/import-collections` writes `companies.collections`, and the se
   endpoint that can change with any redeploy. Revisit if INZ publishes a download.
 
 ## How it works
+
 `cmd/import-collections` resolves each collection's dataset, matches records to the
 catalogue (`Members`), and writes `companies.collections` via `SetCompanyCollections`.
 `-only sequoia,accel` limits a run to the named collections and leaves every other tag as

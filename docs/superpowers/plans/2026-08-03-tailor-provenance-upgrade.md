@@ -35,12 +35,14 @@ SQL behavior unchanged.
 ### Task 1: Upgrade-on-conflict for `InsertExperienceAtomIfNew`
 
 **Files:**
+
 - Modify: `internal/platform/db/queries/experience.sql:84-93` (`InsertExperienceAtomIfNew`)
 - Regenerate (via `make sqlc`, do not hand-edit): `internal/platform/db/experience.sql.go`
 - Test: `internal/platform/db/experience_integration_test.go` (add new test functions after
   `TestExperienceAtomClaimKeyIsUniquePerOwner`, which ends at line 75)
 
 **Interfaces:**
+
 - Consumes: `q.InsertExperienceAtomIfNew(ctx, InsertExperienceAtomIfNewParams{...})
   (ExperienceAtom, error)` — unchanged signature, from `internal/platform/db/experience.sql.go`.
   `InsertExperienceAtomIfNewParams` fields used: `UserID int64`, `EmploymentID
@@ -50,7 +52,6 @@ SQL behavior unchanged.
   existing `Store.AddAtom` (`internal/candidate/experience/store.go`) and every assistant tool
   built on it (`internal/api/handler/assistant_experience_tools.go`) start working
   correctly against this query with zero changes on their side.
-
 - [ ] **Step 1: Write the failing integration tests**
 
 Add these three tests to `internal/platform/db/experience_integration_test.go`, right after
@@ -228,20 +229,22 @@ other query in `experience.sql` should change.
 Run: `go test -tags=integration ./internal/platform/db/ -run TestExperienceAtomClaimKey -v`
 
 Expected: PASS for all of:
+
 - `TestExperienceAtomClaimKeyIsUniquePerOwner` (pre-existing, must still pass unchanged)
 - `TestExperienceAtomClaimKeyUpgradesFromAgentInferred` (new)
 - `TestExperienceAtomClaimKeyNeverDowngradesFromConfirmed` (new)
 - `TestExperienceAtomClaimKeyStaysUnconfirmedAcrossRepeatedAgentInferred` (new)
-
 - [ ] **Step 6: Run the full integration vet gate and the plain test suite**
 
 Run, in order:
+
 ```bash
 go vet -tags=integration ./...
 go build ./...
 go vet ./...
 go test ./...
 ```
+
 Expected: all four succeed with no output beyond normal build/test noise. The last
 two confirm `internal/candidate/experience/store_test.go`'s fake-repo-based tests
 (`TestStoreAddAtomReportsAnAlreadyBankedClaim` etc.) are unaffected — they exercise

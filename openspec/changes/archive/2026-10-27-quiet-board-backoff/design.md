@@ -36,7 +36,6 @@ turning on `close-chronic-boards --apply-empty-feed`.
   `cooldown_until`) cannot erase quiet pauses.
 - **Neutral (NULL) fingerprint whenever the crawl is not complete:** `Stats.Failed > 0`,
   `Stats.Interrupted > 0`, the context ended, or the provider is `selfClosing`.
-
 - **Skipped boards are excluded from the company- and source-scoped sweeps** (found while
   implementing). Those closes act on any provider row of a crawled company (or of the whole source)
   unseen for 48h, so a board quiet for up to 72h would have its live postings closed whenever the

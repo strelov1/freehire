@@ -22,6 +22,7 @@ per template, so users cannot adjust how tightly content packs to fit one or two
 <!-- none: behaviour extends the existing cv-builder and tailor-workspace specs -->
 
 ### Modified Capabilities
+
 - `cv-builder`: CV documents carry per-side page margins; the sanitizer clamps and defaults
   them; the PDF renderer applies them via the Typst templates.
 - `tailor-workspace`: the centre preview paginates into A4 sheets that honour the margins;

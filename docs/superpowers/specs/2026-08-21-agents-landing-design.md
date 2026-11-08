@@ -35,7 +35,7 @@ reads plus tracking behind a pasted key. The page ranks them and says why.
 The primary action is not reading — it is **copying one block of text and
 pasting it into an agent**. That block is the hero:
 
-```
+```text
 Install freehire and use it to run my job search.
 
   curl -fsSL https://freehire.me/install.sh | sh

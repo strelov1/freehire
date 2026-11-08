@@ -5,10 +5,12 @@
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Reclaim confidently-technical titles from `unknown` into `tech`, symmetric to `IsNonTech`.
 - Keep the "never guess" / never-false-positive bias: a non-software "…Engineer" stays `unknown`, never wrongly `tech`.
 
 **Non-Goals:**
+
 - No schema/wire/facet change — `is_tech` column, jobview field, Meili facet, and the UI filter are untouched.
 - No change to the `category` vocabulary — the detector feeds `is_tech` directly, not category.
 - No description-based tech detection (title-only, like `IsNonTech`).

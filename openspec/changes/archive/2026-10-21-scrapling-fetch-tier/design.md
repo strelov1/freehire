@@ -12,11 +12,13 @@ Host configuration lives in the private `freehire-ops` repository.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One self-hosted fetch service on host2 serving both Scrapling fetchers.
 - Adapters keep their code: the service is reached through the existing `Client` and getters.
 - Every source the spike rescued is crawled through it; the hosted Firecrawl tier is gone.
 
 **Non-Goals:**
+
 - Moving the 200+ adapters a plain client serves.
 - echojobs, neogov, dodo, energyjobline, jobleads, wuzzuf, workatastartup, naukri.
 - Replacing the chromedp browser tier (its one provider, echojobs, is not rescued either way).

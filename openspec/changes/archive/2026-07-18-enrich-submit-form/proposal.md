@@ -37,6 +37,7 @@ descriptions as formatted HTML, so submitters cannot preview or control formatti
 <!-- None — this extends existing capabilities. -->
 
 ### Modified Capabilities
+
 - `job-submission`: the submission accepts and stores optional structured facets (skills,
   regions, cities, work_mode, salary_*); on approval they seed the minted job. The submit UI
   gains the facet inputs and the markdown description editor.

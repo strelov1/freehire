@@ -19,6 +19,7 @@ transport; `fetchDetails` is the shared bounded list→detail fan-out; `sanitize
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Register 14 single-company RU bigtech adapters behind the existing `Source` interface
   with the established one-file-plus-one-registration-line ergonomics.
 - Reshape the board model so single-company adapters are a clean fit, not an awkward
@@ -27,6 +28,7 @@ transport; `fetchDetails` is the shared bounded list→detail fan-out; `sanitize
   header; HTML-derived description) without coupling them to those adapters.
 
 **Non-Goals:**
+
 - `tochka` — deferred (fragile multi-row RSC flight-payload for ~48 vacancies; see
   Decision 6).
 - Region/country normalization at ingest — tracked separately as `ingest-job-geography`.

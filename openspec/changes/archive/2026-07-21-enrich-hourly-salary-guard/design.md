@@ -15,11 +15,13 @@ compared three fixes; results in "Decisions".
 ## Goals / Non-Goals
 
 **Goals:**
+
 - The LLM populates `salary_min`/`salary_max` faithfully for fractional hourly
   rates (round to whole currency units; never strip the decimal point).
 - Already-corrupted jobs are re-enriched through the corrected prompt.
 
 **Non-Goals:**
+
 - No change to the salary representation (stays `*int`, whole currency units).
 - No sub-dollar precision (cents) in storage or display.
 - No post-hoc heuristic that tries to "repair" already-stored corrupted numbers.
@@ -35,6 +37,7 @@ the guard also corrected the `salary_period`, which the baseline mislabelled
 made the weak model comply.
 
 Alternatives considered and rejected, both by spike evidence:
+
 - **B — sanitize heuristic (divide-by-100 when `period=hour` and value large).**
   INVALIDATED. The corruption also mangles `salary_period`, so a `period=hour`
   gate misses part of the corrupted data; and any magnitude threshold also

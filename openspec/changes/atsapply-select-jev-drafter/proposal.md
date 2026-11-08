@@ -44,12 +44,14 @@ proposal acts on that validated result for `select`-kind fields only.
 ## Capabilities
 
 ### New Capabilities
+
 - `atsapply-select-drafter-provider`: governs which backend answers a `select`-kind
   draftable field (Jev when configured, LLM otherwise or on Jev failure), the categorical
   decline requirement for identity/demographics/compensation/legal-status questions, and
   the fallback semantics that must hold regardless of which backend answers.
 
 ### Modified Capabilities
+
 (none — `LLMDrafter.Draft` for `text`/`textarea`, `draftable`'s gating, `matchOption`'s
 re-validation, and every other `atsapply` capability are unchanged)
 

@@ -39,6 +39,7 @@ trigram index and threshold tuning — is a deliberate, separate follow-up.
 ## Capabilities
 
 ### New Capabilities
+
 - `aggregator-fuzzy-title-dedup`: an additional normalized-title match path in the
   aggregator suppression pass that catches HTML-entity and trailing-separator title
   mangling.

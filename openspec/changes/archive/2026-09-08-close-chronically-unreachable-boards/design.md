@@ -25,11 +25,13 @@ See `proposal.md` - Why. The relevant existing mechanics:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Give a board that has proven unreachable for a long time an exit path out of "open
   forever," without touching the existing per-run sweep's conservative behavior.
 - Make chronic boards visible to the existing curation pass before anything auto-closes.
 
 **Non-Goals:**
+
 - Not fixing individual broken adapters (paylocity/jobdanmark/oracle's specific
   boards) — that is ordinary curation work once the boards are visible, using
   whatever the per-board `last_error` says.

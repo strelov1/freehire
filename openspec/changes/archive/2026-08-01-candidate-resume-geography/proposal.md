@@ -50,12 +50,14 @@ are not in" and "this on-site job is in another country" — therefore never fir
 ## Capabilities
 
 ### New Capabilities
+
 - `candidate-geography`: deriving, storing, and backfilling where a candidate is
   located, from the free-text location line of their CV — including the rule that
   separates a person's whereabouts from a job's reach, and the precedence between
   what the candidate asserted and what was derived for them.
 
 ### Modified Capabilities
+
 - `resume-structured-profile`: persisting the structured résumé now also derives and
   stores the candidate's geography in the same stamped, monotonic write; clearing the
   résumé clears it too.

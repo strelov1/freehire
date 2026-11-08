@@ -15,6 +15,7 @@ A local, non-prod spike this session validated the mechanics (pgvector installab
 ## Goals / Non-Goals
 
 **Goals:**
+
 - `/similar` becomes a plain indexed Postgres lookup — zero vector math on the request path.
 - The full, HTML-free job description is represented in its embedding(s) — nothing past the first paragraph or two silently disappears, fixing a real quality problem, not just relocating the existing (truncated) vectors.
 - `/similar` never recommends another posting from the same company as the source job.
@@ -22,6 +23,7 @@ A local, non-prod spike this session validated the mechanics (pgvector installab
 - No outage window for `/similar` during the migration.
 
 **Non-Goals:**
+
 - Exact tokenizer-accurate chunk sizing — a conservative rune-count heuristic (ported from the chunking branch, see Decision 1a) is enough; TEI's own `--auto-truncate` is the safety net for a chunk that slightly overshoots.
 - Reworking general keyword search — unaffected, already keyword-only in practice.
 - Tuning `/similar`'s neighbour count beyond matching today's behavior (`defaultSimilarLimit=6`, `maxSimilarLimit=20`) — only the company-diversity rule and the richer source vectors change what's eligible, not how many are returned.
@@ -30,6 +32,7 @@ A local, non-prod spike this session validated the mechanics (pgvector installab
 ## Decisions
 
 **1. A `job_semantic_chunks` table (one row per chunk), not a single `vector(768)` column on `jobs`.** Once the source text is chunked (Decision 1a), a job has a *variable* number of vectors, not one — pgvector's `vector` type is fixed-arity per row, so "many vectors for one job" must be many rows, not a wider column (unlike Meili's native multi-vector `_vectors.default.embeddings` array, or the chunking branch's `real[]`-tolerates-either-shape trick, neither of which pgvector has an equivalent for). Schema:
+
 ```sql
 CREATE TABLE job_semantic_chunks (
     job_id       bigint NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -38,6 +41,7 @@ CREATE TABLE job_semantic_chunks (
     PRIMARY KEY (job_id, chunk_index)
 );
 ```
+
 `ON DELETE CASCADE` matches this repo's actual hard-delete path (`cmd/prune` only) — a pruned job's chunks are pruned with it, no separate cleanup code needed. A closed-but-not-pruned job's chunks are explicitly deleted by `cmd/embed`'s closed-job path (mirrors today's `ClearSemanticEmbeddedBatch`). This *replaces* the originally-planned `jobs.semantic_embedding_vec vector(768)` column outright (that column, added by an earlier task in this same change, gets removed before it's ever used for real data — see Migration Plan) — `jobs.similar_job_ids`/`similar_computed_at` are unaffected by this revision, they describe the OUTPUT of the similarity computation, not the source vectors.
 
 **1a. Reuse the chunking branch's plaintext/chunk logic verbatim; it has no Meilisearch dependency.** `stripToPlainText` (HTML → prose, preserving paragraph boundaries as newlines so chunk splits land between paragraphs) and `chunkText` (a ~2000-rune conservative budget per chunk, splitting on paragraph then word boundaries) are pure Go functions over strings — port them unchanged from `worktree-semantic-embed-full-clean-chunked`'s `internal/search/plaintext.go`/`chunk.go` into wherever they now belong given section 7 deletes most of `internal/search`'s semantic code (likely `internal/embed`, the package that survives and owns the embedding write path). Their existing unit tests port too.
@@ -51,6 +55,7 @@ CREATE TABLE job_semantic_chunks (
 **4. `cmd/similar-backfill` finds work by direct query, no new outbox table.** Unchanged in shape, updated in predicate: work is "a job with at least one row in `job_semantic_chunks` but `similar_computed_at IS NULL` (or older than its newest chunk)" rather than a single-column NULL check. Re-embedding (content change) already replaces a job's chunk rows and should also null `similar_computed_at` in the same transaction, so the backfill worker picks the job back up — one extra column write in `cmd/embed`'s existing stamp transaction, not a new pipeline.
 
 **5. Nearest-neighbour-over-chunks, rolled up to one distance per candidate job, same-company jobs excluded.** A job's "similarity to job X" is the MINIMUM cosine distance across all (X's chunk, candidate's chunk) pairs — the nearest single passage wins, matching the chunking branch's own Meili-side scoring rule ("scores a multi-vector document by the nearest of its vectors") so the *ranking semantics* stay the same even though the storage engine changed. Shape:
+
 ```sql
 SELECT j2.id, MIN(c2.embedding <=> c1.embedding) AS dist
 FROM job_semantic_chunks c1
@@ -63,6 +68,7 @@ GROUP BY j2.id
 ORDER BY dist
 LIMIT $2
 ```
+
 (Exact predicate/index usage to be validated during implementation — this is a heavier query shape than a plain `ORDER BY embedding <=> $1`, a chunk-to-chunk cross join before the per-job rollup; see Risks. The same-company exclusion is a plain `company_slug` comparison, not a vector operation, and composes trivially with the rest.) This is now used only by `cmd/similar-backfill` — `/recommendations` (the other originally-planned consumer of this rollup shape) is removed, not migrated; see Context.
 
 **5a. REMOVED — superseded by the decision to drop `/recommendations` entirely.** (Kept as a record: the original plan here was a two-stage Meili-facet-filter-then-pgvector-rank lookup, avoiding a new SQL facet translator. That design is moot once the endpoint itself is removed — see Context's "Mid-implementation reversal.")

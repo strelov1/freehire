@@ -29,6 +29,7 @@ in the job list.
 ## Capabilities
 
 ### New Capabilities
+
 - `user-job-tracking`: per-user recording of job views and applies, the
   authenticated endpoints that write them, and the rule that the public job read
   path is unaffected.

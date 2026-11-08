@@ -19,12 +19,14 @@ it for the OpenSpec change).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One page for "how do I compare to the live market" (Coverage + Skill trend).
 - Preserve CV readiness's ability to compare against a caller-chosen role —
   the filter UI moves tabs within Profile rather than disappearing.
 - No behavior change to any endpoint; this is a component/route reshuffle.
 
 **Non-Goals:**
+
 - Deep-linking the active tab via a query param on either page (Profile's
   existing `TabRow` doesn't do this either — no new precedent needed).
 - Restoring the originating tab when following `/my/market-pulse/[skill]`'s
@@ -49,6 +51,7 @@ rejected because the user, presented with both mockups, chose Coverage-first.
 "the role's top in-demand skills," using the same `filters.applied` params
 `reload()` already threads through to `getATSReport`. Two options were
 weighed:
+
 1. **Keep the sidebar, re-gate onto `readiness`** (chosen) — CV readiness
    keeps its existing ability to compare against a non-default role; the only
    change is which tab shows the controls.

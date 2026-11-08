@@ -26,6 +26,7 @@ the most common narrowing action.
 ## Capabilities
 
 ### New Capabilities
+
 - `header-location-filter`: a Location & work-format quick-filter embedded in the
   header search box on jobs-backed list pages — a scope-prefix trigger with a
   computed summary label opening a popover (work-format pills + the location pane)

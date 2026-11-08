@@ -50,19 +50,19 @@
       Docker/Postgres/Meilisearch available in this environment, so sign-in and real
       job fixtures were out of reach; documented as a residual gap below.
       - **Disabled state** (no CF-IPCountry header, unauthenticated): pill renders
-        disabled, title "We couldn't determine your location", `aria-pressed=false`.
-        Screenshot confirmed visually.
+      disabled, title "We couldn't determine your location", `aria-pressed=false`.
+      Screenshot confirmed visually.
       - **Region-level enabled state** (`cf-ipcountry: ID` header, simulating an
-        Indonesian visitor via the existing `/geo/region` resolution): pill enabled,
-        title "Click to include".
+      Indonesian visitor via the existing `/geo/region` resolution): pill enabled,
+      title "Click to include".
       - **Toggle on**: `aria-pressed` flips to `true`; the pane's selected-location
-        chips show exactly `APAC`, `Worldwide`, `Not specified` — confirming
-        `selectedChips` picks up the staged values with no code changes, per 2.4.
+      chips show exactly `APAC`, `Worldwide`, `Not specified` — confirming
+      `selectedChips` picks up the staged values with no code changes, per 2.4.
       - **Toggle off**: `aria-pressed` flips back to `false`.
       - Zero browser console errors across all of the above.
       - **Not verified live** (no backend available): the profile-country precedence
-        path (needs a signed-in account with `location_preferences.base.country`
-        set) and a real job whose geography is genuinely unresolved staying visible
-        with the pill on (needs seeded job fixtures) — both are covered by the
-        `eligibleForMe.test.ts` unit tests (1.4) at the logic level, but not observed
-        rendering real job cards end-to-end.
+      path (needs a signed-in account with `location_preferences.base.country`
+      set) and a real job whose geography is genuinely unresolved staying visible
+      with the pill on (needs seeded job fixtures) — both are covered by the
+      `eligibleForMe.test.ts` unit tests (1.4) at the logic level, but not observed
+      rendering real job cards end-to-end.

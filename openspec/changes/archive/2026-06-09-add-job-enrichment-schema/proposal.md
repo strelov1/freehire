@@ -34,6 +34,7 @@ designed so each of these slots in later without reshaping it.
 ## Capabilities
 
 ### New Capabilities
+
 - `job-enrichment`: The structured, AI-derived field model for a job — its
   storage (a `jobs.enrichment` JSONB payload), the typed contract and controlled
   vocabularies that define every field and its allowed values, provenance

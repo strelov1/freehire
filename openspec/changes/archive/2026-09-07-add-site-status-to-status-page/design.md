@@ -24,11 +24,13 @@ error's status only after middleware unwinds).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Answer "is the site itself working right now" on the same page that
   already answers "is the ingest fleet working."
 - Reuse signal the process already computes; add no new external calls.
 
 **Non-Goals:**
+
 - Historical/long-window uptime reporting (e.g. "99.9% over 30 days") — the
   in-process window resets on every deploy by design; that is a different
   feature with a different (persistent) data model, not attempted here.

@@ -11,6 +11,7 @@ composition — the established pattern, no new infrastructure.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Enrich company `Organization` JSON-LD from fields already on the `Company`
   wire shape, each field strictly conditional.
 - Add `CollectionPage` + summary `ItemList` to collection landings from the
@@ -18,6 +19,7 @@ composition — the established pattern, no new infrastructure.
 - Full unit coverage of both pure helpers via vitest.
 
 **Non-Goals:**
+
 - Per-collection FAQ, `ItemList` on company pages, meta-description rewrites,
   Core Web Vitals — all explicitly deferred.
 - No backend / API / schema / dependency changes.

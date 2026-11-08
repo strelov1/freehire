@@ -24,6 +24,7 @@ without sacrificing the narrow internal integer key used for joins.
 ## Capabilities
 
 ### New Capabilities
+
 - `job-public-identity`: how a job is identified to the outside world — the
   public slug format, its stability/uniqueness guarantees, and slug-based public
   routing for read and per-user interaction endpoints.

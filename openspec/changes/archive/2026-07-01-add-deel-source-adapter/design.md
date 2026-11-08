@@ -11,6 +11,7 @@ Within that payload:
   `"careerPageSettings":{ … "preferredOrganizationName":"Klarna" … }` and
   `"jobPostings":[ {posting}, … ]`.
 - Each posting object looks like:
+
   ```json
   {
     "id": "5d3636f8-…",                    // posting id — used in the public URL + sitemap
@@ -24,6 +25,7 @@ Within that payload:
     }
   }
   ```
+
 - The `"$23"` reference resolves to a **text row** elsewhere in the stream:
   `23:T1aef,<…HTML…>` — `T` marks a text chunk, `1aef` is the **byte** length (hex) of the HTML
   that immediately follows the comma.
@@ -39,7 +41,7 @@ the downstream location parser; the adapter only sets the `Remote` flag from the
 
 ## Parsing algorithm
 
-```
+```text
 Fetch(board):
   html  = httpClient.Get("https://jobs.deel.com/<board>")
   flight = concat( jsonUnescape(chunk) for chunk in regex `self.__next_f.push\(\[1,"(…)"\]\)` )

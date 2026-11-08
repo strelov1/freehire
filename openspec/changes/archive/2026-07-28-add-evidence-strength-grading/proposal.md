@@ -16,6 +16,7 @@ Stage 1 of the fit chain classifies each vacancy requirement as `covered` / `syn
 <!-- none — this extends the existing fit-analysis capability -->
 
 ### Modified Capabilities
+
 - `job-fit-analysis`: the Stage-1 requirement-match table gains a graded `evidence_strength` per positive requirement, and the Stage-3 audit uses it to demote keyword-only matches on required requirements.
 
 ## Impact

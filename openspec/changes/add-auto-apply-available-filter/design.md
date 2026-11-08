@@ -33,12 +33,14 @@ See proposal.md - Why. Relevant existing shape:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a candidate filter to postings whose ATS provider auto-apply can
   currently attempt, with zero new Postgres state and zero backfill worker.
 - Keep the signal honest about what it does and doesn't promise (provider
   eligibility, not submission success).
 
 **Non-Goals:**
+
 - Does not change which providers `atsapply` can actually fill/submit for, or
   whether the Ashby/Workable browser-use fallback is enforced in production.
 - Does not attempt to model per-attempt obstacles (captcha, unrecognized
@@ -66,6 +68,7 @@ truth.
 
 **Duplicate the provider set as a documented constant in `internal/search`,
 not a shared package.** Alternatives considered:
+
 - *Import `atsapply`'s maps directly* — impossible under this repo's layering
   (`search` is layer 6, `atsapply` is in `api`, layer 8; `search` may not
   import anything above it).

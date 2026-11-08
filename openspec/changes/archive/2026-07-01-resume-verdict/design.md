@@ -3,6 +3,7 @@
 freehire already parses a résumé into canonical skill slugs (`internal/handler/resume.go` → `skilltag.Parse`, text discarded) and shows a per-profile "Market fit" ratio in the web UI (`web/src/lib/skillGap.ts` reading the `/jobs/facets` distribution). The verdict feature promotes that ratio into a full screen and adds an LLM "coherence" read of the résumé. The verdict UI (`web/src/lib/components/VerdictView.svelte`) is already built and styled to the app's flat monochrome theme, currently on mock data.
 
 Key constraints:
+
 - **Privacy invariant** (from `resume.go`): the raw résumé text is never persisted or logged.
 - **Market facets** are the source of skill demand; the handler already has a `facetCounter` (`FacetCounts(ctx, search.FacetParams)`), the same source `/jobs/facets` uses.
 - **LLM access** is provider-agnostic via `internal/llm` (`New`, `GenerateJSON`, `TruncateRunes`, `NewWithModel` test seam); the HTTP server does not build a client today — only `cmd/enrich` does.
@@ -11,12 +12,14 @@ Key constraints:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Serve a per-profile verdict: deterministic market gap (stack match, must-haves, per-gap unlock) computed live from the profile, plus an optional LLM coherence score + gap advice.
 - Persist only the derived AI layer (coherence + advice + `analyzed_at`) so it survives reload, never the résumé text.
 - Degrade gracefully: deterministic verdict always renders; the AI layer is best-effort.
 - One canonical gap computation shared in spirit with `skillGap.ts` (backend `internal/verdict.Compute` is the authority for this feature).
 
 **Non-Goals:**
+
 - Persisting or re-uploading the résumé text; a refreshed coherence requires a new upload.
 - Classifying skills into stack/methodology (no data source) or humanizing skill slugs beyond what the UI already does.
 - Rate-limiting the LLM endpoint beyond the existing global limiter and input truncation (noted as a follow-up).
@@ -32,6 +35,7 @@ Key constraints:
 **3. AI layer is a separate `Analyzer` over `internal/llm`, best-effort, persisted as derived data.** `Analyzer.Analyze(ctx, resumeText, gaps) (*Analysis, error)`; a nil client (LLM unconfigured) returns `(nil, nil)`. One JSON call returns `{coherence:int, advice:{slug:string}}`; the caller clamps coherence to 0-100, drops advice for non-gap slugs, and truncates advice length. On any error the handler swallows it (logs the error, never the text) and serves the deterministic verdict. The derived analysis is stored as `resume_analysis JSONB` on `search_profiles`; the résumé text is used only in-request.
 
 **4. Two endpoints on the profile sub-resource.**
+
 - `GET /api/v1/me/profiles/:id/verdict` — compute the deterministic verdict live and merge any stored `resume_analysis`.
 - `POST /api/v1/me/profiles/:id/verdict` — parse the uploaded résumé (PDF multipart `file` or JSON `{text}`, reusing `resumeText`/`pdfText` from `resume.go`), run the analyzer, persist the derived analysis, return the full verdict.
 Both `RequireAuth` (cookie-only, matching the other `/me/profiles` routes) and ownership-checked via the `searchprofile` service (missing/other-owner → 404).

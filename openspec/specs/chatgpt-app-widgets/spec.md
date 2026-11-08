@@ -1,8 +1,11 @@
 # chatgpt-app-widgets Specification
 
 ## Purpose
+
 TBD - created by archiving change chatgpt-app-widgets. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: One MCP Apps UI resource
 
 The ChatGPT app server SHALL list and serve exactly one UI resource, with MIME type
@@ -73,4 +76,3 @@ Every result field the page reads SHALL exist as a JSON field of the wire types 
 
 - **WHEN** a field the page reads is renamed or removed in `wire.go`
 - **THEN** the test fails naming the field
-

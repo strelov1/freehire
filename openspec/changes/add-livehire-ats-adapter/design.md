@@ -1,6 +1,6 @@
 ## Context
 
-LiveHire (www.livehire.com) powers branded career sites at `/careers/<segment>` (e.g.
+LiveHire (<https://www.livehire.com>) powers branded career sites at `/careers/<segment>` (e.g.
 `/careers/flybuys`). The HTML pages sit behind a Cloudflare challenge, which is why the platform
 first read as "no public API" during triage. The SPA's own backing API does not:
 
@@ -31,12 +31,14 @@ keyed-segment recognizer mode.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl any LiveHire-hosted career site (one board = one tenant segment) into the catalogue with
   full posting detail, following the existing hydrating-adapter shape (getro.go).
 - Recognize LiveHire board/posting URLs for board-contribution intake without misfiring on the
   rest of the vendor's shared product host.
 
 **Non-Goals:**
+
 - Discovering LiveHire tenants automatically (no public tenant directory exists; boards are
   added one at a time via `board_submissions`/`cmd/add-board`).
 - Submitting applications through LiveHire (out of scope; the apply flow lives behind the

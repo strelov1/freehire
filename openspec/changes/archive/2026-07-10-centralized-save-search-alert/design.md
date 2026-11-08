@@ -7,11 +7,13 @@ The just-shipped onboarding wizard emits a filter query (`selectionsToQuery`) in
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One implementation of "save this search + get it in Telegram," reachable from the sidebar, the post-onboarding banner, and the modal tab.
 - The alert is the primary action and implies the save (auto-name, dedupe) — one tap for the common case.
 - Robust for the anonymous-onboarding path: auth gate + resume across an OAuth full-page redirect.
 
 **Non-Goals:**
+
 - No backend/DB/worker/endpoint changes; no email channel, digest-frequency settings, or board sharing (stays on `/my/searches`).
 - Not changing the requirements of `saved-searches`/`filter-subscriptions`; the modal tab keeps its list management (apply/rename/delete/"Update <name>").
 
@@ -27,6 +29,7 @@ Saving is the primary, standalone action — it works without any subscription �
 Onboarding runs anonymously and OAuth sign-in is a full-page redirect, so in-memory intent is lost. Before opening the auth dialog the flow records the query in `hire.pendingAlert`; `/jobs` mount, when the user is authenticated and a pending record exists, replays `enableAlert(query)` and clears the record. The feed itself is already restored from `hire.jobFilters`, so the replay reconstructs the full intent. Password sign-in (in-dialog, no navigation) continues immediately without the handoff. *Alternative:* only offer the alert to already-signed-in users. Rejected — most onboarding users are anonymous, so reach would be near-zero.
 
 **D4 — Component boundaries.**
+
 - `saveSearchAlert.ts` — pure-ish orchestration: `enableAlert(query)` (auth → resolve-or-create saved search → link → subscribe, idempotent), `alertName(query)`, `alertStateFor(query)` (signed-out / not-saved / saved-not-linked / connecting / subscribed), and `pendingAlert` set/consume/clear over `localStorage`. No Svelte markup; unit-testable with faked stores.
 - `SaveSearchAlert.svelte` — compact presentational states over `saveSearchAlert.ts`, `query` + `variant` props; no knowledge of which surface hosts it.
 - `SavedSearches.svelte` — keeps list/apply/rename/delete/"Update"; renders `SaveSearchAlert` for save + notify.

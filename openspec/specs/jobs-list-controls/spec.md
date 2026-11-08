@@ -1,8 +1,11 @@
 # jobs-list-controls Specification
 
 ## Purpose
+
 TBD - created by archiving change surface-freshness-and-sort-controls. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: The feed's ordering vocabulary names relevance explicitly
 
 The jobs feed's client-side sort vocabulary SHALL be `relevance`, `newest`,
@@ -222,4 +225,3 @@ from a shared link or from the modal, and releasing it SHALL clear only the
   releases the toggle
 - **THEN** the `likely-evergreen` exclusion is cleared and the `fresh` inclusion
   stands
-

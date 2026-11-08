@@ -28,11 +28,13 @@ Spec: `docs/superpowers/specs/2026-10-22-company-closed-jobs-design.md`.
 ### Task 1: The query
 
 **Files:**
+
 - Modify: `internal/platform/db/queries/jobs.sql` (after `ListJobsByCompany`, ~line 259)
 - Regenerate: `internal/platform/db/jobs.sql.go`, `internal/platform/db/querier.go` (`make sqlc`)
 - Create: `internal/platform/db/company_closed_jobs_integration_test.go`
 
 **Interfaces:**
+
 - Produces: `func (q *Queries) ListClosedJobsByCompany(ctx context.Context, arg ListClosedJobsByCompanyParams) ([]Job, error)` with `ListClosedJobsByCompanyParams{CompanySlug string; Limit int32; Offset int32}`.
 
 - [ ] **Step 1: Write the failing test**
@@ -143,16 +145,17 @@ git commit -m "Add the query listing a company's closed postings"
 ### Task 2: The API route
 
 **Files:**
+
 - Modify: `internal/api/handler/companies.go` (register at line ~42; new handler after `GetCompany`)
 - Modify: `internal/api/handler/pagination_window_routes_test.go` (one row in `windowedListRoutes`)
 - Create: `internal/api/handler/company_closed_jobs_integration_test.go`
 - Modify: `web/src/lib/docs/api-spec.ts` (an entry after `'/companies/{slug}'`, ~line 683) and regenerate docs
 
 **Interfaces:**
+
 - Consumes: `ListClosedJobsByCompany` from Task 1; existing `pageParams`, `lookupCompany`, `jobview.FromRows`.
 - Produces: `GET /api/v1/companies/:slug/closed-jobs?limit=&offset=` →
   `{"data": [Job], "meta": {"limit": int, "offset": int, "has_more": bool}}`. 404 unknown slug, 301 retired slug, 400 past the pagination window.
-
 - [ ] **Step 1: Add the window-guard row (fails: route not mounted)**
 
 In `windowedListRoutes`:
@@ -364,15 +367,16 @@ git commit -m "Serve a company's closed postings at /companies/:slug/closed-jobs
 ### Task 3: The Closed tab
 
 **Files:**
+
 - Modify: `web/src/lib/api.ts` (method after `getCompany`, ~line 873; export it in the returned object ~line 3153)
 - Modify: `web/src/lib/components/CompanyTabs.svelte` (fourth tab)
 - Create: `web/src/routes/companies/[slug]/closed/+page.server.ts`
 - Create: `web/src/routes/companies/[slug]/closed/+page.svelte`
 
 **Interfaces:**
+
 - Consumes: the route from Task 2.
 - Produces: `companyClosedJobs(slug: string, limit: number, offset: number): Promise<{ jobs: Job[]; hasMore: boolean }>`.
-
 - [ ] **Step 1: API client method**
 
 ```ts

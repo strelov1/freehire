@@ -16,6 +16,7 @@ field). USD per year: 260–4,200 a month before May, 18k–84k after.
 backfills itself; a chart that cannot be read as more precise than its sample.
 
 **Non-Goals:**
+
 - Per-seniority or per-country history (the sample splits too thin; revisit once
   months are large).
 - Currency conversion or period normalization (the bands never do either; a converted

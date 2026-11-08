@@ -4,6 +4,7 @@ See `proposal.md` - Why for the motivation (the accepted-risk trailing `kb.Enter
 `text`/`textarea` fields in `fillOne`, `internal/api/atsapply/fill.go:191-216`).
 
 Relevant existing shape of `fill.go`:
+
 - `fillAndSubmit(ctx, plan, layout)` loops `plan.Fields`, calling `fillOne(ctx, f, ...)` for
   each; on error it classifies via `classifyFillFailure(err, challengeVisible(ctx))` — note
   `challengeVisible` runs on the loop's own `ctx`, not `fillOne`'s internally-scoped one,
@@ -20,6 +21,7 @@ Relevant existing shape of `fill.go`:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Stop the fill loop as soon as it can tell the form's submit control is gone, rather than
   continuing to fill fields on a page that may have already moved on.
 - Route that case through the exact same confirmed/refused/unconfirmed classification the
@@ -29,6 +31,7 @@ Relevant existing shape of `fill.go`:
   existing testing pattern.
 
 **Non-Goals:**
+
 - Telling a true autocomplete field apart from a plain text field. That is the actual root
   cause the existing code comment names, and per that same comment it needs live
   verification against a real board, not a guess — unchanged by this design.

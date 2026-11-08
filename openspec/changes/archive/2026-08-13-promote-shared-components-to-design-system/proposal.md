@@ -55,6 +55,7 @@ rewrite of call sites in the same change, not a compatibility break for anyone e
 ## Capabilities
 
 ### New Capabilities
+
 - `design-system-primitives`: the contract every promoted or newly-added reusable UI
   component in `freehire-design-system` must meet — exported from `src/index.ts`, reachable
   only through `web`'s single door (`$lib/ui`), given a Storybook story per primitive with
@@ -62,6 +63,7 @@ rewrite of call sites in the same change, not a compatibility break for anyone e
   light and dark Storybook theme toggle.
 
 ### Modified Capabilities
+
 (none — `design-system-verification`'s existing requirements, e.g. the adoption ratchet and
 the single-door check, are unchanged in behavior; this change only moves the baseline numbers
 they measure, which is a data update covered in tasks.md, not a requirement change)

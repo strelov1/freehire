@@ -37,12 +37,14 @@ Two findings shaped this design:
 ## Scope of this slice
 
 In scope:
+
 - A per-candidate visibility setting: **Off** (default) / **Public** / **Anonymous**.
 - A public, unauthenticated page at a stable, unguessable URL rendering the
   profile according to the selected mode.
 - Toggle UI on the existing `my/profile` surface.
 
 Out of scope (future slices, not designed here):
+
 - Employer accounts, employer-side search/browse.
 - Intro-request flow (candidate accept/decline, contact reveal on consent).
 - Per-company visibility (e.g. hiring.cafe's "Hidden Companies" blocklist) —

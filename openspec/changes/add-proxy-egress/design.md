@@ -3,6 +3,7 @@
 The prod datacenter IP is IP-reputation-blocklisted by eightfold's anti-bot (verified 2026-07-16: prod IP → 403 on every eightfold endpoint; residential IP → 200; plain `curl` with no special headers works from residential, so the block is IP-based, not TLS-fingerprint or header based). ~87% of eightfold boards fail `streaming board failed with no progress`. The same class already blocks 2gis, EPAM, wantapply.
 
 Two HTTP transports exist in `internal/sources`:
+
 - The **standard client** — `safehttp.NewClient` → `safehttp.NewTransport` (net/http `*http.Transport` with an SSRF-guarded `DialContext`). Exposed to adapters as `JSONGetter`/`Client`. **eightfold uses this** (not the fingerprint client).
 - The **fingerprint client** — `fingerprintHTTP` (bogdanfinn/tls-client, Chrome profile), used only by Meta/Bayt/GulfTalent for edges that fingerprint the TLS+HTTP/2 layer.
 
@@ -11,12 +12,14 @@ Since eightfold's block is IP-based and it rides the standard client, proxy supp
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Route a curated allowlist of IP-blocked providers (starting with eightfold) through a configured egress proxy.
 - Keep every other provider on the direct datacenter IP (proxy bandwidth is metered/paid).
 - No behavior change when no proxy is configured.
 - Keep proxy credentials out of logs and board-health `last_error`.
 
 **Non-Goals:**
+
 - Proxying the fingerprint client (Meta/Bayt/GulfTalent) — separate follow-on if their edges start IP-blocking.
 - Proxying liveness/linksource (they probe arbitrary user-supplied URLs; keep them on the SSRF-guarded direct client — see Risks).
 - Rotating-proxy pool management logic in-app; a rotating proxy is handled by the provider behind a single URL.

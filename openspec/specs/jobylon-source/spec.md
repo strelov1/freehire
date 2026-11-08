@@ -1,8 +1,11 @@
 # jobylon-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-jobylon-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Jobylon maps its global jobs sitemap to jobs
 
 The system SHALL provide a `jobylon` source adapter that enumerates Jobylon's global jobs sitemap

@@ -12,9 +12,11 @@ The "Finish setting up your account" checklist only appears on `/my/tracking`, a
 ## Capabilities
 
 ### New Capabilities
+
 - `account-setup-checklist`: where the "finish setting up your account" checklist is shown, and that its outstanding steps deep-link into the specific profile tab where the missing field is edited.
 
 ### Modified Capabilities
+
 (none — the checklist and the profile page's tab behavior were never captured as OpenSpec capabilities)
 
 ## Impact

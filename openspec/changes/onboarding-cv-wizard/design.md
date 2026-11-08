@@ -9,10 +9,12 @@ The search profile (`internal/identity/userprofile`, `PUT/GET /api/v1/me/profile
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Reuse every existing piece that already does what a step needs (CV extraction call, category/skills/location pickers, the resume-presence signal) rather than inventing parallel versions.
 - Keep the gate's re-trigger condition equal to "no CV" — no new completion flag, so the behavior is trivially consistent across sessions and devices.
 
 **Non-Goals:**
+
 - No change to the anonymous `/jobs` `OnboardingWizard.svelte` or its localStorage-backed selection — it is a distinct capability (unauthenticated feed preferences) and stays as-is.
 - No SSR-level route guard. The gate is a client-side redirect (a root-layout `$effect`, not a `+layout.server.ts`/`load` check); it does not block server rendering of the page it redirects away from.
 - No new "role" concept distinct from `specializations` — resolved during brainstorming: what the user calls "role" in this app's own vocabulary already is the specialization/category picker (see the anonymous wizard's "What do you do?" step, which labels the same `CATEGORY_OPTIONS` picker as focus/role).

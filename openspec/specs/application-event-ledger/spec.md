@@ -1,8 +1,11 @@
 # application-event-ledger Specification
 
 ## Purpose
+
 TBD - created by archiving change application-event-ledger. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Application events are recorded from the service that decides them
 
 Every application event SHALL be written by the service layer that already makes the
@@ -185,4 +188,3 @@ row would inflate the denominator of every response-rate aggregate.
 - **WHEN** an application's date is corrected
 - **THEN** the event's `recorded_at` still reports when the row was first written, so the
   distinction between when it happened and when it was learned survives the repair
-

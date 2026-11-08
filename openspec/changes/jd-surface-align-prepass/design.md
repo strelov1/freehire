@@ -14,6 +14,7 @@ is no pre-run document snapshot.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Invert alias→canonical enough to recover preferred JD surfaces and apply them
   to a `cv.Document` deterministically, mirroring the JD (expand or shrink).
 - Run that rewrite before any tailor/autopilot LLM turn.
@@ -22,6 +23,7 @@ is no pre-run document snapshot.
   family/dedup phases.
 
 **Non-Goals (design-level; full list in proposal):**
+
 - Family relations, facet collapse, adjacency merges, LLM synonym discovery,
   provider-gated Taleo modes, fit-analysis semantic changes, aligning the
   experience bank.
@@ -85,7 +87,7 @@ API.
 
 ### D7 — Phased dictionary growth (future; no code in this change)
 
-```
+```text
 Phase 1 (this change)     alias surfaces     IaC ↔ infrastructure as code
 Phase 2                   skill families     vector-databases ⊃ {pgvector,…}
 Phase 3                   family ensure+dedup  plant JD term; dedupe chips

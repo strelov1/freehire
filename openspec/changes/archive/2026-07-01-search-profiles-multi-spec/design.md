@@ -15,6 +15,7 @@ already ships.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A profile holds 1..5 specializations, each a valid `enrich.CategoryValues` category.
 - Skills entry is a typeahead over the canonical skill dictionary with job counts and
   removable chips (dictionary-only — no free-text additions).
@@ -23,6 +24,7 @@ already ships.
 - Existing profiles migrate losslessly (single specialization → single-element set).
 
 **Non-Goals:**
+
 - How profiles are consumed (matching, feeds, notifications) — still out of scope.
 - Making skills open-vocabulary (the user chose dictionary-only).
 - A versioned migration runner (the standing seam; prod applies SQL manually).
@@ -30,22 +32,26 @@ already ships.
 ## Decisions
 
 ### 1. Data model: rename `specialization` → `specializations TEXT[]`, don't add a join table
+
 A `TEXT[]` mirrors the existing `skills TEXT[]` exactly (same normalization, same CHECK
 backstop, same sqlc mapping to `[]string`), so the service, queries, and handler stay
 symmetric and simple. A join table would add ordering/uniqueness machinery for no gain at
 this scale (≤5 values per profile, no querying by specialization yet).
+
 - *Alternative — keep `specialization` + add `extra_specializations`*: rejected, awkward
   and asymmetric.
 - *Alternative — join table `search_profile_specializations`*: rejected as over-engineering
   for the current need (the deterministic-facet columns elsewhere use `TEXT[]` too).
 
 ### 2. New migration `0029`, not an edit to `0028`
+
 Migrations apply only on fresh volume init and `0028` already shipped, so editing it would
 desync any persistent DB. `0029` ALTERs the table: add `specializations TEXT[]`, backfill
 `ARRAY[specialization]`, add the `cardinality BETWEEN 1 AND 5` CHECK, drop the old column.
 Prod applies it manually (per the deploy convention).
 
 ### 3. Service validation mirrors `normalizeSkills`
+
 Add `normalizeSpecializations([]string) ([]string, error)`: trim each, drop blanks, reject
 any value outside `enrich.CategoryValues`, dedupe preserving first-seen order, require
 ≥1 and ≤5. `Create`/`Update` signatures change `specialization string` →
@@ -55,6 +61,7 @@ provided-but-empty slice as an error (same as skills). Sentinels: replace
 `ErrTooManySpecializations`, all mapped to `400`.
 
 ### 4. Frontend reuse: `SearchSelect` (multi) for specializations, `RemoteSearchSelect` for skills
+
 `SearchSelect` is already a searchable multi-select — the specialization input becomes an
 array + toggle with a client-side cap of 5. `RemoteSearchSelect` is already the
 typeahead-with-chips pattern; its `search(query)` is backed by a **local** filter over the
@@ -63,6 +70,7 @@ endpoint and the dictionary-only rule is enforced by construction (only listed o
 addable). This directly fixes the dead-end: typing surfaces matches and adds chips.
 
 ### 5. Wire shape is a hard rename (BREAKING), updated in lockstep
+
 `specialization: string` → `specializations: string[]` across `types.ts`, `api.ts`,
 `searchProfiles.svelte.ts`, and the view. The SPA is the only consumer and ships together,
 so no compatibility shim is warranted.

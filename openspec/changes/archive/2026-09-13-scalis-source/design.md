@@ -13,10 +13,12 @@ alone is a `fullBoardListing` source with no per-posting detail fetch needed at 
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl a Scalis tenant's open postings to exhaustion from the listing alone, using the
   existing `nextflight.go` primitives exactly as `deel`/`topco`/`micro1` already do.
 
 **Non-Goals:**
+
 - No tenant-discovery/harvest prober — only one live tenant (`boldbusiness`) is known
   today, the same reasoning `selfrecruit-source` and `hrmos-source` already gave.
 - No `salary_period` mapping beyond the direct `payment` enum reading (`SALARY`→`year`,

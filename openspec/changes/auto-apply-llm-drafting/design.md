@@ -6,6 +6,7 @@ deterministic pipeline in `internal/atsapply` — `ScanGreenhouseForm` → `Reco
 `Resolve` would otherwise report unmapped.
 
 Existing pieces this reuses, unchanged in behavior:
+
 - `internal/experience.Store.ListAtoms(ctx, userID) ([]Atom, error)` /
   `.ListEmployments` — the candidate's durable experience record. `Atom.Provenance` gates
   what may be quoted (`Provenance.Publishable()`: `cv_import`/`stated_in_chat`/`manual`, not
@@ -26,6 +27,7 @@ always wins. Read directly (sibling repo, not a Go dependency) rather than linke
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Answer the class of question the 2026-09-02 live smoke test found costs the most real
   postings: free-text custom questions with no id/label match, where a grounded answer is
   plainly derivable from the candidate's own data.
@@ -33,6 +35,7 @@ always wins. Read directly (sibling repo, not a Go dependency) rather than linke
   sensitive field or an ungroundable field still parks, exactly as today.
 
 **Non-Goals:**
+
 - A human review/approve step before a drafted answer is used. `freehire-apply` gates
   every application behind manual approval; `cmd/auto-apply` has no review surface, and
   building one is a separate, materially larger change (a UI, an approval queue state
@@ -86,6 +89,7 @@ candidate is exactly as identifiable either way (`Claimed.UserID`). This change 
 `scope_test.go`'s allowlist to admit `cmd/auto-apply` explicitly, by name, with the same
 one-line reasoning `cmd/server`'s existing exemption carries — not a loosened or pattern-based
 rule that would admit a future background worker by accident.
+
 - **Sub-decision**: `userLLM` (`internal/handler/user_llm.go`) — the ~15-line composition of
   `llmkey.Resolver.For` + `llm.Client.As` every per-user feature in `internal/handler` already
   shares — gets a second real caller with this change. Extract it (renamed, since
@@ -101,11 +105,13 @@ rule that would admit a future background worker by accident.
 ### The drafter is a narrow interface, tested with a fake — no real model call in unit tests
 
 Mirrors every other LLM-backed feature in this repo (`matchanalysis`, `resumeextract`):
+
 ```go
 type Drafter interface {
     Draft(ctx context.Context, question MergedField, grounding GroundingContext) (string, bool, error)
 }
 ```
+
 `bool` is whether a groundable draft was produced at all (a model call that legitimately
 found nothing to say returns `false`, not an empty string treated as an answer). The real
 implementation wraps `internal/llm.Client` with a structured-output schema (label, grounded

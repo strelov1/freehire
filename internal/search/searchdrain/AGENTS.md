@@ -1,10 +1,13 @@
 # Facet-search drain conventions
 
 ## Scope
+
 Incremental facet-search indexing via the `search_outbox` queue, mirroring `internal/ai/embed`/`semantic_outbox`. Since 2026-11-05 this queue is the ONLY routine path to the live index: the full `reindex` swap-rebuild no longer runs on a timer and is run by hand after a backfill that writes around the queue.
 
 ## Every document change must reach this queue
+
 A change that moves a search document without queuing its job waits for a rebuild that no longer comes. The writers that queue, and the trap each one closed:
+
 - ingest, tg-extract, hydrate-adzuna, employer/moderation writes — `EnqueueSearchOutbox` in the write's transaction;
 - enrichment (`cmd/enrich`'s `Complete`) — the `enrichment.*` facets;
 - description vectors — the `job_semantic_chunks` trigger (migration 0182);
@@ -16,6 +19,7 @@ A job the drain finds withheld (`search.Withheld`) but still indexed is DELETED 
 What stays rebuild-only: a backfill that writes columns without queuing (the `backfill-*` notes in the root AGENTS.md say so each), and a settings change that needs re-indexed data.
 
 ## Always true
+
 - Work flows through `search_outbox` — a reference-only queue (`job_id` + lease/retry, not a copy of the job or a target-version/target-model column: the facet index has no staleness key beyond `content_hash`, which `cmd/ingest`'s cheap-write gate already checks before enqueuing).
 - `cmd/ingest` enqueues (`EnqueueSearchOutbox`, `ON CONFLICT (job_id) DO NOTHING`) inside the SAME transaction as the job's upsert and the enrichment enqueue — atomic with the write, not best-effort after it.
 - The enqueue is unconditional: it does not check `MEILI_MASTER_KEY`. `cmd/search-drain` is the sole gate on whether indexing is actually configured; an unconfigured deployment just never drains the queue.
@@ -107,7 +111,6 @@ were integration tests. Measured on prod 2026-08-18: **19,827 jobs close per day
 - **Missing job rows still need removal.** The deletion queue has no cascading job foreign
   key and the preparation returns missing ids; an indexing-style EXISTS guard would
   strand their documents permanently.
-
 - **A search page hides what the queue still holds.** The drain is paused for the whole of a facet rebuild, so a closure can stay in the index for hours (freehire#4040: 112k entries deep at 18:39 on 2026-11-01). `searchHandlers.dropPendingRemovals` asks this table about the ids on the page it is about to serve (`ListPendingSearchRemovals`, a primary-key lookup) and drops the ones queued, lowering `meta.total` by the same count. The queue is the right set to ask because it is exactly the closed-but-indexed postings, and it cannot be handed to Meilisearch as an `id NOT IN` filter the way `hide_seen` is, at that size. It lives in `runJobSearch`; a path that reads the index elsewhere (facets, companies, the agent endpoints that do not go through it) still sees the lag. A queued row alone does not hide a posting: `TouchJob` and `UpsertJob` reopen a posting WITHOUT dequeuing it, so the lookup joins `jobs` and hides only a job that is gone or still closed. The lookup is bounded by `pendingRemovalsTimeout`, so a stalled database serves the page as the index has it. Known limit: a page whose every hit is queued comes back empty although later pages hold matches.
 - **Duplicate markers use the removal queue too.** Each marker-writing SQL statement
   atomically queues canonical-to-duplicate transitions. The worker rereads current state
@@ -117,9 +120,11 @@ were integration tests. Measured on prod 2026-08-18: **19,827 jobs close per day
   canonical job. Full rebuilds still omit duplicates and reclaim retained storage.
 
 ## How it works
+
 The facet index (`jobs`, plain keyword/facet, no embedder) can otherwise only be refreshed by a full `reindex` — a swap-rebuild from zero on a multi-hour schedule — or by `internal/ingest/linkimport`'s single-document `SubmitJobs` push for its own on-demand imports. `cmd/search-drain` fills the gap `cmd/embed` fills for the semantic index: work flows through `search_outbox`, claimed in waves, indexed in one batch, completed (rows deleted) in one call. The runner lives in `internal/search/searchdrain` behind `Store` + `Indexer` ports (unit-tested with fakes, mirroring `internal/ai/embed/runner_test.go`); `cmd/search-drain` wires the concrete Postgres + Meilisearch adapters. Tuning via `SEARCH_DRAIN_BATCH_SIZE`/`SEARCH_DRAIN_LEASE_SECONDS`/`SEARCH_DRAIN_MAX_ATTEMPTS`/`SEARCH_DRAIN_CALL_TIMEOUT_SECONDS` (`config.LoadSearchDrain`).
 
 ## Limitations
+
 - The `freehire-search-drain.timer`/`.service` unit files are NOT tracked in this repo — they live only on host2 (`/etc/systemd/system/`), unlike the application code. Since 2026-08-06, `freehire-reindexw.service` (also host2-only) carries `ExecStartPre=+systemctl stop freehire-search-drain.timer` and `ExecStopPost=+systemctl start freehire-search-drain.timer`, so a full facet reindex automatically pauses the drain for its duration and resumes it on exit — success or failure alike — rather than relying on a human remembering the "never stack" discipline above. Added after an incident where the drain was stopped manually during a stuck reindex investigation and never turned back on.
 - **The rebuild pauses the drain at its bulk load, through `freehire:pause:search-drain`** (since 2026-11-05), not from its first second: everything before the load only reads Postgres. The key carries a refreshed TTL, so a dead rebuild cannot leave the drain off, and `Drain` checks it between waves, so a run with a backlog stops too. The paragraph below records the unit-level pause this replaced.
 - **The pause stops the SERVICE, not only the timer** (since 2026-09-02; `freehire-reindexw` and `freehire-reindex-dedup` both do it). Stopping only the timer was right while a drain run meant one batch. It stops being true once the queue carries a backlog, because then a run is a loop over the whole queue: on 2026-09-02 the queue stood at 464k and the drain had run for 6h08m when a rebuild started, so the two shared Meilisearch's one serial task queue for three hours — the rebuild at 6.8k docs/min and each 200-document push at 2m13s, against 26k docs/min and 19s once they were separated. It compounds, too: a slower drain grows the backlog, which lengthens the run, which overlaps more of the next rebuild. **Killing a push mid-flight is safe** — the worker's context is SIGTERM-cancelled and an outbox entry is deleted only AFTER its push succeeded, so a cancelled wave stays claimed and its lease expires for the next run to redo.

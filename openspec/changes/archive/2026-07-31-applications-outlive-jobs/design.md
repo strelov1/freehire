@@ -69,7 +69,7 @@ its primary key, which *is* `(user_id, job_id)`. It also leaves views and saves 
 
 A new `applications` table takes the four application columns plus the employer:
 
-```
+```text
 applications(
   id, user_id, company_slug, role_title,
   job_id NULL REFERENCES jobs(id) ON DELETE SET NULL,

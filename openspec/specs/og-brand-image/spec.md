@@ -1,8 +1,11 @@
 # og-brand-image Specification
 
 ## Purpose
+
 TBD - created by archiving change og-brand-cards. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Static brand Open Graph image
 
 The web tier SHALL ship a committed static 1200×630 PNG brand image at
@@ -41,4 +44,3 @@ static brand image (`<origin>/og.png`). A page that supplies its own preview
 
 - **WHEN** a page supplies its own preview image
 - **THEN** its `og:image` is that image, not the brand default
-

@@ -25,6 +25,7 @@ Notifying the author is a follow-up.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `buddies-social-space`: reactions on feed posts.
 
 ## Impact

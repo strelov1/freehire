@@ -28,6 +28,7 @@ latent capability into a one-click action.
 ## Capabilities
 
 ### New Capabilities
+
 - `company-follow`: the company page's "Subscribe to updates" action — how a user
   follows/unfollows a company for new-job Telegram alerts, expressed on top of the
   saved-search and filter-subscription capabilities.

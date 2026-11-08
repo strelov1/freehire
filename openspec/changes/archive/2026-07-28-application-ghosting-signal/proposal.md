@@ -55,12 +55,14 @@ its own change if the offer threshold ever proves too blunt.
 ## Capabilities
 
 ### New Capabilities
+
 - `application-silence-signal`: derives and exposes how long a tracked
   application has been without activity, the stage-aware threshold it is judged
   against, and the resulting state — including the precedence of an unconfirmed
   link suggestion over a silence claim.
 
 ### Modified Capabilities
+
 - `user-job-tracking`: the `/me/tracking` projection gains the silence fields, so
   the response contract for a tracked application changes.
 

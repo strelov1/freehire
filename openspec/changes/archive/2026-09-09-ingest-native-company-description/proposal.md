@@ -40,9 +40,11 @@ without needing a separate backfill run.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `source-ingest`: the adapter output contract gains an optional
   company-level description an adapter may supply once per board, alongside
   the per-posting fields it already returns.

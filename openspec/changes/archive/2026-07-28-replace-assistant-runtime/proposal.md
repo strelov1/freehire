@@ -54,12 +54,14 @@ because the agent was somebody else's process.
 ## Capabilities
 
 ### New Capabilities
+
 - `assistant-agent-runtime`: the in-process agent — session lifecycle, the
   bounded tool-calling turn loop, its streamed turn events, the typed tool
   registry and its two presets (general chat / CV tailoring), and the failure
   and cancellation behaviour of a turn.
 
 ### Modified Capabilities
+
 - `assistant-sessions`: sessions become freehire's own resource (owner-scoped
   list, create, delete, transcript replay served by the freehire API from
   Postgres) instead of an external agent backend's `session_meta`; access is

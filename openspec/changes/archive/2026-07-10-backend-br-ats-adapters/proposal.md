@@ -27,6 +27,7 @@ for this repo's companies and unlocks the broader BR customer roster each platfo
 ## Capabilities
 
 ### New Capabilities
+
 - `backend-br-ats-adapters`: crawl the keyless Brazilian ATS platforms referenced by
   `backend-br/vagas` (quickin, mindsight, enlizt) — one company per board — and normalize
   their open vacancies into the job catalogue, so those postings become searchable

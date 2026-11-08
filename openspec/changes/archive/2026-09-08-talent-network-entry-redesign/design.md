@@ -17,6 +17,7 @@ presentation-only redesign of both, with zero backend/API/data changes.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Replace the buried settings-tab toggle with an unmissable, status-aware
   entry point on `my/profile`.
 - Let a candidate read their current Talent Network status at a glance
@@ -24,6 +25,7 @@ presentation-only redesign of both, with zero backend/API/data changes.
 - Make the public profile page read as a real profile, not a field dump.
 
 **Non-Goals:**
+
 - No change to visibility semantics, masking rules, or any API/DB —
   `talent-network-profile`'s existing behavior is reused as-is.
 - No photo — still deferred, unchanged from the shipped design.

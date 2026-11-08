@@ -11,12 +11,14 @@ surfaces.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Show "N views · M applied" on the job **detail** page.
 - Keep it lightweight: zero read-time counting; reads serve stored values.
 - Never inflate counters on refresh or repeat actions.
 - Backfill existing jobs so the feature isn't all-zeros on release.
 
 **Non-Goals:**
+
 - Counting anonymous opens (kept as a future seam — would need an anonymous
   write path plus bot/dedup defense).
 - Displaying the counts on job cards, search results, or company pages.

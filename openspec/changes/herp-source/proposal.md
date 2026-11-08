@@ -38,6 +38,7 @@ HTML-scraping of free text is needed, only link discovery for the listing.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `herp` is a registered board-based provider — a
   two-level HTML link-discovery + ld+json-detail adapter over `herp.careers`, yielding the
   normalized job shape.

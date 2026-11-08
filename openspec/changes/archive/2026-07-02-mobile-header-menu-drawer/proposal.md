@@ -27,6 +27,7 @@ bottom. It reads as unpolished. The menu's *contents* are fine; its mobile
 <!-- none -->
 
 ### Modified Capabilities
+
 - `header-navigation`: the menu's mobile overlay becomes a full-screen drawer with a
   top bar, sectioned larger-tap-target links, and a pinned bottom action bar (the menu
   *contents* and desktop dropdown are unchanged).

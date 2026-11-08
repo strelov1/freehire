@@ -12,6 +12,7 @@ catalogue-wide the residual is ~1–2k. The identity-URL alternative was spiked 
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Catch aggregator postings whose title words are a subset of an ATS twin's, deterministically,
   with the built-in `<@` array operator (no `pg_trgm`, no threshold).
 - Bound over-merge with a seniority/qualifier gate and a minimum token count.
@@ -19,6 +20,7 @@ catalogue-wide the residual is ~1–2k. The identity-URL alternative was spiked 
 - No new extension. No index unless proven necessary.
 
 **Non-Goals:**
+
 - Trigram/similarity matching (spike: over-built for this residual).
 - Identity-URL mining for gulftalent/himalayas (spike: invalidated).
 - Changing the exact/normalized paths or any `duplicate_of` consumer.
@@ -29,7 +31,7 @@ catalogue-wide the residual is ~1–2k. The identity-URL alternative was spiked 
 
 Add to the `matches` CTE:
 
-```
+```text
 SELECT a.id, t.id
 FROM agg a JOIN ats t
   ON string_to_array(a.ntitle,' ') <@ string_to_array(t.ntitle,' ')   -- agg words ⊆ ats words

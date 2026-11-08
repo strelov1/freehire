@@ -56,6 +56,7 @@ lint rule against new hardcoded strings.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `account-interface-i18n`: the catalog mechanism accepts translations for any
   supported locale rather than exactly one; the account-section navigation
   gains a completeness guarantee (no nav item may ship without a translated

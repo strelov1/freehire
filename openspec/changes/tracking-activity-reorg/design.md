@@ -12,11 +12,13 @@ This document records the decisions that matter for implementation.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Tracking = active pipeline only (Board + Pipeline); Board without a Saved column.
 - New Activity section (`/my/activity`) with Saved · History · Matches tabs.
 - Reuse existing components and backend behavior; frontend-only change.
 
 **Non-Goals:**
+
 - No backend, API, DB, or sqlc change (the `saved` filter and `clearJobStage`
   keep-saved-mark semantics already exist).
 - No redirects from the retired `/my/tracking/history` and `/my/tracking/analyses`.

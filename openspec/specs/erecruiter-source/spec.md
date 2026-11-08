@@ -1,8 +1,11 @@
 # erecruiter-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-erecruiter-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: eRecruiter company-board crawl
 
 The system SHALL provide an `erecruiter` source adapter that crawls one company's public
@@ -91,4 +94,3 @@ by an eRecruiter apply-form `WebID`, which carries no `cfg`.
 
 - **WHEN** a candidate careers page does not reference `skk.erecruiter.pl/Code.ashx?cfg=`
 - **THEN** the harvester skips the candidate silently and continues with the rest
-

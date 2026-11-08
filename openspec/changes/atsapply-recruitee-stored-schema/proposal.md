@@ -15,9 +15,11 @@ Not in scope, and not being revisited by this change: `internal/api/handler/auto
 ## Capabilities
 
 ### New Capabilities
+
 - `atsapply-stored-schema-fallback`: when resolving an application form for submission and no live schema fetcher is registered for the posting's ATS provider, the system reads the form already captured into storage during ingest, when one exists, instead of parking immediately.
 
 ### Modified Capabilities
+
 (none — `fillProviders`/`browserUseProviders` and the park reasons they produce are unchanged; this only changes whether schema resolution itself can proceed for a provider with no live fetcher)
 
 ## Impact

@@ -26,11 +26,13 @@ shared links legible and on-brand.
 ## Capabilities
 
 ### New Capabilities
+
 - `job-og-images`: on-demand rendering of a per-job 1200×630 Open Graph preview
   image, served from a dedicated endpoint, populated from the job's served wire
   fields with defined graceful-degradation behaviour for missing data and logos.
 
 ### Modified Capabilities
+
 - `web-ssr-seo`: the per-route document-metadata requirement extends so the
   job-detail page emits an `og:image` (with dimensions and alt) and uses the
   `summary_large_image` Twitter card when a preview image exists.

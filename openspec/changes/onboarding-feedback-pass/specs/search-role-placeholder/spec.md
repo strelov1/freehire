@@ -23,7 +23,7 @@ The companies search box SHALL keep its static placeholder — it is not a role 
 #### Scenario: A retired category fails the build
 
 - **WHEN** a category named in the placeholder list is removed from the backend vocabulary
-      and the contracts are regenerated
+  and the contracts are regenerated
 - **THEN** the type check fails naming that key, rather than the box continuing to offer it
 
 ### Requirement: Rotation stops at the first interaction and never restarts
@@ -40,7 +40,7 @@ attention is on the field.
 
 - **WHEN** a visitor focuses the search field while it is empty
 - **THEN** the placeholder stops advancing, holds the entry it was showing, and does not
-      resume when focus leaves
+  resume when focus leaves
 
 #### Scenario: Typing stops the rotation
 

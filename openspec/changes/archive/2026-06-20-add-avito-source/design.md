@@ -13,6 +13,7 @@ JSON-LD-detail adapter pattern (`radancy`, `successfactors`, `luxoft`, `globalpa
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A single-company boardless `avito` adapter that enumerates every vacancy from the sitemap and
   yields the normalized job shape under `source = "avito"`.
 - Correct remote detection — Avito's JSON-LD reports the HQ city (`Москва`) even for remote roles,
@@ -20,6 +21,7 @@ JSON-LD-detail adapter pattern (`radancy`, `successfactors`, `luxoft`, `globalpa
 - Reuse the shared HTTP client, `ldJobPosting`, `sanitizeHTML`, `fetchDetails`, `isRemote`.
 
 **Non-Goals:**
+
 - No new pipeline, write-path, or `cmd/ingest` changes — one adapter file, one registry line, one
   `sources/custom.yml` entry.
 - No category/team/SEO landing pages — only `/vacancies/<cat>/<id>/` detail pages.
@@ -28,6 +30,7 @@ JSON-LD-detail adapter pattern (`radancy`, `successfactors`, `luxoft`, `globalpa
 ## Decisions
 
 ### Enumeration: traverse the sitemap index, filter by the vacancy-detail URL pattern
+
 Fetch `https://career.avito.com/sitemap.xml` (a `<sitemapindex>`), fetch each sub-sitemap, and keep
 every `<loc>` matching `/vacancies/<category>/<id>/` (a numeric trailing id). Dedup by that numeric
 id (first-seen wins) before fetching details.
@@ -41,6 +44,7 @@ id (first-seen wins) before fetching details.
   set and offers no clean pagination contract; the sitemap is the canonical, complete enumeration.
 
 ### `external_id` = the numeric vacancy id from the URL path
+
 The JSON-LD `identifier` field holds the **category name** (e.g. "Продажи"), not the id. The stable
 per-vacancy identifier is the trailing numeric segment of `/vacancies/<cat>/<id>/`. A loc without a
 parseable id is skipped (it would collide on the dedup key). The vacancy page URL is the canonical
@@ -50,6 +54,7 @@ parseable id is skipped (it would collide on the dedup key). The vacancy page UR
   is the only canonical link.
 
 ### Location and remote from the page `<title>`, not JSON-LD `addressLocality`
+
 Avito's `JobPosting.jobLocation.addressLocality` is always the HQ city (`Москва`) even for remote
 roles. The authoritative display city is the `<title>` suffix `… в городе <city>` (e.g. "Удалённая
 работа", "Москва", "Санкт-Петербург"). The adapter parses that suffix as the location and falls
@@ -62,6 +67,7 @@ back to `addressLocality` when the suffix is absent. `Remote = isRemote(location
   adapter falls back to the JSON-LD city (degrading remote detection, not breaking ingest).
 
 ### Title, description, post date from the JSON-LD `JobPosting`
+
 `title` (the clean role name, without the "Вакансия Авито «…»" wrapper), `description` (HTML, run
 through `sanitizeHTML` + `html.UnescapeString` like the other ld+json adapters), `datePosted`
 (RFC3339, parsed via `parseRFC3339`/`parseLayout`). `Company` is the static `e.Company` ("Avito").

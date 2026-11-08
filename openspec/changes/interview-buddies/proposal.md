@@ -29,6 +29,7 @@ People searching for the same kind of role in the same place, often at the same 
 ## Capabilities
 
 ### New Capabilities
+
 - `interview-buddies`: buddy membership and anonymous profile, similarity ranking, the buddy feed and its per-application visibility, invitations, in-app chat, blocks and reports, and unread-message notifications.
 
 ### Modified Capabilities

@@ -7,7 +7,9 @@ rows sit on boards the fleet still crawls successfully — the board listed its 
 did not list that company's posting again.
 
 A first attempt at the board-scoped fix (`openspec/changes/close-unseen-by-board/`, shipped as
-#2337) closed this leak directly, but closed 110 live `solidjobs` postings within 18 minutes and
+
+# 2337) closed this leak directly, but closed 110 live `solidjobs` postings within 18 minutes and
+
 was reverted (#2350). The adapter reaches only the first 500 of a board's ~1,400 postings and
 reports that as an unqualified success — every qualification condition in that design was
 satisfied honestly, and the board still had not been listed in full. That design's own postmortem
@@ -39,9 +41,11 @@ run behaviour. This change is that opt-in retry.
 ## Capabilities
 
 ### New Capabilities
+
 (none — this extends the existing sweep behaviour)
 
 ### Modified Capabilities
+
 - `job-lifecycle`: the unseen sweep gains the board scope described above, gated on the new
   `fullBoardListing` adapter marker.
 

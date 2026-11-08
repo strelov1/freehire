@@ -14,6 +14,7 @@ protocol.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A working, streamed chat at `/my/assistant` against the agent backend.
 - Reuse the proven roy control-protocol client rather than reinventing it.
 - Keep the transport contract identical to roy-web (subprotocol auth, verbatim
@@ -22,6 +23,7 @@ protocol.
   unit-testable; components are verified by `svelte-check` + a visual pass.
 
 **Non-Goals:**
+
 - Giving the agent access to freehire data (MCP tools / prompt context).
 - Sharing freehire's session cookie with the agent backend (separate login for
   now).

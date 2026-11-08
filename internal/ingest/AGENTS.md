@@ -23,7 +23,7 @@ reports the whole graph at once, including imports that exist only in test files
 `ingest` reaches into a higher block in exactly five places. Four are the whole cost of
 running the CRAWL as its own service, and are listed here so the number stays honest:
 
-```
+```text
 linkimport -> ai/enrich          linkimport -> search/search
 telegram   -> platform/llm       telegram   -> platform/llmschema
 ```
@@ -34,7 +34,7 @@ pushes it to the index inline.
 
 The fifth is a different kind of edge, not part of that crawl-extraction accounting:
 
-```
+```text
 employer -> identity/accounts
 ```
 

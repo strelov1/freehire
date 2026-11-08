@@ -41,13 +41,13 @@ Two facts from the existing code decide the shape:
 "Do you have `bash`?" fitted a single answer. With two, the question form misleads — **Avoid** does
 not answer it. The row becomes the skill's name followed by two pills:
 
-```
+```text
 bash   [✓ I have it]   [⊘ Avoid]
 ```
 
 and, when the skill is already avoided:
 
-```
+```text
 bash   [✓ I have it]   [↺ Stop avoiding]
 ```
 

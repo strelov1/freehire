@@ -32,6 +32,7 @@ counting (rows are preserved precisely so it is untouched).
 ## Capabilities
 
 ### New Capabilities
+
 - `ingest-content-dedup`: canonical-per-role-cluster selection and the read/enrichment
   collapse — the marker, its recompute, and the list/search/enrichment exclusions,
   built on the existing `role_fingerprint` and role-cluster counts.

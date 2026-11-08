@@ -29,10 +29,12 @@ language levels, and visa/relocation flags — worth mapping rather than just ti
 ## Capabilities
 
 ### New Capabilities
+
 - `joppy-source`: crawls the Joppy company directory (sitemap + per-company `__NEXT_DATA__` page)
   and maps each posting onto freehire's normalized `Job` shape.
 
 ### Modified Capabilities
+
 (none — no existing capability's requirements change)
 
 ## Impact

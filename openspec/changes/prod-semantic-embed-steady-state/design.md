@@ -31,12 +31,14 @@ This change's `freehire-embed.service` adds an equivalent guard on its own merit
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Close the current ~380k un-embedded backlog once.
 - Stand up a real, boring, recurring cron for `cmd/embed` — no custom supervisor,
   no hang-detection heuristics, no HF-endpoint lifecycle management.
 - Publish a `jobs_semantic` index that reflects current reality (no closed jobs).
 
 **Non-Goals:**
+
 - Not enabling hybrid search for end users (`web/src/lib/api.ts`'s `semantic_ratio`
   stays 0) — a separate, later product decision.
 - Not changing `cmd/embed`, the `is_tech` gate, or the `--from-pg` path — all
@@ -100,7 +102,8 @@ timer rescheduled cleanly on its normal interval every time, regardless of wheth
 **5. Conservative CPU/IO weight from day one**
 `search-drain` shipped at `CPUWeight=40`/`IOWeight=40` and only got cut to 10/10
 after causing nginx accept-queue starvation. `cmd/embed`'s per-doc cost (a TEI call
-+ a Postgres write + a Meili push) is heavier than search-drain's (Meili push only),
+
+- a Postgres write + a Meili push) is heavier than search-drain's (Meili push only),
 and it has zero steady-state track record. Ship the new unit at `CPUWeight=10` /
 `IOWeight=10` from the start rather than repeat the same discovery-by-incident.
 

@@ -16,12 +16,14 @@ authenticated by one full-scope API key (`fhk_...`) that already drives `cv edit
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a full-scope key create a new employment or a new atom, the same way it can already
   read every existing one.
 - Keep the provenance rule the honest wall depends on intact: an atom created this way must
   never be indistinguishable from one the candidate stated in a chat the server can verify.
 
 **Non-Goals:**
+
 - A new, narrower API-key scope for bank writes. Investigated and rejected for this change:
   scope selection at key-creation time does not exist for user-facing keys at all today
   (`mintAPIKey` hardcodes `ScopeFull`) — building it would mean a migration, a new

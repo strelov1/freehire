@@ -1,8 +1,11 @@
 # job-collections Specification
 
 ## Purpose
+
 TBD - created by archiving change add-collections-pages. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Curated collections are a company-level membership fact
 
 The system SHALL model a curated collection as a company-level fact: each company
@@ -272,4 +275,3 @@ as `work_mode=remote` and `regions=global`.
 
 - **WHEN** the filter-collection registry is loaded
 - **THEN** every entry has a unique `slug` and a non-empty `params` map
-

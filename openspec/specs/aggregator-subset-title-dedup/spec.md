@@ -1,8 +1,11 @@
 # aggregator-subset-title-dedup Specification
 
 ## Purpose
+
 TBD - created by archiving change aggregator-subset-title-dedup. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Suppression also matches when the aggregator title's words are a subset of an ATS title's
 
 The system SHALL suppress an open aggregator posting as `duplicate_of` an open canonical ATS posting
@@ -67,4 +70,3 @@ release the aggregator copy on the next reindex.
   reindex runs again
 - **THEN** the aggregator copy's `duplicate_of` is cleared and it re-enters search, embedding, and
   enrichment
-

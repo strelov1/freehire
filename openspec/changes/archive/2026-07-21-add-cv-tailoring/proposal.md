@@ -35,6 +35,7 @@ session drives; it wires up the `cvs.job_id` seam the schema already anticipated
 ## Capabilities
 
 ### New Capabilities
+
 - `cv-tailoring`: the two-tier base/tailored CV model over `cvs`, the field-level patch operation
   and its endpoint, the tailoring bootstrap and context endpoints, the scoped-key minting, the
   honest-wall invariants at the model/API boundary, the typed wire contracts, and the fit-page CTA.

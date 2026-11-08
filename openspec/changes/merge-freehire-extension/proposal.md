@@ -45,9 +45,11 @@ and keeps the client and its backend contract in one place.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 (none)
 
 This is a repo-structure and implementation change — no product-facing

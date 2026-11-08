@@ -35,9 +35,11 @@ not the title. A caller who wants systems-engineering roles cannot exclude this 
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `job-search`: the "Public job search endpoint" requirement gains a documented `q`
   semantics contract and the new `q_fields` parameter.
 - `agent-jobs-search`: the "Agent job search endpoint" requirement's "runs the same

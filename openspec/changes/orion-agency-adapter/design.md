@@ -32,11 +32,13 @@ pagination token — `page` is a plain query param, and `pagination.to >= pagina
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Page the API with `hasexpired=false` into the catalogue, one `Job` per item, no
   separate detail fetch (the listing already carries the full description).
 - Reuse `GetJSON` (`JSONGetter`) — no new transport, no auth, no pacing.
 
 **Non-Goals:**
+
 - The sitemap (`/api/sitemap.xml`) — weaker and partially stale (some entries 410); the
   API's own `hasexpired=false` filter is the correct "currently open" source, so the
   sitemap is not read at all.

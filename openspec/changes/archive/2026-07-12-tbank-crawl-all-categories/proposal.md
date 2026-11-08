@@ -22,6 +22,7 @@ prod holds ~1277 field-sales/collections roles and not one engineering vacancy.
 ## Capabilities
 
 ### New Capabilities
+
 - `tbank-source`: the T-Bank careers-API adapter — a boardless single-company
   source that crawls every top-level vacancy category via the `getVacancies` list
   filter and fetches each posting's description from the detail endpoint.

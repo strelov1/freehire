@@ -1,7 +1,9 @@
 # filter-subscriptions Specification
 
 ## Purpose
+
 TBD - created by syncing change filter-subscriptions. Update Purpose after archive.
+
 ## Requirements
 
 ### Requirement: Subscribe a saved search to notifications

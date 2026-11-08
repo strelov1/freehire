@@ -18,7 +18,7 @@ An explicit stage SHALL continue to decide the column — a saved row that has b
 
 - **WHEN** a user who saved jobs before this change opens the tracking board
 - **THEN** those jobs appear as cards in the Preparing column, without any migration having
-      run
+  run
 
 #### Scenario: An explicit stage still wins
 

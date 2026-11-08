@@ -1,8 +1,11 @@
 # aggregator-ats-dedup Specification
 
 ## Purpose
+
 TBD - created by archiving change aggregator-ats-dedup. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: An aggregator posting is suppressed when a first-party ATS twin exists
 
 The system SHALL, when the reindex recomputes duplicate markers, mark an open posting
@@ -117,4 +120,3 @@ suppression is cleared only by this pass deciding the relationship ended.
   posting and finds it canonical by its own criteria
 - **THEN** the suppression stands, the posting stays out of search, embedding, and
   enrichment, and only this pass may release it
-

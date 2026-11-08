@@ -40,11 +40,13 @@ deferred ("a separate, already-deferred half of the same idea").
 ## Capabilities
 
 ### New Capabilities
+
 - `mentor-busy-sync`: a mentor's own opt-in Google Calendar read-only consent for
   busy-time sync, the periodic worker that reconciles `mentor_busy_intervals` from it,
   and the reconsent handling for a revoked grant.
 
 ### Modified Capabilities
+
 (none — `mentor-availability`'s busy-set requirement is already source-agnostic, and the
 slot engine's consumption of `mentor_busy_intervals` does not change)
 

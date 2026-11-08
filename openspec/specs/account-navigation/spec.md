@@ -6,7 +6,9 @@ The in-section navigation and shared chrome for the signed-in `my/*` account
 area: a single shell that owns the width container, the `noindex` robots tag, a
 unified auth-gate, and the section navigation (a vertical sidebar on wide
 viewports, a horizontal tab strip on narrow ones), plus the bare-`/my` redirect.
+
 ## Requirements
+
 ### Requirement: Account section shell
 
 The signed-in account area SHALL render every `my/*` route inside a single shared
@@ -202,4 +204,3 @@ returning a not-found response.
 
 - **WHEN** a user navigates to `/my`
 - **THEN** the app redirects to `/my/tracking`
-

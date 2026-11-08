@@ -21,6 +21,7 @@ the adapter claims to handle, so the requirement needs to say carrier rather tha
 <!-- none -->
 
 ### Modified Capabilities
+
 - `opencats-source`: posting recognition is defined in terms of an anchor and its text; it
   must be defined in terms of whatever element carries the route, since an install may carry
   it on a row handler and then no anchor text exists.

@@ -13,6 +13,7 @@
 <!-- none -->
 
 ### Modified Capabilities
+
 - `source-ingest`: the standalone ingest command additionally accepts a shard selector that restricts a run to a round-robin slice of the board file.
 
 ## Impact

@@ -4,7 +4,7 @@
 
 The panel's header carries a strip that reads as a timeline and is not one:
 
-```
+```text
 ● Viewed yesterday ————————————— ● Applied 6 days ago
 ```
 

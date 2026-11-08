@@ -29,6 +29,7 @@ already removed that product moment: opening Tailor now starts editing immediate
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Give the autopilot run a way to independently verify its own edits before it reports, using the
   free, deterministic `job_match` tool (`internal/handler/assistant_cv_tools.go:210`) rather than
   its own belief about what it changed.
@@ -38,6 +39,7 @@ already removed that product moment: opening Tailor now starts editing immediate
   now that its underlying product assumption no longer holds.
 
 **Non-Goals:**
+
 - Restructuring `internal/matchanalysis`'s three-stage chain itself (Extract & Match / Recruiter
   verdict / Adversarial audit). The cost concern that raised this is already solved structurally —
   see Decision 4.
@@ -97,6 +99,7 @@ blocked run mid-turn and asserting the refresh still ran.
 `prepareAutopilotAnalysis` (replacing today's `ensureAnalysisForRun`) resolves the job and
 delegates to a new `matchHandlers.prepareAutopilotRun(c, userID, job) func(context.Context)`,
 which:
+
 1. Runs today's `ensureCachedAnalysis` (fill-if-empty) synchronously, while `c` is still valid —
    unchanged behavior.
 2. Builds the fit-chain `Input` and a bound `*matchanalysis.Analyzer` once, using `c` — also while
@@ -168,6 +171,7 @@ plain revert; no cache row format changes.
 ## Open Questions
 
 None outstanding — resolved during design discussion:
+
 - Post-run refresh ordering/goroutine question → resolved by Decision 2 (same goroutine,
   sequential after `runner.Run`).
 - Whether `internal/llmkey`'s background-entrypoint scope test constrains this path → does not

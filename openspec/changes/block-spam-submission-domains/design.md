@@ -17,12 +17,14 @@ See proposal.md - Why. Relevant current state:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Refuse a submission from a known-bad host before it ever reaches the moderator queue.
 - Let a moderator turn "reject this one" into "reject this one and every other pending
   submission from the same host, and block the host" in a single action.
 - Never affect `moderation.Service.Create` (the trusted, moderator-authored path).
 
 **Non-Goals:**
+
 - No wildcard/suffix/registrable-domain matching (e.g. blocking `*.gridnaut.site` or
   catching a same-registrant domain under a different TLD). Exact-host matching (modulo a
   `www.` prefix) is enough for the observed pattern and keeps the check a single indexed
@@ -61,6 +63,7 @@ adding it would need its own normalization decision this change doesn't need to 
 
 **`block_domain` bulk-rejects same-host pending rows in the same DB transaction as the
 target reject and the blocklist insert.** Alternatives considered:
+
 - *Separate "bulk reject by host" endpoint, called by the frontend after the single
   reject succeeds.* Rejected: two round trips, and a failure between them leaves the
   blocklist entry live while sibling spam rows are still sitting in the queue — exactly

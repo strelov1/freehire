@@ -16,6 +16,7 @@ Saving a search and turning on its Telegram alert is the product's retention loo
 ## Capabilities
 
 ### New Capabilities
+
 - `save-search-alert`: A centralized, query-driven "save this search and get its new jobs in Telegram" flow — a shared module + compact component surfaced from the filters sidebar, the post-onboarding banner, and the saved-searches modal tab, over the existing saved-search / subscription / Telegram-link backend.
 
 ### Modified Capabilities

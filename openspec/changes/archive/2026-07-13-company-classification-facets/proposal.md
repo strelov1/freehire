@@ -45,7 +45,7 @@ company-website classification.)
 
 ### New Capabilities
 
-_None._
+*None.*
 
 ### Modified Capabilities
 

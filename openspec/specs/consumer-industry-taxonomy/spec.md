@@ -72,7 +72,6 @@ singular forms resolved fine.
 - **THEN** its derived `is_tech` is `false`, and it is not enqueued for AI
   enrichment or semantic embedding
 
-
 ### Requirement: The consumer categories are NOT craft-protected from deletion
 
 `engineering_design` and `industrial_engineering` are subtracted from

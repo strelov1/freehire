@@ -47,13 +47,16 @@ would truncate the distribution and `title` is not a filterable attribute. Sugge
 are mined into a bounded dictionary offline instead.
 
 #### Scenario: A title suggestion carries no facet value
+
 - **WHEN** the index holds the suggestion "Java Developer" of kind `title`
 - **THEN** it carries no facet value, because no facet names that phrase
 
 #### Scenario: A category suggestion carries its slug
+
 - **WHEN** the index holds the suggestion "Backend" of kind `category`
 - **THEN** it carries the facet value `backend`
 
 #### Scenario: No suggestion names a role
+
 - **WHEN** the dictionary is built
 - **THEN** no document carries the kind `role`

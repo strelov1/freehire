@@ -6,7 +6,9 @@ Capture AI-derived, additive metadata for each job — seniority, work mode,
 skills, salary, location descriptors, and company descriptors — in a typed,
 versioned enrichment payload, so jobs can be filtered and presented richly
 without altering the raw source fields ingested by parsers.
+
 ## Requirements
+
 ### Requirement: Jobs store an additive enrichment payload
 
 The system SHALL store a structured enrichment payload per job in a

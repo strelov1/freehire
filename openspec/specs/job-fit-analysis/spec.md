@@ -1,8 +1,11 @@
 # job-fit-analysis Specification
 
 ## Purpose
+
 TBD - created by archiving change job-fit-analysis. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: On-demand LLM fit analysis
 
 The system SHALL provide an authenticated `POST /api/v1/jobs/:slug/fit` endpoint that runs a fixed
@@ -428,4 +431,3 @@ per-analysis masking is performed.
 
 - **WHEN** a user has a stored CV but no current structured résumé (extraction absent or stale)
 - **THEN** the fit analysis does not run and the endpoint responds `200` with no analysis
-

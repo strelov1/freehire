@@ -1,8 +1,11 @@
 # job-analytics Specification
 
 ## Purpose
+
 TBD - created by syncing change analytics-facets. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Facet distribution endpoint
 
 The system SHALL expose a public, unauthenticated `GET /api/v1/jobs/facets`
@@ -14,6 +17,7 @@ numeric range filters) and apply them with identical semantics.
 
 The response SHALL use the single-item envelope `{"data": ...}` whose `data`
 object contains:
+
 - `total`: the estimated number of vacancies matching the filters,
 - `facets`: a map of facet → (value → count),
 - `stats`: a map of numeric facet → `{min, max}`.
@@ -98,4 +102,3 @@ single facet query rather than the sum of all of them.
 - **WHEN** a client requests the facet distribution without the disjunctive flag
 - **THEN** every facet is counted under the full filter (conjunctive), exactly as
   before
-

@@ -7,7 +7,9 @@ orientation-then-search read path over the labels the classification worker alre
 assigned, the triage and linking actions, the bounds that keep a tool result small
 enough to be replayed on every later turn, and the reasons the assistant is denied
 the read-marking single-message endpoint and any way to send.
+
 ## Requirements
+
 ### Requirement: The assistant orients in mail by its labels before reading any
 
 The assistant SHALL be given an `inbox_overview` tool that reports the shape of the

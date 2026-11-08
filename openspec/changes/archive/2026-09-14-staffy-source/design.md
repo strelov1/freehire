@@ -45,6 +45,7 @@ Confirmed live against `jobs.wearestaffy.com`:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl Staffy's whole board from one static listing fetch (enumeration, verified against
   its own declared total) plus one detail fetch per posting for description, location,
   work mode, and seniority — all read from clean, fixed DOM structure, no JSON API or
@@ -52,6 +53,7 @@ Confirmed live against `jobs.wearestaffy.com`:
   initiative).
 
 **Non-Goals:**
+
 - No per-posting `Company` mapping — see Context; `CompanyEntry.Company` (the
   curator-configured "Staffy") is used for every posting.
 - No `EmploymentType`/`Skills`/`Salary*` mapping. None of these fields appear anywhere on

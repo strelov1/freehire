@@ -60,7 +60,7 @@ tailors a vacancy from the right one without thinking about which CV was edited 
 3. **Duplicate.** The owner's chosen way to create a second base (decided over a Huntr-style
    "create new from profile / PDF / LinkedIn" flow, which is deferred). Duplicating a base
    makes a new base with the same document, template and appearance, titled
-   "<title> (copy)", and opens it in the workspace's base mode.
+   "`<title>` (copy)", and opens it in the workspace's base mode.
 4. **Choose the base when tailoring — only when there is a choice.**
    - One base (or none): nothing changes, no extra step. None still seeds a base from the
      extracted résumé, as today.

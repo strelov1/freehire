@@ -48,15 +48,16 @@
 ## 1. Extract the slot engine into internal/engage/slots
 
 **Files:**
+
 - Move (git mv) from `internal/engage/mentorship/` to `internal/engage/slots/`: `slots.go`, `slots_test.go`, `slice.go`, `slice_test.go`, `override.go`, `override_test.go`, `expand.go`, `expand_test.go`, `subtract.go`, `subtract_test.go`, `schedule.go`, `schedule_test.go`, `calendar.go`, `calendar_test.go`, `anchor_test.go`, `determinism_test.go`, `midnight_test.go`, `repeated_hour_test.go`.
   `calendar.go` moves too although the proposal lists six files: `Calendar` calls the engine's unexported `expandSchedule`, `subtractBusy`, `sliceSlots`, `mergeOverlapping`, `compareIntervals` and `clip`, and is just as pure.
 - Create: `internal/engage/slots/doc.go`, `internal/engage/mentorship/engine_helpers_test.go`
 - Modify: `internal/platform/arch/layering/blocks.go:244`; every remaining `internal/engage/mentorship/*.go` that names an engine type (`booking.go`, `booking_repository.go`, `profile.go`, `repository.go`, `schedule_service.go`, `service.go`, `slot_cache.go:89-113`, `booking_test.go`, `fake_repo_test.go`, `profile_test.go`, `remind_test.go`, `service_calendar_test.go`, `slot_cache_test.go`, `googlemeet*.go`, `invite_test.go`); `internal/api/handler/mentorship.go`, `mentorship_availability.go`, `mentorship_write.go`, `mentorship_moderation_photo_integration_test.go`.
 
 **Interfaces:**
+
 - Produces (package `slots`, unchanged apart from the renames): `type Rule`, `func NewWeeklyRule(time.Weekday, TimeOfDay, TimeOfDay) (Rule, error)`, `func NewDatedRule(Date, TimeOfDay, TimeOfDay) (Rule, error)`, `func (Rule) WithID(int64) Rule` (was unexported `withID`), `func (Rule) ID() int64`, `type TimeOfDay`, `func NewTimeOfDay(int, int) (TimeOfDay, error)`, `type Date`, `func NewDate(int, time.Month, int) (Date, error)`, `type Interval struct{ Start, End time.Time }`, `type SessionParams struct{ Duration, BufferBefore, BufferAfter, MinimumNotice, Horizon time.Duration }`, `type SlotRequest struct{ Rules []Rule; OwnerZone *time.Location; Params SessionParams; Busy []Interval; From, To, Now time.Time; ViewerZone string }`, `type SlotResult struct{ Slots []Interval; Zone string }`, `func Slots(SlotRequest) (SlotResult, error)`, `type CalendarRequest` (field `OwnerZone`), `func Calendar(CalendarRequest) (CalendarResult, error)`, `StatusBooked/StatusBusy/StatusFree/StatusClosed`, sentinels `ErrNoOwnerZone`, `ErrInvalidTimeOfDay`, `ErrInvalidDate`, `ErrInvalidWeekday`, `ErrInvalidSpan`, `ErrInvalidSessionParams` (messages now prefixed `slots:` instead of `mentorship:`; no test or client reads the text).
 - Consumes: nothing new. Mentorship behaviour does not change.
-
 - [x] 1.1 Move the engine and its tests with history, and rename the package and the mentor-flavoured identifiers:
 
 ```bash
@@ -77,16 +78,22 @@ perl -pi -e 's/^package mentorship$/package slots/; s/\bErrNoMentorZone\b/ErrNoO
 ```go
 // ErrNoOwnerZone → 500. A mentor row reached the engine without the IANA zone that
 ```
+
 with
+
 ```go
 // ErrNoOwnerZone → 500. An owner's row reached the engine without the IANA zone that
 ```
+
 and in `internal/engage/slots/schedule.go` replace
+
 ```go
 // WithID labels a rule with the row it came from. Unexported: an id is something the
 // repository knows and a caller cannot invent.
 ```
+
 with
+
 ```go
 // WithID labels a rule with the row it came from. Only a repository calls it: an id is
 // something storage knows and a caller cannot invent.
@@ -114,7 +121,9 @@ package slots
 ```go
 		"referral", "reminder", "report", "socialdigest", "subscription",
 ```
+
 with
+
 ```go
 		"referral", "reminder", "report",
 		// slots is the pure availability engine (rules, expansion, slicing) that mentorship
@@ -123,6 +132,7 @@ with
 		"slots",
 		"socialdigest", "subscription",
 ```
+
 Run `go test ./internal/platform/arch/layering/ -count=1`. Expected: `ok`.
 
 - [x] 1.6 Run `go build ./internal/engage/mentorship/`. Expected: FAIL with `undefined: Rule`, `undefined: Interval`, `undefined: SlotRequest`, … . Rename the local variable that would shadow the new package import: in `internal/engage/mentorship/slot_cache.go` replace
@@ -134,7 +144,9 @@ Run `go test ./internal/platform/arch/layering/ -count=1`. Expected: `ok`.
 	}
 	return SlotResult{Slots: slots, Zone: c.Zone}, true
 ```
+
 with
+
 ```go
 	intervals := make([]Interval, 0, len(c.Slots))
 	for i := range c.Slots {
@@ -199,6 +211,7 @@ go build ./... && go vet ./...
 go vet -tags=integration ./internal/engage/mentorship/... ./internal/api/handler/ ./internal/engage/slots/
 go test ./internal/engage/slots/ ./internal/engage/mentorship/... ./internal/api/handler/ ./internal/platform/arch/layering/ -count=1
 ```
+
 Expected: every command succeeds; `go test` prints `ok` for each package. Then the mentorship integration suite: `go test -tags=integration ./internal/engage/mentorship/ ./internal/api/handler/ -run 'Mentor|Mentorship' -count=1`. Expected: `ok`.
 
 - [x] 1.10 Commit:
@@ -211,11 +224,13 @@ git commit -m "Move the slot engine into internal/engage/slots" -m "Pure move: t
 ## 2. Schema and queries (migration 0215_buddy_mocks.sql)
 
 **Files:**
+
 - Create: `migrations/0215_buddy_mocks.sql`, `internal/platform/db/queries/buddy_mocks.sql`, `internal/platform/db/buddy_mocks_integration_test.go`
 - Modify: `internal/platform/db/queries/buddies.sql:20-40` (`LeaveBuddyMember`)
 - Regenerate: `internal/platform/db/models.go`, `internal/platform/db/buddy_mocks.sql.go`, `internal/platform/db/buddies.sql.go`, `internal/platform/db/querier.go`
 
 **Interfaces (generated by sqlc; verify after `make sqlc`):**
+
 - Models: `db.BuddyMockSetting{UserID int64; Timezone string; MeetingUrl string; Topics []string; Paused bool; CreatedAt, UpdatedAt pgtype.Timestamptz}`, `db.BuddyMockAvailability{ID int64; UserID int64; Weekday pgtype.Int2; OnDate pgtype.Date; StartTime, EndTime pgtype.Time; CreatedAt pgtype.Timestamptz}`.
 - `GetBuddyMockSettings(ctx, userID int64) (BuddyMockSetting, error)`
 - `UpsertBuddyMockSettings(ctx, UpsertBuddyMockSettingsParams{UserID int64; Timezone string; MeetingUrl string; Topics []string; Paused bool}) (BuddyMockSetting, error)`
@@ -959,6 +974,7 @@ grep -n 'type BuddyMockSetting struct\|type BuddyMockAvailability struct' intern
 grep -n '^func (q \*Queries) \(CreateBuddyMock\|GetBuddyMock\|ClaimBuddyMockCancelNotices\|CountFutureBuddyMocksAsGuest\|GetBuddyMemberMockSummary\)(' internal/platform/db/buddy_mocks.sql.go
 grep -n 'HostTimezone \|MeetingUrl \|HostEmail \|CounterpartVisible \|RatingAvg ' internal/platform/db/buddy_mocks.sql.go
 ```
+
 Expected: every grep prints a line; `HostTimezone`, `MeetingUrl` and `HostEmail` are `string`, `CounterpartVisible` is `bool`, `RatingAvg` is `float64`, `ClaimBuddyMockCancelNotices(ctx context.Context, actorID int64) ([]pgtype.UUID, error)`. If sqlc typed `host_timezone`/`meeting_url` as `pgtype.Text` despite the `coalesce(...)::text`, change the mapping in Task 5 (`row.HostTimezone.String`, `row.MeetingUrl.String`) rather than the query.
 
 - [x] 2.7 Run the schema tests and the account-deletion guard:
@@ -966,6 +982,7 @@ Expected: every grep prints a line; `HostTimezone`, `MeetingUrl` and `HostEmail`
 ```bash
 go test -tags=integration ./internal/platform/db/ -run 'BuddyMock|TestBlockCancelsThePairsFutureMocks|TestLeaveBuddyMemberCancelsTheirFutureMocks|TestCreateBuddyMockRefusesAPairThatCannotMeet|TestEveryUserForeignKeyIsIndexed|TestDeletingUserCascadesBuddyData|TestBuddyMembershipQueries' -count=1
 ```
+
 Expected: `ok`.
 
 - [x] 2.8 Lint the new migration: `pnpm check:sql`. Expected: no findings for `0215_buddy_mocks.sql` (fix a finding by the rule's own advice, or with a `-- squawk-ignore <rule>` line before the statement and the reason beside it).
@@ -981,9 +998,11 @@ git commit -m "Add the buddy mock-interview schema and queries" -m "Six tables, 
 ## 3. Mock settings and availability
 
 **Files:**
+
 - Create: `internal/engage/buddy/mock.go`, `internal/engage/buddy/mock_service.go`, `internal/engage/buddy/mock_repository.go`, `internal/engage/buddy/mock_test.go`, `internal/engage/buddy/mock_helpers_integration_test.go`, `internal/engage/buddy/mock_settings_integration_test.go`
 
 **Interfaces:**
+
 - Consumes: `slots.SessionParams`, `slots.Slots`, `slots.SlotRequest`, `slots.SlotResult`, `slots.Rule` (+ `WithID`, `NewWeeklyRule`, `NewDatedRule`, `NewDate`, `NewTimeOfDay`), `slots.Interval`, `slots.ErrInvalidSpan` (Task 1); `db.Queries.GetBuddyMockSettings`, `UpsertBuddyMockSettings`, `ListBuddyMockAvailability`, `ReplaceBuddyMockWeekly`, `CreateBuddyMockAvailabilityRule`, `DeleteBuddyMockAvailabilityRule` (Task 2); `(*Service).requireActive(ctx, userID int64) error` (`feed.go:208`), `ErrNotFound`, `ErrNotMember` (`buddy.go`).
 - Produces:
   - `const MockDuration, MockMinimumNotice, MockHorizon time.Duration`; `const TopicCoding, TopicSystemDesign, TopicBehavioral = "coding", "system_design", "behavioral"`; `var MockTopics []string`; `const MockConfirmed, MockCancelled`; `const RoleHost, RoleGuest`; `const CancelByParticipant, CancelByLeave, CancelByBlock = "participant", "left", "blocked"`
@@ -995,7 +1014,6 @@ git commit -m "Add the buddy mock-interview schema and queries" -m "Six tables, 
   - `func NewMockService(members *Service, repo MockRepository, notifier MockNotifier) *MockService`
   - `func (*MockService) Settings(ctx, userID int64) (MockSettings, bool, error)`, `SaveSettings(ctx, userID int64, in MockSettings) (MockSettings, error)`, `Availability(ctx, userID int64) ([]slots.Rule, error)`, `ReplaceWeekly(ctx, userID int64, rules []slots.Rule) error`, `AddOverride(ctx, userID int64, rule slots.Rule) (slots.Rule, error)`, `DeleteRule(ctx, userID, ruleID int64) error`
   - unexported: `validateMockSettings(MockSettings) (MockSettings, error)`, `ianaZone(string) (*time.Location, bool)`, `mockSlots(rules []slots.Rule, hostZone *time.Location, busy []slots.Interval, from, to, now time.Time, viewerZone string) (slots.SlotResult, error)`
-
 - [x] 3.1 Write the failing unit tests `internal/engage/buddy/mock_test.go` (settings validation, and the availability scenarios "Weekly range across a DST change" and "Closed date", which are the engine's answer under the mock shape):
 
 ```go
@@ -1826,13 +1844,14 @@ git commit -m "Add buddy mock settings and availability"
 ## 4. Slot listing
 
 **Files:**
+
 - Modify: `internal/engage/buddy/mock_service.go` (interface + `OpenSlots`, `hostSlots`), `internal/engage/buddy/mock_repository.go` (`MockBusy`), `internal/engage/buddy/mock_helpers_integration_test.go` (`firstSlot`, `seedMock`)
 - Create: `internal/engage/buddy/mock_slots_integration_test.go`
 
 **Interfaces:**
+
 - Consumes: `(*Service).visibleMember(ctx, viewerID int64, handle string) (Member, error)` (`buddy.go`; `ErrNotMember` for an inactive viewer, `ErrNotFound` for an unknown/left/self/blocked handle); `db.Queries.ListBuddyMockBusy`; `mockSlots`, `ianaZone`; `slots.ErrNoOwnerZone`.
 - Produces: `MockRepository.MockBusy(ctx, userID int64, from, to time.Time) ([]slots.Interval, error)`; `type MockSlots struct{ Slots []slots.Interval; Zone string; Topics []string }`; `func (*MockService) OpenSlots(ctx, viewerID int64, hostHandle string, from, to time.Time, viewerZone string) (MockSlots, error)`; unexported `(*MockService).hostSlots(ctx, hostID int64, settings MockSettings, from, to time.Time, viewerZone string) (slots.SlotResult, error)`.
-
 - [x] 4.1 Append the two fixtures the next tasks share to `internal/engage/buddy/mock_helpers_integration_test.go` (add `"github.com/google/uuid"` and `"github.com/jackc/pgx/v5/pgtype"` to its imports):
 
 ```go
@@ -2003,6 +2022,7 @@ func TestSlotListingRefusesStrangersAndBlocks(t *testing.T) {
 	// theirs, as host or as guest.
 	MockBusy(ctx context.Context, userID int64, from, to time.Time) ([]slots.Interval, error)
 ```
+
 and append to the file:
 
 ```go
@@ -2059,6 +2079,7 @@ func (s *MockService) hostSlots(ctx context.Context, hostID int64, settings Mock
 	return mockSlots(rules, zone, busy, from, to, s.now(), viewerZone)
 }
 ```
+
 In `internal/engage/buddy/mock_repository.go` append:
 
 ```go
@@ -2092,13 +2113,14 @@ git commit -m "List another buddy's open mock slots"
 ## 5. Booking
 
 **Files:**
+
 - Modify: `internal/engage/buddy/mock.go` (sentinels), `internal/engage/buddy/mock_service.go` (interface, `BookInput`, `Book`, `offerable`), `internal/engage/buddy/mock_repository.go` (`FutureGuestMocks`, `CreateMock`, `MockByID`)
 - Create: `internal/engage/buddy/mock_booking_integration_test.go`
 
 **Interfaces:**
+
 - Consumes: `db.Queries.CountFutureBuddyMocksAsGuest`, `CreateBuddyMock`, `GetBuddyMock`; `pgerr.ExclusionViolationConstraint(err) (name string, ok bool)` (`internal/platform/pgerr/pgerr.go:93`, the helper mentorship's `CreateBooking` uses); `hostSlots`, `visibleMember`, `MockNotifier.MockBooked`.
 - Produces: `const MaxGuestMocks = 3`; `var ErrInvalidTopic, ErrSlotUnavailable, ErrGuestMockLimit, ErrMockNotFound error`; `type NewMock struct{ HostUserID, GuestUserID int64; StartsAt, EndsAt time.Time; Topic, GuestTimezone string }`; `type BookInput struct{ HostHandle string; GuestUserID int64; StartsAt time.Time; Topic, GuestZone string }`; `func (*MockService) Book(ctx, BookInput) (Mock, error)`; repository `FutureGuestMocks(ctx, guestID int64) (int, error)`, `CreateMock(ctx, NewMock) (Mock, error)`, `MockByID(ctx, uuid.UUID) (Mock, bool, error)`.
-
 - [x] 5.1 Write the failing tests `internal/engage/buddy/mock_booking_integration_test.go`:
 
 ```go
@@ -2273,6 +2295,7 @@ func TestPausingKeepsBookedMocksConfirmed(t *testing.T) {
 	// brake on one member reserving everybody's evenings, not a quota.
 	MaxGuestMocks = 3
 ```
+
 and after `ErrInvalidMockSettings`:
 
 ```go
@@ -2301,6 +2324,7 @@ type NewMock struct {
 	GuestTimezone string
 }
 ```
+
 In `internal/engage/buddy/mock_service.go` add `"log"`, `"slices"` and `"github.com/google/uuid"` to the imports, extend `MockRepository` after `MockBusy`:
 
 ```go
@@ -2314,6 +2338,7 @@ In `internal/engage/buddy/mock_service.go` add `"log"`, `"slices"` and `"github.
 	// both addresses. Authorisation is the caller's.
 	MockByID(ctx context.Context, id uuid.UUID) (Mock, bool, error)
 ```
+
 and append:
 
 ```go
@@ -2395,6 +2420,7 @@ func (s *MockService) offerable(ctx context.Context, hostID int64, settings Mock
 	return slices.ContainsFunc(res.Slots, func(iv slots.Interval) bool { return iv.Start.Equal(start) }), nil
 }
 ```
+
 In `internal/engage/buddy/mock_repository.go` add `"github.com/google/uuid"` and `"github.com/strelov1/freehire/internal/platform/pgerr"` to the imports and append:
 
 ```go
@@ -2472,13 +2498,14 @@ git commit -m "Book a buddy mock interview"
 The leave already cancels inside `LeaveBuddyMember` and the block inside the `user_blocks` trigger (Task 2). The seam left is the NOTICE: a trigger cannot hand rows back, and the block statement is the messaging core's, which may not import buddy. Every cancellation therefore records `cancelled_by`, and the caller announces afterwards with `AnnounceCancellations(actorID)`, which claims the un-announced ones by that actor (`ClaimBuddyMockCancelNotices`). The api layer composes it after the leave and the block (Task 10) — the only layer that sees both the messaging core and buddy. A crash between the write and the announcement loses that notice; notices are best-effort (design D5), and the cancelled mock still shows as cancelled in both lists.
 
 **Files:**
+
 - Modify: `internal/engage/buddy/mock.go` (`ErrMockNotCancellable`), `internal/engage/buddy/mock_service.go` (interface, `Cancel`, `AnnounceCancellations`), `internal/engage/buddy/mock_repository.go` (`CancelMock`, `ClaimCancelNotices`)
 - Create: `internal/engage/buddy/mock_cancel_integration_test.go`
 
 **Interfaces:**
+
 - Consumes: `db.Queries.CancelBuddyMock`, `ClaimBuddyMockCancelNotices`; `MockByID`; `MockNotifier.MockCancelled`; `(*Service).Leave`, `(*Service).Invite`, `(*messaging.Service).Block(ctx, userID, conversationID int64) error`.
 - Produces: `var ErrMockNotCancellable error`; `func (*MockService) Cancel(ctx, userID int64, id uuid.UUID) error`; `func (*MockService) AnnounceCancellations(ctx, actorID int64)`; repository `CancelMock(ctx, id uuid.UUID, userID int64) (bool, error)`, `ClaimCancelNotices(ctx, actorID int64) ([]Mock, error)`.
-
 - [x] 6.1 Write the failing tests `internal/engage/buddy/mock_cancel_integration_test.go`:
 
 ```go
@@ -2618,6 +2645,7 @@ func TestBlockingCancelsThePairsFutureMocks(t *testing.T) {
 	}
 }
 ```
+
 Add `"slices"`, `"github.com/google/uuid"`, `"github.com/jackc/pgx/v5/pgxpool"` and `"github.com/strelov1/freehire/internal/engage/slots"` to this file's imports.
 
 - [x] 6.2 Run: `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `mocks.Cancel undefined`, `mocks.AnnounceCancellations undefined`, `undefined: buddy.ErrMockNotCancellable`.
@@ -2628,6 +2656,7 @@ Add `"slices"`, `"github.com/google/uuid"`, `"github.com/jackc/pgx/v5/pgxpool"` 
 	// ErrMockNotCancellable → 422. The mock has started, or is already cancelled.
 	ErrMockNotCancellable = errors.New("buddy: the mock interview has started or is already cancelled")
 ```
+
 In `internal/engage/buddy/mock_service.go` extend `MockRepository` after `MockByID`:
 
 ```go
@@ -2638,6 +2667,7 @@ In `internal/engage/buddy/mock_service.go` extend `MockRepository` after `MockBy
 	// — by cancelling, leaving or blocking — and returns those mocks.
 	ClaimCancelNotices(ctx context.Context, actorID int64) ([]Mock, error)
 ```
+
 and append:
 
 ```go
@@ -2688,6 +2718,7 @@ func (s *MockService) AnnounceCancellations(ctx context.Context, actorID int64) 
 	}
 }
 ```
+
 In `internal/engage/buddy/mock_repository.go` append:
 
 ```go
@@ -2733,13 +2764,14 @@ git commit -m "Cancel buddy mocks by participant, leave and block"
 ## 7. Mock list, blind review and member summary
 
 **Files:**
+
 - Modify: `internal/engage/buddy/mock.go` (review constants, sentinels, `MockReview`, `MockEntry`, `EntryFor`, `settle`, `RevealedReview`, `MockSummary`, `MockList`), `internal/engage/buddy/mock_service.go` (interface, `List`, `Review`, `MemberSummary`), `internal/engage/buddy/mock_repository.go` (`MockEntries`, `CreateMockReview`, `MockSummary`), `internal/engage/buddy/mock_test.go` (`TestMockEntrySettle`)
 - Create: `internal/engage/buddy/mock_review_integration_test.go`
 
 **Interfaces:**
+
 - Consumes: `db.Queries.ListBuddyMocksForUser`, `CreateBuddyMockReview`, `GetBuddyMemberMockSummary`, `ListBuddyMemberRevealedReviews`; `visibleMember`, `requireActive`, `MockByID`.
 - Produces: `const ReviewWindow = 7 * 24 * time.Hour`, `const MaxReviewCommentRunes = 1000`; `var ErrInvalidReview, ErrAlreadyReviewed error`; `type MockReview struct{ Rating int; Comment string }`; `type MockEntry struct{ ID uuid.UUID; Role, Counterpart string; StartsAt, EndsAt time.Time; Topic, Status, CancelReason, MeetingURL string; MyReview, TheirReview *MockReview; CanCancel, CanReview bool }`; `func (Mock) EntryFor(userID int64, now time.Time) MockEntry`; `type MockList struct{ Upcoming, Past []MockEntry }`; `type RevealedReview struct{ Rating int; Comment, Topic, Day string }`; `type MockSummary struct{ Completed, RatingCount int; RatingAvg float64; Recent []RevealedReview }`; `func (*MockService) List(ctx, userID int64) (MockList, error)`, `Review(ctx, userID int64, id uuid.UUID, rating int, comment string) error`, `MemberSummary(ctx, viewerID int64, handle string) (MockSummary, error)`; repository `MockEntries(ctx, userID int64, limit int32) ([]MockEntry, error)`, `CreateMockReview(ctx, id uuid.UUID, authorID int64, rating int, comment string) (bool, error)`, `MockSummary(ctx, subjectID int64, recent int32) (MockSummary, error)`.
-
 - [x] 7.1 Write the failing unit test — append to `internal/engage/buddy/mock_test.go`:
 
 ```go
@@ -2926,6 +2958,7 @@ func TestAOneSidedReviewIsRevealedWhenTheWindowCloses(t *testing.T) {
 	// mockListLimit bounds the caller's own list.
 	mockListLimit = 200
 ```
+
 inside the sentinel `var (...)` block add:
 
 ```go
@@ -2935,6 +2968,7 @@ inside the sentinel `var (...)` block add:
 	// ErrAlreadyReviewed → 409. One review per participant per mock.
 	ErrAlreadyReviewed = errors.New("buddy: mock interview already reviewed")
 ```
+
 and append to the file:
 
 ```go
@@ -3010,6 +3044,7 @@ type MockSummary struct {
 	Recent      []RevealedReview
 }
 ```
+
 In `internal/engage/buddy/mock_service.go` add `"strings"` and `"unicode/utf8"` to the imports, extend `MockRepository` after `ClaimCancelNotices`:
 
 ```go
@@ -3022,6 +3057,7 @@ In `internal/engage/buddy/mock_service.go` add `"strings"` and `"unicode/utf8"` 
 	// MockSummary is subjectID's completed count and revealed-review aggregate.
 	MockSummary(ctx context.Context, subjectID int64, recent int32) (MockSummary, error)
 ```
+
 and append:
 
 ```go
@@ -3093,6 +3129,7 @@ func (s *MockService) MemberSummary(ctx context.Context, viewerID int64, handle 
 	return s.repo.MockSummary(ctx, target.UserID, recentReviews)
 }
 ```
+
 In `internal/engage/buddy/mock_repository.go` append:
 
 ```go
@@ -3170,12 +3207,13 @@ git commit -m "List buddy mocks and review them blind"
 ## 8. Notifications
 
 **Files:**
+
 - Create: `internal/engage/buddy/mock_notify.go`, `internal/engage/buddy/mock_notify_test.go`, `internal/engage/buddy/mock_notify_integration_test.go`
 
 **Interfaces:**
+
 - Consumes: `emailnotify.Sender` (`Send(ctx, emailnotify.Message) error`, `internal/engage/emailnotify/notifier.go:33`), `emailnotify.Message{From, To, Subject, HTML, Text string; Group emailprefs.Group}`, `emailprefs.GroupEssential` (transactional, no unsubscribe link — the mentorship booking mail's choice and reason), `db.Queries.RecordNotification(ctx, db.RecordNotificationParams{UserID int64; Kind, Title, Body string; DedupKey pgtype.Text}) (int64, error)` (returns `pgx.ErrNoRows` on a dedup conflict); `Mock`, `ianaZone`, the `MockNotifier` interface (Task 3).
 - Produces: `func NewMockMailNotifier(q *db.Queries, sender emailnotify.Sender, from, origin string) *MockMailNotifier` implementing `MockNotifier`. A nil `sender` records notification-center rows only; a nil `q` sends mail only (unit tests). Notification kinds `buddy_mock_booked`, `buddy_mock_cancelled`, `buddy_mock_reminder` (free text; no migration).
-
 - [x] 8.1 Write the failing unit tests `internal/engage/buddy/mock_notify_test.go`:
 
 ```go
@@ -3598,6 +3636,7 @@ func TestBookingNoticesNameHandlesOnly(t *testing.T) {
 	}
 }
 ```
+
 Run: `go test -tags=integration ./internal/engage/buddy/ -run TestBookingNoticesNameHandlesOnly -count=1`. Expected: `ok`.
 
 - [x] 8.6 Verify and commit:
@@ -3611,13 +3650,14 @@ git commit -m "Notify buddy mock participants by handle only"
 ## 9. Reminders in cmd/mentorship-remind
 
 **Files:**
+
 - Create: `internal/engage/buddy/mock_remind.go`, `internal/engage/buddy/mock_remind_integration_test.go`
 - Modify: `internal/engage/buddy/mock_service.go` (interface), `internal/engage/buddy/mock_repository.go` (three methods), `cmd/mentorship-remind/main.go:1-24` (doc comment), `:26-34` (imports), `:70-85` (the pass)
 
 **Interfaces:**
+
 - Consumes: `db.Queries.ListBuddyMocksDueForReminder`, `RecordBuddyMockReminder`, `DeleteBuddyMockReminder`; `MockByID`; `MockNotifier.MockReminder`; `NewMockMailNotifier` (Task 8).
 - Produces: `var MockReminderOffsets = []time.Duration{24 * time.Hour, time.Hour}`; `type MockReminderStats struct{ Sent, Failed int }`; `func (*MockService) SendDueMockReminders(ctx, maxPerRun int32) (MockReminderStats, error)`; repository `MocksDueForReminder(ctx, offset, floor time.Duration, limit int32) ([]Mock, error)`, `ClaimMockReminder(ctx, id uuid.UUID, offset time.Duration) (bool, error)`, `ReleaseMockReminder(ctx, id uuid.UUID, offset time.Duration) error`.
-
 - [x] 9.1 Write the failing tests `internal/engage/buddy/mock_remind_integration_test.go`:
 
 ```go
@@ -3718,6 +3758,7 @@ func TestAStartedMockIsNotReminded(t *testing.T) {
 	// ReleaseMockReminder gives a claim back after a failed delivery.
 	ReleaseMockReminder(ctx context.Context, id uuid.UUID, offset time.Duration) error
 ```
+
 Create `internal/engage/buddy/mock_remind.go`:
 
 ```go
@@ -3799,6 +3840,7 @@ func (s *MockService) SendDueMockReminders(ctx context.Context, maxPerRun int32)
 	return stats, nil
 }
 ```
+
 Append to `internal/engage/buddy/mock_repository.go`:
 
 ```go
@@ -3849,8 +3891,9 @@ func (r *QueriesRepository) ReleaseMockReminder(ctx context.Context, id uuid.UUI
 // feature needs no unit of its own. A failure in one pass does not skip the other, and the
 // run exits non-zero if either could not read its work.
 ```
-  - add `"github.com/strelov1/freehire/internal/engage/buddy"` to the imports;
-  - replace lines 70-84 (`svc := mentorship.New(` through `return 0`) with:
+
+- add `"github.com/strelov1/freehire/internal/engage/buddy"` to the imports;
+- replace lines 70-84 (`svc := mentorship.New(` through `return 0`) with:
 
 ```go
 	q := db.New(pool)
@@ -3897,10 +3940,12 @@ git commit -m "Remind buddy mock participants from mentorship-remind"
 `web/static/openapi.yaml` describes no buddy route (`grep -n buddies web/static/openapi.yaml` prints nothing) and mocks are not exposed over MCP, OJCP or the public API (design Non-Goals), so the contract file is not touched.
 
 **Files:**
+
 - Create: `internal/api/handler/buddy_mocks.go`, `internal/api/handler/buddy_mocks_integration_test.go`
 - Modify: `internal/api/handler/buddies.go:21-41` (struct, constructor, register), `:115-124` (Leave); `internal/api/handler/conversations.go:19-25` (struct, constructor), `:152-155` (Block); `internal/api/handler/mentorship.go:344-354` (extract `slotResponses`); `internal/api/handler/handler.go:946-951` (composition); `internal/api/handler/buddies_integration_test.go:74-77` (test env)
 
 **Interfaces:**
+
 - Consumes: every `MockService` method (Tasks 3-7), `Mock.EntryFor`; `slotWindow(c) (from, to time.Time, err error)`, `slotResponse`, `offsetLabel`, `availabilityRuleRequest.toRule() (slots.Rule, error)`, `weeklyAvailabilityRequest`, `toAvailabilityResponse(slots.Rule) availabilityRuleResponse` (mentorship handlers, same package); `requireUserID`, `pathID`, `buddyError`.
 - Produces (all `mw.cookie`; `/api/v1` prefix):
   - `GET /me/buddies/mocks` → `{"data": {"upcoming": [mock], "past": [mock]}}`
@@ -3913,7 +3958,6 @@ git commit -m "Remind buddy mock participants from mentorship-remind"
   - `mock` = `{id, role, counterpart|null, starts_at, ends_at, topic, status, meeting_url|null, can_cancel, can_review, my_review|null, their_review|null}`
   - Status mapping: 422 invalid settings/topic/review/not cancellable/rule; 409 slot unavailable, already reviewed; 429 guest limit; 404 not found (unknown/left/blocked/self handle, unknown mock); 403 not a member; 500 a stored zone that no longer resolves.
   - `newBuddyHandlers(svc *buddy.Service, mocks *buddy.MockService) *buddyHandlers`; `newConversationHandlers(msg *messaging.Service, mocks *buddy.MockService) *conversationHandlers`; `slotResponses(ivs []slots.Interval) []slotResponse`.
-
 - [x] 10.1 Write the failing handler tests `internal/api/handler/buddy_mocks_integration_test.go`:
 
 ```go
@@ -4038,10 +4082,13 @@ func TestBuddyMockRoutesHideAMemberAcrossABlock(t *testing.T) {
 		})
 	}
 ```
+
 with
+
 ```go
 	out := slotResponses(result.Slots)
 ```
+
 and add after `GetMentorSlots`:
 
 ```go
@@ -4463,7 +4510,9 @@ func newBuddyHandlers(svc *buddy.Service) *buddyHandlers {
 	return &buddyHandlers{buddy: svc}
 }
 ```
+
 with
+
 ```go
 type buddyHandlers struct {
 	buddy *buddy.Service
@@ -4474,6 +4523,7 @@ func newBuddyHandlers(svc *buddy.Service, mocks *buddy.MockService) *buddyHandle
 	return &buddyHandlers{buddy: svc, mocks: mocks}
 }
 ```
+
 add `	h.registerMocks(api, mw)` as the last line of `register`, and in `Leave` replace
 
 ```go
@@ -4482,7 +4532,9 @@ add `	h.registerMocks(api, mw)` as the last line of `register`, and in `Leave` r
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 ```
+
 with
+
 ```go
 	if err := h.buddy.Leave(c.Context(), userID); err != nil {
 		return buddyError(err)
@@ -4492,6 +4544,7 @@ with
 	h.mocks.AnnounceCancellations(c.Context(), userID)
 	return c.SendStatus(fiber.StatusNoContent)
 ```
+
 In `internal/api/handler/conversations.go` replace
 
 ```go
@@ -4503,7 +4556,9 @@ func newConversationHandlers(msg *messaging.Service) *conversationHandlers {
 	return &conversationHandlers{msg: msg}
 }
 ```
+
 with
+
 ```go
 type conversationHandlers struct {
 	msg   *messaging.Service
@@ -4514,6 +4569,7 @@ func newConversationHandlers(msg *messaging.Service, mocks *buddy.MockService) *
 	return &conversationHandlers{msg: msg, mocks: mocks}
 }
 ```
+
 and replace
 
 ```go
@@ -4521,7 +4577,9 @@ func (h *conversationHandlers) Block(c *fiber.Ctx) error {
 	return h.byID(c, h.msg.Block)
 }
 ```
+
 with
+
 ```go
 //
 // A block also cancels every future buddy mock between the two, inside the block's own
@@ -4537,6 +4595,7 @@ func (h *conversationHandlers) Block(c *fiber.Ctx) error {
 	})
 }
 ```
+
 (the leading `//` line continues the existing doc comment above `Block`). In `internal/api/handler/handler.go` replace lines 946-951
 
 ```go
@@ -4547,7 +4606,9 @@ func (h *conversationHandlers) Block(c *fiber.Ctx) error {
 	conversationH := newConversationHandlers(messagingSvc)
 	buddyH := newBuddyHandlers(buddy.New(buddyRepo, messagingSvc))
 ```
+
 with
+
 ```go
 	// Conversations are the messaging core's; each persona a participant may speak as is
 	// registered here.
@@ -4565,13 +4626,16 @@ with
 	conversationH := newConversationHandlers(messagingSvc, buddyMocks)
 	buddyH := newBuddyHandlers(buddySvc, buddyMocks)
 ```
+
 In `internal/api/handler/buddies_integration_test.go` replace
 
 ```go
 	newBuddyHandlers(buddy.New(repo, msg)).register(env.app.Group("/api/v1"), mw)
 	newConversationHandlers(msg).register(env.app.Group("/api/v1"), mw)
 ```
+
 with
+
 ```go
 	svc := buddy.New(repo, msg)
 	mocks := buddy.NewMockService(svc, repo, nil)
@@ -4596,16 +4660,17 @@ Mentor pages keep their behaviour exactly; only where the calls come from moves.
 Before any web command in Tasks 11-12, install the linked design system first (web/AGENTS.md): `pnpm --dir design-system install && pnpm --dir web install`.
 
 **Files:**
+
 - Modify: `web/src/lib/types.ts` (after `MentorAvailabilityRule`, line 2058), `web/src/lib/components/MentorScheduleEditor.svelte` (script, lines 1-87; empty-week paragraph), `web/src/lib/components/MentorBookingView.svelte` (imports, props, `load`, the "taking the hour" block, the chosen-slot markup and footer), `web/src/routes/my/mentorship/schedule/+page.svelte`, `web/src/routes/mentors/[slug]/+page.svelte`
 - Create: `web/src/lib/components/MentorBookingForm.svelte`, `web/src/lib/components/MentorScheduleEditor.spec.ts`
 
 **Interfaces:**
+
 - Produces (TS): `export interface AvailabilityApi { replaceWeek(rows: { weekday: number; start: string; end: string }[]): Promise<void>; reload(): Promise<MentorAvailabilityRule[]>; addOverride(date: string, start: string, end: string): Promise<MentorAvailabilityRule>; remove(id: number): Promise<void>; }`
 - `MentorScheduleEditor` props: `{ rules: MentorAvailabilityRule[] ($bindable); schedule: AvailabilityApi; emptyMessage: string }`
 - `MentorBookingView` props: `{ loadSlots: (from: string, to: string, timezone: string, signal: AbortSignal) => Promise<MentorSlots>; sessionMinutes: number; counterpart: string; booker: Snippet<[{ slot: MentorSlot; day: string; zone: string; refused: () => void }]> }`
 - `MentorBookingForm` props: `{ mentor: Mentor; slot: MentorSlot; zone: string; refused: () => void }`
 - Consumes: `api.replaceWeeklyAvailability`, `api.myMentorAvailability`, `api.addAvailabilityOverride`, `api.deleteAvailabilityRule`, `api.getMentorSlots`, `api.bookMentorSession` (`web/src/lib/api.ts`).
-
 - [x] 11.1 Add the type. In `web/src/lib/types.ts`, right after the closing `}` of `export interface MentorAvailabilityRule` (line 2058), insert:
 
 ```ts
@@ -4668,6 +4733,7 @@ describe('MentorScheduleEditor', () => {
   });
 });
 ```
+
 Run: `pnpm --dir web exec vitest run src/lib/components/MentorScheduleEditor.spec.ts`. Expected: FAIL — the first test sees no call on `schedule.replaceWeek` (the component still calls `api.replaceWeeklyAvailability`), the third finds no `Nobody can book you yet.`.
 
 - [x] 11.3 Refactor `web/src/lib/components/MentorScheduleEditor.svelte`. Replace the top of the script
@@ -4681,7 +4747,9 @@ Run: `pnpm --dir web exec vitest run src/lib/components/MentorScheduleEditor.spe
 
   let { rules = $bindable() }: { rules: MentorAvailabilityRule[] } = $props();
 ```
+
 with
+
 ```svelte
   import { errorMessage } from '#lib/utils.js';
   import { Badge, Button, Card } from '#lib/ui/index.js';
@@ -4700,6 +4768,7 @@ with
     emptyMessage: string;
   } = $props();
 ```
+
 then replace the four calls: `await api.replaceWeeklyAvailability(draft);` → `await schedule.replaceWeek(draft);`, `rules = await api.myMentorAvailability();` → `rules = await schedule.reload();`, `const added = await api.addAvailabilityOverride(overrideDate, overrideStart, end);` → `const added = await schedule.addOverride(overrideDate, overrideStart, end);`, `await api.deleteAvailabilityRule(id);` → `await schedule.remove(id);`. In the markup replace
 
 ```svelte
@@ -4707,7 +4776,9 @@ then replace the four calls: `await api.replaceWeeklyAvailability(draft);` → `
         No hours yet — until you add some, your profile offers nothing to book.
       </p>
 ```
+
 with
+
 ```svelte
       <p class="text-muted-foreground text-sm">{emptyMessage}</p>
 ```
@@ -4737,6 +4808,7 @@ with
   };
 </script>
 ```
+
 and `<MentorScheduleEditor bind:rules={availability} />` with
 
 ```svelte
@@ -4746,6 +4818,7 @@ and `<MentorScheduleEditor bind:rules={availability} />` with
     emptyMessage="No hours yet — until you add some, your profile offers nothing to book."
   />
 ```
+
 Run: `pnpm --dir web exec vitest run src/lib/components/MentorScheduleEditor.spec.ts`. Expected: PASS.
 
 - [x] 11.5 Move the mentor booking form out of `MentorBookingView`. Create `web/src/lib/components/MentorBookingForm.svelte` (the logic and markup are the ones that lived in `MentorBookingView`, with `chosen` → `slot` and `reload()` → `refused()`):
@@ -4850,21 +4923,26 @@ Run: `pnpm --dir web exec vitest run src/lib/components/MentorScheduleEditor.spe
   import { signinUrl } from '#lib/signin.js';
   import { Badge, Button, Card, Skeleton } from '#lib/ui/index.js';
 ```
+
 with
+
 ```svelte
   import { onMount, type Snippet } from 'svelte';
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { Badge, Card, Skeleton } from '#lib/ui/index.js';
 ```
-  - Replace
+
+- Replace
 
 ```svelte
   import type { Mentor, MentorSlot } from '#lib/types.js';
 
   let { mentor }: { mentor: Mentor } = $props();
 ```
+
 with
+
 ```svelte
   import type { MentorSlot, MentorSlots } from '#lib/types.js';
 
@@ -4886,7 +4964,8 @@ with
     booker: Snippet<[{ slot: MentorSlot; day: string; zone: string; refused: () => void }]>;
   } = $props();
 ```
-  - Replace
+
+- Replace
 
 ```svelte
       const res = await api.getMentorSlots(
@@ -4897,17 +4976,21 @@ with
         controller.signal,
       );
 ```
+
 with
+
 ```svelte
       const res = await loadSlots(window.from, window.to, browserZone, controller.signal);
 ```
-  - Delete everything from the line `  // ---- taking the hour ----------------------------------------------------------` down to, not including, the line `  // From the module that owns the Monday-first order, not a second list beside it.`, and put in its place:
+
+- Delete everything from the line `  // ---- taking the hour ----------------------------------------------------------` down to, not including, the line `  // From the module that owns the Monday-first order, not a second list beside it.`, and put in its place:
 
 ```svelte
   const chosen = $derived(daySlots.find((s) => s.starts_at === selectedSlot));
 
 ```
-  - In the markup, replace everything from `  {#if chosen}` to the closing `</p>` of the `Times shown in {zone}…` paragraph (the last element before `</Card>`) with:
+
+- In the markup, replace everything from `  {#if chosen}` to the closing `</p>` of the `Times shown in {zone}…` paragraph (the last element before `</Card>`) with:
 
 ```svelte
   {#if chosen}
@@ -4932,12 +5015,15 @@ with
 ```svelte
   import MentorBookingView from '#lib/components/MentorBookingView.svelte';
 ```
+
 with
+
 ```svelte
   import { api } from '#lib/api.js';
   import MentorBookingForm from '#lib/components/MentorBookingForm.svelte';
   import MentorBookingView from '#lib/components/MentorBookingView.svelte';
 ```
+
 and `  <MentorBookingView {mentor} />` with
 
 ```svelte
@@ -4959,6 +5045,7 @@ pnpm --dir web exec vitest run src/lib/components/MentorScheduleEditor.spec.ts s
 pnpm --dir web check
 pnpm --dir web lint
 ```
+
 Expected: tests pass; `svelte-check` reports 0 errors; lint clean. Then, with a local stack (`make up`, `pnpm --dir web dev`), run the mentorship end-to-end story: `PLAYWRIGHT_BASE_URL=http://localhost:5173 pnpm --dir web test:e2e e2e/mentorship.spec.ts`. Expected: passes (it publishes a schedule through the editor and books through the view).
 
 - [x] 11.9 Commit:
@@ -4971,14 +5058,15 @@ git commit -m "Let the schedule editor and slot picker take their API as props"
 ## 12. Buddy mock pages
 
 **Files:**
+
 - Create: `web/src/lib/buddyMocks.ts`, `web/src/lib/buddyMocks.test.ts`, `web/src/lib/components/BuddyMockSettingsForm.svelte`, `web/src/lib/components/BuddyMockReviewForm.svelte`, `web/src/lib/components/BuddyMockList.svelte`, `web/src/lib/components/BuddyMockPanel.svelte`, `web/src/routes/my/buddies/mocks/+page.svelte`
 - Modify: `web/src/lib/types.ts` (after `BuddyActivity`, line 1164), `web/src/lib/api.ts` (type imports `:140-160`, functions after `inviteBuddy` `:2389-2391`, the returned object after `inviteBuddy,` `:3398`), `web/src/lib/api.test.ts` (append), `web/src/routes/my/buddies/[handle]/+page.svelte` (imports, panel), `web/src/lib/components/BuddiesView.svelte` (header link, leave dialog wording)
 
 **Interfaces:**
+
 - Produces (TS): `type BuddyMockTopic = 'coding' | 'system_design' | 'behavioral'`; `interface BuddyMockSettings { timezone: string; meeting_url: string; topics: BuddyMockTopic[]; paused: boolean }`; `interface BuddyMockSlots extends MentorSlots { topics: BuddyMockTopic[] }`; `interface BuddyMock { id: string; role: 'host' | 'guest'; counterpart: string | null; starts_at: string; ends_at: string; topic: BuddyMockTopic; status: 'confirmed' | 'cancelled'; meeting_url: string | null; can_cancel: boolean; can_review: boolean; my_review: BuddyMockReview | null; their_review: BuddyMockReview | null }`; `interface BuddyMocks { upcoming: BuddyMock[]; past: BuddyMock[] }`; `interface BuddyMockSummary { completed: number; rating_count: number; rating_avg: number; recent: { rating: number; comment: string; topic: BuddyMockTopic; day: string }[] }`.
 - `api.getBuddyMockSettings(): Promise<BuddyMockSettings | null>`, `saveBuddyMockSettings(s: BuddyMockSettings): Promise<BuddyMockSettings>`, `myBuddyMockAvailability(): Promise<MentorAvailabilityRule[]>`, `replaceBuddyMockWeekly(rows): Promise<void>`, `addBuddyMockOverride(date, start, end): Promise<MentorAvailabilityRule>`, `deleteBuddyMockAvailabilityRule(id: number): Promise<void>`, `getBuddyMockSlots(handle, from, to, timezone, signal?): Promise<BuddyMockSlots>`, `bookBuddyMock(handle, { starts_at, topic, timezone }): Promise<BuddyMock>`, `listBuddyMocks(): Promise<BuddyMocks>`, `cancelBuddyMock(id: string): Promise<void>`, `reviewBuddyMock(id: string, rating: number, comment: string): Promise<void>`, `getBuddyMockSummary(handle: string): Promise<BuddyMockSummary>`.
 - `buddyMocks.ts`: `MOCK_DURATION_MINUTES = 60`, `MOCK_TOPICS`, `mockTopicLabel(t)`, `isHttpsLink(raw)`, `mockWhen(mock, zone)`, `reviewSummaryLine(summary)`, `mockCounterpartLabel(mock)`, `mockRoleLabel(mock)`.
-
 - [x] 12.1 Add the types. In `web/src/lib/types.ts`, after the `export interface BuddyActivity …` line (1164), insert:
 
 ```ts
@@ -5067,6 +5155,7 @@ describe('buddy mocks', () => {
   });
 });
 ```
+
 Run: `pnpm --dir web exec vitest run src/lib/buddyMocks.test.ts`. Expected: FAIL — cannot resolve `./buddyMocks`.
 
 - [x] 12.3 Create `web/src/lib/buddyMocks.ts`:
@@ -5129,6 +5218,7 @@ export function mockRoleLabel(mock: Pick<BuddyMock, 'role'>): string {
   return mock.role === 'host' ? 'You host' : 'You are the guest';
 }
 ```
+
 Run: `pnpm --dir web exec vitest run src/lib/buddyMocks.test.ts`. Expected: PASS.
 
 - [x] 12.4 Add the API calls. In `web/src/lib/api.ts` add `BuddyMock,`, `BuddyMocks,`, `BuddyMockSettings,`, `BuddyMockSlots,`, `BuddyMockSummary,` and `BuddyMockTopic,` to the `import type { … } from './types'` list after `BuddyActivity,` (line 153). After `inviteBuddy` (lines 2389-2391) insert:
@@ -5191,6 +5281,7 @@ Run: `pnpm --dir web exec vitest run src/lib/buddyMocks.test.ts`. Expected: PASS
     return requestData(`/api/v1/me/buddies/profiles/${encodeURIComponent(handle)}/mock-reviews`);
   }
 ```
+
 and in the returned object, after `    inviteBuddy,` (line 3398) insert:
 
 ```ts
@@ -5207,6 +5298,7 @@ and in the returned object, after `    inviteBuddy,` (line 3398) insert:
     reviewBuddyMock,
     getBuddyMockSummary,
 ```
+
 Append to `web/src/lib/api.test.ts`:
 
 ```ts
@@ -5227,6 +5319,7 @@ describe('buddy mock paths', () => {
   });
 });
 ```
+
 Run: `pnpm --dir web exec vitest run src/lib/api.test.ts`. Expected: PASS (if the base-URL join differs, assert with `toContain` on each path instead — the paths are what the test is about).
 
 - [x] 12.5 Create `web/src/lib/components/BuddyMockSettingsForm.svelte`:
@@ -5691,18 +5784,22 @@ Run: `pnpm --dir web exec vitest run src/lib/api.test.ts`. Expected: PASS (if th
 ```svelte
       <BuddyMockPanel handle={profile.handle} />
 ```
-  - In `web/src/lib/components/BuddiesView.svelte` add `  import { resolve } from '$app/paths';` after `  import { page } from '$app/state';`, replace
+
+- In `web/src/lib/components/BuddiesView.svelte` add `  import { resolve } from '$app/paths';` after `  import { page } from '$app/state';`, replace
 
 ```svelte
       <Button variant="outline" size="sm" onclick={() => (confirmLeaveOpen = true)}>Leave</Button>
 ```
+
 with
+
 ```svelte
       <div class="flex items-center gap-3">
         <a href={resolve('/my/buddies/mocks')} class="text-sm font-medium underline hover:no-underline">Mock interviews</a>
         <Button variant="outline" size="sm" onclick={() => (confirmLeaveOpen = true)}>Leave</Button>
       </div>
 ```
+
 and in the leave dialog replace `description="You disappear from other members' lists and feed, and every conversation closes. You can join again later with the same handle."` with `description="You disappear from other members' lists and feed, every conversation closes and your upcoming mock interviews are cancelled. You can join again later with the same handle."`.
 
 - [x] 12.11 Verify:
@@ -5712,6 +5809,7 @@ pnpm --dir web exec vitest run src/lib/buddyMocks.test.ts src/lib/api.test.ts sr
 pnpm --dir web check
 pnpm --dir web lint
 ```
+
 Expected: all pass, 0 svelte-check errors, lint clean. Then against a local stack (`make up`, `make run`, `pnpm --dir web dev`): sign in as two accounts in two browsers, join buddies with both, save settings and a week on `/my/buddies/mocks` as the first, open the first's page as the second, pick a day, slot and topic, book; confirm the second lands on `/my/buddies/mocks` with "Join the call", the first sees the mock with the second's handle, cancelling as either re-offers the slot, and the settings form shows the name-through-link warning.
 
 - [x] 12.12 Commit:
@@ -5724,6 +5822,7 @@ git commit -m "Add the buddy mock interview pages"
 ## 13. Documentation
 
 **Files:**
+
 - Modify: `internal/engage/buddy/AGENTS.md`, `internal/engage/mentorship/AGENTS.md` (lines 5-6, 23, 29-30, 37, 146), `internal/engage/AGENTS.md` (Packages), `AGENTS.md` (the `mentorship-remind` bullet; the Interview buddies row of the module table)
 
 **Interfaces:** none (docs).
@@ -5738,6 +5837,7 @@ publishes when they can host and another books 60 minutes of it. Tables `buddy_m
 arithmetic is the shared engine in [internal/engage/slots](../slots/doc.go), the reminders a
 second pass of `cmd/mentorship-remind`, HTTP `internal/api/handler/buddy_mocks.go`.
 ```
+
 and append to "Always true":
 
 ```markdown
@@ -5771,23 +5871,29 @@ and append to "Always true":
 publishes when they are free, and a seeker books half an hour of it. The slot engine is
 in slots.go/expand.go/override.go/subtract.go/slice.go; the domain services in
 ```
+
 with
+
 ```markdown
 publishes when they are free, and a seeker books half an hour of it. The slot engine lives
 in internal/engage/slots (shared with buddy mock interviews; the rules below still bind
 it); the domain services in
 ```
+
 replace `  could diagnose it (expand.go's `resolve`).` with `  could diagnose it (internal/engage/slots/expand.go's `resolve`).`; replace
 
 ```markdown
   loop on an unauthenticated endpoint (schedule.go:`Date.next`, and the regression tests
   in midnight_test.go).
 ```
+
 with
+
 ```markdown
   loop on an unauthenticated endpoint (internal/engage/slots/schedule.go:`Date.next`, and
   the regression tests in internal/engage/slots/midnight_test.go).
 ```
+
 replace `  midnight cannot see it; anchor_test.go now calls the engine the way the handler does.` with `  midnight cannot see it; internal/engage/slots/anchor_test.go calls the engine the way the handler does.`; and replace `Run the slot-engine tests with `-count=1`: the layering guard next door reports `ok` with `Run the slot-engine tests (`go test ./internal/engage/slots/`) with `-count=1`: the layering guard next door reports `ok`.
 
 - [x] 13.3 In `internal/engage/AGENTS.md` replace `` `referral` `reminder` `report` `socialdigest` `` with `` `referral` `reminder` `report` `slots` `socialdigest` ``.
@@ -5797,11 +5903,13 @@ replace `  midnight cannot see it; anchor_test.go now calls the engine the way t
 ```markdown
 The same run reminds buddy mock interviews (`buddy.SendDueMockReminders`: same offsets, windows and claim order); a failure in one pass does not skip the other, and the run exits non-zero if either could not read its work.
 ```
+
 and append the buddy AGENTS.md link to that closing sentence, so it reads:
 
 ```markdown
 See [internal/engage/mentorship/AGENTS.md](internal/engage/mentorship/AGENTS.md) and [internal/engage/buddy/AGENTS.md](internal/engage/buddy/AGENTS.md).
 ```
+
 In the module table, extend the Interview buddies row's description from "(anonymous peer network: handle, feed vocabulary, one conversation per pair)" to "(anonymous peer network: handle, feed vocabulary, one conversation per pair, mock interviews)".
 
 - [x] 13.5 Check the links and commit:
@@ -5811,6 +5919,7 @@ pnpm check:links
 git add internal/engage/buddy/AGENTS.md internal/engage/mentorship/AGENTS.md internal/engage/AGENTS.md AGENTS.md
 git commit -m "Document buddy mock interviews and the shared slot engine"
 ```
+
 Expected: `pnpm check:links` reports no broken link.
 
 ## 14. Final verification
@@ -5824,6 +5933,7 @@ pnpm check:sql && pnpm check:links
 pnpm --dir web test && pnpm --dir web check && pnpm --dir web lint
 openspec validate buddy-mock-interviews --strict
 ```
+
 Expected: `gofmt -l .` prints nothing and every other command succeeds.
 
 - [x] 14.2 Walk the spec once more: every scenario in `specs/buddy-mock-interviews/spec.md` maps to a test named in Tasks 2-12 (settings 3.5; availability 3.1; slot listing 4.2; booking 5.1 and 2.1; link visibility 7.2 and 10.1; cancellation 6.1 and 2.1; reminders 9.1; blind review 7.2; anonymous notifications 8.1 and 8.5). Fix any scenario left without one before opening the PR.

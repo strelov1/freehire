@@ -14,9 +14,11 @@ The catalogue is browsable only by deterministic facets (skills, geography, seni
 ## Capabilities
 
 ### New Capabilities
+
 - `job-collections`: curated, company-themed collections — membership model, the deterministic propagation onto jobs, the search facet, the import worker, and the `/collections` web pages.
 
 ### Modified Capabilities
+
 - `job-search`: the served job wire shape and the search document gain a `collections` field, and `collections` becomes a filterable facet/query parameter.
 
 ## Impact

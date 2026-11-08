@@ -15,6 +15,7 @@ The `/my/recommendations` feed ranks the whole open catalogue by CV similarity b
 <!-- none -->
 
 ### Modified Capabilities
+
 - `cv-recommendations`: the recommendations endpoint additionally accepts facet filter params and constrains the ranked candidate set to them; the recommendations page gains a sidebar facet filter and a filters-empty state.
 
 ## Impact

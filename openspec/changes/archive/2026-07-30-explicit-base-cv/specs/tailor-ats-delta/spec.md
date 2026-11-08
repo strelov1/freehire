@@ -15,18 +15,22 @@ The baseline SHALL be the CV marked as the user's base. A vacancy-less tailored 
 used as the baseline, however recently it was edited.
 
 #### Scenario: Another account's CV is not found
+
 - **WHEN** a caller reads the delta for a CV owned by a different account
 - **THEN** the response is the same not-found as for a CV id that does not exist
 
 #### Scenario: A base CV has no delta
+
 - **WHEN** a caller reads the delta for the base CV
 - **THEN** the response is a conflict saying it is the base, and no score is computed
 
 #### Scenario: A tailored copy whose vacancy was pruned has no delta
+
 - **WHEN** a caller reads the delta for a tailored copy whose vacancy row has been deleted
 - **THEN** the response is a conflict saying the vacancy no longer exists, and no score is computed
 
 #### Scenario: An orphan is never the baseline
+
 - **WHEN** the user has a base CV and an orphaned tailored copy edited more recently, and a delta
   is read for a third, live tailored CV
 - **THEN** the comparison is against the base CV, and the response names it as the baseline

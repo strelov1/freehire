@@ -144,5 +144,3 @@ when the job closes. A cancelled reminder SHALL NOT be delivered.
 
 - **WHEN** a job with pending reminders is closed
 - **THEN** those reminders are cancelled and no reminder is sent for the dead job
-
-

@@ -29,6 +29,7 @@ of API access; RevenueCat/app-store API sales; metering by record.
 ## Decisions
 
 ### D1. Product family decides checkout, not "any entitling subscription"
+
 `decideCheckoutTarget` takes the price lists of the REQUESTED price's family: Pro/Ultra prices for a
 Pro/Ultra request, API/Data prices for an API/Data request. Upgrade-in-place then only ever changes a
 subscription of the same family. `Sells` admits all four lists. `moreThanOneEntitling` and the
@@ -37,6 +38,7 @@ billing overview stay Pro/Ultra-only.
 exact duplication `CheckoutURL` was fixed to prevent.
 
 ### D2. Two plain timestamp columns
+
 `users.api_until_stripe` and `users.api_data_until_stripe`, nullable, written together with
 `pro_until_stripe`/`ultra_until_stripe` by `SetStripeEntitlement` (one statement, one re-read).
 `entitlement` gains `API` and `Data`. No `_granted`/`_revenuecat` sources and no generated columns:
@@ -45,6 +47,7 @@ Stripe is the only seller (YAGNI; add a source column if manual grants are ever 
 `billing.APITierOf(apiUntil, dataUntil, now)` — billing owns the product.
 
 ### D3. Key resolution only when a Bearer key is presented, cached in process
+
 The public-read gate inspects `Authorization` itself. No header → no lookup, so anonymous traffic
 pays nothing new. With a `fhk_` Bearer token: hash, look up `(user_id, scope, api_until,
 api_data_until)` in one query, and cache the RESULT (including "no tier" and "unknown key") in an
@@ -59,6 +62,7 @@ and single-flight, and fake keys live in a bounded miss cache apart from real on
 cannot evict them.
 
 ### D4. One gate, budgets by caller class
+
 A single `publicLimiter(budget)` middleware replaces `publicReadLimiter` and `agentSearchLimiter`:
 
 1. trusted peer → pass (unchanged behaviour);
@@ -80,11 +84,13 @@ The per-route trusted-peer and fail-open semantics come from `ratelimit` unchang
 the exported `Throttler` directly for the two-step anonymous check.
 
 ### D5. Verified bot = Cloudflare Transform Rule + secret
+
 A Request Header Transform Rule sets `X-FH-Verified-Bot: <secret>` when `cf.client.bot`. Go compares
 with `subtle.ConstantTimeCompare` against `VERIFIED_BOT_SECRET`; unset disables the exemption.
 Transform Rules are a separate quota from the 5 custom WAF rules already in use.
 
 ### D6. Rollout order
+
 One switch, `PUBLIC_ANON_LIMITS`: unset keeps TODAY's anonymous budgets exactly (600/min reads and
 300/min agent search, each its own IP key, no daily cap); `strict` applies the shared 120/min +
 2,000/day. Paid-key and verified-bot handling are active either way. Order: deploy → create Stripe
@@ -121,6 +127,5 @@ Rollback: restore the env numbers; the columns are inert.
   from the access log before setting strict.
 - API-only subscribers have no in-app billing section (overview stays Pro/Ultra); they manage
   the subscription through the provider's portal.
-
 - Adzuna and other aggregator sources may forbid sublicensing their postings; checked before the
   licence text ships (task 6.1), and if needed those sources are named as excluded from the licence.

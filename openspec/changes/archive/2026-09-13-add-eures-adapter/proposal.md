@@ -61,10 +61,12 @@ next multi-country aggregator alongside `arbeitsagentur`/`trudvsem`/`whatjobs`.
 ## Capabilities
 
 ### New Capabilities
+
 - `eures-source`: crawling one EURES-covered country's board through the EURES public search +
   detail APIs, scoped to ICT occupations, marked as an aggregator for cross-source dedup.
 
 ### Modified Capabilities
+
 (none)
 
 ## Impact

@@ -41,6 +41,7 @@ recruiter weigh most heavily.
 ## Capabilities
 
 ### New Capabilities
+
 - `job-fit-analysis`: On-demand LLM analysis of a single (candidate, job) fit — the fixed
   three-stage prompt-chain (Extract&Match → Recruiter verdict → Adversarial audit), the
   five-dimension scored verdict + requirement-match table, its per-(user,job) cache with CV/job

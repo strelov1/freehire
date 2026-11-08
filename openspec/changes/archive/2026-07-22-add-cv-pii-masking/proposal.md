@@ -26,11 +26,13 @@ email/URL); a local, context-aware PII model can, and was spike-VALIDATED.
 ## Capabilities
 
 ### New Capabilities
+
 - `cv-pii-masking`: detect PII in CV text (regex floor ∪ local model spans) and produce a
   reversible `Redactor` that masks text into LLM prompts and restores it in user-facing output;
   fail-closed when the detector is unavailable.
 
 ### Modified Capabilities
+
 - `job-fit-analysis`: CV and structured-résumé text sent to the LLM MUST be PII-masked, and
   user-facing output MUST be restored, without re-leaking PII into later stages.
 - `resume-structured-profile`: contact fields MUST be derived from deterministic detection, and

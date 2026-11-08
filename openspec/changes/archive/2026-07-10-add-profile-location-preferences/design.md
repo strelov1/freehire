@@ -7,11 +7,13 @@ The controlled vocabularies already exist and are reused, not reinvented: `enric
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a user record compound, directional location/work preferences ("remote for LATAM" + "on-site in Florianópolis" + "willing to relocate to Berlin") in one profile.
 - Reuse existing vocabularies so the same values flow into the jobs filter with no new taxonomy.
 - Make "Apply my profile" seed the location facets in addition to category/skills.
 
 **Non-Goals:**
+
 - Matching / recommendations / notifications consuming these preferences (future; the shape already supports them).
 - Multi-base support, per-mode reach modelling beyond the three blocks, or a separate "worldwide" toggle.
 - Geocoding or validating cities against a dictionary (cities stay free-text, mirroring the jobs `cities` facet).

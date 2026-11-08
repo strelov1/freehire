@@ -34,11 +34,13 @@ not fixed here. See design.md's Non-Goals.
 ## Capabilities
 
 ### New Capabilities
+
 - `notification-center`: the `user_notifications` ledger, its read/unread API,
   and the write-side hook into all three delivery engines, plus the web and
   mobile UI that reads it.
 
 ### Modified Capabilities
+
 (none — this only adds a side effect at each engine's existing delivery point,
 it does not change what `filter-subscriptions`/`saved-job-reminders` themselves
 require)

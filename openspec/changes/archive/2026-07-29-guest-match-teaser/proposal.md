@@ -28,6 +28,7 @@ mock rather than as a preview of a real feature.
 <!-- none: this extends an existing capability -->
 
 ### Modified Capabilities
+
 - `job-profile-match`: the locked (guest / no-profile) states change from a static
   sidebar-only teaser to a deterministic, job-derived teaser rendered in both the
   sidebar block and the job card.

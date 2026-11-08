@@ -1,6 +1,7 @@
 # job-page-provenance Specification
 
 ## Purpose
+
 How the job detail page states the facts ABOUT a posting rather than about the role — how
 compactly its dates and engagement counters read, where they sit, and the rule that the
 posting's date is stated once per page.

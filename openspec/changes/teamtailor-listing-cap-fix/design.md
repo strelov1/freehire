@@ -9,11 +9,13 @@ The live measurement (Context in proposal.md) used a plain `curl` with a browser
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Stop a real board from losing postings to a page cap that no longer matches reality.
 - Bring `teamtailor` in line with the `fullBoardListing` bar using the exact fix shape already proven on `workday`/`careerplug`/`icims`/`taleo` — no new mechanism.
 - Capture the marker's own contract as an `openspec` capability, since it was previously only in `AGENTS.md`/code comments — useful for every future adapter this ongoing audit reaches, not just this one.
 
 **Non-Goals:**
+
 - Fixing the other 7 audited-and-failing adapters (`hh`, `neogov`, `edjoin`, `workstream`, `bayt`, `peopleforce`, `gusto`). Confirmed with the user: `teamtailor`'s live bug is the priority for this change; the rest stay a follow-up.
 - Finding a source-declared total for `teamtailor` to verify against. No such signal was found in the platform's public listing; pagination-to-empty-page is the proof this adapter uses, matching how several already-marked adapters (`greenhouse`, `lever`, `workable`, `ashby`) also rely on "no artificial cap" rather than a count check.
 - Auditing or marking any of the ~163 still-untouched adapters, `apploi` (the largest by real volume) included.

@@ -11,11 +11,13 @@ top-level dictionary `skills` array and an `enrichment` blob with
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Enrich `JobPosting` with `hiringOrganization.logo`, `skills`,
   `experienceRequirements`, `educationRequirements`, each strictly conditional.
 - First unit coverage for `jobPostingJsonLd` (currently untested).
 
 **Non-Goals:**
+
 - `directApply`, `identifier`, `jobBenefits` — deferred.
 - No backend, data, or route changes.
 

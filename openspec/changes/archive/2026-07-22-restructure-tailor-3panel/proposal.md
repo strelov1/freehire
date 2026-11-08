@@ -39,6 +39,7 @@ preview parity.
 <!-- None. This restructures existing workspace behaviour; no new capability is introduced. -->
 
 ### Modified Capabilities
+
 - `tailor-workspace`: the workspace becomes a three-column surface (left-tabbed
   Editor/Chat, centre live HTML CV preview + Download PDF, right-tabbed
   Templates/Job description/Verdict); the structured editor moves into the left tab group and its

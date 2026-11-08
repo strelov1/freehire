@@ -21,14 +21,17 @@ Explicitly **out of scope**: migrating `yc_*`, `maturity`, or `subindustry` into
 ## Capabilities
 
 ### New Capabilities
+
 - `company-credential-registries`: credential collections sourced from authoritative public registers — the two register sources and their fetch strategies, the matching policy that decides when a company earns a credential, and how a credential is presented so it is never mistaken for a promise about a specific role.
 
 ### Modified Capabilities
+
 - `job-collections`: the registry entry gains a kind and an optional gate; a dataset parser yields records rather than names and may resolve its URL dynamically; the search facet renders credentials as a distinct group; the import worker supports a non-writing dry run.
 
 ## Impact
 
 **Code**
+
 - `internal/collections` — `Kind`, `Record`, `Gate`, `Dataset.ResolveURL`, legal-name normalization, the two new entries, and the eight existing parsers adapted to the record shape.
 - `cmd/import-collections` — record-shaped resolve, gate application, ambiguity precomputation, `-dry-run`.
 - `cmd/gen-contracts` — emit the collection registry (slug, title, description, kind).
@@ -36,16 +39,20 @@ Explicitly **out of scope**: migrating `yc_*`, `maturity`, or `subindustry` into
 - `web/src/lib/facets.ts`, `web/src/lib/collections.ts`, the job card, and the company page.
 
 **Not affected**
+
 - No migration. `companies.collections` and `jobs.collections` already exist.
 - No new filterable Meili attribute. `collections` is already filterable on both indexes, so there is no hard-500 deploy window.
 - `enrichment.visa_sponsorship` is untouched and keeps its current meaning.
 
 **Operational**
+
 - Ordinary release, then `cmd/import-collections`, then `make reindex` (never stacked with `reindex-companies`).
 - A `-dry-run` pass against production is a precondition of the first write: the single-token rule leans on `hq_country`, and if that column is sparsely populated the rule would cut exactly the single-word UK brands worth having.
 
 **Dependencies**
+
 - Two new upstream fetches: GOV.UK (Content API + assets host) and `ind.nl`. Both are public and unauthenticated. Both are HTML/CSV shapes that will eventually change; the existing abort-before-write is what keeps a broken parser from stripping the tag off every company.
 
 **Provenance**
+
 - The idea and the two public register URLs were taken from [`DaKheera47/job-ops`](https://github.com/DaKheera47/job-ops). That project is AGPLv3 + Commons Clause and freehire is MIT, so **no code was copied** — the fetch strategies, matching policy, and storage model here are our own and are built on `internal/collections`, which predates this change.

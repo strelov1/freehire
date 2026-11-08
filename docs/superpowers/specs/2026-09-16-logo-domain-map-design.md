@@ -38,7 +38,7 @@ The proxy was built for this. `freehire-logo/internal/resolve/resolve.go` docume
 
 `internal/server/server.go:81` already reads `?domain=`, and it works today:
 
-```
+```text
 GET /g2i               → 1814 B  (wrong company)
 GET /g2i?domain=g2i.co → 2984 B  (correct)
 GET /G2i?domain=g2i.co → 2984 B  (correct, regardless of spelling)

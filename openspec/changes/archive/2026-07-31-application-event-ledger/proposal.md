@@ -37,10 +37,12 @@ this change deliberately starts empty, so it can only be built once events accru
 ## Capabilities
 
 ### New Capabilities
+
 - `application-event-ledger`: the append-only event log — its vocabulary, the paths that
   emit into it, idempotency, retraction, and the backfill's honesty boundary.
 
 ### Modified Capabilities
+
 - `company-hiring-signal`: the per-company response rate derives from the ledger rather
   than from live mail rows, and the payload gains a median time to first reply under the
   same sample gate.

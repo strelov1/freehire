@@ -23,6 +23,7 @@ Lever board ever reaches the CDX index — Lever is out of scope for this change
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Add Common Crawl CDX discovery for Greenhouse and Ashby, wired through the existing
   `discoverer` interface so the rest of the pipeline (live-validate, dedup, append) needs no
   changes.
@@ -30,6 +31,7 @@ Lever board ever reaches the CDX index — Lever is out of scope for this change
 - Degrade gracefully: one bad snapshot fetch shouldn't sink the whole discovery run.
 
 **Non-Goals:**
+
 - Lever discovery (ruled out by the spike — CCBot is blocked).
 - Any change to how a *seeded* run behaves — supplying a seed file still bypasses discovery
   exactly as it does today.

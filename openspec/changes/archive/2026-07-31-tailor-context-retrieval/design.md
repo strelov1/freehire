@@ -15,11 +15,13 @@ spending tool rounds on something the server could have handed it in the first r
 ## Goals / Non-Goals
 
 **Goals:**
+
 - The agent arrives at its first edit knowing what it can evidence, without paying rounds to find out.
 - The opening round stops being the most expensive thing in the conversation.
 - A wrong id costs a correction, not a round.
 
 **Non-Goals:**
+
 - A batch search tool. If the context already carries retrieval for every requirement, the ten
   calls do not happen — building a batching mechanism for them would be machinery for a problem
   this change removes.

@@ -12,11 +12,13 @@ table were missing the six screening fields. See proposal.md - Why.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Extend the existing three extension-side seams (type, value mapping, synonym table) to
   carry the six screening fields through the same mechanism identity fields already use.
 - Preserve the existing rule that an unstated field is left blank, never guessed.
 
 **Non-Goals:**
+
 - No backend change — `internal/screeninganswers` and both autofill endpoints already serve/
   consume these fields.
 - No change to the agent-driven autofill path, which already has this data.

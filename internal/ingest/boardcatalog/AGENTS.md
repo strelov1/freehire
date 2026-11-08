@@ -1,11 +1,13 @@
 # Board catalog conventions
 
 ## Scope
+
 The `boards` table: which company crawls on which ATS, under what board id, and whether
 that board is proven. It replaced `sources/*.yml` (#2357) as what `cmd/ingest` reads, and
 absorbed the recognized half of `internal/ingest/contribution`'s lifecycle.
 
 ## Always true
+
 - **The catalog is the schedule and the crawl list.** `cmd/ingest <provider>` reads
   `status IN ('pending','active')` for that provider; `freehire-ops' provision/host2/gen-ingest-timers.sh`
   reads the distinct providers of the same set. A board is crawled because it has a live
@@ -32,6 +34,7 @@ absorbed the recognized half of `internal/ingest/contribution`'s lifecycle.
   region, so the two regions' postings cannot be told apart.
 
 ## Duplicate identity is TWO checks, and only one of them is the index
+
 `boards_identity_key` is `UNIQUE (provider, lower(board), region) WHERE status IN
 ('pending','active')`. It folds CASE, and that is all SQL can do here.
 
@@ -48,6 +51,7 @@ so a run that refreshes one spelling closes the other's still-live rows. A false
 a duplicate.
 
 ## Structure
+
 - `catalog.go` — `Status`, `InsertInput`, `Board`, and `Validate` (the registry check,
   shared with what `Config.Validate` runs).
 - `repository.go` — the `Repository` port, `Insert` (validate → normalize → dedupe →
@@ -58,6 +62,7 @@ a duplicate.
   curator renames it (`cmd/add-board --rename`).
 
 ## Gotchas
+
 - **`Insert` never returns a validation error.** An invalid candidate is PERSISTED at
   `status='rejected'` with the reason, so the submitter is told why instead of the row
   silently not existing. Only `ErrDuplicateBoard` and genuine persistence failures come

@@ -7,12 +7,14 @@ The collection datasets (`internal/collections`) carry each company's **website*
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Turn a company website into a validated ATS board (greenhouse/lever/ashby) via its careers page.
 - Reuse `harvest-boards` for API validation + `sources/*.yml` writing — zero changes to it.
 - Keep the discovery core (`internal/atsdetect`) pure and unit-tested.
 - Target the companies we're missing (unmatched against our catalogue), to focus the fetch load.
 
 **Non-Goals:**
+
 - Headless/JS rendering — static HTML only; JS-only careers pages are skipped (documented seam).
 - ATS platforms beyond greenhouse/lever/ashby (workday/icims/custom are a later pattern).
 - Auto-deploy — the run produces a `sources/*.yml` diff the operator reviews before shipping.
@@ -38,11 +40,13 @@ The collection datasets (`internal/collections`) carry each company's **website*
 ## Migration Plan
 
 This is additive tooling; nothing to migrate. Operational run:
+
 1. Export the prod company-slug set: `ssh … "psql -tAc 'SELECT slug FROM companies'" > companies.txt`.
 2. `go run ./cmd/harvest-ats extract companies.txt > unmatched.json`.
 3. `go run ./cmd/harvest-ats resolve unmatched.json` → `*.seed.json` per provider.
 4. `go run ./cmd/harvest-boards <provider> <provider>.seed.json` for greenhouse/lever/ashby.
 5. Review the `sources/*.yml` diff; deploy sources (`deploy.sh --no-build`) + ingest.
+
 - **Rollback:** the run only writes local seed/source files reviewed before deploy; nothing reaches prod without the operator shipping the diff.
 
 ## Open Questions

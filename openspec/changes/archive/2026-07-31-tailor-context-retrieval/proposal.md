@@ -36,6 +36,7 @@ candidate's own atoms, with no model call in it.
 <!-- none: this sharpens an existing capability rather than adding one -->
 
 ### Modified Capabilities
+
 - `cv-tailoring`: the tailoring context an agent reads now carries retrieved evidence per
   requirement and a markdown description, rather than a raw posting and no bank information.
 - `assistant-agent-runtime`: a rejected tool call reports what a valid argument would have been,

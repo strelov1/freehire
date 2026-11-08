@@ -23,6 +23,7 @@ work is already a conversation; the site should offer it too. Approved design:
 ## Capabilities
 
 ### New Capabilities
+
 - `auto-apply-chat`: a per-application assistant conversation that narrates an automatic
   application's progress and takes the candidate's answers and decisions in free text.
 

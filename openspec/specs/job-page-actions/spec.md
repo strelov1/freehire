@@ -1,11 +1,14 @@
 # job-page-actions Specification
 
 ## Purpose
+
 How the job detail page ranks and places what a reader can do with a posting: which
 control is the page's single primary call to action, where the CTAs sit relative to the
 title and the content tabs, and how the pair changes as auto-apply becomes available,
 starts, completes or gives up.
+
 ## Requirements
+
 ### Requirement: Primary CTAs sit under the title, not on the tab row
 
 The job detail page SHALL render its call-to-action buttons (`Tailor my CV`, the external
@@ -223,4 +226,3 @@ button and learns why the action is unavailable from the backend's own refusal a
 
 - **WHEN** the posting did not come from a source auto-apply can drive
 - **THEN** no auto-apply button renders anywhere on the page
-

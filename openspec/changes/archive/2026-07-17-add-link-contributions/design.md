@@ -16,6 +16,7 @@ stateless JWT cookie or API key (`RequireAuthOrKey`).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Accept a job link, recognize the company board `(source, board)` with zero network calls, and
   reject a board we already crawl or already recorded.
 - The unit of a contribution is the board, not the vacancy: a second link to the same company
@@ -24,6 +25,7 @@ stateless JWT cookie or API key (`RequireAuthOrKey`).
 - Offer the same flow from two front doors: the website and a linked Telegram chat.
 
 **Non-Goals:**
+
 - The background worker that validates a board, onboards it into `sources`, and scrapes its
   vacancies (a `status` seam is provided; the worker is a follow-up).
 - Point claw-back for a board that later fails to onboard.
@@ -47,7 +49,7 @@ whole cost of adding one.
 
 ### D2. New `link_contributions` table + `users.points`, one transaction
 
-```
+```text
 link_contributions(
   id, submitted_by → users, url, source, board,
   status default 'pending' check in ('pending','onboarded','rejected'),

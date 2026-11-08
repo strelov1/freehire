@@ -27,6 +27,7 @@ an actual job-browsing surface, consistent with the app.
 ## Capabilities
 
 ### New Capabilities
+
 - `assistant-job-cards`: rendering freehire job references in the agent chat as
   rich, data-backed job cards (link detection + segment rendering + card
   hydration by slug), plus the agent-side convention that produces the links.
@@ -37,7 +38,7 @@ an actual job-browsing surface, consistent with the app.
 ## Impact
 
 - **Frontend (`hire/web`)**: `web/src/lib/assistant/unfurl.ts` (new, pure parser
-  + vitest), `web/src/lib/assistant/JobCardUnfurl.svelte` (new: fetch-by-slug →
+  - vitest), `web/src/lib/assistant/JobCardUnfurl.svelte` (new: fetch-by-slug →
   `JobRow`, skeleton, link fallback, module cache), and the message renderer in
   `web/src/routes/my/assistant/+page.svelte` (segment loop). Reuses `JobRow.svelte`,
   `api.getJob`, and the `Job` (jobview) type — the API already returns the

@@ -24,6 +24,7 @@ every render on `b.MeetingURL != ""`; no change is needed there.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A mentor can connect a `calendar.events` grant, entirely separate from any
   `gmail.readonly`/`calendar.readonly` grant the same account may hold for an
   unrelated feature.
@@ -33,6 +34,7 @@ every render on `b.MeetingURL != ""`; no change is needed there.
   on this booking," never to a blocked or delayed booking.
 
 **Non-Goals:**
+
 - Free/busy sync (`calendar.readonly` for a mentor, populating `mentor_busy_intervals`)
   — a separate, already-deferred half of the same idea; this change touches neither.
 - Any new UI for disconnecting or inspecting this grant beyond what `/my/integrations`

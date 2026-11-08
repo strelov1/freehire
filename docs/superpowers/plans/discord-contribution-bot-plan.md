@@ -54,6 +54,7 @@ queries for it, and add the new Discord config fields.
 
 **Migration** (new file `migrations/00NN_discord_links.sql`, NN = next sequential number per
 Global Constraints):
+
 ```sql
 CREATE TABLE public.discord_links (
     user_id    bigint NOT NULL,
@@ -74,12 +75,14 @@ ALTER TABLE public.link_contributions
     ADD CONSTRAINT link_contributions_surface_check
     CHECK ((surface = ANY (ARRAY['web'::text, 'telegram'::text, 'extension'::text, 'cli'::text, 'discord'::text, 'unknown'::text])));
 ```
+
 Read `migrations/0001_init.sql` (search `telegram_links`) to confirm the exact DDL style/ordering
 convention (table, then PK constraint, then FK constraint as separate `ALTER TABLE` statements)
 before writing this file, and follow it.
 
 **sqlc queries** — new file `internal/platform/db/queries/discord_links.sql`, following
 `internal/platform/db/queries/telegram_links.sql`'s shape exactly (read it first):
+
 - `UpsertDiscordLink` (insert ... on conflict (user_id) do update, mirrors `UpsertTelegramLink`)
 - `GetDiscordLink` (`:one`, by `user_id`)
 - `GetUserIDByDiscordID` (`:one`, `SELECT user_id FROM discord_links WHERE discord_id = $1 ORDER BY linked_at DESC LIMIT 1`)
@@ -88,12 +91,14 @@ before writing this file, and follow it.
 Run `make sqlc` after adding the query file (regenerates `internal/platform/db`).
 
 **Config** — in `internal/platform/config/config.go`, add to the `Settings` struct and `Load()`:
+
 ```go
 DiscordBotToken       string
 DiscordApplicationID  string
 DiscordPublicKey      string
 DiscordGuildID        string
 ```
+
 read from `DISCORD_BOT_TOKEN`, `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`,
 `DISCORD_GUILD_ID` via plain `os.Getenv` — no defaults, matching the `TelegramBotToken` field
 group (read that block in `config.go` first for placement/comment style).
@@ -112,6 +117,7 @@ point the client at an `httptest.Server` instead of the real API; do the same he
 token issue/parse/TTL shape.
 
 Build:
+
 - `VerifySignature(publicKeyHex string, timestamp, body []byte, signatureHex string) bool` —
   decode both hex strings, Ed25519-verify `append(timestamp, body...)` against the decoded
   public key using stdlib `crypto/ed25519`. Return `false` on any decode failure, never panic.
@@ -140,6 +146,7 @@ Build:
   appropriately for this package.
 
 **Tests** (`internal/engage/discordbot/*_test.go`, table-driven, no network/DB needed):
+
 - `VerifySignature`: valid signature passes; tampered body fails; wrong timestamp fails; garbage
   hex fails without panicking.
 - `DiscordLinkTokens`: issue then parse round-trips the user id; an expired token fails to parse;
@@ -159,6 +166,7 @@ as the Discord API's shape allows. Also add the trivial `SurfaceDiscord` constan
 since this task is the first consumer of it.
 
 Build:
+
 - `internal/ingest/contribution/contribution.go`: add `SurfaceDiscord = "discord"` alongside the
   existing `Surface*` constants, and add it to the `NormalizeSurface` switch's accepted list.
 - `discordHandlers` struct: `queries *db.Queries`, a `*discordbot.Client`, a
@@ -200,6 +208,7 @@ Build:
 **Tests** (`internal/api/handler/discord_test.go`, no DB — use a fake/nil queries where the linking
 endpoints allow it, or scope tests to what's reachable without one; read
 `internal/api/handler/telegram_test.go` for the existing signature-guard test style and mirror it):
+
 - Missing/invalid Ed25519 signature -> 403, no processing.
 - Valid PING -> PONG (`{"type":1}`).
 - `/link` with a valid token upserts the link and replies ephemeral-success (this may need a
@@ -222,6 +231,7 @@ Extends `internal/api/handler/discord.go` from Task 3. Read the rest of
 the Discord-shaped mirror of all of it.
 
 Build:
+
 - Extract `intakeReply`'s `switch out.Status { ... }` body (and the `jobURL`/`companyURL`
   helpers it uses) out of `internal/api/handler/telegram.go` into a shared, surface-agnostic
   function — e.g. `func renderIntakeOutcome(out intakeOutcome, frontendOrigin string) string` in
@@ -248,6 +258,7 @@ Build:
   `discordH.register(api, mw)` calls with the new config fields from Task 1's `Settings`).
 
 **Tests** (extend `internal/api/handler/discord_test.go`):
+
 - `/contribute` command-option parsing (the `url` string option is read correctly).
 - Command dispatch: unknown command name doesn't panic and replies with a generic error.
 - `renderIntakeOutcome` (or whatever the extracted helper is named): table-driven test over every
@@ -277,6 +288,7 @@ with the private key) since, unlike Telegram's static shared-secret header, Disc
 must carry a valid signature to reach the handler at all.
 
 Cover, per `openspec/changes/discord-contribution-bot/specs/**/*.md`'s scenarios:
+
 - Linked user's `/contribute` on a readable-vacancy link: full flow, deferred ack then a
   follow-up `EditOriginalResponse` call with a link to the posting (assert on the stub server
   receiving the PATCH).
@@ -292,10 +304,12 @@ Cover, per `openspec/changes/discord-contribution-bot/specs/**/*.md`'s scenarios
   `/api/v1/discord/interactions` responds 404.
 
 **Verification for this task** (run both, from the module root):
-```
+
+```text
 go vet -tags=integration ./...
 go test -tags=integration ./internal/api/handler/...
 ```
+
 Docker is available in this environment — actually run the tagged suite, don't just vet-check
 it. Paste the pass/fail summary into the task report.
 
@@ -329,6 +343,7 @@ Read `web/src/lib/api.ts` around the existing `telegramStatus`/`telegramLink`/`t
 functions (grep for them) and `web/src/lib/components/ContributeLandingView.svelte` first.
 
 Build:
+
 - `web/src/lib/api.ts`: add `discordStatus()`, `discordLink()`, `discordUnlink()`, mirroring the
   Telegram trio's shapes exactly but hitting `/api/v1/me/discord`, `/api/v1/me/discord/link`
   (returns `{token, instructions}`, not a URL — see Task 3), `/api/v1/me/discord` DELETE. Add the

@@ -33,6 +33,7 @@ in a change of its own.
 ## Capabilities
 
 ### New Capabilities
+
 - `application-timeline`: reading the application-event ledger as a dated series for one
   caller — the range read, what each event carries to the wire, how provenance is reported,
   and what happens to an event whose message was deleted.

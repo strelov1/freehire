@@ -53,6 +53,7 @@ Wording note: new user-facing copy and API paths use **"CV"**, not "résumé"
 ## Capabilities
 
 ### New Capabilities
+
 - `cv-ats-score`: the CV ATS-readiness score — deterministic structural + keyword
   checks producing a score and fix checklist, plus an optional nil-safe LLM
   qualitative layer, served per profile against the caller's stored CV.

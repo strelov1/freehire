@@ -25,6 +25,7 @@ service → sqlc repo over `user_jobs`). Job closure happens in the ingest/liven
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One-shot, opt-in reminders for saved-but-not-applied jobs over Telegram / email.
 - Hybrid scheduling: an account default rule (enabled, delay, channels) plus a per-job
   override chosen at save time.
@@ -35,6 +36,7 @@ service → sqlc repo over `user_jobs`). Job closure happens in the ingest/liven
 - Reuse the existing delivery transports and worker plumbing; do not reinvent them.
 
 **Non-Goals:**
+
 - Recurring / escalating reminders (explicitly one-shot).
 - Reminders for jobs the user only viewed but never saved.
 - New delivery channels beyond the existing Telegram + email.

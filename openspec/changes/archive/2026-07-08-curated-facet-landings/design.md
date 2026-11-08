@@ -11,12 +11,14 @@ about landing pages (see the spec delta).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Add ~33 hand-verified filter collections across four new axes (tech categories,
   seniority, infra skills, named roles), each with a live open-job count ≥ 300.
 - Reconcile the `job-collections` spec with the shipped landing-page reality.
 - Guard the registry with a slug-uniqueness + non-empty-params unit test.
 
 **Non-Goals:**
+
 - No programmatic generation, no facet-combination pages.
 - No new URL namespace — stays `/collections/[slug]`.
 - No backend, routing, sitemap, or page-template changes.

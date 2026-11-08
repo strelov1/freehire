@@ -1,8 +1,11 @@
 # email-inbox Specification
 
 ## Purpose
+
 TBD - created by archiving change gmail-inbox. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Subject-grouped inbox listing
 
 The system SHALL expose an inbox endpoint returning the caller's ATS mail grouped
@@ -229,4 +232,3 @@ impossible to find, and the classifier reads attacker-controlled text.
 
 - **WHEN** a message has no classification yet
 - **THEN** it is listed, because nothing has judged it
-

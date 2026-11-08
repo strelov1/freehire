@@ -15,9 +15,11 @@ The six dictionary-derived facets (countries, regions, work_mode, skills, senior
 ## Capabilities
 
 ### New Capabilities
+
 - `deterministic-facets`: The doctrine that the six dictionary-derived facets are sourced solely from the deterministic dictionaries (`jobderive`) at read time, the LLM's values for those six are excluded from the served wire shape (kept raw in the enrichment JSONB), and existing jobs are re-derived for all six facets by a single unified backfill pass.
 
 ### Modified Capabilities
+
 - `job-geography`: The read-time merge requirement changes from "ingest-derived and enrichment-derived geography are **unioned**" to dict-only; the work-mode read-time precedence changes from "the LLM work mode beats the ingest value" to dict-only (ingest/parser value only); the "existing jobs are backfilled with parsed geography" requirement generalizes to the single unified `backfill-derive` pass.
 
 ## Impact

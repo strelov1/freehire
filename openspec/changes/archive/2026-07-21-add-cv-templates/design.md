@@ -17,6 +17,7 @@ and dropping a matching templates/<id>.typ file." This change walks that seam.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Ship 3 new no-color, simple templates (`centered`, `modern-sans`, `sidebar`)
   next to `classic-ats`.
 - Let the UI discover templates from the server (id, label, style, `ats_safe`)
@@ -26,6 +27,7 @@ and dropping a matching templates/<id>.typ file." This change walks that seam.
 - Keep `classic-ats` the default; existing CVs render unchanged.
 
 **Non-Goals:**
+
 - No per-template configurable options (accent color, font size). Templates are
   fixed, no-color.
 - No per-user live thumbnails (rendering the user's own CV in every template).
@@ -93,6 +95,7 @@ to keep the production render interface PDF-only; the generator is dev-only and
 tolerates a little duplication of the compile shell-out.
 
 **6. Template layouts (all no-color):**
+
 - `centered` — single-column serif (Libertinus); name centered, contacts
   centered inline under it; section headings centered with a rule. ATS-safe.
 - `modern-sans` — single-column sans-serif using the bundled Liberation Sans
@@ -108,8 +111,8 @@ proportional sans — and the renderer runs `--ignore-system-fonts`, so a genuin
 sans template needs a bundled face. Embed Liberation Sans Regular + Bold (SIL
 OFL, Helvetica-metric-compatible, so it reads as the classic professional resume
 sans) into the `cv` package via `//go:embed`, plus its license. At render time
-the renderer materializes the font files into the sandbox and adds `--font-path
-<dir>` so `#set text(font: "Liberation Sans")` resolves. The same extraction is
+the renderer materializes the font files into the sandbox and adds
+`--font-path <dir>` so `#set text(font: "Liberation Sans")` resolves. The same extraction is
 reused by the preview generator. Rationale: font variety (serif vs sans) is the
 core visual contrast between templates; one committed libre font is the minimal
 cost. Alternatives — DejaVu Sans Mono (monospace, unusual for a CV) or a

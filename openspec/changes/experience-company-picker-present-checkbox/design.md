@@ -7,11 +7,13 @@ The experience bank's job forms are different: `jobs.company` (via `createExperi
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Reuse `CompanyPicker` for the experience bank's Company field without changing its behavior for its existing two consumers.
 - Keep free-text entry fully functional (typing a company that never appears in suggestions must still save correctly).
 - Expose the existing `current` field through the add-job and edit-job forms only, since it does not apply to `project`-kind entries.
 
 **Non-Goals:**
+
 - No backend or API changes — `current` and `company` are already accepted end to end.
 - No change to `ReferralsView.svelte` or `MentorProfileEditor.svelte` behavior.
 - No dedicated `Checkbox` design-system component — out of scope for this change; follow the existing raw-`<input type="checkbox">` convention (e.g. `MentorProfileEditor.svelte:337`).

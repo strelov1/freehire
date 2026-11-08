@@ -1,8 +1,11 @@
 # source-quality-metrics Specification
 
 ## Purpose
+
 Measure, per source, how much of what it delivers is missing what a visitor relies on (work mode, place, employer) or is likely no longer live, so an adapter or a feed that quietly degrades while its crawls stay green is visible and alertable.
+
 ## Requirements
+
 ### Requirement: Per-source quality counts
 
 The per-source snapshot SHALL record, for each source, how many of its open, non-private
@@ -25,4 +28,3 @@ measurement time as `freehire_source_stats_measured_timestamp_seconds`.
 
 - **WHEN** `source_stats` holds no row
 - **THEN** none of the three families is published
-

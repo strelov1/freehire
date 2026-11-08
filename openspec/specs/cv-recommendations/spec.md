@@ -1,8 +1,11 @@
 # cv-recommendations Specification
 
 ## Purpose
+
 TBD - created by archiving change cv-recommendations. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: CV embedding is persisted in the jobs' vector space
 
 The system SHALL compute and persist a per-user CV embedding that lives in the exact same vector space as the job embeddings, by embedding the CV text through the same Meilisearch embedder that embeds jobs and reading the resulting vector back. The persisted vector SHALL be stored with the identity of the embedder that produced it, so that a change of embedder model marks the stored vector stale and it is never compared against jobs embedded by a different model. The raw CV text SHALL NOT be persisted (only the derived vector, alongside the S3 blob résumé-storage already keeps).
@@ -106,4 +109,3 @@ The sort control SHALL be offered only to a signed-in user (the "Recommended" mo
 
 - **WHEN** the feed is rendered embedded and scoped to a single company
 - **THEN** no CV sort control is offered
-

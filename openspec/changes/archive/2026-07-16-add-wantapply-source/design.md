@@ -17,11 +17,13 @@ shared HTTP client, and the `boardless`/`aggregator`/`HydratingSource`/`SeenRefr
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Full Wantapply catalogue in the catalogue as `source='wantapply'`, with structured facets from the JSON-LD and a real close signal via the board unseen-sweep.
 - Steady-state crawl fetches detail only for new vacancies.
 - Widen the Wantapply Telegram footprint (4 new channels) without removing the existing one.
 
 **Non-Goals:**
+
 - Resolving `hiringOrganization.sameAs` to a company's native ATS (field is present on only a minority of pages; the stored apply URL is the wantapply page).
 - Any cross-source dedup change to reconcile the site adapter with the retained Telegram channels — the small overlap is accepted.
 - Crawling the `.com` host or bypassing its WAF.

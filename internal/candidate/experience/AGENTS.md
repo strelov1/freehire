@@ -1,11 +1,13 @@
 # The experience bank
 
 ## Scope
+
 `internal/candidate/experience` — the durable, per-user record of what a candidate has actually
 done. An `Employment` is a place where something happened (a job or a project); an `Atom`
 is one piece of evidence at the grain of a CV bullet.
 
 ## Always true
+
 - **The bank is a store, not a cache.** Every other record of experience is derived and
   replaced: `resume_structured` is regenerated on each upload, a tailored CV is thrown away
   with its vacancy. The bank accumulates, and **only its owner removes anything** — import
@@ -28,7 +30,6 @@ is one piece of evidence at the grain of a CV bullet.
 
   This closes the laundering route the cookie-only gate used to guard by routing alone: bank an
   inference as `agent_inferred`, edit it, read back `manual`, cite it in a CV.
-
 - **Provenance decides publication, and the check is in the service.** `cv_import`,
   `stated_in_chat` and `manual` are the candidate speaking and may reach a CV;
   `agent_inferred` is the model speaking and may not, until the candidate confirms it and
@@ -59,7 +60,7 @@ is one piece of evidence at the grain of a CV bullet.
 
 ## How it works
 
-```
+```text
 upload ──► resumeextract.Extract ──► EntriesFromResume ──► Import
                                                              │ employments: Find → FillBlanks | Create
                                                              └ atoms: InsertAtomIfNew (ON CONFLICT DO NOTHING)
@@ -115,6 +116,7 @@ The ATS report deliberately reads the **file's** structure and not the bank: it 
 document, and banked evidence would have it praise a CV for experience the CV never states.
 
 ## Limitations
+
 - **Paraphrase duplicates.** Exact `ClaimKey` still only collapses identical normalised
   claims. Near-paraphrases are flagged as soft-duplicate clusters (token Jaccard on the
   claim) and the owner can merge a pair via `Store.MergeAtoms` / the Experience tab /

@@ -7,7 +7,9 @@ candidate's experience bank for each, rewrites what the evidence supports, and c
 it could not close. It is the same method the conversational tailoring uses — the rhythm differs, not
 the rules. Everything a client could otherwise dictate (the brief, the turn's ceiling, the pre-run
 snapshot) belongs to the server, and the run is undoable in one move.
+
 ## Requirements
+
 ### Requirement: An autopilot run is started by the server, not composed by the client
 
 The system SHALL expose a dedicated endpoint that starts an unattended tailoring run on a tailoring
@@ -232,4 +234,3 @@ unchanged.
 
 - **WHEN** an autopilot run starts on a session whose vacancy already has a cached analysis
 - **THEN** no new analysis is computed and the run proceeds directly
-

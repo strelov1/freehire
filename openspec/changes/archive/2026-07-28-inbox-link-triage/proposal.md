@@ -48,10 +48,12 @@ data.
 ## Capabilities
 
 ### New Capabilities
+
 - `application-from-mail`: recording a tracked application directly from a piece
   of employer mail, dated by that mail, and linking the two in a single action.
 
 ### Modified Capabilities
+
 - `agent-inbox-surface`: the agent-shaped listing gains the link-state filter, so
   the confirmation queue and the orphaned-mail queue are addressable the way the
   unclassified work queue already is.

@@ -18,12 +18,14 @@ GET-only handler under its own `internal/handler/<name>.go` file, registered dir
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a profile's `base.city` and `relocation.cities` be picked from real places instead of
   typed blind, reusing the dictionary and UI pattern that already exist.
 - Keep the `location_preferences` wire contract exactly as `search-profiles` already
   specifies it (city as free text) — this is a UI improvement, not a schema change.
 
 **Non-Goals:**
+
 - Building a prefix-index data structure (trie, sorted-string search, external search
   engine). At ~34k rows, a linear scan in Go is sub-millisecond; the existing `cities` job
   facet already tolerates a similarly-sized in-memory scan pattern, and `RemoteSearchSelect`

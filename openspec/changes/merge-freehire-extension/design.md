@@ -28,6 +28,7 @@ byte-identical duplicate of its `AGENTS.md` and is dropped.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - `extension/` lands in this repo as a normal top-level package, buildable and
   testable on its own, with no lingering double-nesting.
 - The sidepanel renders through `freehire-design-system` components and tokens
@@ -38,6 +39,7 @@ byte-identical duplicate of its `AGENTS.md` and is dropped.
   carry over instead of being lost.
 
 **Non-Goals:**
+
 - No pnpm/workspace migration for `extension/` — it keeps npm and
   `package-lock.json`.
 - No change to `internal/assistant`, `internal/browsertools`, or the
@@ -67,15 +69,18 @@ second commit.
 `vite: () => ({ plugins: [tailwindcss()] })` entry in `extension/wxt.config.ts`
 — mirroring `web/vite.config.ts`'s `tailwindcss()` call, not importing it.
 New `extension/entrypoints/sidepanel/app.css`:
+
 ```css
 @import "tailwindcss";
 @import "freehire-design-system/theme.css";
 ```
+
 imported once from `sidepanel/main.ts`, replacing the `:global(body)` reset
 currently inlined in `App.svelte`'s `<style>` block.
 
 **4. Restyle by direct component swap, not a wrapper layer.** Each hand-rolled
 element maps to an existing `design-system/src/*` primitive:
+
 - Sign-in / link buttons (`.signin`, `.link`) → `Button` (variants for
   primary vs. ghost).
 - Status pill (`.status`, `.status.online`) → `Badge`.
@@ -89,6 +94,7 @@ for now rather than growing the design system as a side effect (that's a
 separate, deliberate change).
 
 **5. Docs and OpenSpec carry-over is a folder copy, not a rewrite.**
+
 - `openspec/changes/{agent-autofill-wire,apply-form-readiness,combobox-actuation,local-harness-wire}`
   and the extension-specific entries under `openspec/changes/archive/` copy in
   unmodified (checked: no name collisions with this repo's existing changes).

@@ -1,8 +1,11 @@
 # gmail-ats-sync Specification
 
 ## Purpose
+
 TBD - created by archiving change gmail-inbox. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Full-message persistence
 
 The worker SHALL upsert each ATS message with its headers and full text and HTML
@@ -81,4 +84,3 @@ messages consuming the query's results and a body retrieval each.
 - **WHEN** the mailbox holds a message the connected account sent
 - **THEN** the query does not ask for it
 - **AND** it is not stored, whether or not its text is hiring-shaped
-

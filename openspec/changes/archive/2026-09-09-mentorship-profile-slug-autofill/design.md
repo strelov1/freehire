@@ -20,6 +20,7 @@ See `proposal.md` - Why. Two relevant facts about the existing code:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A blank "Your URL" at submission time always yields a valid, unique slug without a
   round trip to the user.
 - An explicit slug typed by the mentor keeps today's validation and collision behavior
@@ -27,6 +28,7 @@ See `proposal.md` - Why. Two relevant facts about the existing code:
 - The company field in the creation form is chosen by name, not typed as a slug.
 
 **Non-Goals:**
+
 - Editing `slug` or `company_slug` after creation - explicitly out of scope, see
   proposal.md.
 - Any change to `CompanyPicker.svelte`'s own behavior or its use in `ReferralsView`.

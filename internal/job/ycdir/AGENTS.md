@@ -5,6 +5,7 @@ Maps yc-oss directory entries to company-info fields, consumed by `cmd/import-yc
 ## Enrichment Map
 
 `internal/job/ycdir.Map` turns each yc-oss entry into:
+
 - `one_liner` → tagline
 - `long_description` → `company_info.description`
 - `industry`+`industries`+`subindustry` leaf+`tags` → industries

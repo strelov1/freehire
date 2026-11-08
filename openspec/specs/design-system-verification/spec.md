@@ -1,8 +1,11 @@
 # design-system-verification Specification
 
 ## Purpose
+
 TBD - created by archiving change extend-ds-verification-to-web. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Primitive adoption is counted and held
 
 The verification suite SHALL report, for every primitive the design system exports, the
@@ -155,4 +158,3 @@ classes.
 
 - **WHEN** a call site passes a `class` that collides with one of the primitive's own utilities
 - **THEN** the caller's class is the one that applies, and a test asserts it
-

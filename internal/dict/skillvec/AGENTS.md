@@ -1,6 +1,7 @@
 # Skill vectors
 
 ## Scope
+
 Turns a set of canonical `skilltag` slugs into a fixed-width vector, so the search
 engine can order the whole catalogue by cosine against a candidate's skills instead
 of the application scoring a window by hand. Pure and I/O-free: no LLM, no embedding
@@ -35,6 +36,7 @@ before that reuse would read the new skill's weight at the old skill's slot.
 quietly ranking as absent — it has no position until the registry is regenerated.
 
 ## Dimensions
+
 `Dimensions` (1280) is wider than the dictionary (1068 after the 2026-10 enrichment-
 mining batch) so growth needs no re-declaration. It is NOT free: Meilisearch stores the
 declared width whether or not the tail is occupied, and at catalogue scale each 256
@@ -62,6 +64,7 @@ renumber the fifteen canonicals after it and invalidate every stored vector, whi
 the whole reason this file is append-only.
 
 ## Why there are no rarity weights
+
 An earlier version weighted each skill by how rare it is in the catalogue, so that
 matching `erlang` counted for more than matching `git`. That is a defensible idea and it
 is **gone**, because it is incompatible with the ordering the feed promises.
@@ -85,6 +88,7 @@ since engaging twenty you hold beats engaging six.
 fail — and it should.
 
 ## Why the cosine is the score, and why it needed a ballast
+
 Vectors are unit length, so the cosine is the overlap over the product of lengths. That
 alone is NOT enough. When a vacancy sits almost entirely inside a large profile the
 expression collapses to roughly `sqrt(overlap) / ||A||` — it rewards the SIZE of the
@@ -108,6 +112,7 @@ Constants come from a sweep over a stratified production sample (k in [2,12], fl
 it.
 
 ## Not to be confused with
+
 `internal/candidate/jobmatch` scores ONE job against a profile and credits adjacent
 skills via `skilladjacency`; it serves the per-job match bar. This package orders
 many jobs and counts literal overlap only. The two may disagree at the margin — a

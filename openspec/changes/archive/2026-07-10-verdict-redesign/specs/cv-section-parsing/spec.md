@@ -12,17 +12,21 @@ sets). When no Skills-section heading is found, `declared` SHALL be empty and al
 tagged skills SHALL fall into `body` (never a crash).
 
 #### Scenario: Skills declared and also used in experience
+
 - **WHEN** a CV has a "Skills" section listing "go, kubernetes" and an experience bullet that also mentions "go"
 - **THEN** `declared` contains {go, kubernetes}, `body` contains {go}, and `all` contains {go, kubernetes}
 
 #### Scenario: Skill used in experience but not declared
+
 - **WHEN** a CV mentions "kafka" only inside an experience bullet and never in the Skills section
 - **THEN** `kafka` is in `body` and not in `declared`
 
 #### Scenario: No Skills-section heading present
+
 - **WHEN** a CV has no recognizable Skills-section heading
 - **THEN** `declared` is empty and every tagged skill is in `body`
 
 #### Scenario: Deterministic
+
 - **WHEN** the same CV text is parsed twice
 - **THEN** the `declared`, `body`, and `all` sets are identical

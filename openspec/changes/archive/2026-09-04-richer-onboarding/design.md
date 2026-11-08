@@ -103,7 +103,7 @@ migration when it does.
 
 ### The questionnaire is a new table with named columns
 
-```
+```text
 CREATE TABLE public.candidate_survey (
     user_id                 bigint PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
     job_search_stage        text,

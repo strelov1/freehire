@@ -87,7 +87,7 @@
 - [x] 5.1 Write a failing test in a new `CandidateContactsEditor.spec.ts`
       asserting the "Your contacts" heading, its description, all four
       field placeholders (Full name/Email/Phone/Location), the "Links (one
-      per line)" label, the "https://…" placeholder, the "Save contacts"
+      per line)" label, the "<https://…>" placeholder, the "Save contacts"
       button, and the save-success/save-error messages render in Russian
       under a mocked `ru` locale.
 - [x] 5.2 Add `CandidateContactsEditor.messages.ts` (en/ru) covering all of
@@ -115,39 +115,39 @@
       **A second, independent review (`/code-review`) found four more real
       issues, all fixed:**
       1. `AccountTimezone.svelte`, `AccountLanguage.svelte`,
-         `CandidateContactsEditor.svelte`, and `LocationCard.svelte` each
-         captured a translated fallback error message into `$state` at the
-         moment of failure, so an already-shown error froze in whatever
-         locale was active then — a later locale change (e.g. via the
-         sibling `AccountLanguage` card) left it stale. Fixed by storing a
-         flag/the server's own raw message in `$state` and deriving the
-         displayed text from `s` (the resolved catalog) reactively, in all
-         four components. (A live regression test proving the reactive
-         update was attempted and reverted — the shared `$app/state` test
-         mock is a plain object, not a genuine Svelte reactive primitive, so
-         it cannot exercise a mid-session locale change; the fix is
-         verified by code reading instead.)
+      `CandidateContactsEditor.svelte`, and `LocationCard.svelte` each
+      captured a translated fallback error message into `$state` at the
+      moment of failure, so an already-shown error froze in whatever
+      locale was active then — a later locale change (e.g. via the
+      sibling `AccountLanguage` card) left it stale. Fixed by storing a
+      flag/the server's own raw message in `$state` and deriving the
+      displayed text from `s` (the resolved catalog) reactively, in all
+      four components. (A live regression test proving the reactive
+      update was attempted and reverted — the shared `$app/state` test
+      mock is a plain object, not a genuine Svelte reactive primitive, so
+      it cannot exercise a mid-session locale change; the fix is
+      verified by code reading instead.)
       2. `ProfileForm.spec.ts` renders `SkillsPicker`/`LocationPreferencesFields`
-         (via its create-profile branch) without its own `$app/state` mock;
-         no current test exercises that branch, but the shared stub would
-         throw the moment one does. Added the same defensive mock
-         `SkillsCard.spec.ts` already needed.
+      (via its create-profile branch) without its own `$app/state` mock;
+      no current test exercises that branch, but the shared stub would
+      throw the moment one does. Added the same defensive mock
+      `SkillsCard.spec.ts` already needed.
       3. `AccountLanguage.svelte`'s six language codes and
-         `AccountLanguage.messages.ts`'s `languageNames` catalog keys were
-         two independent, hand-written lists with nothing tying them
-         together. `LANGUAGE_CODES` now derives from `$lib/locale.ts`'s
-         `SUPPORTED_LOCALES`, and `languageNames` is typed
-         `satisfies Record<Locale, string>` — adding a locale without a
-         matching catalog entry is now a compile error, not a silent
-         `tokenLabel` fallback to the raw code.
+      `AccountLanguage.messages.ts`'s `languageNames` catalog keys were
+      two independent, hand-written lists with nothing tying them
+      together. `LANGUAGE_CODES` now derives from `$lib/locale.ts`'s
+      `SUPPORTED_LOCALES`, and `languageNames` is typed
+      `satisfies Record<Locale, string>` — adding a locale without a
+      matching catalog entry is now a compile error, not a silent
+      `tokenLabel` fallback to the raw code.
       4. `SkillsCard`'s save-failure message concatenated
-         `saveFailedPrefix`/`saveFailedSuffix` catalog keys around an
-         interpolated skill name — a shape that hard-codes English/Russian
-         word order and can't express a language whose grammar needs the
-         value positioned differently. Added a minimal `format()`
-         placeholder-substitution helper to `$lib/i18n/t.ts` (with its own
-         tests) and switched `SkillsCard.messages.ts` to a single
-         `'Could not update {skill} in your profile. Try again.'` template.
+      `saveFailedPrefix`/`saveFailedSuffix` catalog keys around an
+      interpolated skill name — a shape that hard-codes English/Russian
+      word order and can't express a language whose grammar needs the
+      value positioned differently. Added a minimal `format()`
+      placeholder-substitution helper to `$lib/i18n/t.ts` (with its own
+      tests) and switched `SkillsCard.messages.ts` to a single
+      `'Could not update {skill} in your profile. Try again.'` template.
       Also applied the first review's Minor suggestion: `AccountLanguage`'s
       `byCode` dropped its unused `list` parameter (always called with the
       same array).

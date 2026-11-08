@@ -35,6 +35,7 @@ Scope is **deterministic word-subset containment**. Trigram/similarity matching 
 ## Capabilities
 
 ### New Capabilities
+
 - `aggregator-subset-title-dedup`: suppress an aggregator posting whose title words are a subset of
   a first-party ATS posting's, gated against seniority-only differences.
 

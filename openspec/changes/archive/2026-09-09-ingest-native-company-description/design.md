@@ -26,6 +26,7 @@ Relevant existing state:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Capture Greenhouse's board-level `content` field once per board crawl and
   fill-write it into `tagline`/`company_info` under the existing gap-fill
   rule.
@@ -34,6 +35,7 @@ Relevant existing state:
   it without another contract change.
 
 **Non-Goals:**
+
 - Implementing Workable's side of this now — its field was empty in every
   spike sample; revisit if a larger sample shows real coverage.
 - Any change to how `Company` (the display name) itself is derived — this is

@@ -9,6 +9,7 @@ standard schema.org `JobPosting` `application/ld+json` block, decoded the same w
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Page the listing to exhaustion using the existing shared paging helper, in its
   fail-on-any-gap form so the `fullBoardListing` guarantee is genuine.
 - Match job links by an exact, non-loose path shape, applying the lesson `herp-source`'s
@@ -17,6 +18,7 @@ standard schema.org `JobPosting` `application/ld+json` block, decoded the same w
   to freehire's own controlled vocabulary without guessing.
 
 **Non-Goals:**
+
 - `baseSalary` and structured `jobLocation` sub-fields beyond a joined address string. HRMOS's
   ld+json exposes both, but mapping salary correctly needs verifying currency/period shape
   and rounding conventions across more companies than this change's live sample covered —

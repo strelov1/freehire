@@ -25,6 +25,7 @@ a single Loxo adapter unlocks a whole class of sources at once.
 ## Capabilities
 
 ### New Capabilities
+
 - `loxo-source`: the Loxo careers-board adapter — listing crawl, detail parse
   (title, embedded-JSON description, stable `<agency_id>-<slug>` external id,
   best-effort location/remote), and Hub-based employer attribution.

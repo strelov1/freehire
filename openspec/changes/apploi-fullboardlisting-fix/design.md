@@ -19,6 +19,7 @@ under three minutes and is the measurement this change relies on.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Bring `apploi` to the same `fullBoardListing` bar as the eight adapters already fixed: fail
   `Fetch` loudly instead of silently truncating when completeness cannot be structurally
   proven.
@@ -26,6 +27,7 @@ under three minutes and is the measurement this change relies on.
   enough not to burden production with a repeat of the two cancelled full scans.
 
 **Non-Goals:**
+
 - Raising `apploiMaxPages`. The company-level sample found nothing close to the cap; see
   Decisions for why a company-level upper bound is sufficient here even without a per-board
   measurement.

@@ -28,12 +28,14 @@ diagnosis below):
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A boardless `meta` adapter that enumerates the jobsearch sitemap and yields normalized jobs
   with sanitized-HTML descriptions, reusing the list→detail pattern and helpers.
 - A Chrome-fingerprint (uTLS) HTTP client, scoped to this adapter, that still routes through the
   `safehttp` SSRF-guarded dialer.
 
 **Non-Goals:**
+
 - Changing the shared client's fingerprint or any other adapter's transport.
 - A headless-browser tier (`tls-client` is the pure-Go fit for sitemap + ld+json).
 - Enumerating postings Meta itself does not list in its sitemap.

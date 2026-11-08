@@ -17,6 +17,7 @@ document carries the decisions forward into OpenSpec's tracked format.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Extract the duplicated claim-wave drain loop into one generic `internal/outbox`
   package, so a seventh queue only needs its own `Store` port and processing
   logic, not a seventh copy of the loop.
@@ -25,6 +26,7 @@ document carries the decisions forward into OpenSpec's tracked format.
 - Migrate all six existing workers onto it in this one change.
 
 **Non-Goals:**
+
 - No database schema change. The six tables stay separate — a single shared
   physical table was considered and rejected (see Decisions).
 - No new queue. This change touches only the six that already exist.

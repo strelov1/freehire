@@ -34,11 +34,13 @@ out of scope here and recorded as seams.
 ## Capabilities
 
 ### New Capabilities
+
 - `job-analytics`: a public, filterable facet-distribution endpoint that reports
   vacancy counts per facet value (and numeric min/max) under a given set of
   search filters, built on the Meilisearch facet distribution feature.
 
 ### Modified Capabilities
+
 - `web-frontend`: add a public `/analytics` page that renders facet-distribution
   breakdowns with interactive, URL-synced drill-down, reusing the existing job
   filter store and filter panel.

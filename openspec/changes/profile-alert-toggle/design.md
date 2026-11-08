@@ -8,6 +8,7 @@ This document nails down the exact API/DB shape against the real code
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One toggle, backed entirely by the existing saved-search + subscription
   primitives — no new matching engine, no server-side re-implementation of
   "profile → filters."
@@ -15,6 +16,7 @@ This document nails down the exact API/DB shape against the real code
   filters without the user doing anything.
 
 **Non-Goals:**
+
 - A skill-coverage-threshold notification engine (explicitly deferred to a
   future change if ever wanted).
 - A dedicated channel-picker in the toggle — it inherits the account's

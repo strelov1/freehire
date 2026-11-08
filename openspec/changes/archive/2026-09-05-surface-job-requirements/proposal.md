@@ -19,9 +19,11 @@ No breaking changes. The wire shape does not move; a field that was always prese
 ## Capabilities
 
 ### New Capabilities
+
 - `posting-requirements-derivation`: a deterministic, dictionary-gated extraction of a posting's requirements from its description markup, stored per job and refreshable by a one-off backfill.
 
 ### Modified Capabilities
+
 - `job-enrichment`: the served `enrichment.requirements` is filled from the deterministic derivation when the LLM payload states none, so the field's coverage no longer depends on whether the model has run.
 
 ## Impact

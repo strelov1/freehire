@@ -9,6 +9,7 @@ order buries fresh postings behind a stale tail, and neither enqueue nor claim
 excludes closed jobs, so LLM budget is spent on dead orphans.
 
 Existing infrastructure this design leans on:
+
 - `jobs_posted_at_id_idx (posted_at DESC NULLS LAST, id DESC)` — already serves the
   public feed's `ORDER BY`; the new claim reuses it.
 - `enrichment_outbox UNIQUE (job_id, target_version)` — provides a `job_id` index for
@@ -20,6 +21,7 @@ Existing infrastructure this design leans on:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Enrich fresher, open jobs first.
 - Never enrich closed jobs.
 - Raise throughput ~×4 via bounded concurrency, without breaking the
@@ -27,6 +29,7 @@ Existing infrastructure this design leans on:
 - No new migrations.
 
 **Non-Goals:**
+
 - Removing closed-job cruft already in the outbox (claim-time filter skips it; a
   cleanup sweep is a separate future change).
 - Per-run caps / changing the run-till-empty drain semantics.

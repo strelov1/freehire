@@ -12,12 +12,14 @@ freehire#3114 asks for a third credential surface — OAuth 2.1 so an MCP client
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A client can register itself, send a human through a consent screen, and receive a bearer token — no client secret, no pre-provisioned client_id, no pasted key.
 - A granted token is revocable two ways: explicitly (the "Connected devices" list) and implicitly (password reset / sign-out-everywhere, for free, via the existing `token_version` counter).
 - The signed-in MCP server's tools are the *same code path* as the in-app assistant's tools — a result can never disagree between the two surfaces.
 - Standard enough that Claude Desktop, Cursor, and ChatGPT's MCP clients can connect without freehire-specific client configuration (RFC 7591 dynamic registration, RFC 8414/9728 metadata discovery, RFC 8252 loopback redirects).
 
 **Non-Goals:**
+
 - Refresh tokens / token rotation. The issue specifies a 30-day expiry, not a renewing one; re-running consent is the renewal path. Revisit only if a real client cannot tolerate a 30-day hard stop.
 - Per-tool or per-scope grants. One fixed scope (`mcp:account`) covering every reused assistant tool. A capability matrix is not asked for and multiplies the consent UI and the grant schema for no current requirement.
 - Client vetting or an approval queue for dynamic registration. Registration is open (anyone can mint a `client_id`); the security boundary is the human's consent click, not who may request a `client_id` — identical to how any public OAuth client registry works (Linear, GitHub Apps' device flow, etc.).

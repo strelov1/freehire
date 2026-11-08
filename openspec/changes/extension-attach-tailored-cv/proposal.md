@@ -35,10 +35,12 @@ exposes to an extension.
 ## Capabilities
 
 ### New Capabilities
+
 (none — this extends the extension's existing autofill surface rather than introducing a
 new domain concept)
 
 ### Modified Capabilities
+
 - `extension-autofill`: adds a file-attach primitive and a requirement governing when the
   panel offers it, replacing the spec's current "no upload primitive" statement for the
   tailored-CV case specifically (the manual path remains for every other case: no tailored

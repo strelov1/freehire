@@ -39,5 +39,5 @@
 
 ## 6. Land and retire the old repo
 
-- [ ] 6.1 Open and merge the PR into `main`. PR #1726 opened: https://github.com/strelov1/freehire/pull/1726 — merge still pending on CI + the manual Chrome check.
+- [ ] 6.1 Open and merge the PR into `main`. PR #1726 opened: <https://github.com/strelov1/freehire/pull/1726> — merge still pending on CI + the manual Chrome check.
 - [ ] 6.2 Confirm with the user, then archive (not delete) `freehire-extension` on GitHub.

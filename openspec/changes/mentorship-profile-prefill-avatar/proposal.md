@@ -39,11 +39,13 @@ concern still holds.
 ## Capabilities
 
 ### New Capabilities
+
 - `mentor-profile-prefill`: read-only, best-effort suggestions for a mentor's own
   not-yet-created profile, composed from their résumé, user profile, account and
   experience bank.
 
 ### Modified Capabilities
+
 - `mentor-profile`: adds the `show_photo` opt-in field and the public photo endpoint
   the spec's "An avatar is NOT part of this requirement" section explicitly deferred,
   now resolved with mentor-controlled consent rather than automatic reuse.

@@ -100,7 +100,7 @@ difference. It counts the `web/src` files that import each primitive, holds ever
 count at `scripts/adoption-baseline.json`, and names the unused primitives on every
 run whether it passes or fails. Today:
 
-```
+```text
 adoption: 4/15 primitives have a consumer in web/src
   unused: Alert, Avatar, Card, Chip, Dialog, EmptyState, FormField,
           Pagination, Table, Tabs, Tooltip
@@ -122,7 +122,7 @@ import, and the walk reads only `from`-clauses.
 Both baselines are held by `scripts/ratchet.mjs`, and it is **exact in both
 directions**. A regression fails. An improvement fails too, and asks to be recorded:
 
-```
+```text
 ✗ adoption: Dialog: 0 → 3 — improved; rerun with --update to record it
 ```
 

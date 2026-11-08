@@ -19,6 +19,7 @@ and the SPA filter facets.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Remove the live Meili facet count from `/open`'s render path.
 - Precompute the four facets `/open` shows (`countries`, `skills`, `seniority`,
   `work_mode`) once per day, served from Postgres over a public endpoint.
@@ -26,6 +27,7 @@ and the SPA filter facets.
 - Keep the live `/api/v1/jobs/facets` and SPA filtering unchanged.
 
 **Non-Goals:**
+
 - No change to how SPA filter facets (disjunctive, arbitrary filters) are counted.
 - No caching/HTTP/2/compression work on `/open` (tracked separately).
 - No snapshot of the other 19 facets — only the four `/open` renders.
@@ -40,7 +42,7 @@ as `cmd/reindex` does), calls `FacetCounts` for the four attributes, and only
 *then* opens a short DB transaction to swap the table. Computing the source
 before `BEGIN` means a slow/failing Meili never holds a transaction open, and a
 Meili error aborts the run before it touches the table.
-_Alternative — SQL `GROUP BY` over `jobs` (like the insights rollups):_ avoids
+*Alternative — SQL `GROUP BY` over `jobs` (like the insights rollups):* avoids
 the Meili dependency, but would re-implement the skills/countries normalization
 that lives in the search index and risk the snapshot diverging from the live
 filter facets. Rejected for the parity risk.

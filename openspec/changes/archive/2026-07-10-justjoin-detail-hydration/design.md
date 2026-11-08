@@ -22,6 +22,7 @@ optional adapter/store capabilities as interfaces the runner type-asserts (`Stre
 ## Goals / Non-Goals
 
 **Goals:**
+
 - justjoin jobs carry a real (sanitized) description.
 - Detail requests happen only for new offers in steady state; bounded concurrency; a single
   offer's failure does not abort the crawl.
@@ -31,6 +32,7 @@ optional adapter/store capabilities as interfaces the runner type-asserts (`Stre
 - No change to `Source.Fetch` or to any other adapter; no N+1 DB queries.
 
 **Non-Goals:**
+
 - Fetching detail for already-seen offers on every crawl (rejected: cost).
 - Salary parsing from `employmentTypes` (out of scope; separate concern).
 - A general framework for detail hydration across all aggregators — only justjoin opts in

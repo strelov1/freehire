@@ -15,16 +15,19 @@ the exclusion targets, and it SHALL remain searchable regardless of whether
 its category ever resolves further.
 
 #### Scenario: A job with no resolved category and no tech signal is excluded
+
 - **WHEN** a job's category is empty, its enrichment carries no category or
   `"other"`, and its `is_tech` is unknown or `false`
 - **THEN** the job is excluded from the search index
 
 #### Scenario: A confirmed-technical job with no resolved category remains searchable
+
 - **WHEN** a job's category is empty, its enrichment carries no category or
   `"other"`, but its `is_tech` is `true`
 - **THEN** the job is included in the search index
 
 #### Scenario: A resolved category always includes the job regardless of is_tech
+
 - **WHEN** a job's category (from the title dictionary or enrichment) is
   resolved to a specific, non-`"other"` value
 - **THEN** the job is included in the search index

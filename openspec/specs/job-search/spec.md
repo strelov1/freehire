@@ -1,8 +1,11 @@
 # job-search Specification
 
 ## Purpose
+
 TBD - created by archiving change add-job-search. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Searchable jobs index
 
 The system SHALL maintain a Meilisearch index of jobs with one document per job,
@@ -12,6 +15,7 @@ text (title, company, description, location), the filterable facets, the
 sortable fields, and the display fields returned to clients.
 
 The index SHALL declare:
+
 - **searchable attributes**: title, company, description, location.
 - **filterable attributes**: source, company_slug, work_mode, employment_type,
   seniority, category, domains, regions, countries, company_type, company_size,
@@ -403,38 +407,47 @@ Status updates SHALL use the queue written atomically with the closing statement
 An entry for a still-closed job SHALL not be indexed by the indexing queue. Failed status updates SHALL retain the removal entry for retry without failing the ingest run that closed the job. A full rebuild SHALL omit closed documents, eventually reclaiming their storage. Rebuild-time queue scheduling remains independently configured.
 
 #### Scenario: A closed job stops matching search before the next batch reindex
+
 - **WHEN** a crawl closes a previously searchable posting and the status wave completes
 - **THEN** its document remains stored but marked closed and absent from every public search/count surface
 
 #### Scenario: A bulk close queues every job it closed
+
 - **WHEN** one statement closes many jobs
 - **THEN** every closed job is queued by that same statement
 
 #### Scenario: A rolled-back close queues nothing
+
 - **WHEN** the closing transaction does not commit
 - **THEN** no removal is queued
 
 #### Scenario: A hard-deleted job leaves the index
+
 - **WHEN** the job row is removed before its queued removal is processed
 - **THEN** its document is physically removed
 
 #### Scenario: A queued removal survives its job being deleted
+
 - **WHEN** a queued job row is hard-deleted
 - **THEN** its queue entry survives and is processed
 
 #### Scenario: Removing an unindexed job is harmless
+
 - **WHEN** a queued removal names an absent index document
 - **THEN** processing succeeds without creating a new document
 
 #### Scenario: A job queued for both indexing and removal ends up removed
+
 - **WHEN** a queued indexing entry's job closes before indexing
 - **THEN** it is not indexed and its document is excluded by the status update
 
 #### Scenario: An unavailable search engine does not lose the removal
+
 - **WHEN** a status wave cannot complete
 - **THEN** its queue entry remains for retry and the closing ingest run is unaffected
 
 #### Scenario: A reopened document clears its marker
+
 - **WHEN** an open posting replaces a previously marked document
 - **THEN** the marker is cleared and the posting is searchable again
 
@@ -562,28 +575,34 @@ At most 5 alternatives SHALL be accepted. More SHALL be refused with HTTP 400 an
 message `q has more than 5 OR alternatives`.
 
 #### Scenario: OR unions alternatives
+
 - **WHEN** a caller searches `produktchef OR "product owner"`
 - **THEN** the results include postings matching either alternative
 - **AND** a posting matching both appears once and is counted once in the total
 
 #### Scenario: title: scopes an alternative to the title
+
 - **WHEN** a caller searches `title:"product owner" -junior`
 - **THEN** a posting that mentions "product owner" only in its description is not returned
 - **AND** a posting titled "Junior Product Owner" is not returned
 
 #### Scenario: A query without operators is unchanged
+
 - **WHEN** a caller searches `golang rust` or `golang or rust`
 - **THEN** the search engine receives that query text unchanged in a single-index request
 
 #### Scenario: Sort and paging apply to the merged set
+
 - **WHEN** a caller searches `produktchef OR golang` sorted by `posted_at:desc` with limit 1 and offset 1
 - **THEN** the response holds the second-newest posting of the merged set and the total of the merged set
 
 #### Scenario: Facet counts describe the merged set
+
 - **WHEN** facet counts are requested for `produktchef OR golang`
 - **THEN** each posting in the merged set contributes once to its facet values
 
 #### Scenario: Too many alternatives are refused
+
 - **WHEN** a caller searches with six alternatives
 - **THEN** the response is HTTP 400 with the message `q has more than 5 OR alternatives`
 
@@ -596,22 +615,26 @@ The index document built from a database row SHALL carry its current duplicate s
 A link import's duplicate transition SHALL use its existing atomic removal outbox and SHALL NOT submit a separate direct index deletion.
 
 #### Scenario: A duplicate retains its indexed content
+
 - **WHEN** a searchable posting becomes a duplicate and the status wave completes
 - **THEN** its text and vectors remain stored but it contributes no hits, facets, distinct counts or sitemap entries
 
 #### Scenario: An absent duplicate document creates no skeleton
+
 - **WHEN** a duplicate status wave includes a job absent from the index
 - **THEN** no document is created
 
 #### Scenario: A released duplicate returns to search
+
 - **WHEN** a duplicate becomes canonical before or during its status wave
 - **THEN** it is queued for current-content replacement and becomes searchable with stale markers cleared
 
 #### Scenario: A private or missing duplicate is physically removed
+
 - **WHEN** a queued duplicate is private or its database row is missing
 - **THEN** its document is physically removed regardless of duplicate status
 
 #### Scenario: Link import has one durable duplicate update
+
 - **WHEN** reimporting a previously searchable generic URL identifies an existing canonical posting
 - **THEN** the marking transaction queues the duplicate and the importer submits no direct engine deletion
-

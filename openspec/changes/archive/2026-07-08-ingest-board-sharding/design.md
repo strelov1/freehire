@@ -5,11 +5,13 @@
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let one oversized board file be crawled across several staggered, timeout-safe runs that together cover every board.
 - Keep it a generic ingest capability (any file), not a workday special case.
 - No change to the pipeline, the write path, or the stale-job sweep.
 
 **Non-Goals:**
+
 - Changing 429 retry behavior (a separate lever; sharding alone restores coverage).
 - Per-file schedule config in the repo — cadence lives in the ops timers.
 

@@ -9,15 +9,18 @@
 - On retry failure, or when there was no filter to blame, or the original error is not `ErrBadQuery` (a genuine engine-down failure) — behavior is unchanged from today. This only changes the outcome for a filter-classified rejection that has something to drop.
 
 **Explicitly not in scope:**
+
 - The analogous sort-attribute hazard (`AGENTS.md`'s "Adding a sortable attribute", same root cause, same deploy window). Dropping a bad sort falls back to default ordering, not to "no filter" — a differently-shaped fix, left as a parallel, still-open gap, not silently folded into this change.
 - Identifying which SPECIFIC facet param caused the rejection by parsing Meilisearch's error message. Its error is not reliably structured for that; the degrade reports every currently-active filter param honestly rather than guessing at one.
 
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `job-search`: gains an ADDED requirement (the existing "Public job search endpoint" requirement's own text and filtering behavior are unchanged) describing the degrade-on-filter-rejection behavior — the same endpoint's own failure-mode contract, not a new capability.
 
 ## Impact

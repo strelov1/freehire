@@ -221,4 +221,3 @@ from a mailbox with nothing in it.
 - **WHEN** the model call fails
 - **THEN** the action responds with an error
 - **AND** nothing is imported and nothing is linked
-

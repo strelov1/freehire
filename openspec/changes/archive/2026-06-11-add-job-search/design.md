@@ -21,6 +21,7 @@ Postgres initdb. MVP stage — architecture is fluid.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A public `GET /api/v1/jobs/search` with full-text query, facet filters, sort,
   pagination, and a hybrid keyword/semantic blend — leaving `GET /api/v1/jobs`
   untouched.
@@ -32,6 +33,7 @@ Postgres initdb. MVP stage — architecture is fluid.
   `internal/search` package, so callers never touch the SDK directly.
 
 **Non-Goals:**
+
 - Real-time indexing on write. A `search_outbox` table (mirroring
   `enrichment_outbox`) is the documented seam; not built. Until ingest exists,
   scheduled reindex is sufficient.

@@ -1,8 +1,11 @@
 # geo-default-scope Specification
 
 ## Purpose
+
 TBD - created by archiving change geo-default-location-scope. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Derive the visitor's region from the edge country header
 
 The system SHALL read the visitor's ISO 3166-1 alpha-2 country from the
@@ -220,4 +223,3 @@ list by a fact the visitor never asked about.
 
 - **WHEN** a visitor from Brazil opens a company page carrying an embedded jobs list
 - **THEN** that list is not scoped by the derived region
-

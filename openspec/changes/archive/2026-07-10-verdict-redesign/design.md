@@ -7,6 +7,7 @@ and the CV tab shows a flat pass/warn/fail checklist with an optional LLM
 content-quality re-blend. Both under-present the underlying data.
 
 Constraints from the codebase:
+
 - `internal/verdict.Compute` and `internal/atscheck.Score` are **pure, I/O-free**;
   handlers own the Meilisearch facet queries and the stored-CV read.
 - The LLM layer is **optional** — the feature must fully work without it
@@ -19,6 +20,7 @@ Constraints from the codebase:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Market tab: top-20 role-skill breakdown with `strong`/`hidden`/`missing` status,
   `must_have`, market frequency, advice; headline stats (must-have covered,
   stack-match %, coherence %) — all from real data.
@@ -28,6 +30,7 @@ Constraints from the codebase:
 - Keep the feature fully functional with no LLM configured.
 
 **Non-Goals:**
+
 - `(stack)/(methodology)` per-skill tag (deferred).
 - A bespoke purple page theme (deferred; use design-system tokens).
 - Any DB schema change.
@@ -56,7 +59,8 @@ always contributes — via the LLM score when present, else a deterministic prox
 (action-verb + quantified-number detection).
 
 **4. LLM stays a bounded enrichment.** The `Review` supplies only `content_quality`
-+ `suggestions` (renamed from `findings`); it never emits a skill number or a
+
+- `suggestions` (renamed from `findings`); it never emits a skill number or a
 category score. Cached per user in the existing column, invalidated on CV replace.
 
 **5. One extra facet query, no new dependency.** The role facet query in

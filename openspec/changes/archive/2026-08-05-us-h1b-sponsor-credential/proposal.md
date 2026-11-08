@@ -36,9 +36,11 @@ adds the missing US register using the existing machinery unchanged.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `company-credential-registries`: adds a third register requirement (US H-1B,
   sourced from the USCIS Employer Data Hub) alongside the existing UK and NL
   requirements. No existing requirement's behavior changes; this is an additive

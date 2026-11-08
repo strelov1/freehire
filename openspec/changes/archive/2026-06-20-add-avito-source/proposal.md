@@ -27,6 +27,7 @@ the full vacancy list is enumerable from a public sitemap — no headless browse
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `avito` is a registered single-company boardless
   provider — it enumerates `career.avito.com` from the public `sitemap-iblock-2.xml`, fetches each
   vacancy page, parses its `JobPosting` JSON-LD into the normalized job shape, and yields jobs

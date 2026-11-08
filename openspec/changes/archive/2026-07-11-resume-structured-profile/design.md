@@ -11,12 +11,14 @@ A stored résumé today is opaque and re-parsed per fit analysis:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Derive a typed, sanitized **structured résumé** (contacts, summary, work experience with dates, education, languages, links, total years) from the uploaded CV, once, best-effort via the LLM.
 - Persist it read-only per user, provenance-stamped, self-healing across re-uploads (never describe a different CV than the one currently stored).
 - Serve it on the résumé read surface for a read-only profile rendering.
 - Feed it into the fit chain as pre-normalized context beside the existing CV text, degrading to today's behavior when absent.
 
 **Non-Goals:**
+
 - Per-field editing / user correction of the structured résumé (read-only this change).
 - Replacing the deterministic extractors (`cv-autofill`, `resume-skill-extraction`) or the raw-text fit input — the structure is additive.
 - A backfill worker that re-extracts existing résumés or re-extracts on an `LLM_MODEL` upgrade (the model stamp is stored so a future backfill can find stale rows; the worker itself is a noted seam, not built now).

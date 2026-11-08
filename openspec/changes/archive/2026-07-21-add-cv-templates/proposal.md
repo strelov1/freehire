@@ -43,6 +43,7 @@ unchanged.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `cv-builder`: the template registry grows from one to four templates; a new
   read endpoint lists templates with display metadata; a new endpoint sets a
   CV's template alone; templates are discoverable in the UI as a thumbnail

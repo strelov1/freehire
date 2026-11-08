@@ -35,11 +35,13 @@ yield decide"): `dayforcehcm` (already onboarded, `internal/ingest/sources/dayfo
 ## Capabilities
 
 ### New Capabilities
+
 - `jobappnetwork-source`: crawling one talentReef/jobappnetwork employer board (a numeric client
   id) through its public listing API, filtered to external, catalogue-eligible postings, and
   recognizing the platform's public URL shape for board onboarding.
 
 ### Modified Capabilities
+
 (none — no existing capability's requirements change)
 
 ## Impact

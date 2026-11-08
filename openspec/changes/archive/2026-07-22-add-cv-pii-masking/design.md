@@ -15,6 +15,7 @@ or cities. Full detail: `docs/superpowers/specs/2026-07-22-pii-masking-cv-llm-de
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Direct identifiers (name, email, phone, home address, personal links) never leave our
   perimeter to the model provider.
 - User-facing analysis output shows the real values (restore), and PII never re-leaks into a
@@ -22,6 +23,7 @@ or cities. Full detail: `docs/superpowers/specs/2026-07-22-pii-masking-cv-llm-de
 - Surgical scope: only CV-bearing calls are masked; `enrich` of public job text is untouched.
 
 **Non-Goals:**
+
 - Masking employer/university/title/skill/city context (needed for fit scoring).
 - A litellm masking guardrail (evaluated and rejected — see Decisions).
 - Reversible masking of anything other than the detected CV PII.

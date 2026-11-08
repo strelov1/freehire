@@ -31,6 +31,7 @@ The relevant part of the source was verified live during design (not assumed):
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Add `us-h1b-sponsor` as a `KindCredential` entry using the existing dataset/gate
   machinery unchanged.
 - Source it from the USCIS Employer Data Hub bulk files, combining the most recent
@@ -42,6 +43,7 @@ The relevant part of the source was verified live during design (not assumed):
   need: country aliases and corporate-suffix stripping.
 
 **Non-Goals:**
+
 - DOL/OFLC LCA disclosure data (job title, wage, worksite per petition). That
   dataset answers a different question — "what does a specific role pay" — and is
   a candidate for a future job-level feature, not a company credential fact.

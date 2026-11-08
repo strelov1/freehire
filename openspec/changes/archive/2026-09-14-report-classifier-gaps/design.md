@@ -24,6 +24,7 @@ between chunks, knobs read through `worker.EnvInt64` before touching the databas
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Turn accumulated enrichment data into a ranked, human-readable list of dictionary gaps for
   `skilltag` and for `classify`, cheaply enough to re-run whenever a curator wants a fresh
   read.
@@ -31,6 +32,7 @@ between chunks, knobs read through `worker.EnvInt64` before touching the databas
   one-off report/backfill tool operationally (env knobs, resumability, pacing).
 
 **Non-Goals:**
+
 - Deciding *which* candidates are worth adding — that is a curated, reviewed edit to
   `dictionaries.go`/`labels.go`/`descriptions.tsv` or the `classify` title table, done by a
   person reading the report.

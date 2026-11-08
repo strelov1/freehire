@@ -1,11 +1,14 @@
 # fuzzy-description-role-dedup Specification
 
 ## Purpose
+
 Collapse near-identical-description reposts that byte-exact matching misses — a role
 reposted per city with a localized salary or legal block, where a hash sees two unrelated
 texts because it has no notion of "almost". Uses word overlap of the normalized description
 within a company+title bucket, running after and never overriding the exact passes.
+
 ## Requirements
+
 ### Requirement: Near-identical-description reposts collapse within a company+title bucket
 
 The system SHALL collapse open canonical postings that share a `company_slug` and a

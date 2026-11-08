@@ -50,7 +50,6 @@
   and adds a seam. Instead `cmd/ingest/dbStore.Save` maps `job.Fields()`→`UpsertJobParams`
   inline (hashes + tx + index unchanged). Goal 1 (single door) is delivered at CONSTRUCTION
   time via `job.New`, not persistence.
-
 - [x] 4.1 SEALED the ingest write path: `normalizeJob`→`(job.Job, error)` via `job.New`;
   deleted the `pipeline.Job` struct; `Store.Save` now takes `job.Job` (only a factory
   product persists); both loops skip `ErrInvalidDraft` (empty title/identity) instead of

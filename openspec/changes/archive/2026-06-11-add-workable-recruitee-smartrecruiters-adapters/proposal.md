@@ -18,6 +18,7 @@ freehire only crawls three ATS platforms (greenhouse, lever, ashby). Every compa
 <!-- none -->
 
 ### Modified Capabilities
+
 - `source-ingest`: three new registered providers; the "no per-posting detail request" constraint is relaxed so an adapter may fetch detail when the list endpoint lacks the description.
 
 ## Impact

@@ -1,6 +1,7 @@
 ## Context
 
-#2074 treated `companies.industries` and `companies.domains` as two equal answers to
+# 2074 treated `companies.industries` and `companies.domains` as two equal answers to
+
 one question. Verified against aggregates — coverage of companies with open jobs rose
 27% → 66% — and not against individual companies, which is where it fails.
 

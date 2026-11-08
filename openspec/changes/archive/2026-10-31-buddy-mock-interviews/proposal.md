@@ -42,10 +42,12 @@ hard part exists. It is simply locked inside the mentorship package.
 ## Capabilities
 
 ### New Capabilities
+
 - `buddy-mock-interviews`: mock settings, availability, booking, cancellation, reminders
   and the blind two-way review between buddy members.
 
 ### Modified Capabilities
+
 - None. The engine extraction is a move with no behaviour change; mentorship specs stay as
   they are.
 

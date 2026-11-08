@@ -33,12 +33,14 @@ Google Jobs traffic to `/jobs/:slug` is the point of the product.
 ## Capabilities
 
 ### New Capabilities
+
 - `web-ssr-seo`: Public pages are server-rendered with per-route metadata,
   `JobPosting`/`Organization` JSON-LD, a real `robots.txt`, and a generated
   `sitemap.xml`, so crawlers and link-preview bots see full content in the
   initial HTML response.
 
 ### Modified Capabilities
+
 - `web-frontend`: The frontend's rendering model changes from a client-only SPA
   to SvelteKit SSR with hydration. Public read views (jobs list, job detail,
   companies list, company detail) SHALL be server-rendered so their content is

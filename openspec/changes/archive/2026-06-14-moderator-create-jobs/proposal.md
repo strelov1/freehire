@@ -25,12 +25,14 @@ authenticated user.
 ## Capabilities
 
 ### New Capabilities
+
 - `job-authoring`: moderator-driven creation and editing of hand-curated vacancies — the
   manual source identity (`source='manual'`, `external_id=URL`), the `POST`/`PATCH`
   endpoints, authorship audit (`created_by`/`updated_by`), enrichment enqueue on create,
   and the manual-source-only edit invariant.
 
 ### Modified Capabilities
+
 - `user-auth`: adds a user `role` attribute and role-based authorization (`RequireRole`)
   layered over the existing cookie/API-key authentication.
 

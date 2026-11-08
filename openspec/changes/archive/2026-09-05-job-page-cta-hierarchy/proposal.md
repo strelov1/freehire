@@ -26,7 +26,6 @@ grey `secondary` button beside a loud green `Apply` that only opens someone else
   new-tab target, and its apply-intent tracking — only its rank on the page changes.
 - Where Auto-apply is not offered (every non-Greenhouse posting, which is most of the
   catalogue), the title row carries the unchanged green `Apply` alone.
-
 - Give the phone an auto-apply button. It had none: the sticky bottom bar carried the
   external link and nothing else, so the feature the desktop page now leads with was
   invisible to most of this page's traffic. The bar takes whichever control the plan made

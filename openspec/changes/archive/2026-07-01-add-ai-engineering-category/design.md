@@ -14,6 +14,7 @@ enrichment schema enum is generated from the same `CategoryValues`.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A distinct `ai_engineering` category (label "AI Engineer") separating
   LLM-application roles from classic ML.
 - Title classification routes AI-application vs classic-ML vs mixed titles
@@ -21,6 +22,7 @@ enrichment schema enum is generated from the same `CategoryValues`.
 - The new value flows automatically into the enrichment enum and the web filter.
 
 **Non-Goals:**
+
 - No description-body classification for category (title-only, as today).
 - No handling of AI-infra/support titles ("AI Platform/Infrastructure Engineer")
   — they are unclassified by title today and stay so.

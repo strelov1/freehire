@@ -32,9 +32,11 @@ turned out to be the platform's own SPA catch-all `index.html` rather than JSON.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `recrutei` is a registered board-based provider —
   a listing-enumerates/detail-hydrates adapter over `jobs.recrutei.com.br/<board>`, yielding
   the normalized job shape including a Brazilian labor-regime-derived employment type from

@@ -14,6 +14,7 @@ window, semantic ratio) is the contract this new endpoint must match exactly.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A public search endpoint that returns full descriptions with a selectable
   format (`html`/`text`/`markdown`), running the identical query/filter/sort/paging
   as the public search.
@@ -21,6 +22,7 @@ window, semantic ratio) is the contract this new endpoint must match exactly.
 - Structure the shared search logic so the two endpoints cannot drift.
 
 **Non-Goals:**
+
 - No auth/API key (public, keyless) — full descriptions are already public via the
   detail endpoint.
 - No field selection, cursor pagination, or JSON:API envelope — same `{data, meta}`
@@ -47,6 +49,7 @@ so it is at most a page of primary-key lookups — an indexed batch.
 
 **Format conversion in a small dedicated helper.** `description_format` maps to a
 pure `formatDescription(html, format) string`:
+
 - `html` → identity (verbatim stored HTML).
 - `text` → strip tags to plain text.
 - `markdown` → convert HTML to Markdown, preserving block structure.

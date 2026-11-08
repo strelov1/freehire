@@ -9,10 +9,12 @@ read, which is the 85%-of-enriched coverage gap this change closes.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A deterministic, high-precision `work_mode` derivation from the description.
 - Description is the lowest-priority source: structured → location → description.
 
 **Non-Goals:**
+
 - seniority/category from description; skill-vocabulary expansion; any LLM change.
 - Re-reading the description for anything but work mode.
 

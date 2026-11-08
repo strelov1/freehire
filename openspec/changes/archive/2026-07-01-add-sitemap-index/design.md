@@ -8,6 +8,7 @@ companies** — so the cap hides ~95% of pages. The file already documents a
 follow-up; this change is that follow-up.
 
 Constraints:
+
 - Sitemap protocol: ≤50,000 URLs and ≤50 MB per file; an index may reference
   many sub-sitemaps.
 - Prod is resource-sensitive (past disk-full and reindex-freeze incidents), so
@@ -19,6 +20,7 @@ Constraints:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Enumerate the full open catalogue (all open jobs + all companies) across a
   sitemap index and sub-sitemaps.
 - Keep every request a bounded, index-friendly scan regardless of catalogue
@@ -27,6 +29,7 @@ Constraints:
   search engine into sitemap generation.
 
 **Non-Goals:**
+
 - No content-quality filtering of which jobs to include (all open jobs ship;
   a future quality gate is a separate change — noted as a seam).
 - No DB schema/migration changes.
@@ -36,6 +39,7 @@ Constraints:
 ## Decisions
 
 ### Keyset pagination, not OFFSET
+
 Sub-sitemap chunks are addressed by a cursor — the last `id` (jobs) / `slug`
 (companies) of the previous chunk — and fetched with `WHERE id > $cursor ORDER
 BY id LIMIT $n`. **Why:** `OFFSET n` over millions of rows forces Postgres to
@@ -45,6 +49,7 @@ the PK index. *Alternative rejected:* page-number + OFFSET — simpler URLs but
 O(offset) cost per chunk.
 
 ### The index is built from chunk-boundary cursors, computed cheaply
+
 `GET /sitemap.xml` needs the list of sub-sitemap URLs, i.e. each chunk's start
 cursor. A dedicated backend query returns just the boundary cursors (the id at
 every 50,000th open job, ordered) so the index is one small query, not a scan of
@@ -55,11 +60,13 @@ rejected:* client walks every chunk to discover cursors — fetches the whole
 catalogue just to build the index.
 
 ### Chunk size = 50,000 (the protocol max)
+
 Minimises the number of sub-sitemaps (~51 job files, ~2 company files) and thus
 index size and per-crawl request count, while staying within the 50k-URL /
 50 MB limits (a job URL line ≈ 110 bytes → ≈ 5.5 MB per file).
 
 ### Slim, read-only backend endpoints under `/api/v1`
+
 New Fiber handlers backed by new sqlc queries return only `{slug, updated_at}`
 (and `id` as the next cursor for jobs). Registered **before** the `/jobs/:slug`
 and `/companies/:slug` catch-alls (same ordering the existing `/jobs/search`,
@@ -68,6 +75,7 @@ Job cursor is the numeric `id`; company cursor is the `slug` string (`slug >
 $cursor`), first chunk keyed by the empty string.
 
 ### Frontend route shape
+
 - `sitemap.xml/+server.ts` → `<sitemapindex>` (rewrite of the existing file).
 - `sitemap-pages.xml/+server.ts` → static URLs.
 - `sitemap-jobs.xml/+server.ts` and `sitemap-companies.xml/+server.ts` →

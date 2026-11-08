@@ -1,8 +1,11 @@
 # wantapply-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-wantapply-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Wantapply sitemap crawl
 
 The system SHALL provide a `wantapply` source adapter that crawls the Wantapply site over its
@@ -78,4 +81,3 @@ refreshed and SHALL be closed by the sweep after its unseen window.
 
 - **WHEN** a vacancy previously ingested from `wantapply` no longer appears in the sitemap across the sweep's unseen window
 - **THEN** the post-run unseen-sweep closes that vacancy (it is not excluded as a self-closing source)
-

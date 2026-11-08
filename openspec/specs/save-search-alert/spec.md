@@ -1,8 +1,11 @@
 # save-search-alert Specification
 
 ## Purpose
+
 TBD - created by archiving change centralized-save-search-alert. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Save is the primary action; the Telegram alert follows
 
 The system SHALL make saving the current filter query the primary, standalone action — it MUST work without any Telegram subscription — and SHALL offer the Telegram alert only once the search is saved. The flow is driven only by a filter query string, so the same behavior is reachable from any surface, and each step is idempotent.
@@ -106,4 +109,3 @@ A network or server failure at any step (save, link, subscribe) leaves the feed 
 
 - **WHEN** a step in the flow fails due to a network or server error
 - **THEN** an error state with a retry is shown and the jobs feed remains usable
-

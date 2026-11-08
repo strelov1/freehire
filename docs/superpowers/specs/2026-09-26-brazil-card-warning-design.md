@@ -15,7 +15,7 @@ What it does badly is *say so*.
 
 On 26.09.2026 one visitor met it. Four charges, in eleven minutes:
 
-```
+```text
 05:28  BR  not_assessed  currency_not_supported
 05:28  BR  not_assessed  currency_not_supported
 05:29  US  highest       highest_risk_level      ← second card, blocked by Radar

@@ -1,8 +1,11 @@
 # onstrider-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-onstrider-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Onstrider enumerates vacancies from the sitemap
 
 The system SHALL provide an `onstrider` source adapter that enumerates vacancy URLs from
@@ -70,4 +73,3 @@ crawls over the direct client unchanged.
 - **WHEN** `SOURCES_PROXY_URL` is set and `sources.ApplyProxyEgress` runs over the registry
 - **THEN** the `onstrider` adapter's transport is routed through the configured proxy while
   non-allowlisted providers stay on the direct client
-

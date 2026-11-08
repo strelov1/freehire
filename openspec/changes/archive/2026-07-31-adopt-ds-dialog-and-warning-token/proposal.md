@@ -36,10 +36,12 @@ are `dark:` variants that exist only because there is no token for `.dark` to ov
 ## Capabilities
 
 ### New Capabilities
+
 - `design-system-warning-colour`: the semantic colour for caution — what it means, what it
   is named, and the rule that a caution surface may not pick a hue of its own.
 
 ### Modified Capabilities
+
 - `design-system-verification`: the adoption baseline and the web token baseline both change,
   and the change is the point rather than an incidental edit.
 

@@ -48,6 +48,7 @@ nothing validated it before render.
      rather than introducing a new one. -->
 
 ### Modified Capabilities
+
 - `assistant-job-cards`: how a vacancy reaches the user changes from "the chat
   unfurls job links found in the reply's markdown" to "the model calls a typed
   tool and the chat renders the deck it authored". Every requirement in the

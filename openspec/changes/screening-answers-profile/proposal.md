@@ -33,10 +33,12 @@ every application; capturing them once removes that repetition.
 ## Capabilities
 
 ### New Capabilities
+
 - `screening-answers`: the candidate's own stated answers to the six recurring ATS
   screening questions — storage, validation, manual edit, and assistant-driven edit.
 
 ### Modified Capabilities
+
 - `extension-autofill`: the autofill payload's scope changes from identity-only (name,
   contact, links) to identity + screening answers, so the extension can fill both kinds of
   field from one assembled block.

@@ -14,9 +14,11 @@ The app has two parallel "points" quantities that confuse users and the codebase
 ## Capabilities
 
 ### New Capabilities
+
 - `credits-page`: The user-facing Credits page and its history endpoint — current balance display and a paged, human-labelled transaction history over the credit ledger.
 
 ### Modified Capabilities
+
 - `link-contributions`: The contribution reward and its surfacing are expressed in AI credits, not a separate points counter; the `users.points` balance requirement is removed and the contributions view copy speaks in credits.
 - `account-navigation`: The account section gains a "Credits" navigation item.
 

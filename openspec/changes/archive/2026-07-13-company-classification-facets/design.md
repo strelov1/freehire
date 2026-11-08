@@ -10,6 +10,7 @@ every company's denormalized facets under an `IS DISTINCT FROM` change-guard —
 natural home for one more computed column.
 
 A task-1.1 prod measurement narrowed the reliable signals:
+
 - **Government source** is clean only for the exclusively-government sources
   `usajobs` and `neogov` (generic ATS like workday/icims/greenhouse carry
   government jobs too, so they are NOT a government signal).
@@ -21,6 +22,7 @@ A task-1.1 prod measurement narrowed the reliable signals:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One well-posed, deterministic company facet (`maturity`), computed once per
   company from existing signals, honest `NULL` on unknown.
 - Zero LLM, zero per-job cost, no new worker — reuse `RefreshCompanyFacets` and its
@@ -28,6 +30,7 @@ A task-1.1 prod measurement narrowed the reliable signals:
 - Additive: `company_type` and everything reading it stay untouched.
 
 **Non-Goals:**
+
 - `business_model` — no reliable deterministic signal exists yet (deferred).
 - Removing or deprecating `company_type` (a later change).
 - Per-job exposure / Meilisearch faceting (company-level Postgres filter only; a

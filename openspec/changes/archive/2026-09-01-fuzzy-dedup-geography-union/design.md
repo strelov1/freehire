@@ -206,6 +206,5 @@ not re-derived.
 - **Does `linkimport` need its own single-row query? — SETTLED: no.** It passes a one-element
   slice to the by-id-set query. The `:one` "always answers" contract the old `RoleClusterGeo`
   needed disappears with it, because an absent row already means "no widening".
-
 - **Is the whole-catalogue recursive query fast enough? — SETTLED: yes, it is FASTER than the
   query it replaces.** See the measurement below.

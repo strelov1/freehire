@@ -18,8 +18,10 @@ launcher (it appears live once you land on `/jobs`).
 ## Decisions
 
 ### One component, a `variant` discriminator
+
 `HeaderLocationFilter` gains `variant: 'jobs' | 'companies' | 'launcher'`. The shell
 (trigger, open/close, summary label) is shared; the body switches:
+
 - **jobs** — unchanged: work-format pills + `<LocationPane>`, drives the store.
 - **companies** — Region pills + Remote-hiring pills (both `REGION` options; drive
   `store.cycle('regions'|'remote_regions', code)`), counts from the company facet
@@ -31,12 +33,14 @@ launcher (it appears live once you land on `/jobs`).
 over-built — "pick jumps to the feed, refine live there" needs zero new state.
 
 ### Bridge carries the variant
+
 `ListSearchTarget.filterScope` gains `variant: 'jobs' | 'companies'`. `JobsView`
 registers `'jobs'` (unchanged shape otherwise); `CompaniesView` registers
 `'companies'` with its store + company facet counts. The launcher is **not** a
 bridge target — `HeaderSearch` renders the trigger directly in `'launcher'` mode.
 
 ### `summarizeScope` generalized over a facet spec
+
 `summarizeScope(store, spec?)` takes a `{ format?: string; geo: string[] }` spec
 (default = the jobs spec, so existing callers/tests are unchanged). Companies pass
 `{ geo: ['regions', 'remote_regions'] }`. A per-param labeler maps `countries`→

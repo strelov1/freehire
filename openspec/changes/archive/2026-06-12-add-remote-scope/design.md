@@ -18,6 +18,7 @@ needed to add fields. MVP stage: no persistent data, architecture stays fluid.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make a remote role's reach (`global`, regions, key countries) explicit and
   distinguishable from `unknown`.
 - Back one curated reach facet ("Region") with one field, filtered the same way
@@ -26,6 +27,7 @@ needed to add fields. MVP stage: no persistent data, architecture stays fluid.
   (the format) + `regions` (the reach) — removing the parallel raw flag.
 
 **Non-Goals:**
+
 - Changing the `jobs.remote` column, the source/pipeline `Remote` field, or the
   LLM hint path (all kept).
 - A DB migration or `enrich.Version` bump (no persistent data at MVP).

@@ -48,11 +48,13 @@ target screen; picking/paging through several jobs from a push is deferred).
 ## Capabilities
 
 ### New Capabilities
+
 - `mobile-push-channel`: the shared push-transport plumbing (multi-device fan-out,
   deep-link data payload) and application-nudge push delivery, which has no existing
   spec home (`internal/nudge` was never given its own capability spec).
 
 ### Modified Capabilities
+
 - `filter-subscriptions`: `channel` gains a third accepted value (`push`); a push
   digest renders as a short title/body instead of the full job listing.
 - `saved-job-reminders`: the reminder rule's `channels` set gains a third accepted

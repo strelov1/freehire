@@ -1,10 +1,12 @@
 # tracking-list-view Specification
 
 ## Purpose
+
 Reading the tracked applications as a list rather than a board, and finding one
 by employer or role. Introduced by the tracker-drag-list-search change.
 
 ## Requirements
+
 ### Requirement: The tracked applications are readable as a list
 
 The tracking section SHALL offer a list view of the caller's applications at

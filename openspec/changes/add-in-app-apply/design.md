@@ -23,12 +23,14 @@ What already exists and is reused:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - An employer vacancy in `freehire` apply mode, with up to ten typed questions.
 - A candidate application, validated against the form, delivered once by email to the
   employer's confirmed address, retried rather than duplicated on failure.
 - Tracking and answer-bank side effects; a per-day cap; the job page and `directApply`.
 
 **Non-Goals:**
+
 - An applicant inbox or statuses for the employer (seam: `direct_applications` already holds
   every application; a dashboard reads it later).
 - Payment for posting; auto-apply onto these forms; file-upload questions; staff-authored
@@ -37,6 +39,7 @@ What already exists and is reused:
 ## Decisions
 
 ### 1. Apply mode is a property of the external id, not a new column
+
 A `freehire`-mode vacancy is minted with `external_id = 'freehire:' + uuid` and `url = ''`.
 `jobs.apply_mode` would mean an `ALTER` on a 12.7M-row table for a value true of a handful of
 rows, and a separate marker written after the mint (e.g. "has a `freehire` apply_forms row")
@@ -73,6 +76,7 @@ index — and these consequences, each handled:
   the webhook and copies both carry the slug beside it.
 
 ### 2. Questions live in `apply_forms` with provider `freehire`
+
 The same `applyform.Form` shape, so the existing display path keeps working. Absent row means
 zero questions. A question's `Field.ID` is server-minted (`q1`…`qN` in submitted order)
 so answers reference ids, never labels. Validation and construction
@@ -86,6 +90,7 @@ first would otherwise stay live beside it asking none of the questions. A failed
 edit returns 500 with the content change already saved; the employer saves again.
 
 ### 3. A new package `internal/ingest/directapply`
+
 The candidate's application is not an employer capability, so it does not join
 `employer.Service`'s two halves. It sits in `ingest` (layer 7) because it needs the employer
 account (`employer.Service.ActiveAccount` and the confirmed work email), which `application`
@@ -96,15 +101,18 @@ and `ingest/screeninganswers`, all below or beside it. Mail goes through a port,
 Added to `internal/platform/arch/layering/blocks.go`.
 
 ### 4. `direct_applications`: record first, stamp sent after
-```
+
+```text
 id bigserial PK, job_id → jobs ON DELETE CASCADE, user_id → users ON DELETE CASCADE,
 cv_id uuid NOT NULL, note text NOT NULL DEFAULT '', answers jsonb NOT NULL,
 created_at timestamptz NOT NULL DEFAULT now(), sending_at timestamptz NULL,
 sent_at timestamptz NULL,
 UNIQUE (job_id, user_id)
 ```
+
 `answers` is a snapshot `[{id, label, type, answer}]`, so the record still reads correctly
 after the employer edits the questions. Flow of `Apply`:
+
 1. Load the vacancy; `IsDirectApply` and open, else not found / closed. Its own employer
    applying is answered not found.
 2. `ActiveAccount` for the vacancy's `created_by`, else refused.
@@ -136,11 +144,13 @@ A crash between 7 and 8 sends twice on the next retry. Accepted: the opposite or
 then send) loses an application silently, which is worse than a duplicate email.
 
 ### 5. The cap is an env knob read once at startup
+
 `DIRECT_APPLY_DAILY_LIMIT`, default 30, read in `internal/platform/config` and rejected at
 startup when set but not a positive integer. It is not a `plan` feature: `internal/ai/plan`
 meters AI actions, and an application is not one.
 
 ### 6. The read endpoint carries the prefill
+
 `GET /jobs/:slug/direct-apply` (cookie session optional — `optionalCookie`, never an API
 key, since the response carries the caller's banked answers): company name, questions with id, type,
 options, required; and for a signed-in user, `prefill` (field id → answer) and `applied`
@@ -154,6 +164,7 @@ holds what the candidate answered on earlier on-site applications. The existing
 `POST /jobs/:slug/direct-apply` (cookie only) submits.
 
 ### 7. Wire and page
+
 `jobview` gains `direct_apply: true`, omitted (not `false`) for every other posting so the
 search index carries nothing new for the rest of the catalogue. For such a vacancy `url` is
 `""` and the web CTA opens `DirectApplyForm.svelte` instead of a link; the badge reads "Only

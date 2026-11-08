@@ -20,11 +20,13 @@ Relevant item fields: `advertId` / `advertPublishId` (stable id), `title`/`name`
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A keyless `traffit` adapter that returns every live posting of one tenant, paged.
 - A harvest prober that live-validates candidate tenant slugs.
 - A seeded `sources/traffit.yml` with a validated starter tenant set.
 
 **Non-Goals:**
+
 - Auto-discovery of tenants (not keyless-feasible: wildcard DNS/cert; crt.sh only sees
   marketing subdomains). Seed comes from search dorks / a curated list, validated live.
 - Applicant-form parsing (`/public/form/...`) — that page is a dead end for ingest.

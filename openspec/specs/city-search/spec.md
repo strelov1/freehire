@@ -1,8 +1,11 @@
 # city-search Specification
 
 ## Purpose
+
 TBD - created by archiving change profile-city-autocomplete. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: City search returns population-ranked prefix matches
 
 The system SHALL expose a search over the existing GeoNames-derived city dictionary
@@ -132,4 +135,3 @@ if the user does not change it.
   dictionary does not recognize
 - **THEN** opening the profile editor shows that value as the selected city, and saving
   without changing it keeps it unchanged
-

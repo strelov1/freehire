@@ -71,7 +71,7 @@ re-crawled, held back by design.
 
 ### Catalogue now
 
-```
+```text
 total 5 191 817   live 2 673 737
 no_verdict 3 175 387 (61.2%)   nontech 1 253 718   tech 762 712
 jobs index: 2 670 324 docs      disk: 77 GB free
@@ -139,7 +139,7 @@ mine at 03:15) — PRs #1166–#1181. Assume concurrent deploy activity.
 
 ## Evening session (18:40–20:00 UTC) — what changed
 
-### The report has NOT been re-run. It was started twice and stopped twice, on purpose.
+### The report has NOT been re-run. It was started twice and stopped twice, on purpose
 
 1. **First stop — a stacked reindex.** Arriving to run `--boards` I found a facet swap and
    `reindex --semantic --from-pg` running together. Cause: `/usr/local/bin/semantic-after-wave2b.sh`
@@ -211,7 +211,6 @@ except through `pg_stat_activity`. Worth a small PR.
 0. **Nothing to do for `freehire-reindexw.timer`** — `restore-reindexw-timer.service`
    owns it now (see above). Verify with `cat /tmp/restore-reindexw.log` and
    `systemctl is-enabled freehire-reindexw.timer`; if that unit died, restore by hand.
-
 1. **DONE and QUEUED — deploy landed 19:58 UTC** (`release-1200.service`, `Result=success`,
    flipped to **blue** @ 7ea10864, which carries a9d62b6a plus #1195/#1205 from other
    sessions; `/api/v1/jobs` and `/api/v1/jobs/facets` both 200). `prune` rebuilt into both
@@ -229,7 +228,6 @@ except through `pg_stat_activity`. Worth a small PR.
    **re-checks** before enabling the facet timer, while the backfill waiter settles only
    60s — so the backfill is already running by the re-check and the timer stays off. The
    re-check after the sleep is load-bearing, not cosmetic.
-
 2. **`prune --boards` is QUEUED too** — `boards-1200-waiter.service`
    (`/usr/local/bin/boards-after-backfill.sh`, log `/tmp/boards-1200.log`, report lands in
    `/tmp/prune-boards-1200.txt`). It waits for the #1200 backfill, then performs the
@@ -255,10 +253,9 @@ except through `pg_stat_activity`. Worth a small PR.
    Note the colours flipped to blue **twice in a row**: another session deployed in
    between, so the "inactive" colour was blue again both times. Do not assume the
    colour alternates.
-
 3. **The whole chain is queued. Nothing needs a human until the patch exists.**
 
-   ```
+   ```text
    freehire-backfill-derive   (#1194, ANOTHER session)
      └─ backfill-1200-waiter  → backfill-derive-1200        /tmp/backfill-1200.log
           └─ boards-1200-waiter → prune-boards-1200         /tmp/prune-boards-1200.txt
@@ -270,7 +267,6 @@ except through `pg_stat_activity`. Worth a small PR.
    `prune` it just built carries `HasEngineering`. `retire-1200-waiter` works in a
    **scratch clone** — never hire-blue/hire-green, whose working trees are deployment
    artefacts that `release.sh`'s `git pull` would then refuse.
-
 4. **The one thing left for a person: apply the patch and open the PR.**
    This host cannot push — no `gh`, no key for the `freehire` user, anonymous HTTPS
    remote — so the chain stops at an artefact by necessity, not by choice.
@@ -279,25 +275,26 @@ except through `pg_stat_activity`. Worth a small PR.
    scp root@89.167.94.146:/tmp/retire-1200.patch .
    git checkout -b chore/retire-boards-wave2 && git apply retire-1200.patch
    ```
+
    Read `/tmp/retire-1200.log` first: it records how many entries moved and which
    providers were held back. **Spot-check a sample of the moved boards before merging**
    — #1162 exists because a mechanical reading of this report retired live IT employers.
-2. **After any retirement PR ships, run `prune --apply` again** — a retired board stops
+5. **After any retirement PR ships, run `prune --apply` again** — a retired board stops
    being crawled but its jobs are not closed automatically, and only then do the
    company-scoped rules become armed against them.
-3. **Decide the borderline five:** `quality engineer`, `process engineer`,
+6. **Decide the borderline five:** `quality engineer`, `process engineer`,
    `project engineer`, `service engineer`, `service technician` — ~30k rows, mostly
    industrial but they collide with QA and IT field-service titles.
-4. **Academic IT teaching — open question.** `adjunct faculty` / `assistant professor`
+7. **Academic IT teaching — open question.** `adjunct faculty` / `assistant professor`
    caught 255 genuinely IT titles (`Assistant Professor, Cybersecurity`,
    `Adjunct Faculty – Computer Science (Programming)`) out of 5 366 academic ones —
    0.11% of the plan. Accepted for now on the grounds that teaching is not practising.
    The clean fix, if wanted, is extending `jobderive.TechEvidence` with discipline names
    (also fixes `Information Technology Support Specialist`), which needs its own
    measurement.
-5. **Resume semantic** when the facet work is quiet.
-6. **Tick task 2.3 and archive** `openspec/changes/fix-board-retirement-verdict/`.
-7. **Consider a changelog entry** — 233k non-IT postings removed is user-facing
+8. **Resume semantic** when the facet work is quiet.
+9. **Tick task 2.3 and archive** `openspec/changes/fix-board-retirement-verdict/`.
+10. **Consider a changelog entry** — 233k non-IT postings removed is user-facing
    (`write-changelog` skill, posts live in `web/src/posts/`).
 
 ## Still-unanswered question worth keeping in view

@@ -14,12 +14,14 @@ The project already has the right idiom for this shape of work: transactional-ou
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Automatically resolve each inbox email to at most one of the caller's own applications and classify its status, using deterministic matching first and the LLM only for the tail.
 - Keep the user in control: auto-link only at high confidence (undoable), suggest otherwise, and advance application stage only forward at high confidence.
 - Surface the linkage both ways: linked emails on a new application detail page, and an application link + confirmation chip in the inbox reading pane.
 - Fit the existing outbox+cron+`systemd`-timer machinery with zero new infrastructure.
 
 **Non-Goals:**
+
 - The interview-prep durable workflow (extract date → durable wait → company brief → send email). It is documented below as the follow-on sub-project and is where a durable-workflow engine (Inngest/Temporal) is evaluated. This change deliberately stops at classification + linking, which needs no such engine.
 - Live company web-research (reuses `company_info` only, when B is built).
 - Any change to the Gmail/hosted ingest crawl itself beyond the enqueue-on-insert hook.

@@ -1,6 +1,7 @@
 # tracking-calendar-view Specification
 
 ## Purpose
+
 The tracking section's calendar: a month of what happened to the caller's applications,
 the day panel beneath it, and the rule that the day an event falls on belongs to the
 reader's clock rather than the server's. Introduced by the tracking-calendar-view change.

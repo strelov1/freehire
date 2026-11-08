@@ -14,9 +14,11 @@ Two features already invent their own version of "a short, unique, user-chosen n
 ## Capabilities
 
 ### New Capabilities
+
 - `identity/username-claim`: account-level username — format, reserved words, default suggestion, explicit claim with a 30-day change rate limit, availability check.
 
 ### Modified Capabilities
+
 - `hosted-mailbox`: mailbox address allocation ("Claim a hosted mailbox address" requirement) changes from mailbox's own handle derivation/collision-suffix to reading the account's `username` (via `EnsureUsername`); claiming a mailbox no longer independently allocates a name, it adopts the caller's username.
 
 ## Impact

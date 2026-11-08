@@ -42,6 +42,7 @@ previous decision or an obvious expectation:
 ## Capabilities
 
 ### New Capabilities
+
 - `apply-form-display`: serving a stored application form for one posting and
   showing its questions on the job page — the endpoint, the display projection, and
   what it deliberately omits.

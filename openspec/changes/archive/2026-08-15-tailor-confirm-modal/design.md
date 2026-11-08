@@ -31,6 +31,7 @@ and is already used from both `web/` and (once wired) `extension/` via the share
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One confirmation UX, phrased and structured the same way, across extension and web.
 - Zero new backend surface — read only what `GET /jobs/:slug/match` already returns.
 - Extension: zero added network calls (reuse the card's already-loaded match).
@@ -39,6 +40,7 @@ and is already used from both `web/` and (once wired) `extension/` via the share
   points without threading match data through component props.
 
 **Non-Goals:**
+
 - Changing what `/tailor/[slug]` itself does once reached (its own "Tailor it for me" / "Walk
   me through it" choice is untouched).
 - Gating the "View full analysis" revisit links — those stay direct navigation.
@@ -68,6 +70,7 @@ existing "a port, not a shared import" comment.
 **Web: a new singleton dialog controller (`askConfirmTailor`), not props threaded through
 JobDrawer/MatchSummary.** Both call sites currently hold only a slug (or a slug plus item), not
 a fetched `JobMatchResult`. Options considered:
+
 1. *(chosen)* Singleton controller self-fetches `api.getJobMatch(slug)` when opened, mirroring
    `askCvRefresh`'s exact state/resolver/settle shape. Each call site becomes one `await
    askConfirmTailor(slug, optionalLabel)`. Cost: one extra (cheap, deterministic) fetch per

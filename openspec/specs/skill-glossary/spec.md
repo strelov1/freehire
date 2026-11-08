@@ -8,6 +8,7 @@ and the label a reader sees. It is revealed on the skill chip and served as a gl
 under `/skills`.
 
 ## Requirements
+
 ### Requirement: A canonical skill carries a curated plain-language description
 
 `internal/dict/skilltag` SHALL own a description for each canonical skill alongside the

@@ -1,8 +1,11 @@
 # job-submission Specification
 
 ## Purpose
+
 TBD - created by archiving change public-job-submissions. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Authenticated user submits a vacancy for review
 
 The system SHALL allow any authenticated user to submit a vacancy for moderation through
@@ -146,7 +149,6 @@ submitter. The moderator queue MAY surface the submitter's email for review.
 
 - **WHEN** a user reads their own submissions
 - **THEN** the response body contains no raw submitter user id field
-
 
 ### Requirement: The submit surface captures structured facets and a formatted description
 

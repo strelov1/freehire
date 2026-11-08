@@ -30,10 +30,12 @@ Worktree: `/Users/i_strelov/Projects/hire-wt-tailor-landing`, branch `tailor-lan
 ### Task 1: The demo copy and the keyword highlighter
 
 **Files:**
+
 - Create: `web/src/lib/tailorDemo.ts`
 - Test: `web/src/lib/tailorDemo.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `DEMO_ROLE: string`
   - `DEMO_REQUIREMENTS: { id: string; label: string }[]`
@@ -176,10 +178,12 @@ git commit -m "Add the tailoring landing's example copy and highlighter"
 ### Task 2: The hero demo component
 
 **Files:**
+
 - Create: `web/src/lib/components/TailorHeroDemo.svelte`
 - Test: `web/src/lib/components/TailorHeroDemo.spec.ts`
 
 **Interfaces:**
+
 - Consumes: everything Task 1 produces except `highlight`.
 - Produces: `<TailorHeroDemo />`, which takes no props.
 
@@ -377,12 +381,14 @@ git commit -m "Add the tailoring hero demo"
 ### Task 3: The Pro price, perks and checkout button
 
 **Files:**
+
 - Create: `web/src/lib/proPrice.ts`, `web/src/lib/proPrice.test.ts`
 - Create: `web/src/lib/proPerks.ts`
 - Modify: `web/src/routes/pricing/+page.svelte`. Replace the inline `PAID_FEATURES` array (around lines 97-103) with an import of `PRO_PERKS`, and use `PRO_PERKS` where `PAID_FEATURES` was used.
 - Create: `web/src/lib/components/ProCheckoutButton.svelte`, `web/src/lib/components/ProCheckoutButton.spec.ts`
 
 **Interfaces:**
+
 - Produces:
   - `proMonthlyPrice(plans: PlansMatrix | null): PublicPrice | null`
   - `priceLabel(p: PublicPrice): string`, which gives `"$5"` for 500 USD cents
@@ -596,9 +602,9 @@ git commit -m "Add a Pro checkout button and share the Pro perk list"
 ### Task 4: The FAQ, rewritten around buyer objections
 
 **Files:**
+
 - Modify: `web/src/lib/tailorFaq.ts`, which is replaced whole.
 - Test: `web/src/lib/tailorFaq.test.ts` stays unchanged and must still pass.
-
 - [ ] **Step 1: Replace the array**
 
 ```ts
@@ -650,6 +656,7 @@ export const TAILOR_FAQ: FaqItem[] = [
 ```
 
 Before you commit, check two claims against the code:
+
 1. Contact masking: `internal/candidate/pii/AGENTS.md` must say that CV text is masked before it reaches the LLM on the tailoring path. If it does not, delete the sentence "Contact details are masked…".
 2. "Pro stays on until the end of the period you paid for": `internal/identity/billing/AGENTS.md` must describe cancellation at period end. If it does not, delete that clause.
 
@@ -670,14 +677,15 @@ git commit -m "Rewrite the tailoring FAQ around what stops a purchase"
 ### Task 5: The page load and the rewritten landing
 
 **Files:**
+
 - Create: `web/src/routes/features/tailor/+page.server.ts`
 - Modify: `web/src/routes/features/tailor/+page.svelte`
 - Modify: `web/src/lib/components/TailorLandingView.svelte`, which is replaced whole.
 
 **Interfaces:**
+
 - Consumes: `proMonthlyPrice`, `priceLabel`, `PRO_PERKS`, `ProCheckoutButton`, `TailorHeroDemo`, `DEMO_*`, `highlight`, `TAILOR_FAQ`.
 - Produces: `TailorLandingView` takes the prop `{ price: PublicPrice | null }`.
-
 - [ ] **Step 1: Server load**
 
 ```ts
@@ -701,11 +709,11 @@ export const load: PageServerLoad = async ({ fetch }) => {
 - [ ] **Step 2: Page wrapper**
 
 In `+page.svelte`:
+
 - Add `import type { PageData } from './$types';` and `const { data }: { data: PageData } = $props();`.
 - Render `<TailorLandingView price={data.price} />`.
 - Replace the `<Seo>` title with `"CV tailoring — your CV rewritten for each job, nothing made up | freehire"`.
 - Replace the description with `"freehire rewrites your CV for one vacancy at a time: it brings your relevant work forward in the job's own words, asks you about anything your history doesn't support, and shows the job match rising. ATS-readable PDF. Part of Pro."`
-
 - [ ] **Step 3: Rewrite `TailorLandingView.svelte`**
 
 ```svelte
@@ -935,10 +943,10 @@ In `+page.svelte`:
 ```
 
 Notes for the implementer:
+
 - `priceCell` reads `price` outside `$derived`. Svelte warns that this captures only the initial value. Write it as `const priceCell = $derived(price ? ... : 'Pro plan');` and build `compare` with `$derived` too.
 - `#how-it-works` is a same-page anchor. If the `svelte/no-navigation-without-resolve` lint rule flags it, use `href={resolve('/features/tailor') + '#how-it-works'}`, the same pattern other pages use.
 - Check whether `TailorWorkspacePreview` still has importers, using `grep -rn TailorWorkspacePreview src`. It must still be used by the onboarding tour. If the landing page was its only importer, stop and report it instead of deleting the file.
-
 - [ ] **Step 4: Type and lint check**
 
 Run: `pnpm check && pnpm lint`

@@ -57,11 +57,13 @@ Explicitly out of scope, and why:
 ## Capabilities
 
 ### New Capabilities
+
 - `apply-form-capture`: capturing a job's application form from the ATS that
   published it, storing it verbatim, and keeping it fresh — the store, the
   per-provider acquisition, the queue, and the worker that drains it.
 
 ### Modified Capabilities
+
 - `source-ingest`: an adapter MAY now yield an application form alongside the
   normalized job when its list endpoint already carries one, and the ingest write
   path persists it. Today the adapter contract stops at the job shape.

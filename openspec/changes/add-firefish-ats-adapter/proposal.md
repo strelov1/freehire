@@ -27,11 +27,13 @@ vacancies); pages answer a plain client with no edge in front.
 ## Capabilities
 
 ### New Capabilities
+
 - `firefish-source`: crawling Firefish-hosted career sites into the job catalogue via each
   site's public RSS document (one request per board, vacancy normalization, structured
   salary/type/date facets).
 
 ### Modified Capabilities
+
 (none — `board-harvest`'s existing requirements already cover "one more recognized platform";
 only its recognizer registry gains an entry, no requirement changes)
 

@@ -1,10 +1,12 @@
 # experience-bank Specification
 
 ## Purpose
+
 The durable record of what a candidate has actually done — employments and the evidence
 atoms attached to them — and the surfaces that let its owner see, correct and extend it.
 
 ## Requirements
+
 ### Requirement: The bank names a way into the interviewer in every state
 
 The experience view SHALL offer a labelled action that opens the `profile` interviewer,

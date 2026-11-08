@@ -17,11 +17,13 @@ open healthcare postings published before the window) is what that predicate cos
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One honest growth rule, applied by every insights rollup.
 - A role × country grid covering every categorized canonical posting, live, with a
   30-day direction, readable without JavaScript.
 
 **Non-Goals:**
+
 - An industry axis (deferred: company industry covers ~41% of postings, see the
   conversation that produced this change).
 - Seniority or work-mode axes (resolved for ~18% / ~22% of postings).

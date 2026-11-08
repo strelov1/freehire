@@ -17,12 +17,14 @@ catalogue uses"), so no re-mapping is needed between what `Recognize` returns an
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Turn any `name,slug,url` CSV (the ats-scrapers `ats-companies/*.csv` shape) into
   provider-partitioned seed files `cmd/harvest-boards` can consume unmodified.
 - Reuse `atsboard.Recognize` as the single source of truth for URL → (provider, board);
   add no parallel parsing logic for any ATS.
 
 **Non-Goals:**
+
 - Does not call `cmd/harvest-boards`, probe any platform, or touch the `boards` table —
   that remains a separate, explicit step run by an operator after reviewing this tool's
   output.

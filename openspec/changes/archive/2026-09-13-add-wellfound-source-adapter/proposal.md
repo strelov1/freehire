@@ -29,10 +29,12 @@ worth onboarding.
 ## Capabilities
 
 ### New Capabilities
+
 - `wellfound-source`: crawling Wellfound's role-scoped job search pages through the hosted
   Firecrawl tier and parsing the embedded Next.js/Apollo job payload into the catalogue.
 
 ### Modified Capabilities
+
 (none — `source-ingest` and `board-harvest`'s existing requirements already cover "a new
 provider is an adapter plus a registry line plus boards added via `cmd/add-board`"; adding
 one more conforming provider does not change what either capability requires.)

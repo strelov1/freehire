@@ -1,8 +1,11 @@
 # arbeitsagentur-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-arbeitsagentur-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Arbeitsagentur enumerates postings by professional field
 
 The system SHALL provide an `arbeitsagentur` source adapter that queries the Bundesagentur für
@@ -72,4 +75,3 @@ an empty description (and no remote flag) — and a single failed page SHALL NOT
 - **WHEN** a kept posting's detail page fetch fails or carries no description block
 - **THEN** the adapter still yields the `Job` (with an empty description and no remote flag) and
   continues the crawl
-

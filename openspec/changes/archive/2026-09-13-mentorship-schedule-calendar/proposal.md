@@ -25,10 +25,12 @@ order (Sessions, Bookings, Profile, Schedule) rather than first.
 ## Capabilities
 
 ### New Capabilities
+
 - `mentor-schedule-calendar`: lets a mentor see their own availability, bookings and
   synced-calendar busy time as a categorized month calendar, computed on read.
 
 ### Modified Capabilities
+
 (none — the tab reorder is presentational only and the new capability reuses the existing
 `mentor-availability` computation internally without changing its requirements, and reuses
 `mentor-busy-sync`'s stored intervals without changing what is synced or how)

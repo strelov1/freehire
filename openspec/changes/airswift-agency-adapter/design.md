@@ -18,11 +18,13 @@ Verified live (2026-10-08):
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Enumerate the sitemap, map each live posting's ld+json to a `Job`.
 - Drop expired postings outright (same category as a 404) rather than storing an
   `unreadableDetail` stub for ~55-60% of the catalogue every run.
 
 **Non-Goals:**
+
 - Any company resolution beyond the constant `"Airswift"` — confirmed not an
   aggregator.
 - Handling a genuinely missing/malformed `JobPosting` on a NON-expired page any
@@ -39,6 +41,7 @@ search (immune to whitespace/attribute-order changes) and costs nothing extra �
 tree is already built.
 
 **Detail function's decision order:**
+
 1. No id extractable from URL → drop (`false`), same as every sitemap-enumerating
    adapter.
 2. Fetch error → `detailUnreadable(err)` check, same as `bayt.go`/`energyjobline.go`

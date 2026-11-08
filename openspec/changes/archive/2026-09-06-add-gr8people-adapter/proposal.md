@@ -37,10 +37,12 @@ Not in scope: `werecruit.io`, the last platform in the issue's shortlist.
 ## Capabilities
 
 ### New Capabilities
+
 - `gr8people-source`: crawling one gr8people/workgr8 employer board (a tenant career-site host)
   through its own GraphQL search API, and recognizing both domains' public URLs as one provider.
 
 ### Modified Capabilities
+
 (none)
 
 ## Impact

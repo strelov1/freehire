@@ -5,11 +5,13 @@ See proposal.md — Why. Four independent CI jobs on PR #1737 after the rebase. 
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Green `web` typecheck, `design-system` adoption, `backend` integration (the two named tests), and extension `build` typecheck on this branch.
 - Keep the existing heal/reset *contracts* (tests stay; production code moves).
 - Leave changes local until the user asks to push.
 
 **Non-Goals:**
+
 - Broader oxlint cleanup, new coverage, or Talent Network behaviour.
 - Weakening or deleting the two failing integration tests.
 - A general TypeScript `noUncheckedIndexedAccess` policy change beyond the files CI named.

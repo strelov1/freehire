@@ -39,12 +39,14 @@ hot path so the job read stays cheap and cacheable.
 ## Capabilities
 
 ### New Capabilities
+
 - `view-count-aggregation`: Offline aggregation of nginx access logs into
   per-job view counts — log-signal selection, unique-daily-visitor dedup, bot
   handling, the daily rollup table, the processed-day cursor, batched counter
   updates, and one-shot backfill from historical logs.
 
 ### Modified Capabilities
+
 - `job-engagement-counts`: `view_count` is redefined to count distinct daily
   visitors across all traffic (anonymous + signed-in + API), sourced from the
   log-aggregation worker; `POST /jobs/:slug/view` no longer increments it.

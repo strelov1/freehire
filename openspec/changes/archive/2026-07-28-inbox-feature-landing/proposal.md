@@ -39,6 +39,7 @@ this change turns that narrative into a durable page on the site.
 ## Capabilities
 
 ### New Capabilities
+
 - `inbox-feature-landing`: the public `/features/inbox` page — its sections,
   the claims it is allowed to make about classification and stage advance, its
   SEO payload, and the links that lead to it.

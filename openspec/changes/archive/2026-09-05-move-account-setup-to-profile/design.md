@@ -9,11 +9,13 @@ See proposal.md - Why/What Changes for motivation. Current state:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Move the checklist to `/my/profile`, rendered only once a profile exists.
 - Make the `role`/`skills`/`location` steps land on their own tab instead of the default one.
 - Make that work both as a fresh navigation to `/my/profile?tab=<id>` and as an in-page link click while already on `/my/profile` (a same-route navigation that only changes the query string).
 
 **Non-Goals:**
+
 - Two-way sync of `view` back into the URL on manual tab clicks (e.g. via `replaceState`) — out of scope; the existing tabs already work without it, and this change only needs the URL → tab direction.
 - Any change to which fields count as "done" (`accountSteps`'s predicates) — untouched.
 - A generic/typed coupling between `accountCompleteness.ts` and the profile page's `ViewId` — see Decisions.

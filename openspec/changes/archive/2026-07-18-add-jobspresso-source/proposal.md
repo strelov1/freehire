@@ -26,6 +26,7 @@ at the cost of a single adapter that reuses the existing RSS + aggregator machin
 ## Capabilities
 
 ### New Capabilities
+
 - `jobspresso-source`: the `jobspresso` adapter — its RSS fetch, `<item>` → `Job` mapping,
   `dc:creator` company/location split, `guid` `p=` id extraction with slug fallback, drop rules
   for unusable items, and boardless-aggregator remote-only classification.

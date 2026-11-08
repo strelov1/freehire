@@ -104,17 +104,17 @@
       **Deployed 2026-08-19.** Three things went differently from the plan and are worth the
       next person's attention:
       - `release.sh` applies every pending migration in one step, so 0114 and 0115 landed
-        together. Harmless in the end — the derivation only fires on a write naming a marker
-        column, so it clears nothing retroactively — but the plan's "backfill between them"
-        was not achievable through the normal deploy path. What actually protects the
-        catalogue is the marker timers being stopped, not the migration order.
+      together. Harmless in the end — the derivation only fires on a write naming a marker
+      column, so it clears nothing retroactively — but the plan's "backfill between them"
+      was not achievable through the normal deploy path. What actually protects the
+      catalogue is the marker timers being stopped, not the migration order.
       - **The deploy caused a 7-minute outage, and the cause was the worker pause switch.**
-        `freehire:pause:all` was set to reduce lock contention; `cmd/migrate` is a worker, so
-        it exited 0 with "paused, skipping this run", `release.sh` read that as success and
-        flipped the colour. New code, old schema, `SQLSTATE 42703` on every job read. The
-        migration block guards against "migration failed", not "migration politely declined".
+      `freehire:pause:all` was set to reduce lock contention; `cmd/migrate` is a worker, so
+      it exited 0 with "paused, skipping this run", `release.sh` read that as success and
+      flipped the colour. New code, old schema, `SQLSTATE 42703` on every job read. The
+      migration block guards against "migration failed", not "migration politely declined".
       - `ALTER TABLE` needed ten retries to win `ACCESS EXCLUSIVE` on `jobs` even off-peak;
-        the 5s `lock_timeout` is deliberate and the answer is repetition, not a longer wait.
+      the 5s `lock_timeout` is deliberate and the answer is repetition, not a longer wait.
       Backfill: 2,032,470 rows, ~55 min at `BACKFILL_MARKER_CHUNK=1000000` (the 50k default
       projected five hours — the chunk spans an id RANGE and the sequence runs far ahead of
       the row count).

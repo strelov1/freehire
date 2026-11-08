@@ -92,7 +92,6 @@ draughting is not a business role at a software employer. Both are scoped to thi
 category: widening either to "any resolved category" would change the catalogue filter
 for `marketing`/`sales`/`support`, which is outside this change.
 
-
 ### 2. Bare `design engineer` → `engineering_design`, product hybrids by explicit marker
 
 The bare title is genuinely ambiguous in the industry, but not in our data: the

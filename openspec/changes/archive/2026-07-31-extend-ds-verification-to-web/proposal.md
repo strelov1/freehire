@@ -42,6 +42,7 @@ in for. This change makes those measurable; it does not perform them.
 ## Capabilities
 
 ### New Capabilities
+
 - `design-system-verification`: the mechanical guarantees that keep the design system
   honest — what each one asserts, which files it reads, and how a guarantee that cannot yet
   be satisfied everywhere is expressed as a ratchet rather than a hard rule.

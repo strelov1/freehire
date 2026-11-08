@@ -23,6 +23,7 @@ real cross-route rate-limit leak.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One `Throttler` implementation and one Fiber middleware wrapper used by every
   rate-limited route in the API.
 - Preserve every route's existing limit/window/observable behavior (429 + `Retry-After`)
@@ -31,6 +32,7 @@ real cross-route rate-limit leak.
 - Fix the route-prefix key-collision bug as part of the migration, not as a follow-up.
 
 **Non-Goals:**
+
 - Feature/beta flags and response/LLM-answer caching on Redis — both were discussed as
   future uses of the same Redis instance but are explicitly out of scope for this change.
 - Horizontal scaling of the app server — not a current requirement; Redis here is valued

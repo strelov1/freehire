@@ -18,6 +18,7 @@ code, comment, or measurement suggesting the sequential listing walk shares that
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Bring `bayt` to the same `fullBoardListing` bar the six batch-fixed adapters already meet:
   fail `Fetch` loudly instead of silently truncating when completeness cannot be structurally
   proven, using the raw-count fix already established for the batch.
@@ -29,6 +30,7 @@ code, comment, or measurement suggesting the sequential listing walk shares that
   sequential listing walk, and confirm the fix does not conflate the two.
 
 **Non-Goals:**
+
 - Raising `baytMaxPages`. No live measurement shows any real country's listing reaching it.
 - Widening `baytDetailWorkers` or otherwise touching the concurrency pacing that already exists
   for the documented throttling risk — this change only changes what happens when a request

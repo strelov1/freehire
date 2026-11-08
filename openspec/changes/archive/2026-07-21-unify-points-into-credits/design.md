@@ -13,6 +13,7 @@ this work. We remove the legacy counter, restate the contribution UI in credits,
 balance widget onto one page, and add a history read path.
 
 Ledger `ref` semantics (all numeric strings; `grant` has NULL ref):
+
 - `debit` + `feature=match` → job id (`match_analysis.go` `debitMatch`)
 - `debit` + `feature=tailor` → tailored-CV id (`cv_tailor.go`)
 - `reward` → contribution id
@@ -20,6 +21,7 @@ Ledger `ref` semantics (all numeric strings; `grant` has NULL ref):
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Remove `users.points` and every read/write/display of it; contribution reward is solely AI credits.
 - New `/my/credits` page: current balance + human-labelled transaction history.
 - New `GET /api/v1/me/credits/history` endpoint over `credit_ledger`, newest first.
@@ -27,6 +29,7 @@ Ledger `ref` semantics (all numeric strings; `grant` has NULL ref):
 - Add a "Credits" account-nav item.
 
 **Non-Goals:**
+
 - No change to credits economics, `credit_ledger`/`credit_balances` schema, or `Reward`/`Debit`.
 - No cursor/infinite-scroll pagination — a bounded recent-N list is sufficient for MVP.
 - No revocation of rewards for later-rejected contributions (unchanged existing behaviour).

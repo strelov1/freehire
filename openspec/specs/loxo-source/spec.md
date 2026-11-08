@@ -1,8 +1,11 @@
 # loxo-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-loxo-adapter. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Loxo careers-board crawl
 
 The system SHALL provide a `loxo` source adapter that crawls one Loxo agency's
@@ -86,4 +89,3 @@ never aborts the whole board crawl.
 - **WHEN** one posting's detail page fails to fetch or parse
 - **THEN** that posting is dropped and the rest of the board's postings are still
   returned
-

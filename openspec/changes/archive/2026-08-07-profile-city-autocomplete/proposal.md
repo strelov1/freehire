@@ -35,10 +35,12 @@ for interactive lookup — this proposal adds that lookup and wires the two prof
 ## Capabilities
 
 ### New Capabilities
+
 - `city-search`: population-ranked prefix search over the existing GeoNames city dictionary,
   exposed as an HTTP endpoint and used to back autocomplete UI for city entry.
 
 ### Modified Capabilities
+
 _None._ `search-profiles`' `location_preferences` save/read contract (city as validated,
 trimmed free text) is unchanged — only the editor's input mechanism changes, not what is
 accepted or stored.

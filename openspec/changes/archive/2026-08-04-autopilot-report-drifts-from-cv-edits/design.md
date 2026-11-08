@@ -13,6 +13,7 @@ that requirement `open`.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let one `cv_edit` call keep the report in step with the edit it just made, without a second
   tool call the model has to remember.
 - Keep `tailor_report`'s existing whole-report semantics for the unattended-run path, where it
@@ -20,6 +21,7 @@ that requirement `open`.
   a second way to touch one entry, it does not replace the first.
 
 **Non-Goals:**
+
 - Making `autopilot_report` a value computed live from the document and the evidence bank
   instead of a value the model asserts. Considered and rejected: the report is phrased in
   requirement-language ("closed_bank", "closed_candidate", a one-line note), not derivable from

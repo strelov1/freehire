@@ -18,11 +18,13 @@ if err != nil {
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A filter-classified Meilisearch rejection degrades to a widened, successful result with an honest `meta.ignored_params` report, the same convention every unrecognized param already gets.
 - No new failure mode, no new latency in the common (successful) path — the retry only ever happens after the primary call has already failed.
 - Reuse `search.ErrBadQuery`/`SortAndCap`/`UnknownParams` as they exist; no parallel classification or reporting mechanism.
 
 **Non-Goals:**
+
 - The sort-attribute hazard (`AGENTS.md`'s "Adding a sortable attribute"). Left as a separate, still-open, differently-shaped gap — see proposal.md.
 - Parsing Meilisearch's error message to name the one offending param. Reports every active filter param instead.
 - Changing `search.Client.Search`'s own signature or `queryErr`'s classification. The retry is a caller-side concern (a second ordinary call), not a new capability on the client.

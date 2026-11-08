@@ -21,6 +21,7 @@ also makes live vacancies look permanently removed.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `source-ingest`: the `sber` inline-body scenario is refined to require the apply URL be
   built from the numeric `internalId`, not the `requisitionId`.
 

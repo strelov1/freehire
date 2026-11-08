@@ -17,6 +17,7 @@ accepts events; a "generation" observation carries `model`, `input`, `output`,
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Capture every model call (prompt, response, tokens, latency, error level) from
   a single seam, covering `enrich` and `tg-extract` at once.
 - Zero behavioural change when unconfigured; zero impact on the caller's result
@@ -24,6 +25,7 @@ accepts events; a "generation" observation carries `model`, `input`, `output`,
 - No heavy dependencies — standard library `net/http` only.
 
 **Non-Goals:**
+
 - OpenTelemetry / vendor-neutral export (rejected below; can be revisited).
 - Nested trace trees, sessions, scores, prompt-management, or datasets — a flat
   generation per call is enough for the four target questions.

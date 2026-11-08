@@ -13,19 +13,23 @@ silence, or one with mail awaiting confirmation has nothing to chase and SHALL N
 draft.
 
 #### Scenario: A silent application yields a draft
+
 - **WHEN** the candidate requests a follow-up draft for an application whose silence state is `silent`
 - **THEN** the response carries a subject and a body naming the role, the company, and the elapsed time
 
 #### Scenario: The same application drafts identically twice
+
 - **WHEN** a draft is requested twice with no change to the application
 - **THEN** both responses are identical
 
 #### Scenario: An application that is not silent is refused
+
 - **WHEN** the candidate requests a draft for an application whose silence state is `active`,
   `unconfirmed`, or absent (a terminal stage, or a job merely viewed or saved)
 - **THEN** the request is refused and no draft is assembled
 
 #### Scenario: An exhausted allowance does not withhold the draft
+
 - **WHEN** a candidate who has spent every daily allowance requests a follow-up draft for a silent
   application
 - **THEN** the draft is assembled and returned, because it calls no model and consumes nothing

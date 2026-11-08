@@ -39,6 +39,7 @@ coherence feature that never earned its place on the page.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `resume-verdict`: replace the top-20 stack-match / must-have / LLM-coherence
   model with vacancy-coverage scoring, per-skill new-vacancy unlock, and an
   interactive role/filter selector; remove all LLM coherence and résumé-analysis

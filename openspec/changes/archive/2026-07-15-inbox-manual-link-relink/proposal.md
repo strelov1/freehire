@@ -26,6 +26,7 @@ exists — it is simply never called from the UI. This change surfaces it.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `email-inbox`: add manual application-linking and post-unlink undo to the inbox
   reading pane's link controls.
 

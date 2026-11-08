@@ -32,6 +32,7 @@ solver, no new dependency.
 ## Capabilities
 
 ### New Capabilities
+
 - `waf-challenge-pacing`: the sources HTTP transport recognizes an AWS-WAF
   challenge response and surfaces it as a typed error rather than content; an
   optional rate-limited HTML getter lets a source pace its requests under the

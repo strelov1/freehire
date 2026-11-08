@@ -16,6 +16,7 @@ active tab from `page.url.pathname`.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One source of truth for the account area's chrome (container, `noindex`,
   auth-gate) and its navigation.
 - Persistent in-section navigation across all `my/*` pages including Profile.
@@ -24,6 +25,7 @@ active tab from `page.url.pathname`.
 - Close the bare-`/my` 404.
 
 **Non-Goals:**
+
 - No collapsible/icon-only sidebar state or persisted collapse preference.
 - No change to the header dropdown account links (they stay as entry points).
 - No backend/API/DB changes; frontend only.

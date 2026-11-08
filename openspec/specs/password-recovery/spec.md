@@ -1,8 +1,11 @@
 # password-recovery Specification
 
 ## Purpose
+
 TBD - created by archiving change harden-account-security. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Forgotten-password code request
 
 The system SHALL let anyone request a password-reset code for an email address, and SHALL
@@ -102,4 +105,3 @@ and SHALL keep the caller signed in while revoking every other session.
 
 - **WHEN** the request authenticates with an API key instead of the session cookie
 - **THEN** the system responds `401` and changes nothing
-

@@ -24,6 +24,7 @@ needs new capability:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make `ats_boards.py`'s dedup check the thing that is actually true today (the `boards`
   table), for both scripts that share it (`harvest_boards.py`, `discover_boards.py`).
 - Make the GitHub aggregator sweep's survivors land somewhere `cmd/harvest-boards` can
@@ -32,6 +33,7 @@ needs new capability:
 - Onboard the 177 already-measured new boards from the three current-season repos.
 
 **Non-Goals:**
+
 - No new `cmd/harvest-boards` discovery source or prober — the seed-file path already
   covers this input shape, and adding a `discover()` implementation per provider would
   duplicate what `harvest_aggregators()` already does in Python for no behavioral gain.

@@ -20,6 +20,7 @@ moderation.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a submitter see, before submitting, a render of the vacancy close to how it will
   look once approved.
 - Let a submitter state employment type and seniority explicitly, on the same override
@@ -28,6 +29,7 @@ moderation.
   coverage, without duplicating that parsing logic.
 
 **Non-Goals:**
+
 - No pricing/paid tier on `/submit` — it stays free and moderator-reviewed, unchanged.
 - No change to `POST /jobs/resolve` or the credit-reward contribution flow — prefill is
   strictly read-only and shares only the parsing registry, not the import/reward path.

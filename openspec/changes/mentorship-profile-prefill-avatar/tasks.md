@@ -118,26 +118,26 @@
       experience bank (`POST /me/experience/employments`), with a matching `acme`
       company row inserted for the exact-match check.
       - Visited `/my/mentorship/profile` with no existing profile: the create form
-        came back seeded with name "Jane Doe", headline, bio, languages, topic
-        "backend", timezone "Europe/Berlin" and company slug "acme" — confirmed by
-        DOM inspection, screenshot, and `GET .../suggestions` called directly
-        (returned all seven fields). "Your URL" and "Meeting link" correctly stayed
-        blank (never suggested); filled both and submitted — profile created
-        `pending`, form switched to edit mode with the same values retained.
+      came back seeded with name "Jane Doe", headline, bio, languages, topic
+      "backend", timezone "Europe/Berlin" and company slug "acme" — confirmed by
+      DOM inspection, screenshot, and `GET .../suggestions` called directly
+      (returned all seven fields). "Your URL" and "Meeting link" correctly stayed
+      blank (never suggested); filled both and submitted — profile created
+      `pending`, form switched to edit mode with the same values retained.
       - Approved the profile (`status='approved'`) directly in Postgres (no
-        moderator UI in this change's scope), checked `show_photo` in the edit form
-        and saved, then visited the public `/mentors` directory and
-        `/mentors/jane-doe-test`: both rendered the circular avatar
-        (`GET /api/v1/mentors/jane-doe-test/photo` → 200), zero console errors.
+      moderator UI in this change's scope), checked `show_photo` in the edit form
+      and saved, then visited the public `/mentors` directory and
+      `/mentors/jane-doe-test`: both rendered the circular avatar
+      (`GET /api/v1/mentors/jane-doe-test/photo` → 200), zero console errors.
       - Unchecked `show_photo` and saved: the avatar disappeared from the public
-        profile page with zero `<img src*="/photo">` elements and zero console
-        errors — no broken-image icon.
+      profile page with zero `<img src*="/photo">` elements and zero console
+      errors — no broken-image icon.
       - Found and fixed a real bug in this pass (see task 4.1's note): the
-        suggestions aggregator originally used `Structured`+`CandidateOwned`, which
-        never merges identity fields, so `name` would have stayed unsuggested for a
-        candidate who set it only via the contacts overlay. Fixed before this
-        check's first successful run.
+      suggestions aggregator originally used `Structured`+`CandidateOwned`, which
+      never merges identity fields, so `name` would have stayed unsuggested for a
+      candidate who set it only via the contacts overlay. Fixed before this
+      check's first successful run.
       - Two infrastructure hiccups along the way, neither a code defect: OrbStack's
-        Docker daemon crashed mid-setup (waited for the user to restart it, then
-        recreated the compose containers against the same volumes); and the Vite
-        dev server's proxy briefly 502'd after that restart until relaunched fresh.
+      Docker daemon crashed mid-setup (waited for the user to restart it, then
+      recreated the compose containers against the same volumes); and the Vite
+      dev server's proxy briefly 502'd after that restart until relaunched fresh.

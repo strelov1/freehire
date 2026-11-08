@@ -13,9 +13,11 @@ Public saved-search sharing (`/b/:slug` "boards") lets a user publish a live, un
 ## Capabilities
 
 ### New Capabilities
+
 - `saved-job-lists`: signed-in users create named lists of specific jobs (distinct from the single-flag "save"), manage list membership, and optionally publish a list read-only via a public slug.
 
 ### Modified Capabilities
+
 - `saved-searches`: remove the "Share a saved search as a public board", "Unshare a public board", "Public read of a shared board by slug", and "Public board page in the web app" requirements; update "List saved searches" to drop the `public_slug`/`author_label` fields from the response; update "Saved searches section in the account area" to drop the share/unshare/copy-link actions from that page.
 
 ## Impact

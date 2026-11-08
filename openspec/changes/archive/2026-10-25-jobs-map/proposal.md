@@ -15,6 +15,7 @@ The job list says how many postings match but not where they are. A visitor sear
 ## Capabilities
 
 ### New Capabilities
+
 - `jobs-map`: the `/jobs` map dialog — what it draws for the current filters, how clicks change the filters, the worldwide toggle, and its layout guarantees.
 
 ### Modified Capabilities

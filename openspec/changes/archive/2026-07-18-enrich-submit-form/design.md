@@ -25,6 +25,7 @@ Three facts shape this design:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let a submitter (and a moderator) supply `skills`, `regions`, `cities`, `work_mode`,
   and salary on the submit/create surfaces.
 - Make `skills`/`regions`/`cities`/`work_mode` **hard facets** on the minted job:
@@ -36,6 +37,7 @@ Three facts shape this design:
 - Polish the page within the existing design system (tokens, `$lib/ui`, pill/chip style).
 
 **Non-Goals:**
+
 - No "locked/user-authoritative field" concept in the enrichment subsystem.
 - No reuse of the stateful filter facet components (`FacetStore`, `LocationPane`,
   `ChipFacet`) — they are built for multi-select faceted filtering, not single-value entry.
@@ -45,6 +47,7 @@ Three facts shape this design:
 ## Decisions
 
 ### D1. Extend the structured-facets seam to region & city (explicit wins)
+
 Add `Regions []string` and `Cities []string` to `jobderive.Input`, and apply the same
 precedence already used for `WorkMode`: when the caller supplies them, they win over
 `geo.Regions`/`geo.Cities`; when empty, geo derivation fills them. Add the matching
@@ -54,12 +57,14 @@ established pattern, not a new mechanism. *Alternative rejected:* a separate ove
 outside `jobderive` — needlessly duplicates the precedence logic.
 
 ### D2. Thread explicit facets through the create/submit contract
+
 Add `Skills`, `Regions`, `Cities`, `WorkMode` (and the salary fields, see D3) to
 `createJobRequest` and `moderation.CreateInput`. `moderation.Create`/`Update` pass them
 into `derive(...)`. The moderator create path gains the same capability for free (shared
 contract), which is desirable and consistent.
 
 ### D3. Recruiter salary is an authoritative manual override on the job, overlaid onto the enrichment payload every consumer reads
+
 The recruiter's salary must **hold** — a recruiter may want to state it themselves and have it
 survive. Every salary consumer in the app (search facets/sort in `internal/search`, filter
 mapping in `query_filter.go`, insights rollups, the jobview wire shape) reads a single
@@ -86,6 +91,7 @@ to prefer — broad consumer churn for no gain over the single-projection overla
 "locked fields" concept across enrichment — out of scope.
 
 ### D4. Reuse the tracker's markdown editor; convert to HTML on submit
+
 The description field mounts the existing `NoteEditor` (EasyMDE). Its value is markdown; on
 submit, convert to HTML with the already-bundled `marked`, then send it as `description`.
 `moderation.Create` already runs `SanitizeHTML`, so the server remains the sanitization
@@ -95,6 +101,7 @@ step bridges the editor's output to the catalogue's HTML description contract.
 every other source, which is HTML.
 
 ### D5. Form inputs reuse filter vocabularies, not filter components
+
 New single-value inputs (region select, city input, work-mode segmented control, skills
 chip input, salary min/max + currency/period) are built on `$lib/ui` primitives and reuse
 the shared vocabularies/labels (`REGION_LABELS`, `COUNTRY_REGION_MAP`, the work-mode vocab,

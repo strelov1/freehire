@@ -13,6 +13,7 @@ Out of scope (deliberate, later slices): catalog/index exclusion of non-tech, ga
 ## Capabilities
 
 ### New Capabilities
+
 - `tech-classification`: deterministic non-tech title detection, the tri-state `is_tech` derivation and persistence, and its exposure as a filterable search facet.
 
 ### Modified Capabilities

@@ -13,9 +13,11 @@ aijobs.net is a large AI/ML job aggregator (~47k listings, updated continuously)
 ## Capabilities
 
 ### New Capabilities
+
 - `aijobs-source`: crawls aijobs.net's job listing (CSRF-protected paginated HTML) and per-job detail pages into normalized `Job` records — provider registration, pagination/backlog bound, and field-mapping rules (company-from-slug, description-from-structured-sections, skills, dropped salary, relative-time `PostedAt`).
 
 ### Modified Capabilities
+
 (none — no existing capability's requirements change; the new form-POST HTTP helper is an internal implementation detail of `aijobs-source`, not a separate spec-level capability)
 
 ## Impact

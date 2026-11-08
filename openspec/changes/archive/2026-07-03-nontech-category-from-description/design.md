@@ -17,6 +17,7 @@ category detector over the description, reusing the exact pattern already proven
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Recover a `category` for confidently **non-technical** roles from the description so
   they hit the existing gate and stop consuming LLM budget.
 - Zero false positives that would mislabel a technical job as non-tech.
@@ -24,6 +25,7 @@ category detector over the description, reusing the exact pattern already proven
   `cmd/backfill-derive` are covered by one change.
 
 **Non-Goals:**
+
 - Detecting **technical** categories from the description (a title-empty tech job is
   already enriched as empty — classifying it tech saves no LLM cost). Out of scope.
 - Russian-language phrase support (the existing `SeniorityFromDescription` is EN-only;

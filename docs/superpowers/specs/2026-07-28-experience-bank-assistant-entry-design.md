@@ -33,7 +33,7 @@ behaviour.
 `/my/assistant` and `/my/assistant/[id]` are two separate `+page.svelte` files, each
 mounting its own `<AssistantChat>`. Arriving with `?preset=profile` runs:
 
-```
+```text
 boot() → createAndOpen() → openSession() → onSessionChange(id)
        → goto('/my/assistant/<id>', {replaceState:true})   [async]
        → phase = 'ready' → dispatch(kickoff)               [SSE turn starts]

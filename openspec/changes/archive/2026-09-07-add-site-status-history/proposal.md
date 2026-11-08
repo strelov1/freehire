@@ -26,9 +26,11 @@ during a genuinely rare outage has no way to tell it's unusual.
 ## Capabilities
 
 ### New Capabilities
+
 (none — this is additive to an existing capability, not a new one)
 
 ### Modified Capabilities
+
 - `site-health-status`: adds the daily sampling requirement and the `site.history`
   field to the existing site-status derivation and reporting.
 - `ingest-status-page`: the `GET /api/v1/status` response shape and the `/status`

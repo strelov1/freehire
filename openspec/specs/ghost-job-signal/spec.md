@@ -1,8 +1,11 @@
 # ghost-job-signal Specification
 
 ## Purpose
+
 TBD - created by archiving change ghost-job-signal. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: A job carries a ghost signal derived from four criteria in two strength tiers
 
 The system SHALL derive, for every open job, a `ghost` signal consisting of a level, the set of
@@ -432,4 +435,3 @@ spread across two modules into one.
   contributor gates
 - **THEN** each combination yields the level the classifier defines, and no set of structural-only
   criteria yields the higher level
-

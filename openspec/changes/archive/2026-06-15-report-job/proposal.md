@@ -35,6 +35,7 @@ close it, reusing the moderation queue pattern we already built for submissions.
 ## Capabilities
 
 ### New Capabilities
+
 - `job-report`: the user-facing report queue — the `job_reports` staging table, the
   authenticated `POST /jobs/:slug/reports` endpoint, the controlled `reason` and
   `pending`/`resolved`/`dismissed` status vocabularies, the one-open-report-per-(user,job)
@@ -57,7 +58,7 @@ close it, reusing the moderation queue pattern we already built for submissions.
 - **New package** `internal/report` (Service + Repository), mirroring `internal/submission`.
   Resolve-with-close delegates to the existing job-lifecycle close path.
 - **Handler** `internal/handler`: new `reports.go` (file / list-pending / resolve / dismiss)
-  + routes wired in `Register`. Report filing is `RequireAuthOrKey`; the queue and
+  - routes wired in `Register`. Report filing is `RequireAuthOrKey`; the queue and
   decisions are `RequireRole("moderator")`.
 - **Web** `web/`: a report button + two-step modal in `JobView.svelte`, a reports API
   client, and a reports section in the `/moderation` route (gated on `user.role`).

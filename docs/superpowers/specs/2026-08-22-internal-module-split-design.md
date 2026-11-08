@@ -75,7 +75,7 @@ during implementation — see edit 2, and `ingest/catalogstats` likewise.
 With the four prerequisite edits applied, the block graph is acyclic and settles into
 eight layers. A block may import only blocks strictly below it.
 
-```
+```text
 8. api
 7. engage      ingest
 6. application search
@@ -189,7 +189,7 @@ the same PR.
 After the move, `ingest` depends on `platform`, `dict`, `job` — plus exactly four edges
 into higher blocks:
 
-```
+```text
 linkimport => enrich        linkimport => search
 telegram   => llm           telegram   => llmschema
 ```
@@ -234,7 +234,7 @@ release script (ops-side, not in this repo).
 
 The compiler is the primary check — the move either builds or it doesn't.
 
-```
+```text
 gofmt -l .                          # must print nothing
 go build ./...
 go vet ./...

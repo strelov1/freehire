@@ -17,22 +17,27 @@ score); the Content Quality category SHALL fall back to a deterministic proxy
 (action-verb and quantified-result detection) when no LLM review is present.
 
 #### Scenario: A scanned/image CV fails Format Compliance
+
 - **WHEN** the extracted CV text is near-empty (a scanned or image-only PDF)
 - **THEN** the machine-readable line item under Format Compliance is `fail` and `overall` is low
 
 #### Scenario: A clean text CV scores its deterministic categories
+
 - **WHEN** a CV has contact info, Experience/Skills sections, dates, bullets, and a normal length
 - **THEN** the Format, Section, and Length categories award their points and `overall` is high
 
 #### Scenario: Overall is the sum of categories
+
 - **WHEN** the categories score 34, 18, 13, 11, and 9
 - **THEN** `overall` = 85
 
 #### Scenario: Potential adds back recoverable points
+
 - **WHEN** `overall` is 72 and the warn/fail items carry 16 recoverable points
 - **THEN** `potential` = 88
 
 #### Scenario: Deterministic
+
 - **WHEN** the same CV text and role are scored twice with no LLM review
 - **THEN** the categories, line items, `overall`, and `potential` are identical
 
@@ -47,14 +52,17 @@ share of the role's top skills. The role SHALL come from the request's facet
 params (the verdict page's filter).
 
 #### Scenario: Strong and recommended keywords split by presence in the CV text
+
 - **WHEN** a role's top skills are {go, kubernetes, kafka} and the CV text contains "go" and "kafka" but not "kubernetes"
 - **THEN** `strong_keywords` includes "go" and "kafka" and `recommended_keywords` includes "kubernetes"
 
 #### Scenario: Keyword Strength scales with matched share
+
 - **WHEN** the CV matches 2 of the role's 3 top skills
 - **THEN** the Keyword Strength category scores about two-thirds of its 40-point max
 
 #### Scenario: Role comes from the request filter
+
 - **WHEN** the caller requests the report with `?category=data`
 - **THEN** keyword-match uses the data role's top skills, independent of the profile's stored specializations
 
@@ -72,21 +80,26 @@ replaced or deleted. The raw CV text SHALL NOT be persisted — only the derived
 review.
 
 #### Scenario: No LLM configured degrades cleanly
+
 - **WHEN** the server has no LLM configured and a report is requested
 - **THEN** the response is 200, Content Quality uses its deterministic proxy, and `suggestions` is empty
 
 #### Scenario: LLM review sets Content Quality and suggestions
+
 - **WHEN** the LLM review returns a content-quality score and improvement items
 - **THEN** the Content Quality category reflects that score and `suggestions` carries the numbered items
 
 #### Scenario: LLM review is cached and reused
+
 - **WHEN** the LLM review has run for a user's stored CV and the report is opened again (any profile/role)
 - **THEN** the cached review is served without re-calling the LLM
 
 #### Scenario: Replacing the CV invalidates the cached review
+
 - **WHEN** the user uploads a new CV
 - **THEN** the previously cached review is cleared and not shown for the new CV
 
 #### Scenario: Only the derived review is stored
+
 - **WHEN** a CV is reviewed
 - **THEN** the stored analysis contains the content-quality and suggestions but no CV text

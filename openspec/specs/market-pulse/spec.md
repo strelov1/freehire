@@ -1,8 +1,11 @@
 # market-pulse Specification
 
 ## Purpose
+
 TBD - created by archiving change market-coverage-into-pulse. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Tabbed market page with Coverage and Skill trend
 
 The `/my/market-pulse` page SHALL present two tabs, **Coverage** and **Skill
@@ -12,15 +15,18 @@ authenticated session; a signed-out visitor SHALL see a sign-in prompt instead
 of either tab's content.
 
 #### Scenario: Default tab on load
+
 - **WHEN** a signed-in user navigates to `/my/market-pulse`
 - **THEN** the Coverage tab is active and its content is shown
 
 #### Scenario: Switching tabs
+
 - **WHEN** the user selects the Skill trend tab
 - **THEN** the Coverage tab's content and filter controls are hidden and the
   Skill trend content is shown
 
 #### Scenario: Signed-out visitor
+
 - **WHEN** a signed-out visitor opens `/my/market-pulse`
 - **THEN** neither tab's content is fetched or rendered; a sign-in prompt is
   shown instead
@@ -35,12 +41,14 @@ carrying the coverage percent, the ranked gap skills, and each gap's unlock
 count.
 
 #### Scenario: Default role from the profile
+
 - **WHEN** a signed-in user with a profile opens the Coverage tab with no
   filter override
 - **THEN** the verdict is computed for the union of the profile's saved
   specializations
 
 #### Scenario: Refining the comparison role
+
 - **WHEN** the user changes the role, region, or seniority filter
 - **THEN** the verdict recomputes for the new selection without altering the
   stored profile
@@ -52,6 +60,7 @@ compute a verdict. It SHALL show an empty state explaining that a profile is
 required, with a call-to-action linking to `/my/profile`.
 
 #### Scenario: No profile yet
+
 - **WHEN** a signed-in user with no saved profile opens the Coverage tab
 - **THEN** no verdict request is made; an empty state with a link to
   `/my/profile` is shown instead
@@ -63,6 +72,7 @@ only while the Coverage tab is active. They SHALL NOT appear while the Skill
 trend tab is active.
 
 #### Scenario: Filters hidden on Skill trend
+
 - **WHEN** the user is on the Skill trend tab
 - **THEN** no filter summary, edge-tab, or modal is rendered
 
@@ -76,22 +86,25 @@ profile skill has any retained history, the tab SHALL show an empty state
 with a call-to-action linking to `/my/profile`.
 
 #### Scenario: Cards for skills with history
+
 - **WHEN** a signed-in user's profile skills have retained weekly snapshots
 - **THEN** the Skill trend tab shows one card per such skill with its open
   count, percent change, and sparkline
 
 #### Scenario: Filtering by name
+
 - **WHEN** the user types into the skill search input
 - **THEN** only cards whose skill name matches the query (case-insensitive
   substring) remain visible
 
 #### Scenario: No trend data yet
+
 - **WHEN** none of the profile's skills have a retained weekly snapshot
 - **THEN** an empty state is shown with a call-to-action linking to
   `/my/profile`
 
 #### Scenario: Drilling into one skill
+
 - **WHEN** the user opens a skill's card
 - **THEN** they navigate to `/my/market-pulse/[skill]`, that skill's full
   retained history detail view
-

@@ -47,12 +47,14 @@ and they belong with the trades wave.
 ## Capabilities
 
 ### New Capabilities
+
 - `industrial-engineering-taxonomy`: which titles resolve to
   `industrial_engineering`, why it is non-technical yet undeletable, the
   Russian `инженер` family and the qualified forms that leave it, and the named
   roles the crafts expose.
 
 ### Modified Capabilities
+
 - `catalog-pruning`: the business-category rule currently spares exactly one
   non-technical category by name. It must spare the set of non-technical
   categories that name a craft, so a second one cannot be added without the

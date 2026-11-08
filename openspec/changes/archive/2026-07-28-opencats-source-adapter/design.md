@@ -16,6 +16,7 @@ sorted by SURT (domain first), so a global search by URL path returns nothing.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl self-hosted OpenCATS portals as an ordinary provider, inheriting `board_health`,
   cooldown, the unseen-job sweep, and incremental search indexing without special-casing.
 - Make discovery repeatable, so installs that appear later are found by re-running the tool
@@ -24,6 +25,7 @@ sorted by SURT (domain first), so a global search by URL path returns nothing.
   to garbage jobs.
 
 **Non-Goals:**
+
 - Application submission — the adapter is read-only, as all adapters are.
 - FreeATS — zero public installs found; the seam is recorded, no code is written.
 - Self-closing support — withdrawn postings close via the 48-hour sweep.

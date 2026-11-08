@@ -19,6 +19,7 @@ to preserve repeated keys (Fiber's own accessors collapse them). That parsed
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Accept a compact comma-separated form (`skills=go,react,aws`) for every
   list-valued facet param (every entry in `StringFacets`, both the include
   param and its `_exclude` counterpart).
@@ -29,6 +30,7 @@ to preserve repeated keys (Fiber's own accessors collapse them). That parsed
   track or remove later.
 
 **Non-Goals:**
+
 - Company filters (`stagedCompanyFilters.ts` / `companyFilters.ts`) — a
   separate codec with its own param set; out of scope for this change.
 - Changing `../freehire-cli` — it already works unchanged against a
@@ -117,6 +119,7 @@ were captured in.
 ## Open Questions
 
 None — resolved during brainstorming with the user:
+
 - Backward compatibility: support both formats indefinitely (not a
   time-boxed deprecation).
 - Scope: all `StringFacets`, not just `skills`.

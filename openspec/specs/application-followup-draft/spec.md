@@ -1,6 +1,7 @@
 # application-followup-draft Specification
 
 ## Purpose
+
 Turn the silence signal into an action: assemble a follow-up message for an application that has
 gone quiet, and record that the candidate chased — without disturbing what silence measures. The
 assembler is deterministic and I/O-free (`internal/application/followup`); the system never transmits the
@@ -21,14 +22,17 @@ silence, or one with mail awaiting confirmation has nothing to chase and SHALL N
 draft.
 
 #### Scenario: A silent application yields a draft
+
 - **WHEN** the candidate requests a follow-up draft for an application whose silence state is `silent`
 - **THEN** the response carries a subject and a body naming the role, the company, and the elapsed time
 
 #### Scenario: The same application drafts identically twice
+
 - **WHEN** a draft is requested twice with no change to the application
 - **THEN** both responses are identical
 
 #### Scenario: An application that is not silent is refused
+
 - **WHEN** the candidate requests a draft for an application whose silence state is `active`,
   `unconfirmed`, or absent (a terminal stage, or a job merely viewed or saved)
 - **THEN** the request is refused and no draft is assembled
@@ -41,10 +45,12 @@ system MUST NOT compose a new claim about the candidate: if no cached analysis e
 no strength, the draft SHALL omit the line rather than invent one.
 
 #### Scenario: A cached analysis supplies the line
+
 - **WHEN** a fit analysis is cached for the application's vacancy and names at least one strength
 - **THEN** the draft states that strength
 
 #### Scenario: No analysis means no claim
+
 - **WHEN** no fit analysis is cached, or the cached one names no strengths
 - **THEN** the draft is still assembled and simply carries no strength line
 
@@ -56,10 +62,12 @@ application nobody ever answered — the draft SHALL be issued with no recipient
 or guessed.
 
 #### Scenario: A replied-then-quiet application prefills its recipient
+
 - **WHEN** the application has linked mail carrying a sender address
 - **THEN** the draft's recipient is that address
 
 #### Scenario: An unanswered application drafts without a recipient
+
 - **WHEN** the application has no linked mail
 - **THEN** the draft is still returned, with no recipient set
 
@@ -69,6 +77,7 @@ The system SHALL NOT transmit the follow-up. The draft is handed to the candidat
 own mail client, and no endpoint in this capability delivers mail to a third party.
 
 #### Scenario: Requesting a draft sends nothing
+
 - **WHEN** a draft is requested
 - **THEN** no message is transmitted to any address
 
@@ -80,14 +89,17 @@ been quiet, and the candidate chasing is not a reply. An application that was si
 has since been chased SHALL still report its silence, alongside the fact that it was chased.
 
 #### Scenario: Chasing does not reset the silence
+
 - **WHEN** the candidate records a follow-up on an application silent for 24 days
 - **THEN** the application still reports silence, and its days-silent keeps counting from the last
   inbound activity
 
 #### Scenario: A reply does reset it
+
 - **WHEN** mail linked to the application arrives after the recorded follow-up
 - **THEN** the last activity moves to that mail, as it would have without any follow-up
 
 #### Scenario: The record is owner-scoped
+
 - **WHEN** a caller records a follow-up on an application belonging to a different account
 - **THEN** the request is refused as not found, and nothing is written

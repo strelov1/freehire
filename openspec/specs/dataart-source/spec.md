@@ -1,8 +1,11 @@
 # dataart-source Specification
 
 ## Purpose
+
 TBD - created by archiving change dataart-source. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: DataArt careers crawl
 
 The system SHALL provide a `dataart` source adapter that crawls DataArt's careers
@@ -39,4 +42,3 @@ fetches each vacancy page, and maps its schema.org `JobPosting` ld+json to a `Jo
 - **WHEN** a vacancy page fetch fails or the page carries no `JobPosting` ld+json
 - **THEN** that vacancy is skipped and the rest of the crawl still returns their
   Jobs
-

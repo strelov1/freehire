@@ -31,6 +31,7 @@ as `sort` values; only the no-sort default shifts.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `job-search`: the no-sort, empty-query default ordering changes to
   `posted_at` descending; the DB-list ordering is no longer required to match
   the search default.

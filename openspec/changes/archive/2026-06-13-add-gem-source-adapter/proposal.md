@@ -28,6 +28,7 @@ one-line-per-board ergonomics as every other platform.
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `gem` is a registered provider — a GraphQL
   list→detail adapter yielding the normalized job shape with a sanitized-HTML description,
   consistent with the existing detail-fetching adapters.

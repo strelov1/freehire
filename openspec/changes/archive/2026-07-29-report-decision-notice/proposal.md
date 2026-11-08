@@ -25,6 +25,7 @@ cheapest data-quality signal the product has, and silence trains people to stop 
 <!-- None. The notice is part of the existing report review flow, not a separate capability. -->
 
 ### Modified Capabilities
+
 - `job-report`: resolve and dismiss gain a moderator note, an opt-out, and a mailed notice to
   the reporter; the decision response reports whether that notice was delivered.
 

@@ -35,6 +35,7 @@ listing code, so they ship together.
 <!-- none: this extends the existing community-threads capability -->
 
 ### Modified Capabilities
+
 - `community-threads`: gains a cross-subject listing of open threads that
   resolves each thread's subject to its display name, and a corrected
   end-of-pagination signal on the existing listings.

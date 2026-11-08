@@ -30,9 +30,11 @@ adapter contract; only the field is unused), is worth capturing.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 (none — `source-ingest`'s "an adapter MAY implement CompanyDescriber" requirement
 already covers a second adapter implementing it; no requirement text changes)
 

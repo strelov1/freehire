@@ -15,7 +15,7 @@ Use the section for your agent.
 
 ### Claude Code
 
-```
+```text
 claude mcp add --transport http freehire https://freehire.me/api/v1/mcp
 ```
 
@@ -23,7 +23,7 @@ For personal tools, run `claude mcp login freehire` or tell the user to open `/m
 
 ### Codex
 
-```
+```text
 codex mcp add freehire --url https://freehire.me/api/v1/mcp
 ```
 
@@ -31,7 +31,7 @@ Codex may open a browser sign-in right after this command, because the server of
 
 ### Gemini CLI
 
-```
+```text
 gemini mcp add --transport http freehire https://freehire.me/api/v1/mcp
 ```
 
@@ -47,7 +47,7 @@ Add under `"mcpServers"`:
 
 Register a remote MCP server named `freehire` at `https://freehire.me/api/v1/mcp` in the host's default config. OAuth starts on the first personal tool call.
 
-Chat apps with no terminal (Claude.ai, ChatGPT) cannot be set up from here: send the user to https://freehire.me/mcp, which has a one-click install for each.
+Chat apps with no terminal (Claude.ai, ChatGPT) cannot be set up from here: send the user to <https://freehire.me/mcp>, which has a one-click install for each.
 
 ---
 
@@ -55,13 +55,13 @@ Chat apps with no terminal (Claude.ai, ChatGPT) cannot be set up from here: send
 
 Do this only if you run in a terminal on the user's machine (Claude Code, Codex, Gemini CLI, and similar). The CLI lets you work with the CV and notes stored locally.
 
-```
+```text
 curl -fsSL https://freehire.me/install.sh | sh
 ```
 
 In Claude Code, also install the plugin with the skills (job search, market fit, CV tailoring, application tracking, inbox triage):
 
-```
+```text
 claude plugin marketplace add strelov1/freehire-cli
 claude plugin install freehire@freehire-cli
 ```
@@ -80,4 +80,4 @@ An MCP server added during this session is usually not loaded until a new one st
 
 Otherwise, run one public job search through the freehire MCP tools (for example, remote senior Go jobs in Europe) and show the user a few results. Then tell the user setup is done, and which steps, if any, still need them: signing in, a new session, or reloading plugins.
 
-More: https://freehire.me/agents · https://freehire.me/llms.txt
+More: <https://freehire.me/agents> · <https://freehire.me/llms.txt>

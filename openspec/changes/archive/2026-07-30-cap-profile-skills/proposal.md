@@ -39,7 +39,7 @@ against a long CV.
 
 ### New Capabilities
 
-_None._
+*None.*
 
 ### Modified Capabilities
 

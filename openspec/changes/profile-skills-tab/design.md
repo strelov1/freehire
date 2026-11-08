@@ -21,6 +21,7 @@ create a profile (`skills` must be non-empty on `PUT /me/profile`).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Give Skills / Skills to avoid their own top-level tab, edited with immediate
   per-toggle autosave (no shared Save button).
 - Keep first-time profile creation working unchanged (Role + Skills entered
@@ -29,6 +30,7 @@ create a profile (`skills` must be non-empty on `PUT /me/profile`).
   Settings-tab skills field to merge into.
 
 **Non-Goals:**
+
 - No change to the `PUT /api/v1/me/profile` contract or `user_profiles` schema.
 - No change to Role/specializations, location preferences, headshot, or CV
   storage/readiness behavior.
@@ -63,6 +65,7 @@ and not N sequential single-skill calls.**
 `withSkills` over the extracted skills and saves them alongside the caller's
 already-locally-merged specializations, queued through the same `#queue` as the
 other mutators. Two candidates were rejected:
+
 - Looping the single-skill `addSkill`: one full-row `PUT` per extracted skill
   (5-15 typically), all serialized, for no benefit over one bulk write.
 - A skills-only bulk mutator (the first version of this decision, `addSkills`,

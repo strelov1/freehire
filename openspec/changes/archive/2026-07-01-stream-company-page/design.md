@@ -26,6 +26,7 @@ that is not needed for SEO.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Client navigation into a company page renders the header immediately; the job
   list fills in behind a skeleton.
 - Any client-side navigation gives instant feedback via a global progress bar.
@@ -34,6 +35,7 @@ that is not needed for SEO.
   informed.
 
 **Non-Goals:**
+
 - Backend/API optimization, caching, or reindex — profiling only; any fix is a
   separate follow-up change.
 - Changing the job-search view, filters, or the companies list page.

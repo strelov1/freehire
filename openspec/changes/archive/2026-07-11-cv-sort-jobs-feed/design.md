@@ -18,6 +18,7 @@ single value `'posted_at'`, and `filtersFromParams` never reads `sort` back.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Surface CV ranking as a sort mode ("Newest" / "Recommended") on the standalone feed.
 - Reuse the existing recommendations endpoint unchanged; zero backend work.
 - Keep facet filters working in CV mode; round-trip the sort in URL + localStorage.
@@ -25,6 +26,7 @@ single value `'posted_at'`, and `filtersFromParams` never reads `sort` back.
 - Remove the now-redundant `/my/recommendations` page and its nav entry.
 
 **Non-Goals:**
+
 - No backend, DB migration, or search-index change.
 - No combining free-text `q` with CV ranking (the endpoint ignores query text).
 - No CV sort on company-scoped embedded feeds.

@@ -35,6 +35,7 @@ incident that doesn't demonstrate the legal-suffix case.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Suppress an aggregator posting against its ATS twin even when the two sources' raw company
   names slugify to different strings that agree once word-break hyphens are removed
   (`"cfoinsights"` vs `"cfo-insights"`).
@@ -42,6 +43,7 @@ incident that doesn't demonstrate the legal-suffix case.
 - No new column, no backfill.
 
 **Non-Goals:**
+
 - Legal-suffix normalization (`normalize.CompanyKey`'s other fold). Out of scope by explicit
   user decision — reopen only if a real incident demonstrates it.
 - Any change to `company_slug`'s stored value, its role as a URL path segment, or

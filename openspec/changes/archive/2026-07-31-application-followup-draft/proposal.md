@@ -47,10 +47,12 @@ Not in this change, deliberately:
 ## Capabilities
 
 ### New Capabilities
+
 - `application-followup-draft`: assembling a follow-up message for a silent application, prefilling
   the recipient when one is known, and recording that the candidate chased.
 
 ### Modified Capabilities
+
 - `application-silence-signal`: a recorded follow-up is now part of what the board reports about a
   silent application, and — the requirement worth pinning — it does NOT reset the silence clock.
 

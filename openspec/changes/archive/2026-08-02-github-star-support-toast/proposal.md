@@ -28,6 +28,7 @@ read as nagging. The asks have to queue.
 ## Capabilities
 
 ### New Capabilities
+
 - `open-source-support-toast`: when the site may ask a visitor to star the repository,
   how that ask queues behind the Product Hunt strip and the consent banner, and when it
   stops being shown.

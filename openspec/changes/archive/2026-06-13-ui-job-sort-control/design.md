@@ -15,12 +15,14 @@ those dateless jobs down.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let the user pick the sort field in the UI, so the order is explicit and
   predictable.
 - Default the browse to freshest-by-posting-date.
 - Keep the choice in the URL, consistent with every other filter.
 
 **Non-Goals:**
+
 - No implicit/derived ordering (rejected `COALESCE(posted_at, created_at)`).
 - No new sortable fields, no Meilisearch reindex, no DB migration.
 - Salary sort, ascending toggles — not in this change.

@@ -11,6 +11,7 @@ particular slice of `/my/profile` goes first.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Every literal, reader-facing string these seven components own renders in
   the resolved locale.
 - Follow the existing catalog conventions exactly (one `*.messages.ts` per
@@ -19,6 +20,7 @@ particular slice of `/my/profile` goes first.
   `ContributeView.messages.ts`).
 
 **Non-Goals:**
+
 - Translating `/my/profile`'s four remaining tab views
   (`ExperienceBankView`, `ProfileForm`, `ScreeningAnswersForm`,
   `EducationCard`) — separate, larger changes.

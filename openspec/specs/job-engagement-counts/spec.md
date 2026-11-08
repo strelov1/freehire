@@ -1,8 +1,11 @@
 # job-engagement-counts Specification
 
 ## Purpose
+
 TBD - created by archiving change job-view-apply-counts. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Job carries materialized engagement counters
 
 Each job SHALL carry two non-negative integer counters, `view_count` and
@@ -105,4 +108,3 @@ projections — SHALL render no count, the same way they already render no salar
 - **WHEN** a card is rendered from a listing projection that carries no
   `view_count` field
 - **THEN** no view count is rendered and the card is otherwise unchanged
-

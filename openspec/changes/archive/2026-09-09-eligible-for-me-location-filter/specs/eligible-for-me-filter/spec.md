@@ -53,6 +53,7 @@ location never resolved out of the "not eligible" bucket the filter narrows to.
 
 The filter SHALL resolve the visitor's geography in this order, using the first
 source that yields a value:
+
 1. The signed-in candidate's profile `location_preferences.base.country`, when set
    (country-level).
 2. The macro-region derived from the visitor's edge country header, via the

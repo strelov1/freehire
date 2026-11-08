@@ -46,6 +46,7 @@ platforms, because it counts fields rather than reading a `required` flag that m
 different things in different places.
 
 **Files:**
+
 - Create: `docs/superpowers/plans/measurements/01-fields-per-form.md`
 
 - [ ] **Step 1: Confirm the corpus is what the spec says it is**
@@ -100,6 +101,7 @@ git commit -m "measure: how many questions each ATS puts on an application form"
 ### Task 2: The required-field measurement (four platforms, and the exclusion)
 
 **Files:**
+
 - Create: `docs/superpowers/plans/measurements/02-required-fields.md`
 
 - [ ] **Step 1: Prove the exclusion before relying on it**
@@ -171,6 +173,7 @@ The section no competitor can reproduce, and the one with the subtlest trap: lab
 stored verbatim, so counting them raw splits one question across many spellings.
 
 **Files:**
+
 - Create: `docs/superpowers/plans/measurements/03-question-labels.md`
 
 - [ ] **Step 1: Look at the raw labels before deciding how to count them**
@@ -191,6 +194,7 @@ before looking is how the section becomes decoration.
 - [ ] **Step 2: Choose and record the grouping method**
 
 Pick exactly one, and write down why in the measurement file:
+
 - exact labels (honest, fragmented, probably useless as a table);
 - a stated normalisation (case, punctuation, whitespace — say precisely what);
 - hand-grouped families, listing every raw label folded into each family.
@@ -223,6 +227,7 @@ git commit -m "measure: what an application form asks beyond name, email and CV"
 ### Task 4: Write the article
 
 **Files:**
+
 - Create: `web/src/posts/2026-09-09-what-application-forms-actually-ask.svx`
 
 - [ ] **Step 1: Read three existing articles first**

@@ -3,7 +3,6 @@
 - [x] 1.1 Measure the bucket-size distribution — DONE 2026-07-30: 210 319 buckets, median 2, p99 27, largest 16 745, 165.4M naive pairs. Eleven buckets >1000 rows carry 92% of the cost, so a size cap (~200) replaces MinHash/LSH: 0.05% of buckets skipped, 97% of work removed, ~5.2M comparisons left. See design D6.
 - [x] 1.2 Threshold validated on prod buckets (900 buckets, 3182 rows): T=0.85 merges 1360, T=0.90 merges 1293, T=0.95 merges 1156 — the curve is flat across the band the spike predicted, so 0.90 is not a knife edge. Sampled merges are real: same role in two cities whose descriptions differ by the city name alone (4 characters in 3767), which a hash can never see as "almost equal".
 - [x] 1.3 Real collapse potential measured by dry run rather than by the misleading stripped-title count. On a deliberately candidate-heavy sample (buckets of 2-30 only) 1418 of 3182 rows merge at T=0.90; catalogue-wide the share is far lower, since the median bucket after the exact passes holds 2 rows and most singletons never enter.
-
 - [x] 1.4 Measure the empty-`company_slug` hazard — DONE 2026-07-30: 154 900 rows (5.7%) carry none, 105 212 of them land in 20 126 cross-employer same-title buckets (up to 4 companies in one). Such rows are excluded from the pass; the bucket is only a guard when the slug is real. See design D7.
 
 ## 2. Similarity + query layer

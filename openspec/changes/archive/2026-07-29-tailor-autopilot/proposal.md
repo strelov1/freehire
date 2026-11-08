@@ -34,10 +34,12 @@ ones only the candidate can answer, and their answers are banked for every futur
 ## Capabilities
 
 ### New Capabilities
+
 - `tailor-autopilot`: an unattended tailoring run over the vacancy's requirements — its entry point,
   its per-requirement report, the snapshot it takes, and the revert that undoes it.
 
 ### Modified Capabilities
+
 - `tailor-workspace`: the bootstrap presents two explicit actions instead of auto-starting the agent,
   and the Editor is read-only for the duration of a run.
 - `assistant-agent-runtime`: the maximum tool-call rounds of a turn is chosen per turn by the server

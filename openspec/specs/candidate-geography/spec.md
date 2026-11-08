@@ -1,6 +1,7 @@
 # candidate-geography Specification
 
 ## Purpose
+
 Deriving, storing, and backfilling where a CANDIDATE is located, from the free-text
 location line of their CV. Covers the rule that separates a person's whereabouts from a
 job's reach, the storage that keeps "not known" distinct from "stated but unresolvable",
@@ -8,6 +9,7 @@ the reconciler that lets a dictionary change reach existing candidates, and the 
 between what the candidate asserted and what was derived for them.
 
 ## Requirements
+
 ### Requirement: Candidate geography is derived through a candidate-specific entry point
 
 The system SHALL derive a candidate's geography from the free-text location line of

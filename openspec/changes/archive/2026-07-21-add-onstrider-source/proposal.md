@@ -32,6 +32,7 @@ cost of a single adapter that reuses the existing sitemap + ld+json machinery.
 ## Capabilities
 
 ### New Capabilities
+
 - `onstrider-source`: the `onstrider` adapter — its sitemap enumeration, canonical-URL filter,
   per-vacancy `JobPosting` ld+json mapping, open/closed-via-markup drop rule, boardless
   single-company classification, and proxied-egress enrollment.

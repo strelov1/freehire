@@ -19,7 +19,7 @@ and **visible progress** while the filling happens.
 The Match tab grows an application-form panel: the form's questions as a checklist, a
 required-fields counter, and an autofill pass that walks the page field by field in view.
 
-```
+```text
 Application form                       6/7 · 86%
 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░
 
@@ -57,7 +57,7 @@ Nothing new crosses the network. The panel already reads the page's form and wri
 back through the same relay; this feature is the panel using them per-field instead of
 once, plus a checklist rendered from what it reads.
 
-```
+```text
 sidepanel/App.svelte
   └─ ApplyPlan.svelte          the checklist + counter (new)
         ↑ questions              ↓ fill one / reveal one

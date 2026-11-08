@@ -43,6 +43,7 @@ production case, not a one-off.
 ## Capabilities
 
 ### New Capabilities
+
 - `atsapply-unscannable-form-detection`: recognizing, before a submission is attempted, that
   a job posting's application form cannot be safely scanned or filled by this package's
   existing Greenhouse driver (an unrecognized DOM shape such as a white-label custom domain,
@@ -50,6 +51,7 @@ production case, not a one-off.
   reason, rather than a plain error that looks like a transient, retryable failure.
 
 ### Modified Capabilities
+
 (none in `openspec/specs/` — `auto-apply-submit` was proposed by `auto-apply-worker`, which is
 not archived yet, so there is no main spec to delta against; the same situation
 `auto-apply-llm-drafting` documented. This change's behavior change to `Client.Submit`'s error

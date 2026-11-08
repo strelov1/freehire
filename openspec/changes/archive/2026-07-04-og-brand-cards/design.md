@@ -11,11 +11,13 @@ inside `card.ts`.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Every page gets a branded link preview by default.
 - Company pages get a logo-forward, on-brand preview.
 - Job/company/brand cards share one brand vocabulary and cannot drift.
 
 **Non-Goals:**
+
 - No dynamic homepage OG endpoint — the brand card is a committed static PNG
   (zero runtime cost; figures baked in, bumped on demand).
 - No emoji flags — satori ships no emoji font here; HQ is text via `countryLabel`.

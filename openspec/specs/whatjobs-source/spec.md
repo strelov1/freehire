@@ -1,6 +1,7 @@
 # whatjobs-source Specification
 
 ## Purpose
+
 The WhatJobs FeedAPI adapter: freehire publishes for this CPC network, and its feed is read as
 a keyword-sliced aggregator. The vendor issues one publisher account per country, so the system
 runs one adapter instance per configured market (the US account under the bare provider key
@@ -11,7 +12,9 @@ pagination and its depth ceiling, posting identity derived from the tracked clic
 and the normalization that discards the feed's placeholder fields. Everything below applies
 per-market; scenarios use the `whatjobs` (US) market as the concrete example, but the same rules
 govern every other registered market.
+
 ## Requirements
+
 ### Requirement: The WhatJobs feed is crawled as a keyword-sliced aggregator, one instance per market
 
 The system SHALL crawl the WhatJobs FeedAPI as a multi-company aggregator whose board is a
@@ -306,4 +309,3 @@ issued sequentially succeed.
 
 - **WHEN** several whatjobs boards crawl concurrently in one run
 - **THEN** the number of simultaneous feed requests never exceeds the configured cap
-

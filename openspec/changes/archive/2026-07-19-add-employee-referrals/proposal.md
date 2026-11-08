@@ -35,6 +35,7 @@ pings to the seeker, credit/paywall gating, replying from inside Telegram/email.
 ## Capabilities
 
 ### New Capabilities
+
 - `employee-referrals`: the referral offer + request lifecycle — becoming a
   moderated referrer for a company, the seeker's request flow (CV choice,
   contact, note), referrer notification across channels, cabinet management on

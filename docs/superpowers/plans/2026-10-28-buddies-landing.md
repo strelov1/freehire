@@ -5,6 +5,7 @@
 **Goal:** Add a public landing page at `/features/interview-buddies` that explains the free, anonymous interview-buddies network and sends visitors to `/my/buddies`. Add a link to it in the footer.
 
 **Architecture:**
+
 - The page mirrors the shipped `/features/tailor` landing.
 - The demo copy lives in `buddiesDemo.ts`. The looping hero animation `BuddiesHeroDemo.svelte` reads it, and the server render shows the finished state.
 - `buddiesFaq.ts` feeds both the visible FAQ and the FAQPage JSON-LD.
@@ -36,10 +37,12 @@ Worktree: `/Users/i_strelov/Projects/hire-wt-buddies-landing`, branch `buddies-l
 ### Task 1: Demo data and the hero demo
 
 **Files:**
+
 - Create: `web/src/lib/buddiesDemo.ts`, `web/src/lib/buddiesDemo.test.ts`
 - Create: `web/src/lib/components/BuddiesHeroDemo.svelte`, `web/src/lib/components/BuddiesHeroDemo.spec.ts`
 
 **Interfaces:**
+
 - Produces:
   - `DEMO_FEED: { handle: string; role: string; type: 'applied' | 'interview' | 'offer'; company: string; day: string }[]`
   - `DEMO_INVITE: { to: string; body: string }`
@@ -168,6 +171,7 @@ describe('BuddiesHeroDemo', () => {
 - [ ] **Step 7: Implement the component**
 
 The rules:
+
 - `step` counts the shown entries and runs from 1 to `FEED_LEN`.
 - At `step === LAST`, where `LAST = FEED_LEN + 1`, the invitation shows as well.
 - Entries list in chronological order. Each new one appears below the last, the way a chat appends. Every slot is always rendered and toggled by opacity, so the card height never changes.
@@ -281,6 +285,7 @@ The `invite()` helper in the spec takes the closest `div` of the body text, whic
 ### Task 2: The FAQ
 
 **Files:**
+
 - Create: `web/src/lib/buddiesFaq.ts`
 - Create: `web/src/lib/buddiesFaq.test.ts`, a copy of `web/src/lib/tailorFaq.test.ts` with `TAILOR_FAQ` changed to `BUDDIES_FAQ`, the import path changed to `./buddiesFaq`, and the describe name changed.
 
@@ -345,6 +350,7 @@ export const BUDDIES_FAQ: FaqItem[] = [
 ### Task 3: The landing view, the route and the footer link
 
 **Files:**
+
 - Create: `web/src/lib/components/BuddiesLandingView.svelte`, `web/src/lib/components/BuddiesLandingView.spec.ts`
 - Create: `web/src/routes/features/interview-buddies/+page.svelte`
 - Modify: `web/src/lib/components/Footer.svelte`. Add one link to the Features group, after Referrals.
@@ -385,6 +391,7 @@ Run `pnpm vitest run src/lib/components/BuddiesLandingView.spec.ts` and expect F
 - [ ] **Step 2: Implement the view**
 
 Mirror the structure and classes of `web/src/lib/components/TailorLandingView.svelte`. Read it first: `dot-grid` hero, `SectionLabel`, the fact strip, `NumberedGrid`, the two-column `grid gap-px … bg-border` panels, the FAQ `dl` with `sm:odd:last:col-span-2`, the closing CTA box. Use `Button` from `#lib/ui/index.js` with `href={resolve('/my/buddies')} variant="primary" size="lg"` and the label **Join interview buddies**. Take the copy verbatim from the spec's "Page structure":
+
 - **Hero.** SectionLabel `interview buddies · free`. h1 "Find people interviewing where you are." The subhead from the spec. The Join button, then a plain `<a href="#how-it-works">` reading "See how it works ↓". Microcopy "Free · Anonymous · Leave any time". On the right, `<BuddiesHeroDemo />`.
 - **Fact strip.** "Free for everyone", "Anonymous handle", "No recruiters, no crawlers", "You choose what shows".
 - **How it works.** `id="how-it-works" class="scroll-mt-20 …"`, SectionLabel `how it works`, and a `NumberedGrid` with these steps:
@@ -402,7 +409,6 @@ Mirror the structure and classes of `web/src/lib/components/TailorLandingView.sv
   - **Leave**: "Hides you and closes your chats until you come back — with the same handle."
 - **FAQ.** SectionLabel `faq`, h2 "Questions people ask before joining." The `dl` comes from `BUDDIES_FAQ`.
 - **Closing.** h2 "Stop interviewing alone.", the paragraph "Free, anonymous, and you can leave any time.", and the Join button.
-
 - [ ] **Step 3: The route**
 
 ```svelte
@@ -456,9 +462,11 @@ Then check whether any sitemap or static list of feature pages also needs the ne
 ### Task 4: Browser pass (controller)
 
 - [ ] Start the dev server against prod:
+
   ```bash
   VITE_API_URL=https://freehire.me API_INTERNAL_URL=https://freehire.me pnpm exec vite dev --port 5192
   ```
+
 - [ ] Screenshot `/features/interview-buddies` at 1440 and 390 widths with the Playwright script in `/tmp/tailor-shots/shot.mjs`. Point it at the new URL first.
 - [ ] Check four things:
   - The demo loops, and the card keeps its height while it does.

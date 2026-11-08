@@ -25,6 +25,7 @@ thinking, and each section as it resolves), and keep only a short summary in the
 ## Capabilities
 
 ### Modified Capabilities
+
 - `job-fit-analysis`: gains a live-streaming SSE compute path and a dedicated detailed page; the
   sidebar block is reduced to a summary. The scored-verdict contract and cache are unchanged.
 

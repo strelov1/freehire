@@ -37,6 +37,7 @@ so the postings are reachable with simple GET requests, no browser or bot-wall.
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `teamtailor` is a registered provider — a
   listing-HTML-enumerated, JSON-LD detail adapter yielding the normalized job shape with a
   sanitized-HTML description, consistent with the existing detail-fetching adapters.

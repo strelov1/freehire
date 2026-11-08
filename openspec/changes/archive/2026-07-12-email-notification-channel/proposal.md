@@ -34,11 +34,13 @@ enable job alerts without Telegram — reaching users the current channel misses
 ## Capabilities
 
 ### New Capabilities
+
 - `email-notify`: render a subscription digest to an email and send it via AWS
   SES to the subscriber's account email; the email-channel sibling of
   `telegram-notify`.
 
 ### Modified Capabilities
+
 - `filter-subscriptions`: the subscription channel allowlist accepts `email`;
   the delivery engine routes each digest to a per-channel notifier and resolves
   the account email as the destination for email subscriptions.

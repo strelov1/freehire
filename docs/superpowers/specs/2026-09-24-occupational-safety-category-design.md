@@ -272,7 +272,6 @@ category is what makes it usable here.
   `process safety management`. The measured cost is nil: the acronym and the phrase each
   appear in 2% of postings, so the phrase alone loses almost nothing, and the structural
   change would touch every existing entry for one term.
-
 - **Reject `ASP` and `DOT` outright.** Associate Safety Professional collides with
   ASP.NET; Department of Transportation collides with the English word. Neither survives
   a corpus check — the 17% this probe reported for `ASP` is the prefix of "aspects" and

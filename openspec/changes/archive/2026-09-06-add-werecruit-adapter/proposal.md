@@ -33,11 +33,13 @@ Not in scope: none — this is the last platform in issue #2080's shortlist.
 ## Capabilities
 
 ### New Capabilities
+
 - `werecruit-source`: crawling one werecruit employer board (a locale-scoped tenant career site)
   through its embedded listing data, hydrating each posting's description, and recognizing the
   platform's public URL shape for board onboarding.
 
 ### Modified Capabilities
+
 (none)
 
 ## Impact

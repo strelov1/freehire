@@ -48,10 +48,12 @@ monetization.
 ## Capabilities
 
 ### New Capabilities
+
 - `talent-network-profile`: candidate opt-in visibility setting and the
   public, unauthenticated profile page that renders according to it.
 
 ### Modified Capabilities
+
 (none — purely additive; no existing capability's requirements change)
 
 ## Impact

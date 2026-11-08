@@ -25,6 +25,7 @@ anti-bot wall. Adding it widens coverage of the CEE market at the cost of a sing
 ## Capabilities
 
 ### New Capabilities
+
 - `djinni-source`: the `djinni` adapter — its listing crawl, JSON-LD `JobPosting` mapping,
   pagination and end-of-feed stop, aggregator/boardless classification, and the drop rules
   for unusable postings.

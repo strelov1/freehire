@@ -29,6 +29,7 @@ component — and a natural next slice after `i18n-profile-small-cards`
 ## Capabilities
 
 ### New Capabilities
+
 - `account-interface-i18n`: extends the same not-yet-synced capability
   `i18n-profile-small-cards` and the earlier `i18n-my-account`/
   `i18n-my-account-fanout` changes declared (see those proposals for why
@@ -36,6 +37,7 @@ component — and a natural next slice after `i18n-profile-small-cards`
   `openspec/specs/` for it).
 
 ### Modified Capabilities
+
 (none)
 
 ## Impact

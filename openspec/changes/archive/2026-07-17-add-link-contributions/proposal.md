@@ -30,6 +30,7 @@ long tail are a follow-up.
 ## Capabilities
 
 ### New Capabilities
+
 - `link-contributions`: authenticated users contribute a company board by pasting a supported
   ATS link (via the website or a linked Telegram chat); the system derives and dedups the board
   without a network fetch, records novel boards, and maintains a per-user points balance.

@@ -22,9 +22,11 @@ this is a genuine adapter gap, not a vanity domain.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `selfrecruit` is a registered board-based
   provider — an HTML listing + DOM-extracted-detail adapter over `<board>.selfrecruit.ge`,
   yielding the normalized job shape with a UUID-derived `external_id`.

@@ -30,6 +30,7 @@ or bot-wall. Adding a `successfactors` adapter brings this large segment into th
 <!-- None. Reuses the source-ingest pipeline and write path unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `successfactors` is a registered provider — a
   sitemap-enumerated, HTML-microdata detail adapter yielding the normalized job shape with a
   sanitized-HTML description, consistent with the existing detail-fetching adapters.

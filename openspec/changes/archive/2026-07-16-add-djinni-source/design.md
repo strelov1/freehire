@@ -16,12 +16,14 @@ link-source adapters) therefore has nothing to bite on and is not applicable her
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `djinni` adapter that maps the listing JSON-LD to normalized `Job`s and pages to the end.
 - ATS-dedup that reuses the existing reindex suppression by classifying `djinni` as an
   aggregator — no new dedup code, no adapter DB access.
 - Keep the adapter a pure HTTP reader, unit-testable against a saved HTML fixture.
 
 **Non-Goals:**
+
 - No new cross-source dedup mechanism, DB-backed port, or company registry.
 - No per-posting detail hydration (the listing already carries the description).
 - No sharding by specialization (single board is acceptable at ~16 min/full crawl); the

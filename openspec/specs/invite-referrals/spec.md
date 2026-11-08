@@ -1,11 +1,13 @@
 # invite-referrals Specification
 
 ## Purpose
+
 A per-account invite link, the attribution of a signup to it, the invitee's first-month
 discount, and the reward the referrer earns once that invitee has paid us at least what
 the reward is worth.
 
 ## Requirements
+
 ### Requirement: Every account has one invite code, minted on demand
 
 An account SHALL have at most one invite code. The code SHALL be generated from a

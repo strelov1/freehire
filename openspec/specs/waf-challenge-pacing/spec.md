@@ -1,8 +1,11 @@
 # waf-challenge-pacing Specification
 
 ## Purpose
+
 TBD - created by archiving change clinch-detail-via-paced-challenge-layer. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: WAF challenge responses are surfaced as a typed error
 
 The sources HTTP transport SHALL treat an AWS-WAF *Challenge* response as a
@@ -46,4 +49,3 @@ pattern.
 
 - **WHEN** the context is cancelled while a request waits on the limiter
 - **THEN** the getter returns the context error and does not perform the inner fetch
-

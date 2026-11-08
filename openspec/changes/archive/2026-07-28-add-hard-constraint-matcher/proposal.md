@@ -16,9 +16,11 @@ Our fit signal is split between a deterministic skill-coverage bar (`internal/jo
 ## Capabilities
 
 ### New Capabilities
+
 - `hard-constraint-matching`: the deterministic evaluator, `Blocker` model, six requirement categories, severity/score-cap tiers, credential vocabulary, degree ladder, and the "never a false blocker" precision rules.
 
 ### Modified Capabilities
+
 - `deterministic-facets`: `internal/jobfacts` gains `RequiredCertifications(description)` (credential-vocabulary scan) and `DegreeOptional(description)` ("or equivalent" detector) — deterministic, computed at read, no stored field.
 - `resume-structured-profile`: adds the `certifications` field to the structured résumé shape.
 - `job-profile-match`: the profile-match bar additionally surfaces hard-constraint blockers alongside skill coverage.

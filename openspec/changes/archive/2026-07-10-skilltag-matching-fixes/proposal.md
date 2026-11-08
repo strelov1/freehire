@@ -7,6 +7,7 @@ derives a user's skills **solely** from their résumé text — so every miss is
 lost skill in coverage and the ATS score, with no manual entry to compensate.
 
 Two concrete gaps, both from the matcher mechanics (not missing vocabulary):
+
 - **Hyphen/underscore joins don't match.** `distributed-systems` misses the
   `distributed systems` phrase alias because `normalize()` only strips HTML and
   lowercases — the hyphen survives, and the word pass splits on it.
@@ -44,6 +45,7 @@ curated acronym list, not semantic similarity.
 ## Capabilities
 
 ### New Capabilities
+
 - `skill-tag-matching`: the resolution rules of the deterministic skill-tag
   matcher — separator-insensitive multi-word matching, case-preserving acronym
   matching, and the precision-first "curated only, never guess" invariant.

@@ -35,14 +35,15 @@ This plan is the step-by-step expansion of those tasks; if the two disagree, Ope
 ### Task 1: The two queries
 
 **Files:**
+
 - Modify: `internal/platform/db/queries/jobs.sql` (add two queries)
 - Generated (do not hand-edit): `internal/platform/db/jobs.sql.go`, `internal/platform/db/querier.go`
 - Test: `internal/platform/db/canonical_job_for_role_integration_test.go` (create)
 
 **Interfaces:**
+
 - Produces: `db.CanonicalJobForRole(ctx, CanonicalJobForRoleParams{CompanySlug, RoleFingerprint, Source, ExternalID string}) (db.CanonicalJobForRoleRow, error)` returning `{ID int64; PublicSlug string}`, `pgx.ErrNoRows` when there is no canon.
 - Produces: `db.MarkJobDuplicateOf(ctx, db.MarkJobDuplicateOfParams{ID, DuplicateOf int64}) (int64, error)` — rows affected.
-
 - [ ] **Step 1: Write the failing test**
 
 Create `internal/platform/db/canonical_job_for_role_integration_test.go`:
@@ -227,14 +228,15 @@ git commit -m "feat(db): ask for the canonical posting of a role cluster"
 ### Task 2: Mark the imported row
 
 **Files:**
+
 - Modify: `internal/ingest/linkimport/linkimport.go` (`Result` struct ~line 33; `write` ~line 170)
 - Test: `internal/ingest/linkimport/import_integration_test.go`
 
 **Interfaces:**
+
 - Consumes: `db.CanonicalJobForRole`, `db.MarkJobDuplicateOf` from Task 1.
 - Produces: `linkimport.Result` gains `Deduped bool`. On a hit, `Result.PublicSlug` is the
   CANONICAL row's slug, not the written row's.
-
 - [ ] **Step 1: Write the failing test**
 
 Append to `internal/ingest/linkimport/import_integration_test.go`:
@@ -438,14 +440,15 @@ git commit -m "feat(linkimport): a storefront import collapses onto the posting 
 ### Task 3: The intake answers found
 
 **Files:**
+
 - Modify: `internal/api/handler/intake.go` (`Resolve`)
 - Test: `internal/api/handler/resolve_job_integration_test.go`
 
 **Interfaces:**
+
 - Consumes: `linkimport.Result.Deduped` from Task 2.
 - Produces: no new wire status. `found` becomes reachable a second way — after the import,
   with the contribution recorded first.
-
 - [ ] **Step 1: Write the failing test**
 
 Add to `TestResolveJobEndpoint` in `internal/api/handler/resolve_job_integration_test.go`:
@@ -558,14 +561,12 @@ Run: `go test -tags=integration ./internal/api/handler/ -run TestResolveJobEndpo
 Expected: PASS, with every pre-existing subtest still green.
 
 - [ ] **Step 5: Update the docs that state the outcomes**
-
 - `internal/ingest/contribution/AGENTS.md`: the outcome list — note that `found` is reachable twice,
   once before any fetch (catalogue hit by URL) and once after an import that collapsed onto an
   existing posting.
 - `web/src/lib/docs/api-spec.ts`: the `/jobs/resolve` description — `found` also answers a link
   whose vacancy the catalogue already holds under another source.
 - Regenerate: `cd web && pnpm gen:api-docs` (writes `docs/API.md`).
-
 - [ ] **Step 6: Full verification**
 
 ```bash
@@ -574,6 +575,7 @@ go test ./...
 go test -tags=integration ./internal/api/handler/ ./internal/ingest/linkimport/ ./internal/platform/db/ ./internal/ingest/contribution/
 cd web && pnpm lint && pnpm build
 ```
+
 Expected: build/vet clean, `gofmt -l` silent, all tests pass, web lint 0 errors.
 
 - [ ] **Step 7: Commit and open the PR**

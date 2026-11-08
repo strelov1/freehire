@@ -14,11 +14,13 @@ right-0 top-20`) which is level with it.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Remove the Filters-vs-swipe overlap on mobile.
 - Remove the empty top offset above the standalone list's job count.
 - Keep filter access one tap away on both standalone and embedded views.
 
 **Non-Goals:**
+
 - No change to the drawer contents, the desktop aside, the swipe tab, or any
   data/reactive-state/API behaviour. Markup + Tailwind classes only.
 

@@ -54,6 +54,7 @@ concept of its own — the second date already exists and is already served as
 ## Impact
 
 **Go**
+
 - `internal/search/search/document.go` — `JobDocument.CreatedTS`
 - `internal/search/search/client.go` — `created_ts` in `FilterableAttributes`
 - `internal/search/search/query_filter.go` — the `open_within_days` bound
@@ -65,12 +66,14 @@ need no edit: all of them build documents through the single `search.FromJob`, w
 is where `posted_ts` is already derived and where `created_ts` joins it.
 
 **Web**
+
 - `facetModel.ts` (`openWithinDays`, serialize/parse/count), `filters.ts`,
   `stagedFilters.svelte.ts`, `features.ts` (`openWithinEnabled`)
 - `FilterModal.svelte`, `JobsView.svelte`, `ListToolbar.svelte`, `FilterSummary.svelte`,
   `filterSections.ts`
 
 **Contract**
+
 - `web/static/openapi.yaml` and `web/src/lib/docs/api-spec.ts`
 
 **Deploy** — ordering is load-bearing and documented in
@@ -79,6 +82,7 @@ asks for an attribute the live index has not declared turns every filtered searc
 a 500. Settings patch first, binary second, full rebuild third, flag last.
 
 **Not in scope**
+
 - `internal/search/searchintent` keeps mapping "posted this week" to
   `posted_within_days`. That phrase is literally about the posting date; teaching the
   LLM the second bound is its own change with its own prompt evaluation.

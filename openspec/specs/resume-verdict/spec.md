@@ -1,8 +1,11 @@
 # resume-verdict Specification
 
 ## Purpose
+
 TBD - created by syncing change resume-verdict. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Verdict endpoint authentication and ownership
 
 The profile sub-resource endpoints SHALL require an authenticated session
@@ -13,18 +16,22 @@ SHALL be addressed without a profile id in the path: the verdict as
 When the caller has no profile, these endpoints SHALL respond 404.
 
 #### Scenario: Owner reads their verdict
+
 - **WHEN** a signed-in user who has a profile requests `GET /me/profile/verdict`
 - **THEN** the response is 200 with the verdict for their profile
 
 #### Scenario: Owner reads their ATS report
+
 - **WHEN** a signed-in user who has a profile requests `GET /me/profile/ats-report`
 - **THEN** the response is 200 with the report for their profile
 
 #### Scenario: No profile yet
+
 - **WHEN** a signed-in user who has not saved a profile requests `GET /me/profile/verdict` or `GET /me/profile/ats-report`
 - **THEN** the response is 404
 
 #### Scenario: Unauthenticated request refused
+
 - **WHEN** a request without a valid session cookie hits `GET /me/profile/verdict` or `/me/profile/ats-report`
 - **THEN** the response is 401
 
@@ -39,14 +46,17 @@ count, a `total` count, and a `coverage_percent` = round(covered / total × 100)
 When the role has no open vacancies (`total` = 0), `coverage_percent` SHALL be 0.
 
 #### Scenario: Coverage reported as count and percent
+
 - **WHEN** a role has 1000 open vacancies and 630 of them list at least one of the profile's skills
 - **THEN** the verdict reports `total` = 1000, `covered` = 630, and `coverage_percent` = 63
 
 #### Scenario: Role with no open vacancies
+
 - **WHEN** the selected role has 0 open vacancies
 - **THEN** the verdict reports `total` = 0, `covered` = 0, and `coverage_percent` = 0
 
 #### Scenario: No market data available
+
 - **WHEN** the search/facet backend is not configured
 - **THEN** the verdict endpoint responds 503 and no verdict is produced
 
@@ -61,18 +71,22 @@ response SHALL carry at most the top 20. Skills the profile already has SHALL NO
 appear as gaps.
 
 #### Scenario: Gap carries the new vacancies it unlocks
+
 - **WHEN** 190 open vacancies in a 1000-vacancy role list "kubernetes" and none of those 190 list any skill the profile already has
 - **THEN** the gap row for "kubernetes" reports `new_vacancies` = 190 and `unlock_percent` = 19
 
 #### Scenario: A skill covered by existing skills is not double-counted
+
 - **WHEN** a vacancy lists both "kubernetes" (a gap) and "docker" (a skill the profile has)
 - **THEN** that vacancy is already counted as covered and does NOT contribute to "kubernetes"'s `new_vacancies`
 
 #### Scenario: Owned skills are not gaps
+
 - **WHEN** the profile already lists "go"
 - **THEN** "go" does not appear in the gap list regardless of its market demand
 
 #### Scenario: Gaps ranked biggest win first
+
 - **WHEN** the uncovered market has "kafka" unlocking 120 vacancies and "grpc" unlocking 64
 - **THEN** "kafka" is ranked before "grpc" in the gap list
 
@@ -86,14 +100,17 @@ own specializations. The profile's skills are always the measured set and SHALL
 never be taken from the filter parameters.
 
 #### Scenario: Filter overrides the profile's role
+
 - **WHEN** the caller requests a profile's verdict with `?category=data&seniority=senior`
 - **THEN** coverage is computed over senior data-category vacancies, and the stored profile is unchanged
 
 #### Scenario: Defaults to the profile's specializations
+
 - **WHEN** the caller requests a profile's verdict with no `category` parameter
 - **THEN** coverage is computed over the union of the profile's saved specializations
 
 #### Scenario: Profile skills are not a filter
+
 - **WHEN** the caller passes `?skills=rust` while the profile lists "go"
 - **THEN** coverage still measures the profile's "go" skill and "rust" is not treated as an owned skill
 
@@ -104,6 +121,7 @@ count and `coverage_percent` over the profile's own specializations — so the u
 sees the key number without opening the detailed verdict.
 
 #### Scenario: Coverage headline on the profile card
+
 - **WHEN** the profile list renders a profile whose skills cover 630 of 1000 role vacancies
 - **THEN** the card shows the coverage as 630 and 63%
 
@@ -118,14 +136,17 @@ absent) — it is surfaced as a close, reframe-able gap rather than a hard miss.
 classification SHALL be deterministic and require no LLM.
 
 #### Scenario: Adjacent when a close skill is held
+
 - **WHEN** the role wants "rest-apis", the CV lacks it but lists "fastapi", and the adjacency dictionary maps rest-apis → {fastapi}
 - **THEN** the skill's status is `adjacent`
 
 #### Scenario: Missing when no close skill is held
+
 - **WHEN** the role wants "rust", the CV holds no skill adjacent to rust
 - **THEN** the skill's status is `missing`
 
 #### Scenario: Adjacent does not inflate coverage
+
 - **WHEN** a must-have role skill is `adjacent` (not strong or hidden)
 - **THEN** it does not count toward `must_have_covered` or `stack_match_percent`
 
@@ -138,6 +159,7 @@ SHALL prompt learning it and evidencing it. `strong` SHALL carry no advice. Advi
 SHALL be deterministic templates.
 
 #### Scenario: Adjacent advice names the held skill
+
 - **WHEN** "rest-apis" is `adjacent` because the CV lists "fastapi"
 - **THEN** its advice references "fastapi" as the close skill to reframe around
 
@@ -148,6 +170,6 @@ skill-bundles capability) so the candidate sees which market skill *combinations
 they cover, not only isolated skills.
 
 #### Scenario: Bundle coverage carried on the verdict
+
 - **WHEN** the CV covers the `genai-core` and `cloud-ops` bundles but not `web-stack`
 - **THEN** the verdict's bundle rows report genai-core and cloud-ops as covered and web-stack as not covered
-

@@ -32,6 +32,7 @@ allows one key to back multiple Services/App ID configurations.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Add `apple` as a fourth provider in the existing OAuth registry, indistinguishable
   from the caller's point of view (`GET /api/v1/auth/oauth/providers` lists it,
   the same `/start` and `/callback` shape signs the user in).
@@ -40,6 +41,7 @@ allows one key to back multiple Services/App ID configurations.
   their constructor's parameter shape changes (see Decisions).
 
 **Non-Goals:**
+
 - Native Sign in with Apple in the freehire-mobile app (a separate, later change —
   Apple's App Review guidance expects the native SDK on iOS, not a webview
   redirect, so it is not simply "the mobile app calls the same `/start` URL").

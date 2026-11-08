@@ -27,6 +27,7 @@ as companion work.
 ## Capabilities
 
 ### New Capabilities
+
 - `pipeline-metrics`: the ingest and indexing pipeline's queue depths, dead letters,
   board-fleet health, and catalogue freshness are published as Prometheus gauges, so a
   backlog that stops draining is observable rather than only discoverable by hand.

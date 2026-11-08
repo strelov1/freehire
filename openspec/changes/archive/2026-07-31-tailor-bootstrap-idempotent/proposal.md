@@ -4,7 +4,7 @@ Reported from production: opening `/tailor/senior-backend-engineer-appinio-slztl
 reloading loses the conversation. The data says why — three tailored CVs on that one vacancy
 inside half an hour, each with its own empty conversation:
 
-```
+```text
 8efbd881…  19:38  bound session, 0 messages
 59c41575…  19:57  bound session, 0 messages
 84738209…  20:05  bound session, 0 messages
@@ -36,6 +36,7 @@ than one that had vanished. Removing the self-start made the existing bug visibl
 <!-- none: this fixes existing behaviour -->
 
 ### Modified Capabilities
+
 - `cv-tailoring`: the bootstrap reaches one tailored copy per vacancy rather than creating one per
   request.
 - `tailor-workspace`: the workspace names its CV in the address, so a reload resumes instead of

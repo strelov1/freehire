@@ -7,7 +7,7 @@ is the canonical 39-line consumer.
 
 The two backfills predate none of this — they simply were not converted. Their current shape is:
 
-```
+```text
 cfg := config.Load()
 ctx := context.Background()
 pool, err := database.Connect(ctx, cfg.DatabaseURL)

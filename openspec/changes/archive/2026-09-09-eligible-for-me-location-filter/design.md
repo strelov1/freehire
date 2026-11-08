@@ -23,12 +23,14 @@ design builds on, all already in the repo:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Ship the "Eligible for me" pill exactly as specified in
   `specs/eligible-for-me-filter` and `specs/filter-modal`.
 - Reuse `geoScope.ts`/`/geo/region` for the region-level fallback instead of
   building a second geography resolver.
 
 **Non-Goals:**
+
 - No manual country picker or client-side geography cache — superseded by reusing
   `geo-default-scope`, per the discussion in this change's history.
 - No write-back to the candidate's profile from this filter action.
@@ -43,6 +45,7 @@ design builds on, all already in the repo:
 **A small pure module resolves the geography source and the value set to stage.**
 Colocated near `filtersFromProfile` in behavior (pure, testable without mounting a
 component), it exposes:
+
 - A precedence function `(profileCountry: string | null, edgeRegion: string | null) => GeoSource`
   where `GeoSource` is `{ kind: 'country'; code: string } | { kind: 'region'; code: string } | null`,
   implementing the two-step precedence from the spec.

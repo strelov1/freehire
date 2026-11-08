@@ -35,6 +35,7 @@ No breaking changes.
 ## Capabilities
 
 ### New Capabilities
+
 - `application-mail-recall`: from an application, find the caller's mail that belongs
   to it and offer it as suggestions — the pull direction of mail-to-application
   linking, its bounds, its spend attribution, and what it is forbidden to do.

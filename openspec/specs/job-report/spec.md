@@ -1,8 +1,11 @@
 # job-report Specification
 
 ## Purpose
+
 TBD - created by archiving change report-job. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Authenticated user reports a problem with a vacancy
 
 The system SHALL allow any authenticated user to report a live vacancy through
@@ -241,4 +244,3 @@ hand instead of assuming a reply was sent.
 
 - **WHEN** a moderator decides a report asking to notify the reporter and the mail is accepted by the transport
 - **THEN** the response reports that the reporter was notified
-

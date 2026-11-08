@@ -24,6 +24,7 @@ throwaway Meilisearch v1.49. Its numbers appear under Decisions.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Order the whole catalogue by skill overlap, composing with existing facet
   filters in one engine query, with ordinary pagination.
 - Reward both absolute overlap and coverage share; weight rare skills higher.
@@ -32,6 +33,7 @@ throwaway Meilisearch v1.49. Its numbers appear under Decisions.
 - Degrade silently for any caller who cannot be served it.
 
 **Non-Goals:**
+
 - Replacing `jobmatch.Compute`. It stays the per-job explanation; this is the
   ordering of many. They answer different questions and may legitimately disagree
   at the margin.
@@ -51,7 +53,7 @@ no model: position `i` holds the weight of skill `i`.
 
 The cosine of two such vectors expands to exactly the intended ranking:
 
-```
+```text
 cos(A, B) = Σ idf(s)² over s ∈ A∩B  /  (‖A‖ · ‖B‖)
 ```
 

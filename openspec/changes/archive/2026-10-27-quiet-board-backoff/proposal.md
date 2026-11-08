@@ -23,6 +23,7 @@ paced at all.
 ### New Capabilities
 
 ### Modified Capabilities
+
 - `ingest-board-health`: adds a quiet-board backoff driven by a listing fingerprint, alongside the
   existing failure cooldown, and adds skipping a board in its quiet pause.
 

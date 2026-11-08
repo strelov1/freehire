@@ -47,6 +47,7 @@ forcing flag-vs-enrichment reconciliation.
      capabilities rather than introducing a new one. -->
 
 ### Modified Capabilities
+
 - `job-enrichment`: the typed enrichment contract gains a single `regions`
   enum-array reach field (vocabulary incl. `global`, macro-regions, and select
   countries; validation); the public jobs read API drops the now-redundant raw

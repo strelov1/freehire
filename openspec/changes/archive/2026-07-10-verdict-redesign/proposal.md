@@ -45,11 +45,13 @@ LLM — so the report is both more useful and still honest and testable.
 ## Capabilities
 
 ### New Capabilities
+
 - `cv-section-parsing`: deterministic segmentation of CV plain text into a Skills
   section vs the body, with per-segment skill-tagging, producing `declared` /
   `body` / `all` skill sets.
 
 ### Modified Capabilities
+
 - `resume-verdict`: add a market-anchored top-20 skill breakdown (per-skill
   status, must-have flag, advice) plus must-have-covered, stack-match, and
   coherence headline stats to the verdict; surface the whole feature on a single

@@ -13,22 +13,26 @@ This is a **refactor-only** change. No external behavior, wire shape, or API
 contract changes; no `BREAKING` changes. Each item below is an independent task.
 
 Dead code (pure removals):
+
 - Remove the unused `search.Client.DeleteJob` method (zero callers) and its now-orphaned `strconv` import.
 - Remove the dead `enrich` `Claimed.Attempts` field and its query plumbing (`o.attempts` in `ClaimEnrichmentBatch` RETURNING is threaded through and never read).
 - Remove the unused `pipeline.Runner.Concurrency` knob and its `<= 0` fallback (always `0`, always falls through to `defaultConcurrency`).
 
 Backend dedup / efficiency:
+
 - Collapse the triplicated `{data, meta:{total,limit,offset}}` list-response envelope (`ListJobs`/`ListCompanies`/`SearchJobs`) into one `listResponse` helper next to `pageParams`.
 - Add a slim `GetJobIDBySlug` query for the view/apply interaction path so it stops `SELECT *`-ing the full `jobs` row (`description` TEXT + `enrichment` JSONB) on every silent view.
 - Replace the two index-aligned parallel slices in `smartRecruiters.Fetch` (`jobs []Job` + `found []bool`) with a single `[]*Job` using `nil` as the skip sentinel.
 
 Frontend (Svelte 5 SPA):
+
 - Inline the pure pass-through `get<T>()` wrapper in `api.ts` into its five `request<T>()` call sites.
 - Extract the triplicated input class string into a thin `ui/input.svelte` primitive (mirroring `button`/`badge`).
 - Render `JobRow`'s tag/skill chips with the shared `Badge variant="secondary"` instead of hand-rolled spans, matching `JobView`.
 - Finish the half-built generic And/Or facet toggle so `FacetSection` no longer hard-wires the skills facet (the backend already speaks the generic `<param>_mode=and` protocol).
 
 Maintenance guard (no infra):
+
 - Add a cheap drift guard between the Go enrichment vocabularies and the web `facets.ts` value lists (a source-of-truth comment, plus a small Go fixture test if warranted) — explicitly **not** a codegen pipeline.
 
 ## Capabilities

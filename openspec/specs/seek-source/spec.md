@@ -1,8 +1,11 @@
 # seek-source Specification
 
 ## Purpose
+
 TBD - created by archiving change add-seek-source-adapter. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: SEEK per-market, per-subclassification listing crawl
 
 The system SHALL provide a `seek` source adapter that crawls SEEK's Australian and New Zealand
@@ -184,4 +187,3 @@ the slice to crawl and is required.
 
 - **WHEN** a `seek` entry omits its board
 - **THEN** board-file validation rejects it before any request goes out
-

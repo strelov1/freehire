@@ -147,6 +147,7 @@ its own `Store.Enqueue` (or doesn't) before invoking the runner. That boundary i
 `internal/platform/outbox` never calls `Complete`, `Fail`, or `Discard` itself — those calls happen
 inside each package's `Processor` closure exactly as they do today, preserving every
 existing nuance without a generic abstraction having to model it:
+
 - `enrich`'s immediate dead-letter (`maxAttempts=1`) for a corrupted row that can never load.
 - `applyform`'s `ErrPostingGone` → `Discard` (retire without retry) versus an ordinary
   transient failure → `Fail` (retry up to `MaxAttempts`).

@@ -31,9 +31,11 @@ label for itself and its six values, and a spot in the filter modal.
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `ai-role-archetype`: the six archetype slugs are additionally exposed as a
   generated web-contracts enum (`AI_ARCHETYPE_VALUES`), not only as an
   internal Go rule set.

@@ -1,8 +1,11 @@
 # cv-ats-score Specification
 
 ## Purpose
+
 TBD - created by archiving change verdict-market-signals. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Summary keyword-density line item
 
 The ATS score SHALL include a deterministic line item that rewards a keyword-dense
@@ -14,14 +17,17 @@ five categories' total maximum of 100 (item weights re-balanced within the
 category). It SHALL require no LLM.
 
 #### Scenario: Keyword-dense summary is rewarded
+
 - **WHEN** the CV's summary section mentions several of the CV's skills (e.g. "Go, Kafka, Kubernetes")
 - **THEN** the summary keyword-density item passes and awards its points
 
 #### Scenario: Empty or generic summary is flagged
+
 - **WHEN** the CV's summary carries none of the CV's concrete skills
 - **THEN** the item is recoverable with a fix to add role keywords to the summary
 
 #### Scenario: Category maxima still sum to 100
+
 - **WHEN** the report is scored
 - **THEN** the five categories' maxima still sum to 100
 
@@ -36,14 +42,17 @@ RU), dates, a sane length band, and bullet usage. Each check SHALL carry a statu
 reproducible (same CV text ⇒ same score) and require no LLM.
 
 #### Scenario: A scanned/image CV fails machine-readability
+
 - **WHEN** the extracted CV text is near-empty (a scanned or image-only PDF)
 - **THEN** the `machine_readable` check is `fail` and the overall readability is low
 
 #### Scenario: A clean text CV scores its structural checks
+
 - **WHEN** a CV has an email, phone, Experience/Skills sections, dates, bullets, and a normal length
 - **THEN** those checks are `pass` and readability is high
 
 #### Scenario: Deterministic
+
 - **WHEN** the same CV text is scored twice
 - **THEN** the score and checklist are identical
 
@@ -56,10 +65,12 @@ skill set) and SHALL name the top missing role skills in the check's fix. The ro
 SHALL come from the request's facet params (Profile's CV readiness tab filter).
 
 #### Scenario: Keyword-match counts role skills present in the CV text
+
 - **WHEN** a role's top skills are {go, kubernetes, kafka} and the CV text contains "go" and "kafka" but not "kubernetes"
 - **THEN** keyword-match reflects 2 of 3 and the fix names "kubernetes" as missing
 
 #### Scenario: Role comes from the request filter
+
 - **WHEN** the caller requests the report with `?category=data`
 - **THEN** keyword-match uses the data role's top skills, independent of the profile's stored specializations
 
@@ -78,26 +89,32 @@ it SHALL be invalidated when the CV is replaced or deleted. Neither the raw CV t
 contact identifier SHALL be persisted — only the derived review.
 
 #### Scenario: No LLM configured degrades cleanly
+
 - **WHEN** the server has no LLM configured and a report is requested
 - **THEN** the response is 200 with the deterministic score and no content-quality
 
 #### Scenario: Review reads the structured résumé, not the raw CV
+
 - **WHEN** the LLM qualitative review runs for a user's stored CV
 - **THEN** the text sent to the model is the contact-free projection of the structured résumé, and the raw CV is not sent
 
 #### Scenario: No structured résumé degrades to the deterministic score
+
 - **WHEN** a report is requested for a CV that has no current structured résumé
 - **THEN** the caller skips the model call and the response is 200 with the deterministic score and no content-quality
 
 #### Scenario: LLM review is cached and reused
+
 - **WHEN** the LLM review has run for a user's stored CV and the report is opened again (any profile/role)
 - **THEN** the cached review is served without re-calling the LLM
 
 #### Scenario: Replacing the CV invalidates the cached review
+
 - **WHEN** the user uploads a new CV
 - **THEN** the previously cached review is cleared and not shown for the new CV
 
 #### Scenario: Only the derived review is stored
+
 - **WHEN** a CV is reviewed
 - **THEN** the stored analysis contains the content-quality and findings but no CV text or contact identifier
 
@@ -110,14 +127,16 @@ but the caller has no CV stored, it SHALL respond 200 with a "no CV" state (so t
 SPA prompts an upload) rather than an error.
 
 #### Scenario: Owner reads their report
+
 - **WHEN** a signed-in user requests the ATS report for a profile they own, with a CV stored
 - **THEN** the response is 200 with the score and checklist
 
 #### Scenario: Non-owner is refused
+
 - **WHEN** a signed-in user requests the ATS report for another user's profile
 - **THEN** the response is 404
 
 #### Scenario: No CV stored
+
 - **WHEN** the caller has CV storage enabled but no CV uploaded
 - **THEN** the response is 200 with a "no CV" state, not an error
-

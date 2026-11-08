@@ -25,6 +25,7 @@
 
 - [x] 5.1 `go build ./... && go vet ./... && go test ./...` and `pnpm test && pnpm lint && pnpm build` in `web/`.
 - [x] 5.2 Verify the CSP against a real build (`vite build && vite preview`, not `vite dev`): load a job list, a company page, the tailor template gallery and a blog post, and confirm the console reports no CSP violation and company logos still render.
+
 ## 6. After deploy
 
 Deferred by decision, not skipped: the assistant is gated to the beta group and a live turn

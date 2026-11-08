@@ -65,11 +65,13 @@ the retrospective surface, and the import channel.
 ## Capabilities
 
 ### New Capabilities
+
 - `application-record`: the application as an entity independent of the catalogue — its identity,
   its optional link to a posting, the guarantee that it outlives the posting, and the requirement
   that aggregates correlate events through it rather than through the posting.
 
 ### Modified Capabilities
+
 - `catalog-pruning`: gains a requirement that removal MUST NOT destroy a user's application, nor
   change what the aggregates say about the employer. The cascade it relies on today is stated
   only in a SQL comment, never in the spec, so this is a new guarantee rather than a rewritten

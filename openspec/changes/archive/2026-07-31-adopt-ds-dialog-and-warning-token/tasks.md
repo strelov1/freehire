@@ -39,7 +39,7 @@ refuses to close mid-delete, and the platform's close knew nothing about that.
       `fixed inset-0`, the z-index, the Escape handler and the hand-rolled focus handling.
 - [x] 3.3 Width via `class` where the default `max-w-lg` is wrong.
 - [~] 3.4 Verify by hand: opens, closes on Escape, closes on backdrop, closes on its own
-      button, submits, and focus returns to the trigger. Both themes.
+  button, submits, and focus returns to the trigger. Both themes.
 - [x] 3.5 `pnpm check:adoption` — `Dialog` rises; `--update` and commit the diff.
 
 ## 4. Record what was not done

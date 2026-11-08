@@ -15,6 +15,7 @@ opens a socket.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A user's own agent can read and fill the form in the user's own browser, using
   the API key they already have.
 - The same tool list and outcomes whichever client they use, so a loop written
@@ -23,6 +24,7 @@ opens a socket.
   as a raw frame or a timeout.
 
 **Non-Goals:**
+
 - Replacing the hosted path. The panel's Autofill button keeps working for users
   who run no harness.
 - A new credential, scope, or endpoint. The relay already resolves an API key to

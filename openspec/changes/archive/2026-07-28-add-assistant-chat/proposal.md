@@ -41,6 +41,7 @@ and host-2 deployment.
 ## Capabilities
 
 ### New Capabilities
+
 - `assistant-chat`: an in-app chat page that streams a conversation with a
   Claude agent served by the separate `freehire-agent` backend over a WebSocket
   relay.

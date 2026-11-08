@@ -45,12 +45,13 @@
 ### Task 1: Migration and queries
 
 **Files:**
+
 - Create: `migrations/0231_cvs_base_cv_id_hand_edited.sql`
 - Modify: `internal/platform/db/queries/cvs.sql`; regenerate `internal/platform/db/*` with `make sqlc`
 
 **Interfaces:**
-- Produces (sqlc): `GetBaseCVByUser` (new rule; rows now also return `hand_edited`), `ListBaseCVsByUser(userID) → rows {id,title,template_id,hand_edited,created_at,updated_at,is_default}`, `GetBaseCVByID(id,userID)` (non-tailored only, with data+hand_edited), `CreateTailoredCV` gains `base_cv_id` param (nullable uuid), `GetCVByID` returns `base_cv_id`, `hand_edited`; `DuplicateBaseCV(id,userID,title) → CreateCVRow-like` copying data/template/hand_edited; `MarkCVHandEdited(id,userID) :execrows`.
 
+- Produces (sqlc): `GetBaseCVByUser` (new rule; rows now also return `hand_edited`), `ListBaseCVsByUser(userID) → rows {id,title,template_id,hand_edited,created_at,updated_at,is_default}`, `GetBaseCVByID(id,userID)` (non-tailored only, with data+hand_edited), `CreateTailoredCV` gains `base_cv_id` param (nullable uuid), `GetCVByID` returns `base_cv_id`, `hand_edited`; `DuplicateBaseCV(id,userID,title) → CreateCVRow-like` copying data/template/hand_edited; `MarkCVHandEdited(id,userID) :execrows`.
 - [ ] **Step 1:** Write migration: `ADD COLUMN base_cv_id uuid`, `ADD COLUMN hand_edited boolean NOT NULL DEFAULT false`; FK `cvs_base_cv_id_fkey ... REFERENCES cvs(id) ON DELETE SET NULL NOT VALID` then `VALIDATE CONSTRAINT`; partial index on `(base_cv_id) WHERE base_cv_id IS NOT NULL` (needed by SET NULL and the default query); backfill `UPDATE cvs t SET base_cv_id = (newest-edited non-tailored CV of t.user_id) WHERE t.is_tailored AND base_cv_id IS NULL AND such a base exists`. Header comment states why the backfill matters (spec: "The default base").
 - [ ] **Step 2:** Rewrite `GetBaseCVByUser` ordering and add the new queries in `cvs.sql` (default flag in the list is computed with the same expression as the single-row query; keep the expression in one comment-referenced shape).
 - [ ] **Step 3:** Run `make sqlc`; fix compile breaks in `internal/candidate/cv/store.go` (repository adapters) minimally; `go build ./...`.
@@ -60,12 +61,13 @@
 ### Task 2: cv store (rule, list, duplicate, tailor-from-base)
 
 **Files:**
+
 - Modify: `internal/candidate/cv/store.go`, `internal/candidate/cv/AGENTS.md`
 - Test: `internal/candidate/cv/store_test.go` / `store_tailor_test.go` (integration-tagged, testcontainers, same style as neighbours)
 
 **Interfaces:**
-- Produces: `Record` gains `BaseCVID uuid.UUID` (zero when NULL) and `HandEdited bool`; `BaseItem{Meta; IsDefault, HandEdited bool}`; `(*Store).Bases(ctx, userID) ([]BaseItem, error)`; `(*Store).BaseByID(ctx, id uuid.UUID, userID int64) (Record, error)` (ErrNotFound if missing/foreign, `ErrNotBase` if tailored); `(*Store).BaseFor(ctx, userID, tailored Record) (Record, bool, error)` (own base if set and live, else default); `(*Store).Duplicate(ctx, id uuid.UUID, userID int64) (Meta, error)` (title `"<title> (copy)"`, `ErrNotBase` for tailored); `Tailor(..., baseID uuid.UUID, ...)` — `uuid.Nil` ⇒ default; stores `base_cv_id`; `var ErrNotBase`.
 
+- Produces: `Record` gains `BaseCVID uuid.UUID` (zero when NULL) and `HandEdited bool`; `BaseItem{Meta; IsDefault, HandEdited bool}`; `(*Store).Bases(ctx, userID) ([]BaseItem, error)`; `(*Store).BaseByID(ctx, id uuid.UUID, userID int64) (Record, error)` (ErrNotFound if missing/foreign, `ErrNotBase` if tailored); `(*Store).BaseFor(ctx, userID, tailored Record) (Record, bool, error)` (own base if set and live, else default); `(*Store).Duplicate(ctx, id uuid.UUID, userID int64) (Meta, error)` (title `"<title> (copy)"`, `ErrNotBase` for tailored); `Tailor(..., baseID uuid.UUID, ...)` — `uuid.Nil` ⇒ default; stores `base_cv_id`; `var ErrNotBase`.
 - [ ] **Step 1:** Failing tests: (a) two bases, edit the older one → default unchanged (oldest-created); (b) tailor from base B → default becomes B; (c) delete B → tailored copy survives with `BaseCVID` zero and `BaseFor` falls back to default; (d) `Duplicate` copies document/template/`HandEdited`, title `"X (copy)"`, does not change default; (e) `Duplicate` of tailored → `ErrNotBase`; foreign → `ErrNotFound`; (f) `Tailor` with a tailored or foreign `baseID` → `ErrNotBase` / `ErrNotFound`; (g) `Bases` flags exactly one default, `[]` for none.
 - [ ] **Step 2:** Run `go test -tags=integration ./internal/candidate/cv/ -run 'Base|Duplicate|Tailor'`; expected FAIL (undefined).
 - [ ] **Step 3:** Implement the interfaces above on `Repository`/`Store`/`queriesRepository`.
@@ -75,6 +77,7 @@
 ### Task 3: cvedit sets `hand_edited`
 
 **Files:**
+
 - Modify: `internal/candidate/cvedit/` (commit path + its repository tx), `internal/platform/db` use of `MarkCVHandEdited`
 - Test: `internal/candidate/cvedit/*_test.go` (integration if that is where commit tests live)
 
@@ -88,6 +91,7 @@
 ### Task 4: Handlers
 
 **Files:**
+
 - Modify: `internal/api/handler/cv.go` (routes, `ListBaseCVs`, `DuplicateCV`), `cv_tailor.go`, `cv_reseed.go`, `cv_ats_delta.go`, `auto_apply_tailor.go`/`auto_apply_enqueue.go` (callers of the changed helper)
 - Test: new `internal/api/handler/cv_bases_integration_test.go`; update existing reseed tests for the changed semantics
 
@@ -109,6 +113,7 @@
 ### Task 6: Web plumbing and picker
 
 **Files:**
+
 - Modify: `web/src/lib/api.ts`, `web/src/lib/cv.ts` (types `CvBaseItem`)
 - Create: `web/src/lib/components/cv/BasePicker.svelte` (+ `.messages.ts`), `web/src/lib/tailor/tailorHref.ts`
 - Test: `web/src/lib/tailor/tailorHref.test.ts`, `web/src/lib/components/cv/BasePicker.spec.ts`
@@ -122,6 +127,7 @@
 ### Task 7: Choose the base when tailoring
 
 **Files:**
+
 - Modify: `web/src/lib/confirmTailorDialog.svelte.ts`, `web/src/lib/components/ConfirmTailorDialog.svelte`, `JobView.svelte`, `JobDrawer.svelte` (call sites), `web/src/lib/cvIntakeDialog.svelte.ts` (`openCvIntake(baseCvId?)`, state `baseCvId`), `JdIntakeDialog.svelte` (picker when 2+ bases and none preselected; every `goto` uses `tailorHref`), `web/src/routes/my/cvs/+layout.svelte` (passes base), `web/src/routes/tailor/[slug]/+page.svelte` (reads `?base`, passes to both `api.tailorCv` calls)
 - Test: extend/ add specs for dialog controller and intake
 
@@ -134,6 +140,7 @@
 ### Task 8: Base cards on `/my/cvs`
 
 **Files:**
+
 - Create: `web/src/lib/components/cv/BaseCvCards.svelte` (+ `BaseCvCards.messages.ts`)
 - Modify: `web/src/lib/components/cv/CvList.svelte` (mount the block above the tailored list), `CvList.messages.ts` if shared strings
 - Test: `BaseCvCards.spec.ts`
@@ -146,6 +153,7 @@ One card per base: title, template, last edited, "Default" badge, actions Edit (
 ### Task 9: Base editor page
 
 **Files:**
+
 - Modify: `web/src/routes/my/cvs/[id]/+page.svelte`, `messages.ts` (keeps the tailored redirect)
 - Create: components only if the page exceeds ~250 lines
 - Test: `web/src/routes/my/cvs/[id]/page.spec.ts` (or the repo's route-test convention)

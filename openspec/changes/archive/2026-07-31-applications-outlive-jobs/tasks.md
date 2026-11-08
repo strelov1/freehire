@@ -34,7 +34,6 @@
 > and the apply path writing another.
 
 - [x] 5a.0 `migrations/0065_applications_applied_at_optional.sql` — `applied_at` becomes nullable. `PATCH /jobs/:slug/track` sets a stage on a job never marked applied, and that row needs a home here; the alternative gave `stage` two homes, the duplication this change exists to remove. Decision recorded in the `application-record` spec
-
 - [x] 5.1 Port `internal/db/queries/user_jobs.sql` to read and write `applications` for the application columns, keeping `user_jobs` for view/save/dismiss/vote; run `make sqlc`
 - [x] 5.2 Port `internal/jobtracking` (`MarkApplied`, `TrackJob`, the board read) — `applied_count` stays incremented only on the live transition, never by the backfill
 - [x] 5.3 Port `internal/userjob` silence reads so the stage ladder resolves from the application record

@@ -19,6 +19,7 @@ they are just (a) name-ordered and (b) computing `job_count` via a query-time
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A sidebar Company filter that searches the whole catalogue by name and lists
   companies most-active first, showing real names and job counts.
 - A cheap, popularity-ordered `GET /api/v1/companies` reused by both the sidebar
@@ -27,6 +28,7 @@ they are just (a) name-ordered and (b) computing `job_count` via a query-time
   so URL sync, exclusion, chips, and active-filter-count are unchanged.
 
 **Non-Goals:**
+
 - Real-time exactness of `job_count` (eventual consistency within the recompute
   interval is acceptable).
 - Per-filter *contextual* company counts (the count is global open-job count).

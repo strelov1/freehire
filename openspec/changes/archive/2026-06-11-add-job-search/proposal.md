@@ -38,6 +38,7 @@ typo tolerance, or semantic ranking. A purpose-built search engine does.
 ## Capabilities
 
 ### New Capabilities
+
 - `job-search`: how jobs are searched — the Meilisearch-backed `jobs` index
   (document shape, searchable/filterable/sortable attributes, the hybrid
   embedder), the public `GET /api/v1/jobs/search` contract (query, facet

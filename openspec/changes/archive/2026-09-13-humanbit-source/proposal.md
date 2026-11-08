@@ -28,9 +28,11 @@ postings confirm the platform live). Like Scalis, it is a Next.js App Router sit
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `source-ingest`: add a requirement that `humanbit` is a registered board-based provider —
   a listing-enumerates/detail-hydrates RSC-flight adapter over `jobs.humanbit.ai/<board>`,
   yielding the normalized job shape including structured employment type, remote flag, and

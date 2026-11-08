@@ -1,7 +1,9 @@
 ## Context
 
 The Experience tab and its bank-edit reseed offer existed in the Tailor workspace from
-#1669 until `ae1c13c8` removed them. Nothing else in the file changed shape in a way that
+
+# 1669 until `ae1c13c8` removed them. Nothing else in the file changed shape in a way that
+
 blocks restoring them: `ExperienceBankView`'s `onBankMutated` prop, `offerCvRefresh`/
 `askCvRefresh`, and the reseed endpoint (`api.reseedCv`, now wrapped by `applyReseed`/
 `reseed`/`confirmResetOpen` under the History tab's "Reset" control) are all still present
@@ -11,6 +13,7 @@ equivalent of this offer.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Re-add the `experience` left-panel tab, its mobile-tab-bar equivalent, and the
   bank-edit → reseed-offer wiring, restoring the behavior `ae1c13c8` removed.
 - Reuse the existing `offerCvRefresh`/`askCvRefresh`/`ExperienceBankView` surfaces exactly
@@ -18,6 +21,7 @@ equivalent of this offer.
   construction rather than by convention.
 
 **Non-Goals:**
+
 - No change to how often a bank edit syncs into an *already-rendered* CV automatically —
   reseed stays an explicit, confirmed action (`ConfirmDialog`), not an auto-apply.
 - No change to the assistant's Projects-vs-Experience filing behavior or the PII filter

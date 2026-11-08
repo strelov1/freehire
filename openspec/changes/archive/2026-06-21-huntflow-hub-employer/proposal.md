@@ -31,6 +31,7 @@ not an employer.
 <!-- None. Reuses the source-ingest pipeline, write path, and dedup key unchanged. -->
 
 ### Modified Capabilities
+
 - `source-ingest`: a board-file entry MAY be marked as a community hub; for a hub entry the
   `huntflow` adapter resolves each vacancy's employer from its own `division` breadcrumb
   (segment before the `Partners` folder) instead of from the configured company, falling back

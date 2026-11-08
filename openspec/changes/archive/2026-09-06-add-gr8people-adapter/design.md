@@ -34,6 +34,7 @@ the sampled boards).
 `@include(if: $hasXxx)`-gated custom fields omitted — those exist for a tenant's own
 custom-field configuration and are out of scope, matching how other adapters ignore vendor custom
 fields they cannot generically interpret):
+
 ```json
 {
   "id": "Sm9iUG9zdGluZy80NzA5", "key": "4709", "number": "JR019381", "status": "OPEN",
@@ -46,6 +47,7 @@ fields they cannot generically interpret):
   "numPositionsOpen": 1, "applyOnExternalATS": false
 }
 ```
+
 `workplaceType` is a closed three-value enum (`ON_SITE`/`REMOTE`/`HYBRID` — confirmed by a
 validator function in the platform's own bundle), a genuine structured work-mode signal.
 `places.nodes[].name` is already a formatted "City, Region[, Postal], Country" string per place
@@ -58,6 +60,7 @@ others map an equivalent field, everything else left unmapped.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One adapter, one provider key, covering both `gr8people.com` and `workgr8.com` tenants.
 - Board = the tenant's whole host, matching the existing `modeHost` convention (Factorial,
   Teamtailor, Zoho).
@@ -66,6 +69,7 @@ others map an equivalent field, everything else left unmapped.
   caching would add complexity for no measured benefit).
 
 **Non-Goals:**
+
 - Custom fields (`userDefinedN`, `classificationType`, `gradeLevel`, etc.) gated behind the
   `hasXxx` GraphQL flags — tenant-specific configuration with no generic mapping, and reading them
   would require first querying each tenant's field configuration, doubling the request cost for a

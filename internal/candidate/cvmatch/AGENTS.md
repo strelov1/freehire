@@ -1,11 +1,13 @@
 # Job-match scoring conventions
 
 ## Scope
+
 Deterministic, dictionary-only scoring of a **tailored CV against the vacancy it is bound to**.
 Backend `internal/candidate/cvmatch` + `internal/api/handler/cv_job_match.go`; frontend in
 `web/src/lib/tailor/JobMatch.svelte` and its unit-tested view model `web/src/lib/tailor/jobmatch.ts`.
 
 ## Always true
+
 - **The document is the only subject.** The scorer never reads the base CV, the experience bank
   or the structured résumé — those describe the *candidate*. That is what distinguishes this
   score from `internal/candidate/matchanalysis`, whose numbers do not move when the CV is edited.
@@ -32,6 +34,7 @@ dictionaries rather than in their CV. `Score.Contributing` names what the overal
 so a three-category score is never mistaken for a four-category one.
 
 The rule recurses one level down, in two places:
+
 - inside Requirements Coverage, an unverifiable requirement leaves that category's denominator;
 - inside Job Title Match, a vacancy title the dictionary resolves to no role category leaves that
   category's denominator (its reported `Weight` drops from 20 to 12).
@@ -57,6 +60,7 @@ Consequence worth keeping: a requirement can never be attributed a skill outside
 this category and Keyword Match cannot disagree about what the vacancy asks for.
 
 ## Wire-shape gotchas
+
 - `cvmatch.Category` is named **`ScoredCategory`**: `cmd/gen-contracts` emits into one flat
   TypeScript namespace where `Category` is already the facet enum.
 - `lineitem.go` is **excluded** from codegen (see `cmd/gen-contracts`): its `LineItem`/`Status`

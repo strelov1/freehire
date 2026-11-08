@@ -33,6 +33,7 @@ roy-web already ships.
 ## Capabilities
 
 ### New Capabilities
+
 - `assistant-sessions`: multi-session management for the in-app agent chat —
   listing the caller's sessions, creating/switching (with journal replay) and
   deleting them, and the owner-scoped backend contract (`GET /sessions`,

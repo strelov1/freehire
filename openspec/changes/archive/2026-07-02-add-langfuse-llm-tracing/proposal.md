@@ -24,6 +24,7 @@ comparing a budget model against Claude, and diagnosing latency/dead-lettering.
 ## Capabilities
 
 ### New Capabilities
+
 - `llm-observability`: Tracing of every model call made through the shared LLM
   client to Langfuse — captured prompt/response, token usage, latency, and error
   level — gated on configuration and non-blocking to the caller.

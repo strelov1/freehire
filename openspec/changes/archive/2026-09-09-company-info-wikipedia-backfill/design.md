@@ -18,6 +18,7 @@ See `proposal.md` for motivation and the spike numbers. Relevant existing state:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Fill `tagline` (and a `company_info.summary` key) for companies with none,
   using only Wikipedia/Wikidata's free public APIs.
 - Reject a match with high confidence when the resolved entity is not a
@@ -27,6 +28,7 @@ See `proposal.md` for motivation and the spike numbers. Relevant existing state:
   resolved (matched or confidently rejected) by a prior run.
 
 **Non-Goals:**
+
 - Resolving company-identity duplicates (e.g. `sberbank` vs. `пао-сбербанк`
   as separate catalog rows) — out of scope, tracked by the existing
   company-identity merge tooling (`docs/agents/company-identity.md`).
@@ -70,7 +72,7 @@ recall problem: "defense contractor" and "electrical contractor" are
 Wikidata subclasses of `company`/`business`, not direct instances of them.
 Walking the class hierarchy fixes this: one SPARQL `ASK` per candidate,
 
-```
+```text
 ASK { wd:Q<id> wdt:P31/wdt:P279* ?type . VALUES ?type { wd:Q4830453 wd:Q43229 wd:Q6881511 wd:Q783794 wd:Q891723 wd:Q328664 ... } }
 ```
 

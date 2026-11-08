@@ -50,7 +50,7 @@ yield a job.
 #### Scenario: A canonical post is mapped
 
 - **WHEN** a comment reads "Modash.io | Senior Product Engineer | Remote (Europe) | ... |
-  https://modash.io"
+  <https://modash.io>"
 - **THEN** a job is yielded with company "Modash.io", title "Senior Product Engineer",
   location "Remote (Europe)", flagged remote, and its URL is that link
 

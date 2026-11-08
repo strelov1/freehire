@@ -11,7 +11,8 @@ the URL, so filters and free-text `q` round-trip through the URL.
 
 The reference is the Tinder swipe pattern: a full-screen card deck where a single
 gesture decides each item. We add it as a triage layer over the existing search
-+ tracking machinery — no new catalogue wire shape, reusing `jobview` and the
+
+- tracking machinery — no new catalogue wire shape, reusing `jobview` and the
 save interaction.
 
 ## Goals / Non-Goals

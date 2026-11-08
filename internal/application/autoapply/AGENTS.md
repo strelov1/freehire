@@ -1,6 +1,7 @@
 # Auto-apply queue-drain conventions
 
 ## Scope
+
 The domain logic behind `cmd/auto-apply`: claim a wave of `auto_apply_queue` rows, assemble
 each candidate's known answers, ask a browser driver to resolve and maybe submit the
 application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` and
@@ -8,6 +9,7 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
 (`dbStore`, `assemblerAnswerSource`, `internal/api/atsapply.Client`).
 
 ## Always true
+
 - **Submits only when every required question is answered.** `SidecarClient.Submit` returns
   `StatusApplied` or `StatusParked` (with the unmapped reasons); there is no partial-fill
   outcome. A required field with no known answer parks the whole attempt — nothing here ever
@@ -61,7 +63,6 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
   this would mean either leaking provider/captcha knowledge into this generic queue-drain
   layer, or reworking `SidecarClient.Submit` to pull answers lazily — both costlier than the
   handful of avoidable DB reads per already-doomed-to-park row that this saves.
-
 - **`Store.Claim` only ever returns a reviewed-and-approved entry.** `Claimed.TailoredCVID`
   is the candidate's approved tailored CV for the vacancy — never the zero value for a row
   this package sees, because the real `Claim` (`ClaimAutoApplyBatch`) requires
@@ -70,7 +71,6 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
   not reviewed, simply sits in the queue unclaimed; a decline parks it the same way an
   unresolved form field does, through its own review endpoint (`internal/api/handler`), not
   through anything in this package.
-
 - **An enqueue-time eligibility gate refuses (or, in shadow mode, only logs) a positively
   mismatched (candidate, job) pair before it ever reaches this package's queue at all.**
   `internal/api/handler`'s `startAutoApply` (the only creator of `auto_apply_queue` rows,
@@ -87,6 +87,7 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
   like the evaluator it calls, never manufactures a blocker from an absent field.
 
 ## How it works
+
 `Run` wires `outbox.RunPool` over `Store.Claim`, mirroring `internal/ingest/applyform`'s own
 `cmd/capture-apply-form` runner shape. `process` per claimed item: assemble answers → call
 `SidecarClient.Submit` → map the result to `Store.Submit` (success; composes

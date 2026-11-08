@@ -43,6 +43,7 @@ time, rather than carrying it into the two new nudge kinds.
 ## Capabilities
 
 ### New Capabilities
+
 - `lifecycle-nudges`: the `internal/nudge` decision engine — follow-up and
   interview-prep nudges, MATCH/DELIVER, episode-key dedup, re-check-before-send.
 - `notification-settings`: the single account-level enabled+channel gate shared by
@@ -50,6 +51,7 @@ time, rather than carrying it into the two new nudge kinds.
   behavior, and its `/my/notifications` UI.
 
 ### Modified Capabilities
+
 - `saved-job-reminders`: removes the "Account-level reminder default rule" and
   "Per-job reminder management" requirements (superseded by `notification-settings`
   and the per-job-control removal); "Scheduling a reminder on save" drops the

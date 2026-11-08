@@ -24,6 +24,7 @@ migration is `0019`, so this change adds `0020`.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A signed-in user can flag a live vacancy with a reason from a fixed vocabulary, required
   details, and an optional Telegram contact, addressed by the job's public slug.
 - A moderator can review the pending queue and either resolve a report (optionally closing
@@ -33,6 +34,7 @@ migration is `0019`, so this change adds `0020`.
   cross-cutting concepts.
 
 **Non-Goals:**
+
 - No auto-close on a report threshold — every close is a moderator decision (the
   threshold is a clean later seam, not built now).
 - No public/anonymous reporting — authentication is required (decided in brainstorming;

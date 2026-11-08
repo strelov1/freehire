@@ -39,12 +39,14 @@ already filter and link to.
 ## Capabilities
 
 ### New Capabilities
+
 - `creative-media-taxonomy`: which titles resolve to the `creative` category,
   why it is technical, the named roles the media crafts expose (including the
   game-development titles that keep their existing categories), and the curated
   creative-toolchain skill vocabulary.
 
 ### Modified Capabilities
+
 - `design-taxonomy`: "Sound Design Engineer" is currently pinned to `design`.
   It moves to `creative` with the rest of audio, and "Audio Design Engineer"
   moves with it — otherwise one craft scatters across three categories, the

@@ -37,12 +37,14 @@ second and uses the first to link it.
 ## Capabilities
 
 ### New Capabilities
+
 - `interview-schedule`: capturing an interview's time and attaching it to an
   application — the calendar grant, the sync window, what may and may not be stored,
   the deterministic UID tier and the suggestion tier below it, and what a reschedule or
   a cancellation does.
 
 ### Modified Capabilities
+
 - `tracking-calendar-view`: the calendar shows scheduled meetings alongside recorded
   events, drawn so the two cannot be mistaken for each other. Additive — no existing
   requirement changes.

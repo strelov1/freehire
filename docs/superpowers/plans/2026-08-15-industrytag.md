@@ -25,6 +25,7 @@ Spec: `docs/superpowers/specs/2026-08-15-industrytag-design.md`
 ### Task 1: The `industrytag` package
 
 **Files:**
+
 - Create: `internal/dict/industrytag/industrytag.go`
 - Create: `internal/dict/industrytag/dictionaries.go`
 - Create: `internal/dict/industrytag/labels.go`
@@ -32,6 +33,7 @@ Spec: `docs/superpowers/specs/2026-08-15-industrytag-design.md`
 - Test: `internal/dict/industrytag/dictionaries_test.go`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `industrytag.Canonicalize(tags []string) []string` (sorted, de-duplicated canonical slugs); `industrytag.Label(canonical string) string`; `industrytag.Canonicals() []string`.
 
@@ -273,14 +275,15 @@ git commit -m "Add internal/dict/industrytag: curated industry vocabulary"
 ### Task 2: Stop `UpsertYCCompany` from clobbering other sources
 
 **Files:**
+
 - Modify: `internal/platform/db/queries/companies.sql:239-270` (`UpsertYCCompany`)
 - Modify: `cmd/import-yc/main.go:185-206` (`recordToParams`)
 - Test: `internal/platform/db/company_yc_integration_test.go`
 
 **Interfaces:**
+
 - Consumes: `industrytag.Canonicalize` from Task 1.
 - Produces: no signature change — `UpsertYCCompanyParams` keeps its fields.
-
 - [ ] **Step 1: Write the failing integration test**
 
 Append to `internal/platform/db/company_yc_integration_test.go` (the file already carries
@@ -401,11 +404,13 @@ git commit -m "Make UpsertYCCompany merge instead of replace, canonicalize indus
 ### Task 3: The import worker
 
 **Files:**
+
 - Create: `cmd/import-company-industries/main.go`
 - Create: `cmd/import-company-industries/main_test.go`
 - Modify: `internal/platform/db/queries/companies.sql` (add two queries)
 
 **Interfaces:**
+
 - Consumes: `industrytag.Canonicalize` from Task 1.
 - Produces: a binary. `ListCompanyIndustriesPage(ctx, afterSlug, limit)` returns `[]struct{Slug string; Industries []string}`; `SetCompanyIndustries(ctx, slug, industries)`.
 
@@ -737,14 +742,15 @@ git commit -m "Add import-company-industries worker: normalize and merge industr
 ### Task 4: Wire the facet into Meilisearch and the API
 
 **Files:**
+
 - Modify: `internal/search/company.go:113-140`
 - Modify: `internal/api/handler/companies.go`
 - Test: `internal/search/company_test.go`
 
 **Interfaces:**
+
 - Consumes: canonical values written by Tasks 2 and 3.
 - Produces: an `industries` query parameter on `/companies`, filtering by membership.
-
 - [ ] **Step 1: Write the failing test**
 
 In `internal/search/company_test.go`:
@@ -811,14 +817,15 @@ ssh root@89.167.94.146 'systemctl start freehire-reindexw.timer'
 ### Task 5: The UI filter
 
 **Files:**
+
 - Modify: `cmd/gen-contracts/main.go:342`
 - Modify: `web/src/lib/facets.ts` (next to `const DOMAINS` at :413 and the facet list at :536-560)
 - Test: `web/src/lib/facets.test.ts`
 
 **Interfaces:**
+
 - Consumes: the `industries` param from Task 4; `industrytag.Canonicals()` and `Label()` from Task 1.
 - Produces: nothing downstream.
-
 - [ ] **Step 0: Generate the options from Go, do not retype them**
 
 `DOMAINS` in `facets.ts:413` is `options(DOMAIN_VALUES, DOMAIN_LABELS)`, and those

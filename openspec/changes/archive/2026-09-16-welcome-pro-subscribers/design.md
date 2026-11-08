@@ -25,12 +25,14 @@ request: make a first-time payment visibly acknowledged, automatically, going fo
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Exactly one welcome email per account, ever, the first time it becomes a paying tier.
 - The badge and the email both read the same tier resolution (`plan.TierOf`), so they can
   never disagree about whether an account is paying.
 - No new network request added to ordinary page loads for the badge.
 
 **Non-Goals:**
+
 - Mobile header treatment for the badge (the profile icon it attaches to is desktop-only
   today — see `header-navigation`'s existing "Unified header layout" scenario; mobile's
   equivalent affordance is a future change, not this one).
@@ -56,6 +58,7 @@ links)`) rather than inventing a new one.
 ### Idempotency: a nullable `users.pro_welcome_sent_at` column, set only after a successful send
 
 Alternatives considered:
+
 - **Diff previous vs. current tier inside the sync path.** Rejected: `billing.sync`
   deliberately never diffs (see AGENTS.md), and this worker has no "previous" to diff
   against between runs without inventing its own shadow state — a stamped column already

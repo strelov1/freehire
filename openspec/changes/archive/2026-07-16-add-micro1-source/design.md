@@ -24,12 +24,14 @@ differing only in the detail parser (RSC flight vs. a clean ld+json tag).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Ingest all open micro1 postings as normalized `Job`s via a keyless, boardless
   single-company adapter that reuses existing pipeline contracts.
 - Parse the RSC-flight `data` object and resolve the referenced description.
 - Emit structured `Skills` from `required_skills` into the facet seam.
 
 **Non-Goals:**
+
 - No use of the `prod-api.micro1.ai/api/v1` backend (no public listing endpoint
   found; the sitemap is simpler and stable).
 - No per-client company modeling — clients are anonymized, so the source is one

@@ -31,11 +31,13 @@ offer every crawl is prohibitively expensive.
 ## Capabilities
 
 ### New Capabilities
+
 - `justjoin-source`: the justjoin adapter's list+detail crawl — how it hydrates the
   description and structured facets from `/v1/offers/{slug}` for unseen offers, and the
   one-time backfill of existing rows.
 
 ### Modified Capabilities
+
 - `source-ingest`: add an optional adapter capability that hydrates only postings the
   catalogue does not already have, driven by a provider-scoped seen-set the pipeline
   supplies — a bounded, opt-in seam that leaves every other adapter and the `Source.Fetch`

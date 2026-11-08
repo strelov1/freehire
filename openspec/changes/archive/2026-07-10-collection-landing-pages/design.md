@@ -21,6 +21,7 @@ exactly the primitive a collection landing needs.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Each curated collection gets an indexable, self-canonical landing at
   `/collections/:slug` with its own `<title>`, `<h1>`, and description.
 - Reuse existing filtering/feed machinery — no new pagination or facet code.
@@ -28,6 +29,7 @@ exactly the primitive a collection landing needs.
 - Fix the missing `<h1>` on `/jobs` and `/companies` along the way.
 
 **Non-Goals:**
+
 - Redirecting the old `/jobs?collections=<slug>` URLs (they remain valid manual
   filters; canonical consolidation already handles the duplicate signal).
 - Multi-value (`OR`-list) scope params — every current collection param is

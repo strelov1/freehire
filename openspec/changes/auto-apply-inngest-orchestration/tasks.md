@@ -1,4 +1,5 @@
 ## 1. Auth: shared orchestrator secret (replaces the abandoned per-user credential — see
+
    design.md's own Decisions and Alternatives considered)
 
 - [x] 1.1 sqlc query `GetAutoApplyQueueEntryByID` (by `id` alone, no `user_id` filter) —

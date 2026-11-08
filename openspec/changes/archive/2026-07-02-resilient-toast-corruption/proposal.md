@@ -13,6 +13,7 @@ A single row in `jobs` with corrupted TOAST storage (`missing chunk number 0 for
 ## Capabilities
 
 ### New Capabilities
+
 - `corruption-resilience`: full-scan workers survive individual corrupted (`XX001`) rows by skipping+logging them rather than aborting; operators can detect and repair corrupted rows; the DB shuts down cleanly to prevent new corruption.
 
 ### Modified Capabilities

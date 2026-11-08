@@ -64,7 +64,7 @@ used plain argmax and still succeeded.
 Pure orchestration + the deterministic detectors; the model call is behind a small
 client interface so `internal/candidate/pii` stays testable without the sidecar.
 
-```
+```text
 type Contacts struct{ FullName, Email, Phone string; Links []string } // known, authoritative
 
 type Span struct{ Start, End int; Kind string } // NAME|EMAIL|PHONE|LINK|ADDRESS
@@ -103,7 +103,6 @@ masking/restoring in Go — NOT a litellm masking guardrail. Rationale:
   touched, no per-request guardrail opt-in), keeps restore fully under our control (litellm's
   `output_parse_pii` has documented streaming-restore bugs and `matchanalysis` is SSE), and
   keeps freehire's privacy self-contained rather than coupled to the litellm repo/deploy.
-
 - **Model:** `openai/privacy-filter` (Apache-2.0, ONNX q4, `onnxruntime`, CPU-OK, ~96% F1,
   128K context). Pulled **only** from the official repo (a malicious typosquat existed).
 - **Shape:** a small HTTP detection service that returns PII spans (`{start,end,kind}`) for a

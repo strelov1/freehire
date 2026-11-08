@@ -7,11 +7,13 @@ The wire `Analysis` (with `RequirementMatch []Requirement`) is generated to TS v
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Grade the strength of the cited evidence for the two positive statuses so the served verdict and the Stage-3 audit can distinguish real ownership from a bare keyword.
 - Keep the grade deterministic-to-serve and self-healing: additive field on the existing cached payload, no migration, no reindex, no new endpoint.
 - Preserve the "never persist an out-of-vocabulary value" sanitize invariant.
 
 **Non-Goals:**
+
 - No change to `overall_score` weights or the six dimensions — strength informs the *model's* Stage-3 scoring via the prompt, it is not a new server-side weighted input.
 - No deterministic (non-LLM) derivation of evidence strength — it is a Stage-1 model judgement over the CV, sanitized on the way out (mirrors how `status` works today).
 - No backfill of existing cached analyses — they refresh on the next recompute.

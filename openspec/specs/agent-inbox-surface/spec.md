@@ -10,7 +10,9 @@ exactly what such a user already owns. This capability is the way in: the caller
 pushes mail their client fetched and writes back the verdict their model reached,
 and the server never classifies `external` mail. Everything downstream — the
 listing, linking, the tracker's stage advance — treats that mail as any other.
+
 ## Requirements
+
 ### Requirement: Ingesting externally-fetched mail
 
 The system SHALL accept a batch of messages an authenticated caller's own mail
@@ -250,4 +252,3 @@ browser session.
 
 - **WHEN** a request carrying a full-scope API key reads a message belonging to another user
 - **THEN** the request returns 404
-

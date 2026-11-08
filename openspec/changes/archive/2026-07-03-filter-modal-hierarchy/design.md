@@ -19,6 +19,7 @@ A throwaway prototype validated the layout and interactions.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A discoverable, sectioned filter modal that scales past ~18 flat facets.
 - Deferred apply with a live result-count preview; the sidebar reflects selection.
 - Hierarchy where it pays off: grouped specialization and a region→country→city tree.
@@ -26,6 +27,7 @@ A throwaway prototype validated the layout and interactions.
 - No API, DB schema, or search-index change.
 
 **Non-Goals:**
+
 - Skills grouped by themes (needs a new dictionary — separate change).
 - A global "search across all filters" box (deferred).
 - Scoped facet counts (countries-within-region, cities-within-country) — region-level
@@ -35,6 +37,7 @@ A throwaway prototype validated the layout and interactions.
 ## Decisions
 
 ### Staged vs applied state — a staging store layered over FilterStore
+
 The modal edits a **staged** snapshot; the sidebar and URL stay the live truth. Model
 this as a thin staging store that clones the current `JobFilters` on open, exposes the
 same facet mutators as `FilterStore`, and on **Show results** writes the snapshot back
@@ -44,12 +47,14 @@ saved searches). Chip removal in the sidebar calls the live `FilterStore` direct
 live-URL invariant that the rest of the app relies on.
 
 ### Sidebar becomes a summary component
+
 `FiltersPanel` is reshaped: instead of rendering facet controls it renders the applied
 values as grouped chips plus the **All filters** button and **Reset all**. The
 per-facet control rendering (`FacetSection`, pill/select/token controls) moves into the
 modal's right pane. `activeFilterCount` already exists for the badge.
 
 ### Facet registry gains grouping + hierarchy metadata
+
 Extend `FacetDef` with a `section` (rail grouping) and, where needed, a hierarchy
 descriptor. Specialization gets a static `category → section` map covering the whole
 `CATEGORY_VALUES` vocabulary (a test asserts exhaustiveness so a newly added category
@@ -57,6 +62,7 @@ can't silently fall out of every section). Location becomes a dedicated hierarch
 control rather than a flat select.
 
 ### Geography hierarchy is built client-side from two exported maps
+
 Add `emitMap` to `cmd/gen-contracts` and export `country→region` (inverse of
 `internal/location`'s region grouping) and a new `city→country` map. The city→country
 map is curated in `internal/location` over the **beacon-city** set the parser can emit
@@ -68,6 +74,7 @@ unchanged. *Alternative rejected:* a backend hierarchical/scoped facet endpoint 
 surface, not needed when the client already has the full mappings.
 
 ### Live count preview reuses the facets endpoint
+
 **Show results** shows the total for the staged filters via `api.facetCounts(staged
 params).total`, debounced per toggle. No new endpoint.
 

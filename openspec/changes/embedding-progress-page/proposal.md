@@ -26,6 +26,7 @@ visible coverage figure is what would have shown it.
 ## Capabilities
 
 ### New Capabilities
+
 - `embedding-progress`: the public measure of semantic-embedding coverage — what is
   counted, how it is kept fresh, the JSON and stream endpoints, and the page.
 

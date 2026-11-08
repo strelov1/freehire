@@ -17,6 +17,7 @@ since #659, because nothing asks the model to populate it.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Resume collecting the LLM's raw `skills` guess into the existing
   `Enrichment.Skills` field, going forward, as a discovery signal for future
   `internal/skilltag` dictionary expansion.
@@ -25,6 +26,7 @@ since #659, because nothing asks the model to populate it.
   untouched and remains the sole served source).
 
 **Non-Goals:**
+
 - Reverting any of the other eight fields `enrich-prompt-trim` dropped. Their
   taxonomies are closed and slow-changing (grade levels, employment types,
   education levels, …); discovery has near-zero marginal value there, so

@@ -11,12 +11,14 @@ truncated (the full text sits behind login).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `tecla` adapter that crawls the whole marketplace through `getPublicJobs` pagination and
   yields normalized `Job`s with the correct per-posting company.
 - Mark every job remote (the platform is remote-only) and date it from `createdAt`.
 - Follow the established boardless-adapter shape so the feature fits without restructuring.
 
 **Non-Goals:**
+
 - Salary (no field on `Job`), skills/seniority parsing (ingest dictionaries own that).
 - Authenticated full-description fetch — out of scope; we accept the truncated public text.
 - Cron scheduling — lives in the `freehire-ops` repo.

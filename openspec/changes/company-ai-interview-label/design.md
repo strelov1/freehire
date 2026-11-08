@@ -68,7 +68,7 @@ in the wrong place and paying for the mistake in coverage.
 
 **Chosen:** `company_process_reports`, modelled on `ghost_reports`.
 
-```
+```text
 id            bigint  generated always as identity primary key
 user_id       bigint  references users (id) on delete cascade
 company_slug  text    references companies (slug) on delete cascade

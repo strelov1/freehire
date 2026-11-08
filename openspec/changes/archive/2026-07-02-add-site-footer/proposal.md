@@ -23,6 +23,7 @@ makes freehire look professionally maintained.
 ## Capabilities
 
 ### New Capabilities
+
 - `site-footer`: the global site footer — its layout, the link groups it exposes,
   the social links it carries, and its responsive/theming behavior.
 

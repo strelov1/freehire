@@ -11,9 +11,11 @@ Upgrading from Pro to Ultra (and any other tier-to-tier change) opens a brand-ne
 ## Capabilities
 
 ### New Capabilities
+
 - `subscription-billing`: purchasing, upgrading/downgrading, and viewing the state of a paid subscription (Pro/Ultra) against the payment provider (Stripe) — the checkout flow, the upgrade-in-place behavior, and what the billing overview reports.
 
 ### Modified Capabilities
+
 (none — `subscription-billing` did not exist as a spec before this change)
 
 ## Impact

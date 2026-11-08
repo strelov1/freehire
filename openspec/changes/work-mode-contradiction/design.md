@@ -43,7 +43,7 @@ be shown to help and can be argued to hurt does not go in.
 What remains is denial by construction — sentences whose only purpose is to say the job is
 not remote:
 
-```
+```text
 100% on-site                     (unless "for the first …" follows)
 not a remote position/role/job/opportunity
 this position/role/job is not remote
@@ -94,7 +94,7 @@ shared.
 phrase. The contradiction is not a fourth tier under those; it is a check ABOVE the whole
 chain's result:
 
-```
+```text
 workMode := <existing three-tier resolution>
 if workMode == "remote" && location.RemoteContradicted(in.Description) {
         workMode = "onsite"
@@ -151,7 +151,7 @@ Withholding every stale row at once would face a hydrating provider with one det
 per stored posting — 1.27M on workday. The predicate therefore withholds a stale row only
 when it falls in the run's slot:
 
-```
+```text
 abs(hashtext(external_id)) % @refresh_slices = @refresh_slot
 ```
 

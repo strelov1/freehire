@@ -4,6 +4,7 @@ This document captures the OpenSpec-level decisions for the
 **freehire-repo portion** only.
 
 Current state the change builds on:
+
 - `cvs` table (`internal/cv/`, migration `0024_cvs.sql`) with `data jsonb` (`cv.Document`) and a
   **nullable `job_id`** the migration comment marks as "a seam for the follow-up per-vacancy
   tailoring phase". `cv.Document.Sanitize()` is already documented as "in the follow-up tailoring
@@ -22,6 +23,7 @@ depend on.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Turn `cvs.job_id` into the two-tier base/tailored model.
 - A pure, sanitized, field-level patch transform (`cv.Apply`) and its `PATCH` endpoint.
 - A bootstrap endpoint that seeds/creates CVs, gates on a cached analysis, and mints a scoped key.
@@ -29,6 +31,7 @@ depend on.
 - A fit-page CTA that opens the tailoring session.
 
 **Non-Goals:**
+
 - The `freehire cv` CLI and the roy `cv-tailoring` skill (separate repos).
 - An item-level **experience bank** — noted seam; the base CV is the proto-bank.
 - Any change to how `jobfit.Analysis` is computed (it is only read).

@@ -1,8 +1,11 @@
 # linksource-board-coverage Specification
 
 ## Purpose
+
 TBD - created by archiving change unified-link-contribution. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Single-vacancy resolution on any recognised ATS board
 
 The system SHALL resolve a single vacancy from a job link whose host belongs to a
@@ -65,4 +68,3 @@ both.
 
 - **WHEN** a new ATS host is added to the recogniser
 - **THEN** both the contribution flow and link resolution recognise links on that host
-

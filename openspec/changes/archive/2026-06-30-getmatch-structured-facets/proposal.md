@@ -15,6 +15,7 @@ getmatch.ru exposes a posting's grade, required experience, skills, and speciali
 <!-- none -->
 
 ### Modified Capabilities
+
 - `source-ingest`: source adapters gain optional structured facet fields on the normalized `Job`, and the getmatch adapter maps its detail data into them under freehire's vocabularies.
 - `deterministic-facets`: the `seniority`, `category`, `skills`, and `experience_years_min` facets accept a structured source signal that takes precedence over the deterministic dictionary, extending the precedence rule already in force for `work_mode`.
 

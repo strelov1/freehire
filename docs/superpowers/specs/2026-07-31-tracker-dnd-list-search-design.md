@@ -70,7 +70,7 @@ application's stage change 404s and the card reverts.
 
 New routes, addressed by the row id exactly as the listing served it:
 
-```
+```text
 PATCH  /api/v1/me/applications/:id          {stage?, notes?}
 DELETE /api/v1/me/applications/:id          remove from the board
 DELETE /api/v1/me/applications/:id/stage    drop progress, keep the bookmark

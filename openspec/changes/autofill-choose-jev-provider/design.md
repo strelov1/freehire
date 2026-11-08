@@ -25,6 +25,7 @@ confidence, at ~0.3-0.5s per call.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Answer `Choose` with Jev when `TYPESAFE_API_KEY` is configured, preserving the exact
   same contract callers rely on today: a verbatim option from `options`, or `""`.
 - Degrade safely: any Jev-side failure (network, auth, malformed response) falls back to
@@ -34,6 +35,7 @@ confidence, at ~0.3-0.5s per call.
 - Zero behavior change when `TYPESAFE_API_KEY` is unset (the default today).
 
 **Non-Goals:**
+
 - Splitting `Plan` into discrete/free-text sub-calls so it too can use Jev.
 - Touching `LLMDrafter.Draft` (`internal/api/atsapply/llm_drafter.go`), `cmd/auto-apply`,
   or `cmd/enrich`.

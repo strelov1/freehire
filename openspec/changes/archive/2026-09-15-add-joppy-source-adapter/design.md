@@ -36,6 +36,7 @@ joppy.me (2026-09-15) actually found, since the issue's own notes leave several 
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Crawl every company in the directory each run and return every open posting found, cheaply
   (well under 300 requests for a board this size).
 - Map every field the platform states in a structured form onto the matching `Job` field, and
@@ -44,6 +45,7 @@ joppy.me (2026-09-15) actually found, since the issue's own notes leave several 
   own data holds it internally either way.
 
 **Non-Goals:**
+
 - No CEFR-precise `EnglishLevel` mapping from Joppy's own 1-5 language scale (see Decisions —
   rejected for lack of an authoritative equivalence).
 - No `HydratingSource`/seen-based incremental fetch: nothing is expensive enough here to bound

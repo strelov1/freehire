@@ -15,6 +15,7 @@ live facet index. The missing piece is (a) knowing which writes actually need
 re-indexing, and (b) a batched, best-effort push wired into the ingest worker.
 
 Constraints worth preserving:
+
 - `internal/pipeline` is deliberately decoupled from `internal/db` and
   `internal/search` (it imports only `jobderive`/`sources`/`worker`). Indexing
   needs the `db.Job` row, which only the store sees, so indexing belongs on the
@@ -29,6 +30,7 @@ Constraints worth preserving:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - New and content-changed open jobs become searchable within one crawl cycle.
 - Only rows whose indexed representation changed are pushed (no full-catalogue
   re-push).
@@ -37,6 +39,7 @@ Constraints worth preserving:
   pipeline decoupled from db/search.
 
 **Non-Goals:**
+
 - Removing closed-job documents incrementally. Closures (post-run sweep, liveness
   probe) continue to be reconciled by the batch reindex, unchanged from today.
 - The semantic index. It keeps its own schedule.

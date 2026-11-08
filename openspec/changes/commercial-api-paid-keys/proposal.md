@@ -31,6 +31,7 @@ files are later changes.
 ## Capabilities
 
 ### New Capabilities
+
 - `commercial-api`: the API subscription product, its entitlement, tier-aware and anonymous limits
   on public reads, the verified-bot exemption, and the data licence.
 

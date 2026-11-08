@@ -33,6 +33,7 @@ de-identified structured résumé (or, for tailoring, the CV body without the co
 <!-- none -->
 
 ### Modified Capabilities
+
 - `job-fit-analysis`: fit is scored from the de-identified structured résumé, not the raw CV; the raw CV is no longer sent and no longer masked per-analysis.
 - `cv-ats-score`: the LLM qualitative review reads the structured résumé, not the raw CV.
 - `cv-tailoring`: the tailoring agent's credential cannot read or write the CV contact block.

@@ -36,6 +36,7 @@ these insights, and any authenticated/paid tiering.
 ## Capabilities
 
 ### New Capabilities
+
 - `market-insights`: public aggregate market-intelligence reads over the job
   catalogue — role demand, skill demand, hiring velocity, and salary bands —
   served from precomputed rollups.

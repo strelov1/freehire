@@ -10,7 +10,7 @@ Please report suspected vulnerabilities **privately**, by either:
 
 - Opening a private report through **GitHub Security Advisories** for this
   repository (Security → Report a vulnerability), or
-- Emailing **hello@freehire.me**.
+- Emailing **<hello@freehire.me>**.
 
 Please include:
 

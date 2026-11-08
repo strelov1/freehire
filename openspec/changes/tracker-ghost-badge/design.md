@@ -16,12 +16,14 @@ The tracker (`ListTrackedJobs`, `internal/api/handler/me_tracking.go`) has neith
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A tracked job's card carries the same `ghost` signal the job's own detail page and the other two listings already show, computed the same way (`jobview.ClassifyGhost`), never a bespoke derivation.
 - No new read of a job's description anywhere in this path — `TestMeasureBoardLoad` stays green with no changes.
 - Best-effort: a lookup failure never fails the listing request. A `ListJobGhostStamps` failure aborts the whole attach pass, omitting `ghost` from every affected card; a `Search` (reality-class) failure only narrows the evidence — the reality criterion becomes unreachable, but a job whose other criteria (ATS absence, silent applications, user reports) already converge on their own still carries the signal. See Decisions.
 - Bounded cost: one Meilisearch query and the two existing ghost-evidence queries per page, not per row.
 
 **Non-Goals:**
+
 - Serving `Reality` on the tracker card. Neither `/jobs` nor search does this today (Context, above) — both use `ClassifyReality`'s output only to feed `ClassifyGhost`'s `RealityClass` input. This change follows that convention rather than introducing a new one.
 - Changing `ghost.Classify`, `jobview.ClassifyGhost`, or the ghost-signal's own derivation rules. Reused verbatim.
 - A live "is this job still in the index" check. A tracked job absent from Meilisearch (not yet reindexed, or the index and Postgres have briefly diverged) simply reads `RealityClass = ""` for that one job, the same degrade an ordinary missing-hit already produces elsewhere.

@@ -1,11 +1,14 @@
 # module-layering Specification
 
 ## Purpose
+
 The shape of `internal/`: which block every package belongs to, which blocks may see which,
 and how that is enforced. It exists so the directory tree carries the information the root
 `AGENTS.md` table used to carry alone, and so an import that crosses a boundary fails CI
 rather than merging.
+
 ## Requirements
+
 ### Requirement: Every internal package belongs to exactly one block
 
 Every package under `internal/` SHALL live at `internal/<block>/<pkg>`, where `<block>` is

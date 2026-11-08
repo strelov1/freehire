@@ -24,6 +24,7 @@ See proposal.md - Why. Relevant existing state:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One durable per-user record holding appearance defaults, validated with the exact rules a CV
   document already uses.
 - Apply it at the three existing base-CV creation call sites, non-invasively.
@@ -31,6 +32,7 @@ See proposal.md - Why. Relevant existing state:
   forking it.
 
 **Non-Goals:**
+
 - Re-applying defaults to an existing/open CV ("reset to defaults" in the tailoring workspace).
 - A new top-level `/my/*` navigation entry.
 - Any change to tailored (job-bound) CV creation — it already inherits from the base CV.

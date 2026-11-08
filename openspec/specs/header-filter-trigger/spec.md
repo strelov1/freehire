@@ -7,7 +7,9 @@ the shared header search box, at its right edge, mirroring the location scope-pr
 the left. It shows an active-filter badge and opens the active page's own filter modal on
 every viewport, so filters stay reachable at any scroll position without a separate
 toolbar or floating affordance.
+
 ## Requirements
+
 ### Requirement: All-filters trigger in the header search box
 
 On list pages backed by a filter modal — the jobs feed (`/`), a company's jobs list
@@ -91,4 +93,3 @@ Tying the controls' visibility to the total is what hid them on a company page.
 - **WHEN** a view passes list controls but renders its result total outside the
   toolbar
 - **THEN** the desktop toolbar row renders the controls and omits only the total
-

@@ -14,6 +14,7 @@ The semantic index (`jobs_semantic`) can only be built by a full `reindex --sema
 ## Capabilities
 
 ### New Capabilities
+
 - `semantic-embedding`: the incremental pipeline that keeps `jobs_semantic` current — a transactional outbox queue, per-job embed provenance, and a `cmd/embed` worker that adds/updates open jobs and removes closed ones in place, independent of the full `reindex --semantic` rebuild.
 
 ### Modified Capabilities

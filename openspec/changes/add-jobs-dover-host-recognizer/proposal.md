@@ -29,9 +29,11 @@ postings), so the uuid is proof that the link names a board, not the board itsel
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 - `link-contributions`: the Supported-ATS board recognition registry gains the
   `jobs.dover.com` host — a vacancy or board link on it yields `(dover, <Org>)`, the same
   board an `app.dover.com` link for the same company spells.

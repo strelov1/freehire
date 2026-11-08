@@ -36,11 +36,13 @@ charts, and dedicated velocity pages.
 ## Capabilities
 
 ### New Capabilities
+
 - `seo-insights-pages`: public server-rendered landing pages over the insights
   data — hub + per-category salary/skills/roles pages — with SEO content, a
   data-quality gate, internal linking, and a sitemap shard.
 
 ### Modified Capabilities
+
 - `market-insights`: add an optional `category` scope to the roles read, and a
   per-category all-seniority salary read, so the landing pages can be served from
   single API calls.

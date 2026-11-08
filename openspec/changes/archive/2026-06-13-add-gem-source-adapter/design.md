@@ -22,11 +22,13 @@ The Gem contract was confirmed live against the `go-cadre` board:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A `gem` adapter that lists a board and yields normalized jobs with sanitized-HTML
   descriptions, reusing the existing list→detail pattern and helpers.
 - One-line registration in `sources.All`; one `sources.yml` entry to onboard a board.
 
 **Non-Goals:**
+
 - Pagination of `JobBoardList` (the operation exposes no page arguments; Gem boards are
   single-company and small). Deferred until an observed board truncates.
 - Any change to the pipeline, write path, config, or schema.

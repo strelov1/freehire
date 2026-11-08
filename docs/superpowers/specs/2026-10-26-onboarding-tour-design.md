@@ -72,7 +72,6 @@ Migration 0207 re-asks every account once (it nulls `onboarding_completed_at`); 
 skips any data step already answered and pre-fills the rest, and an account with nothing
 missing is completed without a screen.
 
-
 The layout routes any account with `onboarding_completed_at IS NULL` to `/onboarding`
 on every visit until it is finished or closed with X — the "wouldn't let me see the
 job" complaint. New rule: the tour marks the account complete when it is SHOWN. The

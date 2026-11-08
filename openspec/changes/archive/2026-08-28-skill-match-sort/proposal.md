@@ -29,11 +29,13 @@ cannot be served it.
 ## Capabilities
 
 ### New Capabilities
+
 - `skill-match-sort`: the skill vector — its permanent position registry, its
   rarity weighting, how a vacancy's and a candidate's are built, and the ordering
   their cosine produces.
 
 ### Modified Capabilities
+
 - `job-search`: the index gains a `userProvided` embedder and a per-document
   vector; the search endpoint gains the `sort=match` directive, optional
   authentication, and the rule that a vector ranking suppresses attribute sorting.

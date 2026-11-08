@@ -1,7 +1,7 @@
 # Skill-Match Sort Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
+>
 > **Historical.** This plan was written before implementation and is kept as the
 > record of what was intended. Three things went differently and the CODE is the
 > authority, not this file: task 1 needed no work (`skilltag.Canonicals()` already
@@ -68,10 +68,12 @@ the canonical values are only reachable as the *values* of two unexported alias
 tables (`wordAliases`, `phraseAliases`).
 
 **Files:**
+
 - Create: `internal/dict/skilltag/canonicals.go`
 - Test: `internal/dict/skilltag/canonicals_test.go`
 
 **Interfaces:**
+
 - Produces: `skilltag.Canonicals() []string` — every distinct canonical slug, sorted, a fresh slice per call.
 
 - [ ] **Step 1: Write the failing test**
@@ -188,12 +190,14 @@ git commit -m "feat(skilltag): expose the dictionary's canonical slugs"
 ### Task 2: The permanent skill→position registry
 
 **Files:**
+
 - Create: `internal/dict/skillvec/registry.go`
 - Create: `internal/dict/skillvec/gen/main.go`
 - Test: `internal/dict/skillvec/registry_test.go`
 - Modify: `internal/platform/arch/layering/blocks.go` (the `dict` block list)
 
 **Interfaces:**
+
 - Consumes: `skilltag.Canonicals() []string` (Task 1).
 - Produces:
   - `skillvec.Dimensions` — `const Dimensions = 1024`
@@ -486,10 +490,12 @@ git commit -m "feat(skillvec): permanent skill-to-position registry"
 ### Task 3: IDF weights and vector construction
 
 **Files:**
+
 - Modify: `internal/dict/skillvec/skillvec.go`
 - Test: `internal/dict/skillvec/skillvec_test.go`
 
 **Interfaces:**
+
 - Consumes: `skillvec.Position` and `Dimensions` (Task 2).
 - Produces:
   - `type Weights struct { … }` — zero value is usable and yields nil vectors
@@ -720,10 +726,12 @@ git commit -m "feat(skillvec): IDF-weighted, unit-length skill vectors"
 ### Task 4: Load the weights from the facet-stats rollup
 
 **Files:**
+
 - Create: `internal/search/search/skillweights.go`
 - Test: `internal/search/search/skillweights_test.go`
 
 **Interfaces:**
+
 - Consumes: `skillvec.WeightsFromCounts` (Task 3); `db.Queries.ListFacetStats` (existing).
 - Produces: `func LoadSkillWeights(ctx context.Context, r FacetStatsReader) (skillvec.Weights, error)` and `type FacetStatsReader interface`.
 
@@ -868,10 +876,12 @@ git commit -m "feat(search): derive skill-rarity weights from the facet rollup"
 ### Task 5: Carry the vector on the search document
 
 **Files:**
+
 - Modify: `internal/search/search/document.go:36-77` (the struct), `:86-111` (`FromJob`), `:17-26` (the size comment)
 - Test: `internal/search/search/document_test.go`
 
 **Interfaces:**
+
 - Consumes: `skillvec.Weights` (Task 3).
 - Produces: `FromJob(j db.Job, w skillvec.Weights) (JobDocument, error)` — **the signature changes**, and `JobDocument.Vectors map[string][]float32` with JSON tag `_vectors`.
 
@@ -996,11 +1006,13 @@ git commit -m "feat(search): carry an IDF-weighted skill vector on the job docum
 ### Task 6: Update the three indexers
 
 **Files:**
+
 - Modify: `cmd/reindex/main.go:479`
 - Modify: `cmd/search-drain/indexer.go:109`
 - Modify: `internal/ingest/linkimport/linkimport.go:319`
 
 **Interfaces:**
+
 - Consumes: `search.LoadSkillWeights` (Task 4), the new `FromJob` signature (Task 5).
 - Produces: nothing new — this restores a compiling build.
 
@@ -1077,13 +1089,14 @@ git commit -m "feat(search): thread skill weights through the three indexers"
 ### Task 7: Declare the embedder and accept a query vector
 
 **Files:**
+
 - Modify: `internal/search/search/client.go:535` (`facetSettings`), `:440-447` (`SearchParams`), `:472-500` (`Search`), `:27` and `:3` (the "NO embedder" comments)
 - Test: `internal/search/search/settings_test.go`
 
 **Interfaces:**
+
 - Consumes: `skillvec.Dimensions` (Task 2), `SkillEmbedder` (Task 5).
 - Produces: `SearchParams.Vector []float32`.
-
 - [ ] **Step 1: Write the failing test**
 
 ```go
@@ -1188,10 +1201,12 @@ git commit -m "feat(search): declare the skill embedder and accept a query vecto
 ### Task 8: The sort=match request path
 
 **Files:**
+
 - Modify: `internal/api/handler/search.go:44` (route), `:90-97` (`searchSortable`), `:120-147` (`runJobSearch`), `:150-172` (`searchSort`)
 - Test: `internal/api/handler/search_test.go`
 
 **Interfaces:**
+
 - Consumes: `SearchParams.Vector` (Task 7), `search.LoadSkillWeights` (Task 4), `userprofile.Service.Get` (existing).
 - Produces: `?sort=match` on `/jobs/search`.
 
@@ -1393,11 +1408,13 @@ git commit -m "feat(api): rank /jobs/search by the caller's skill vector on sort
 ### Task 9: Expose the option in the SPA
 
 **Files:**
+
 - Modify: `web/src/lib/facetModel.ts` (the sort vocabulary)
 - Modify: the sort selector component (find it with `grep -rn "posted_at" web/src/lib/components/`)
 - Test: `web/src/lib/facetModel.test.ts`
 
 **Interfaces:**
+
 - Consumes: `?sort=match` (Task 8).
 
 Per `hire-grep-web-for-an-existing-implementation-first`: check `web/` for an existing
@@ -1449,6 +1466,7 @@ git commit -m "feat(web): offer the profile-match sort on the jobs feed"
 ### Task 10: Document the rollout hazard
 
 **Files:**
+
 - Modify: `internal/search/search/AGENTS.md`
 - Modify: `CLAUDE.md` (the `reindex` bullet under "Worker gotchas")
 

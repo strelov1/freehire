@@ -60,6 +60,7 @@ run this session got stuck at the review step with nowhere in the product to res
   `auto_apply_queue.resolved_preview jsonb`, holds the persisted answer-preview snapshot.
 
 Explicitly **not** part of this change:
+
 - **No dedicated `/my/auto-apply` page and no "recently completed by auto-apply" list.**
   Recently-completed attempts are already visible in the tracker at the `applied` stage
   (`cmd/auto-apply`'s existing success path already calls `jobtracking.MarkJobApplied`); a
@@ -75,12 +76,14 @@ Explicitly **not** part of this change:
 ## Capabilities
 
 ### New Capabilities
+
 - `auto-apply-tracker-review`: the tracker-embedded read/act surface for an auto-apply attempt
   — the six-value status derivation, the persisted answer-preview snapshot, and the
   approve/decline interaction, all surfaced through the existing tracked-job shape rather than a
   standalone endpoint or page.
 
 ### Modified Capabilities
+
 (none — `auto-apply-cv-tailoring`, `atsapply-resume-upload`, and `auto-apply-orchestration`'s own
 requirements are unchanged; `cmd/auto-apply` gains a second, independent claim pass and
 `PostAutoApplyTailor` loses a notification call it already made, neither of which changes what

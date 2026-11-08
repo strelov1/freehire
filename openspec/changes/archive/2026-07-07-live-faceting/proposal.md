@@ -30,6 +30,7 @@ facet you're editing.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `job-analytics`: the facet-distribution endpoint gains an opt-in **disjunctive**
   mode — each facet counted under the filter minus its own selection, plus the
   full-filter total — backed by a new concurrent `search` capability.

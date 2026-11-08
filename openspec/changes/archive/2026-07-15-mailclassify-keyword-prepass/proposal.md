@@ -22,6 +22,7 @@ large share of classification calls at no accuracy cost on those cases.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `email-body-classification`: add the deterministic keyword fast-path before the
   LLM status classification.
 

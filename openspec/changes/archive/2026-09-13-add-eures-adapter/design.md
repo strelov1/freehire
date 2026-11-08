@@ -2,7 +2,7 @@
 
 See proposal.md - Why. Everything below was verified live against the real public API on
 2026-09-13 (no key needed), cross-checked against the unofficial community OpenAPI documentation
-at https://github.com/rorar/EURES-API-Documentation.
+at <https://github.com/rorar/EURES-API-Documentation>.
 
 **Search endpoint.** `POST https://europa.eu/eures/api/jv-searchengine/public/jv-search/search`.
 Request carries `resultsPerPage` (max 50), `page` (1-based), `sortSearch`, `keywords` (empty array
@@ -71,6 +71,7 @@ unofficial API docs don't document the frontend URL shape).
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One provider (`eures`), one board per EURES-covered country.
 - ICT-only scope enforced by the adapter's own fixed occupation filter, never board-configurable.
 - Correct aggregator classification so cross-source dedup can suppress EURES copies of postings
@@ -79,6 +80,7 @@ unofficial API docs don't document the frontend URL shape).
   gains a direct national-PES or ATS adapter).
 
 **Non-Goals:**
+
 - NUTS-region sharding as a second board axis. Rejected: the measured 3-day-window headroom
   already covers today's volumes, `CompanyEntry.Board` models one identity string, and this would
   turn 31 boards into on the order of 90+ for a problem not yet observed. Revisit only if measured

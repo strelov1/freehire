@@ -69,6 +69,7 @@ refer them, and that flow already exists.
 ## Impact
 
 **New code**
+
 - `internal/engage/mentorship` — the domain: profile, schedule, slot computation,
   booking lifecycle. The slot pipeline is a pure, dependency-free file (no database,
   no clock beyond an injected one, no network) so its timezone and boundary cases test

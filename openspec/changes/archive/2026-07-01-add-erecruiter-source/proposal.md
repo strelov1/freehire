@@ -24,6 +24,7 @@ identity instead of through the aggregator.
 ## Capabilities
 
 ### New Capabilities
+
 - `erecruiter-source`: a board-based `erecruiter` adapter that crawls one company's
   keyless eRecruiter career board (list rows + per-offer detail) into the catalogue,
   plus a harvest prober that discovers and validates a company's `cfg` board token.

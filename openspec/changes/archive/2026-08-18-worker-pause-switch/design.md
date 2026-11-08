@@ -59,7 +59,7 @@ silently running while the fleet is held.
 
 ### Two keys, presence-as-signal
 
-```
+```text
 freehire:pause:all       # the whole fleet
 freehire:pause:<binary>  # one binary, e.g. freehire:pause:ingest
 ```

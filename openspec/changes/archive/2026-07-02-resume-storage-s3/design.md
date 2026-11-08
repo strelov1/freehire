@@ -5,6 +5,7 @@ The résumé-verdict feature (shipped) analyzes an uploaded résumé for coheren
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One résumé per user stored in S3, uploaded once, reused for skill extraction and verdict coherence.
 - A generic `internal/blobstore` S3 abstraction in `hire` — no bucket/host/provider baked into code, only `S3_*` env.
 - Coherence re-runs from the stored résumé (no re-upload); the verdict page stops asking to upload again when a résumé exists.
@@ -12,6 +13,7 @@ The résumé-verdict feature (shipped) analyzes an uploaded résumé for coheren
 - `freehire-ops` provisions the Hetzner bucket + injects `S3_*` into prod.
 
 **Non-Goals:**
+
 - Encryption at rest of the résumé (deferred; object storage is access-controlled by credentials; revisit if needed).
 - Versioning/history of résumés (one per user, overwrite on re-upload).
 - Storing the extracted text separately (derived on read to avoid drift).

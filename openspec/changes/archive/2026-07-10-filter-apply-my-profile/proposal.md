@@ -26,6 +26,7 @@ in one action instead of making the user reconstruct it facet by facet.
 <!-- none -->
 
 ### Modified Capabilities
+
 - `filter-modal`: adds a requirement for a header action that resets and seeds the staged
   filters from the signed-in user's profile, with a create-profile fallback.
 

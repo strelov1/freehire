@@ -19,6 +19,7 @@ sourced from external datasets and matched onto our `companies`.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A company can belong to ≥1 curated collection; this drives a job-feed landing
   page per collection that reuses the existing faceted search unchanged.
 - Membership is populated from external data (YC open dataset; a hand list for
@@ -27,6 +28,7 @@ sourced from external datasets and matched onto our `companies`.
 - Reuse the established facet plumbing — no new search path, no bespoke feed.
 
 **Non-Goals:**
+
 - Collection CRUD UI / per-collection cover art / arbitrary user-defined
   collections. The set is curated and fixed in code (one registry entry each).
 - Domain-based company matching (matches by normalized name only).
@@ -65,6 +67,7 @@ later generated via `gen-contracts`).
 
 **4. Import worker resolves, writes, propagates.** `cmd/import-collections` is a
 run-once-and-exit worker (same shape as the other `cmd/` workers). Per collection:
+
 - `yc`: fetch the open `yc-oss` dataset (JSON: name, website, batch, status),
   normalize each company name via `normalize.Slug`, match to existing
   `companies.slug`; log unmatched for manual follow-up.
@@ -109,6 +112,7 @@ distribution in one search call.
 2. Deploy the code (jobview/search facet, web pages, new binary).
 3. Run `cmd/import-collections` once to populate membership + propagate.
 4. `make reindex` to surface `jobs.collections` in Meili.
+
 - **Rollback:** the facet is additive; the pages degrade to empty if membership
   is unpopulated. Reverting is dropping the two columns and the routes — no data
   loss for existing jobs.

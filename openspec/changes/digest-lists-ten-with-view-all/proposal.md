@@ -55,6 +55,7 @@ is the news. Only the body is bounded.
 ## Impact
 
 **Go:**
+
 - `internal/notify/notify.go` — `Config.SnapshotCap` replaces `DigestCap`,
   `ListLimit` constant, `Digest.NotificationID`, `Digest.Listed()`.
 - `internal/notify/deliver.go` — `buildDigest` caps at `SnapshotCap`; record →

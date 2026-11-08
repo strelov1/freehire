@@ -1,12 +1,14 @@
 # Board contribution conventions
 
 ## Scope
+
 The crowdsourced "contribute a board" flow: a signed-in user pastes a job link from a
 supported multi-tenant ATS, and a company board we do not yet crawl is recorded and rewarded
 and, from `add-invites` onward, with days of Pro. Distinct from `internal/ingest/submission` (the manual full-card moderation queue) —
 contributions are URL-only, auto-validated, unmoderated.
 
 ## Always true
+
 - **The unit is the BOARD, not the vacancy.** A contribution is `(source, board)` — the ATS
   provider and the company slug. Two links to the same company (two vacancies, or the bare
   board-listing URL) collapse to one board, so only the first earns a point. Rationale: once
@@ -65,6 +67,7 @@ contributions are URL-only, auto-validated, unmoderated.
   `0034_drop_users_points.sql`; the credit balance is the unified per-user reward now.
 
 ## Entry points (one sequence, four doors)
+
 There is no "contribute a board" endpoint any more. Every surface — the website's contribute
 form, the Telegram bot, the browser extension, the CLI — posts to `POST /api/v1/jobs/resolve`,
 whose sequence lives in `handler/intake.go`: catalog lookup, then import, then record. A second
@@ -101,6 +104,7 @@ The id-in-the-URL lookup is often the only thing that knows this, since a storef
 names no board.
 
 Two orderings inside it are load-bearing, both pinned by tests:
+
 - the catalog lookup runs FIRST, or a posting we carry from an aggregator gets a second row
   under `weblink`;
 - the board is inspected BEFORE the import (`Service.Inspect`), because the import writes a
@@ -110,8 +114,8 @@ Two orderings inside it are load-bearing, both pinned by tests:
 The service surface is `Inspect` + `RecordIntake`; callers that do not import first compose
 the two themselves.
 
-
 ## Limitations
+
 - Credits are awarded before the board is verified to fetch (no network on submit). Onboarding
   the board into `sources` and any claw-back for an unreachable board are deferred to a
   background ingest worker; the `status` column keeps that option open.

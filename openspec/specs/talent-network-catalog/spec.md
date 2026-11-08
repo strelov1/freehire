@@ -1,8 +1,11 @@
 # talent-network-catalog Specification
 
 ## Purpose
+
 TBD - created by archiving change talent-network-public-catalog. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: The catalogue lists members whose CV can be read
 
 The catalogue SHALL contain exactly those accounts that are members

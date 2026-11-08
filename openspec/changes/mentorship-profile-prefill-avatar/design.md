@@ -18,12 +18,14 @@ suggestions endpoint cannot reuse. Headshot bytes come from
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Compose mentor-profile suggestions the same way `me_profile.go` composes its `cv`
   block: narrow reader interfaces, best-effort, independent per field.
 - Serve a mentor's own headshot publicly only through their own explicit,
   per-profile opt-in, reusing the account's single stored copy.
 
 **Non-Goals:**
+
 - No new photo storage, resizing, or caching layer — `show_photo` gates read access to
   the existing `headshot.Store` object, nothing else.
 - No fuzzy or LLM-assisted company matching — only the exact slug match the create flow

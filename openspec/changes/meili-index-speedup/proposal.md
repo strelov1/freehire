@@ -32,9 +32,11 @@ results mid-word — this was caught in code review, see design.md.)
 ## Capabilities
 
 ### New Capabilities
+
 (none)
 
 ### Modified Capabilities
+
 (none — this is an internal indexing-performance change to `internal/search`, not a
 change to job-search's request/response contract. Search relevancy may shift
 marginally for queries where word-to-word distance within the same field mattered;

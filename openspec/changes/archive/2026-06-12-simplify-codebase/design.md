@@ -13,11 +13,13 @@ without inventing infrastructure.
 ## Goals / Non-Goals
 
 Goals:
+
 - Remove dead code, verbatim duplication, and one hot-path `SELECT *`.
 - Finish one half-built generic abstraction so it stops lying about being generic.
 - Keep every external wire contract byte-for-byte identical.
 
 Non-Goals:
+
 - No behavior, API, or schema changes; no migrations; no new config or deps.
 - No Go→TS codegen pipeline (explicitly rejected below).
 - No speculative new abstractions; the `ui/input.svelte` primitive only mirrors

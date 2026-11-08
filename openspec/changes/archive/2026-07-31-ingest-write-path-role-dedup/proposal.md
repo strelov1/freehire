@@ -37,6 +37,7 @@ and the fact that duplicate rows are kept rather than dropped.
 ## Capabilities
 
 ### Modified Capabilities
+
 - `ingest-content-dedup`: the repost marker is assigned when a posting is first written, not
   only by the periodic recompute, so a per-city fan-out never reaches search, the subscription
   digests, or the enrichment queue as separate vacancies.

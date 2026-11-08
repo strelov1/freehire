@@ -37,6 +37,7 @@ unfiltered request behaves exactly as before.
 <!-- none: this extends existing capabilities -->
 
 ### Modified Capabilities
+
 - `companies`: the `companies` table gains derived facet arrays (`regions`,
   `countries`, `domains`, `company_types`, `company_sizes`) maintained by the
   periodic recompute; `GET /api/v1/companies` gains facet-filter query parameters

@@ -1,7 +1,9 @@
 # employee-referrals Specification
 
 ## Purpose
+
 TBD - created by archiving change add-employee-referrals. Update Purpose after archive.
+
 ## Requirements
 
 ### Requirement: Member offers to refer into a company

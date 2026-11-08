@@ -38,10 +38,12 @@ aggregator page it records a link for manual triage and nothing appears in the c
 ## Capabilities
 
 ### New Capabilities
+
 - `posting-import-by-url`: importing the vacancy on a user-supplied page into the catalog
   when we can parse it, and routing the page to manual triage when we cannot.
 
 ### Modified Capabilities
+
 - `posting-url-resolution`: the two-tier resolve becomes callable from more than the find
   endpoint (no behavior change to `/jobs/find` itself).
 

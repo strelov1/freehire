@@ -22,6 +22,7 @@ its openings.
 ## Capabilities
 
 ### New Capabilities
+
 - `company-info-display`: rendering the company's authoritative firmographic facts on the
   company detail page, conditional on availability.
 

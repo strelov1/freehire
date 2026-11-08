@@ -18,6 +18,7 @@ Non-goals (deferred): a "latest updates" block on the landing page/footer, tag-f
 ## Capabilities
 
 ### New Capabilities
+
 - `blog-changelog`: a markdown-file-backed blog in the SvelteKit frontend — post authoring format (frontmatter incl. `type` + mdsvex), the `/blog` index (with type filter) and `/blog/[slug]` post pages, SEO metadata (meta/OG/JSON-LD + sitemap inclusion), and the RSS feed. The feature also ships an authoring-discipline skill + workflow hooks (Finish-step, AGENT.md) as tooling deliverables (no runtime spec requirement — they govern agent workflow, not system behavior).
 
 ### Modified Capabilities

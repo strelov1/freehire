@@ -1,10 +1,12 @@
 # The screening answer bank
 
 ## Scope
+
 `internal/candidate/answerbank` — what the candidate answers to employers' screening
 questions, accumulating across applications.
 
 ## Always true
+
 - **The bank is a store, not a cache.** It accumulates; only its owner removes anything.
   No reconciler prunes it, no import replaces it — same rule as
   [the experience bank](../experience/AGENTS.md), and a sweeper here would silently discard

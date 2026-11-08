@@ -23,10 +23,12 @@ straightforward addition alongside freehire's other boarded ATS adapters (greenh
 ## Capabilities
 
 ### New Capabilities
+
 - `dover-source`: crawling Dover-hosted company career pages into the job catalogue via Dover's
   public JSON API (board resolution, paginated listing, per-job hydration, posting normalization).
 
 ### Modified Capabilities
+
 (none — `apply-form-capture` and `board-harvest`'s existing requirements already cover "one more
 recognized platform"; only their recognizer registries gain an entry, no requirement changes)
 

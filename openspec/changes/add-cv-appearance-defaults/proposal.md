@@ -28,10 +28,12 @@ Explicitly out of scope: re-applying saved defaults to an already-open/existing 
 ## Capabilities
 
 ### New Capabilities
+
 - `cv-appearance-defaults`: per-user default template/typography/margins — storage, API, and the
   settings screen that edits them.
 
 ### Modified Capabilities
+
 - `cv-builder`: base-CV creation (seeding from résumé or empty) and the "default template" /
   "unset margins default" behavior now consult the user's saved appearance defaults before
   falling back to the system hardcoded defaults.

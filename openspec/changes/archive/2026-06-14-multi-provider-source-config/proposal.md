@@ -32,6 +32,7 @@ No change to adapters, the normalized write path, the DB schema, or the cron mec
 <!-- none -->
 
 ### Modified Capabilities
+
 - `source-ingest`: a board entry's `provider` may be set per entry (file name is the
   fallback default), so one file can list multiple providers.
 - `job-lifecycle`: the unseen-job sweep is scoped and guarded per provider within a run.

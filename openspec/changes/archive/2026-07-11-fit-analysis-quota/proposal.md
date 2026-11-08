@@ -18,6 +18,7 @@ The on-demand "AI fit analysis" runs a three-stage LLM prompt-chain per request 
 <!-- none -->
 
 ### Modified Capabilities
+
 - `job-fit-analysis`: adds a per-user monthly quota (10 unique-job analyses / rolling 30 days) enforced before the LLM call on both the sync and streaming compute endpoints, and exposes quota state on the read endpoint.
 
 ## Impact

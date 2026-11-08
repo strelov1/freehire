@@ -16,6 +16,7 @@ The same `FacetState` and control components (`FacetSection`, `PillGroup`,
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Let one facet hold included and excluded values simultaneously.
 - Keep the URL/API contract unchanged (`?param` / `?param_exclude` / `?param_mode=and`)
   so shared links and saved searches keep working.
@@ -24,6 +25,7 @@ The same `FacetState` and control components (`FacetSection`, `PillGroup`,
 - Unit-test the pure filter logic (model transitions + URL round-trip).
 
 **Non-Goals:**
+
 - No backend, Meilisearch, or search-API change; `query_filter.go` and its tests stay
   untouched.
 - No component-level test harness (Svelte controls stay visually verified).
@@ -41,6 +43,7 @@ serialization and every chip render keys on a plain string today.
 **2. A `setSign` primitive with semantic wrappers in the store.** The store exposes
 `setSign(param, value, 'off'|'include'|'exclude')` plus intent-named wrappers so
 components stay dumb and the transitions stay unit-testable:
+
 - `cycle` (pills): off → include → exclude → off
 - `pick` (select dropdown): off → include, else → off
 - `toggleSign` (select chip control): include ↔ exclude

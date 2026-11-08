@@ -38,6 +38,7 @@ Two further findings de-risk the rewrite considerably:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Restore echojobs ingestion (list discovery + description hydration) using the new site's
   publicly-available, intentionally-maintained data surfaces (sitemap + JSON-LD) — not a
   reverse-engineering of the RSC wire format, which is an internal implementation detail
@@ -49,6 +50,7 @@ Two further findings de-risk the rewrite considerably:
   `cmd/liveness/echojobs.go`, which call the same dead endpoint.
 
 **Non-Goals:**
+
 - Not scraping or headless-browser-rendering echojobs pages — the JSON-LD block makes
   that unnecessary.
 - Not adding new Job fields (e.g. `educationRequirements`, `experienceRequirements`) the
@@ -95,6 +97,7 @@ spuriously reject a posting that was already accepted once
 (`internal/classify/nontech.go:202-207`).
 
 **Field mapping notes** (JSON-LD → `Job`):
+
 - `jobLocationType == "TELECOMMUTE"` → `Remote: true, WorkMode: "remote"`; anything else
   → `WorkMode: ""` (unknown), matching the existing adapter's principle of never guessing
   hybrid/onsite from an ambiguous signal.

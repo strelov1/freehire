@@ -37,10 +37,12 @@ rationale, alternatives considered, and API shape: see
 ## Capabilities
 
 ### New Capabilities
+
 (none — `internal/outbox` is an internal implementation detail with no
 spec-level/user-facing behavior of its own)
 
 ### Modified Capabilities
+
 (none — this is a pure internal refactor; every worker's external behavior,
 retry/dead-letter semantics, and API/DB contract stay exactly as they are today)
 

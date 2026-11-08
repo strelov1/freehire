@@ -19,10 +19,12 @@ today. The marginal cost is one adapter plus one prober, reusing the entire exis
 ## Capabilities
 
 ### New Capabilities
+
 - `opencats-source`: crawling a self-hosted OpenCATS career portal — board identity as
   host plus optional path prefix, routing-invariant parsing, per-posting failure isolation.
 
 ### Modified Capabilities
+
 - `board-harvest`: candidate discovery and live-validation currently require the platform's
   official public API. A self-hosted platform has no such API, so the requirement must admit
   a third-party discovery index and portal-HTML validation, including the exclusion of

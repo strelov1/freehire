@@ -43,6 +43,7 @@ later.)
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Ingest Wellfound's technical postings into the catalogue at a healthy technical yield,
   through a transport that actually reaches the content.
 - Keep the adapter's own code transport-agnostic, exactly like `bayt`/`gulftalent`, so it
@@ -50,6 +51,7 @@ later.)
   the registry layer.
 
 **Non-Goals:**
+
 - Resolving a listing's `atsSource` into a second, first-party copy of the same posting via
   the actual ATS it names. Real future value (a first-party posting should suppress an
   aggregator copy, per the existing cross-source dedup pass), but a distinct piece of work

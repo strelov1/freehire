@@ -1,8 +1,11 @@
 # thumbs-voting Specification
 
 ## Purpose
+
 TBD - created by archiving change add-thumbs-voting. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: A signed-in user holds at most one vote per target
 
 The system SHALL let an authenticated user cast a thumbs **up** or thumbs
@@ -186,4 +189,3 @@ change SHALL apply instantly with no bounce.
 - **WHEN** a thumb is tapped
 - **THEN** the counter and highlighted state update from the endpoint response
   independently of the animation's timing
-

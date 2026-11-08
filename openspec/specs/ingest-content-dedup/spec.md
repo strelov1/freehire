@@ -1,8 +1,11 @@
 # ingest-content-dedup Specification
 
 ## Purpose
+
 TBD - created by archiving change ingest-content-dedup. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: One canonical job per role cluster
 
 The system SHALL designate exactly one **canonical** open job per role cluster
@@ -226,4 +229,3 @@ an improvement on the write and never a condition of keeping the vacancy.
 - **WHEN** an existing posting is written again by a later crawl, whether unchanged or edited
 - **THEN** no canon lookup is made for it and its existing marker stands, leaving the periodic
   recompute to revise it
-
