@@ -527,6 +527,7 @@
        squeezed the chips into a five-line stack. Stacking the two below `sm` gives the
        chips the full width (three lines become two); from `sm` up the original
        chips-left / salary-right row is unchanged. -->
+  {#if skills.length || salary}
   <div
     class="mt-3 flex flex-col items-start gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3"
   >
@@ -534,6 +535,9 @@
          doesn't need. With basis:auto the row's width is derived from its max-content
          width, so shorter chips would ironically shrink the row and cause *more*
          wrapping. -->
+    <!-- No skills, no chip row: an empty flex-1 slot pushed the salary to the far edge
+         alone on its line. -->
+    {#if skills.length}
     <div class="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:flex-1">
       <!-- A long dictionary slug ("event-driven-architecture") would wrap inside its
            own chip and stretch the row to two lines, breaking the card's rhythm on a
@@ -554,12 +558,14 @@
         <span class="text-xs text-muted-foreground">+{extraSkills} skills</span>
       {/if}
     </div>
+    {/if}
     {#if salary}
-      <span class="self-end shrink-0 text-sm font-semibold tabular-nums tracking-tight sm:self-auto">
+      <span class={['shrink-0 text-sm font-semibold tabular-nums tracking-tight sm:self-auto', skills.length && 'self-end']}>
         {salary}
       </span>
     {/if}
   </div>
+  {/if}
 
   <!-- Card-level profile match: the real client-computed coverage bar, only for a
        signed-in viewer with a skills profile. -->
