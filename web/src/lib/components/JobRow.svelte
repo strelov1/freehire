@@ -473,7 +473,7 @@
       {#if supersedesReality(ghost, locale())}
         <GhostBadge {ghost} />
       {:else}
-        <RealityBadge {reality} />
+        <RealityBadge {reality} plain />
       {/if}
       <!-- A separate fact from the two above: those describe the POSTING's reality, this
            describes how the EMPLOYER screens. It is neutral and joins them rather than
@@ -517,7 +517,7 @@
       <!-- Register-backed employer credentials (visa-sponsor licences). A fact about
            the employer, so it sits with the metadata chips and carries its own
            disclaimer rather than reading as a promise about this role. -->
-      <CredentialBadge collections={job.collections} />
+      <CredentialBadge collections={job.collections} plain />
       <!-- Eligible countries as an overlapping flag cluster. Display-only here: the
            whole card is a link, so the flags carry no nested filter links. -->
       {#if job.countries?.length}
