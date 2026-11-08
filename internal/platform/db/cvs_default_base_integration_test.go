@@ -156,7 +156,7 @@ func TestDuplicateBaseCVCopiesDocumentAndFlagAndRefusesTailored(t *testing.T) {
 
 // The newest tailored copy decides even once its base is gone: a deleted base means "no live
 // base", which falls to the oldest base — not to the base an OLDER copy happened to come from.
-func TestDefaultBaseFallsToOldestWhenTheNewestCopysBaseWasDeleted(t *testing.T) {
+func TestDefaultBaseFallsToOldestWhenTheNewestCopyBaseWasDeleted(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()

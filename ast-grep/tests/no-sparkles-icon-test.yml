@@ -1,0 +1,12 @@
+id: no-sparkles-icon
+valid:
+  - import { Check, Star } from '@lucide/svelte';
+  - import { Sparkles } from './local-thing';
+  - import Star from '@lucide/svelte/icons/star';
+  - export { Check } from '@lucide/svelte';
+invalid:
+  - import { Sparkles } from '@lucide/svelte';
+  - import { Check, SparklesIcon } from 'lucide-svelte';
+  - import { Sparkle as Shine } from '@lucide/svelte';
+  - import Sparkles from '@lucide/svelte/icons/sparkles';
+  - export { Sparkles } from '@lucide/svelte';

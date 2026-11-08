@@ -603,6 +603,53 @@ func TestJobStreetIsRegisteredAsItsOwnAggregatorProvider(t *testing.T) {
 	}
 }
 
+// SEEK AU and NZ share subclassification ids and external_id carries no market, so the
+// slice close narrows each board to its market by the exact host its postings live on.
+func TestSeekSlicesCloseOnTheGraceWindowScopedToTheirMarket(t *testing.T) {
+	src := NewSeek(&seekFake{}, newSeekDetailNetwork(&seekFake{}, nil))
+	if !SliceBoardListingProviders(Taxonomy())["seek"] {
+		t.Error("seek must carry sliceBoardListing")
+	}
+	if FullBoardListingProviders(Taxonomy())["seek"] {
+		t.Error("seek must not carry fullBoardListing")
+	}
+	if _, ok := SweepGraceWindows(Taxonomy())["seek"]; !ok {
+		t.Error("seek must declare its sweep grace")
+	}
+	if !ScopesBoardsByRegion(src) {
+		t.Fatal("seek must scope its boards by region")
+	}
+	prefixes := map[string]string{}
+	for region, m := range seekMarkets {
+		prefix, ok := BoardURLPrefix(src, region)
+		if !ok {
+			t.Fatalf("no URL prefix for market %q", region)
+		}
+		job, ok := seekPost("123", "Engineer", "Co").toJob(m)
+		if !ok || !strings.HasPrefix(job.URL, prefix) {
+			t.Errorf("market %q: posting URL %q does not start with the prefix %q", region, job.URL, prefix)
+		}
+		prefixes[prefix] = region
+	}
+	if len(prefixes) != len(seekMarkets) {
+		t.Errorf("markets share a prefix: %v", prefixes)
+	}
+	for prefix, region := range prefixes {
+		for other, m := range seekMarkets {
+			if other == region {
+				continue
+			}
+			job, _ := seekPost("123", "Engineer", "Co").toJob(m)
+			if strings.HasPrefix(job.URL, prefix) {
+				t.Errorf("prefix of %q matches market %q posting %q", region, other, job.URL)
+			}
+		}
+	}
+	if _, ok := BoardURLPrefix(src, "sg"); ok {
+		t.Error("a market seek does not serve must have no prefix")
+	}
+}
+
 // A JobStreet board id repeats in every market and external_id carries no market, so the
 // board-scoped close narrows each board to its market by the host its postings live on. The
 // prefix must be exactly the one toJob builds the posting URL from, and distinct per market.
@@ -628,9 +675,6 @@ func TestJobStreetScopesABoardToItsMarketByURL(t *testing.T) {
 	}
 	if _, ok := BoardURLPrefix(src, "au"); ok {
 		t.Error("a market jobstreet does not serve must have no prefix")
-	}
-	if ScopesBoardsByRegion(NewSeek(&seekFake{}, newSeekDetailNetwork(&seekFake{}, nil))) {
-		t.Error("seek must not scope by region: its boards are refused by the sweep grace anyway")
 	}
 }
 

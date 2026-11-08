@@ -259,6 +259,14 @@ func TestSweepableBoards(t *testing.T) {
 			want:  refs("zeta-inc"),
 		},
 		{
+			// Workday's own answer for an emptied site is a 200 with jobPostings: [], so the
+			// ordinary board scope closes it once its postings are past the grace window.
+			name:  "an emptied workday board is swept",
+			scope: boardScopeFor(t, "workday"),
+			stats: pipeline.Stats{EmptyBoards: refs("acme.wd1.myworkdayjobs.com/Careers")},
+			want:  refs("acme.wd1.myworkdayjobs.com/Careers"),
+		},
+		{
 			name:  "an empty board needs a complete listing, not a slice",
 			scope: BoardScope{HasGrace: true, SliceBoardListing: true, EmptyBoardListing: true},
 			stats: pipeline.Stats{EmptyBoards: refs("data engineer")},
@@ -278,6 +286,22 @@ func TestSweepableBoards(t *testing.T) {
 			scope: BoardScope{FullBoardListing: true, RegionScoped: true},
 			stats: pipeline.Stats{QualifyingBoards: []pipeline.BoardRef{{Board: "6290", Region: "sg"}, {Board: "6290", Region: "my"}, {Board: "6290", Region: "sg"}}},
 			want:  []pipeline.BoardRef{{Board: "6290", Region: "my"}, {Board: "6290", Region: "sg"}},
+		},
+		{
+			// seek: a finished slice closes on the grace window and keeps its market, since
+			// subclassification "6290" is a board in AU and NZ alike.
+			name:  "a region-scoped slice provider keeps each finished slice's region",
+			scope: BoardScope{HasGrace: true, SliceBoardListing: true, RegionScoped: true},
+			stats: pipeline.Stats{QualifyingBoards: []pipeline.BoardRef{{Board: "6290", Region: "nz"}, {Board: "6290", Region: "au"}}},
+			want:  []pipeline.BoardRef{{Board: "6290", Region: "au"}, {Board: "6290", Region: "nz"}},
+		},
+		{
+			// A slice that failed, was interrupted or read too little never reaches
+			// QualifyingBoards, so it must not be swept.
+			name:  "a slice that did not qualify is not swept",
+			scope: BoardScope{HasGrace: true, SliceBoardListing: true, RegionScoped: true},
+			stats: pipeline.Stats{QualifyingBoards: []pipeline.BoardRef{{Board: "6290", Region: "au"}}},
+			want:  []pipeline.BoardRef{{Board: "6290", Region: "au"}},
 		},
 		{
 			name:  "any other provider's boards are keyed on the id alone",
@@ -422,5 +446,14 @@ func TestDetailFieldAddedNamesRealHydratingProviders(t *testing.T) {
 		if _, ok := src.(sources.HydratingSource); !ok {
 			t.Errorf("%q is not a HydratingSource, so withholding its rows changes nothing", provider)
 		}
+	}
+}
+
+func boardScopeFor(t *testing.T, provider string) BoardScope {
+	t.Helper()
+	reg := sources.All(nil)
+	return BoardScope{
+		FullBoardListing:  sources.FullBoardListingProviders(reg)[provider],
+		EmptyBoardListing: sources.EmptyBoardListingProviders(reg)[provider],
 	}
 }

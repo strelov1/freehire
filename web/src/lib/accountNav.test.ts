@@ -159,11 +159,10 @@ describe('isSectionActive', () => {
 });
 
 describe('the burger menu duplicates what is opened from anywhere', () => {
-  it('names the tailoring section after what it is for', () => {
-    // "CV builder" described the tool this grew out of; every CV in here is aimed at one
-    // vacancy, which is what the section is actually for.
-    const tailor = accountNav.find((i) => i.href === '/my/cvs');
-    expect(tailor?.label).toBe('Tailor');
+  it('names the CV section after the page it opens', () => {
+    // The sidebar label and the page heading must agree: "Tailor" opened a page titled CVs.
+    const cvs = accountNav.find((i) => i.href === '/my/cvs');
+    expect(cvs?.label).toBe('CVs');
   });
 });
 
@@ -236,8 +235,7 @@ describe('workspaceNav', () => {
           '/my/cvs',
         ],
       ],
-      ['found', ['/my/talent-network']],
-      ['help', ['/my/referrals', '/my/mentorship']],
+      ['network', ['/my/talent-network', '/my/referrals', '/my/mentorship']],
       ['settings', SETTINGS],
     ]);
   });
@@ -265,8 +263,8 @@ describe('workspaceNav', () => {
 
   // A group the gate empties must disappear rather than render as a lone heading.
   it('drops the beta-only mentorship entry, and never leaves an empty group', () => {
-    const help = workspaceNav('seeker', false, false).find((g) => g.group === 'help');
-    expect(help?.items.map((i) => i.href)).toEqual(['/my/referrals']);
+    const network = workspaceNav('seeker', false, false).find((g) => g.group === 'network');
+    expect(network?.items.map((i) => i.href)).toEqual(['/my/talent-network', '/my/referrals']);
     expect(workspaceNav('mentor', false, false).map((g) => g.group)).toEqual(['settings']);
   });
 });

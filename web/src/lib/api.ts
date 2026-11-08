@@ -175,6 +175,8 @@ import type {
 export interface Slice<T> {
   items: T[];
   total?: number;
+  /** `total` counts what has been read so far, not everything that matches. */
+  totalIsLowerBound?: boolean;
   hasMore: boolean;
 }
 
@@ -512,6 +514,7 @@ function toSlice<T>(page: Page<T>, offset: number): Slice<T> {
   return {
     items: page.data,
     total: page.meta.total,
+    ...(page.meta.total_is_lower_bound ? { totalIsLowerBound: true } : {}),
     hasMore: offset + page.data.length < page.meta.total,
   };
 }
@@ -1818,8 +1821,8 @@ export function createApi(
    *  they change their card or cancel. Generated per visit and short-lived, so it is fetched
    *  when a surface is about to show it rather than stored.
    *
-   *  404 when there is no subscription, or the provider is unreachable. Either way the
-   *  surface omits the link rather than rendering a broken one. */
+   *  404 when there is no subscription; 500 when the provider is unreachable. Either way
+   *  the surface omits the link rather than rendering a broken one. */
   async function billingManageUrl(): Promise<{ url: string }> {
     return requestData<{ url: string }>('/api/v1/billing/manage');
   }

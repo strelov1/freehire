@@ -14,7 +14,7 @@ export const messages = defineMessages(
       '/my/inbox': 'Inbox',
       '/my/market-pulse': 'Market Pulse',
       '/my/assistant': 'Agent',
-      '/my/cvs': 'Tailor',
+      '/my/cvs': 'CVs',
       '/my/talent-network': 'Talent Network',
       '/my/referrals': 'Referral requests',
       '/my/referrals/offers': 'Offers to refer',
@@ -56,8 +56,7 @@ export const messages = defineMessages(
     },
     // `main` has no heading: it is the workspace itself.
     navGroups: {
-      found: 'Get found · anonymous',
-      help: 'Get help',
+      network: 'Network',
       settings: 'Settings',
     },
     rail: {
@@ -74,7 +73,7 @@ export const messages = defineMessages(
         '/my/inbox': 'Входящие',
         '/my/market-pulse': 'Пульс рынка',
         '/my/assistant': 'Агент',
-        '/my/cvs': 'Адаптация CV',
+        '/my/cvs': 'Резюме',
         '/my/talent-network': 'Сеть талантов',
         '/my/referrals': 'Запросы рекомендаций',
         '/my/referrals/offers': 'Готов рекомендовать',
@@ -120,8 +119,7 @@ export const messages = defineMessages(
         employer: 'Ваша компания и вакансии',
       },
       navGroups: {
-        found: 'Вас находят · анонимно',
-        help: 'Помощь',
+        network: 'Сеть',
         settings: 'Настройки',
       },
       rail: {

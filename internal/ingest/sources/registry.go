@@ -441,6 +441,11 @@ func All(c HTTPClient) map[string]Source {
 		// Cloudflare challenge that fronts the HTML pages. Hydrating: the listing carries the
 		// facets, the detail carries the body. See livehire.go.
 		NewLiveHire(c),
+		// Firefish: UK recruitment CRM behind employers like Arnold Clark, board = the tenant's
+		// whole careers host (careers.arnoldclark.com or <tenant>.firefishsoftware.com). Every site
+		// publishes one RSS document carrying every open vacancy whole, with body and structured
+		// facets — one GET per board, no detail request. See firefish.go.
+		NewFirefish(c),
 		// Dover: boarded ATS (board = company slug), public JSON API with no bot protection on
 		// the data endpoints — only the browser apply-submission flow gates behind Turnstile.
 		// Paced (pacedDoverGetter): an unpaced multi-board run drew 22 429s from 31 boards

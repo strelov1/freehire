@@ -220,11 +220,11 @@ func (n *EmailNotifier) Send(ctx context.Context, _ string, dest, kind string, m
 	} else {
 		subject, htmlBody, textBody = n.renderBatch(kind, ms, unsubscribe)
 	}
-	return n.sender.Send(ctx, emailnotify.Message{
+	return emailnotify.SoftSkipIfPaused(n.sender.Send(ctx, emailnotify.Message{
 		From: n.from, To: dest, Subject: subject, HTML: htmlBody,
 		Text:  textBody + emailprefs.TextFooter(unsubscribe),
 		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
-	})
+	}), ErrChannelNotConfigured)
 }
 
 // batchBody is what the batch template renders from. Jobs carries the source data,

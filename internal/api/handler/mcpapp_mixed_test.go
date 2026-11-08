@@ -55,6 +55,8 @@ func TestMixedMCPAnonymousDiscoveryAndStepUp(t *testing.T) {
 		req.Header.Set("MCP-Protocol-Version", "2025-06-18")
 		req.Header.Set(mcpapp.AccountUserIDHeader, "11532")
 		req.Header.Set("Cookie", "session=forged")
+		// ChatGPT's in-band challenge; other hosts get HTTP 401 (mcpapp.TestMixedAnonymousPersonalCallStatus).
+		req.Header.Set("User-Agent", "openai-mcp/1.0.0")
 		resp, err := app.Test(req)
 		if err != nil {
 			t.Fatal(err)

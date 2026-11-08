@@ -58,7 +58,7 @@
   <title>{s.headTitle}</title>
 </svelte:head>
 
-<div class="max-w-2xl">
+<div>
   <!-- The section heading lives in the layout, above the tab strip; this pane keeps only
        its own action, and nothing at all when there is none. -->
   {#if hasUnread}

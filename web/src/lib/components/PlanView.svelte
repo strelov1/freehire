@@ -39,6 +39,7 @@
     const words = feature.split(/[-_]+/).filter(Boolean).join(' ');
     return words.charAt(0).toUpperCase() + words.slice(1);
   };
+  const unlimitedFeatures = $derived((plan?.allowances ?? []).filter((a) => a.unlimited).map((a) => featureLabel(a.feature)));
   let history = $state<UsageHistoryEntry[]>([]);
   let status = $state<'loading' | 'error' | 'ready'>('loading');
 
@@ -190,10 +191,10 @@
       <!-- The plan strip. On Pro it states when the subscription runs to; on Free it offers
            the upgrade — but only once we know there is somewhere to send them. -->
       <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3"
+        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand/30 bg-brand/[0.03] px-4 py-3"
       >
         <div class="flex flex-col gap-0.5">
-          <span class="text-sm font-semibold">
+          <span class="text-base font-semibold">
             {planLabel(plan.plan)}
           </span>
           {#if plan.plan !== 'free' && plan.pro_until}
@@ -237,7 +238,7 @@
 
       {#if billing}
         <div class="flex flex-col gap-3">
-          <h2 class="text-sm font-medium text-muted-foreground">{s.subscription.heading}</h2>
+          <h2 class="text-sm font-semibold">{s.subscription.heading}</h2>
           <div class="flex flex-col gap-3 rounded-lg border border-border px-4 py-3">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <span class="text-sm font-medium">
@@ -297,19 +298,19 @@
 
       <div class="flex flex-col gap-3">
         <div class="flex items-baseline justify-between gap-3">
-          <h2 class="text-sm font-medium text-muted-foreground">{s.today.heading}</h2>
+          <h2 class="text-sm font-semibold">{s.today.heading}</h2>
           <span class="text-xs text-muted-foreground">
             {s.today.resetsAtPrefix}
             {fmtTime(plan.resets_at)}
           </span>
         </div>
+        <!-- The metered rows are the ones a reader checks, so they get a row each; every
+             unlimited feature shares one closing row instead of repeating "Unlimited". -->
         <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
-          {#each plan.allowances as a (a.feature)}
+          {#each plan.allowances.filter((a) => !a.unlimited) as a (a.feature)}
             <li class="flex items-center justify-between gap-3 px-4 py-3">
               <span class="truncate text-sm font-medium">{featureLabel(a.feature)}</span>
-              {#if a.unlimited}
-                <span class="shrink-0 text-sm text-muted-foreground">{s.today.unlimited}</span>
-              {:else if !a.limit}
+              {#if !a.limit}
                 <!-- The API omits a zero limit. Printing it left a dangling "0 /"; a zero
                      allowance is a feature this plan does not include, so it says that. -->
                 <span class="shrink-0 text-sm text-muted-foreground">
@@ -317,7 +318,7 @@
                 </span>
               {:else}
                 <span
-                  class="shrink-0 text-sm font-semibold tabular-nums {a.used >= a.limit
+                  class="shrink-0 text-sm tabular-nums {a.used >= a.limit
                     ? 'text-muted-foreground'
                     : ''}"
                 >
@@ -326,13 +327,19 @@
               {/if}
             </li>
           {/each}
+          {#if unlimitedFeatures.length}
+            <li class="flex items-start justify-between gap-3 px-4 py-3">
+              <span class="text-sm text-muted-foreground">{unlimitedFeatures.join(' · ')}</span>
+              <span class="shrink-0 text-sm text-muted-foreground">{s.today.unlimited}</span>
+            </li>
+          {/if}
         </ul>
       </div>
     {/if}
 
     {#if showUsage && usage}
       <div class="flex flex-col gap-2">
-        <h2 class="text-sm font-medium text-muted-foreground">{s.usage.heading}</h2>
+        <h2 class="text-sm font-semibold">{s.usage.heading}</h2>
         <div class="rounded-lg border border-border px-5 py-4">
           <div class="flex items-baseline gap-2">
             <span class="text-2xl font-semibold tabular-nums">{usage.requests}</span>
@@ -353,7 +360,7 @@
     {/if}
 
     <div class="flex flex-col gap-3">
-      <h2 class="text-sm font-medium text-muted-foreground">{s.history.heading}</h2>
+      <h2 class="text-sm font-semibold">{s.history.heading}</h2>
       {#if status === 'loading'}
         <States state="loading" />
       {:else if status === 'error'}
@@ -363,13 +370,13 @@
       {:else}
         <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
           {#each history as entry, i (i)}
-            <li class="flex items-center justify-between gap-3 px-4 py-3">
-              <div class="flex min-w-0 flex-col gap-0.5">
-                <span class="truncate text-sm font-medium">{entry.label}</span>
-                <span class="truncate text-xs text-muted-foreground">
-                  {#if entry.subtitle}{entry.subtitle} · {/if}{fmtDate(entry.created_at)}
-                </span>
-              </div>
+            <!-- One line per entry, the date right-aligned: a log, not a list of cards. -->
+            <li class="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+              <span class="min-w-0 truncate">
+                <span class="font-medium">{entry.label}</span>
+                {#if entry.subtitle}<span class="text-muted-foreground"> · {entry.subtitle}</span>{/if}
+              </span>
+              <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{fmtDate(entry.created_at)}</span>
             </li>
           {/each}
         </ul>

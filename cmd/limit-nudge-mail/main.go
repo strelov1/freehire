@@ -36,7 +36,7 @@ import (
 )
 
 func main() {
-	worker.Main(run)
+	worker.Main(run, emailnotify.HoldKeys("limit-nudge-mail")...)
 }
 
 func run() int {
@@ -76,6 +76,7 @@ func run() int {
 		log.Printf("limit-nudge-mail: ses: %v", err)
 		return 1
 	}
+	ses = ses.WithSendingBreaker()
 
 	mailer := limitnudge.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin,
 		emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))

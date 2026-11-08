@@ -89,13 +89,6 @@ const ALLOWED = [
       'currentColor instead)',
   },
   {
-    file: 'section-label.svelte',
-    kind: 'Tailwind arbitrary value',
-    reason:
-      '0.2em tracking for one mono heading style; Tailwind\'s own scale tops out at ' +
-      'tracking-widest (0.1em) and no other primitive needs this value',
-  },
-  {
     file: 'dialog.svelte',
     kind: 'Tailwind arbitrary value',
     reason:

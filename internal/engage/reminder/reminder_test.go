@@ -324,15 +324,26 @@ func TestUpdateSettings_AddingPushNeedsADevice(t *testing.T) {
 	}
 }
 
-func TestUpdateSettings_EmptyFrequencyStoresTheHourlyInterval(t *testing.T) {
+// An omitted frequency stores the daily default WITH a time: daily without one is
+// never due, so a default of "daily" alone would silence the account.
+func TestUpdateSettings_EmptyFrequencyStoresTheDailyDefault(t *testing.T) {
 	svc := newService(&fakeRepo{})
 	got, err := svc.UpdateSettings(context.Background(), 1, Settings{})
 	if err != nil {
 		t.Fatalf("want no error, got %v", err)
 	}
-	if got.DigestFrequency != notify.FrequencyInterval || got.DigestIntervalHours != notify.DefaultIntervalHours {
-		t.Errorf("stored %q/%d, want %q/%d", got.DigestFrequency, got.DigestIntervalHours,
-			notify.FrequencyInterval, notify.DefaultIntervalHours)
+	if got.DigestFrequency != notify.FrequencyDaily || got.DigestTime == nil || *got.DigestTime != notify.DefaultDigestTime {
+		t.Errorf("stored %q at %v, want %q at %v", got.DigestFrequency, got.DigestTime,
+			notify.FrequencyDaily, notify.DefaultDigestTime)
+	}
+}
+
+// An explicit daily choice still has to name its time.
+func TestUpdateSettings_ExplicitDailyStillNeedsATime(t *testing.T) {
+	svc := newService(&fakeRepo{})
+	_, err := svc.UpdateSettings(context.Background(), 1, Settings{DigestFrequency: notify.FrequencyDaily})
+	if !errors.Is(err, ErrMissingDigestTime) {
+		t.Fatalf("want ErrMissingDigestTime, got %v", err)
 	}
 }
 

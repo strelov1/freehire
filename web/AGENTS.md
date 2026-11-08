@@ -80,6 +80,14 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   a precache whose every URL 404ed. `web/static/sw.js` is a kill switch for browsers that still
   have the old worker registered — it clears their caches and unregisters itself; nothing
   registers it otherwise. Do not bring a service worker back without a reason it serves.
+- The boundaries between the app's parts are checked by easement against
+  [easement.yml](easement.yml): a component never imports a route or `lib/server`,
+  `src/lib` never imports a component, and only routes, hooks and tests reach `lib/server`.
+  Any dependency between two parts that the file does not list fails, so a new one is
+  written there with its reason, not worked around. Run `easement check` in `web/` after
+  changing imports (`mise install` provides it and its indexer); `easement why <a> <b>`
+  shows the imports behind an edge. There is no baseline of known violations, and
+  `easement baseline` is not the way to get a change through.
 
 ## Worth knowing
 
@@ -164,6 +172,7 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 - **The `TopBar` is `sticky top-0 z-40` and `h-14`.** Anything else that pins to the top of
   the page needs `top-14` and a z-index below 40, or it pins *behind* the header and is
   invisible exactly when it is needed.
+- **Bundle budgets**: `pnpm run size` (the `Bundle size budgets` step of the `web` CI job, after `Build`) holds the brotli size of the client entry and eight heavy routes to the limits in `web/.size-limit.mjs`. To raise one on purpose, edit its limit in that file in the same PR and state why in the PR body.
 
 ## Limitations
 

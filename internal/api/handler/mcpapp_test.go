@@ -68,32 +68,31 @@ func TestTheAppSearchNamesTheFiltersItCouldNotHonour(t *testing.T) {
 	}
 }
 
-func TestAPostingTheWebsiteWouldNotShowIsUnreachable(t *testing.T) {
-	// GetJobBySlug carries NO predicate — it is the read a private job's own creator uses,
-	// and the detail page relies on it to serve a closed posting. Neither is right here: a
-	// model enumerates, caches and republishes what it is handed.
-	//
-	// Every refusal answers NOT FOUND rather than forbidden. Whether a private posting
-	// exists under some slug is itself not an anonymous caller's business.
-	cases := []struct {
-		name string
-		job  db.Job
-	}{
-		{"private", db.Job{PublicSlug: "x", IsPrivate: true}},
-		{"closed", db.Job{PublicSlug: "x", ClosedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}}},
-		{"duplicate", db.Job{PublicSlug: "x", DuplicateOf: pgtype.Int8{Int64: 9, Valid: true}}},
+func TestAPrivatePostingIsUnreachable(t *testing.T) {
+	// GetJobBySlug carries NO predicate — it is the read a private job's own creator uses.
+	// A private posting answers NOT FOUND rather than forbidden: whether one exists under
+	// some slug is itself not an anonymous caller's business.
+	_, err := mcpappUnder(&fakeSearcher{}, nil, fakeOJCPStore{job: db.Job{PublicSlug: "x", IsPrivate: true}}).
+		JobDetail(context.Background(), "x")
+	var notFound mcpapp.NotFoundError
+	if !errors.As(err, &notFound) {
+		t.Fatalf("err = %v, want a not-found", err)
 	}
+}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := mcpappUnder(&fakeSearcher{}, nil, fakeOJCPStore{job: tc.job}).
-				JobDetail(context.Background(), "x")
-
-			var notFound mcpapp.NotFoundError
-			if !errors.As(err, &notFound) {
-				t.Fatalf("err = %v, want a not-found", err)
-			}
-		})
+// search_jobs reads an index that trails the database, so it hands out slugs that closed or
+// became duplicates since the push. get_job answers them as the job page does — a closed one
+// with its closed_at — instead of a not-found that contradicts the search a turn earlier.
+func TestGetJobAnswersAClosedPostingWithItsClosedAt(t *testing.T) {
+	closedAt := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
+	got, err := mcpappUnder(&fakeSearcher{}, nil, fakeOJCPStore{job: db.Job{
+		PublicSlug: "x", ClosedAt: pgtype.Timestamptz{Time: closedAt, Valid: true},
+	}}).JobDetail(context.Background(), "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ClosedAt != "2026-11-07T09:00:00Z" {
+		t.Errorf("closed_at = %q, want 2026-11-07T09:00:00Z", got.ClosedAt)
 	}
 }
 

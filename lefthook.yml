@@ -18,12 +18,11 @@ pre-commit:
     golangci-lint:
       glob: "*.go"
       run: golangci-lint run --new-from-rev=HEAD --allow-parallel-runners ./...
-    # Warn-only: govulncheck currently fails against HEAD from Go-toolchain
-    # stdlib CVEs (e.g. GO-2026-6088, fixed only in go1.26.6 — go.mod pins
-    # 1.25.12), not from anything a commit's diff introduces, so it can't
-    # hard-block yet without blocking every Go commit repo-wide. Flip to a
-    # failing command once the toolchain is bumped past the fix. Mirrors the
-    # path scope of .github/workflows/govulncheck.yml's pull_request trigger.
+    # Blocking: `govulncheck ./...` is clean on main under the pinned toolchain, so a
+    # failure now comes from a dependency advisory or from the commit itself.
+    # A missing binary skips on purpose, unlike gitleaks; the CI job is the gate.
+    # The glob mirrors the path scope of .github/workflows/govulncheck.yml's
+    # pull_request trigger.
     govulncheck:
       glob:
         - "**/*.go"
@@ -34,7 +33,17 @@ pre-commit:
           echo "govulncheck not installed (go install golang.org/x/vuln/cmd/govulncheck@latest) - skipping"
           exit 0
         fi
-        govulncheck ./... || echo "govulncheck reported findings above (non-blocking for now, see lefthook.yml)"
+        govulncheck ./...
+    # Spelling over every staged file; _typos.toml decides what is checked, and
+    # --force-exclude makes it honour that for files named explicitly. Steps aside when the
+    # binary is missing: the docs CI job is the gate.
+    typos:
+      run: |
+        if ! command -v typos >/dev/null 2>&1; then
+          echo "typos not installed (mise install) - skipping"
+          exit 0
+        fi
+        typos --force-exclude {staged_files}
     # internal/platform/db is generated and committed, so a query edited without
     # regenerating ships the OLD Go with every check green — nothing else here reads
     # both halves. Same shape of check as design-system's check:dist, except that an
@@ -112,6 +121,19 @@ pre-commit:
     #
     # Unlike govulncheck above, a missing binary FAILS. A scanner that quietly
     # skips is worse than no scanner: it makes the commit look examined.
+    # The rules in ast-grep/rules over the staged files. Unlike gitleaks it steps aside when
+    # the binary is missing (`mise install` brings it): the ast-grep CI job is the gate.
+    ast-grep:
+      glob:
+        - "**/*.go"
+        - "**/*.ts"
+        - "**/*.svelte"
+      run: |
+        if ! command -v ast-grep >/dev/null 2>&1; then
+          echo 'ast-grep is not installed (mise install); the ast-grep CI job will check.'
+          exit 0
+        fi
+        ast-grep scan --error {staged_files}
     gitleaks:
       run: |
         if ! command -v gitleaks >/dev/null 2>&1; then

@@ -274,6 +274,18 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   the digest announce only what it carries and retire only that. A claimed id whose job
   row was pruned stays in the claim and is stamped notified, or it would be re-claimed
   every pass forever.
+- **A match records the query revision it answered.** `saved_searches.query_revision` rises
+  by one only when `UpdateSavedSearch` changes the query text (a rename leaves it), and
+  `subscription_matches.query_revision` stores the revision a match was found under (migration
+  0243). `RecordSubscriptionMatches` takes it per pair from the `ListActiveSubscriptions` row
+  and refuses a pair whose search has moved on, so a pass that read the old query cannot
+  record after the edit; a still-pending row of an older revision is reset on conflict, or a
+  job both queries match would stay blocked. Claim, `CountCoveredMatches`,
+  `MarkCoveredMatchesNotified` and the pending metrics read only the current revision, and
+  `ExpireStaleSubscriptionMatches` retires unleased superseded rows. This covers a leased match
+  released or lapsing after an edit, which the edit's DELETE of unleased pending rows cannot.
+  It is a counter and not `updated_at` (a rename would strand valid matches) and not a clock
+  comparison (two in-flight statements cannot be ordered by timestamp).
 - **A match goes STALE, undelivered, after `Config.FreshnessWindow` (3 days) or once its
   job closes.** `ExpireStaleSubscriptionMatches` runs first in every delivery stage, in
   bounded batches until one comes back short, and stamps `expired_at` (migration 0193) —
@@ -358,9 +370,20 @@ Bot API — check which one you're in.
   were never marked notified — and only while they are fresh: an outage longer than the
   freshness window loses what it held back, by design.
 
+## Pausing outbound mail
+
+Outbound mail workers can be held by class (transactional, engagement, lifecycle) or all at
+once with one Redis key, and a worker stops sending for the rest of its run once SES refuses the
+whole account. The keys, the class table, the fail-open note, the resume order
+(transactional, then engagement, then lifecycle) and the breaker are in
+[internal/platform/worker/AGENTS.md](../../internal/platform/worker/AGENTS.md#holding-outbound-mail-by-class).
+A hold sends nothing and never bypasses unsubscribe or consent rules; the API server's own
+mail is never held.
+
 ## Engagement tracking
 
-Campaigns (`cmd/broadcast`) and the saved-search digest (`cmd/notify`) can be measured; nothing
+Campaigns (`cmd/broadcast`) and the saved-search digest (`cmd/notify`) can be measured for delivery
+and clicks; nothing
 else can. A message is tracked only when it names a `Campaign` and its client was given a
 configuration set (`WithEngagementTracking`, from `SES_ENGAGEMENT_CONFIGURATION_SET`), so account,
 security and application mail cannot pick up an open pixel by accident.
@@ -374,8 +397,16 @@ security and application mail cannot pick up an open pixel by accident.
 - **A set SES does not know is caught before sending.** `CheckEngagementTracking` needs
   `ses:GetConfigurationSet`. `cmd/broadcast` refuses to start, because recorded failures would
   spend the audience; `cmd/notify` falls back to untracked mail, because a digest is retried.
-- **Opens overcount.** Apple Mail Privacy Protection and security scanners fetch the pixel without a
-  person reading anything, typically soon after delivery. Judge send times by clicks.
+- **Clicks only, no open pixel.** The configuration set publishes no Open event, which is what
+  keeps SES from adding the pixel. Opens would overcount anyway: Apple Mail Privacy Protection and
+  security scanners fetch it without a person reading anything. The owner chose this on 2026-11-05.
+  Scanners can follow links too, so a click within seconds of delivery deserves suspicion.
+- **Bounces and complaints on every other mail.** The sending identity (`mail.freehire.me`,
+  us-east-1) has `freehire-feedback` as its default configuration set, which publishes only
+  BOUNCE and COMPLAINT to the same topic. Every mail carries a `group` tag, and the consumer
+  records such an event under `campaign = 'group:<group>'` (`group:essential`, `group:news`, ...),
+  so a complaint spike names the kind of mail behind it. A message naming
+  `freehire-engagement` overrides the default, so campaign mail is not counted twice.
 - **Comparing two send times:** run `./broadcast -campaign <name> -half a` at one time and
   `-half b` at the other. The sides are hashed with the campaign name and stable across runs. Then:
 

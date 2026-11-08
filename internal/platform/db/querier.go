@@ -210,13 +210,18 @@ type Querier interface {
 	// scope, enforcing expiry and touching last_used_at in one atomic statement. No row
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
 	// and an insufficient scope as 403.
+	//
+	// A key in use is the account in use, so the same statement keeps users.last_active_at
+	// current (at most once a day), as GetUserTokenVersion does for a session: optional
+	// mail stops after 180 idle days (mail_recipient, migration 0247).
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error)
 	// Resolve a presented bearer token to its owning user, touching last_used_at in
 	// the same statement. A grant is live only while BOTH hold: it has not outlived
 	// its own expires_at, AND its issued_token_version still matches the user's
 	// current one (a mismatch means LogoutAll or a password change ran since). No row
 	// covers unknown, expired, and revoked-by-version-bump alike; the caller reads
-	// that as 401, same as AuthenticateAPIKey's contract.
+	// that as 401, same as AuthenticateAPIKey's contract. It also keeps
+	// users.last_active_at current, as AuthenticateAPIKey does.
 	AuthenticateOAuthGrant(ctx context.Context, accessTokenHash string) (int64, error)
 	// Same idea as SearchOutboxMetrics, but this queue has THREE terminal-ish states rather
 	// than two, so it cannot be a copy of it.
@@ -3300,6 +3305,10 @@ type Querier interface {
 	// The account's current session generation, read on every authenticated request to
 	// decide whether a correctly-signed token was revoked. One primary-key lookup; this
 	// is the price of making a stateless JWT revocable at all.
+	//
+	// The same statement stamps last_active_at, at most once a day, because this is the
+	// one place every signed-in request passes; mail_recipient (migration 0247) reads it
+	// to stop optional mail to people who have not used freehire in 180 days.
 	GetUserTokenVersion(ctx context.Context, id int64) (int32, error)
 	// The account's own username (NULL until claimed/allocated) and, when set, the
 	// time of its last EXPLICIT change via SetUsername — NULL for a lazily
@@ -3866,8 +3875,8 @@ type Querier interface {
 	// description vectors. A job with no captured form simply has no row.
 	ListApplyFormsForJobs(ctx context.Context, jobIds []int64) ([]ListApplyFormsForJobsRow, error)
 	// The notify fan-out targets: every approved referrer of a company with their email and
-	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
-	// optional Telegram ping.
+	// linked Telegram chat (NULL when unlinked). Email is '' when mail_recipient (0247) says
+	// the address may not be mailed; chat_id drives the optional Telegram ping.
 	ListApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]ListApprovedReferrerRecipientsRow, error)
 	// The caller's session rail: their unbound conversations, most recently active first.
 	// Owner-scoped by construction — another user's sessions can never appear.
@@ -6408,6 +6417,14 @@ type Querier interface {
 	// Join their current rows so one unsubscribe cannot fail the entire query group's
 	// batch. Lock those parents through the insert: an existence check alone still races
 	// with a DELETE that commits after this statement takes its snapshot.
+	//
+	// Each pair carries the query revision its search ran under (a third aligned array), and a
+	// pair is recorded only while the saved search is still at that revision: an edit that
+	// commits between the pass reading the query and recording its hits must not let the old
+	// query's results in after the edit cleared the pending set. The saved search row is locked
+	// through the insert for the same reason as the subscription. On conflict, a still-pending
+	// row of an OLDER revision is reset to the new one, or a job the new query also matches
+	// would stay blocked behind the leftover row claiming ignores.
 	RecordSubscriptionMatches(ctx context.Context, arg RecordSubscriptionMatchesParams) (int64, error)
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
@@ -7932,6 +7949,11 @@ type Querier interface {
 	// the ledger's unique key would otherwise stop a job the new query also matches from being
 	// recorded again. A leased row is left alone, since a send already holds it. last_searched_at
 	// stays: clearing it would re-read a page of postings the subscriber was never owed.
+	//
+	// The DELETE only covers rows that exist now. query_revision (raised here, by one, only when
+	// the query text differs) is what covers the rest: each match records the revision it
+	// answered, so a leased row that is released or whose lease lapses, and a match recorded by
+	// a pass that read the old query, are ignored by claiming and refused by recording.
 	UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchParams) (SavedSearch, error)
 	// Set the account's preferred interface language. The handler validates the code
 	// against the curated set before this runs (also enforced by the DB CHECK

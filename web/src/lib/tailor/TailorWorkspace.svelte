@@ -32,7 +32,7 @@
   import TemplateGallery from '#lib/tailor/TemplateGallery.svelte';
   import AccountNavRail from '#lib/components/AccountNavRail.svelte';
   import { ConfirmDialog } from '#lib/ui/index.js';
-  import { clampWidth, fitToWidthZoom, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from '#lib/tailor/geometry.js';
+  import { clampWidth, fitToWidthZoom, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from '#lib/cvGeometry.js';
   import { undoRun, openingActions, baseOpeningActions } from '#lib/tailor/autopilot.js';
   import { findPlaceholders } from '#lib/tailor/readiness.js';
   import { tablist } from '#lib/actions/tablist.js';

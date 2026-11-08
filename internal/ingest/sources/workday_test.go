@@ -36,6 +36,9 @@ func TestWorkdayMarkers(t *testing.T) {
 	if _, ok := s.(fullBoardListing); !ok {
 		t.Error("workday should implement the fullBoardListing marker")
 	}
+	if _, ok := s.(emptyBoardListing); !ok {
+		t.Error("workday should implement the emptyBoardListing marker")
+	}
 }
 
 func TestWorkdayRegisteredAsFullBoardListing(t *testing.T) {
@@ -763,5 +766,19 @@ func TestWorkdaySplitIgnoresAFacetThatDoesNotCoverTheBoard(t *testing.T) {
 	}
 	if len(postings) != 2 {
 		t.Fatalf("len(postings) = %d, want 2 (one per state)", len(postings))
+	}
+}
+
+func TestWorkdayEmptyListingAnswers(t *testing.T) {
+	entry := CompanyEntry{Company: "Acme", Provider: "workday", Board: "acme.wd1.myworkdayjobs.com/Careers"}
+	jobs, err := NewWorkday((&routedHTTP{}).route("/Careers/jobs", `{"total":0,"jobPostings":[],"facets":[]}`)).
+		Fetch(context.Background(), entry)
+	if err != nil || len(jobs) != 0 {
+		t.Fatalf("empty board: jobs=%d err=%v, want an empty listing", len(jobs), err)
+	}
+	for _, body := range []string{`{}`, `{"total":0}`, `{"jobPostings":null}`, `{"total":5,"jobPostings":[]}`} {
+		if _, err := NewWorkday((&routedHTTP{}).route("/Careers/jobs", body)).Fetch(context.Background(), entry); err == nil {
+			t.Errorf("Fetch(%s) succeeded, want a failed crawl", body)
+		}
 	}
 }

@@ -44,6 +44,7 @@ var checkedFacets = []struct {
 	{"seniority", func(in SearchInput) []string { return in.Seniority }},
 	{"category", func(in SearchInput) []string { return in.Category }},
 	{"employment_type", func(in SearchInput) []string { return in.EmploymentType }},
+	{"engagement", func(in SearchInput) []string { return in.Engagement }},
 	{"english_level", func(in SearchInput) []string { return in.EnglishLevel }},
 	{"regions", func(in SearchInput) []string { return in.Regions }},
 	{"relocation", func(in SearchInput) []string { return in.Relocation }},

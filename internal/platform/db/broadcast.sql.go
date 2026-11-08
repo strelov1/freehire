@@ -13,7 +13,7 @@ const countBroadcastCandidates = `-- name: CountBroadcastCandidates :one
 SELECT count(*)
 FROM users u
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
-WHERE u.email_verified
+WHERE mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
   AND COALESCE(ns.news_email_enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM broadcast_emails be
@@ -41,7 +41,7 @@ const listBroadcastCandidates = `-- name: ListBroadcastCandidates :many
 SELECT u.id, u.email
 FROM users u
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
-WHERE u.email_verified
+WHERE mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
   AND COALESCE(ns.news_email_enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM broadcast_emails be

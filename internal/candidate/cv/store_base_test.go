@@ -70,7 +70,7 @@ func TestTailorRejectsAForeignOrTailoredBase(t *testing.T) {
 	}
 }
 
-func TestReopeningAVacancyWithAnotherBaseReportsTheCopysOwnBase(t *testing.T) {
+func TestReopeningAVacancyWithAnotherBaseReportsTheCopyOwnBase(t *testing.T) {
 	s := NewStore(newFakeRepo())
 	ctx := context.Background()
 	first, second := twoBases(t, s)

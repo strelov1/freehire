@@ -43,8 +43,7 @@ vi.mock('#lib/api.js', () => ({ api: { getJobMatch, getMatchAnalysis } }));
 vi.mock('#lib/profileAlertSync.js', () => ({ syncProfileAlert }));
 
 const job = { public_slug: 'rust-job', skills: ['rust'] } as Job;
-// The guest teaser needs two skills to have a have/missing contrast to draw; with one it
-// renders the call-to-action alone, which is not the branch under test.
+// A job with more than one skill, so a guest view has something it could have summarised.
 const twoSkillJob = { public_slug: 'rust-job', skills: ['rust', 'go'] } as Job;
 
 const analysed: MatchAnalysisResponse = {

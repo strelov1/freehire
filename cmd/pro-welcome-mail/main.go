@@ -43,7 +43,7 @@ import (
 )
 
 func main() {
-	worker.Main(run)
+	worker.Main(run, emailnotify.HoldKeys("pro-welcome-mail")...)
 }
 
 func run() int {
@@ -82,6 +82,7 @@ func run() int {
 		log.Printf("pro-welcome-mail: ses: %v", err)
 		return 1
 	}
+	ses = ses.WithSendingBreaker()
 
 	mailer := prowelcome.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin,
 		emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))

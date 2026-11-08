@@ -192,7 +192,7 @@
 {#snippet onward(href: string, text: string)}
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every caller passes a resolve() result; the rule cannot see through a snippet parameter -->
   <a {href}
-    class="group inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong transition-colors hover:text-foreground"
+    class="group inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
   >
     {text}
     <ArrowRight class="size-4 transition-transform group-hover:translate-x-0.5" />

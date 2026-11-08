@@ -47,8 +47,11 @@ func NewLinks(secret, origin string) *Links {
 // client shows only the text alternative has the same right to leave as one whose
 // client renders HTML, and a spam scorer reads both — so this line going missing
 // from one sender is a real cost, not a cosmetic one.
+//
+// It also says who is writing and why, which the HTML shell's footer says too: SES
+// Trust & Safety found our mail hard to attribute (case of 2026-11-07).
 func TextFooter(unsubscribeURL string) string {
-	return "\nUnsubscribe: " + unsubscribeURL + "\n"
+	return "\n--\nThis email is from freehire, the job search service. You get it because you have a freehire account and these notifications are on.\nUnsubscribe: " + unsubscribeURL + "\n"
 }
 
 // For returns the preference URL for one recipient and one group of mail. It fails

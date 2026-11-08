@@ -1,6 +1,6 @@
 import { GHOST_CRITERION_VALUES } from './generated/contracts';
 import type { Ghost, GhostCriterion } from './generated/contracts';
-import type { Locale } from './locale';
+import type { Locale } from './i18n/locale';
 import { timeAgo } from './utils';
 
 /** A rendered ghost badge: a tone, a hedged chip label, the `fired/total` scale, and

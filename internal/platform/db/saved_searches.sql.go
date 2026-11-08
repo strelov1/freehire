@@ -28,7 +28,7 @@ func (q *Queries) CountSavedSearches(ctx context.Context, userID int64) (int64, 
 const createSavedSearch = `-- name: CreateSavedSearch :one
 INSERT INTO saved_searches (user_id, name, query, derived_from_profile)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, name, query, created_at, updated_at, derived_from_profile
+RETURNING id, user_id, name, query, created_at, updated_at, derived_from_profile, query_revision
 `
 
 type CreateSavedSearchParams struct {
@@ -58,6 +58,7 @@ func (q *Queries) CreateSavedSearch(ctx context.Context, arg CreateSavedSearchPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DerivedFromProfile,
+		&i.QueryRevision,
 	)
 	return i, err
 }
@@ -84,7 +85,7 @@ func (q *Queries) DeleteSavedSearch(ctx context.Context, arg DeleteSavedSearchPa
 }
 
 const getSavedSearch = `-- name: GetSavedSearch :one
-SELECT id, user_id, name, query, created_at, updated_at, derived_from_profile FROM saved_searches
+SELECT id, user_id, name, query, created_at, updated_at, derived_from_profile, query_revision FROM saved_searches
 WHERE id = $1 AND user_id = $2
 `
 
@@ -107,12 +108,13 @@ func (q *Queries) GetSavedSearch(ctx context.Context, arg GetSavedSearchParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DerivedFromProfile,
+		&i.QueryRevision,
 	)
 	return i, err
 }
 
 const listSavedSearches = `-- name: ListSavedSearches :many
-SELECT id, user_id, name, query, created_at, updated_at, derived_from_profile FROM saved_searches
+SELECT id, user_id, name, query, created_at, updated_at, derived_from_profile, query_revision FROM saved_searches
 WHERE user_id = $1
 ORDER BY updated_at DESC
 `
@@ -135,6 +137,7 @@ func (q *Queries) ListSavedSearches(ctx context.Context, userID int64) ([]SavedS
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DerivedFromProfile,
+			&i.QueryRevision,
 		); err != nil {
 			return nil, err
 		}
@@ -163,9 +166,11 @@ WITH dropped AS (
 UPDATE saved_searches
 SET name       = COALESCE($1, name),
     query      = COALESCE($2, query),
+    query_revision = query_revision
+        + CASE WHEN $2::text IS NOT NULL AND $2::text <> query THEN 1 ELSE 0 END,
     updated_at = now()
 WHERE saved_searches.id = $3 AND saved_searches.user_id = $4
-RETURNING id, user_id, name, query, created_at, updated_at, derived_from_profile
+RETURNING id, user_id, name, query, created_at, updated_at, derived_from_profile, query_revision
 `
 
 type UpdateSavedSearchParams struct {
@@ -187,6 +192,11 @@ type UpdateSavedSearchParams struct {
 // the ledger's unique key would otherwise stop a job the new query also matches from being
 // recorded again. A leased row is left alone, since a send already holds it. last_searched_at
 // stays: clearing it would re-read a page of postings the subscriber was never owed.
+//
+// The DELETE only covers rows that exist now. query_revision (raised here, by one, only when
+// the query text differs) is what covers the rest: each match records the revision it
+// answered, so a leased row that is released or whose lease lapses, and a match recorded by
+// a pass that read the old query, are ignored by claiming and refused by recording.
 func (q *Queries) UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchParams) (SavedSearch, error) {
 	row := q.db.QueryRow(ctx, updateSavedSearch,
 		arg.Name,
@@ -203,6 +213,7 @@ func (q *Queries) UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DerivedFromProfile,
+		&i.QueryRevision,
 	)
 	return i, err
 }

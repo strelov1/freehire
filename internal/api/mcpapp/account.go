@@ -3,6 +3,7 @@ package mcpapp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -108,8 +109,12 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		out, err := t.Run(ctx, userID, req.Params.Arguments)
 		if err != nil {
+			code := observability.ErrorCode(err)
+			if errors.Is(err, assistant.ErrInvalidArguments) {
+				code = "invalid_request"
+			}
 			result := errorResult(err.Error())
-			result.Meta = mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": observability.ErrorCode(err)}}
+			result.Meta = mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": code}}
 			return result, nil
 		}
 		payload, err := json.Marshal(out)

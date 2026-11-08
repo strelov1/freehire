@@ -5,7 +5,7 @@ import { sequence } from '@sveltejs/kit/hooks';
 import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
 import { hasSessionCookie } from '#lib/authCookie.js';
 import { cachePolicy, variesOnCookie } from '#lib/httpCache.js';
-import { isTranslatedLocale, LOCALE_COOKIE } from '#lib/locale.js';
+import { isTranslatedLocale, LOCALE_COOKIE } from '#lib/i18n/locale.js';
 import { CAPTURE_MAX_AGE_SECONDS, REF_COOKIE, captureRef, capturePromo } from '#lib/referral.js';
 
 const otelEndpoint = OTEL_EXPORTER_OTLP_LOGS_ENDPOINT || (OTEL_EXPORTER_OTLP_ENDPOINT ? `${OTEL_EXPORTER_OTLP_ENDPOINT.replace(/\/$/, '')}/v1/logs` : undefined);

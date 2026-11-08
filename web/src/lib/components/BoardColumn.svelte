@@ -15,9 +15,12 @@
     onremove,
     removing = [],
     dragDisabled = false,
+    emptyHint = '',
   }: {
     id: BoardColumnId;
     label: string;
+    // Shown in an empty column, so it reads as a drop target rather than a missing render.
+    emptyHint?: string;
     items: BoardItem[];
     // Set while the board is filtered — by search text or the "needs attention" toggle.
     // The zone is handed the matching rows only, and svelte-dnd-action answers a drop
@@ -83,21 +86,32 @@
   });
 </script>
 
-<!-- snap-start: the board's row snaps (JobBoard), so a swipe lands on a column, not between two. -->
+<!-- snap-start: the board's row snaps (JobBoard), so a swipe lands on a column, not between two.
+     w-full on a phone: one column per screen, snapped, instead of the next one cut mid-word.
+     self-start: each column is as tall as its own cards, so an empty one is a short drop
+     target rather than a grey slab stretched to the fullest column. -->
 <section
   aria-labelledby={titleId}
-  class="flex w-72 shrink-0 snap-start flex-col gap-2 rounded-xl bg-secondary/40 p-2"
+  class="flex w-full shrink-0 snap-start flex-col gap-2 self-start rounded-xl bg-secondary/40 p-2 sm:w-72"
 >
   <header class="flex items-center justify-between px-1 py-0.5 text-sm font-medium">
     <h2 id={titleId}>{label}</h2>
     <span class="text-xs tabular-nums text-muted-foreground">{items.length}</span>
   </header>
+
   <!-- Each column's card list is its own bounded scroll container. svelte-dnd-action
        auto-scrolls a scrollable *container* correctly during a drag, but mis-places
        the drop once the *window* auto-scrolls (a card dropped low in a long column
        would snap back near the top). Capping the height and scrolling here keeps the
        drag inside a container the library handles, so a card lands where it's
        dropped — and the column header/count stay put. -->
+  <!-- The empty-column hint sits OVER the drop zone, not above it, and lets the pointer
+       through: above the zone, a card released on the hint landed outside it and sprang back.
+       It is not a child of the zone, which svelte-dnd-action reserves for its items. -->
+  <div class="relative">
+  {#if items.length === 0 && emptyHint && !dragDisabled}
+    <p class="pointer-events-none absolute inset-x-1 top-2 text-xs text-muted-foreground/70">{emptyHint}</p>
+  {/if}
   <div
     class="flex max-h-[calc(100dvh-14rem)] min-h-24 flex-col gap-2 overflow-y-auto"
     bind:this={zone}
@@ -120,5 +134,6 @@
         <BoardCard {item} {onopen} {onremove} removing={removing.includes(item.id)} />
       </div>
     {/each}
+  </div>
   </div>
 </section>

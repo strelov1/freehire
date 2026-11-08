@@ -1,4 +1,4 @@
-import type { CollectionKind, FilterCollectionGroup } from './collections';
+import type { CollectionKind, FilterCollectionGroup, SeeAlsoMark } from './collections';
 
 // A section of the /collections hub: one card there, and its own page at
 // /collections/group/:slug listing every collection in it. A filter collection
@@ -13,6 +13,23 @@ export type CollectionSectionDef = {
   slug: string;
   title: string;
   description: string;
+};
+
+// One collection inside a section, normalized across both kinds of collection so
+// the pages render them uniformly. `count` is the open-job count, or null when it
+// could not be fetched — counts are decorative, so a failed fetch degrades to no count.
+export type CollectionRow = {
+  slug: string;
+  title: string;
+  description: string;
+  count: number | null;
+  mark: SeeAlsoMark;
+  // Leading companies hiring in it, biggest first — drawn as an overlapping logo
+  // stack in place of `mark`. Empty when the snapshot has none for it: `mark` is
+  // the fallback.
+  companies: string[];
+  // Leading countries, for a regional remote collection — a flag stack, same rule.
+  flags: string[];
 };
 
 // In display order.

@@ -68,7 +68,7 @@ func (n *Notifier) Send(ctx context.Context, _ string, dest string, m notify.Mes
 		return fmt.Errorf("emailnotify: unsubscribe link for user %d: %w", m.UserID, err)
 	}
 	e := n.render(m, unsubscribe)
-	return n.sender.Send(ctx, Message{
+	return SoftSkipIfPaused(n.sender.Send(ctx, Message{
 		From:           n.from,
 		To:             dest,
 		Subject:        e.subject,
@@ -77,7 +77,7 @@ func (n *Notifier) Send(ctx context.Context, _ string, dest string, m notify.Mes
 		Group:          emailprefs.GroupAlerts,
 		UnsubscribeURL: unsubscribe,
 		Campaign:       digestCampaign,
-	})
+	}), notify.ErrChannelNotConfigured)
 }
 
 // digestCampaign is the engagement-tracking name of the saved-search digest.

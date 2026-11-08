@@ -2,6 +2,7 @@
   import type { CvBaseItem } from '#lib/cv.js';
   import { messages } from './BasePicker.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { formatDate } from '#lib/utils.js';
   import { format, t } from '#lib/i18n/t.js';
 
   // The choice of base to tailor from. It renders nothing for fewer than two bases: with one
@@ -15,7 +16,8 @@
   }: { bases: CvBaseItem[]; value?: string; name?: string; copyHint?: boolean } = $props();
 
   const s = $derived(t(messages, locale()));
-  const fmt = (iso: string) => new Date(iso).toLocaleDateString();
+  // The site's one date format ("Oct 27, 2026"), not the browser's numeric default.
+  const fmt = (iso: string) => formatDate(iso, locale());
 </script>
 
 {#if bases.length >= 2}

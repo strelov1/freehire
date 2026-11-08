@@ -21,7 +21,7 @@
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
   import { askConfirmTailor } from '#lib/confirmTailorDialog.svelte.js';
-  import { tailorHref } from '#lib/tailor/tailorHref.js';
+  import { tailorHref } from '#lib/tailorHref.js';
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { formatSalary, summaryFacets } from '#lib/enrichment.js';
@@ -727,7 +727,9 @@
     class="shrink-0 gap-1.5 px-2 text-muted-foreground"
   >
     <Flag class="size-4 shrink-0" aria-hidden="true" />
-    Report
+    <!-- Icon only from lg, where it sits beside the CTAs: a rare action, it should not
+         weigh as much as Apply. The accessible name stays on the button. -->
+    <span class="lg:sr-only">Report</span>
   </Button>
 {/snippet}
 
@@ -813,7 +815,7 @@
 {#snippet actionStrip(className: string)}
   <div class={`shrink-0 items-center gap-1.5 ${className}`}>
     <a
-      class="inline-flex shrink-0 items-center gap-1.5 px-1 text-sm font-medium text-primary hover:underline"
+      class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
       onclick={onDiscussionClick}
     >
@@ -860,7 +862,7 @@
      apply control the plan did not pick. -->
 {#snippet ctaGroup()}
   {#if !closed}
-    <div class="hidden shrink-0 items-center justify-end gap-2 lg:flex">
+    <div class="hidden shrink-0 items-center gap-2 lg:flex">
       {@render autoApplyCta('md', 'shrink-0')}
       {@render applyCta('md', 'shrink-0', cta.external)}
       {@render tailorCta('md', 'shrink-0')}
@@ -877,7 +879,7 @@
          400 chars server-side — the headline above the full description. -->
     <section class="flex flex-col gap-2">
       <h2 class="text-base font-semibold">Summary</h2>
-      <p class="text-sm leading-relaxed text-muted-foreground">{e.summary}</p>
+      <p class="text-sm leading-relaxed">{e.summary}</p>
     </section>
   {:else}
     <!-- The description's own headings are demoted to h3 (descriptionHeadings.ts) to sit
@@ -1040,7 +1042,7 @@
              variant/class/children, so a `title` passed to it would be dropped
              silently and the badge would state a claim with its evidence gone. -->
         <span title={badge.tooltip} class="inline-flex">
-          <Chip variant="brand" class="font-semibold">{badge.label}</Chip>
+          <Chip class="font-semibold">{badge.label}</Chip>
         </span>
       {/each}
     </div>
@@ -1107,9 +1109,16 @@
     <!-- The CTAs take a row of their own under the title rather than riding its right
          edge: the title is the longest string on the page and the buttons are the widest
          fixed thing beside it, so sharing a line meant a two-word title left them adrift in
-         the middle of the page and a long one pushed them down anyway. Right-aligned, so
-         they land above the quiet strip's own right edge on the tab row below. -->
-    {@render ctaGroup()}
+         the middle of the page and a long one pushed them down anyway. Left-aligned under
+         the title they read as its next step; right-aligned they floated with nothing to
+         their left. -->
+    <!-- From lg the quiet actions (Discussion, Report, Save) share the CTAs' row, at its far
+         end, rather than the tab row: there they read as more tabs, and every pixel they
+         took came out of the tab labels. -->
+    <div class="hidden items-center justify-between gap-4 lg:flex">
+      {@render ctaGroup()}
+      {@render actionStrip('-mr-1 flex')}
+    </div>
 
     <!-- Below lg the provenance line already spends its width on the company name and its
          badges, so the dates read here instead — a caption under the title rather than
@@ -1153,9 +1162,8 @@
     {/if}
 
     {#if job.company?.trim()}
-      <!-- A muted text link, not a button: it shows on every posting, and this page's CTA
-           hierarchy is the subject of its own open change. The company page is resolved
-           only on click, keeping crawler visits cheap. -->
+      <!-- A muted text link, not a button: it shows on every posting. The company page is
+           resolved only on click, keeping crawler visits cheap. -->
       <a
         href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
         target="_blank"
@@ -1167,9 +1175,7 @@
       </a>
     {/if}
 
-    <!-- Beside the referral block rather than a fourth button of its own: the two are the
-         same insider seen from different ends, and this page's CTA hierarchy is the
-         subject of its own open change. -->
+    <!-- Mentorship is a separate way to get help from someone at this company. -->
     {#if job.company_slug}
       <MentorBlock companySlug={job.company_slug} companyName={job.company} />
     {/if}
@@ -1325,11 +1331,8 @@
       </div>
     </div>
 
-    <!-- Tabs left, actions right, one rule under both — and no gap between the halves,
-         because each draws its own stretch of that rule and a gap here is a gap in the
-         line (the strip's own left padding separates them instead). The row is rendered
-         whether or not there are tabs to put in it: a posting from an unknown employer
-         has only the description, and the rule then simply closes the actions off. -->
+    <!-- The tab row. Rendered whether or not there are tabs to put in it: a posting from an
+         unknown employer has only the description, and the rule then closes the header. -->
     <div class="flex items-end justify-between">
       {#if contentTabs.length > 1}
         <TabStrip
@@ -1343,7 +1346,6 @@
       {:else}
         <div class="min-w-0 flex-1 border-b border-border" aria-hidden="true"></div>
       {/if}
-      {@render actionStrip('hidden border-b border-border pb-2 lg:flex')}
     </div>
 
     <!-- The three states of one exchange. They sit at the top of the content column rather
@@ -1415,7 +1417,9 @@
       />
     {/if}
 
-    <div class="hidden lg:block">{@render signInFeedback()}</div>
+    <!-- `contents`, not `block`: an empty wrapper still took a slot in the column's gap and
+         doubled the space between the tab row and the description. -->
+    <div class="hidden lg:contents">{@render signInFeedback()}</div>
 
     {#if contentTabs.length > 1}
       <!-- One panel for every tab, its contents toggled by class rather than {#if}.

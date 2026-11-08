@@ -975,7 +975,7 @@
 
 <!-- Single flex-1 root so a host can compose the chat beside another pane (e.g. the tailor
      artifact panel); the host supplies the outer height + flex row. -->
-<div class="flex min-w-0 flex-1 flex-col">
+<div class="flex min-h-0 min-w-0 flex-1 flex-col">
 {#if error}
   <div
     class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong"
@@ -1063,7 +1063,7 @@
     {/if}
 
     <!-- Chat pane -->
-    <div class="flex min-w-0 flex-1 flex-col">
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
       <!-- Desktop: collapse/expand the session list (only when a rail exists). -->
       {#if showSessionRail}
         <div class="hidden items-center gap-1 border-b border-border px-2 py-1.5 md:flex">
@@ -1137,7 +1137,7 @@
       {/if}
 
       <!-- Message list -->
-      <div bind:this={scroller} onscroll={onPaneScroll} class="flex-1 overflow-y-auto p-4">
+      <div bind:this={scroller} onscroll={onPaneScroll} class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
         <!-- The transcript is a log, so a screen reader hears what arrives without moving
              to it. Busy while a turn streams (and while a conversation loads): the reply is
              re-rendered token by token, and announcing each re-render would read the same
@@ -1153,8 +1153,12 @@
           {#if phase === 'loading'}
             <p class="text-sm text-muted-foreground">{s.connecting}</p>
           {:else if chat.messages.length === 0 && openingActions?.length}
-            <div class="rounded-xl border border-border bg-muted/30 p-4">
-              <div class="flex flex-wrap gap-2">
+            <!-- A plain list of left-aligned rows rather than filled pills in a boxed card: the
+                 brand fill is kept for the unattended run, the one action that does the work;
+                 a question to ask is a quiet row, so three of them no longer read as three
+                 competing calls to action. -->
+            <div>
+              <div class="flex flex-col gap-2">
                 <!-- The icon comes from the action's kind, not from the action itself: the
                      surfaces that offer these are plain modules, and a Svelte component cannot
                      travel through one. The two kinds are the two rhythms — the unattended run
@@ -1163,11 +1167,16 @@
                   {@const Icon = action.kind === 'autopilot' ? Rocket : MessagesSquare}
                   <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                    class={[
+                      'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors disabled:opacity-50',
+                      action.kind === 'autopilot'
+                        ? 'bg-brand text-brand-foreground hover:opacity-90'
+                        : 'border border-border bg-card text-foreground hover:bg-accent',
+                    ]}
                     disabled={turnActive || switching}
                     onclick={() => runOpening(action)}
                   >
-                    <Icon class="size-4" />
+                    <Icon class={['size-4 shrink-0', action.kind !== 'autopilot' && 'text-muted-foreground']} />
                     {action.label}
                   </button>
                 {/each}

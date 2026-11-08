@@ -243,6 +243,9 @@
     skillsSettled && matchSortNeedsSkills(filters.value, matchFilterAvailable),
   );
 
+  // Under best match the server applies the threshold across the whole ranking, so the
+  // page is used as served; under any other ordering the browser still trims the page.
+  const serverMatch = $derived(minMatch != null && selectedSort === 'match');
   const matchSortHint = $derived(minMatch != null && selectedSort !== 'match');
 
   // Which date the above-list select bounds. Not $derived: the flag is a runtime env
@@ -445,7 +448,7 @@
   const visibleJobs = $derived(
     displayItems.filter((j) => {
       if (isDismissed(j.public_slug)) return false;
-      if (matchFilterAvailable && minMatch != null && (j.skills ?? []).length > 0) {
+      if (!serverMatch && matchFilterAvailable && minMatch != null && (j.skills ?? []).length > 0) {
         return computeClientMatch(j.skills ?? [], profileSkills).percent >= minMatch;
       }
       return true;
@@ -457,7 +460,9 @@
   // trims the already-fetched page client-side. Showing the raw total next to a
   // shrunk list would read as a lie ("500 open jobs" over three visible cards), so
   // swap in what's actually on screen while the threshold is active.
-  const listTotal = $derived(matchFilterAvailable && minMatch != null ? visibleJobs.length : jobs.total);
+  const listTotal = $derived(
+    !serverMatch && matchFilterAvailable && minMatch != null ? visibleJobs.length : jobs.total,
+  );
 
   // The pending "Job hidden — Undo" toast, or null. Set when a card is hidden; the
   // toast owns its auto-dismiss. Undo clears the slug's hidden mark (card returns via
@@ -512,7 +517,7 @@
 
   // Personal feed preferences must be re-applied when the reader changes in-tab.
   const searchUserID = $derived(
-    standalone && (filters.applied.hideSeen || filters.applied.formerEmployers) ? currentUser()?.id ?? null : null,
+    standalone && (filters.applied.hideSeen || filters.applied.formerEmployers || serverMatch) ? currentUser()?.id ?? null : null,
   );
 
   let lastSearchUserID = untrack(() => searchUserID);
@@ -830,6 +835,7 @@
     <ListToolbar
       total={displayItems.length > 0 ? listTotal : null}
       unit={listTotal === 1 ? 'job' : 'jobs'}
+      atLeast={serverMatch && jobs.totalIsLowerBound}
       settled={jobs.status === 'ready'}
       announceKey={resultSetKey}
       onSwipe={standalone ? openSwipe : undefined}
@@ -954,7 +960,7 @@
              so this is somewhere to leave rather than a dead end. -->
         <States
           state="empty"
-          message={minMatch === null
+          message={minMatch === null || serverMatch
             ? 'Every job on this page is one you hid.'
             : 'Every job on this page is hidden or below your match threshold.'}
         />
@@ -963,7 +969,7 @@
              `holdover`): the rows are real but about to be replaced. -->
         <div class="flex flex-col gap-3" aria-busy={holdingOver}>
           {#each visibleJobs as job (job.public_slug)}
-            <JobRow {job} {onHide} />
+            <JobRow {job} {onHide} hideCompany={!!scope.company_slug} />
           {/each}
         </div>
       {/if}

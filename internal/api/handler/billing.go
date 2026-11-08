@@ -184,12 +184,12 @@ func (h *billingHandlers) Checkout(c *fiber.Ctx) error {
 	// The price comes from the pricing page's monthly/annual choice. It is validated
 	// against the configured list inside the service — never trusted as sent.
 	url, applied, err := h.billing.CheckoutURL(ctx, userID, c.Query("price"), discount)
-	if err != nil {
-		// Either checkout is unconfigured, or the provider refused. Neither is something a
-		// candidate can act on, and a 404 lets the surface omit the offer rather than render
-		// a broken one.
-		log.Printf("billing: no checkout for user %d: %v", userID, err)
+	if billingAbsent(err) {
+		// Checkout is unconfigured or the price is not offered: the surface omits the offer.
 		return fiber.NewError(fiber.StatusNotFound, "checkout is not available")
+	}
+	if err != nil {
+		return err
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{
 		"url": url,
@@ -251,11 +251,11 @@ func (h *billingHandlers) Subscription(c *fiber.Ctx) error {
 	defer cancel()
 
 	out, err := h.billing.SubscriptionOverview(ctx, userID)
-	if err != nil {
-		if !errors.Is(err, billing.ErrNoSubscription) {
-			log.Printf("billing: could not read the subscription of user %d: %v", userID, err)
-		}
+	if billingAbsent(err) {
 		return fiber.NewError(fiber.StatusNotFound, "no subscription")
+	}
+	if err != nil {
+		return err
 	}
 	return c.JSON(fiber.Map{"data": out})
 }
@@ -277,13 +277,19 @@ func (h *billingHandlers) Manage(c *fiber.Ctx) error {
 	defer cancel()
 
 	url, err := h.billing.ManagementURL(ctx, userID)
-	if err != nil {
-		// No subscription, or the provider is unreachable. Either way there is nothing to
-		// manage right now, and the surface omits the link.
-		if !errors.Is(err, billing.ErrNoSubscription) {
-			log.Printf("billing: no management URL for user %d: %v", userID, err)
-		}
+	if billingAbsent(err) {
 		return fiber.NewError(fiber.StatusNotFound, "no subscription to manage")
 	}
+	if err != nil {
+		return err
+	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"url": url}})
+}
+
+// billingAbsent is the state where there is honestly nothing to show: billing or checkout
+// is not configured, or the account has no subscription. Anything else — the provider
+// down, a query failing — is a fault, answered 500 and reported rather than passed off as
+// "no subscription" to somebody who is paying.
+func billingAbsent(err error) bool {
+	return errors.Is(err, billing.ErrNoSubscription) || errors.Is(err, billing.ErrDisabled) || errors.Is(err, billing.ErrNoCheckout)
 }

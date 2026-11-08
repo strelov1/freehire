@@ -57,6 +57,9 @@ type SearchInput struct {
 	RequireAllSkills bool       `json:"require_all_skills,omitempty" jsonschema:"true: every listed skill must be present, not just one"`
 	ExcludeSkills    stringList `json:"exclude_skills,omitempty" jsonschema:"technologies the posting must not ask for, e.g. php"`
 	EmploymentType   stringList `json:"employment_type,omitempty" jsonschema:"any of full_time, part_time, contract, internship"`
+	// Engagement is the contract form, which employment_type cannot tell apart: a contract
+	// role may be freelance B2B or a fixed-term employment contract (agent report, 2026-11-05).
+	Engagement stringList `json:"engagement,omitempty" jsonschema:"contract form, e.g. b2b, c2c, ir35_outside, uop"`
 
 	// SalaryMin is a floor, expressed in SalaryCurrency. A floor without a currency is
 	// ambiguous across a catalogue holding both, so the two travel together.

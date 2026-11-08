@@ -138,7 +138,8 @@ func newCatalogueServer(r Reader, origin, instructions, surface string) *mcp.Ser
 		Description: "Read one posting in full by the slug a search result carries: the whole " +
 			"description, the stated requirements, which applicant tracking system handles " +
 			"applications, and whether the posting still looks live — when it was last seen " +
-			"open, a reality class, and any observed signs that it is not being filled.",
+			"open, a reality class, and any observed signs that it is not being filled. A closed " +
+			"posting carries closed_at.",
 		Annotations: readOnly(),
 		Meta:        rendersInWidget(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in JobDetailInput) (*mcp.CallToolResult, JobResult, error) {

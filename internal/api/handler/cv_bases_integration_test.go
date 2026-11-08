@@ -167,7 +167,7 @@ func TestTailorCV_AnotherUsersBaseIs404(t *testing.T) {
 	}
 }
 
-func TestStartTailorSession_ReportsTheCopysOwnBase(t *testing.T) {
+func TestStartTailorSession_ReportsTheCopyOwnBase(t *testing.T) {
 	f := newBasesFixture(t)
 	_, got := f.tailor(t, "bases-job-1", tailorCVRequest{BaseCVID: f.other.ID.String()})
 	// Make the OTHER base the default again by tailoring a second vacancy from the first.

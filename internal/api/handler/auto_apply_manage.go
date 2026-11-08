@@ -22,7 +22,7 @@ const autoApplyNoAttemptMessage = "there is no auto-apply attempt for this job"
 // autoApplyEntryForSlug resolves the caller's attempt on the job behind slug. An unknown slug
 // is pgx.ErrNoRows (404 over HTTP); a known job with no attempt is a 404 that says so.
 func (h *assistantHandlers) autoApplyEntryForSlug(ctx context.Context, userID int64, slug string) (db.Job, db.GetAutoApplyQueueEntryForJobRow, error) {
-	job, err := h.queries.GetJobBySlug(ctx, slug)
+	job, err := jobBySlugOrCode(ctx, h.queries, slug)
 	if err != nil {
 		return db.Job{}, db.GetAutoApplyQueueEntryForJobRow{}, err
 	}
