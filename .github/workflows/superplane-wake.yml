@@ -49,24 +49,30 @@ jobs:
           quiet=$(date -u -d '6 hours ago' +%Y-%m-%dT%H:%M:%SZ)
           day=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
 
-          gh pr list --state open --limit 30 \
-            --json number,isDraft,isCrossRepository,author,mergeStateStatus,statusCheckRollup,commits,comments \
+          # Commits and comments are read per candidate: asking for them in the list
+          # trips GitHub's GraphQL node limit well before every open PR is listed.
+          gh pr list --state open --limit 500 \
+            --json number,isDraft,isCrossRepository,author,mergeStateStatus,statusCheckRollup \
             --jq ".[]
               | select(.isDraft | not) | select(.isCrossRepository | not)
               | select(.author.login != \"app/dependabot\" and .author.login != \"dependabot\")
-              | select(.commits[-1].committedDate < \"$quiet\")
               | .failing = ([.statusCheckRollup[]
                   | select((.conclusion // .state) as \$s | [\"FAILURE\",\"ERROR\",\"TIMED_OUT\"] | index(\$s))
                   | (.name // .context)] | unique)
               | select(.mergeStateStatus == \"DIRTY\" or (.failing | length > 0))
-              | .wakes = [.comments[] | select(.body | contains(\"$marker\")) | .createdAt]
-              | select((.wakes | length) < 3)
-              | select((.wakes | max // \"\") < \"$day\")
               | {number, conflict: (.mergeStateStatus == \"DIRTY\"), failing}" > stuck.jsonl
 
           failed=0
           while IFS= read -r pr; do
             number=$(jq -r .number <<<"$pr")
+            due=$(gh pr view "$number" --json commits,comments --jq "
+              (.commits[-1].committedDate < \"$quiet\")
+              and ([.comments[] | select(.body | contains(\"$marker\")) | .createdAt] as \$w
+                   | (\$w | length) < 3 and (\$w | max // \"\") < \"$day\")")
+            if [ "$due" != true ]; then
+              echo "#$number is busy or already woken"
+              continue
+            fi
             {
               echo "@superplaneagent this pull request is stuck; get it mergeable."
               echo
