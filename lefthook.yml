@@ -247,3 +247,18 @@ pre-commit:
         - "design-system/scripts/check-adoption.mjs"
         - "web/src/**/*.{svelte,ts,js}"
       run: pnpm --dir design-system run check:adoption
+
+# The same commitlint config CI applies to the PR title (commitlint.config.js). Local
+# commits are not what lands on main — the squash merge takes the PR title — but a branch
+# that follows the convention makes a title easy to write. Steps aside when the root
+# tooling is not installed (`pnpm install` at the repository root): the PR title check is
+# the gate.
+commit-msg:
+  commands:
+    commitlint:
+      run: |
+        if [ ! -x node_modules/.bin/commitlint ]; then
+          echo "commitlint not installed (pnpm install at the repository root) - skipping"
+          exit 0
+        fi
+        node_modules/.bin/commitlint --edit {1}
