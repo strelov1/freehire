@@ -102,6 +102,31 @@ GROUP BY user_id, day
 HAVING count(*) > 1;
 ```
 
+Do the letters cause payments? `go run ./cmd/report-cv-letters` (hand-run, read-only, needs only
+`DATABASE_URL`; `report.go` here). Per letter it prints sent, delivered, clicked, bounced and
+complained (SES, from `email_events` plus `email_event_daily`) and how many recipients started
+paying within `PaidWindowDays` (14) of the letter, next to the holdout, then the whole-sequence
+rates from enrollment. Reading it:
+
+- **The control is on the letter's clock.** A letter's own control is the holdout accounts still
+  unpaid when it fell due (`uploaded_at` + the step's `AfterDays`), counted over the 14 days after.
+  Letter 3 goes to people who did not pay in two weeks, so a rate counted from enrollment would
+  be a different stretch of an account's life. The enrollment rows (holdout against every
+  non-holdout account, letter or not) are the comparison that cannot be flattered.
+- **Only closed windows are read.** An account whose 14 days are still open is not a non-payer;
+  `sent` counts every letter, the paid rate only matured ones. Run it 14+ days after the last
+  letter of the cohort you care about, and it needs a few hundred accounts per group to say
+  anything.
+- **Letters overlap.** Letters are 5 and 7 days apart, so one payer can sit inside two letters'
+  windows; the per-letter paid counts do not add up.
+- **No opens.** The report prints n/a: the configuration set publishes no Open event (see
+  [notifications](../../../docs/agents/notifications.md#engagement-tracking)); reopening that is the
+  owner's decision, not a column to fill.
+- **Mobile buyers are missing** until app-store purchases reach the backend; `paid_at` is a Stripe or
+  RevenueCat tier first seen live by the hourly observation.
+- `email_events` has no user id, so SES figures cannot be cut by holdout or by payer; they say how a
+  letter fared, and the ledger says who paid.
+
 Conversion by group:
 
 ```sql
