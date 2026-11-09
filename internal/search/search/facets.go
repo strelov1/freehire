@@ -46,14 +46,11 @@ type FacetStat struct {
 // responsibility from returning ranked hits, so it runs with limit 0 (no
 // documents), no sort, and no hybrid embedder — just the distribution.
 func (c *Client) FacetCounts(ctx context.Context, p FacetParams) (FacetResult, error) {
-	resp, err := c.facetSearch(ctx, p.Query, p.Filter, p.Facets)
+	raw, err := c.facetSearch(ctx, p.Query, p.Filter, p.Facets)
 	if err != nil {
 		return FacetResult{}, queryErr(ctx, "search: facet query", err)
 	}
-	res, err := buildFacetResult(resp)
-	if err != nil {
-		return FacetResult{}, err
-	}
+	res := buildFacetResult(raw)
 	if err := widenImpliedRegionCounts(ctx, p.Query, p.Filter, res.Facets["regions"], c.facetSearch); err != nil {
 		return FacetResult{}, err
 	}
@@ -97,33 +94,81 @@ func widenImpliedRegionCounts(ctx context.Context, query string, filter any, dis
 		if err != nil {
 			return queryErr(ctx, "search: region count "+val, err)
 		}
-		dist[val] = resp.EstimatedTotalHits
+		dist[val] = resp.Total
 	}
 	return nil
 }
 
-// facetSearch runs one facet-count query, reading q's operators the same way
-// Search does: a single alternative is today's single-index request, several are
-// one federated request whose merged counts are per document.
-func (c *Client) facetSearch(ctx context.Context, query string, filter any, facets []string) (*meilisearch.SearchResponse, error) {
+// rawFacets is an engine-neutral facet answer: the filtered total, the per-facet
+// value counts and the numeric stats. Meilisearch and the FacetEngine both fill it,
+// so everything above the facet seam is engine-blind.
+type rawFacets struct {
+	Total        int64
+	Distribution map[string]map[string]int64
+	Stats        map[string]FacetStat
+}
+
+// rawFromResponse decodes a Meilisearch response into a rawFacets.
+func rawFromResponse(resp *meilisearch.SearchResponse) (rawFacets, error) {
+	dist, err := decodeFacetDistribution(resp.FacetDistribution)
+	if err != nil {
+		return rawFacets{}, err
+	}
+	stats, err := decodeFacetStats(resp.FacetStats)
+	if err != nil {
+		return rawFacets{}, err
+	}
+	return rawFacets{Total: resp.EstimatedTotalHits, Distribution: dist, Stats: stats}, nil
+}
+
+// facetSearch runs one facet-count query. Without query text the router may send it
+// to the second engine (see route.go); otherwise, and as the fallback, it is the
+// Meilisearch request.
+func (c *Client) facetSearch(ctx context.Context, query string, filter any, facets []string) (rawFacets, error) {
+	meili := func() (rawFacets, error) { return c.meiliFacets(ctx, query, filter, facets) }
+	mode := c.routeMode(query)
+	if mode == FacetModeMeili {
+		c.countMeiliOnly(query, "facets")
+		return meili()
+	}
+	return routeRequest(ctx, c.router, mode, "facets", filter,
+		func(ctx context.Context) (rawFacets, error) {
+			a, err := c.router.engine.Facets(ctx, filter, facets)
+			return rawFacets(a), err
+		},
+		meili, cloneRaw, diffRaw)
+}
+
+// meiliFacets is the Meilisearch half of facetSearch, reading q's operators the same
+// way Search does: a single alternative is today's single-index request, several
+// are one federated request whose merged counts are per document.
+func (c *Client) meiliFacets(ctx context.Context, query string, filter any, facets []string) (rawFacets, error) {
 	filter = withOpenJobs(filter)
 	alts, err := ParseQuery(query)
 	if err != nil {
-		return nil, err
+		return rawFacets{}, err
 	}
 	if len(alts) == 1 {
-		return c.facet.SearchWithContext(ctx, alts[0].Text, &meilisearch.SearchRequest{
+		resp, err := c.facet.SearchWithContext(ctx, alts[0].Text, &meilisearch.SearchRequest{
 			Filter:               filter,
 			Facets:               facets,
 			Limit:                0,
 			AttributesToSearchOn: alts[0].Fields,
 		})
+		if err != nil {
+			return rawFacets{}, err
+		}
+		return rawFromResponse(resp)
 	}
-	resp, err := c.manager.MultiSearchWithContext(ctx, buildFederatedFacets(alts, filter, facets))
+	merged, err := c.manager.MultiSearchWithContext(ctx, buildFederatedFacets(alts, filter, facets))
 	if err != nil {
-		return nil, err
+		return rawFacets{}, err
 	}
-	return federatedAsSearchResponse(resp)
+	resp, err := federatedAsSearchResponse(merged)
+	if err != nil {
+		return rawFacets{}, err
+	}
+	return rawFromResponse(resp)
 }
 
 // DistinctCount returns the exact number of distinct values of attr among the
@@ -141,6 +186,18 @@ func (c *Client) facetSearch(ctx context.Context, query string, filter any, face
 // per-alternative distinct counts a company matched by two alternatives twice,
 // and a count that is not exact is what this exists to avoid.
 func (c *Client) DistinctCount(ctx context.Context, query string, filter any, attr string) (int64, error) {
+	meili := func() (int64, error) { return c.meiliDistinctCount(ctx, query, filter, attr) }
+	mode := c.routeMode(query)
+	if mode == FacetModeMeili {
+		c.countMeiliOnly(query, "distinct")
+		return meili()
+	}
+	return routeRequest(ctx, c.router, mode, "distinct", filter,
+		func(ctx context.Context) (int64, error) { return c.router.engine.DistinctCount(ctx, filter, attr) },
+		meili, func(n int64) int64 { return n }, diffCount)
+}
+
+func (c *Client) meiliDistinctCount(ctx context.Context, query string, filter any, attr string) (int64, error) {
 	filter = withOpenJobs(filter)
 	alts, err := ParseQuery(query)
 	if err != nil {
@@ -173,7 +230,7 @@ type FacetReq struct {
 
 // facetSearcher runs one Limit:0 facet query. It is injected so
 // disjunctiveFacetCounts is unit-testable without a live engine.
-type facetSearcher func(ctx context.Context, query string, filter any, facets []string) (*meilisearch.SearchResponse, error)
+type facetSearcher func(ctx context.Context, query string, filter any, facets []string) (rawFacets, error)
 
 // DisjunctiveFacetCounts computes each facet's distribution under its own reduced
 // filter (so a selected facet still shows its siblings' counts) plus the grand
@@ -211,7 +268,7 @@ func disjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, 
 			return queryErr(ctx, "search: disjunctive total", err)
 		}
 		mu.Lock()
-		res.Total = resp.EstimatedTotalHits
+		res.Total = resp.Total
 		mu.Unlock()
 		return nil
 	})
@@ -223,10 +280,7 @@ func disjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, 
 			if err != nil {
 				return queryErr(ctx, "search: disjunctive facet "+r.Attr, err)
 			}
-			fr, err := buildFacetResult(resp)
-			if err != nil {
-				return err
-			}
+			fr := buildFacetResult(resp)
 			if r.Attr == "regions" {
 				if err := widenImpliedRegionCounts(ctx, query, r.Filter, fr.Facets[r.Attr], search); err != nil {
 					return err
@@ -251,20 +305,12 @@ func disjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, 
 	return res, nil
 }
 
-// buildFacetResult assembles a FacetResult from a Meilisearch response, decoding
-// its raw facet payloads. Split from FacetCounts so the assembly is unit-testable
-// without a live engine.
-func buildFacetResult(resp *meilisearch.SearchResponse) (FacetResult, error) {
-	facets, err := decodeFacetDistribution(resp.FacetDistribution)
-	if err != nil {
-		return FacetResult{}, err
-	}
-	stats, err := decodeFacetStats(resp.FacetStats)
-	if err != nil {
-		return FacetResult{}, err
-	}
-	foldSourceFamilies(facets["source"])
-	return FacetResult{Total: resp.EstimatedTotalHits, Facets: facets, Stats: stats}, nil
+// buildFacetResult assembles a FacetResult from an engine's raw answer, folding
+// source families into their own bucket. Split from FacetCounts so the assembly is
+// unit-testable without a live engine.
+func buildFacetResult(raw rawFacets) FacetResult {
+	foldSourceFamilies(raw.Distribution["source"])
+	return FacetResult{Total: raw.Total, Facets: raw.Distribution, Stats: raw.Stats}
 }
 
 // foldSourceFamilies adds each family member's count into the family's own bucket

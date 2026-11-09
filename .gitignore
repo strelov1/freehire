@@ -58,6 +58,7 @@ hire
 /liveness
 /llm-probe
 /mail-ingest
+/facetd
 /mail-preview
 /mentor-busy-sync
 /mentorship-remind
