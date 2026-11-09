@@ -187,3 +187,39 @@ it('opens a first chat without creating a session, and creates it with the first
   expect(posted()).toHaveLength(1);
   unmount();
 });
+
+it('leaves the caller on the chat they opened while their first message was creating a session', async () => {
+  const created = '5b2f7a40-1c9e-4d0a-8f61-3e7d2c9a4b10';
+  const other = '9e8d7c6b-5a49-4382-9171-605f4e3d2c1b';
+  let finishCreate!: (response: Response) => void;
+  const fetcher = vi.fn((url: string, init?: RequestInit) => {
+    const u = String(url);
+    if (u.endsWith('/assistant/sessions') && init?.method === 'POST') {
+      return new Promise<Response>((resolve) => {
+        finishCreate = resolve;
+      });
+    }
+    if (u.endsWith(`/assistant/sessions/${other}`)) {
+      return Promise.resolve(
+        Response.json({ data: { session: { id: other, preset: 'chat', label: 'Earlier' }, messages: [] } }),
+      );
+    }
+    return Promise.resolve(Response.json({ data: [] }));
+  });
+  vi.stubGlobal('fetch', fetcher);
+  composer.props = null;
+  const { rerender, unmount } = render(AssistantChat, {});
+  await waitFor(() => expect(composer.props).not.toBeNull());
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  (composer.props as { onSubmit: (text: string) => void } | null)?.onSubmit('Find me remote Go jobs');
+  await waitFor(() => expect(finishCreate).toBeTypeOf('function'));
+  await rerender({ session: other });
+  await waitFor(() => expect(fetcher.mock.calls.some(([u]) => String(u).endsWith(`/${other}`))).toBe(true));
+  finishCreate(Response.json({ data: { id: created, preset: 'chat', label: '' } }));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  // Neither opened nor sent to: the caller stays on the chat they picked.
+  expect(fetcher.mock.calls.some(([u]) => String(u).includes(`/${created}`))).toBe(false);
+  unmount();
+});

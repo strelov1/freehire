@@ -594,7 +594,7 @@
     deferredNew = true;
   }
 
-  async function createAndOpen(): Promise<string> {
+  async function createAndOpen() {
     const created = await createSession(arrival.preset);
     // Only once a session exists: a failed create leaves a blank chat still able to send.
     deferredNew = false;
@@ -602,13 +602,12 @@
       // The support routes cannot replay a transcript, so the new session is opened as is.
       activeId = created.id;
       activePreset = 'support';
-      return created.id;
+      return;
     }
     // Spent: the next chat minted here — "New chat", or a later boot() — is a plain one.
     arrival.preset = 'chat';
     sessions = upsertSession(sessions, fromSummary(created, NEW_CHAT_LABEL));
     await openSession(created.id);
-    return created.id;
   }
 
   async function newChat() {
@@ -774,18 +773,25 @@
       // Held as a switch while the session is created: the composer refuses a second send
       // (openSession, which ends this, would clear a queued one anyway).
       switching = true;
-      let created: string;
+      let created: Awaited<ReturnType<typeof createSession>>;
       try {
-        created = await createAndOpen();
+        created = await createSession('chat');
       } catch (err) {
         switching = false;
         if (start.kind === 'message') giveBack(start);
         setError(err instanceof Error ? err.message : s.newChatFailed);
         return;
       }
-      // The caller moved to another chat while this one was being created: the message was
-      // meant for the new one, so hand it back rather than send it somewhere else.
-      if (activeId !== created) {
+      sessions = upsertSession(sessions, fromSummary(created, NEW_CHAT_LABEL));
+      // The caller opened another chat while this one was being created. Leave them there,
+      // and hand the message back rather than send it somewhere it was not written for.
+      if (disposed || activeId !== null) {
+        if (start.kind === 'message') giveBack(start);
+        return;
+      }
+      deferredNew = false;
+      await openSession(created.id);
+      if (activeId !== created.id) {
         if (start.kind === 'message') giveBack(start);
         return;
       }
