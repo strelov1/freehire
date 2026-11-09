@@ -1,7 +1,7 @@
 ## 1. Package and placement
 
 - [x] 1.1 Add `github.com/RoaringBitmap/roaring/v2` to go.mod
-- [ ] 1.2 (package, layering entry and AGENTS.md done; `cmd/facetd` and its workers.md entry remain) Create `internal/search/facetidx` (block `search`) and `cmd/facetd`; add both to `internal/platform/arch/layering/blocks.go`; add an AGENTS.md for the package and an entry in `docs/agents/workers.md`
+- [x] 1.2 Create `internal/search/facetidx` (block `search`) and `cmd/facetd`; add both to `internal/platform/arch/layering/blocks.go`; add an AGENTS.md for the package and an entry in `docs/agents/workers.md`
 
 ## 2. Index and filter evaluator
 
@@ -16,13 +16,13 @@
 
 - [x] 3.1 Write batch API: upsert documents (full replace), mark closed, mark duplicate, delete; idempotent
 - [x] 3.2 Copy-on-write generations: clone touched bitmaps, swap an atomic pointer; test that a reader during a 15k batch answers from the previous generation without blocking
-- [ ] 3.3 (snapshot write/read and corrupt-file error done; not-ready-until-loaded lives in cmd/facetd) Snapshot to disk and load on start; not-ready until loaded; corrupt/missing snapshot → rebuild
-- [ ] 3.4 Full rebuild: a facetd `rebuilder` in `cmd/reindex` (Prepare/Push/Promote/Cleanup over facetd `/rebuild/begin|push|commit|abort`); with `FACETD_URL` set a reindex tees batches into both engines; `-facetd-only` rebuilds facetd alone without description vectors; facetd builds the new generation off to the side and swaps it in on commit
+- [x] 3.3 Snapshot to disk and load on start; not-ready until loaded; corrupt/missing snapshot → rebuild
+- [x] 3.4 Full rebuild: a facetd `rebuilder` in `cmd/reindex` (Prepare/Push/Promote/Cleanup over facetd `/rebuild/begin|push|commit|abort`); with `FACETD_URL` set a reindex tees batches into both engines; `-facetd-only` rebuilds facetd alone without description vectors; facetd builds the new generation off to the side and swaps it in on commit
 
 ## 4. facetd service
 
-- [ ] 4.1 `cmd/facetd`: HTTP API on localhost (`/facets`, `/distinct`, `/write`, `/rebuild/begin|push|commit|abort`, `/ready`), periodic and shutdown snapshots, graceful shutdown
-- [ ] 4.2 Prometheus metrics: request latency and count by endpoint, unsupported/refused by reason, documents, generation age, last applied drain batch
+- [x] 4.1 `cmd/facetd`: HTTP API on localhost (`/facets`, `/distinct`, `/write`, `/rebuild/begin|push|commit|abort`, `/ready`), periodic and shutdown snapshots, graceful shutdown
+- [x] 4.2 Prometheus metrics: request latency and count by endpoint, unsupported/refused by reason, documents, generation age, last applied drain batch
 - [x] 4.3 facetd HTTP client in `internal/search/search` with per-request timeout
 
 ## 5. Routing in the search client
@@ -33,7 +33,7 @@
 - [x] 5.3a Shadow diff tolerates what Meilisearch does not determine: compare distribution keys case-folded (Meilisearch matches strings case-insensitively and reports the spelling of whichever variant its indexing batch saw first), and do not count values that tie on the last count at the 1200 cap (their selection follows Meilisearch's internal tree order); see internal/search/facetidx/AGENTS.md
 - [x] 5.3 Shadow: detached evaluation with its own timeout and a concurrency cap; differences counted and logged with the filter; never affects the response
 - [ ] 5.4 Metrics: requests by engine and mode, fallbacks by reason, shadow differences
-- [ ] 5.5 Integration test through `FacetCounts` and the disjunctive path in `facetd` mode against the same fixture as 2.5 (region widening runs unchanged)
+- [x] 5.5 Integration test through `FacetCounts` and the disjunctive path in `facetd` mode against the same fixture as 2.5 (region widening runs unchanged)
 
 ## 6. Drain dual write
 

@@ -240,3 +240,7 @@ func (f *field) buildForward(n uint32) {
 		}
 	}
 }
+
+// Docs is how many documents the index holds (closed, duplicate and deleted ones included)
+// and how many of them are live, i.e. counted by every answer.
+func (ix *Index) Docs() (total, live uint64) { return uint64(ix.n), ix.live.GetCardinality() }

@@ -14,8 +14,10 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -61,6 +63,15 @@ func main() {
 }
 
 func run() int {
+	// -facetd-only rebuilds facetd (FACETD_URL) alone: no Meilisearch, no description vectors.
+	facetdOnly := flag.Bool("facetd-only", false, "rebuild only facetd (needs FACETD_URL), skipping Meilisearch")
+	flag.Parse()
+	facetdURL := os.Getenv("FACETD_URL")
+	if *facetdOnly && facetdURL == "" {
+		log.Print("config: -facetd-only needs FACETD_URL")
+		return 1
+	}
+
 	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
@@ -122,7 +133,7 @@ func run() int {
 	// Bootstrap owns config + pool, so this required-config check lands just after
 	// the pool opens rather than before it. The connect is cheap and cleanup closes
 	// it on this early return, so the only cost of a missing key is one DB handshake.
-	if cfg.MeiliKey == "" {
+	if cfg.MeiliKey == "" && !*facetdOnly {
 		log.Print("config: MEILI_MASTER_KEY is required")
 		return 1
 	}
@@ -134,9 +145,11 @@ func run() int {
 
 	// Guard free disk for the swap rebuild up front — BEFORE the expensive recompute —
 	// so a disk refusal is a true no-op (no prod writes, no full-catalogue scans).
-	if err := guardDisk(rcfg.MeiliDataDir, rcfg.MinFreeGB, statfsFree); err != nil {
-		log.Printf("reindex: %v", err)
-		return 1
+	if !*facetdOnly {
+		if err := guardDisk(rcfg.MeiliDataDir, rcfg.MinFreeGB, statfsFree); err != nil {
+			log.Printf("reindex: %v", err)
+			return 1
+		}
 	}
 
 	// The duplicate-marker passes run only when asked for (REINDEX_DEDUP=1) — see
@@ -180,15 +193,27 @@ func run() int {
 	// Only from here does the rebuild write to Meilisearch, so only from here does it compete
 	// with the drain, whose pushes re-merge the whole index. Everything above reads Postgres:
 	// pausing the drain from the start kept new jobs and alerts waiting about 6 hours for nothing.
-	releaseDrain, err := worker.HoldPause(ctx, cfg.RedisURL, worker.SearchDrainJob, drainHoldTTL)
-	if err != nil {
-		log.Printf("reindex: could not pause the drain, the load will compete with it: %v", err)
-	} else {
-		defer releaseDrain()
+	if !*facetdOnly {
+		releaseDrain, err := worker.HoldPause(ctx, cfg.RedisURL, worker.SearchDrainJob, drainHoldTTL)
+		if err != nil {
+			log.Printf("reindex: could not pause the drain, the load will compete with it: %v", err)
+		} else {
+			defer releaseDrain()
+		}
 	}
-	log.Print("reindex: target=facet scope=full mode=swap")
+	var rb rebuilder
+	var chunks search.ChunkLister = q // description vectors are Meilisearch's; facetd ignores them
+	switch {
+	case *facetdOnly:
+		rb, chunks = newFacetdRebuild(facetdURL), nil
+	case facetdURL != "":
+		rb = &teeRebuild{primary: client.NewFacetRebuild(), secondary: newFacetdRebuild(facetdURL)}
+	default:
+		rb = client.NewFacetRebuild()
+	}
+	log.Printf("reindex: target=facet scope=full mode=swap facetd=%t facetd_only=%t", facetdURL != "", *facetdOnly)
 	done = worker.Stage("index and swap")
-	indexed, skipped, err := reindexFull(ctx, reader, client.NewFacetRebuild(), lookup, geo, q, q, time.Now())
+	indexed, skipped, err := reindexFull(ctx, reader, rb, lookup, geo, chunks, q, time.Now())
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
@@ -196,6 +221,9 @@ func run() int {
 	done()
 	worker.ReportWork(int64(indexed+skipped), int64(indexed))
 	log.Printf("reindex done: target=facet scope=full indexed=%d skipped=%d", indexed, skipped)
+	if *facetdOnly {
+		return 0 // Meilisearch was not rebuilt: the outbox rows are still owed to it
+	}
 
 	// Best-effort: the reindex itself already succeeded, so a purge failure just leaves
 	// those rows for the next cycle rather than failing this run.

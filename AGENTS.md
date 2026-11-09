@@ -50,7 +50,7 @@ guard. Two placements surprise people (both commented in the table): the LLM cli
 (`platform/llm`) is transport, not AI, like `safehttp`; moderator-authored vacancies and the
 public submission queue are `ingest` (manual job intake, not applications).
 
-`cmd/<name>/` — every binary is a **run-once-and-exit**, cron-driven worker that needs `DATABASE_URL` and exits non-zero on failure, except `cmd/server`, `cmd/mail-ingest` (long-lived SES inbound daemon, `Restart=always`) and `cmd/auto-apply-orchestrate` (serves the Inngest function's HTTP callback protocol between steps, needs no `DATABASE_URL`).
+`cmd/<name>/` — every binary is a **run-once-and-exit**, cron-driven worker that needs `DATABASE_URL` and exits non-zero on failure, except `cmd/server`, `cmd/mail-ingest` (long-lived SES inbound daemon, `Restart=always`), `cmd/facetd` (long-lived in-memory facet engine, localhost HTTP, needs no `DATABASE_URL`) and `cmd/auto-apply-orchestrate` (serves the Inngest function's HTTP callback protocol between steps, needs no `DATABASE_URL`).
 
 Non-obvious:
 
