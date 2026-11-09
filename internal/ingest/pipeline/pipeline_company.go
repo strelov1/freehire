@@ -21,6 +21,15 @@ func canonicalCompanySlug(canon companyCanonical, company string) string {
 	return ""
 }
 
+// companySlugOf is the slug saveOne would store for company: the canonical one when the
+// registry has one, the derived one otherwise.
+func companySlugOf(canon companyCanonical, company string) string {
+	if slug := canonicalCompanySlug(canon, company); slug != "" {
+		return slug
+	}
+	return normalize.CompanySlug(company)
+}
+
 // resolveCompanyAliases resolves a buffered board's distinct company slugs against the alias
 // registry in ONE call, whatever the posting count.
 //

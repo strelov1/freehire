@@ -179,6 +179,31 @@ WHERE source = sqlc.arg(source)
   AND closed_at IS NULL
 RETURNING company_slug;
 
+-- name: CloseCoveredJobs :many
+-- Close the open stored rows an aggregator board listed for an employer the coverage gate
+-- found already crawled first-hand (pipeline.CoveredCloser). Until 2026-11-08 these rows were
+-- only refreshed (RefreshCoveredJobs), so a copy stored before the employer's own board joined
+-- the fleet stayed visible beside it whenever its title differed from every ATS posting —
+-- 4,784 open whatjobs/adzuna rows under 1,354 covered companies when measured. Closing is
+-- reversible: a lapsed coverage lets the next crawl write the posting, and UpsertJob reopens
+-- it. The removal enqueue rides the statement, as in CloseUnseenJobs. RETURNING company_slug
+-- so the caller records the company as crawled, as RefreshCovered does.
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'ats_covered',
+        updated_at    = now()
+    WHERE source = sqlc.arg(source)
+      AND external_id = ANY(sqlc.arg(external_ids)::text[])
+      AND closed_at IS NULL
+    RETURNING id, company_slug
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT company_slug FROM closed;
+
 -- name: CloseJobByID :one
 --
 -- The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
