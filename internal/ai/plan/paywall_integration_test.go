@@ -106,6 +106,10 @@ func TestRecordPaywallHitNeverResolvesAJobItCannotProve(t *testing.T) {
 	job := insertPaywallJob(t, pool, "someone-elses-job")
 	foreignCV := insertPaywallCV(t, pool, other, job)
 	foreignSession := insertPaywallSession(t, pool, other, job)
+	privateJob := insertPaywallJob(t, pool, "private-job")
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET is_private = true, created_by = $1 WHERE id = $2`, other, privateJob); err != nil {
+		t.Fatalf("mark job private: %v", err)
+	}
 
 	for _, tc := range []struct {
 		feature string
@@ -115,6 +119,7 @@ func TestRecordPaywallHitNeverResolvesAJobItCannotProve(t *testing.T) {
 		{"foreign-cv", PaywallJob{CVID: foreignCV}},
 		{"foreign-session", PaywallJob{SessionID: foreignSession}},
 		{"unknown-cv", PaywallJob{CVID: uuid.New()}},
+		{"foreign-private-slug", PaywallJob{Slug: "private-job"}},
 		{"no-job", PaywallJob{}},
 	} {
 		if err := s.RecordPaywallHit(ctx, user, tc.feature, tc.job); err != nil {
@@ -123,6 +128,22 @@ func TestRecordPaywallHitNeverResolvesAJobItCannotProve(t *testing.T) {
 		if slug, ok := paywallJobSlug(t, pool, user, tc.feature); ok {
 			t.Errorf("%s resolved to job %q, want none", tc.feature, slug)
 		}
+	}
+}
+
+func TestRecordPaywallHitResolvesAPrivateJobForItsCreator(t *testing.T) {
+	s, pool := newStore(t, enforcing(), time.Date(2026, 11, 8, 10, 0, 0, 0, time.UTC))
+	ctx := context.Background()
+	owner := insertUser(t, pool, "paywall-owner@example.test")
+	job := insertPaywallJob(t, pool, "owners-private-job")
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET is_private = true, created_by = $1 WHERE id = $2`, owner, job); err != nil {
+		t.Fatalf("mark job private: %v", err)
+	}
+	if err := s.RecordPaywallHit(ctx, owner, "tailor", PaywallJob{Slug: "owners-private-job"}); err != nil {
+		t.Fatal(err)
+	}
+	if slug, ok := paywallJobSlug(t, pool, owner, "tailor"); !ok || slug != "owners-private-job" {
+		t.Errorf("recorded job %q (set=%v), want owners-private-job", slug, ok)
 	}
 }
 
