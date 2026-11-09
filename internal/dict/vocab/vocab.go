@@ -193,7 +193,7 @@ var (
 	}
 	// NonTechCategories are the CategoryValues for confidently non-technical roles: a
 	// member feeds `jobderive.deriveIsTech` to `is_tech = false`, and the enrichment
-	// enqueue gate (`internal/platform/db/queries/jobs.sql`'s EnqueueJobEnrichment /
+	// enqueue gate (`internal/platform/db/queries/jobs_enrichment.sql`'s EnqueueJobEnrichment /
 	// `enrichment.sql`'s EnqueuePendingJobs) reads `is_tech IS TRUE`, so a confirmed
 	// non-tech role never consumes LLM budget. That gate is stricter than this list
 	// alone: it ALSO excludes `is_tech IS NULL` — a category the title dictionary and
