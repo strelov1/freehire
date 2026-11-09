@@ -278,7 +278,7 @@ func TestMetricsCarryMemoryAndBatchSize(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	body := rec.Body.String()
-	for _, want := range []string{"facetd_write_batch_jobs_count 1", "facetd_write_batch_jobs_sum 2", "go_memstats_heap_alloc_bytes"} {
+	for _, want := range []string{"\nfacetd_write_batch_jobs_count 1\n", "\nfacetd_write_batch_jobs_sum 2\n", "\ngo_memstats_heap_alloc_bytes "} {
 		if !strings.Contains(body, want) {
 			t.Errorf("/metrics lacks %q", want)
 		}

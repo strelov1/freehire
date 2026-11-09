@@ -583,7 +583,7 @@ func newMetrics(s *Server) *metrics {
 		}
 	}
 	m.reg.MustRegister(m.requests, m.latency, m.refused, m.snapshotSeconds, m.snapshotBytes, m.snapshotLastSuccess, m.snapshotErrors, m.walBytes, m.walRecords, m.walReplayed, m.walErrors, m.writeBatch,
-		// go_* and process_*: heap and RSS against the unit's MemoryHigh, GC pauses.
+		// go_* and process_*: heap, RSS and GC pauses (MemoryHigh also counts page cache).
 		collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "facetd_documents", Help: "Documents in the index, closed and duplicate included."},
 			cur(func(ix *facetidx.Index) float64 { t, _ := ix.Docs(); return float64(t) })),
