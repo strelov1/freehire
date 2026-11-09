@@ -93,4 +93,10 @@ describe('PlanView API plan', () => {
     expect(screen.queryByText('API plan')).toBeNull();
     expect(billingManageUrl).not.toHaveBeenCalled();
   });
+
+  it('says it could not check the API plan instead of reading as none', async () => {
+    getApiPlan.mockRejectedValue(new Error('network'));
+    render(PlanView);
+    expect(await screen.findByText("Couldn't check your API plan. Reload the page to try again.")).toBeTruthy();
+  });
 });

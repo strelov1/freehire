@@ -98,15 +98,18 @@
   // Without its own strip an API subscriber read "Free" and an upgrade button here and paid
   // for Pro as well, thinking the API needed it.
   let apiPlan = $state<ApiPlan | null>(null);
+  // A failed read is said, not shown as "no API plan": that is the state that misled them.
+  let apiPlanFailed = $state(false);
   // Cleared first, like the billing effect below, so one account's plan never shows to the next.
   $effect(() => {
     apiPlan = null;
+    apiPlanFailed = false;
     if (!isAuthenticated()) return;
     let live = true;
     api
       .getApiPlan()
       .then((p) => live && (apiPlan = p))
-      .catch(() => {});
+      .catch(() => live && (apiPlanFailed = true));
     return () => {
       live = false;
     };
@@ -259,7 +262,9 @@
         </div>
       </div>
 
-      {#if apiPlan?.tier}
+      {#if apiPlanFailed}
+        <p class="text-xs text-muted-foreground">{s.apiStrip.loadError}</p>
+      {:else if apiPlan?.tier}
         <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
           <div class="flex flex-col gap-0.5">
             <span class="text-base font-semibold">{s.apiStrip.tiers[apiPlan.tier]}</span>

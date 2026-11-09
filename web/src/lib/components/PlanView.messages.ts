@@ -30,6 +30,7 @@ export const messages = defineMessages(
       tiers: { api: 'API plan', api_data: 'Data plan' },
       separate: 'Billed separately from Pro',
       keys: 'API keys',
+      loadError: "Couldn't check your API plan. Reload the page to try again.",
     },
     subscription: {
       heading: 'Subscription',
@@ -110,6 +111,7 @@ export const messages = defineMessages(
         tiers: { api: 'API-тариф', api_data: 'Тариф Data' },
         separate: 'Оплачивается отдельно от Pro',
         keys: 'API-ключи',
+        loadError: 'Не удалось проверить API-тариф. Обновите страницу, чтобы попробовать ещё раз.',
       },
       subscription: {
         heading: 'Подписка',
