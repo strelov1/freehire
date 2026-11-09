@@ -14,23 +14,23 @@
 
 ## 3. Writes and snapshots
 
-- [ ] 3.1 Write batch API: upsert documents (full replace), mark closed, mark duplicate, delete; idempotent
-- [ ] 3.2 Copy-on-write generations: clone touched bitmaps, swap an atomic pointer; test that a reader during a 15k batch answers from the previous generation without blocking
-- [ ] 3.3 Snapshot to disk and load on start; not-ready until loaded; corrupt/missing snapshot → rebuild
-- [ ] 3.4 Full rebuild from Postgres reusing the `cmd/reindex` document builder, streamed into a fresh generation and swapped in
+- [x] 3.1 Write batch API: upsert documents (full replace), mark closed, mark duplicate, delete; idempotent
+- [x] 3.2 Copy-on-write generations: clone touched bitmaps, swap an atomic pointer; test that a reader during a 15k batch answers from the previous generation without blocking
+- [ ] 3.3 (snapshot write/read and corrupt-file error done; not-ready-until-loaded lives in cmd/facetd) Snapshot to disk and load on start; not-ready until loaded; corrupt/missing snapshot → rebuild
+- [ ] 3.4 Full rebuild: a facetd `rebuilder` in `cmd/reindex` (Prepare/Push/Promote/Cleanup over facetd `/rebuild/begin|push|commit|abort`); with `FACETD_URL` set a reindex tees batches into both engines; `-facetd-only` rebuilds facetd alone without description vectors; facetd builds the new generation off to the side and swaps it in on commit
 
 ## 4. facetd service
 
-- [ ] 4.1 `cmd/facetd`: HTTP API on localhost (`/facets`, `/distinct`, `/write`, `/rebuild`, `/ready`), graceful shutdown with a final snapshot
+- [ ] 4.1 `cmd/facetd`: HTTP API on localhost (`/facets`, `/distinct`, `/write`, `/rebuild/begin|push|commit|abort`, `/ready`), periodic and shutdown snapshots, graceful shutdown
 - [ ] 4.2 Prometheus metrics: request latency and count by endpoint, unsupported/refused by reason, documents, generation age, last applied drain batch
-- [ ] 4.3 facetd HTTP client in `internal/search/search` with per-request timeout
+- [x] 4.3 facetd HTTP client in `internal/search/search` with per-request timeout
 
 ## 5. Routing in the search client
 
 - [x] 5.0 Engine-neutral raw facet answer (total, distribution, stats) replacing `*meilisearch.SearchResponse` at the `facetSearch` seam; `buildFacetResult` and `widenImpliedRegionCounts` read it; behaviour unchanged (existing tests pass)
 - [x] 5.1 Router at the raw-call level in `facetSearch` and `DistinctCount`: receives the filter before `withOpenJobs`; requests with query text always go to Meilisearch
 - [x] 5.2 Modes `meili` / `shadow` / `facetd` from `SEARCH_FACET_ENGINE`, overridable at runtime through a Redis key; unit tests for each mode, fallback on error/timeout/unsupported/not-ready, and the mode flip
-- [ ] 5.3a Shadow diff tolerates what Meilisearch does not determine: compare distribution keys case-folded (Meilisearch matches strings case-insensitively and reports the spelling of whichever variant its indexing batch saw first), and do not count values that tie on the last count at the 1200 cap (their selection follows Meilisearch's internal tree order); see internal/search/facetidx/AGENTS.md
+- [x] 5.3a Shadow diff tolerates what Meilisearch does not determine: compare distribution keys case-folded (Meilisearch matches strings case-insensitively and reports the spelling of whichever variant its indexing batch saw first), and do not count values that tie on the last count at the 1200 cap (their selection follows Meilisearch's internal tree order); see internal/search/facetidx/AGENTS.md
 - [x] 5.3 Shadow: detached evaluation with its own timeout and a concurrency cap; differences counted and logged with the filter; never affects the response
 - [ ] 5.4 Metrics: requests by engine and mode, fallbacks by reason, shadow differences
 - [ ] 5.5 Integration test through `FacetCounts` and the disjunctive path in `facetd` mode against the same fixture as 2.5 (region widening runs unchanged)

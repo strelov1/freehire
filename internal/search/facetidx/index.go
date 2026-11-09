@@ -65,8 +65,10 @@ type field struct {
 // filter a caller passes arrives without the open-jobs clause.
 type Index struct {
 	n       uint32
-	jobIDs  []int64 // doc id -> job id
-	docOf   map[int64]uint32
+	jobIDs  []int64          // doc id -> job id
+	docOf   map[int64]uint32 // job id -> doc id; shared by generations, never mutated after Build
+	overlay map[int64]uint32 // ids added since docOf was last merged; small, copied per batch
+	gen     uint64
 	all     *roaring.Bitmap
 	live    *roaring.Bitmap // all minus closed, duplicate and deleted
 	closed  *roaring.Bitmap
@@ -165,15 +167,7 @@ func (b *Builder) Build() *Index {
 }
 
 func (f *field) finish(n uint32) {
-	slices.SortFunc(f.num, func(a, b numEntry) int {
-		switch {
-		case a.v < b.v:
-			return -1
-		case a.v > b.v:
-			return 1
-		}
-		return int(a.doc) - int(b.doc)
-	})
+	slices.SortFunc(f.num, cmpNum)
 	f.exists.RunOptimize()
 	f.empty.RunOptimize()
 	f.numeric.RunOptimize()
@@ -192,10 +186,25 @@ func (f *field) finish(n uint32) {
 	for i, c := range f.cards {
 		f.cardSum[i+1] = f.cardSum[i] + uint64(c)
 	}
-	multi := f.postings > f.withVals
-	if len(f.vals) >= fwdMinValues || (multi && len(f.vals) >= fwdMinMultiValues) {
+	if f.wantsForward() {
 		f.buildForward(n)
 	}
+}
+
+// wantsForward reports whether the field is one a forward array pays off for.
+func (f *field) wantsForward() bool {
+	multi := f.postings > f.withVals
+	return len(f.vals) >= fwdMinValues || (multi && len(f.vals) >= fwdMinMultiValues)
+}
+
+// lookup maps a job id to its document id. A deleted job keeps its mapping (its document
+// is simply never live), so a re-upsert revives the same document.
+func (ix *Index) lookup(id int64) (uint32, bool) {
+	if d, ok := ix.docOf[id]; ok {
+		return d, true
+	}
+	d, ok := ix.overlay[id]
+	return d, ok
 }
 
 // buildForward turns the value bitmaps into the CSR document -> values array. Values are

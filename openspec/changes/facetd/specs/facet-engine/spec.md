@@ -133,8 +133,9 @@ in progress.
 
 ### Requirement: facetd survives a restart without a full rebuild
 
-facetd SHALL persist a snapshot of its index and, on start, load it and serve; a full rebuild from
-Postgres SHALL be available for a missing or unreadable snapshot. Until it has loaded, facetd SHALL
+facetd SHALL persist a snapshot of its index and, on start, load it and serve; a full rebuild
+(through `cmd/reindex`, from the same documents Meilisearch receives) SHALL be available for a
+missing or unreadable snapshot. Until it has loaded, facetd SHALL
 report not-ready and refuse requests, so the router falls back.
 
 #### Scenario: Restart with a snapshot

@@ -370,7 +370,7 @@ func (ix *Index) eq(attr string, v token) (*roaring.Bitmap, error) {
 		if err != nil {
 			return roaring.New(), nil
 		}
-		if d, ok := ix.docOf[n]; ok {
+		if d, ok := ix.lookup(n); ok {
 			return roaring.BitmapOf(d), nil
 		}
 		return roaring.New(), nil
@@ -403,7 +403,7 @@ func (ix *Index) neq(attr string, v token) (*roaring.Bitmap, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(f.vals) == 0 && len(f.num) == 0 {
+		if f.postings == 0 && len(f.num) == 0 { // no value anywhere; vals may outlive removed ones
 			return roaring.New(), nil
 		}
 	}

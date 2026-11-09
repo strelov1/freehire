@@ -24,9 +24,8 @@ builds.
   or a timeout falls back to Meilisearch for that request).
 - `search-drain` writes every document change, close, duplicate mark and delete to facetd as well
   as to Meilisearch, from the same batch, so a fallback never serves a staler answer than before.
-- facetd boots from its last on-disk snapshot plus the drain's replay, and can rebuild from
-  Postgres through the same document builder `cmd/reindex` uses, in about a minute for the open
-  catalogue.
+- facetd boots from its last on-disk snapshot and is kept current by the drain; a full rebuild
+  runs through `cmd/reindex` (the same documents it builds for Meilisearch, teed into facetd).
 - Metrics: request counts and latency per engine and mode, fallbacks by reason, shadow
   differences, index size and staleness.
 - Out of scope, later changes: filtered result LISTS from facetd (ordered ids then documents),

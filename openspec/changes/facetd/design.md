@@ -54,8 +54,13 @@ parity test compares them.
 
 **Index the flattened `JobDocument`, not Postgres rows.** facetd ingests exactly the JSON the drain
 sends Meilisearch and flattens it as Meilisearch does. Parity then follows from one document shape;
-a second projection from Postgres would be a second place for a facet to drift. Full rebuild reuses
-the document builder `cmd/reindex` uses and streams to facetd.
+a second projection from Postgres would be a second place for a facet to drift. Full rebuild is a
+second implementation of `cmd/reindex`'s `rebuilder` interface (Prepare / Push / Promote / Cleanup)
+over facetd's `/rebuild/*` endpoints: with `FACETD_URL` set, a reindex tees the same document
+batches into Meilisearch and facetd, and `-facetd-only` rebuilds facetd alone (skipping description
+vectors, which facetd does not need). A rebuild therefore takes as long as a reindex's Postgres
+preparation (hours, not the minute the raw spike export took); it is the rare path — a restart reads
+the snapshot, and the drain keeps it current.
 
 **Copy the engine's rules, pinned by a parity test.** `!=` matches documents without the attribute
 unless no document carries the attribute (then nothing); `NOT IN` matches documents without it; an

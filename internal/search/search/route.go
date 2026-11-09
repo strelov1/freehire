@@ -210,6 +210,43 @@ func diffCount(m, e int64) string {
 	return ""
 }
 
+// foldCounts sums the counts of keys that fold to the same lowercase string:
+// Meilisearch matches strings case-insensitively and reports whichever spelling it saw first.
+func foldCounts(m map[string]int64) map[string]int64 {
+	out := make(map[string]int64, len(m))
+	for k, v := range m {
+		out[strings.ToLower(k)] += v
+	}
+	return out
+}
+
+// diffDistribution compares one facet's values, case-folded. At the
+// maxValuesPerFacet cap the values tied on Meilisearch's smallest count are
+// not compared: which of them made the cut follows Meilisearch's internal tree
+// order and cannot be reproduced. Higher counts and the value count still must match.
+func diffDistribution(attr string, m, e map[string]int64) string {
+	mv, ev := foldCounts(m), foldCounts(e)
+	var tie int64 = -1
+	if len(m) == maxValuesPerFacet {
+		tie = 1<<63 - 1
+		for _, c := range mv {
+			tie = min(tie, c)
+		}
+		if len(e) != maxValuesPerFacet {
+			return fmt.Sprintf("%s: values: meili=%d engine=%d", attr, len(m), len(e))
+		}
+	}
+	for _, val := range sortedKeys(mv, ev) {
+		if tie >= 0 && (mv[val] == tie && ev[val] <= tie || mv[val] == 0 && ev[val] == tie) {
+			continue
+		}
+		if mv[val] != ev[val] {
+			return fmt.Sprintf("%s=%s: meili=%d engine=%d", attr, val, mv[val], ev[val])
+		}
+	}
+	return ""
+}
+
 // diffRaw names the first difference, comparing in a stable key order. A facet or
 // value absent on one side equals a zero count there.
 func diffRaw(m, e rawFacets) string {
@@ -217,11 +254,8 @@ func diffRaw(m, e rawFacets) string {
 		return fmt.Sprintf("total: meili=%d engine=%d", m.Total, e.Total)
 	}
 	for _, attr := range sortedKeys(m.Distribution, e.Distribution) {
-		mv, ev := m.Distribution[attr], e.Distribution[attr]
-		for _, val := range sortedKeys(mv, ev) {
-			if mv[val] != ev[val] {
-				return fmt.Sprintf("%s=%s: meili=%d engine=%d", attr, val, mv[val], ev[val])
-			}
+		if d := diffDistribution(attr, m.Distribution[attr], e.Distribution[attr]); d != "" {
+			return d
 		}
 	}
 	for _, attr := range sortedKeys(m.Stats, e.Stats) {
