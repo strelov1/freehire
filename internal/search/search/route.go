@@ -65,6 +65,9 @@ type FacetEngineAnswer struct {
 var (
 	ErrEngineUnsupported = errors.New("search: facet engine cannot answer this request")
 	ErrEngineNotReady    = errors.New("search: facet engine not ready")
+	// ErrFacetdRejected is facetd's 400 to a /write: a document in the batch is unreadable.
+	// Retrying the same batch cannot succeed; facetd itself is healthy.
+	ErrFacetdRejected = errors.New("search: facetd rejected the write batch")
 )
 
 // FacetMode says which engine answers a facet request that has no query text.
@@ -91,6 +94,9 @@ func ParseFacetMode(s string) (FacetMode, error) {
 const (
 	defaultEngineTimeout = 150 * time.Millisecond
 	shadowConcurrency    = 8
+	// failureLogEvery bounds the fallback and shadow-failure warnings to one per interval:
+	// a common unsupported filter would otherwise log on every request. The metrics count all.
+	failureLogEvery = 10 * time.Second
 )
 
 // RoutingCounters is a snapshot of the router's event counts.
@@ -111,6 +117,13 @@ type facetRouter struct {
 
 	shadowDiffs, shadowErrors, shadowSkipped      atomic.Int64
 	fbError, fbTimeout, fbUnsupported, fbNotReady atomic.Int64
+	lastFailureLog                                atomic.Int64 // unix nanos
+}
+
+// logFailure reports whether this failure may be logged: at most one per failureLogEvery.
+func (r *facetRouter) logFailure() bool {
+	now, last := time.Now().UnixNano(), r.lastFailureLog.Load()
+	return now-last >= int64(failureLogEvery) && r.lastFailureLog.CompareAndSwap(last, now)
 }
 
 // WithFacetEngine routes facet requests without query text through engine according
@@ -209,7 +222,9 @@ func routeRequest[T any](ctx context.Context, r *facetRouter, mode FacetMode, ki
 			defer cancel()
 			eng, err := timed("facetd", kind, func() (T, error) { return engine(sctx) })
 			if err != nil {
-				slog.Warn("facetd shadow: engine failed", "kind", kind, "filter", filter, "err", err)
+				if r.logFailure() {
+					slog.Warn("facetd shadow: engine failed (sampled, see freehire_search_facet_shadow_errors_total)", "kind", kind, "filter", filter, "err", err)
+				}
 				r.shadowErrors.Add(1)
 				facetShadowErrors.WithLabelValues(kind).Inc()
 				return
@@ -239,7 +254,9 @@ func (r *facetRouter) fallback(kind string, filter any, err error) {
 	}
 	ctr.Add(1)
 	facetFallbacks.WithLabelValues(reason, kind).Inc()
-	slog.Warn("facetd fallback to meilisearch", "kind", kind, "reason", reason, "filter", filter, "err", err)
+	if r.logFailure() {
+		slog.Warn("facetd fallback to meilisearch (sampled, see freehire_search_facet_fallbacks_total)", "kind", kind, "reason", reason, "filter", filter, "err", err)
+	}
 }
 
 func cloneRaw(a rawFacets) rawFacets {

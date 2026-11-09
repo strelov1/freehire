@@ -47,6 +47,11 @@ func encodeWALRecord(req writeReq) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	// scanWAL treats a longer record as corruption, so refuse it here rather than acknowledge
+	// a batch the replay would drop.
+	if len(payload) > maxBulkBody {
+		return nil, fmt.Errorf("wal: record of %d bytes exceeds %d", len(payload), maxBulkBody)
+	}
 	rec := make([]byte, walHeader, walHeader+len(payload))
 	binary.BigEndian.PutUint32(rec[0:4], uint32(len(payload)))
 	binary.BigEndian.PutUint32(rec[4:8], crc32.ChecksumIEEE(payload))

@@ -39,7 +39,7 @@ func (ix *Index) Facets(filter any, facets []string) (Answer, error) {
 	}
 	for _, name := range facets {
 		fld, ok := ix.fields[name]
-		if !ok {
+		if !ok || rangeOnly[name] {
 			return Answer{}, fmt.Errorf("%w: %q", ErrUnknownFacet, name)
 		}
 		top := fld.top(fld.counts(f), MaxValuesPerFacet)
@@ -63,7 +63,7 @@ func (ix *Index) Distinct(filter any, attr string) (int64, error) {
 		return 0, err
 	}
 	fld, ok := ix.fields[attr]
-	if !ok {
+	if !ok || rangeOnly[attr] {
 		return 0, fmt.Errorf("%w: %q", ErrUnknownFacet, attr)
 	}
 	return int64(len(fld.counts(f))) + int64(roaring.AndNot(f, fld.valued).GetCardinality()), nil

@@ -268,3 +268,10 @@ func TestRouteFacetdRegionWideningAndDisjunctive(t *testing.T) {
 		t.Fatalf("got %+v err %v meili %d", got, err, mc.Load())
 	}
 }
+
+func TestFailureLogIsSampled(t *testing.T) {
+	r := &facetRouter{}
+	if !r.logFailure() || r.logFailure() {
+		t.Fatal("want the first failure logged and the next one within the interval suppressed")
+	}
+}

@@ -29,6 +29,12 @@ var indexedAttrs = []string{
 	"reality.class",
 }
 
+// rangeOnly are the numeric attributes our code only ever range-filters (Gte on unix
+// seconds). They keep the number column alone: indexed as strings too, nearly every
+// document would own a value bitmap of its own (10x the memory, and a copy of the value map
+// per write batch). `=`, IN, `!=` and facets on them are refused, so the router falls back.
+var rangeOnly = map[string]bool{"posted_ts": true, "created_ts": true}
+
 // Attributes returns the attributes the index holds, besides id and the closed/duplicate markers.
 func Attributes() []string { return slices.Clone(indexedAttrs) }
 
@@ -87,6 +93,9 @@ func flatten(raw []byte) (flattened, error) {
 		}
 		p := &posting{}
 		p.add(cur)
+		if rangeOnly[attr] {
+			p.strs = nil
+		}
 		out.attrs[attr] = p
 	}
 	return out, nil

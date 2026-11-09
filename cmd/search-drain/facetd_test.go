@@ -95,6 +95,26 @@ func TestMirrorQueuesIdsWhenFacetdFailsOrTimesOut(t *testing.T) {
 	}
 }
 
+// After facetd fails once, later waves of the run are queued without another call (and
+// without another timeout); a rejected batch does not trip that.
+func TestMirrorStopsCallingAfterFailure(t *testing.T) {
+	status := 400
+	c, bodies, stop := fakeFacetd(t, &status, 0)
+	defer stop()
+	q := &fakeQueue{}
+	m := &facetdMirror{client: c, queue: q, timeout: time.Second}
+	m.Apply(context.Background(), search.FacetdWrite{Delete: []int64{1}})
+	status = 503
+	m.Apply(context.Background(), search.FacetdWrite{Delete: []int64{2}})
+	m.Apply(context.Background(), search.FacetdWrite{Delete: []int64{3}})
+	if len(*bodies) != 2 {
+		t.Fatalf("calls = %d, want 2 (the rejected one does not trip, the 503 does)", len(*bodies))
+	}
+	if !slices.Equal(q.ids, []int64{1, 2, 3}) {
+		t.Fatalf("queued %v", q.ids)
+	}
+}
+
 func TestMirrorUnsetMakesNoCalls(t *testing.T) {
 	var m *facetdMirror // FACETD_URL unset
 	m.Apply(context.Background(), search.FacetdWrite{Delete: []int64{1}})
@@ -146,6 +166,7 @@ type fakeRetryStore struct {
 	jobs      []db.Job
 	completed []int64
 	failed    []int64
+	dead      []int64 // failed with maxAttempts 1: dead-lettered at once
 	claims    int
 }
 
@@ -161,8 +182,11 @@ func (s *fakeRetryStore) Complete(_ context.Context, ids []int64) error {
 	s.completed = append(s.completed, ids...)
 	return nil
 }
-func (s *fakeRetryStore) Fail(_ context.Context, ids []int64, _ string, _ int) error {
+func (s *fakeRetryStore) Fail(_ context.Context, ids []int64, _ string, maxAttempts int) error {
 	s.failed = append(s.failed, ids...)
+	if maxAttempts == 1 {
+		s.dead = append(s.dead, ids...)
+	}
 	return nil
 }
 func (s *fakeRetryStore) Stats(context.Context) (int64, int64, error) { return 0, 0, nil }
@@ -170,6 +194,7 @@ func (s *fakeRetryStore) Stats(context.Context) (int64, int64, error) { return 0
 type fakeTarget struct {
 	ready  error
 	write  error
+	reject int64 // a write carrying this job id answers ErrFacetdRejected
 	writes []search.FacetdWrite
 }
 
@@ -177,6 +202,11 @@ func (f *fakeTarget) Ready(context.Context) error { return f.ready }
 func (f *fakeTarget) Write(_ context.Context, w search.FacetdWrite) error {
 	if f.write != nil {
 		return f.write
+	}
+	for _, d := range w.Upserts {
+		if d.ID == f.reject {
+			return search.ErrFacetdRejected
+		}
 	}
 	f.writes = append(f.writes, w)
 	return nil
@@ -238,6 +268,25 @@ func TestRetryPassFailsBatchAndStops(t *testing.T) {
 	}
 	if r.mirror.failures.Load() != 1 {
 		t.Fatalf("failures %d", r.mirror.failures.Load())
+	}
+}
+
+// A rejected batch is split until the bad job stands alone; only it is dead-lettered.
+func TestRetryPassIsolatesRejectedJob(t *testing.T) {
+	st, tg, r := retryFixture()
+	st.queued = append(st.queued, searchdrain.Claimed{OutboxID: 13, JobID: 7})
+	st.jobs = append(st.jobs, db.Job{ID: 7})
+	tg.reject = 5
+	res := r.Run(context.Background(), searchdrain.RunOptions{BatchSize: 10, MaxAttempts: 3})
+	if res.Sent != 3 || res.Failed != 1 {
+		t.Fatalf("res %+v", res)
+	}
+	if !slices.Equal(st.dead, []int64{10}) || !slices.Equal(st.failed, []int64{10}) {
+		t.Fatalf("dead %v failed %v", st.dead, st.failed)
+	}
+	slices.Sort(st.completed)
+	if !slices.Equal(st.completed, []int64{11, 12, 13}) {
+		t.Fatalf("completed %v", st.completed)
 	}
 }
 

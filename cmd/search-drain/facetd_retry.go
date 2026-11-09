@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -107,23 +109,53 @@ func (r facetdRetry) Run(ctx context.Context, opt searchdrain.RunOptions) facetd
 			break
 		}
 		claimed += len(entries)
-		if err := r.send(ctx, opt, entries); err != nil {
-			res.Failed += len(entries)
+		sent, rejected, err := r.deliver(ctx, opt, entries)
+		res.Sent += sent
+		res.Failed += rejected
+		if err != nil {
+			res.Failed += len(entries) - sent - rejected
 			r.mirror.failures.Add(1)
 			log.Printf("search-drain: facetd retry of %d jobs failed: %v", len(entries), err)
 			// Detached: a cancelled run must still release the lease and count the attempt.
+			// Entries already completed are gone from the table, so failing them is a no-op.
 			if ferr := r.store.Fail(context.WithoutCancel(ctx), outboxIDs(entries), err.Error(), opt.MaxAttempts); ferr != nil {
 				log.Printf("search-drain: facetd retry record failure: %v", ferr)
 			}
 			break
 		}
-		res.Sent += len(entries)
-		log.Printf("search-drain: facetd retry sent %d jobs", len(entries))
+		log.Printf("search-drain: facetd retry sent %d jobs (%d rejected)", sent, rejected)
 		if len(entries) < batch {
 			break
 		}
 	}
 	return res
+}
+
+// deliver sends the entries as one write. When facetd rejects the batch (an unreadable
+// document) it splits it in halves until the bad entries stand alone, and dead-letters only
+// those, so one broken job does not take its whole batch down. Any other error is returned:
+// facetd is unwell and the pass stops.
+func (r facetdRetry) deliver(ctx context.Context, opt searchdrain.RunOptions, entries []searchdrain.Claimed) (sent, rejected int, err error) {
+	err = r.send(ctx, opt, entries)
+	switch {
+	case err == nil:
+		return len(entries), 0, nil
+	case !errors.Is(err, search.ErrFacetdRejected):
+		return 0, 0, err
+	case len(entries) == 1:
+		log.Printf("search-drain: facetd rejected job %d, dead-lettering it: %v", entries[0].JobID, err)
+		if ferr := r.store.Fail(context.WithoutCancel(ctx), outboxIDs(entries), err.Error(), 1); ferr != nil {
+			log.Printf("search-drain: facetd retry record failure: %v", ferr)
+		}
+		return 0, 1, nil
+	}
+	mid := len(entries) / 2
+	s1, r1, err := r.deliver(ctx, opt, entries[:mid])
+	if err != nil {
+		return s1, r1, err
+	}
+	s2, r2, err := r.deliver(ctx, opt, entries[mid:])
+	return s1 + s2, r1 + r2, err
 }
 
 // send derives the entries' current state and delivers it as one facetd write.
@@ -174,8 +206,8 @@ func newDBFacetdRetryStore(pool *pgxpool.Pool) dbFacetdRetryStore {
 
 func (s dbFacetdRetryStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]searchdrain.Claimed, error) {
 	rows, err := s.q.ClaimFacetdOutboxBatch(ctx, db.ClaimFacetdOutboxBatchParams{
-		LeaseSeconds: int32(leaseSeconds),
-		BatchSize:    int32(batch),
+		LeaseSeconds: clampInt32(leaseSeconds),
+		BatchSize:    clampInt32(batch),
 	})
 	if err != nil {
 		return nil, err
@@ -198,10 +230,21 @@ func (s dbFacetdRetryStore) Complete(ctx context.Context, ids []int64) error {
 func (s dbFacetdRetryStore) Fail(ctx context.Context, ids []int64, errMsg string, maxAttempts int) error {
 	_, err := s.q.RecordFacetdOutboxFailure(ctx, db.RecordFacetdOutboxFailureParams{
 		LastError:   errMsg,
-		MaxAttempts: int32(maxAttempts),
+		MaxAttempts: clampInt32(maxAttempts),
 		Ids:         ids,
 	})
 	return err
+}
+
+// clampInt32 narrows an option read from the environment to the int4 the query takes.
+func clampInt32(v int) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
 }
 
 func (s dbFacetdRetryStore) Stats(ctx context.Context) (int64, int64, error) {

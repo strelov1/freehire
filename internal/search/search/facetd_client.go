@@ -23,7 +23,7 @@ import (
 // F is null, a string, an array of strings, or an array of arrays of strings
 // (the Meilisearch filter shapes). 422 {"error": "..."} means the filter or
 // attribute is unsupported (ErrEngineUnsupported); 503 means not ready
-// (ErrEngineNotReady); anything else is a plain error. The deadline is the ctx's.
+// (ErrEngineNotReady); 400 to a /write is ErrFacetdRejected; anything else is a plain error. The deadline is the ctx's.
 type FacetdClient struct {
 	base string
 	hc   *http.Client
@@ -145,6 +145,8 @@ func (c *FacetdClient) post(ctx context.Context, path string, body, out any) err
 		return fmt.Errorf("%w: %s", ErrEngineUnsupported, facetdErrBody(resp.Body))
 	case http.StatusServiceUnavailable:
 		return fmt.Errorf("%w: %s", ErrEngineNotReady, facetdErrBody(resp.Body))
+	case http.StatusBadRequest:
+		return fmt.Errorf("%w: facetd %s: %s", ErrFacetdRejected, path, facetdErrBody(resp.Body))
 	}
 	return fmt.Errorf("facetd %s: status %d: %s", path, resp.StatusCode, facetdErrBody(resp.Body))
 }

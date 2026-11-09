@@ -418,6 +418,12 @@ func (s *Server) rebuildBegin(w http.ResponseWriter, _ *http.Request) {
 		fail(w, http.StatusConflict, "a rebuild commit is running")
 		return
 	}
+	// One rebuild at a time: a second begin would silently mix two reindexes' documents.
+	s.expireRebuildLocked()
+	if s.rebuilding {
+		fail(w, http.StatusConflict, "a rebuild is already open (POST /rebuild/abort to drop it)")
+		return
+	}
 	s.builder, s.pending, s.rebuilding, s.rebuildAt = facetidx.NewBuilder(), nil, true, time.Now()
 	reply(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -505,11 +511,15 @@ func (s *Server) rebuildCommit(w http.ResponseWriter, _ *http.Request) {
 	s.pending, s.rebuilding, s.committing = nil, false, false
 	s.mu.Unlock()
 
-	if err := s.Snapshot(false); err != nil {
-		log.Printf("facetd: snapshot after rebuild: %v", err)
-	}
 	total, live := st.Current().Docs()
 	log.Printf("facetd: rebuild committed generation=%d docs=%d live=%d replayed_batches=%d", gen, total, live, replayed)
+	// The rebuilt index is live but only durable once snapshotted: until then a restart
+	// comes back on the previous snapshot. Say so, so the reindex fails loudly and is rerun.
+	if err := s.Snapshot(false); err != nil {
+		log.Printf("facetd: snapshot after rebuild: %v", err)
+		fail(w, http.StatusInternalServerError, "rebuild committed (generation %d) but its snapshot failed, a restart would lose it: %v", gen, err)
+		return
+	}
 	reply(w, http.StatusOK, map[string]uint64{"generation": gen, "documents": total})
 }
 

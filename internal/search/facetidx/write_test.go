@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -81,11 +82,11 @@ var testFilters = []any{
 func sameAnswers(t *testing.T, label string, a, b *Index) {
 	t.Helper()
 	for _, f := range testFilters {
-		x, err := a.Facets(f, Attributes())
+		x, err := a.Facets(f, facetable())
 		if err != nil {
 			t.Fatalf("%s %v: %v", label, f, err)
 		}
-		y, err := b.Facets(f, Attributes())
+		y, err := b.Facets(f, facetable())
 		if err != nil {
 			t.Fatalf("%s %v: %v", label, f, err)
 		}
@@ -257,7 +258,7 @@ func TestReaderKeepsItsGeneration(t *testing.T) {
 	st := NewStore(NewBuilder().Build())
 	mustApply(t, st, syntheticBatch(r, 1, 20000))
 	old := st.Current()
-	before, _ := old.Facets(`work_mode = "remote"`, Attributes())
+	before, _ := old.Facets(`work_mode = "remote"`, facetable())
 
 	var wg sync.WaitGroup
 	stop := make(chan struct{})
@@ -284,7 +285,7 @@ func TestReaderKeepsItsGeneration(t *testing.T) {
 					t.Errorf("torn generation: %d vs %d", sum, a.Total)
 					return
 				}
-				if mid, _ := old.Facets(`work_mode = "remote"`, Attributes()); !reflect.DeepEqual(mid, before) {
+				if mid, _ := old.Facets(`work_mode = "remote"`, facetable()); !reflect.DeepEqual(mid, before) {
 					t.Error("old generation changed under a reader")
 					return
 				}
@@ -303,11 +304,11 @@ func TestReaderKeepsItsGeneration(t *testing.T) {
 	}
 	close(stop)
 	wg.Wait()
-	after, _ := old.Facets(`work_mode = "remote"`, Attributes())
+	after, _ := old.Facets(`work_mode = "remote"`, facetable())
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("old generation changed after Apply")
 	}
-	if cur, _ := st.Current().Facets(`work_mode = "remote"`, Attributes()); reflect.DeepEqual(cur, before) {
+	if cur, _ := st.Current().Facets(`work_mode = "remote"`, facetable()); reflect.DeepEqual(cur, before) {
 		t.Fatal("new generation did not change")
 	}
 }
@@ -386,7 +387,7 @@ func TestScale(t *testing.T) {
 	waitForward(t, st)
 	t.Logf("forward arrays back after: %v", time.Since(t0))
 	t0 = time.Now()
-	_, _ = st.Current().Facets(`work_mode = "remote"`, Attributes())
+	_, _ = st.Current().Facets(`work_mode = "remote"`, facetable())
 	t.Logf("Facets all attrs, 1/3 filter: %v", time.Since(t0))
 
 	var buf bytes.Buffer
@@ -432,4 +433,9 @@ func TestWalkSkipsDocumentsNewerThanTheForwardArray(t *testing.T) {
 		t.Fatalf("walk = %v", got)
 	}
 	sameAnswers(t, "after adding a document without company_slug", next, build(t, append(docs, added)...))
+}
+
+// facetable is every indexed attribute a facet request may name (range-only ones are not).
+func facetable() []string {
+	return slices.DeleteFunc(Attributes(), func(a string) bool { return rangeOnly[a] })
 }

@@ -379,6 +379,9 @@ func (ix *Index) eq(attr string, v token) (*roaring.Bitmap, error) {
 	if err != nil {
 		return nil, err
 	}
+	if rangeOnly[attr] {
+		return nil, p0(ErrUnsupportedFilter, "equality on range-only attribute "+attr)
+	}
 	out := roaring.New()
 	keys := []string{norm(v.text)}
 	if n, perr := strconv.ParseFloat(v.text, 64); perr == nil {

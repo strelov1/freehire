@@ -60,7 +60,7 @@ func TestFlatten(t *testing.T) {
 		{"requires_clearance", []string{"true"}, nil, false},
 		{"enrichment.seniority", []string{"senior"}, nil, false},
 		{"enrichment.salary_min", []string{"1500.5"}, []float64{1500.5}, false},
-		{"posted_ts", []string{"1700000000"}, []float64{1.7e9}, false},
+		{"posted_ts", nil, []float64{1.7e9}, false}, // range-only: no string postings
 		{"reality.class", []string{"fresh"}, nil, false},
 		{"cities", []string{"a", "b"}, nil, false},
 	}
@@ -151,12 +151,23 @@ func TestUnsupported(t *testing.T) {
 	ix := build(t, fixture1)
 	for _, f := range []any{
 		"", `skills`, `skills = `, `skills ~ "go"`, `nope = "x"`, `skills IN "go"`, `skills = "go" skills = "x"`,
-		`skills = "go`, `(skills = "go"`, `posted_ts >= abc`, `skills IS NULL`, `skills = "go" XOR x`,
+		`skills = "go`, `(skills = "go"`, `posted_ts >= abc`,
+		`posted_ts = 10`, `posted_ts IN [10]`, `posted_ts != 10`, `created_ts = 10`, `skills IS NULL`, `skills = "go" XOR x`,
 		42, map[string]string{}, []any{1},
 	} {
 		if _, err := ix.match(f); !errors.Is(err, ErrUnsupportedFilter) {
 			t.Errorf("%#v: err = %v, want ErrUnsupportedFilter", f, err)
 		}
+	}
+}
+
+func TestRangeOnlyNotFaceted(t *testing.T) {
+	ix := build(t, fixture1)
+	if _, err := ix.Facets(nil, []string{"posted_ts"}); !errors.Is(err, ErrUnknownFacet) {
+		t.Errorf("Facets(posted_ts) err = %v, want ErrUnknownFacet", err)
+	}
+	if _, err := ix.Distinct(nil, "created_ts"); !errors.Is(err, ErrUnknownFacet) {
+		t.Errorf("Distinct(created_ts) err = %v, want ErrUnknownFacet", err)
 	}
 }
 

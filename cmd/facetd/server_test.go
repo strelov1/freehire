@@ -160,7 +160,9 @@ func TestRebuildAbortAndConflicts(t *testing.T) {
 	}
 	call(t, h, "POST", "/rebuild/begin", "")
 	call(t, h, "POST", "/rebuild/push", `{"docs":[`+doc(5, "z")+`]}`)
-	call(t, h, "POST", "/rebuild/begin", "") // resets
+	if c, _ := call(t, h, "POST", "/rebuild/begin", ""); c != 409 {
+		t.Errorf("begin while a rebuild is open = %d, want 409", c)
+	}
 	call(t, h, "POST", "/rebuild/abort", "")
 	if s.rebuilding {
 		t.Error("abort left rebuild open")
@@ -226,5 +228,20 @@ func TestIdleRebuildIsAbandoned(t *testing.T) {
 	}
 	if got := total(t, h, "null"); got != 2 {
 		t.Errorf("total = %v, want 2: the write is applied to the live index", got)
+	}
+}
+
+// A commit whose snapshot cannot be written still swaps the index in but answers 500, so the
+// reindex knows the rebuild is not durable.
+func TestCommitReportsSnapshotFailure(t *testing.T) {
+	s := NewServer(filepath.Join(t.TempDir(), "missing-dir", "facetd.snap"))
+	h := s.Handler()
+	call(t, h, "POST", "/rebuild/begin", "")
+	call(t, h, "POST", "/rebuild/push", `{"docs":[`+doc(1, "a")+`]}`)
+	if c, body := call(t, h, "POST", "/rebuild/commit", ""); c != 500 {
+		t.Errorf("commit with a failing snapshot = %d %s, want 500", c, body)
+	}
+	if n := total(t, h, "null"); n != 1 {
+		t.Errorf("committed index not live: total = %v", n)
 	}
 }
