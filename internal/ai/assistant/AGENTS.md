@@ -58,8 +58,9 @@ built from the same services the HTTP handlers use.
   reported as missing, never as forbidden.
 - **Every system prompt carries a LANGUAGE directive** (`SystemPrompt(preset, language)`,
   `prompt.go`), naming the candidate's saved profile language (freehire#1837) rather than
-  guessing from whatever language they type in this message or defaulting to English. It
-  governs the assistant's own conversational words only. The tailor preset's directive
+  guessing from whatever language they type in this message or defaulting to English. An
+  explicit request ("answer in Russian") overrides it for that conversation; typing in a
+  language is not such a request. It governs the assistant's own conversational words only. The tailor preset's directive
   carves out the one exception: a `cv_edit` bullet follows the VACANCY's language instead
   (the honest wall's own instruction to reframe evidence "in the vacancy's language"), since
   a CV is written for the employer reading it, not for the candidate reading the chat beside

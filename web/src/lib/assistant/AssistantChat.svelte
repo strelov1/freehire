@@ -196,6 +196,10 @@
   // disables the composer and list while a session load is in flight.
   let sessions = $state<SessionItem[]>([]);
   let activeId = $state<string | null>(null);
+  // A plain chat with nothing to resume opens blank, with no session behind it yet: the first
+  // message creates one. Minting it on page open left most chat sessions empty — new accounts
+  // land here and leave without typing (2026-11-09: 143 of 152 a week).
+  let deferredNew = $state(false);
   // The open conversation's preset, as the SERVER records it — not the one this arrival
   // asked for. A rehearsal is reached by its own address as often as it is created, and
   // only the server knows which kind of conversation an id names.
@@ -266,7 +270,7 @@
   let runActive = $state(false);
 
   /** Whether a turn may be started right now: the pane is settled and nothing is running. */
-  const canStartTurn = () => phase === 'ready' && !turnActive && !switching && !!activeId;
+  const canStartTurn = () => phase === 'ready' && !turnActive && !switching && !creating && (!!activeId || deferredNew);
 
   /**
    * Start an unattended run from outside the chat — the workspace's "Run again" beside the
@@ -387,7 +391,7 @@
         }
         await openSession(session);
       } else if (!(await openNewestOpenable())) {
-        await createAndOpen();
+        startBlankChat();
       }
       if (disposed) return;
       phase = 'ready';
@@ -450,6 +454,9 @@
     // caller staring at whatever was already on screen. Boot again, which is what a
     // remount used to do for us — open the newest chat and re-address to it.
     if (!requested) {
+      // A blank chat lives at the bare address (it has no id to put there): booting again
+      // would land right back on it and wake this effect forever.
+      if (deferredNew && !activeId) return;
       notFound = false;
       void boot();
       return;
@@ -580,8 +587,17 @@
     return false;
   }
 
+  function startBlankChat() {
+    activeId = null;
+    activePreset = 'chat';
+    chat = initChat();
+    deferredNew = true;
+  }
+
   async function createAndOpen() {
     const created = await createSession(arrival.preset);
+    // Only once a session exists: a failed create leaves a blank chat still able to send.
+    deferredNew = false;
     if (isSupport) {
       // The support routes cannot replay a transcript, so the new session is opened as is.
       activeId = created.id;
@@ -657,6 +673,7 @@
       chat = initChat();
       const next = activeAfterDelete(remaining, true, null);
       try {
+        // Not a blank chat: the address still names the deleted one, and only a new id moves it.
         if (next) await openSession(next);
         else await createAndOpen();
       } catch (err) {
@@ -726,7 +743,8 @@
   // later; otherwise it is sent immediately.
   function submitText(raw: string, docs: Attachment[] = []) {
     const text = raw.trim();
-    if ((!text && docs.length === 0) || phase !== 'ready' || switching || !activeId) return;
+    if ((!text && docs.length === 0) || phase !== 'ready' || switching || creating || (!activeId && !deferredNew))
+      return;
     if (error?.cutOff) error = null;
     // Counted once per message the user sends, queued or dispatched — never the text
     // itself. This measures usage only; what a turn costs is recorded server-side.
@@ -751,6 +769,40 @@
     | { kind: 'retry' };
 
   async function dispatch(start: TurnStart) {
+    if (!activeId && deferredNew && !disposed) {
+      // Held as a switch while the session is created: the composer refuses a second send
+      // (openSession, which ends this, would clear a queued one anyway).
+      switching = true;
+      let created: Awaited<ReturnType<typeof createSession>>;
+      try {
+        created = await createSession('chat');
+      } catch (err) {
+        switching = false;
+        if (start.kind === 'message') giveBack(start);
+        setError(err instanceof Error ? err.message : s.newChatFailed);
+        return;
+      }
+      sessions = upsertSession(sessions, fromSummary(created, NEW_CHAT_LABEL));
+      // The caller opened another chat while this one was being created. Leave them there,
+      // and hand the message back rather than send it somewhere it was not written for.
+      if (disposed || activeId !== null) {
+        if (start.kind === 'message') giveBack(start);
+        return;
+      }
+      deferredNew = false;
+      try {
+        await openSession(created.id);
+      } catch (err) {
+        // The session exists and is active, so a resend goes to it; only this send is lost.
+        if (start.kind === 'message') giveBack(start);
+        report(err, s.openChatFailed);
+        return;
+      }
+      if (activeId !== created.id) {
+        if (start.kind === 'message') giveBack(start);
+        return;
+      }
+    }
     const id = activeId;
     if (!id || disposed) return;
     if (!error?.cutOff) error = null;

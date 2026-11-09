@@ -260,6 +260,12 @@ func resolveList(state *State, p Path) (reflect.Value, int, error) {
 	steps := p.steps()
 	last := steps[len(steps)-1]
 	if !last.isIndex() {
+		// A bare list path (`experience[0].bullets`) was the commonest refused cv_edit on prod,
+		// and the plain refusal left the agent to guess the fix; spell out the append index.
+		if v, err := resolveSteps(state, steps, p); err == nil && v.Kind() == reflect.Slice {
+			return reflect.Value{}, 0, fmt.Errorf("%w: %q is a whole list, not a position in it: use \"%s[%d]\" to add at the end, or name an existing position%s",
+				ErrInvalidOp, p, p, v.Len(), holds(v))
+		}
 		return reflect.Value{}, 0, fmt.Errorf("%w: %q does not name a position in a list", ErrInvalidOp, p)
 	}
 	list, err := resolveSteps(state, steps[:len(steps)-1], p)
