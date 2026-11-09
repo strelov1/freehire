@@ -213,6 +213,7 @@ extension/*.zip
 /reindex
 /reindex-companies
 /report-company-website-twins
+/report-cv-letters
 /report-classify-drift
 /report-geo-gaps
 /report-skill-gaps
