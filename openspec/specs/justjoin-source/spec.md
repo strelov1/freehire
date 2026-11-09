@@ -15,12 +15,13 @@ The system SHALL provide two adapters on one implementation: `justjoin` for `jus
 (offer pages under `/job-offer/`) and `rocketjobs` for `rocketjobs.pl` (offer pages under
 `/oferta-pracy/`). Each is boardless (one national board, no per-tenant id) and an aggregator
 (it stays in the source facet and takes each offer's employer from the offer). Every
-`justjoin` job SHALL carry `IsTechHint`, because every justjoin.it offer is filed under one
-of its IT categories; `rocketjobs` jobs SHALL NOT.
+`justjoin` job read from an offer page SHALL carry `IsTechHint`, because every justjoin.it
+offer is filed under one of its IT categories; a liveness-refresh job carries no content and
+no hint, and `rocketjobs` jobs SHALL NOT carry it.
 
 #### Scenario: The IT board marks its jobs technical
 
-- **WHEN** the `justjoin` adapter yields a job
+- **WHEN** the `justjoin` adapter yields a job read from an offer page
 - **THEN** the job carries `IsTechHint`, and a job from `rocketjobs` does not
 
 ### Requirement: The sitemap is the offer set
@@ -101,7 +102,8 @@ Pay is listed per contract type, once in its original currency and again convert
 adapter SHALL read only the original-currency entries with a full range and a known period.
 The structured salary SHALL take the employment contract's range when there is one, else the
 first other contract type's, and the description SHALL begin with a "Wynagrodzenie" paragraph
-stating every contract type's range with its gross or net basis.
+stating each retained range with its contract type and gross or net basis. An offer with no
+retained range SHALL carry neither a structured salary nor the paragraph.
 
 #### Scenario: An offer page becomes a job
 
