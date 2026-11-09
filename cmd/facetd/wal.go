@@ -10,7 +10,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/strelov1/freehire/internal/search/facetidx"
@@ -69,10 +68,10 @@ func scanWAL(data []byte) (recs []writeReq, good int, err error) {
 		n := int(binary.BigEndian.Uint32(data[off : off+4]))
 		sum := binary.BigEndian.Uint32(data[off+4 : off+8])
 		end := off + walHeader + n
-		if n > maxBulkBody || end > len(data) {
-			if n > maxBulkBody && end <= len(data) {
-				return nil, 0, fmt.Errorf("wal: record at %d claims %d bytes", off, n)
-			}
+		if n > maxBulkBody { // the writer never writes one: a damaged header, wherever it is
+			return nil, 0, fmt.Errorf("wal: record at %d claims %d bytes", off, n)
+		}
+		if end > len(data) {
 			return recs, off, nil // torn payload
 		}
 		payload := data[off+walHeader : end]
@@ -242,25 +241,25 @@ func (s *Server) rotateWAL(from int64) error {
 	if _, err := s.wal.ReadAt(tail, from); err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
-	if _, err := writeFileAtomic(s.walPath, func(w io.Writer) error {
+	_, err := writeFileAtomic(s.walPath, func(w io.Writer) error {
 		_, err := io.Copy(w, bytes.NewReader(tail))
 		return err
-	}); err != nil {
+	})
+	// After the rename the new file is in place even if syncing its directory failed: the
+	// handle must follow it, or later acknowledged writes would land on the unlinked inode.
+	var renamed postRenameError
+	if err != nil && !errors.As(err, &renamed) {
 		return err
 	}
 	// The old handle still points at the replaced inode; reopen on the new file.
-	if err := s.openWALFile(); err != nil {
+	if oerr := s.openWALFile(); oerr != nil {
 		s.walBroken = true
-		return err
-	}
-	if d, err := os.Open(filepath.Dir(s.walPath)); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
+		return oerr
 	}
 	s.walOff = int64(len(tail))
 	kept, _, _ := scanWAL(tail)
 	s.walRecs = len(kept)
 	s.m.walBytes.Set(float64(s.walOff))
 	s.m.walRecords.Set(float64(s.walRecs))
-	return nil
+	return err
 }

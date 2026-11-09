@@ -87,6 +87,24 @@ func TestWALCorruptionMidFileFailsStartup(t *testing.T) {
 	}
 }
 
+// A damaged length in a record that is not the last must fail recovery, not be read as a
+// torn tail that silently drops every acknowledged record after it.
+func TestWALOversizedLengthMidFileFailsStartup(t *testing.T) {
+	snap := filepath.Join(t.TempDir(), "idx.snap")
+	_, h := loaded(t, snap, doc(1, "a"))
+	call(t, h, "POST", "/write", upsert(2))
+	call(t, h, "POST", "/write", upsert(3))
+	data, _ := os.ReadFile(snap + ".wal")
+	data[0] = 0x7f // first record's length: far past maxBulkBody and past the file
+	_ = os.WriteFile(snap+".wal", data, 0o600)
+	if err := NewServer(snap).LoadSnapshot(); err == nil {
+		t.Fatal("an oversized length must fail startup")
+	}
+	if m, _ := filepath.Glob(snap + ".wal.corrupt-*"); len(m) != 1 {
+		t.Fatalf("corrupt log not moved aside: %v", m)
+	}
+}
+
 func TestWALSnapshotTruncatesAndRestartKeepsEverything(t *testing.T) {
 	snap := filepath.Join(t.TempDir(), "idx.snap")
 	s, h := loaded(t, snap, doc(1, "a"))

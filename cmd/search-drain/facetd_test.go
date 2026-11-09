@@ -192,14 +192,18 @@ func (s *fakeRetryStore) Fail(_ context.Context, ids []int64, _ string, maxAttem
 func (s *fakeRetryStore) Stats(context.Context) (int64, int64, error) { return 0, 0, nil }
 
 type fakeTarget struct {
-	ready  error
-	write  error
-	reject int64 // a write carrying this job id answers ErrFacetdRejected
-	writes []search.FacetdWrite
+	ready   error
+	write   error
+	reject  int64  // a write carrying this job id answers ErrFacetdRejected
+	onWrite func() // called on every write, before it answers
+	writes  []search.FacetdWrite
 }
 
 func (f *fakeTarget) Ready(context.Context) error { return f.ready }
 func (f *fakeTarget) Write(_ context.Context, w search.FacetdWrite) error {
+	if f.onWrite != nil {
+		f.onWrite()
+	}
 	if f.write != nil {
 		return f.write
 	}
@@ -287,6 +291,18 @@ func TestRetryPassIsolatesRejectedJob(t *testing.T) {
 	slices.Sort(st.completed)
 	if !slices.Equal(st.completed, []int64{11, 12, 13}) {
 		t.Fatalf("completed %v", st.completed)
+	}
+}
+
+// A run cancelled mid-write spends no attempt: the lease brings the entries back.
+func TestRetryPassCancelledRunDoesNotFail(t *testing.T) {
+	st, tg, r := retryFixture()
+	ctx, cancel := context.WithCancel(context.Background())
+	tg.write = context.Canceled
+	tg.onWrite = cancel
+	r.Run(ctx, searchdrain.RunOptions{BatchSize: 10, MaxAttempts: 3})
+	if len(st.failed) != 0 || len(st.completed) != 0 {
+		t.Fatalf("failed %v completed %v, want the claim left to expire", st.failed, st.completed)
 	}
 }
 

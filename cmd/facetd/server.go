@@ -166,17 +166,23 @@ func writeFileAtomic(path string, write func(io.Writer) error) (int64, error) {
 	// The rename is durable only once its directory is synced; the WAL is rotated after this.
 	dir, err := os.Open(filepath.Dir(path))
 	if err != nil {
-		return 0, err
+		return 0, postRenameError{err}
 	}
 	err = dir.Sync()
 	if cerr := dir.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
-		return 0, err
+		return 0, postRenameError{err}
 	}
 	return st.Size(), nil
 }
+
+// postRenameError is a writeFileAtomic failure after the rename: the new file is in place,
+// only its directory entry may not be durable yet.
+type postRenameError struct{ error }
+
+func (e postRenameError) Unwrap() error { return e.error }
 
 // Handler is the HTTP API.
 func (s *Server) Handler() http.Handler {

@@ -112,6 +112,12 @@ func (r facetdRetry) Run(ctx context.Context, opt searchdrain.RunOptions) facetd
 		sent, rejected, err := r.deliver(ctx, opt, entries)
 		res.Sent += sent
 		res.Failed += rejected
+		if err != nil && ctx.Err() != nil {
+			// The run ended (a stop, a SIGTERM), not facetd: spend no attempt, the lease
+			// expires and the next run retries the entries.
+			log.Printf("search-drain: facetd retry of %d jobs abandoned (%v), left claimed: %v", len(entries), ctx.Err(), err)
+			break
+		}
 		if err != nil {
 			res.Failed += len(entries) - sent - rejected
 			r.mirror.failures.Add(1)
