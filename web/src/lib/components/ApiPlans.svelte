@@ -24,12 +24,18 @@
 
   // The tier the caller already holds, so its card says so instead of selling it again.
   let held = $state<ApiPlan['tier']>('');
+  // Cleared first: a sign-out or account switch without a reload must not keep the last tier.
   $effect(() => {
+    held = '';
     if (!isAuthenticated()) return;
+    let live = true;
     api
       .getApiPlan()
-      .then((p) => (held = p.tier))
+      .then((p) => live && (held = p.tier))
       .catch(() => {});
+    return () => {
+      live = false;
+    };
   });
 
   // Which plan's checkout is opening, so only its own button says so.

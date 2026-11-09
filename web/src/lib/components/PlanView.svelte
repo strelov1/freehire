@@ -98,12 +98,18 @@
   // Without its own strip an API subscriber read "Free" and an upgrade button here and paid
   // for Pro as well, thinking the API needed it.
   let apiPlan = $state<ApiPlan | null>(null);
+  // Cleared first, like the billing effect below, so one account's plan never shows to the next.
   $effect(() => {
+    apiPlan = null;
     if (!isAuthenticated()) return;
+    let live = true;
     api
       .getApiPlan()
-      .then((p) => (apiPlan = p))
-      .catch(() => (apiPlan = null));
+      .then((p) => live && (apiPlan = p))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   });
   const hasApiPlan = $derived(!!apiPlan?.tier);
 
