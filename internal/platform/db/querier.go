@@ -5010,7 +5010,8 @@ type Querier interface {
 	// at most max_age_hours old (an old hit is no longer "what you just tried"). One row per
 	// account, whatever the number of hits, and none once the step row exists: the letter is
 	// once per account, never once per hit. The job, when the hit carries one, is read here so
-	// the letter is composed from the row; a job that is gone leaves the strings empty.
+	// the letter is composed from the row; a job that is gone, or a private one the account did
+	// not create, leaves the strings empty.
 	// Paged by user id like ListCVLifecycleDue.
 	ListPaywallLetterDue(ctx context.Context, arg ListPaywallLetterDueParams) ([]ListPaywallLetterDueRow, error)
 	// The moderator review queue: every claim that could not auto-activate (unknown or

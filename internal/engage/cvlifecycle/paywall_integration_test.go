@@ -157,6 +157,25 @@ func TestPaywall_AHitWithoutAPostingHasEmptyJobFields(t *testing.T) {
 	}
 }
 
+func TestPaywall_APrivatePostingIsNamedOnlyToItsCreator(t *testing.T) {
+	pool := testdb.Pool(t)
+	q := db.New(pool)
+	creator, _ := plainMailable(t, pool, "privowner")
+	stranger, _ := plainMailable(t, pool, "privstranger")
+	job := seedJob(t, pool, "private-go-dev", "Go Developer", "Secret Co")
+	exec(t, pool, `UPDATE jobs SET is_private = true, created_by = $1 WHERE id = $2`, creator, job)
+	hit(t, pool, creator, "tailor", job, 2*time.Hour)
+	hit(t, pool, stranger, "tailor", job, 2*time.Hour)
+
+	due := dueIDs(t, q)
+	if row := due[creator]; row.JobTitle != "Go Developer" || row.JobCompany != "Secret Co" || row.JobSlug != "private-go-dev" {
+		t.Errorf("creator row = %+v, want their own private posting named", row)
+	}
+	if row, ok := due[stranger]; !ok || row.JobTitle != "" || row.JobCompany != "" || row.JobSlug != "" {
+		t.Errorf("stranger row = %+v (listed=%v), want the feature alone", row, ok)
+	}
+}
+
 func TestPaywall_OncePerAccountNotOncePerHitOrFeature(t *testing.T) {
 	pool := testdb.Pool(t)
 	r, sender := newRunner(t, db.New(pool))

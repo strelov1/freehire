@@ -260,7 +260,7 @@ SELECT DISTINCT ON (h.user_id)
     COALESCE(j.public_slug, '')::text AS job_slug
 FROM paywall_hits h
 JOIN users u ON u.id = h.user_id
-LEFT JOIN jobs j ON j.id = h.job_id
+LEFT JOIN jobs j ON j.id = h.job_id AND (NOT j.is_private OR j.created_by = h.user_id)
 LEFT JOIN notification_settings ns ON ns.user_id = h.user_id
 WHERE h.created_at <= now() - make_interval(mins => $1::int)
   AND h.created_at > now() - make_interval(hours => $2::int)
@@ -307,7 +307,8 @@ type ListPaywallLetterDueRow struct {
 // at most max_age_hours old (an old hit is no longer "what you just tried"). One row per
 // account, whatever the number of hits, and none once the step row exists: the letter is
 // once per account, never once per hit. The job, when the hit carries one, is read here so
-// the letter is composed from the row; a job that is gone leaves the strings empty.
+// the letter is composed from the row; a job that is gone, or a private one the account did
+// not create, leaves the strings empty.
 // Paged by user id like ListCVLifecycleDue.
 func (q *Queries) ListPaywallLetterDue(ctx context.Context, arg ListPaywallLetterDueParams) ([]ListPaywallLetterDueRow, error) {
 	rows, err := q.db.Query(ctx, listPaywallLetterDue,
