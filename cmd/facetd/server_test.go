@@ -127,6 +127,27 @@ func TestWriteApplies(t *testing.T) {
 	}
 }
 
+// During the first rebuild there is no index to apply to, yet a bad write is still refused
+// rather than acknowledged and dropped at commit; a good one is recorded and kept.
+func TestFirstRebuildValidatesWrites(t *testing.T) {
+	s := NewServer("")
+	h := s.Handler()
+	call(t, h, "POST", "/rebuild/begin", "")
+	if c, _ := call(t, h, "POST", "/write", `{"upserts":[{"id":"bad"}],"close":[1]}`); c != 400 {
+		t.Fatalf("bad write = %d, want 400", c)
+	}
+	if c, _ := call(t, h, "POST", "/write", `{"upserts":[`+doc(9, "c")+`]}`); c != 200 {
+		t.Fatalf("good write = %d", c)
+	}
+	call(t, h, "POST", "/rebuild/push", `{"docs":[`+doc(1, "a")+`]}`)
+	if c, _ := call(t, h, "POST", "/rebuild/commit", ""); c != 200 {
+		t.Fatal("commit failed")
+	}
+	if n := total(t, h, `"source = c"`); n != 1 {
+		t.Errorf("write recorded during the first rebuild lost: c = %v", n)
+	}
+}
+
 // A write that arrives between begin and commit must survive the swap.
 func TestWriteDuringRebuildIsReapplied(t *testing.T) {
 	s, h := loaded(t, "", doc(1, "a"), doc(2, "b"))

@@ -119,12 +119,14 @@ func (r facetdRetry) Run(ctx context.Context, opt searchdrain.RunOptions) facetd
 			break
 		}
 		if err != nil {
-			res.Failed += len(entries) - sent - rejected
+			// deliver settles entries in order, so the first sent+rejected are done: completed
+			// or dead-lettered. Failing a dead letter again would revive it (attempts < max).
+			unsettled := entries[sent+rejected:]
+			res.Failed += len(unsettled)
 			r.mirror.failures.Add(1)
-			log.Printf("search-drain: facetd retry of %d jobs failed: %v", len(entries), err)
-			// Detached: a cancelled run must still release the lease and count the attempt.
-			// Entries already completed are gone from the table, so failing them is a no-op.
-			if ferr := r.store.Fail(context.WithoutCancel(ctx), outboxIDs(entries), err.Error(), opt.MaxAttempts); ferr != nil {
+			log.Printf("search-drain: facetd retry of %d jobs failed: %v", len(unsettled), err)
+			// Detached: release the lease and count the attempt even if the run is ending.
+			if ferr := r.store.Fail(context.WithoutCancel(ctx), outboxIDs(unsettled), err.Error(), opt.MaxAttempts); ferr != nil {
 				log.Printf("search-drain: facetd retry record failure: %v", ferr)
 			}
 			break

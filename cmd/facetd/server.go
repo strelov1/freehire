@@ -397,6 +397,14 @@ func (s *Server) write(w http.ResponseWriter, r *http.Request) {
 		s.notReady(w)
 		return
 	}
+	if st == nil {
+		// The first rebuild has no index to apply to; try the batch on an empty one so a bad
+		// document is refused now, not acknowledged and then skipped at commit and in replay.
+		if _, err := facetidx.NewStore(facetidx.NewBuilder().Build()).Apply(b); err != nil {
+			fail(w, http.StatusBadRequest, "%v", err)
+			return
+		}
+	}
 	recLen, err := s.logWrite(req) // durable before it is applied or acknowledged
 	if err != nil {
 		fail(w, http.StatusInternalServerError, "facetd: write-ahead log: %v", err)

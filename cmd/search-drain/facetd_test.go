@@ -294,6 +294,28 @@ func TestRetryPassIsolatesRejectedJob(t *testing.T) {
 	}
 }
 
+// facetd failing after a rejection fails only the entries not yet settled: the dead letter
+// stays dead and the sent ones stay completed.
+func TestRetryPassFailureAfterRejectionKeepsDeadLetter(t *testing.T) {
+	st, tg, r := retryFixture()
+	st.queued = append(st.queued, searchdrain.Claimed{OutboxID: 13, JobID: 7})
+	st.jobs = append(st.jobs, db.Job{ID: 7})
+	tg.reject = 5
+	calls := 0
+	tg.onWrite = func() { // writes: all four, [10 11], [10], [11], then [12 13] fails
+		if calls++; calls == 5 {
+			tg.write = errors.New("boom")
+		}
+	}
+	res := r.Run(context.Background(), searchdrain.RunOptions{BatchSize: 10, MaxAttempts: 3})
+	if !slices.Equal(st.dead, []int64{10}) || !slices.Equal(st.failed, []int64{10, 12, 13}) || !slices.Equal(st.completed, []int64{11}) {
+		t.Fatalf("dead %v failed %v completed %v", st.dead, st.failed, st.completed)
+	}
+	if res.Sent != 1 || res.Failed != 3 {
+		t.Fatalf("res %+v", res)
+	}
+}
+
 // A run cancelled mid-write spends no attempt: the lease brings the entries back.
 func TestRetryPassCancelledRunDoesNotFail(t *testing.T) {
 	st, tg, r := retryFixture()
