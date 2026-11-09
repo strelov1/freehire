@@ -9,7 +9,7 @@
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, plural, t, tokenLabel } from '#lib/i18n/t.js';
   import { formatMinorUnits } from '#lib/money.js';
-  import type { AiUsage, BillingOverview, PlanState, UsageHistoryEntry } from '#lib/types.js';
+  import type { AiUsage, ApiPlan, BillingOverview, PlanState, UsageHistoryEntry } from '#lib/types.js';
   import { messages } from './PlanView.messages';
   import States from './States.svelte';
 
@@ -94,6 +94,28 @@
   // there is no subscription to manage, which is the ordinary state for a free account.
   let manageUrl = $state<string | null>(null);
 
+  // The API product is billed apart from Pro, and a checkout for it lands on this page too.
+  // Without its own strip an API subscriber read "Free" and an upgrade button here and paid
+  // for Pro as well, thinking the API needed it.
+  let apiPlan = $state<ApiPlan | null>(null);
+  // A failed read is said, not shown as "no API plan": that is the state that misled them.
+  let apiPlanFailed = $state(false);
+  // Cleared first, like the billing effect below, so one account's plan never shows to the next.
+  $effect(() => {
+    apiPlan = null;
+    apiPlanFailed = false;
+    if (!isAuthenticated()) return;
+    let live = true;
+    api
+      .getApiPlan()
+      .then((p) => live && (apiPlan = p))
+      .catch(() => live && (apiPlanFailed = true));
+    return () => {
+      live = false;
+    };
+  });
+  const hasApiPlan = $derived(!!apiPlan?.tier);
+
   // What is being paid and what has been taken. Null for a free account, and for a provider
   // we could not reach — in both cases the section is simply absent, because a billing
   // section that cannot show the money is worse than none.
@@ -115,13 +137,16 @@
     const paid = plan?.plan === 'pro' || plan?.plan === 'ultra';
     billing = null;
     manageUrl = null;
-    if (!paid) return;
+    if (!paid && !hasApiPlan) return;
 
     let live = true;
-    api
-      .billingSubscription()
-      .then((b) => live && (billing = b))
-      .catch(() => {});
+    // The overview describes the Pro/Ultra subscription only; an API-only customer has the
+    // provider's portal for receipts.
+    if (paid)
+      api
+        .billingSubscription()
+        .then((b) => live && (billing = b))
+        .catch(() => {});
     api
       .billingManageUrl()
       .then(({ url }) => live && (manageUrl = url))
@@ -204,7 +229,9 @@
               {fmtDate(plan.pro_until)}
             </span>
           {:else if plan.plan === 'free'}
-            <span class="text-xs text-muted-foreground">{s.planStrip.freeSubtitle}</span>
+            <span class="text-xs text-muted-foreground"
+              >{hasApiPlan ? s.planStrip.freeWithApi : s.planStrip.freeSubtitle}</span
+            >
           {/if}
         </div>
         <!-- Both, not one or the other. A subscriber below the top tier has two things to do
@@ -234,6 +261,24 @@
           <!-- eslint-enable svelte/no-navigation-without-resolve -->
         </div>
       </div>
+
+      {#if apiPlanFailed}
+        <p class="text-xs text-muted-foreground">{s.apiStrip.loadError}</p>
+      {:else if apiPlan?.tier}
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
+          <div class="flex flex-col gap-0.5">
+            <span class="text-base font-semibold">{s.apiStrip.tiers[apiPlan.tier]}</span>
+            <span class="text-xs text-muted-foreground">
+              {#if apiPlan.until}{s.planStrip.runsUntilPrefix} {fmtDate(apiPlan.until)} ·
+              {/if}{s.apiStrip.separate}
+            </span>
+          </div>
+          <a
+            class="rounded-md border border-border px-3 py-1.5 text-sm font-medium"
+            href={resolve('/my/integrations/api-keys')}>{s.apiStrip.keys}</a
+          >
+        </div>
+      {/if}
 
       {#if billing}
         <div class="flex flex-col gap-3">
