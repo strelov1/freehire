@@ -69,6 +69,15 @@ type CoveredRefresher interface {
 	RefreshCovered(ctx context.Context, source string, externalIDs []string) ([]string, error)
 }
 
+// CoveredCloser closes the OPEN stored rows an aggregator board listed for an employer the
+// coverage gate found already crawled first-hand, so the aggregator copy stops showing beside
+// the employer's own postings. A lapsed coverage lets the next crawl write the posting again,
+// which reopens it. A Store lacking it refreshes those rows instead (CoveredRefresher). Return
+// one stored company slug per closed row.
+type CoveredCloser interface {
+	CloseCovered(ctx context.Context, source string, externalIDs []string) ([]string, error)
+}
+
 // SeenLookup is the optional Store capability a HydratingSource needs: the external_ids already
 // stored for the board about to be crawled, so the adapter fetches expensive per-posting detail
 // only for postings the catalogue lacks. Only the ingest dbStore implements it; the runner

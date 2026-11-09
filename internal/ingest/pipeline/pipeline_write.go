@@ -17,6 +17,8 @@ type boardTally struct {
 	firstErr error
 	// refreshIDs holds listed identities needing an open-only liveness refresh.
 	refreshIDs []string
+	// coveredIDs holds listed identities the coverage gate kept out of the write path.
+	coveredIDs []string
 }
 
 // writeBoard writes raw through saveConcurrency workers, each tallying into its own
@@ -52,6 +54,7 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 			merged.firstErr = t.firstErr
 		}
 		merged.refreshIDs = append(merged.refreshIDs, t.refreshIDs...)
+		merged.coveredIDs = append(merged.coveredIDs, t.coveredIDs...)
 	}
 	return merged
 }
@@ -83,6 +86,13 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 		_, externalID := jobIdentity(e, j)
 		if outOfCatalogueTitle(j.Title, seen[externalID]) {
 			t.rej.reject(j.Title)
+			return
+		}
+		// A covered employer's re-listed copy is closed like a written one would be. A listing
+		// naming no company (a sitemap refresh) cannot be judged here and keeps its touch.
+		if covered != nil && j.Company != "" && covered(companySlugOf(canon, j.Company)) {
+			t.st.ATSCovered++
+			t.coveredIDs = append(t.coveredIDs, externalID)
 			return
 		}
 		slug, err := r.touch(ctx, e, j)
@@ -145,7 +155,7 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 	}
 	if covered != nil && covered(dj.Fields().CompanySlug) {
 		t.st.ATSCovered++
-		t.refreshIDs = append(t.refreshIDs, dj.Fields().ExternalID)
+		t.coveredIDs = append(t.coveredIDs, dj.Fields().ExternalID)
 		return
 	}
 	if err := r.save(ctx, dj, j.ApplyForm); err != nil {
@@ -201,6 +211,28 @@ func (r Runner) refreshCovered(ctx context.Context, e sources.CompanyEntry, exte
 	companies, err := cr.RefreshCovered(ctx, e.Provider, externalIDs)
 	if err != nil {
 		log.Printf("ingest: %s board %q (%s): refresh %d listed postings: %v",
+			e.Provider, e.Board, e.Company, len(externalIDs), err)
+		return 0, len(externalIDs), nil
+	}
+	return len(companies), 0, companies
+}
+
+// closeCovered closes the stored open rows behind the postings the coverage gate kept out of the
+// write path (see CoveredCloser), falling back to refreshing them for a Store without it. A
+// closed row counts in Stats.Refreshed: the listing named it and the run accounted for it, which
+// is what lets a provider whose every posting was covered still sweep. A failure counts in
+// Stats.RefreshFailed, which withholds the close scopes as a failed refresh does.
+func (r Runner) closeCovered(ctx context.Context, e sources.CompanyEntry, externalIDs []string) (closed, failed int, companies []string) {
+	cc, ok := r.Store.(CoveredCloser)
+	if !ok {
+		return r.refreshCovered(ctx, e, externalIDs)
+	}
+	if len(externalIDs) == 0 {
+		return 0, 0, nil
+	}
+	companies, err := cc.CloseCovered(ctx, e.Provider, externalIDs)
+	if err != nil {
+		log.Printf("ingest: %s board %q (%s): close %d covered postings: %v",
 			e.Provider, e.Board, e.Company, len(externalIDs), err)
 		return 0, len(externalIDs), nil
 	}

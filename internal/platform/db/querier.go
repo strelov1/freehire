@@ -759,6 +759,17 @@ type Querier interface {
 	CloseChronicProviderJobs(ctx context.Context, arg CloseChronicProviderJobsParams) (int64, error)
 	// Moderator close: the thread leaves the open listing and rejects new replies.
 	CloseCommunityThread(ctx context.Context, id int64) error
+	// Close the open stored rows an aggregator board listed for an employer the coverage gate
+	// found already crawled first-hand (pipeline.CoveredCloser). Until 2026-11-08 these rows were
+	// only refreshed (RefreshCoveredJobs), so a copy stored before the employer's own board joined
+	// the fleet stayed visible beside it whenever its title differed from every ATS posting —
+	// 4,784 open whatjobs/adzuna rows under 1,354 covered companies when measured. Closing is
+	// reversible: a lapsed coverage lets the next crawl write the posting, and UpsertJob reopens
+	// it. The removal enqueue rides the statement, as in CloseUnseenJobs. RETURNING company_slug
+	// so the caller records the company as crawled, as RefreshCovered does — and for a listed row
+	// an earlier crawl already closed this way too, or a provider whose every posting is covered
+	// would show no crawl evidence from its second run on and never sweep its delisted rows.
+	CloseCoveredJobs(ctx context.Context, arg CloseCoveredJobsParams) ([]string, error)
 	// Soft-close, the employer-self-service analogue of CloseJobByID: scoped to the actor's own
 	// employer-authored posting (created_by = actor_id AND source = 'employer'), never any other
 	// job. closed_reason = 'employer_closed' (migration 0175) keeps this mechanism distinguishable

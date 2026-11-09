@@ -11,6 +11,68 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const closeCoveredJobs = `-- name: CloseCoveredJobs :many
+WITH already AS (
+    SELECT j.company_slug FROM jobs j
+    WHERE j.source = $1
+      AND j.external_id = ANY($2::text[])
+      AND j.closed_reason = 'ats_covered'
+      AND j.closed_at IS NOT NULL
+      AND NOT j.is_private
+), closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'ats_covered',
+        updated_at    = now()
+    WHERE source = $1
+      AND external_id = ANY($2::text[])
+      AND closed_at IS NULL
+    RETURNING id, company_slug
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT company_slug FROM closed
+UNION ALL
+SELECT company_slug FROM already
+`
+
+type CloseCoveredJobsParams struct {
+	Source      string   `json:"source"`
+	ExternalIds []string `json:"external_ids"`
+}
+
+// Close the open stored rows an aggregator board listed for an employer the coverage gate
+// found already crawled first-hand (pipeline.CoveredCloser). Until 2026-11-08 these rows were
+// only refreshed (RefreshCoveredJobs), so a copy stored before the employer's own board joined
+// the fleet stayed visible beside it whenever its title differed from every ATS posting —
+// 4,784 open whatjobs/adzuna rows under 1,354 covered companies when measured. Closing is
+// reversible: a lapsed coverage lets the next crawl write the posting, and UpsertJob reopens
+// it. The removal enqueue rides the statement, as in CloseUnseenJobs. RETURNING company_slug
+// so the caller records the company as crawled, as RefreshCovered does — and for a listed row
+// an earlier crawl already closed this way too, or a provider whose every posting is covered
+// would show no crawl evidence from its second run on and never sweep its delisted rows.
+func (q *Queries) CloseCoveredJobs(ctx context.Context, arg CloseCoveredJobsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, closeCoveredJobs, arg.Source, arg.ExternalIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var company_slug string
+		if err := rows.Scan(&company_slug); err != nil {
+			return nil, err
+		}
+		items = append(items, company_slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const closeJobByID = `-- name: CloseJobByID :one
 WITH closed AS (
     UPDATE jobs
