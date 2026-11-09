@@ -123,7 +123,7 @@ The result is written to `jobs.requirements_derived` by every job write path (th
 `internal/job/job`'s `withDerived`) and folded into the served
 `enrichment.requirements` by `jobview.FromDomain` when the model stated none. It is
 **not** copied into the `enrichment` blob — see the note in `SetJobEnrichment`
-(`internal/platform/db/queries/jobs.sql`) for why a materialised copy is unfixable.
+(`internal/platform/db/queries/jobs_enrichment.sql`) for why a materialised copy is unfixable.
 
 ## Extending a vocabulary
 
