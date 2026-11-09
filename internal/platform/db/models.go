@@ -796,6 +796,16 @@ type ExperienceEmployment struct {
 	PeriodEndMonth   pgtype.Int2        `json:"period_end_month"`
 }
 
+type FacetdOutbox struct {
+	ID        int64              `json:"id"`
+	JobID     int64              `json:"job_id"`
+	Attempts  int64              `json:"attempts"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	FailedAt  pgtype.Timestamptz `json:"failed_at"`
+	LastError string             `json:"last_error"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type GhostReport struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`

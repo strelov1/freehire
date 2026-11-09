@@ -62,6 +62,8 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 	err := ss.FetchStream(ctx, e, emit)
 	st := t.st
 	st.Refreshed, st.RefreshFailed, _ = r.refreshCovered(ctx, e, t.refreshIDs)
+	closed, closeFailed, _ := r.closeCovered(ctx, e, t.coveredIDs)
+	st.Refreshed, st.RefreshFailed = st.Refreshed+closed, st.RefreshFailed+closeFailed
 	t.rej.log(e)
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",

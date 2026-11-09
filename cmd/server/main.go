@@ -184,7 +184,11 @@ func runServer(cfg config.Settings) error {
 	// is a long-lived object here rather than something built per request.
 	var suggestSvc *suggest.Service
 	if cfg.MeiliKey != "" {
-		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
+		facetOpts, err := facetEngineOptions(ctx, redisClient)
+		if err != nil {
+			return err
+		}
+		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey, facetOpts...)
 		suggestSvc = suggest.New(suggest.NewIndex(searchClient))
 		startSuggestRefresh(ctx, suggestSvc)
 	}

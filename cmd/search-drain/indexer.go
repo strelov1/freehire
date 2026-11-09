@@ -23,6 +23,14 @@ import (
 type searchIndexer struct {
 	client *search.Client
 	q      *db.Queries
+	// mirror copies each applied wave to facetd; nil when FACETD_URL is unset.
+	mirror *facetdMirror
+}
+
+// docBuilder turns persisted rows into search documents. The indexing wave and the facetd
+// retry pass share it, so a document facetd gets later is built exactly as Meilisearch's was.
+type docBuilder struct {
+	q *db.Queries
 }
 
 // clusterKey identifies one role cluster, which is still how the job-reality counts are
@@ -44,6 +52,24 @@ var sourceTypeOf = sources.SourceTypes(sources.Taxonomy())
 var unseenWindows = search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(), search.UnseenWindow))
 
 func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
+	docs, withheld, err := docBuilder{ix.q}.build(ctx, jobs)
+	if err != nil {
+		return err
+	}
+	if err := ix.client.IndexJobs(ctx, docs); err != nil {
+		return err
+	}
+	if err := ix.removeWithheld(ctx, withheld); err != nil {
+		return err
+	}
+	// After Meilisearch accepted the wave. A failure here is queued, never returned.
+	ix.mirror.Apply(ctx, search.FacetdWrite{Upserts: docs, Delete: withheld})
+	return nil
+}
+
+// build returns the documents of the jobs search shows and the ids of those it withholds.
+func (b docBuilder) build(ctx context.Context, jobs []db.Job) ([]search.JobDocument, []int64, error) {
+	ix := b
 	// Resolve every job's role-cluster counts (and, for clusters with more than one open
 	// row, geography) in two queries scoped to the whole wave instead of one
 	// RoleClusterCount/RoleClusterGeo round trip per job — at the documented default wave
@@ -99,7 +125,7 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 			// values already indexed with the canon's own (see
 			// search.JobDocument.MergeClosureGeography). Skip the wave; the lease
 			// expires and a later run reads the geography again.
-			return fmt.Errorf("%w: duplicate-closure geography for wave: %v",
+			return nil, nil, fmt.Errorf("%w: duplicate-closure geography for wave: %v",
 				searchdrain.ErrSkipWave, err)
 		}
 		for _, r := range rows {
@@ -112,7 +138,7 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	// read skips the wave rather than pushing documents that would erase them.
 	desc, err := search.ChunkVectorsForJobs(ctx, ix.q, geoIDs)
 	if err != nil {
-		return fmt.Errorf("%w: %v", searchdrain.ErrSkipWave, err)
+		return nil, nil, fmt.Errorf("%w: %v", searchdrain.ErrSkipWave, err)
 	}
 
 	// The application forms' question counts. A document without one would not erase a
@@ -121,7 +147,7 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	// like the two reads above, and the lease brings it back.
 	questions, err := applyform.QuestionCounts(ctx, ix.q, geoIDs)
 	if err != nil {
-		return fmt.Errorf("%w: apply-form question counts for wave: %v", searchdrain.ErrSkipWave, err)
+		return nil, nil, fmt.Errorf("%w: apply-form question counts for wave: %v", searchdrain.ErrSkipWave, err)
 	}
 
 	docs := make([]search.JobDocument, 0, len(jobs))
@@ -139,7 +165,7 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 		}
 		doc, err := search.FromJob(job, desc[job.ID], sourceTypeOf(job.Source))
 		if err != nil {
-			return fmt.Errorf("build document (job %d): %w", job.ID, err)
+			return nil, nil, fmt.Errorf("build document (job %d): %w", job.ID, err)
 		}
 		doc.AttachApplyQuestions(questions)
 		repost, mass := int64(1), int64(1)
@@ -155,10 +181,7 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 		}
 		docs = append(docs, doc)
 	}
-	if err := ix.client.IndexJobs(ctx, docs); err != nil {
-		return err
-	}
-	return ix.removeWithheld(ctx, withheld)
+	return docs, withheld, nil
 }
 
 // removeWithheld deletes the documents of the wave's withheld jobs that are still indexed.
@@ -185,6 +208,7 @@ func (ix searchIndexer) removeWithheld(ctx context.Context, ids []int64) error {
 type facetDeleter struct {
 	client *search.Client
 	q      *db.Queries
+	mirror *facetdMirror // nil when FACETD_URL is unset
 }
 
 func (d facetDeleter) DeleteBatch(ctx context.Context, jobIDs []int64) error {
@@ -214,5 +238,9 @@ func (d facetDeleter) DeleteBatch(ctx context.Context, jobIDs []int64) error {
 	if err := d.client.MarkDuplicateJobs(ctx, duplicates); err != nil {
 		return fmt.Errorf("%w: update duplicate markers: %v", searchdrain.ErrSkipWave, err)
 	}
-	return d.client.DeleteJobs(ctx, removed)
+	if err := d.client.DeleteJobs(ctx, removed); err != nil {
+		return err
+	}
+	d.mirror.Apply(ctx, search.FacetdWrite{Close: closed, Duplicate: duplicates, Delete: removed})
+	return nil
 }

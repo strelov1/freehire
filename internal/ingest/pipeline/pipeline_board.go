@@ -138,6 +138,9 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, fetch
 	st, rej, firstErr := t.st, t.rej, t.firstErr
 	var refreshedCompanies []string
 	st.Refreshed, st.RefreshFailed, refreshedCompanies = r.refreshCovered(ctx, e, t.refreshIDs)
+	closed, closeFailed, closedCompanies := r.closeCovered(ctx, e, t.coveredIDs)
+	st.Refreshed, st.RefreshFailed = st.Refreshed+closed, st.RefreshFailed+closeFailed
+	refreshedCompanies = append(refreshedCompanies, closedCompanies...)
 	// One line per board with skips (not one per job), so a systemic failure — e.g.
 	// the DB behind a migration, or a board whose postings won't construct — is visible
 	// without flooding the log.

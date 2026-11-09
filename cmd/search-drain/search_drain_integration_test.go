@@ -642,3 +642,91 @@ func TestIntegration_SearchDrainRemovesAJobThatBecameWithheld(t *testing.T) {
 		t.Errorf("listable job %d removed along with the withheld one", shownID)
 	}
 }
+
+// TestIntegration_FacetdDownDuringWaveIsQueuedAndRetried: facetd refuses writes during an
+// indexing wave and a deletion wave. Meilisearch still gets both, the job ids land in
+// facetd_outbox, and once facetd is back the retry pass sends each job's CURRENT state and
+// empties the queue.
+func TestIntegration_FacetdDownDuringWaveIsQueuedAndRetried(t *testing.T) {
+	ctx := context.Background()
+	meiliURL, key := startMeili(t)
+	pool := testdb.Pool(t)
+	q := db.New(pool)
+
+	client := search.NewClient(meiliURL, key)
+	if err := client.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+	opts := searchdrain.RunOptions{BatchSize: 500, LeaseSeconds: 180, MaxAttempts: 3}
+
+	openID := seedJob(t, pool, "open", "Backend Engineer", "acme", "fp-o", []string{"Berlin"}, nil)
+	closedID := seedJob(t, pool, "closed", "Backend Engineer", "globex", "fp-c", []string{"Paris"}, nil)
+	enqueue(t, pool, closedID)
+	plain := searchdrain.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: q}}
+	if _, err := plain.Run(ctx, opts); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+
+	status := http.StatusServiceUnavailable
+	fc, bodies, stop := fakeFacetd(t, &status, 0)
+	defer stop()
+	mirror := &facetdMirror{client: fc, queue: dbFacetdQueue{q}, timeout: 5 * time.Second}
+
+	enqueue(t, pool, openID)
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closedID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO search_delete_outbox (job_id) VALUES ($1) ON CONFLICT DO NOTHING`, closedID); err != nil {
+		t.Fatal(err)
+	}
+	runner := searchdrain.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: q, mirror: mirror}}
+	deletions := searchdrain.DeletionRunner{Store: newDeletionStore(pool), Deleter: facetDeleter{client: client, q: q, mirror: mirror}}
+	stats, del, err := searchdrain.Drain(ctx, runner, deletions, opts)
+	if err != nil || stats.Failed != 0 || del.Failed != 0 {
+		t.Fatalf("Drain: %+v %+v %v", stats, del, err)
+	}
+	if found, _ := meiliDoc(t, meiliURL, key, openID); !found {
+		t.Fatalf("Meilisearch missed job %d though facetd was down", openID)
+	}
+	queued := func() []int64 {
+		rows, err := pool.Query(ctx, `SELECT job_id FROM facetd_outbox ORDER BY job_id`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var ids []int64
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				t.Fatal(err)
+			}
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	if got := queued(); !slices.Equal(got, []int64{openID, closedID}) {
+		t.Fatalf("facetd_outbox = %v, want [%d %d]", got, openID, closedID)
+	}
+
+	// facetd is back: the retry pass re-derives current state and empties the queue.
+	status = http.StatusOK
+	*bodies = nil
+	retry := facetdRetry{store: newDBFacetdRetryStore(pool), facetd: fc, build: docBuilder{q}.build, mirror: mirror}
+	res := retry.Run(ctx, opts)
+	if res.Sent != 2 || res.Failed != 0 || len(*bodies) != 1 {
+		t.Fatalf("retry = %+v, writes %d", res, len(*bodies))
+	}
+	var ups []struct {
+		ID int64 `json:"id"`
+	}
+	b := (*bodies)[0]
+	if err := json.Unmarshal(b["upserts"], &ups); err != nil || len(ups) != 1 || ups[0].ID != openID {
+		t.Fatalf("upserts = %s (%v), want job %d", b["upserts"], err, openID)
+	}
+	if string(b["close"]) != fmt.Sprintf("[%d]", closedID) {
+		t.Fatalf("close = %s, want [%d]", b["close"], closedID)
+	}
+	if got := queued(); len(got) != 0 {
+		t.Fatalf("facetd_outbox not empty after retry: %v", got)
+	}
+}

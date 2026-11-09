@@ -58,6 +58,7 @@ hire
 /liveness
 /llm-probe
 /mail-ingest
+/facetd
 /mail-preview
 /mentor-busy-sync
 /mentorship-remind
@@ -212,6 +213,7 @@ extension/*.zip
 /reindex
 /reindex-companies
 /report-company-website-twins
+/report-cv-letters
 /report-classify-drift
 /report-geo-gaps
 /report-skill-gaps

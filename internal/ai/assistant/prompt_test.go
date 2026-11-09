@@ -394,3 +394,28 @@ func TestSupportPromptAnswersSupportMessageQuestionsFromItsOwnField(t *testing.T
 		t.Error("the support preset must send support-message questions to my_account's support_messages_today")
 	}
 }
+
+// A user asked support to "connect to claude" and was told it was impossible, then asked for the
+// API keys page and was told there was no link (2026-11-09). Both facts must stay in the FAQ.
+func TestSupportPromptKnowsTheMCPConnectorAndTheIntegrationsLink(t *testing.T) {
+	p := SystemPrompt(PresetSupport, "en")
+	for _, want := range []string{"https://freehire.me/api/v1/mcp", "https://freehire.me/mcp", "https://freehire.me/my/integrations/api-keys"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("support prompt lacks %q", want)
+		}
+	}
+}
+
+// The profile language is the default, not a cage: a candidate who asks for another language
+// gets it, while one who merely types in it still does not (freehire#1837).
+func TestLanguageDirectiveHonoursAnExplicitRequest(t *testing.T) {
+	for _, preset := range []string{PresetChat, PresetSupport, PresetTailor} {
+		p := SystemPrompt(preset, "en")
+		if !strings.Contains(p, "if the candidate asks you to reply in another language, do so") {
+			t.Errorf("preset %q refuses an explicit language request", preset)
+		}
+		if !strings.Contains(p, "Writing to you in a language is not such a request") {
+			t.Errorf("preset %q lost the #1837 rule against guessing from the typed language", preset)
+		}
+	}
+}
