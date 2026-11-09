@@ -80,13 +80,23 @@ that calls it is `internal/search/search/route.go`, and full rebuilds come from 
   mapping stay, and a later upsert of that job revives the same document. Doc ids are never
   reused, so the index only grows. Compaction (renumbering live documents into a fresh
   Builder) is the seam; `Replace` with a rebuild does it today.
-- **Forward arrays are the trade-off.** Rebuilding a field's CSR per batch costs O(postings of
-  the field); a batch drops the arrays of the fields it touches and a single background
-  goroutine rebuilds the missing ones from the current generation, installing them only if
-  no newer generation appeared meanwhile (same generation number, identical content). In
-  between, counting uses the AND strategy: exact, slower for a high-cardinality facet under
-  a big filter. Under a drain that publishes faster than a rebuild takes, the arrays may
-  stay off; that costs latency, never correctness.
+- **A batch costs what it touches, never the catalogue** (`delta.go`). Rebuilding a field's
+  CSR or re-copying its number column per batch is O(documents): at 2M documents that was
+  ~420 ms per 500-job batch, now ~65 ms. So a batch keeps the forward array and records the
+  documents it changed as an overlay (`fdirty` + their current value ids in `fresh`); the
+  walk reads the overlay for those and the array for the rest, and a removed document's old
+  values come from the array instead of probing every value bitmap. A single background
+  goroutine rebuilds an array once its overlay passes `dirtyMax` documents, from one
+  generation, and installs it on whatever generation is current then, carrying over only the
+  documents dirtied since (`dirtyLog` past the old length, same `epoch`). So it always lands,
+  however fast the drain writes. The number column is a sorted base plus a small sorted delta
+  (`numAdd`) and the documents whose base entries are void (`numDead`), merged back once they
+  pass 1/16 of the base.
+- **`posted_ts` and `created_ts` are range-only** (`rangeOnly` in `flatten.go`): only the
+  number column, no string postings. Indexed as strings too, nearly every document owned a
+  value bitmap of its own (10x the heap). `=`, `IN`, `!=` on them are ErrUnsupportedFilter
+  and a facet or distinct on them ErrUnknownFacet, so the router falls back to Meilisearch;
+  our code only ever range-filters them (`Gte`).
 - **Snapshot** (`snapshot.go`, format documented there): magic + version, job ids, the three
   marks, then per attribute its three bitmaps, values with their bitmaps and the numeric
   column, then a CRC-32C of everything. `all`, `live`, the id map, keys, cardinalities,

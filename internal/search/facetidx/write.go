@@ -165,27 +165,47 @@ func setBit(bm *roaring.Bitmap, d uint32, on bool) {
 }
 
 // patch returns a copy of the field without the documents in gone and with the adds. Only
-// the value bitmaps that change are cloned; the forward array is dropped (see Store).
+// the value bitmaps that change are cloned; the number column and the forward array take the
+// change as an overlay (see delta.go), so a batch costs what it touches, not the catalogue.
 func (f *field) patch(gone *roaring.Bitmap, adds []fieldAdd) *field {
 	nf := *f
-	nf.off, nf.fwd16, nf.fwd32 = nil, nil, nil
 	nf.exists, nf.empty, nf.numeric, nf.valued = f.exists.Clone(), f.empty.Clone(), f.numeric.Clone(), f.valued.Clone()
 	nf.bms = slices.Clone(f.bms)
 	owned := map[uint32]bool{}
+	own := func(id uint32) {
+		if !owned[id] {
+			nf.bms[id] = nf.bms[id].Clone()
+			owned[id] = true
+		}
+	}
+	touched := roaring.New() // documents whose values for this field change
 	if !gone.IsEmpty() && f.exists.Intersects(gone) {
+		here := roaring.And(f.exists, gone)
+		touched.Or(here)
 		nf.exists.AndNot(gone)
 		nf.empty.AndNot(gone)
 		nf.numeric.AndNot(gone)
 		nf.valued.AndNot(gone)
-		for i, bm := range f.bms {
-			if bm.Intersects(gone) {
-				nf.postings -= bm.AndCardinality(gone)
-				nf.bms[i] = roaring.AndNot(bm, gone)
-				owned[uint32(i)] = true
+		if f.off != nil { // the old values of each document, straight from the forward array
+			var buf []uint32
+			it := here.Iterator()
+			for it.HasNext() {
+				d := it.Next()
+				buf = f.fwdValues(d, buf)
+				for _, id := range buf {
+					own(id)
+					nf.bms[id].Remove(d)
+					nf.postings--
+				}
 			}
-		}
-		if f.numeric.Intersects(gone) {
-			nf.num = slices.DeleteFunc(slices.Clone(f.num), func(e numEntry) bool { return gone.Contains(e.doc) })
+		} else {
+			for i, bm := range f.bms {
+				if bm.Intersects(here) {
+					nf.postings -= bm.AndCardinality(here)
+					nf.bms[i] = roaring.AndNot(bm, here)
+					owned[uint32(i)] = true
+				}
+			}
 		}
 	}
 
@@ -196,8 +216,10 @@ func (f *field) patch(gone *roaring.Bitmap, adds []fieldAdd) *field {
 		}
 	}
 	var newNums []numEntry
+	vals := map[uint32][]uint32{} // the value ids each added document now holds
 	for _, a := range adds {
 		d := a.doc
+		touched.Add(d)
 		nf.exists.Add(d)
 		if a.p.empty {
 			nf.empty.Add(d)
@@ -217,12 +239,10 @@ func (f *field) patch(gone *roaring.Bitmap, adds []fieldAdd) *field {
 				cloneKeys()
 				nf.vals[id] = s
 			}
-			if !owned[id] {
-				nf.bms[id] = nf.bms[id].Clone()
-				owned[id] = true
-			}
+			own(id)
 			if nf.bms[id].CheckedAdd(d) {
 				nf.postings++
+				vals[d] = append(vals[d], id)
 			}
 			nf.valued.Add(d)
 		}
@@ -231,10 +251,8 @@ func (f *field) patch(gone *roaring.Bitmap, adds []fieldAdd) *field {
 			nf.numeric.Add(d)
 		}
 	}
-	if len(newNums) > 0 {
-		slices.SortFunc(newNums, cmpNum)
-		nf.num = mergeNums(nf.num, newNums)
-	}
+	slices.SortFunc(newNums, cmpNum)
+	nf.numPatch(f, gone, newNums)
 
 	for id := range owned {
 		nf.bms[id].RunOptimize()
@@ -253,6 +271,7 @@ func (f *field) patch(gone *roaring.Bitmap, adds []fieldAdd) *field {
 	for i, c := range nf.cards {
 		nf.cardSum[i+1] = nf.cardSum[i] + uint64(c)
 	}
+	nf.track(f, touched, vals)
 	return &nf
 }
 
@@ -334,50 +353,59 @@ func (s *Store) Replace(ix *Index) uint64 {
 // Generation is the number of the index: 0 for a built one, +1 per published batch or replace.
 func (ix *Index) Generation() uint64 { return ix.gen }
 
-// refreshForwardLocked starts, unless one runs, the goroutine that rebuilds the forward arrays
-// a batch dropped. Until it installs them counting falls back to ANDing value bitmaps,
-// which is exact and only slower on high-cardinality facets under a large filter.
+// refreshForwardLocked starts, unless one runs, the goroutine that (re)builds the forward
+// arrays: those a field does not have yet, and those whose overlay outgrew dirtyMax. Until
+// then counting reads the overlay, or ANDs value bitmaps when there is no array at all;
+// both are exact.
 func (s *Store) refreshForwardLocked() {
-	if s.refreshing || !s.cur.Load().missingForward() {
+	if s.refreshing || !s.cur.Load().needsRefresh() {
 		return
 	}
 	s.refreshing = true
 	go s.refreshForward()
 }
 
-func (ix *Index) missingForward() bool {
+func (ix *Index) needsRefresh() bool {
 	for _, f := range ix.fields {
-		if f.off == nil && f.wantsForward() {
+		if f.needsRefresh() {
 			return true
 		}
 	}
 	return false
 }
 
-// refreshForward rebuilds missing forward arrays from a generation and installs them only if
-// no newer generation was published meanwhile; otherwise it starts over from the new one.
+// refreshForward builds the arrays from one generation and installs them on the current one,
+// carrying the documents written in between as overlay (withForward); it repeats while any
+// field still needs one.
 func (s *Store) refreshForward() {
 	for {
 		ix := s.cur.Load()
-		patched := map[string]*field{}
+		built := map[string]*field{}
 		for name, f := range ix.fields {
-			if f.off == nil && f.wantsForward() {
+			if f.needsRefresh() {
 				nf := *f
 				nf.buildForward(ix.n)
-				patched[name] = &nf
+				built[name] = &nf
 			}
 		}
 		s.mu.Lock()
-		if s.cur.Load() == ix {
-			if len(patched) == 0 {
-				s.refreshing = false
-				s.mu.Unlock()
-				return
+		if len(built) == 0 {
+			s.refreshing = false
+			s.mu.Unlock()
+			return
+		}
+		cur := s.cur.Load()
+		next := *cur
+		next.fields = maps.Clone(cur.fields)
+		installed := false
+		for name, b := range built {
+			if nf, ok := withForward(cur.fields[name], ix.fields[name], b); ok {
+				next.fields[name] = nf
+				installed = true
 			}
-			next := *ix
-			next.fields = maps.Clone(ix.fields)
-			maps.Copy(next.fields, patched)
-			s.cur.Store(&next) // same generation number: the content is identical
+		}
+		if installed {
+			s.cur.Store(&next) // same generation number: the answers are identical
 		}
 		s.mu.Unlock()
 	}

@@ -119,31 +119,42 @@ func (fld *field) walkCost(size uint64) uint64 {
 func (fld *field) walk(f *roaring.Bitmap) []valueCount {
 	cnt := make([]int32, len(fld.vals))
 	var touched []uint32
+	inc := func(v uint32) {
+		if cnt[v] == 0 {
+			touched = append(touched, v)
+		}
+		cnt[v]++
+	}
+	clean := f
+	if fld.fdirty != nil && fld.fdirty.Intersects(f) { // documents written since the array was built
+		clean = roaring.AndNot(f, fld.fdirty)
+		it := roaring.And(f, fld.fdirty).Iterator()
+		for it.HasNext() {
+			for _, v := range fld.fresh[it.Next()] {
+				inc(v)
+			}
+		}
+	}
+	last := uint32(len(fld.off) - 1) // documents past the array without overlay have no value
 	buf := make([]uint32, 4096)
-	it := f.ManyIterator()
+	it := clean.ManyIterator()
 	for {
 		n := it.NextMany(buf)
 		if n == 0 {
 			break
 		}
 		for _, d := range buf[:n] {
-			if int(d)+1 >= len(fld.off) {
-				continue // added after this field's forward array was built, so it holds no value here
+			if d >= last {
+				continue
 			}
 			a, b := fld.off[d], fld.off[d+1]
 			if fld.fwd16 != nil {
 				for _, v := range fld.fwd16[a:b] {
-					if cnt[v] == 0 {
-						touched = append(touched, uint32(v))
-					}
-					cnt[v]++
+					inc(uint32(v))
 				}
 			} else {
 				for _, v := range fld.fwd32[a:b] {
-					if cnt[v] == 0 {
-						touched = append(touched, v)
-					}
-					cnt[v]++
+					inc(v)
 				}
 			}
 		}
@@ -200,22 +211,33 @@ func (fld *field) stat(f *roaring.Bitmap) (Stat, bool) {
 	if !fld.numeric.Intersects(f) {
 		return Stat{}, false // otherwise the scans below walk the whole column for nothing
 	}
-	var st Stat
-	found := false
-	for _, e := range fld.num {
-		if f.Contains(e.doc) {
-			st.Min, found = e.v, true
-			break
-		}
+	live := func(e numEntry) bool { return f.Contains(e.doc) }
+	base := func(e numEntry) bool {
+		return f.Contains(e.doc) && (fld.numDead == nil || !fld.numDead.Contains(e.doc))
 	}
-	if !found {
+	lo, okLo := firstNum(fld.num, base, false)
+	if l2, ok := firstNum(fld.numAdd, live, false); ok && (!okLo || l2 < lo) {
+		lo, okLo = l2, true
+	}
+	if !okLo {
 		return Stat{}, false
 	}
-	for i := len(fld.num) - 1; i >= 0; i-- {
-		if f.Contains(fld.num[i].doc) {
-			st.Max = fld.num[i].v
-			break
+	hi, okHi := firstNum(fld.num, base, true)
+	if h2, ok := firstNum(fld.numAdd, live, true); ok && (!okHi || h2 > hi) {
+		hi = h2
+	}
+	return Stat{Min: lo, Max: hi}, true
+}
+
+// firstNum is the value of the first entry of col (the last with fromEnd) that keep accepts.
+func firstNum(col []numEntry, keep func(numEntry) bool, fromEnd bool) (float64, bool) {
+	for i := range col {
+		if fromEnd {
+			i = len(col) - 1 - i
+		}
+		if keep(col[i]) {
+			return col[i].v, true
 		}
 	}
-	return st, true
+	return 0, false
 }

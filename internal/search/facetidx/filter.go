@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -406,7 +405,7 @@ func (ix *Index) neq(attr string, v token) (*roaring.Bitmap, error) {
 		if err != nil {
 			return nil, err
 		}
-		if f.postings == 0 && len(f.num) == 0 { // no value anywhere; vals may outlive removed ones
+		if f.postings == 0 && f.numeric.IsEmpty() { // no value anywhere; vals may outlive removed ones
 			return roaring.New(), nil
 		}
 	}
@@ -427,39 +426,17 @@ func (ix *Index) cmp(attr, op string, v token) (*roaring.Bitmap, error) {
 	if perr != nil || math.IsNaN(x) {
 		return nil, p0(ErrUnsupportedFilter, "non-numeric bound "+v.text)
 	}
-	// [lo, hi) of the sorted column that satisfies the comparison.
-	lo, hi := 0, len(f.num)
-	first := func(pred func(float64) bool) int {
-		return sort.Search(len(f.num), func(i int) bool { return pred(f.num[i].v) })
-	}
 	switch op {
 	case ">=":
-		lo = first(func(e float64) bool { return e >= x })
+		return f.numRange(func(e float64) bool { return e >= x }, nil), nil
 	case ">":
-		lo = first(func(e float64) bool { return e > x })
+		return f.numRange(func(e float64) bool { return e > x }, nil), nil
 	case "<=":
-		hi = first(func(e float64) bool { return e > x })
+		return f.numRange(nil, func(e float64) bool { return e > x }), nil
 	case "<":
-		hi = first(func(e float64) bool { return e >= x })
-	default:
-		return nil, p0(ErrUnsupportedFilter, "operator "+op)
+		return f.numRange(nil, func(e float64) bool { return e >= x }), nil
 	}
-	if hi <= lo {
-		return roaring.New(), nil
-	}
-	docs := func(es []numEntry) *roaring.Bitmap {
-		ids := make([]uint32, len(es))
-		for i, e := range es {
-			ids[i] = e.doc
-		}
-		return roaring.BitmapOf(ids...)
-	}
-	// With one number per document a range over most of the column is cheaper as the
-	// complement of the two ends; with several, a document can sit on both sides.
-	if hi-lo > len(f.num)/2 && uint64(len(f.num)) == f.numeric.GetCardinality() {
-		return roaring.AndNot(roaring.AndNot(f.numeric, docs(f.num[:lo])), docs(f.num[hi:])), nil
-	}
-	return docs(f.num[lo:hi]), nil
+	return nil, p0(ErrUnsupportedFilter, "operator "+op)
 }
 
 func p0(err error, msg string) error { return fmt.Errorf("%w: %s", err, msg) }

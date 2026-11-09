@@ -51,13 +51,28 @@ type field struct {
 	postings uint64          // total (document, value) pairs
 	valued   *roaring.Bitmap // documents with at least one value
 	withVals uint64          // its cardinality
-	num      []numEntry
+
+	// number column, see delta.go: num is the sorted base, numAdd the sorted entries written
+	// since, numDead the documents whose base entries no longer count.
+	num     []numEntry
+	numAdd  []numEntry
+	numDead *roaring.Bitmap // nil: none
+	numBase *roaring.Bitmap // documents with an entry in num
+	numOne  bool            // each of them has exactly one
 
 	// forward array in CSR form: values of document d are fwd[off[d]:off[d+1]], ascending.
 	// Exactly one of fwd16 (< 65536 values) and fwd32 is set when the array exists.
 	off   []uint32
 	fwd16 []uint16
 	fwd32 []uint32
+
+	// forward overlay, see delta.go: documents whose values changed since the array was
+	// built, their current value ids, and the same documents in write order.
+	tracking bool // the field wants an array; writes keep the overlay below
+	epoch    uint64
+	fdirty   *roaring.Bitmap
+	fresh    map[uint32][]uint32
+	dirtyLog []uint32
 }
 
 // Index is an immutable snapshot of the catalogue's facets. Every answer is restricted to
@@ -168,6 +183,7 @@ func (b *Builder) Build() *Index {
 
 func (f *field) finish(n uint32) {
 	slices.SortFunc(f.num, cmpNum)
+	f.setNumBase(f.num)
 	f.exists.RunOptimize()
 	f.empty.RunOptimize()
 	f.numeric.RunOptimize()
@@ -186,8 +202,14 @@ func (f *field) finish(n uint32) {
 	for i, c := range f.cards {
 		f.cardSum[i+1] = f.cardSum[i] + uint64(c)
 	}
+	f.startForward(n)
+}
+
+// startForward builds the forward array of a freshly built or loaded field that wants one.
+func (f *field) startForward(n uint32) {
 	if f.wantsForward() {
 		f.buildForward(n)
+		f.tracking, f.epoch = true, nextEpoch()
 	}
 }
 

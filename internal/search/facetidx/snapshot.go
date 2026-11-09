@@ -92,8 +92,9 @@ func (ix *Index) WriteSnapshot(w io.Writer) error {
 			s.str(v)
 			s.bitmap(f.bms[i])
 		}
-		s.uvarint(uint64(len(f.num)))
-		for _, e := range f.num {
+		num := f.numAll()
+		s.uvarint(uint64(len(num)))
+		for _, e := range num {
 			s.u64(math.Float64bits(e.v))
 			s.u32(e.doc)
 		}
@@ -297,8 +298,7 @@ func (ix *Index) derive() {
 		for i, c := range f.cards {
 			f.cardSum[i+1] = f.cardSum[i] + uint64(c)
 		}
-		if f.wantsForward() {
-			f.buildForward(ix.n)
-		}
+		f.setNumBase(f.num)
+		f.startForward(ix.n)
 	}
 }

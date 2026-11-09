@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math/rand"
 	"os"
 	"reflect"
@@ -48,6 +49,9 @@ func genDoc(r *rand.Rand, id int64) map[string]any {
 	if r.Intn(6) == 0 {
 		d["equity"] = r.Intn(2) == 0
 	}
+	if r.Intn(3) > 0 {
+		d["posted_ts"] = r.Intn(1000)
+	}
 	return d
 }
 
@@ -76,6 +80,10 @@ var testFilters = []any{
 	`equity EXISTS`,
 	`equity != "true"`,
 	`NOT skills IN ["s3", "s4"]`,
+	`posted_ts >= 500`,
+	`posted_ts < 900`,
+	`enrichment.salary_min < 60000`,
+	`enrichment.salary_min > 30000`,
 }
 
 // sameAnswers fails unless a and b answer every test filter alike.
@@ -93,6 +101,7 @@ func sameAnswers(t *testing.T, label string, a, b *Index) {
 		if !reflect.DeepEqual(x, y) {
 			t.Fatalf("%s: filter %v answers differ\n got %+v\nwant %+v", label, f, x, y)
 		}
+		walkMatchesAnd(t, label, a, f)
 		for _, attr := range []string{"company_slug", "skills", "cities", "perks"} {
 			dx, _ := a.Distinct(f, attr)
 			dy, _ := b.Distinct(f, attr)
@@ -438,4 +447,111 @@ func TestWalkSkipsDocumentsNewerThanTheForwardArray(t *testing.T) {
 // facetable is every indexed attribute a facet request may name (range-only ones are not).
 func facetable() []string {
 	return slices.DeleteFunc(Attributes(), func(a string) bool { return rangeOnly[a] })
+}
+
+// walkMatchesAnd fails unless every field with a forward array counts the same by walking it
+// (overlay included) as by ANDing value bitmaps, whichever strategy counts() would pick.
+func walkMatchesAnd(t *testing.T, label string, ix *Index, filter any) {
+	t.Helper()
+	m, err := ix.match(filter)
+	if err != nil {
+		t.Fatalf("%s %v: %v", label, filter, err)
+	}
+	for name, f := range ix.fields {
+		if f.off == nil {
+			continue
+		}
+		walked := map[uint32]int32{}
+		for _, vc := range f.walk(m) {
+			walked[vc.id] = vc.n
+		}
+		anded := map[uint32]int32{}
+		for id, bm := range f.bms {
+			if n := bm.AndCardinality(m); n > 0 {
+				anded[uint32(id)] = int32(n)
+			}
+		}
+		if !reflect.DeepEqual(walked, anded) {
+			t.Fatalf("%s: %s under %v: walk %v, AND %v", label, name, filter, walked, anded)
+		}
+	}
+}
+
+// A forward array built from an older generation and installed on a newer one carries the
+// documents written in between as overlay; the overlay keeps answers exact until then too.
+func TestForwardInstalledAcrossWrites(t *testing.T) {
+	slugSpace = 400 // company_slug wants a forward array
+	defer func() { slugSpace = 120 }()
+	r := rand.New(rand.NewSource(11))
+	st := NewStore(NewBuilder().Build())
+	mustApply(t, st, syntheticBatch(r, 1, 3000))
+	waitForward(t, st)
+	g := st.Current()
+	if g.fields["company_slug"].off == nil {
+		t.Fatal("company_slug has no forward array")
+	}
+	built := map[string]*field{}
+	for name, f := range g.fields {
+		if f.tracking {
+			nf := *f
+			nf.buildForward(g.n)
+			built[name] = &nf
+		}
+	}
+	// writes after g: replaced, new and deleted documents
+	b := syntheticBatch(r, 2500, 1000)
+	b.Delete = []int64{1, 2, 3, 2600}
+	next, err := g.apply(b) // by hand, so the background refresh stays out of it
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.fields["company_slug"].fdirty.IsEmpty() {
+		t.Fatal("write left no overlay")
+	}
+	for _, f := range testFilters {
+		walkMatchesAnd(t, "overlay", next, f)
+	}
+	inst := *next
+	inst.fields = maps.Clone(next.fields)
+	for name, bf := range built {
+		nf, ok := withForward(next.fields[name], g.fields[name], bf)
+		if !ok {
+			t.Fatalf("%s: not installable on a descendant", name)
+		}
+		inst.fields[name] = nf
+	}
+	if d := inst.fields["company_slug"].dirtyLog; len(d) == 0 || len(d) > 1004 {
+		t.Fatalf("carried overlay = %d documents, want the ones written after g", len(d))
+	}
+	for _, f := range testFilters {
+		walkMatchesAnd(t, "installed", &inst, f)
+	}
+	sameAnswers(t, "installed", &inst, next)
+}
+
+// The refresh keeps up with writes that arrive while it builds, and answers stay exact.
+func TestRefreshUnderSteadyWrites(t *testing.T) {
+	old := dirtyMax
+	dirtyMax = 50
+	defer func() { dirtyMax = old }()
+	slugSpace = 400
+	defer func() { slugSpace = 120 }()
+	r := rand.New(rand.NewSource(13))
+	model := map[int64]*jobState{}
+	st := NewStore(NewBuilder().Build())
+	for round := 0; round < 40; round++ {
+		var b Batch
+		for i := 0; i < 120; i++ {
+			id := int64(1 + r.Intn(2000))
+			j := &jobState{doc: genDoc(r, id)}
+			b.Upserts = append(b.Upserts, j.raw(t))
+			model[id] = j
+		}
+		mustApply(t, st, b)
+		if round%10 == 9 {
+			sameAnswers(t, fmt.Sprintf("round %d mid-refresh", round), st.Current(), freshBuild(t, model))
+		}
+	}
+	waitForward(t, st)
+	sameAnswers(t, "steady writes", st.Current(), freshBuild(t, model))
 }
