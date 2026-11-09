@@ -32,13 +32,15 @@
 - [x] 5.2 Modes `meili` / `shadow` / `facetd` from `SEARCH_FACET_ENGINE`, overridable at runtime through a Redis key; unit tests for each mode, fallback on error/timeout/unsupported/not-ready, and the mode flip
 - [x] 5.3a Shadow diff tolerates what Meilisearch does not determine: compare distribution keys case-folded (Meilisearch matches strings case-insensitively and reports the spelling of whichever variant its indexing batch saw first), and do not count values that tie on the last count at the 1200 cap (their selection follows Meilisearch's internal tree order); see internal/search/facetidx/AGENTS.md
 - [x] 5.3 Shadow: detached evaluation with its own timeout and a concurrency cap; differences counted and logged with the filter; never affects the response
-- [ ] 5.4 Metrics: requests by engine and mode, fallbacks by reason, shadow differences
+- [x] 5.4 Metrics: requests by engine and mode, fallbacks by reason, shadow differences and errors (Prometheus, the repo's existing pattern)
+- [x] 5.6 Wire it in `cmd/server`: `FACETD_URL` + `FACETD_TIMEOUT` build the FacetdClient; `SEARCH_FACET_ENGINE` sets the start mode (default meili); a Redis key overrides it at runtime, polled into an atomic (no Redis call per request); unset `FACETD_URL` = today's behaviour
 - [x] 5.5 Integration test through `FacetCounts` and the disjunctive path in `facetd` mode against the same fixture as 2.5 (region widening runs unchanged)
 
 ## 6. Drain dual write
 
-- [ ] 6.1 `cmd/search-drain` sends each applied batch (upserts, closes, duplicate marks, deletes) to facetd after Meilisearch accepts it; facetd failure never fails or delays the Meilisearch path
-- [ ] 6.2 Retry for facetd writes that failed, so facetd converges; test with facetd down then back
+- [x] 6.1 `cmd/search-drain` sends each applied indexing wave (the built documents) and each deletion wave (close / duplicate / delete ids) to facetd after Meilisearch accepts it; facetd failure never fails or delays the Meilisearch path
+- [x] 6.2 `facetd_outbox` (migration + sqlc queries in the house outbox pattern): on a failed facetd write the wave's job ids are queued; a pass in the same run, only while facetd is ready, claims them, re-derives current state from Postgres (upsert / close / duplicate / delete) and sends one batch; depth metric; test with facetd down then back
+- [x] 6.3 facetd write-ahead log: append + fsync each /write batch before applying, replay after snapshot load, truncate after a successful snapshot; test kill-between-snapshots
 
 ## 7. Rollout (freehire-ops and prod)
 

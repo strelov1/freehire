@@ -159,3 +159,66 @@ func facetdErrBody(r io.Reader) string {
 	}
 	return strings.TrimSpace(string(b))
 }
+
+// FacetdWrite is one /write batch: documents to upsert and ids to close, mark duplicate or
+// delete. Empty groups are omitted from the wire.
+type FacetdWrite struct {
+	Upserts   []JobDocument
+	Close     []int64
+	Duplicate []int64
+	Delete    []int64
+}
+
+// Empty reports whether the batch carries nothing to send.
+func (w FacetdWrite) Empty() bool {
+	return len(w.Upserts)+len(w.Close)+len(w.Duplicate)+len(w.Delete) == 0
+}
+
+// Write applies one batch to facetd (POST /write). The documents go without their
+// `_vectors`: facetd indexes none, and the description chunks are most of a document's bytes.
+// A not-ready facetd answers ErrEngineNotReady.
+func (c *FacetdClient) Write(ctx context.Context, w FacetdWrite) error {
+	slim := make([]JobDocument, len(w.Upserts))
+	for i, d := range w.Upserts {
+		d.Vectors = DocumentVectors{}
+		slim[i] = d
+	}
+	body := struct {
+		Upserts   []JobDocument `json:"upserts"`
+		Close     []int64       `json:"close"`
+		Duplicate []int64       `json:"duplicate"`
+		Delete    []int64       `json:"delete"`
+	}{slim, w.Close, w.Duplicate, w.Delete}
+	return c.post(ctx, "/write", body, &struct{}{})
+}
+
+// Ready returns nil when facetd answers GET /ready with 200, ErrEngineNotReady on 503.
+func (c *FacetdClient) Ready(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/ready", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return fmt.Errorf("facetd /ready: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return nil
+	case http.StatusServiceUnavailable:
+		return fmt.Errorf("%w: %s", ErrEngineNotReady, facetdErrBody(resp.Body))
+	}
+	return fmt.Errorf("facetd /ready: status %d", resp.StatusCode)
+}
+
+// IDs lists the job id of every change in the batch.
+func (w FacetdWrite) IDs() []int64 {
+	ids := make([]int64, 0, len(w.Upserts)+len(w.Close)+len(w.Duplicate)+len(w.Delete))
+	for _, d := range w.Upserts {
+		ids = append(ids, d.ID)
+	}
+	ids = append(ids, w.Close...)
+	ids = append(ids, w.Duplicate...)
+	return append(ids, w.Delete...)
+}

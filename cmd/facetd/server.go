@@ -39,6 +39,7 @@ const (
 // corrects it, the same window the Meilisearch rebuild has.
 type Server struct {
 	snapshotPath string
+	walPath      string // "" = no write-ahead log; see wal.go
 	m            *metrics
 
 	store atomic.Pointer[facetidx.Store] // nil until a snapshot loaded or a rebuild committed
@@ -48,6 +49,10 @@ type Server struct {
 	committing bool       // Build is running off-lock; push/begin/commit are refused
 	builder    *facetidx.Builder
 	pending    []facetidx.Batch
+	wal        *os.File // guarded by mu, like the three below
+	walOff     int64    // bytes of good records in the log
+	walRecs    int
+	walBroken  bool // a rollback failed: refuse writes rather than log behind garbage
 
 	snapMu      sync.Mutex // one snapshot at a time
 	snapGen     uint64
@@ -58,30 +63,42 @@ type Server struct {
 // NewServer returns a not-ready server. snapshotPath "" disables snapshots.
 func NewServer(snapshotPath string) *Server {
 	s := &Server{snapshotPath: snapshotPath}
+	if snapshotPath != "" {
+		s.walPath = snapshotPath + ".wal"
+	}
 	s.m = newMetrics(s)
 	return s
 }
 
-// LoadSnapshot reads the snapshot file and makes the server ready. A missing or corrupt
-// file leaves it not-ready and returns the error.
+// LoadSnapshot reads the snapshot file, replays the write-ahead log over it and makes the
+// server ready. A missing or corrupt snapshot, or a corrupt log, leaves it not-ready and
+// returns the error; the log is still opened so a rebuild's writes are recorded.
 func (s *Server) LoadSnapshot() error {
 	if s.snapshotPath == "" {
 		return errors.New("no snapshot path configured")
 	}
-	f, err := os.Open(s.snapshotPath)
+	ix, err := readSnapshot(s.snapshotPath)
+	st, werr := s.openWAL(ix)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = f.Close() }()
-	ix, err := facetidx.ReadSnapshot(f)
-	if err != nil {
-		return err
+	if werr != nil {
+		return werr
 	}
 	s.snapMu.Lock()
 	s.snapGen, s.snapWritten = ix.Generation(), true
 	s.snapMu.Unlock()
-	s.store.Store(facetidx.NewStore(ix))
+	s.store.Store(st)
 	return nil
+}
+
+func readSnapshot(path string) (*facetidx.Index, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	return facetidx.ReadSnapshot(f)
 }
 
 // Snapshot writes the current index atomically (temp file in the same directory, then
@@ -93,7 +110,9 @@ func (s *Server) Snapshot(onlyIfChanged bool) error {
 	}
 	s.snapMu.Lock()
 	defer s.snapMu.Unlock()
-	ix := st.Current()
+	s.mu.Lock() // index and log position must be read together: writes log+apply under mu
+	ix, walFrom := st.Current(), s.walOff
+	s.mu.Unlock()
 	if onlyIfChanged && s.snapWritten && s.snapGen == ix.Generation() {
 		return nil
 	}
@@ -102,6 +121,10 @@ func (s *Server) Snapshot(onlyIfChanged bool) error {
 	if err != nil {
 		s.m.snapshotErrors.Inc()
 		return err
+	}
+	if err := s.rotateWAL(walFrom); err != nil {
+		s.m.walErrors.Inc()
+		log.Printf("facetd: WAL rotation after snapshot: %v", err)
 	}
 	s.snapGen, s.snapWritten = ix.Generation(), true
 	s.m.snapshotSeconds.Set(time.Since(start).Seconds())
@@ -346,10 +369,7 @@ func (s *Server) write(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	b := facetidx.Batch{Close: req.Close, Duplicate: req.Duplicate, Delete: req.Delete}
-	for _, u := range req.Upserts {
-		b.Upserts = append(b.Upserts, u)
-	}
+	b := req.batch()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.store.Load()
@@ -357,10 +377,15 @@ func (s *Server) write(w http.ResponseWriter, r *http.Request) {
 		s.notReady(w)
 		return
 	}
+	recLen, err := s.logWrite(req) // durable before it is applied or acknowledged
+	if err != nil {
+		fail(w, http.StatusInternalServerError, "facetd: write-ahead log: %v", err)
+		return
+	}
 	var gen uint64
 	if st != nil {
-		var err error
 		if gen, err = st.Apply(b); err != nil {
+			s.walUndo(recLen)
 			fail(w, http.StatusBadRequest, "%v", err)
 			return
 		}
@@ -468,6 +493,10 @@ type metrics struct {
 	snapshotBytes       prometheus.Gauge
 	snapshotLastSuccess prometheus.Gauge
 	snapshotErrors      prometheus.Counter
+	walBytes            prometheus.Gauge
+	walRecords          prometheus.Gauge
+	walReplayed         prometheus.Counter
+	walErrors           prometheus.Counter
 }
 
 func newMetrics(s *Server) *metrics {
@@ -481,6 +510,10 @@ func newMetrics(s *Server) *metrics {
 		snapshotBytes:       prometheus.NewGauge(prometheus.GaugeOpts{Name: "facetd_snapshot_bytes", Help: "Size of the last successful snapshot."}),
 		snapshotLastSuccess: prometheus.NewGauge(prometheus.GaugeOpts{Name: "facetd_snapshot_last_success_timestamp_seconds", Help: "Unix time of the last successful snapshot."}),
 		snapshotErrors:      prometheus.NewCounter(prometheus.CounterOpts{Name: "facetd_snapshot_errors_total", Help: "Failed snapshot writes."}),
+		walBytes:            prometheus.NewGauge(prometheus.GaugeOpts{Name: "facetd_wal_bytes", Help: "Size of the write-ahead log."}),
+		walRecords:          prometheus.NewGauge(prometheus.GaugeOpts{Name: "facetd_wal_records", Help: "Batches in the write-ahead log."}),
+		walReplayed:         prometheus.NewCounter(prometheus.CounterOpts{Name: "facetd_wal_replayed_total", Help: "Log records replayed at start."}),
+		walErrors:           prometheus.NewCounter(prometheus.CounterOpts{Name: "facetd_wal_errors_total", Help: "Write-ahead log failures: append, rollback, rotation, replay, corruption."}),
 	}
 	cur := func(f func(ix *facetidx.Index) float64) func() float64 {
 		return func() float64 {
@@ -490,7 +523,7 @@ func newMetrics(s *Server) *metrics {
 			return 0
 		}
 	}
-	m.reg.MustRegister(m.requests, m.latency, m.refused, m.snapshotSeconds, m.snapshotBytes, m.snapshotLastSuccess, m.snapshotErrors,
+	m.reg.MustRegister(m.requests, m.latency, m.refused, m.snapshotSeconds, m.snapshotBytes, m.snapshotLastSuccess, m.snapshotErrors, m.walBytes, m.walRecords, m.walReplayed, m.walErrors,
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "facetd_documents", Help: "Documents in the index, closed and duplicate included."},
 			cur(func(ix *facetidx.Index) float64 { t, _ := ix.Docs(); return float64(t) })),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "facetd_documents_live", Help: "Documents every answer counts."},

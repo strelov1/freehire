@@ -93,3 +93,24 @@ Three things are worth knowing before changing it:
 An empty query returns nothing, and that is a boundary. What an empty box offers is the
 filter modal's curated category order, which lives in `web/src/lib/filterSections.ts`
 and is checked there against the category vocabulary at compile time.
+
+## Facet engine (facetd)
+
+`cmd/facetd` is a second engine for facet counts, totals and distinct counts (`Client.Facets`,
+`Client.DistinctCount`) on requests WITHOUT query text; text queries always go to Meilisearch.
+The router is `search/route.go`; wiring is `cmd/server/facet_engine.go`. Design:
+`openspec/changes/facetd/design.md`.
+
+- **Modes.** `meili` (default): Meilisearch only. `shadow`: Meilisearch answers, the engine is
+  called in the background (bounded concurrency) and differences are logged and counted.
+  `facetd`: the engine answers; any error, timeout, unsupported request or not-ready index falls
+  back to Meilisearch.
+- **Env (hire-api).** `FACETD_URL` (unset = no router, today's behaviour), `FACETD_TIMEOUT`
+  (per engine call, default `150ms`), `SEARCH_FACET_ENGINE` (start mode; invalid value fails the start).
+- **Flip at runtime, no deploy.** Redis key `freehire:search:facet-engine` = `meili|shadow|facetd`,
+  polled every 10s. Rollback: `redis-cli SET freehire:search:facet-engine meili`. `DEL` returns to the
+  start mode; an invalid value is logged and ignored; a Redis failure keeps the last mode.
+- **Metrics** (`freehire_search_facet_*`): `requests_total{engine,mode,kind}`,
+  `engine_seconds{engine,kind}`, `fallbacks_total{reason,kind}` (a rising `error`/`timeout` rate is
+  the signal to roll back), `shadow_diffs_total`, `shadow_errors_total`, `shadow_skipped_total`.
+  Run `shadow` until `shadow_diffs_total` stays flat before moving to `facetd`.

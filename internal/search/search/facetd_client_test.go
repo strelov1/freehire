@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -177,5 +178,42 @@ func TestDiffRawCapTie(t *testing.T) {
 	delete(e, "w1199")
 	if diffRaw(raw(m), raw(e)) == "" {
 		t.Fatal("short engine list missed")
+	}
+}
+
+func TestFacetdClientWriteAndReady(t *testing.T) {
+	status := http.StatusOK
+	var got map[string]json.RawMessage
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/write" {
+			_ = json.NewDecoder(r.Body).Decode(&got)
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"generation":1}`))
+	}))
+	defer srv.Close()
+	c := NewFacetdClient(srv.URL, srv.Client())
+
+	doc := JobDocument{ID: 7}
+	doc.Vectors = DocumentVectors{Skills: []float32{0.5}, Desc: [][]float32{{1}}}
+	if err := c.Write(context.Background(), FacetdWrite{Upserts: []JobDocument{doc}, Close: []int64{1}, Delete: []int64{2, 3}}); err != nil {
+		t.Fatal(err)
+	}
+	if string(got["close"]) != "[1]" || string(got["delete"]) != "[2,3]" || string(got["duplicate"]) != "null" {
+		t.Fatalf("body %v", got)
+	}
+	if strings.Contains(string(got["upserts"]), "0.5") {
+		t.Fatalf("vectors sent: %s", got["upserts"])
+	}
+	if err := c.Ready(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	status = http.StatusServiceUnavailable
+	if err := c.Write(context.Background(), FacetdWrite{Delete: []int64{1}}); !errors.Is(err, ErrEngineNotReady) {
+		t.Fatalf("write 503: %v", err)
+	}
+	if err := c.Ready(context.Background()); !errors.Is(err, ErrEngineNotReady) {
+		t.Fatalf("ready 503: %v", err)
 	}
 }

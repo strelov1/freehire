@@ -79,11 +79,20 @@ facet; with it, 2.5 ms.
 bitmaps it touches, then swaps an atomic pointer; readers hold the generation they started with.
 Measured with a single RWMutex instead: read p99 rose to ~280 ms under a write storm.
 
-**Write path from search-drain.** The drain sends each batch to facetd after Meilisearch accepts it,
-through a small facetd client. facetd writes are idempotent (full document replace, set markers,
-delete by id), so a retry is safe; on failure the drain keeps the batch ids in its own retry rather
-than failing the Meilisearch path. A facetd that missed writes while down converges on the next
-snapshot-plus-replay or a rebuild.
+**Write path from search-drain.** The drain sends the same documents (and the same close /
+duplicate / delete ids) to facetd right after Meilisearch accepts a wave — no second read of
+Postgres on the normal path. When the facetd write fails (down, not ready, timeout), the wave's job
+ids go into `facetd_outbox`, a reference-only retry queue in the house outbox pattern; a pass in the
+same drain run, only while facetd reports ready, claims them, re-derives each job's CURRENT state
+from Postgres (upsert, close, duplicate or delete — the same predicates the two Meilisearch passes
+use) and sends one batch. Re-deriving instead of storing the failed payload makes the retry
+idempotent and immune to ordering. The queue is keyed by job id, so it is bounded by the catalogue
+even while facetd is down for days; its depth is a metric and an alert.
+
+**Durability of acknowledged writes.** A snapshot every five minutes alone would lose up to five
+minutes of acknowledged writes on a crash, and nothing would re-send them. facetd appends each
+`/write` batch to a write-ahead log (fsync) before applying it, replays the log after loading the
+snapshot, and truncates it after a successful snapshot. Rebuild-recorded batches ride the same log.
 
 **Mode and fallback.** `SEARCH_FACET_ENGINE` sets the start mode; a Redis key overrides it at runtime
 (the pattern `freehire:pause:search-drain` already uses). In `facetd` mode a request has its own

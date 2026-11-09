@@ -119,7 +119,18 @@ write, and SHALL be retried so facetd converges.
 #### Scenario: facetd is down during a drain run
 
 - **WHEN** facetd is unreachable while the drain runs
-- **THEN** Meilisearch still receives the batch and facetd receives it once it is reachable again
+- **THEN** Meilisearch still receives the batch, the batch's job ids are queued for facetd, and a later drain pass re-derives those jobs' current state from Postgres and sends it once facetd is ready
+
+### Requirement: An acknowledged write survives a facetd crash
+
+facetd SHALL append every write batch to a write-ahead log, flushed to disk, before applying and
+acknowledging it; on start it SHALL load the snapshot and replay the log entries newer than the
+snapshot; a successful snapshot SHALL truncate the log.
+
+#### Scenario: Crash between snapshots
+
+- **WHEN** facetd acknowledges a write batch and is killed before the next snapshot
+- **THEN** after restart the batch's changes are present
 
 ### Requirement: Readers never wait for writers
 

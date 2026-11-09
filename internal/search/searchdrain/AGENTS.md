@@ -116,6 +116,15 @@ were integration tests. Measured on prod 2026-08-18: **19,827 jobs close per day
   during an in-flight status update is repaired by acknowledgment requeueing the now-open
   canonical job. Full rebuilds still omit duplicates and reclaim retained storage.
 
+## The facetd mirror and its retry queue
+
+With `FACETD_URL` set, `cmd/search-drain` also writes to the in-memory facet engine ([cmd/facetd](../../../cmd/facetd)): each indexing wave's built documents plus the withheld deletions (`searchIndexer`), and each deletion wave's close / duplicate / delete ids (`facetDeleter`), in ONE `/write` per wave. Unset = today's behaviour exactly: no facetd call, no queue write.
+
+- **The write happens AFTER Meilisearch accepted the wave, and can never fail, skip or delay it.** It is bounded by `FACETD_WRITE_TIMEOUT` (default 10s, on a context detached from the wave's own deadline) and returns nothing: on any failure `facetdMirror.Apply` queues the wave's job ids in `facetd_outbox` and the wave completes normally. Never return `ErrSkipWave` or an error from the mirror.
+- **`facetd_outbox` is reference-only** (job_id + lease/retry, no payload, no FK to `jobs` so a hard-deleted job can still be removed). Enqueue re-stamps a live entry with a new id, so a retry that already claimed the old id cannot forget the newer failure.
+- **The retry pass runs last in the same invocation, only when `GET /ready` answers 200**, honouring Stop and `MaxPerRun`. It claims a batch, loads the jobs and derives their CURRENT state (`classifyForFacetd`): gone or private -> delete; closed -> close (+ duplicate when also a repost); open repost -> duplicate; open canonical -> a document built by the SAME `docBuilder` the indexing wave uses, or delete when `search.Withheld`. One write per batch; success completes the entries, failure counts an attempt (dead-letter at `SEARCH_DRAIN_MAX_ATTEMPTS`) and ends the pass.
+- **Metrics** (node_exporter textfile `freehire_facetd_mirror.prom` in `PROM_TEXTFILE_DIR`, written only with `FACETD_URL` set): `freehire_facetd_outbox_depth`, `freehire_facetd_outbox_dead_letters`, `freehire_facetd_write_failures` (this run). A depth that does not fall means facetd is down or not ready; a dead letter means facetd misses that job until `reindex` rebuilds it.
+
 ## How it works
 The facet index (`jobs`, plain keyword/facet, no embedder) can otherwise only be refreshed by a full `reindex` — a swap-rebuild from zero on a multi-hour schedule — or by `internal/ingest/linkimport`'s single-document `SubmitJobs` push for its own on-demand imports. `cmd/search-drain` fills the gap `cmd/embed` fills for the semantic index: work flows through `search_outbox`, claimed in waves, indexed in one batch, completed (rows deleted) in one call. The runner lives in `internal/search/searchdrain` behind `Store` + `Indexer` ports (unit-tested with fakes, mirroring `internal/ai/embed/runner_test.go`); `cmd/search-drain` wires the concrete Postgres + Meilisearch adapters. Tuning via `SEARCH_DRAIN_BATCH_SIZE`/`SEARCH_DRAIN_LEASE_SECONDS`/`SEARCH_DRAIN_MAX_ATTEMPTS`/`SEARCH_DRAIN_CALL_TIMEOUT_SECONDS` (`config.LoadSearchDrain`).
 

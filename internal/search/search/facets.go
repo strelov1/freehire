@@ -128,6 +128,7 @@ func (c *Client) facetSearch(ctx context.Context, query string, filter any, face
 	meili := func() (rawFacets, error) { return c.meiliFacets(ctx, query, filter, facets) }
 	mode := c.routeMode(query)
 	if mode == FacetModeMeili {
+		c.countMeiliOnly(query, "facets")
 		return meili()
 	}
 	return routeRequest(ctx, c.router, mode, "facets", filter,
@@ -188,6 +189,7 @@ func (c *Client) DistinctCount(ctx context.Context, query string, filter any, at
 	meili := func() (int64, error) { return c.meiliDistinctCount(ctx, query, filter, attr) }
 	mode := c.routeMode(query)
 	if mode == FacetModeMeili {
+		c.countMeiliOnly(query, "distinct")
 		return meili()
 	}
 	return routeRequest(ctx, c.router, mode, "distinct", filter,

@@ -10,7 +10,42 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
+
+// Router metrics, on the default registry like the rest of hire-api's. Labels are
+// closed sets (engine, mode, kind, reason), so the series count is bounded.
+var (
+	facetRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "freehire_search_facet_requests_total", Help: "Routed facet requests by the engine that answered, mode and kind (facets|distinct).",
+	}, []string{"engine", "mode", "kind"})
+	facetLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "freehire_search_facet_engine_seconds", Help: "Latency of one engine call (meili|facetd), failures included, shadow calls included.",
+		Buckets: []float64{0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.15, 0.25, 0.5, 1, 2.5},
+	}, []string{"engine", "kind"})
+	facetFallbacks = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "freehire_search_facet_fallbacks_total", Help: "facetd-mode requests answered by Meilisearch, by reason (error|timeout|unsupported|not_ready).",
+	}, []string{"reason", "kind"})
+	facetShadowDiffs = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "freehire_search_facet_shadow_diffs_total", Help: "Shadow comparisons where the engine answered differently from Meilisearch.",
+	}, []string{"kind"})
+	facetShadowErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "freehire_search_facet_shadow_errors_total", Help: "Shadow engine calls that failed (not a semantic difference).",
+	}, []string{"kind"})
+	facetShadowSkipped = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "freehire_search_facet_shadow_skipped_total", Help: "Shadow comparisons skipped because shadowConcurrency calls were already in flight.",
+	}, []string{"kind"})
+)
+
+// timed runs fn and records its latency under engine.
+func timed[T any](engine, kind string, fn func() (T, error)) (T, error) {
+	start := time.Now()
+	v, err := fn()
+	facetLatency.WithLabelValues(engine, kind).Observe(time.Since(start).Seconds())
+	return v, err
+}
 
 // FacetEngine is a second engine for facet requests without free text (facetd).
 // filter is the caller's filter WITHOUT the open-jobs clause: the engine hides
@@ -113,6 +148,14 @@ func (c *Client) RoutingCounters() RoutingCounters {
 	return out
 }
 
+// countMeiliOnly counts a request that stayed on Meilisearch while an engine is wired,
+// so a rollout's share is readable. Text queries are not counted: they never route.
+func (c *Client) countMeiliOnly(query, kind string) {
+	if c.router != nil && strings.TrimSpace(query) == "" {
+		facetRequests.WithLabelValues("meili", string(FacetModeMeili), kind).Inc()
+	}
+}
+
 // routeMode is the mode for one request: meili unless an engine is set, the mode asks
 // for it, and there is no query text. Read once per request, so a flip mid-request
 // cannot send it down a mixed path.
@@ -136,9 +179,10 @@ func routeRequest[T any](ctx context.Context, r *facetRouter, mode FacetMode, ki
 
 	if mode == FacetModeFacetd {
 		ectx, cancel := context.WithTimeout(ctx, r.timeout)
-		ans, err := engine(ectx)
+		ans, err := timed("facetd", kind, func() (T, error) { return engine(ectx) })
 		cancel()
 		if err == nil {
+			facetRequests.WithLabelValues("facetd", string(mode), kind).Inc()
 			return ans, nil
 		}
 		if ctx.Err() != nil { // the caller left; do not start a Meilisearch call for nobody
@@ -146,14 +190,16 @@ func routeRequest[T any](ctx context.Context, r *facetRouter, mode FacetMode, ki
 			return zero, ctx.Err()
 		}
 		r.fallback(kind, filter, err)
-		return meili()
+		facetRequests.WithLabelValues("meili", string(mode), kind).Inc()
+		return timed("meili", kind, meili)
 	}
 
 	// shadow
-	ans, err := meili()
+	ans, err := timed("meili", kind, meili)
 	if err != nil {
 		return ans, err
 	}
+	facetRequests.WithLabelValues("meili", string(mode), kind).Inc()
 	select {
 	case r.sem <- struct{}{}:
 		snap := clone(ans)
@@ -161,19 +207,22 @@ func routeRequest[T any](ctx context.Context, r *facetRouter, mode FacetMode, ki
 			defer func() { <-r.sem }()
 			sctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 			defer cancel()
-			eng, err := engine(sctx)
+			eng, err := timed("facetd", kind, func() (T, error) { return engine(sctx) })
 			if err != nil {
 				slog.Warn("facetd shadow: engine failed", "kind", kind, "filter", filter, "err", err)
 				r.shadowErrors.Add(1)
+				facetShadowErrors.WithLabelValues(kind).Inc()
 				return
 			}
 			if d := diff(snap, eng); d != "" {
 				r.shadowDiffs.Add(1)
+				facetShadowDiffs.WithLabelValues(kind).Inc()
 				slog.Warn("facetd shadow: answers differ", "kind", kind, "filter", filter, "first_difference", d)
 			}
 		}()
 	default:
 		r.shadowSkipped.Add(1)
+		facetShadowSkipped.WithLabelValues(kind).Inc()
 	}
 	return ans, nil
 }
@@ -189,6 +238,7 @@ func (r *facetRouter) fallback(kind string, filter any, err error) {
 		reason, ctr = "timeout", &r.fbTimeout
 	}
 	ctr.Add(1)
+	facetFallbacks.WithLabelValues(reason, kind).Inc()
 	slog.Warn("facetd fallback to meilisearch", "kind", kind, "reason", reason, "filter", filter, "err", err)
 }
 

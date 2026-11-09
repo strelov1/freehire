@@ -5,7 +5,8 @@
 // FACETD_URL (/rebuild/*).
 //
 // Env: FACETD_ADDR (default 127.0.0.1:8095), FACETD_SNAPSHOT_PATH (empty disables
-// snapshots), FACETD_SNAPSHOT_INTERVAL (default 5m). Without a loadable snapshot it
+// snapshots), FACETD_SNAPSHOT_INTERVAL (default 5m), FACETD_WAL_PATH (default
+// FACETD_SNAPSHOT_PATH + ".wal"; no snapshot path means no log). Without a loadable snapshot it
 // starts not-ready (503) and the API falls back to Meilisearch until a rebuild commits.
 package main
 
@@ -34,6 +35,9 @@ func run() int {
 		interval = d
 	}
 	srv := NewServer(os.Getenv("FACETD_SNAPSHOT_PATH"))
+	if v := os.Getenv("FACETD_WAL_PATH"); v != "" && srv.snapshotPath != "" {
+		srv.walPath = v
+	}
 	if err := srv.LoadSnapshot(); err != nil {
 		log.Printf("facetd: NOT READY: no usable snapshot (%v); answering 503 until a rebuild commits", err)
 	} else {
