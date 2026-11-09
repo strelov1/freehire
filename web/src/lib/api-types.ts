@@ -30,12 +30,6 @@ export interface Page<T> {
   meta: ListMeta;
 }
 
-/** One entry in a sitemap sub-file: the public slug and its lastmod. Kept slim
- *  on purpose — the sitemap never needs the full job/company row.
- *
- *  `updated_at` is optional because a document indexed before the attribute joined
- *  the shape has none; such a URL ships without a <lastmod> rather than dropping
- *  out of the sitemap. */
 /** What the public unsubscribe page shows. Deliberately small: the token that opens
  *  it is a bearer credential somebody could have forwarded, so it carries the address
  *  the mail already went to, three switches, and the names of the searches those
@@ -64,12 +58,18 @@ export interface EmailPrefsUpdate {
   deactivateSearches?: number[];
 }
 
+/** One entry in a sitemap sub-file: the public slug and its lastmod. Kept slim
+ *  on purpose — the sitemap never needs the full job/company row.
+ *
+ *  `updated_at` is optional because a document indexed before the attribute joined
+ *  the shape has none; such a URL ships without a <lastmod> rather than dropping
+ *  out of the sitemap. */
 export interface SitemapEntry {
   slug: string;
   updated_at?: string;
 }
 
-/** Aggregate market-insight wire shapes (the /api/v1/insights/* reads). */
+// Aggregate market-insight wire shapes (the /api/v1/insights/* reads).
 /** One cell of the role × country grid; `country` is '' for the all-countries column. */
 export interface InsightRoleCountryCell {
   category: string;
