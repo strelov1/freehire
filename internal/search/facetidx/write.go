@@ -187,12 +187,11 @@ func (f *field) patch(gone *roaring.Bitmap, adds []fieldAdd) *field {
 		nf.numeric.AndNot(gone)
 		nf.valued.AndNot(gone)
 		if f.off != nil { // the old values of each document, straight from the forward array
-			var buf []uint32
+			var scratch []uint32
 			it := here.Iterator()
 			for it.HasNext() {
 				d := it.Next()
-				buf = f.fwdValues(d, buf)
-				for _, id := range buf {
+				for _, id := range f.fwdValues(d, &scratch) {
 					own(id)
 					nf.bms[id].Remove(d)
 					nf.postings--

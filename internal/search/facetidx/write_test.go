@@ -555,3 +555,32 @@ func TestRefreshUnderSteadyWrites(t *testing.T) {
 	waitForward(t, st)
 	sameAnswers(t, "steady writes", st.Current(), freshBuild(t, model))
 }
+
+// TestRewriteKeepsOlderGenerationsOverlay: rewriting a dirty document and then a clean one
+// in one batch must not decode the clean one's values into the dirty one's overlay slice,
+// which older generations still read.
+func TestRewriteKeepsOlderGenerationsOverlay(t *testing.T) {
+	ix := build(t, manyDocs(3000)...)
+	g1, err := ix.apply(Batch{Upserts: [][]byte{[]byte(`{"id":7,"company_slug":"co0999"}`)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := g1.match(`id = 7`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fld := g1.fields["company_slug"]
+	if fld.fwd16 == nil || fld.fdirty == nil || !fld.fdirty.Intersects(f) {
+		t.Fatal("setup: want company_slug on fwd16 with job 7 in the overlay")
+	}
+	want := map[string]int64{"co0999": 1}
+	if _, err := g1.apply(Batch{Upserts: [][]byte{
+		[]byte(`{"id":7,"company_slug":"co0001"}`),
+		[]byte(`{"id":8,"company_slug":"co0002"}`),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := toMap(fld, fld.walk(f)); !reflect.DeepEqual(got, want) {
+		t.Fatalf("older generation's walk of document 7 = %v, want %v", got, want)
+	}
+}

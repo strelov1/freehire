@@ -135,8 +135,9 @@ func (nf *field) numPatch(f *field, gone *roaring.Bitmap, add []numEntry) {
 // --- forward overlay ---
 
 // fwdValues is the value ids of document d per the forward array and its overlay; off must
-// be set. A document past the array that is not dirty has no value.
-func (f *field) fwdValues(d uint32, buf []uint32) []uint32 {
+// be set. A document past the array that is not dirty has no value. fwd16 values are decoded
+// into *scratch; the result may alias the array or the overlay, so it is read-only.
+func (f *field) fwdValues(d uint32, scratch *[]uint32) []uint32 {
 	if f.fdirty != nil && f.fdirty.Contains(d) {
 		return f.fresh[d]
 	}
@@ -147,10 +148,11 @@ func (f *field) fwdValues(d uint32, buf []uint32) []uint32 {
 	if f.fwd32 != nil {
 		return f.fwd32[a:b]
 	}
-	buf = buf[:0]
+	buf := (*scratch)[:0]
 	for _, v := range f.fwd16[a:b] {
 		buf = append(buf, uint32(v))
 	}
+	*scratch = buf
 	return buf
 }
 
