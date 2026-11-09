@@ -17,7 +17,7 @@ here, and none derivable from the others:
 
 | Side | Where | What it answers |
 |---|---|---|
-| the slug | `dictionaries.go` | what text resolves to it (`k8s` → `kubernetes`) |
+| the slug | `dictionaries*.go` (`dictionaries.go` assembles the tables; the entries live in `dictionaries_words*.go`, `dictionaries_phrases_*.go`, `dictionaries_ambiguity.go`, `dictionaries_acronyms.go`) | what text resolves to it (`k8s` → `kubernetes`) |
 | the label | `labels.go` | how it is written for a reader (`ci-cd` → `CI/CD`) |
 | the description | `descriptions.tsv` | what the thing *is* (`dbt` → a SQL transformation tool) |
 

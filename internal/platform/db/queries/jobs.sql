@@ -85,7 +85,7 @@ LIMIT sqlc.arg(batch_size);
 --
 -- NOT simply `closed_at IS NULL`, and this is the load-bearing part. A closed posting
 -- REOPENS: ingest's Toucher refreshes liveness "(last_seen_at, reopen if closed) ...
--- WITHOUT rewriting its content" (internal/ingest/pipeline/pipeline.go), and a posting
+-- WITHOUT rewriting its content" (internal/ingest/pipeline/pipeline_ports.go), and a posting
 -- that merely drifts out of a feed for 48h is closed and reopened as it drifts back
 -- (see the notes in sources/seek.go and sources/whatjobs.go). Skipping it on
 -- `closed_at IS NULL` would return it to the catalogue carrying the facets the old

@@ -84,3 +84,21 @@ single posting's detail failure SHALL be isolated and counted, never aborting th
 - **WHEN** the detail fetch for one row fails or the posting is gone
 - **THEN** the worker logs and skips that row and continues with the rest
 
+### Requirement: JustJoin is a registered boardless aggregator provider
+
+The `justjoin` provider SHALL crawl `justjoin.it` through its public JSON API
+(`api.justjoin.it/v2/user-panel/offers/by-cursor`), paginating by following `meta.next.cursor`
+up to a defensive maximum-page cap. Each posting maps to the normalized job shape with the
+employer from `companyName` and `WorkMode` derived from the structured `workplaceType`
+(`remote`/`hybrid`/`office`). The list response carries no apply link, so the adapter SHALL
+synthesize the canonical `URL` from the posting `slug` as `https://justjoin.it/job-offer/<slug>`.
+
+#### Scenario: JustJoin posting maps to a job with synthesized URL and structured work mode
+
+- **WHEN** a `justjoin` posting has slug `acme-senior-go`, `companyName` "Acme", and `workplaceType` "remote"
+- **THEN** the job's `URL` is `https://justjoin.it/job-offer/acme-senior-go`, its `Company` is "Acme", and its `WorkMode` is "remote"
+
+#### Scenario: JustJoin is crawled across cursor pages
+
+- **WHEN** the API response includes a non-null `meta.next.cursor`
+- **THEN** the adapter requests the next page with that cursor until the cursor is absent or the defensive page cap is reached

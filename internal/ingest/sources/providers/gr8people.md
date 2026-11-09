@@ -6,7 +6,7 @@
   (`assets.gr8people.com`), the same GraphQL schema, and the same session-token mechanism —
   confirmed by running the identical query against a tenant on each domain and getting the same
   response shape back. This is the Factorial/FactorialHR case (`factorial.go`,
-  `atsboard/board.go`'s `factorial`/`factorialhr` rows): one adapter, one provider key
+  `atsboard/board_hosts_b.go`'s `factorial`/`factorialhr` rows): one adapter, one provider key
   (`gr8people`), `modeHost` on both domain labels.
 - **The board's session token comes from the tenant's OWN `/jobs` page, and it is tenant-scoped.**
   A GET of `https://<host>/jobs` is server-rendered and its `__NEXT_DATA__` script embeds
