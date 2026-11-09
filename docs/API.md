@@ -2955,7 +2955,7 @@ curl -X POST "https://freehire.me/api/v1/me/referrals/requests" \
 ```
 
 ```json
-{ "data": { "id": "c92f…", "company_slug": "acme", "status": "open", "created_at": "2026-07-28T20:05:00Z" } }
+{ "data": { "id": "c92f…", "company_slug": "acme", "status": "sent", "created_at": "2026-07-28T20:05:00Z" } }
 ```
 
 ### `GET /me/referrals/cv-options`
@@ -3006,7 +3006,7 @@ curl "https://freehire.me/api/v1/me/referrals/incoming" -H "Authorization: Beare
 ```
 
 ```json
-{ "data": [ { "id": "c92f…", "company_slug": "acme", "cv_kind": "original", "status": "open", "note": "Backend, 8 years Go" } ] }
+{ "data": [ { "id": "c92f…", "company_slug": "acme", "cv_kind": "original", "status": "sent", "note": "Backend, 8 years Go" } ] }
 ```
 
 ### `GET /me/referrals/incoming/{id}/cv`

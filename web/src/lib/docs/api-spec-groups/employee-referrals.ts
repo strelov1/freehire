@@ -88,7 +88,7 @@ export const employeeReferralsGroup: Group = {
       curl: `curl -X POST "${BASE_URL}/me/referrals/requests" \\
   -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' \\
   -d '{"company_slug":"acme","cv_kind":"original","linkedin_url":"https://www.linkedin.com/in/you","contact_email":"you@example.com"}'`,
-      responseExample: `{ "data": { "id": "c92f…", "company_slug": "acme", "status": "open", "created_at": "2026-07-28T20:05:00Z" } }`,
+      responseExample: `{ "data": { "id": "c92f…", "company_slug": "acme", "status": "sent", "created_at": "2026-07-28T20:05:00Z" } }`,
     },
     {
       method: 'GET',
@@ -119,7 +119,7 @@ export const employeeReferralsGroup: Group = {
       auth: 'cookie-or-key',
       summary: 'Requests waiting on you as an approved referrer.',
       curl: `curl "${BASE_URL}/me/referrals/incoming" -H "Authorization: Bearer fhk_…"`,
-      responseExample: `{ "data": [ { "id": "c92f…", "company_slug": "acme", "cv_kind": "original", "status": "open", "note": "Backend, 8 years Go" } ] }`,
+      responseExample: `{ "data": [ { "id": "c92f…", "company_slug": "acme", "cv_kind": "original", "status": "sent", "note": "Backend, 8 years Go" } ] }`,
     },
     {
       method: 'GET',
