@@ -61,8 +61,8 @@ importers:
         specifier: ^18.1.2
         version: 18.1.2
       posthog-js:
-        specifier: ^1.444.0
-        version: 1.444.0
+        specifier: ^1.444.3
+        version: 1.444.3
       satori:
         specifier: ^0.63.2
         version: 0.63.2
@@ -1000,8 +1000,8 @@ packages:
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
 
-  '@posthog/browser-common@0.10.2':
-    resolution: {integrity: sha512-ieHSMmY4xG+HfkMTrT9yZoG0NMBWyA4aXMFPCuOOV+xRe706+zoPuwqmNHXv7LGXfi6CvOv4qksEoPNWfP359Q==}
+  '@posthog/browser-common@0.10.3':
+    resolution: {integrity: sha512-dR8Ljupo0QCzOec7bRiBt+BzkDHBFA+983Ncvy6bxthIKPeowk/0ONXyAMqfZBan+zlrQakzB+7yCgpvlfKvaA==}
 
   '@posthog/core@1.62.0':
     resolution: {integrity: sha512-KjNwGC7s0141wnWWHubNMdg1lOhZjqKRw2OTNstuzdVvNDfvv2RbFJQSSvvABmbCmTXwlMpdnbb/M/aAigDnNQ==}
@@ -3137,8 +3137,8 @@ packages:
     resolution: {integrity: sha512-LJlKCCAUFKOuZxipUdYw1NzIITEsPcgyOG9LkvRJvuKj/bRzbuRY0ARXvL0pWGpsZvn8jku+LMep2eU0seHp8g==}
     engines: {node: ^10 || ^12 || >=14}
 
-  posthog-js@1.444.0:
-    resolution: {integrity: sha512-4m+QsAFi1h5Zt8eFq6ciJGD8bcLMt1P/O1cLlo26RrX5F4oMOIKZsNIlf1SIMZWlRNNCFemSpzn6HhwtkZMrnA==}
+  posthog-js@1.444.3:
+    resolution: {integrity: sha512-O/A8vnAJcwozIIU6LZFMw71CnY6kmBNrwZAqXuAsLs/or7fBzAMCRpUfkIP30zToWSu7bO4q5h8USpS8uKz6HA==}
     peerDependencies:
       '@types/react': '>=16.8.0'
       react: '>=16.8.0'
@@ -4486,10 +4486,11 @@ snapshots:
 
   '@polka/url@1.0.0-next.29': {}
 
-  '@posthog/browser-common@0.10.2':
+  '@posthog/browser-common@0.10.3':
     dependencies:
       '@posthog/core': 1.62.0
       '@posthog/types': 1.419.0
+      dompurify: 3.4.17
       preact: 10.29.8
     transitivePeerDependencies:
       - preact-render-to-string
@@ -7047,9 +7048,9 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.2
 
-  posthog-js@1.444.0:
+  posthog-js@1.444.3:
     dependencies:
-      '@posthog/browser-common': 0.10.2
+      '@posthog/browser-common': 0.10.3
       '@posthog/core': 1.62.0
       '@posthog/types': 1.419.0
       core-js: 3.51.0
