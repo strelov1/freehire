@@ -595,8 +595,9 @@
   }
 
   async function createAndOpen() {
-    deferredNew = false;
     const created = await createSession(arrival.preset);
+    // Only once a session exists: a failed create leaves a blank chat still able to send.
+    deferredNew = false;
     if (isSupport) {
       // The support routes cannot replay a transcript, so the new session is opened as is.
       activeId = created.id;
@@ -775,7 +776,6 @@
         await createAndOpen();
       } catch (err) {
         switching = false;
-        deferredNew = true;
         if (start.kind === 'message') giveBack(start);
         setError(err instanceof Error ? err.message : s.newChatFailed);
         return;
