@@ -58,7 +58,7 @@ export interface MyJob {
   /** When somebody last opened a CV sent for this application. Outside the silence derivation:
    *  a recruiter reading a CV is not a reply. */
   cv_opened_at: string | null;
-  /** The six-value status of this job's live auto-apply attempt — the board card's own
+  /** The seven-value status of this job's live auto-apply attempt — the board card's own
    *  "needs your review" badge (openspec/changes/auto-apply-review-tracking). Absent when
    *  there is no live attempt. The full answer preview lives on `TrackedApplication.auto_apply`
    *  instead, which the drawer fetches separately. */

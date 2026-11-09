@@ -13,8 +13,8 @@ var engineeringPhraseAliases1 = []phraseAlias{
 	{"objective-c", "objective-c"},
 	{"ci/cd", "ci-cd"}, {"ci cd", "ci-cd"},
 	{"c developer", "c"}, {"c programming", "c"}, {"ansi c", "c"},
-	// Cyrillic 1С (the RU market's spelling) — the word pass can't see it ([a-z0-9] only), so it
-	// resolves here as a strong phrase; the Latin "1c" is the gated word alias.
+	// Cyrillic 1С (the RU market's spelling) — wordAliases has no Cyrillic "1с" key (the
+	// Latin "1c" is the gated word alias), so it resolves here as a strong phrase.
 	{"1с", "1c"},
 	{"machine learning", "machine-learning"},
 	// additional phrases

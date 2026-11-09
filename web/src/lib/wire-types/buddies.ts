@@ -37,8 +37,8 @@ export interface BuddyProfile {
   card_empty: boolean;
 }
 
-/** One member's feed events per UTC day over the last year; only days with an event. */
-/** One member's feed events per UTC day; `count` is always applied + interview + offer. */
+/** One member's feed events per UTC day over the last year; only days with an event.
+ *  `count` is always applied + interview + offer. */
 export interface BuddyActivity {
   days: { day: string; count: number; applied: number; interview: number; offer: number }[];
 }
