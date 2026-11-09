@@ -18,6 +18,7 @@ WITH already AS (
       AND j.external_id = ANY($2::text[])
       AND j.closed_reason = 'ats_covered'
       AND j.closed_at IS NOT NULL
+      AND NOT j.is_private
 ), closed AS (
     UPDATE jobs
     SET closed_at     = now(),
