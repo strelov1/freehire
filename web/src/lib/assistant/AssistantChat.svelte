@@ -776,6 +776,7 @@
       } catch (err) {
         switching = false;
         deferredNew = true;
+        if (start.kind === 'message') giveBack(start);
         setError(err instanceof Error ? err.message : s.newChatFailed);
         return;
       }
