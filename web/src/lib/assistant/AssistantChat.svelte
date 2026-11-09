@@ -270,7 +270,7 @@
   let runActive = $state(false);
 
   /** Whether a turn may be started right now: the pane is settled and nothing is running. */
-  const canStartTurn = () => phase === 'ready' && !turnActive && !switching && (!!activeId || deferredNew);
+  const canStartTurn = () => phase === 'ready' && !turnActive && !switching && !creating && (!!activeId || deferredNew);
 
   /**
    * Start an unattended run from outside the chat — the workspace's "Run again" beside the
@@ -594,7 +594,7 @@
     deferredNew = true;
   }
 
-  async function createAndOpen() {
+  async function createAndOpen(): Promise<string> {
     const created = await createSession(arrival.preset);
     // Only once a session exists: a failed create leaves a blank chat still able to send.
     deferredNew = false;
@@ -602,12 +602,13 @@
       // The support routes cannot replay a transcript, so the new session is opened as is.
       activeId = created.id;
       activePreset = 'support';
-      return;
+      return created.id;
     }
     // Spent: the next chat minted here — "New chat", or a later boot() — is a plain one.
     arrival.preset = 'chat';
     sessions = upsertSession(sessions, fromSummary(created, NEW_CHAT_LABEL));
     await openSession(created.id);
+    return created.id;
   }
 
   async function newChat() {
@@ -743,7 +744,8 @@
   // later; otherwise it is sent immediately.
   function submitText(raw: string, docs: Attachment[] = []) {
     const text = raw.trim();
-    if ((!text && docs.length === 0) || phase !== 'ready' || switching || (!activeId && !deferredNew)) return;
+    if ((!text && docs.length === 0) || phase !== 'ready' || switching || creating || (!activeId && !deferredNew))
+      return;
     if (error?.cutOff) error = null;
     // Counted once per message the user sends, queued or dispatched — never the text
     // itself. This measures usage only; what a turn costs is recorded server-side.
@@ -772,12 +774,19 @@
       // Held as a switch while the session is created: the composer refuses a second send
       // (openSession, which ends this, would clear a queued one anyway).
       switching = true;
+      let created: string;
       try {
-        await createAndOpen();
+        created = await createAndOpen();
       } catch (err) {
         switching = false;
         if (start.kind === 'message') giveBack(start);
         setError(err instanceof Error ? err.message : s.newChatFailed);
+        return;
+      }
+      // The caller moved to another chat while this one was being created: the message was
+      // meant for the new one, so hand it back rather than send it somewhere else.
+      if (activeId !== created) {
+        if (start.kind === 'message') giveBack(start);
         return;
       }
     }
