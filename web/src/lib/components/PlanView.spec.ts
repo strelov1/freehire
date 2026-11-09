@@ -12,8 +12,13 @@ vi.mock('#lib/auth.svelte.js', () => ({
   isAuthenticated: () => true,
   currentUser: () => ({ beta_tester: false }),
 }));
-const { myPlan, myPlanHistory } = vi.hoisted(() => ({ myPlan: vi.fn(), myPlanHistory: vi.fn() }));
-vi.mock('#lib/api.js', () => ({ api: { myPlan, myPlanHistory } }));
+const { myPlan, myPlanHistory, getApiPlan, billingManageUrl } = vi.hoisted(() => ({
+  myPlan: vi.fn(),
+  myPlanHistory: vi.fn(),
+  getApiPlan: vi.fn(),
+  billingManageUrl: vi.fn(),
+}));
+vi.mock('#lib/api.js', () => ({ api: { myPlan, myPlanHistory, getApiPlan, billingManageUrl } }));
 
 const allowance = (feature: string, over: Partial<Allowance> = {}): Allowance => ({
   feature,
@@ -31,6 +36,7 @@ function freePlan(allowances: Allowance[]): PlanState {
 describe('PlanView allowances', () => {
   beforeEach(() => {
     myPlanHistory.mockResolvedValue([]);
+    getApiPlan.mockResolvedValue({ tier: '' });
   });
 
   it('labels every metered feature instead of printing its API key', async () => {
@@ -59,5 +65,32 @@ describe('PlanView allowances', () => {
     myPlan.mockResolvedValue(freePlan([allowance('match', { used: 1, limit: 3 })]));
     render(PlanView);
     expect(await screen.findByText('1 / 3')).toBeTruthy();
+  });
+});
+
+describe('PlanView API plan', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    myPlanHistory.mockResolvedValue([]);
+    myPlan.mockResolvedValue(freePlan([]));
+    billingManageUrl.mockResolvedValue({ url: 'https://billing.example/portal' });
+  });
+
+  it('shows a bought API plan and says it does not need Pro', async () => {
+    getApiPlan.mockResolvedValue({ tier: 'api', until: '2026-12-09T12:00:00Z' });
+    render(PlanView);
+    expect(await screen.findByText('API plan')).toBeTruthy();
+    expect(screen.getByText('Pro is for AI job-search features. Your API plan does not need it.')).toBeTruthy();
+    expect((await screen.findByRole('link', { name: 'Manage or cancel' })).getAttribute('href')).toBe(
+      'https://billing.example/portal',
+    );
+  });
+
+  it('shows no API strip and no portal link to an account without one', async () => {
+    getApiPlan.mockResolvedValue({ tier: '' });
+    render(PlanView);
+    expect(await screen.findByText('Same features, daily limits')).toBeTruthy();
+    expect(screen.queryByText('API plan')).toBeNull();
+    expect(billingManageUrl).not.toHaveBeenCalled();
   });
 });

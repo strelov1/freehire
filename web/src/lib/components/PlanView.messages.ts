@@ -10,13 +10,14 @@ export const messages = defineMessages(
     signedOut: 'Sign in to view your plan.',
     title: 'Your plan',
     description:
-      'Free covers reading your CV and AI search. Pro unlocks every AI feature, each with a daily allowance that starts over every night.',
+      'Free covers reading your CV and AI search. Pro unlocks every AI feature for your job search, each with a daily allowance that starts over every night. An API plan is a separate product: it licenses our job data for use in your own software and does not need Pro.',
     planStrip: {
       pro: 'Pro',
       ultra: 'Ultra',
       free: 'Free',
       runsUntilPrefix: 'Runs until',
       freeSubtitle: 'Same features, daily limits',
+      freeWithApi: 'Pro is for AI job-search features. Your API plan does not need it.',
       upgrade: 'Upgrade to Pro',
       upgradeUltra: 'Upgrade to Ultra',
       // The provider's portal is where a subscription is changed AND cancelled, so the label
@@ -24,6 +25,11 @@ export const messages = defineMessages(
       // button would need a flow of our own that could disagree with what happened to the
       // money.
       manageSubscription: 'Manage or cancel',
+    },
+    apiStrip: {
+      tiers: { api: 'API plan', api_data: 'Data plan' },
+      separate: 'Billed separately from Pro',
+      keys: 'API keys',
     },
     subscription: {
       heading: 'Subscription',
@@ -88,16 +94,22 @@ export const messages = defineMessages(
       signedOut: 'Войдите, чтобы посмотреть свой тариф.',
       title: 'Ваш тариф',
       description:
-        'На Free доступны разбор CV и AI-поиск. Pro открывает все AI-функции — у каждой свой дневной лимит, и каждую ночь он обнуляется.',
+        'На Free доступны разбор CV и AI-поиск. Pro открывает все AI-функции для поиска работы — у каждой свой дневной лимит, и каждую ночь он обнуляется. API-тариф — отдельный продукт: он даёт лицензию на наши данные о вакансиях для вашего софта, и Pro для него не нужен.',
       planStrip: {
         pro: 'Pro',
         ultra: 'Ultra',
         free: 'Free',
         runsUntilPrefix: 'Действует до',
         freeSubtitle: 'Те же функции, дневные лимиты',
+        freeWithApi: 'Pro — это AI-функции для поиска работы. Вашему API-тарифу он не нужен.',
         upgrade: 'Перейти на Pro',
         upgradeUltra: 'Перейти на Ultra',
         manageSubscription: 'Изменить или отменить',
+      },
+      apiStrip: {
+        tiers: { api: 'API-тариф', api_data: 'Тариф Data' },
+        separate: 'Оплачивается отдельно от Pro',
+        keys: 'API-ключи',
       },
       subscription: {
         heading: 'Подписка',

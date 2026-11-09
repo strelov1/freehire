@@ -5,7 +5,7 @@
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { formatMinorUnits } from '#lib/money.js';
   import { promptSignIn } from '#lib/signin.js';
-  import type { PublicPrice } from '#lib/types.js';
+  import type { ApiPlan, PublicPrice } from '#lib/types.js';
 
   // `buttonVariant`: the API's own page sells the API, so its buttons are the page's CTA;
   // under the Pro plan on /pricing they step down to outline so Pro keeps the one fill.
@@ -21,6 +21,16 @@
   const dataPrice = $derived(pick('api_data'));
 
   const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency, undefined, { trimWhole: true });
+
+  // The tier the caller already holds, so its card says so instead of selling it again.
+  let held = $state<ApiPlan['tier']>('');
+  $effect(() => {
+    if (!isAuthenticated()) return;
+    api
+      .getApiPlan()
+      .then((p) => (held = p.tier))
+      .catch(() => {});
+  });
 
   // Which plan's checkout is opening, so only its own button says so.
   let busyId = $state<string | null>(null);
@@ -69,6 +79,10 @@
         Send a full-access key as
         <code class="text-sm">Authorization: Bearer</code>.
       </p>
+      <p class="max-w-2xl text-balance text-sm text-muted-foreground">
+        API plans are billed separately from Pro. You do not need Pro to use the API, and an API plan does not include
+        Pro's AI job-search features.
+      </p>
     </header>
 
     <div class="grid gap-4 sm:grid-cols-2">
@@ -89,7 +103,12 @@
               <li class="border-b border-border/60 pb-2 text-muted-foreground">{perk}</li>
             {/each}
           </ul>
-          {#if isAuthenticated()}
+          {#if held === card.price.tier}
+            <a
+              href={resolve('/my/integrations/api-keys')}
+              class={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'mt-auto')}>Your current plan · API keys</a
+            >
+          {:else if isAuthenticated()}
             <button
               type="button"
               class={cn(buttonVariants({ variant: buttonVariant, size: 'lg' }), 'mt-auto disabled:opacity-60')}

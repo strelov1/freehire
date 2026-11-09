@@ -308,6 +308,9 @@ func TestMyAccountReturnsOnlyTheCallersOwnData(t *testing.T) {
 	bUntil := time.Now().UTC().AddDate(0, 0, 200)
 	grantPro(t, pool, aID, aUntil)
 	grantPro(t, pool, bID, bUntil)
+	if _, err := pool.Exec(ctx, `UPDATE users SET api_until_stripe = $2 WHERE id = $1`, aID, aUntil); err != nil {
+		t.Fatalf("seed api plan: %v", err)
+	}
 	for _, row := range []struct {
 		user int64
 		used int
@@ -336,6 +339,9 @@ func TestMyAccountReturnsOnlyTheCallersOwnData(t *testing.T) {
 
 	if sum.Plan != "pro" || sum.ValidUntil != aUntil.Format("2006-01-02") {
 		t.Errorf("plan = %q valid until %q, want pro until %s", sum.Plan, sum.ValidUntil, aUntil.Format("2006-01-02"))
+	}
+	if sum.APIPlan != "api" || sum.APIPlanUntil != aUntil.Format("2006-01-02") {
+		t.Errorf("api plan = %q until %q, want api until %s", sum.APIPlan, sum.APIPlanUntil, aUntil.Format("2006-01-02"))
 	}
 	if strings.Contains(out, bUntil.Format("2006-01-02")) {
 		t.Errorf("the other account's expiry date is in the output: %s", out)

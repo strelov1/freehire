@@ -71,12 +71,16 @@ type accountHistoryEntry struct {
 // accountSummary is an allowlist: every field is named here on purpose, so a column added to
 // the plan or the ledger later reaches the model only by being added here.
 type accountSummary struct {
-	Plan          string                `json:"plan"`
-	ValidUntil    string                `json:"valid_until,omitempty"`
-	PaymentSource string                `json:"payment_source,omitempty"`
-	Allowances    []accountAllowance    `json:"allowances_today"`
-	SupportToday  supportAllowance      `json:"support_messages_today"`
-	Recent        []accountHistoryEntry `json:"recent_activity"`
+	Plan          string `json:"plan"`
+	ValidUntil    string `json:"valid_until,omitempty"`
+	PaymentSource string `json:"payment_source,omitempty"`
+	// APIPlan is the data-licence subscription, billed apart from Pro: without it a user
+	// holding both could not be told what their second charge was for.
+	APIPlan      string                `json:"api_plan,omitempty"`
+	APIPlanUntil string                `json:"api_plan_valid_until,omitempty"`
+	Allowances   []accountAllowance    `json:"allowances_today"`
+	SupportToday supportAllowance      `json:"support_messages_today"`
+	Recent       []accountHistoryEntry `json:"recent_activity"`
 }
 
 func paymentSourceLabel(source string) string {
@@ -98,7 +102,7 @@ func (h *assistantHandlers) myAccountTool() assistant.Tool {
 		Title:  "Read my plan and usage",
 		Effect: assistant.EffectReads,
 		Description: "Read the signed-in user's own plan: the tier, when it is valid until, how it was paid " +
-			"(card, app store or granted), what is left of today's allowances, how many support messages are left today and their latest plan activity. " +
+			"(card, app store or granted), their API plan if they hold one (a separate subscription from Pro), what is left of today's allowances, how many support messages are left today and their latest plan activity. " +
 			"Call it before saying anything about their plan, payment or limits. Takes no arguments.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
@@ -117,6 +121,11 @@ func (h *assistantHandlers) myAccountTool() assistant.Tool {
 			if err != nil {
 				return nil, err
 			}
+			ent, err := h.queries.GetUserAPIEntitlement(ctx, userID)
+			if err != nil {
+				return nil, err
+			}
+			apiPlan := apiPlanFrom(ent, time.Now())
 			out := accountSummary{
 				SupportToday: supportAllowance{
 					Limit: support.Limit, Used: support.Used, Remaining: support.Remaining,
@@ -129,6 +138,10 @@ func (h *assistantHandlers) myAccountTool() assistant.Tool {
 			}
 			if p.ProUntil != nil {
 				out.ValidUntil = p.ProUntil.UTC().Format("2006-01-02")
+			}
+			if apiPlan.Until != nil {
+				out.APIPlan = string(apiPlan.Tier)
+				out.APIPlanUntil = apiPlan.Until.UTC().Format("2006-01-02")
 			}
 			for _, a := range p.Allowances {
 				v := accountAllowance{Feature: a.Feature, Used: a.Used, Unlimited: a.Unlimited}
