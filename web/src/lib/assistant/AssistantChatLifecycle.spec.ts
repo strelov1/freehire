@@ -148,3 +148,42 @@ it('keeps the cut-off warning up through a queued message and closes the cut ans
   composer.props?.onSubmit('Never mind');
   await waitFor(() => expect(queryByText(/this answer may be cut off/)).toBeNull());
 });
+
+it('opens a first chat without creating a session, and creates it with the first message', async () => {
+  // Minting a session on page open left most chat sessions empty: new accounts land here and
+  // leave without typing. The row now waits for the first message.
+  const id = '0c1d6c2e-58a4-4b43-9d1a-2f6c0d9b7a11';
+  const fetcher = vi.fn((url: string, init?: RequestInit) => {
+    const u = String(url);
+    if (u.endsWith('/assistant/sessions') && init?.method === 'POST') {
+      return Promise.resolve(Response.json({ data: { id, preset: 'chat', label: '' } }));
+    }
+    if (u.endsWith(`/assistant/sessions/${id}`)) {
+      return Promise.resolve(Response.json({ data: { session: { id, preset: 'chat', label: '' }, messages: [] } }));
+    }
+    if (u.endsWith(`/assistant/sessions/${id}/messages`)) {
+      // Held open: an ended stream sends a plain chat into its catch-up path, which is not under test.
+      return Promise.resolve(
+        new Response(new ReadableStream<Uint8Array>({}), {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        }),
+      );
+    }
+    return Promise.resolve(Response.json({ data: [] }));
+  });
+  vi.stubGlobal('fetch', fetcher);
+  composer.props = null;
+  const { unmount } = render(AssistantChat, {});
+  await waitFor(() => expect(composer.props).not.toBeNull());
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const posted = () =>
+    fetcher.mock.calls.filter(([u, init]) => String(u).endsWith('/assistant/sessions') && init?.method === 'POST');
+  expect(posted()).toHaveLength(0);
+
+  // Cast: TypeScript keeps the `null` assigned above and does not see the mock's write.
+  (composer.props as { onSubmit: (text: string) => void } | null)?.onSubmit('Find me remote Go jobs');
+  await waitFor(() => expect(fetcher.mock.calls.some(([u]) => String(u).endsWith(`/${id}/messages`))).toBe(true));
+  expect(posted()).toHaveLength(1);
+  unmount();
+});

@@ -77,8 +77,10 @@ func LanguageName(code string) string {
 // languageDirective tells the model which language to answer the candidate in,
 // following their saved profile preference rather than guessing from whatever
 // language they happen to type in this message (freehire#1837) or defaulting to
-// English. It governs the assistant's OWN words only — never material it reads
-// (an employer's mail, a job posting) or repeats verbatim.
+// English. Only an explicit request ("answer in Russian") overrides it, for that
+// conversation: refusing one read as a broken bot (2026-11-09). It governs the
+// assistant's OWN words only — never material it reads (an employer's mail, a job
+// posting) or repeats verbatim.
 //
 // The tailor preset carries one deliberate exception: a bullet written with
 // `cv_edit` follows the VACANCY's language instead (tailorPrompt already says so
@@ -89,7 +91,8 @@ func LanguageName(code string) string {
 // Russian bullets on an English-language CV.
 func languageDirective(preset, language string) string {
 	directive := "\n\nLANGUAGE\n\nReply to the candidate in " + LanguageName(language) +
-		", regardless of what language they write in or what language any source material (a job posting, a CV, an employer's message) is in."
+		", regardless of what language they write in or what language any source material (a job posting, a CV, an employer's message) is in." +
+		" The one exception is an explicit request: if the candidate asks you to reply in another language, do so for the rest of this conversation. Writing to you in a language is not such a request."
 	if preset == PresetTailor {
 		directive += " This governs your own words to the candidate only — a bullet you write onto the CV with `cv_edit` follows the vacancy's own language instead, as instructed above."
 	}
@@ -478,7 +481,8 @@ FAQ
 - Deleting an account. Account settings (Profile), then Delete account, then type the account email to confirm. It is immediate and permanent, with no grace period and no recovery. If they cannot sign in, they email hello@freehire.me from the address on the account.
 - Alerts that do not arrive. Check the saved search still exists and which channel it uses under notifications in their account, check the spam folder, and for the mobile app check that notifications are allowed for freehire in the device settings. A saved search only sends when something new matches it.
 - Auto-apply. It fills an employer's own application form from the user's saved answers and CV and submits it only when every required question is answered; otherwise it stops and touches nothing, and the user answers the missing ones. Daily limits depend on the plan, which ` + "`my_account`" + ` shows.
-- API keys. Created and revoked under Integrations, API keys in their account. A key is shown once when it is made. Only an account with a verified email can create one.
+- API keys. Created and revoked at https://freehire.me/my/integrations/api-keys (Integrations, API keys in their account). A key is shown once when it is made. Only an account with a verified email can create one.
+- Connecting an AI assistant (Claude, ChatGPT, Codex, Claude Code and other MCP clients). freehire is an MCP server at https://freehire.me/api/v1/mcp, and setup for each assistant is at https://freehire.me/mcp. Search works without signing in; saving jobs, the tracking board and alerts need the user to approve sign-in (OAuth) when the assistant asks, with no API key to copy. In Claude: Settings, Connectors, Add custom connector, paste that address. Connected assistants are listed and revoked at https://freehire.me/my/integrations/api-keys. If a connector that worked stops connecting, have them remove it, add it again with exactly that address and sign in again; if it still fails, take the client, the exact error and any reference code with ` + "`report_problem`" + ` and hand over.
 - Signing in. If they first signed up with Google, GitHub, LinkedIn or Apple they use that same button, because the account has no password until they set one; otherwise "Forgot password".
 
 When to hand over (` + "`escalate_to_human`" + `):
