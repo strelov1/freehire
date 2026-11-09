@@ -154,3 +154,69 @@ WHERE user_id = sqlc.arg(user_id) AND step = sqlc.arg(step)::smallint;
 -- pending. Only an unerrored row: a burned step is never reopened by this.
 DELETE FROM cv_lifecycle_sends
 WHERE user_id = sqlc.arg(user_id) AND step = sqlc.arg(step)::smallint AND error = '';
+
+-- The paywall letter (step 4): one letter to a free user who was refused by the paid-AI gate,
+-- about an hour after the first refusal that is still fresh. It shares the CV letters'
+-- ledger (cv_lifecycle_sends), consent switch, free-tier test and holdout, but it is not
+-- gated on an enrolment: the account may never have uploaded a CV. The holdout is the same
+-- hash enrolment stores, so an account is in the same group for every letter. The predicate
+-- appears in the list and in the claim, as above: change one, change both.
+
+-- name: ListPaywallLetterDue :many
+-- Accounts the paywall letter is due for, with the earliest hit inside the window to name:
+-- at least hold_minutes old (the letter answers the attempt a while after, not mid-click) and
+-- at most max_age_hours old (an old hit is no longer "what you just tried"). One row per
+-- account, whatever the number of hits, and none once the step row exists: the letter is
+-- once per account, never once per hit. The job, when the hit carries one, is read here so
+-- the letter is composed from the row; a job that is gone leaves the strings empty.
+-- Paged by user id like ListCVLifecycleDue.
+SELECT DISTINCT ON (h.user_id)
+    h.user_id,
+    mail_recipient(u.email, u.email_verified, u.last_active_at)::text AS email,
+    h.feature,
+    COALESCE(j.title, '')::text AS job_title,
+    COALESCE(j.company, '')::text AS job_company,
+    COALESCE(j.public_slug, '')::text AS job_slug
+FROM paywall_hits h
+JOIN users u ON u.id = h.user_id
+LEFT JOIN jobs j ON j.id = h.job_id
+LEFT JOIN notification_settings ns ON ns.user_id = h.user_id
+WHERE h.created_at <= now() - make_interval(mins => sqlc.arg(hold_minutes)::int)
+  AND h.created_at > now() - make_interval(hours => sqlc.arg(max_age_hours)::int)
+  AND NOT cv_lifecycle_holdout(h.user_id)
+  AND mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+  AND COALESCE(ns.news_email_enabled, true)
+  AND (u.pro_until IS NULL OR u.pro_until <= now())
+  AND (u.ultra_until IS NULL OR u.ultra_until <= now())
+  AND NOT EXISTS (
+      SELECT 1 FROM cv_lifecycle_sends s WHERE s.user_id = h.user_id AND s.step = 4
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = h.user_id AND c.day = mail_today()
+  )
+  AND h.user_id > sqlc.arg(after_user_id)::bigint
+ORDER BY h.user_id, h.created_at, h.id
+LIMIT sqlc.arg(max_rows)::int;
+
+-- name: ClaimPaywallLetterSend :one
+-- Writes the step-4 row if, and only if, the account is STILL eligible and still has a hit
+-- inside the window: the one statement that gates the send. No row back (pgx.ErrNoRows)
+-- means do not send. Written before SES is called, like ClaimCVLifecycleSend.
+INSERT INTO cv_lifecycle_sends (user_id, step)
+SELECT u.id, 4
+FROM users u
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.id = sqlc.arg(user_id)
+  AND NOT cv_lifecycle_holdout(u.id)
+  AND mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+  AND COALESCE(ns.news_email_enabled, true)
+  AND (u.pro_until IS NULL OR u.pro_until <= now())
+  AND (u.ultra_until IS NULL OR u.ultra_until <= now())
+  AND EXISTS (
+      SELECT 1 FROM paywall_hits h
+      WHERE h.user_id = u.id
+        AND h.created_at <= now() - make_interval(mins => sqlc.arg(hold_minutes)::int)
+        AND h.created_at > now() - make_interval(hours => sqlc.arg(max_age_hours)::int)
+  )
+ON CONFLICT (user_id, step) DO NOTHING
+RETURNING user_id;

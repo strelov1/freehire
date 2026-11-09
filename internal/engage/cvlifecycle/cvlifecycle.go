@@ -1,6 +1,7 @@
 // Package cvlifecycle sends up to three letters to a free user whose CV has parsed, until
 // they pay: what an ATS makes of the CV, what tailoring would add to that score, and an
-// offer for the first month of Pro.
+// offer for the first month of Pro. It also sends the paywall letter, once to a free user
+// who pressed a paid AI button, naming what they tried.
 //
 // cmd/cv-lifecycle-mail is the only caller. The letters are the founder's (a human
 // Reply-To, first person), optional (they obey the news-email switch and the shared
@@ -23,21 +24,34 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// Step is one letter of the sequence. The values are the ledger's `step` column, which a
-// constraint there holds to 1..3.
+// Step is one letter of the ledger. The values are the ledger's `step` column, which a
+// constraint there holds to 1..4.
 type Step int16
 
 const (
 	StepATS       Step = 1
 	StepPotential Step = 2
 	StepOffer     Step = 3
+	// StepPaywall is not part of the CV sequence: it is due from a paywall hit, not from the
+	// upload, so it has no day offset and the CV letters neither drop nor wait for it.
+	StepPaywall Step = 4
 )
 
-// Steps is the sequence in order.
+// Steps is the CV sequence in order, the letters that run on day offsets from the upload.
 var Steps = []Step{StepATS, StepPotential, StepOffer}
 
+// passOrder is the order a pass sends in. The paywall letter goes first: the account's one
+// letter of the day is taken by whoever reaches it first, and the paywall letter is the
+// timely one, so it wins the day over a CV letter that would otherwise wait for tomorrow.
+var passOrder = append([]Step{StepPaywall}, Steps...)
+
 // Campaign names the letter in SES engagement tracking.
-func (s Step) Campaign() string { return fmt.Sprintf("cv-letter-%d", int16(s)) }
+func (s Step) Campaign() string {
+	if s == StepPaywall {
+		return "paywall-letter"
+	}
+	return fmt.Sprintf("cv-letter-%d", int16(s))
+}
 
 // Config is when each letter is due and how much one pass may do.
 type Config struct {
@@ -53,6 +67,11 @@ type Config struct {
 	// EnrollPerRun caps one pass's enrollments; MaxPerRun caps its letters.
 	EnrollPerRun int32
 	MaxPerRun    int32
+	// PaywallAfterMinutes is how long after a paywall hit the letter becomes due, and
+	// PaywallWithinHours how long it stays worth sending: a hit older than that is not what
+	// the account "just tried", so a letter held back by the daily claim is dropped with it.
+	PaywallAfterMinutes int32
+	PaywallWithinHours  int32
 }
 
 // DefaultConfig is the schedule the product runs: letters on days 1, 6 and 13.
@@ -63,6 +82,9 @@ func DefaultConfig() Config {
 		ObserveWindowDays: 90,
 		EnrollPerRun:      2000,
 		MaxPerRun:         200,
+
+		PaywallAfterMinutes: 60,
+		PaywallWithinHours:  24,
 	}
 }
 
@@ -72,6 +94,9 @@ func (c Config) validate() error {
 	}
 	if c.EnrollWindowDays <= 0 || c.ObserveWindowDays <= 0 || c.EnrollPerRun <= 0 || c.MaxPerRun <= 0 {
 		return errors.New("cvlifecycle: windows and per-run caps must be positive")
+	}
+	if c.PaywallAfterMinutes < 0 || c.PaywallWithinHours <= 0 || int64(c.PaywallAfterMinutes) >= int64(c.PaywallWithinHours)*60 {
+		return fmt.Errorf("cvlifecycle: the paywall letter must be due (%d min) before it expires (%d h)", c.PaywallAfterMinutes, c.PaywallWithinHours)
 	}
 	return nil
 }
@@ -86,14 +111,17 @@ type Store interface {
 	ExitCVLifecycleUnsubscribed(ctx context.Context) (int64, error)
 	ListCVLifecycleDue(ctx context.Context, arg db.ListCVLifecycleDueParams) ([]db.ListCVLifecycleDueRow, error)
 	ClaimCVLifecycleSend(ctx context.Context, arg db.ClaimCVLifecycleSendParams) (int64, error)
+	ListPaywallLetterDue(ctx context.Context, arg db.ListPaywallLetterDueParams) ([]db.ListPaywallLetterDueRow, error)
+	ClaimPaywallLetterSend(ctx context.Context, arg db.ClaimPaywallLetterSendParams) (int64, error)
 	RecordCVLifecycleSendError(ctx context.Context, arg db.RecordCVLifecycleSendErrorParams) error
 	ReleaseCVLifecycleSend(ctx context.Context, arg db.ReleaseCVLifecycleSendParams) error
 	PruneMailDayClaims(ctx context.Context) (int64, error)
 }
 
-// Composer builds what one letter says about one account. ErrSkip (wrapped) means the
+// Composer builds what one CV letter says about one account. ErrSkip (wrapped) means the
 // letter does not apply to this account now; any other error is an input that could not be
-// read. Either way the step stays pending.
+// read. Either way the step stays pending. The paywall letter needs no composer: the row
+// that makes it due already carries everything it says.
 type Composer interface {
 	Compose(ctx context.Context, step Step, userID int64) (Letter, error)
 }
@@ -149,14 +177,14 @@ func New(store Store, composer Composer, sender Sender, cfg Config) (*Runner, er
 }
 
 // Run does one pass: observe who started paying, enroll new accounts, retire the ones that
-// unsubscribed, then send each due letter. A failing bookkeeping statement aborts the pass,
+// unsubscribed, then send each due letter, the paywall letter first. A failing bookkeeping statement aborts the pass,
 // since sending on top of an unknown enrollment state is how a paying user gets an offer.
 func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	stats := newStats()
 	if err := r.bookkeep(ctx, &stats); err != nil {
 		return stats, err
 	}
-	for _, step := range Steps {
+	for _, step := range passOrder {
 		if stats.Paused {
 			break
 		}
@@ -176,10 +204,10 @@ func (r *Runner) DryRun(ctx context.Context) (Stats, error) {
 		return stats, fmt.Errorf("cvlifecycle: counting enrollable accounts: %w", err)
 	}
 	stats.Enrollable = int(n)
-	for _, step := range Steps {
+	for _, step := range passOrder {
 		var after int64
 		for {
-			rows, err := r.listDue(ctx, step, after)
+			rows, err := r.candidates(ctx, step, after)
 			if err != nil {
 				return stats, err
 			}
@@ -225,7 +253,34 @@ func (r *Runner) bookkeep(ctx context.Context, stats *Stats) error {
 
 func (r *Runner) pageSize() int32 { return r.cfg.MaxPerRun }
 
-func (r *Runner) listDue(ctx context.Context, step Step, afterUser int64) ([]db.ListCVLifecycleDueRow, error) {
+// candidate is an account a letter is due for, as either list returns it.
+type candidate struct {
+	UserID int64
+	Email  string
+	// Paywall is what the hit behind a paywall letter carries; nil for a CV letter.
+	Paywall *Paywall
+}
+
+// candidates is one page of the accounts step is due for, after the given user id.
+func (r *Runner) candidates(ctx context.Context, step Step, afterUser int64) ([]candidate, error) {
+	if step == StepPaywall {
+		rows, err := r.store.ListPaywallLetterDue(ctx, db.ListPaywallLetterDueParams{
+			HoldMinutes: r.cfg.PaywallAfterMinutes,
+			MaxAgeHours: r.cfg.PaywallWithinHours,
+			AfterUserID: afterUser,
+			MaxRows:     r.pageSize(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("cvlifecycle: listing the paywall letter: %w", err)
+		}
+		out := make([]candidate, len(rows))
+		for i, row := range rows {
+			out[i] = candidate{UserID: row.UserID, Email: row.Email, Paywall: &Paywall{
+				Feature: row.Feature, JobTitle: row.JobTitle, Company: row.JobCompany, JobSlug: row.JobSlug,
+			}}
+		}
+		return out, nil
+	}
 	rows, err := r.store.ListCVLifecycleDue(ctx, db.ListCVLifecycleDueParams{
 		AfterDays:     r.afterDays(step),
 		NextAfterDays: r.nextAfterDays(step),
@@ -236,7 +291,11 @@ func (r *Runner) listDue(ctx context.Context, step Step, afterUser int64) ([]db.
 	if err != nil {
 		return nil, fmt.Errorf("cvlifecycle: listing step %d: %w", step, err)
 	}
-	return rows, nil
+	out := make([]candidate, len(rows))
+	for i, row := range rows {
+		out[i] = candidate{UserID: row.UserID, Email: row.Email}
+	}
+	return out, nil
 }
 
 func (r *Runner) afterDays(step Step) int32 { return r.cfg.AfterDays[step-1] }
@@ -255,7 +314,7 @@ func (r *Runner) runStep(ctx context.Context, step Step, stats *Stats) error {
 	budget := r.cfg.MaxPerRun - int32(attempted(stats))
 	var after int64
 	for budget > 0 {
-		rows, err := r.listDue(ctx, step, after)
+		rows, err := r.candidates(ctx, step, after)
 		if err != nil {
 			return err
 		}
@@ -281,7 +340,7 @@ func (r *Runner) runStep(ctx context.Context, step Step, stats *Stats) error {
 
 func attempted(stats *Stats) int {
 	n := 0
-	for _, step := range Steps {
+	for _, step := range passOrder {
 		n += stats.Sent[step] + stats.Failed[step]
 	}
 	return n
@@ -309,8 +368,8 @@ const (
 //     and ends the pass: nothing was judged about this address.
 //   - Any other send failure burns the step with its error and gives the day back.
 //   - A crash after the claims keeps both, which fails toward fewer letters.
-func (r *Runner) deliver(ctx context.Context, step Step, row db.ListCVLifecycleDueRow, stats *Stats) outcome {
-	letter, err := r.composer.Compose(ctx, step, row.UserID)
+func (r *Runner) deliver(ctx context.Context, step Step, row candidate, stats *Stats) outcome {
+	letter, err := r.compose(ctx, step, row)
 	if err != nil {
 		if !errors.Is(err, ErrSkip) {
 			stats.Errors++
@@ -320,10 +379,7 @@ func (r *Runner) deliver(ctx context.Context, step Step, row db.ListCVLifecycleD
 		return outcomeSkipped
 	}
 
-	if _, err := r.store.ClaimCVLifecycleSend(ctx, db.ClaimCVLifecycleSendParams{
-		Step: int16(step), UserID: row.UserID,
-		AfterDays: r.afterDays(step), NextAfterDays: r.nextAfterDays(step),
-	}); err != nil {
+	if err := r.claimStep(ctx, step, row.UserID); err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			stats.Errors++
 			log.Printf("cvlifecycle: claiming step %d for user %d: %v", step, row.UserID, err)
@@ -364,6 +420,28 @@ func (r *Runner) deliver(ctx context.Context, step Step, row db.ListCVLifecycleD
 	}
 	stats.Sent[step]++
 	return outcomeSent
+}
+
+func (r *Runner) compose(ctx context.Context, step Step, row candidate) (Letter, error) {
+	if step == StepPaywall {
+		return Letter{Step: step, Paywall: row.Paywall}, nil
+	}
+	return r.composer.Compose(ctx, step, row.UserID)
+}
+
+// claimStep writes the step row through the statement that re-checks the step's eligibility.
+func (r *Runner) claimStep(ctx context.Context, step Step, userID int64) error {
+	if step == StepPaywall {
+		_, err := r.store.ClaimPaywallLetterSend(ctx, db.ClaimPaywallLetterSendParams{
+			UserID: userID, HoldMinutes: r.cfg.PaywallAfterMinutes, MaxAgeHours: r.cfg.PaywallWithinHours,
+		})
+		return err
+	}
+	_, err := r.store.ClaimCVLifecycleSend(ctx, db.ClaimCVLifecycleSendParams{
+		Step: int16(step), UserID: userID,
+		AfterDays: r.afterDays(step), NextAfterDays: r.nextAfterDays(step),
+	})
+	return err
 }
 
 func (r *Runner) releaseStep(ctx context.Context, step Step, userID int64) {

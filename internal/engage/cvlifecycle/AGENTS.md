@@ -1,7 +1,7 @@
 # internal/engage/cvlifecycle
 
-Up to three letters to a verified FREE user whose CV parsed, until they pay or opt out.
-`cmd/cv-lifecycle-mail` is the only caller. The block rules are in
+Up to three letters to a verified FREE user whose CV parsed, until they pay or opt out, and
+the paywall letter (below). `cmd/cv-lifecycle-mail` is the only caller. The block rules are in
 [internal/engage/AGENTS.md](../AGENTS.md); the shared one-letter-a-day claim is
 `internal/engage/maildaily`.
 
@@ -21,6 +21,35 @@ name; letter 2 needs potential above the current score. Otherwise the step is sk
 Letter 3 may be an account's FIRST letter: an account enrolled late (the window is 14 days)
 whose upload is already 13 days old has steps 1 and 2 dropped as superseded. That is the
 spec, not a bug; do not "fix" it by sending the earlier steps late.
+
+## The paywall letter
+
+A fourth letter (`StepPaywall`, step 4 of `cv_lifecycle_sends`, campaign `paywall-letter`)
+answers a free user who pressed a paid AI button: about an hour after a `paywall_hits` row
+(written by the paid-AI gate, see [internal/ai/plan/AGENTS.md](../../ai/plan/AGENTS.md)), it
+says what they tried (the feature, and "for <job> at <company>" when the hit carries a job)
+and that it is part of Pro. No offer, no model call: the list row carries all of it.
+
+- **Once per account, ever** (the ledger's `(user_id, step)` key), however many hits and
+  features: the letter names the earliest hit inside the window. Not once per hit or feature.
+- **Due** `PaywallAfterMinutes` (60) after the hit and only for `PaywallWithinHours` (24): a
+  hit older than that is no longer "what you just tried", so a letter held back by the daily
+  claim for longer is dropped with it rather than sent late.
+- **Every paid-AI label counts**, including the three unmetered ones (`ats_review`,
+  `mail_recall`, `autofill`) and `ai_other`. `attempts` in `paywall.go` words each; a label
+  without words gets a generic letter instead of none. A new paid route needs its words there.
+- **Same gates as the CV letters**, repeated in `ListPaywallLetterDue` and re-checked in
+  `ClaimPaywallLetterSend`: mailable address, news-email consent, free tier at send time (a
+  granted tier counts as paid here), not in the holdout, the shared one-letter-a-day claim.
+  It is NOT gated on enrollment or a CV: a user with no CV can hit a paywall. The holdout is
+  the same `cv_lifecycle_holdout` hash enrollment stores, so an account is in one group for
+  every letter.
+- **It wins the day**: a pass sends the paywall letter before the CV letters (`passOrder`), so
+  an account due for both gets the paywall letter and the CV letter waits for the next day.
+  Other senders (onboarding, broadcast, limit nudge) run in their own commands and are not
+  ordered against it; whoever claims the day first wins, as everywhere.
+- It spends the same `MaxPerRun` budget, burns on a definite send failure like any step, and
+  does not move the enrollment or the paying observation.
 
 ## Enrollment and the holdout
 
@@ -102,6 +131,21 @@ GROUP BY user_id, day
 HAVING count(*) > 1;
 ```
 
+The paywall letter's own conversion is not in the enrollment table (the account may never
+have enrolled). Read it from the ledger and the tier columns instead:
+
+```sql
+SELECT cv_lifecycle_holdout(h.user_id) AS holdout, count(DISTINCT h.user_id) AS hit,
+       count(DISTINCT h.user_id) FILTER (WHERE s.user_id IS NOT NULL) AS mailed,
+       count(DISTINCT h.user_id) FILTER (WHERE u.pro_until_stripe > h.created_at OR u.pro_until_revenuecat > h.created_at
+                                           OR u.ultra_until_stripe > h.created_at OR u.ultra_until_revenuecat > h.created_at) AS paid
+FROM paywall_hits h
+JOIN users u ON u.id = h.user_id
+LEFT JOIN cv_lifecycle_sends s ON s.user_id = h.user_id AND s.step = 4 AND s.error = ''
+WHERE h.created_at < now() - interval '30 days'
+GROUP BY 1;
+```
+
 Conversion by group:
 
 ```sql
@@ -113,5 +157,6 @@ GROUP BY holdout;
 
 ## Tests
 
-Unit tests use fakes (`runner_test.go`, `content_test.go`, `mailer_test.go`). The SQL is
-covered by `store_integration_test.go` (tag `integration`).
+Unit tests use fakes (`runner_test.go`, `content_test.go`, `mailer_test.go`,
+`paywall_test.go`). The SQL is covered by `store_integration_test.go` and
+`paywall_integration_test.go` (tag `integration`).

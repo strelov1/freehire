@@ -57,6 +57,43 @@ func (q *Queries) ClaimCVLifecycleSend(ctx context.Context, arg ClaimCVLifecycle
 	return user_id, err
 }
 
+const claimPaywallLetterSend = `-- name: ClaimPaywallLetterSend :one
+INSERT INTO cv_lifecycle_sends (user_id, step)
+SELECT u.id, 4
+FROM users u
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.id = $1
+  AND NOT cv_lifecycle_holdout(u.id)
+  AND mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+  AND COALESCE(ns.news_email_enabled, true)
+  AND (u.pro_until IS NULL OR u.pro_until <= now())
+  AND (u.ultra_until IS NULL OR u.ultra_until <= now())
+  AND EXISTS (
+      SELECT 1 FROM paywall_hits h
+      WHERE h.user_id = u.id
+        AND h.created_at <= now() - make_interval(mins => $2::int)
+        AND h.created_at > now() - make_interval(hours => $3::int)
+  )
+ON CONFLICT (user_id, step) DO NOTHING
+RETURNING user_id
+`
+
+type ClaimPaywallLetterSendParams struct {
+	UserID      int64 `json:"user_id"`
+	HoldMinutes int32 `json:"hold_minutes"`
+	MaxAgeHours int32 `json:"max_age_hours"`
+}
+
+// Writes the step-4 row if, and only if, the account is STILL eligible and still has a hit
+// inside the window: the one statement that gates the send. No row back (pgx.ErrNoRows)
+// means do not send. Written before SES is called, like ClaimCVLifecycleSend.
+func (q *Queries) ClaimPaywallLetterSend(ctx context.Context, arg ClaimPaywallLetterSendParams) (int64, error) {
+	row := q.db.QueryRow(ctx, claimPaywallLetterSend, arg.UserID, arg.HoldMinutes, arg.MaxAgeHours)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const countCVLifecycleEnrollable = `-- name: CountCVLifecycleEnrollable :one
 SELECT count(*)
 FROM users u
@@ -202,6 +239,98 @@ func (q *Queries) ListCVLifecycleDue(ctx context.Context, arg ListCVLifecycleDue
 	for rows.Next() {
 		var i ListCVLifecycleDueRow
 		if err := rows.Scan(&i.UserID, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPaywallLetterDue = `-- name: ListPaywallLetterDue :many
+
+SELECT DISTINCT ON (h.user_id)
+    h.user_id,
+    mail_recipient(u.email, u.email_verified, u.last_active_at)::text AS email,
+    h.feature,
+    COALESCE(j.title, '')::text AS job_title,
+    COALESCE(j.company, '')::text AS job_company,
+    COALESCE(j.public_slug, '')::text AS job_slug
+FROM paywall_hits h
+JOIN users u ON u.id = h.user_id
+LEFT JOIN jobs j ON j.id = h.job_id
+LEFT JOIN notification_settings ns ON ns.user_id = h.user_id
+WHERE h.created_at <= now() - make_interval(mins => $1::int)
+  AND h.created_at > now() - make_interval(hours => $2::int)
+  AND NOT cv_lifecycle_holdout(h.user_id)
+  AND mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+  AND COALESCE(ns.news_email_enabled, true)
+  AND (u.pro_until IS NULL OR u.pro_until <= now())
+  AND (u.ultra_until IS NULL OR u.ultra_until <= now())
+  AND NOT EXISTS (
+      SELECT 1 FROM cv_lifecycle_sends s WHERE s.user_id = h.user_id AND s.step = 4
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = h.user_id AND c.day = mail_today()
+  )
+  AND h.user_id > $3::bigint
+ORDER BY h.user_id, h.created_at, h.id
+LIMIT $4::int
+`
+
+type ListPaywallLetterDueParams struct {
+	HoldMinutes int32 `json:"hold_minutes"`
+	MaxAgeHours int32 `json:"max_age_hours"`
+	AfterUserID int64 `json:"after_user_id"`
+	MaxRows     int32 `json:"max_rows"`
+}
+
+type ListPaywallLetterDueRow struct {
+	UserID     int64  `json:"user_id"`
+	Email      string `json:"email"`
+	Feature    string `json:"feature"`
+	JobTitle   string `json:"job_title"`
+	JobCompany string `json:"job_company"`
+	JobSlug    string `json:"job_slug"`
+}
+
+// The paywall letter (step 4): one letter to a free user who was refused by the paid-AI gate,
+// about an hour after the first refusal that is still fresh. It shares the CV letters'
+// ledger (cv_lifecycle_sends), consent switch, free-tier test and holdout, but it is not
+// gated on an enrolment: the account may never have uploaded a CV. The holdout is the same
+// hash enrolment stores, so an account is in the same group for every letter. The predicate
+// appears in the list and in the claim, as above: change one, change both.
+// Accounts the paywall letter is due for, with the earliest hit inside the window to name:
+// at least hold_minutes old (the letter answers the attempt a while after, not mid-click) and
+// at most max_age_hours old (an old hit is no longer "what you just tried"). One row per
+// account, whatever the number of hits, and none once the step row exists: the letter is
+// once per account, never once per hit. The job, when the hit carries one, is read here so
+// the letter is composed from the row; a job that is gone leaves the strings empty.
+// Paged by user id like ListCVLifecycleDue.
+func (q *Queries) ListPaywallLetterDue(ctx context.Context, arg ListPaywallLetterDueParams) ([]ListPaywallLetterDueRow, error) {
+	rows, err := q.db.Query(ctx, listPaywallLetterDue,
+		arg.HoldMinutes,
+		arg.MaxAgeHours,
+		arg.AfterUserID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPaywallLetterDueRow{}
+	for rows.Next() {
+		var i ListPaywallLetterDueRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Email,
+			&i.Feature,
+			&i.JobTitle,
+			&i.JobCompany,
+			&i.JobSlug,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
