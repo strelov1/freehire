@@ -187,8 +187,16 @@ RETURNING company_slug;
 -- 4,784 open whatjobs/adzuna rows under 1,354 covered companies when measured. Closing is
 -- reversible: a lapsed coverage lets the next crawl write the posting, and UpsertJob reopens
 -- it. The removal enqueue rides the statement, as in CloseUnseenJobs. RETURNING company_slug
--- so the caller records the company as crawled, as RefreshCovered does.
-WITH closed AS (
+-- so the caller records the company as crawled, as RefreshCovered does — and for a listed row
+-- an earlier crawl already closed this way too, or a provider whose every posting is covered
+-- would show no crawl evidence from its second run on and never sweep its delisted rows.
+WITH already AS (
+    SELECT j.company_slug FROM jobs j
+    WHERE j.source = sqlc.arg(source)
+      AND j.external_id = ANY(sqlc.arg(external_ids)::text[])
+      AND j.closed_reason = 'ats_covered'
+      AND j.closed_at IS NOT NULL
+), closed AS (
     UPDATE jobs
     SET closed_at     = now(),
         closed_reason = 'ats_covered',
@@ -202,7 +210,9 @@ WITH closed AS (
     SELECT id FROM closed
     ON CONFLICT (job_id) DO NOTHING
 )
-SELECT company_slug FROM closed;
+SELECT company_slug FROM closed
+UNION ALL
+SELECT company_slug FROM already;
 
 -- name: CloseJobByID :one
 --

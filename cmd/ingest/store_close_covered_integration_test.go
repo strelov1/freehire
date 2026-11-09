@@ -51,6 +51,15 @@ func TestCloseCovered_ClosesOpenRowsAndQueuesTheirRemoval(t *testing.T) {
 		t.Errorf("crawled = %v, want [%s]", got, row.CompanySlug)
 	}
 
+	// A later crawl lists the row again: it is already closed, yet still crawl evidence.
+	again, err := store.CloseCovered(ctx, "lever", []string{"covered:open"})
+	if err != nil {
+		t.Fatalf("CloseCovered again: %v", err)
+	}
+	if len(again) != 1 || again[0] != row.CompanySlug {
+		t.Errorf("second close slugs = %v, want [%s]", again, row.CompanySlug)
+	}
+
 	// Coverage lapsed: the aggregator posting is written again and the row reopens.
 	if err := store.Save(ctx, cheapPosting("covered:open", "Backend Engineer")); err != nil {
 		t.Fatalf("re-Save: %v", err)

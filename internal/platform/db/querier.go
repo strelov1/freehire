@@ -766,7 +766,9 @@ type Querier interface {
 	// 4,784 open whatjobs/adzuna rows under 1,354 covered companies when measured. Closing is
 	// reversible: a lapsed coverage lets the next crawl write the posting, and UpsertJob reopens
 	// it. The removal enqueue rides the statement, as in CloseUnseenJobs. RETURNING company_slug
-	// so the caller records the company as crawled, as RefreshCovered does.
+	// so the caller records the company as crawled, as RefreshCovered does — and for a listed row
+	// an earlier crawl already closed this way too, or a provider whose every posting is covered
+	// would show no crawl evidence from its second run on and never sweep its delisted rows.
 	CloseCoveredJobs(ctx context.Context, arg CloseCoveredJobsParams) ([]string, error)
 	// Soft-close, the employer-self-service analogue of CloseJobByID: scoped to the actor's own
 	// employer-authored posting (created_by = actor_id AND source = 'employer'), never any other
