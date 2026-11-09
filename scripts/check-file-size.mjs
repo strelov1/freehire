@@ -10,7 +10,7 @@
 import { execFileSync } from "node:child_process";
 import { statSync } from "node:fs";
 
-const MAX_TOKENS = 33000;
+const MAX_TOKENS = 20000;
 
 // Files nobody writes by hand: lockfiles, generated code, binary or data assets and frozen
 // history (archived specs, old plans and reviews).
@@ -23,6 +23,7 @@ const IGNORED = [
   /^docs\/API(\.internal)?\.md$/,
   /^web\/src\/lib\/worldMap\.ts$/, // Natural Earth geometry, regenerated rather than edited
   /^web\/static\/geo-cities\.json$/,
+  /^web\/static\/openapi\.yaml$/, // served whole at /openapi.yaml; splitting it needs a bundler
   /^web\/src\/lib\/data\/contributors\.json$/, // fetched from GitHub
   /\.(gif|png|jpe?g|webp|ico|ttf|otf|woff2?|pdf|svg|tsv|csv|excalidraw)$/,
 ];
