@@ -52,7 +52,8 @@ func TestReport_LetterPaymentsCountOnlyClosedWindowsAndSentLetters(t *testing.T)
 	sendStep(t, pool, outside, 1, 20*day, "")
 	sendStep(t, pool, burned, 1, 20*day, "ses refused")
 	sendStep(t, pool, open, 1, 5*day, "")
-	sendStep(t, pool, inside, 2, 15*day, "")
+	early := enrolled(t, pool, "pay-early", 21*day, 0, false, 5*day)
+	sendStep(t, pool, early, 2, 15*day, "")
 
 	got, err := q.CVLetterPayments(context.Background(), db.CVLetterPaymentsParams{WindowDays: 14, Step: 1})
 	if err != nil {
@@ -66,7 +67,7 @@ func TestReport_LetterPaymentsCountOnlyClosedWindowsAndSentLetters(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Letter 2 went 15 days ago; the payment 6 days after the upload is before it.
+	// Letter 2 went 15 days ago, on day 6; the payment on day 5 is before it.
 	if got2.Sent != 1 || got2.Matured != 1 || got2.Paid != 0 {
 		t.Errorf("step 2 = %+v, want sent 1, matured 1, paid 0 (paid before the letter)", got2)
 	}

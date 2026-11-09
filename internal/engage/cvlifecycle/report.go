@@ -119,16 +119,18 @@ func percent(c Cohort) string {
 // Write prints the report as plain text.
 func (r Report) Write(w io.Writer) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "LETTER\tSENT\tDELIVERED\tOPENED\tCLICKED\tBOUNCED\tCOMPLAINED\tPAID<=%dd\tHOLDOUT PAID<=%dd\n", r.WindowDays, r.WindowDays)
+	// A tabwriter buffers; the first write error comes back from Flush.
+	line := func(format string, args ...any) { _, _ = fmt.Fprintf(tw, format, args...) }
+	line("LETTER\tSENT\tDELIVERED\tOPENED\tCLICKED\tBOUNCED\tCOMPLAINED\tPAID<=%dd\tHOLDOUT PAID<=%dd\n", r.WindowDays, r.WindowDays)
 	for _, l := range r.Letters {
-		fmt.Fprintf(tw, "%d\t%d\t%d\tn/a\t%d\t%d\t%d\t%d/%d (%s)\t%d/%d (%s)\n",
+		line("%d\t%d\t%d\tn/a\t%d\t%d\t%d\t%d/%d (%s)\t%d/%d (%s)\n",
 			l.Step, l.Sent, l.Delivered, l.Clicked, l.Bounced, l.Complained,
 			l.Recipients.Paid, l.Recipients.Accounts, percent(l.Recipients),
 			l.Control.Paid, l.Control.Accounts, percent(l.Control))
 	}
-	fmt.Fprintf(tw, "\nFROM ENROLLMENT\tACCOUNTS\tPAID<=%dd\n", r.WindowDays)
-	fmt.Fprintf(tw, "holdout (no letters)\t%d\t%d (%s)\n", r.Holdout.Accounts, r.Holdout.Paid, percent(r.Holdout))
-	fmt.Fprintf(tw, "mailed (all, letter or not)\t%d\t%d (%s)\n", r.Mailed.Accounts, r.Mailed.Paid, percent(r.Mailed))
+	line("\nFROM ENROLLMENT\tACCOUNTS\tPAID<=%dd\n", r.WindowDays)
+	line("holdout (no letters)\t%d\t%d (%s)\n", r.Holdout.Accounts, r.Holdout.Paid, percent(r.Holdout))
+	line("mailed (all, letter or not)\t%d\t%d (%s)\n", r.Mailed.Accounts, r.Mailed.Paid, percent(r.Mailed))
 	if err := tw.Flush(); err != nil {
 		return err
 	}
