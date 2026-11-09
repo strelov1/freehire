@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The boardless job aggregators the catalogue crawls (Tecla, JobStash, Working Nomads, Himalayas, Remotive, Reed, Computrabajo) and what each adapter must do. Split out of source-ingest, which holds the rules every adapter shares.
+The job aggregators the catalogue crawls and what each adapter must do: the boardless ones (Tecla, JobStash, Working Nomads, Himalayas, Remotive), Reed (keyed and keyword-scoped), and Computrabajo, which is board-scoped (one board per country site, such as `ar`). Split out of source-ingest, which holds the rules every adapter shares.
 
 ## Requirements
 

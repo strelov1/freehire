@@ -39,10 +39,6 @@ export interface User {
   agent_connected: boolean;
 }
 
-/** A user's single profile: their professional self — a non-empty set of
- *  `specializations` (job categories) and a non-empty set of canonical skill tokens. One
- *  per user (no id, no name); the foundation for finding relevant work. Timestamps are
- *  RFC3339 strings or null. */
 /** A geographic reach: controlled regions and/or ISO country codes. Empty = anywhere. */
 interface LocationGeoSet {
   regions?: string[];
@@ -84,6 +80,10 @@ export interface DerivedLocation {
   cities: string[];
 }
 
+/** A user's single profile: their professional self — a non-empty set of
+ *  `specializations` (job categories) and a non-empty set of canonical skill tokens. One
+ *  per user (no id, no name); the foundation for finding relevant work. Timestamps are
+ *  RFC3339 strings or null. */
 export interface UserProfile {
   /** Preferred posting languages; empty means any language. */
   job_languages?: string[];
