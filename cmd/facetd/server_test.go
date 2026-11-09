@@ -136,7 +136,8 @@ func TestFirstRebuildValidatesWrites(t *testing.T) {
 	if c, _ := call(t, h, "POST", "/write", `{"upserts":[{"id":"bad"}],"close":[1]}`); c != 400 {
 		t.Fatalf("bad write = %d, want 400", c)
 	}
-	if c, _ := call(t, h, "POST", "/write", `{"upserts":[`+doc(9, "c")+`]}`); c != 200 {
+	// close names a job the empty index has never seen: still a valid batch
+	if c, _ := call(t, h, "POST", "/write", `{"close":[1],"upserts":[`+doc(9, "c")+`]}`); c != 200 {
 		t.Fatalf("good write = %d", c)
 	}
 	call(t, h, "POST", "/rebuild/push", `{"docs":[`+doc(1, "a")+`]}`)
@@ -145,6 +146,9 @@ func TestFirstRebuildValidatesWrites(t *testing.T) {
 	}
 	if n := total(t, h, `"source = c"`); n != 1 {
 		t.Errorf("write recorded during the first rebuild lost: c = %v", n)
+	}
+	if n := total(t, h, `"source = a"`); n != 0 {
+		t.Errorf("close recorded during the first rebuild lost: a = %v", n)
 	}
 }
 
