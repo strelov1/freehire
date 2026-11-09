@@ -112,6 +112,9 @@ type Client struct {
 	// concurrency, but a remote GPU endpoint does (it hides per-call latency) — a bulk
 	// reindex sets it high.
 	embedConcurrency int
+	// router sends facet requests without query text to a second engine; nil means
+	// Meilisearch only (WithFacetEngine).
+	router *facetRouter
 }
 
 // Option customizes a Client at construction (see NewClient).

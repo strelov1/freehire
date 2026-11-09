@@ -194,6 +194,7 @@ Each is self-contained and can be read independently.
 | **Auto-apply queue** | [internal/application/autoapply/AGENTS.md](internal/application/autoapply/AGENTS.md) |
 | **`internal/search`** block; **Search** (index topology, reindex, dropped filters) | [internal/search/AGENTS.md](internal/search/AGENTS.md) |
 | **Facet-search drain** | [internal/search/searchdrain/AGENTS.md](internal/search/searchdrain/AGENTS.md) |
+| **Facet engine** (facetd's in-memory index, filter evaluator, the Meilisearch rules it copies) | [internal/search/facetidx/AGENTS.md](internal/search/facetidx/AGENTS.md) |
 | **`internal/ingest`** block | [internal/ingest/AGENTS.md](internal/ingest/AGENTS.md) |
 | **Source ingest** (adapters, registry) | [internal/ingest/sources/AGENTS.md](internal/ingest/sources/AGENTS.md) |
 | **Ingest scheduling** | [internal/ingest/ingestsched/AGENTS.md](internal/ingest/ingestsched/AGENTS.md) |

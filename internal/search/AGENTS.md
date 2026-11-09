@@ -16,7 +16,7 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`embedprogress` `facetsnapshot` `savedsearch` `search` `searchdrain` `searchintent`
+`embedprogress` `facetidx` `facetsnapshot` `savedsearch` `search` `searchdrain` `searchintent`
 `suggest`
 
 ## What the jobs index withholds (`search.Withheld`)
