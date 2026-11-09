@@ -1,104 +1,123 @@
 # justjoin-source Specification
 
 ## Purpose
-TBD - created by archiving change justjoin-detail-hydration. Update Purpose after archive.
+
+How the `justjoin` (justjoin.it, Poland's IT board) and `rocketjobs` (rocketjobs.pl, the same
+platform's board for every other trade) adapters crawl the Just Join IT platform. Both hosts'
+robots.txt disallow the platform's JSON API, so the offer set comes from each site's
+active-jobs sitemap and every fact from the offer page itself.
+
 ## Requirements
-### Requirement: JustJoin list-plus-detail crawl
 
-The system SHALL provide a `justjoin` source adapter that crawls the justjoin.it public
-API. The adapter is boardless and multi-company (it stays in the source facet and takes
-each posting's company from the feed), paging the cursor list endpoint
-`https://api.justjoin.it/v2/user-panel/offers/by-cursor` by the `from` cursor. Because the
-list endpoint omits the posting body, the adapter SHALL obtain the description from the
-per-offer detail endpoint `https://api.justjoin.it/v1/offers/{slug}`, whose `body` field
-carries the description HTML.
+### Requirement: Just Join IT boards are boardless aggregator providers
 
-#### Scenario: List page maps to jobs
+The system SHALL provide two adapters on one implementation: `justjoin` for `justjoin.it`
+(offer pages under `/job-offer/`) and `rocketjobs` for `rocketjobs.pl` (offer pages under
+`/oferta-pracy/`). Each is boardless (one national board, no per-tenant id) and an aggregator
+(it stays in the source facet and takes each offer's employer from the offer). Every
+`justjoin` job read from an offer page SHALL carry `IsTechHint`, because every justjoin.it
+offer is filed under one of its IT categories; a liveness-refresh job carries no content and
+no hint, and `rocketjobs` jobs SHALL NOT carry it.
 
-- **WHEN** the adapter reads a cursor page from the list endpoint
-- **THEN** it yields one `Job` per offer carrying the offer's title, company, city
-  location, work mode (from `workplaceType`), posted-at timestamp, and the offer `guid` as
-  the `ExternalID`, synthesizing the canonical detail URL from the offer slug
+#### Scenario: The IT board marks its jobs technical
 
-#### Scenario: Offer without slug, guid, or company is dropped
+- **WHEN** the `justjoin` adapter yields a job read from an offer page
+- **THEN** the job carries `IsTechHint`, and a job from `rocketjobs` does not
 
-- **WHEN** an offer in the feed has no slug, no guid, or no company name
-- **THEN** the adapter drops that offer (it cannot build a URL, a dedup key, or a company)
+### Requirement: The sitemap is the offer set
 
-### Requirement: JustJoin hydrates the description for unseen offers only
+The adapter SHALL list offers from the site's active-jobs sitemap index
+(`https://<host>/sitemaps/active-jobs.xml`) and every part it names, keeping only offer URLs
+on the site's own host whose path is the offer prefix followed by a slug. The slug is the
+offer's `ExternalID` (a multi-city offer is one sitemap entry under its parent slug) and the
+canonical `URL` is `https://<host><offer prefix><slug>`. Duplicate slugs SHALL be listed once,
+and offers SHALL be ordered by the sitemap's `lastmod`, most recent first.
 
-The adapter SHALL fetch per-offer detail only for an offer the catalogue does not already
-have, so a steady-state crawl issues detail requests only for new offers. The adapter SHALL
-receive a `seen(externalID)` predicate; for an offer whose `guid` is not seen it SHALL fetch
-`/v1/offers/{slug}`, put the sanitized `body` into the job description, and — from the same
-detail payload — set the structured facets the platform states unambiguously: skills from
-`requiredSkills[].name` (canonicalized through the skill dictionary) and seniority from
-`experienceLevel.value` (mapped into freehire's seniority vocabulary, with justjoin's `mid`
-meaning `middle`), each left empty when a value does not map. The adapter SHALL NOT derive a
-category from justjoin's `category`: it is a language/stack tag (JavaScript, Java, Python, …)
-that does not pin a single freehire role category, so the title dictionary decides category.
-For a seen offer the adapter SHALL yield a liveness-refresh job (no detail request): the pipeline
-refreshes the posting's last-seen state (and reopens it if closed) WITHOUT rewriting its content,
-so the description and facets hydrated when it was new are preserved rather than overwritten by a
-content-less re-upsert.
+The sitemap is the whole listing, so the crawl SHALL fail when the index or any part cannot
+be read, when the index names no part or more than a defensive cap of parts, or when no offer
+is found: a partial listing would let the sweep close the offers it did not read.
 
-Detail requests SHALL be bounded (a single crawl SHALL NOT issue unbounded concurrent detail
-requests), and a single offer's detail failure SHALL be isolated: the adapter logs and skips
-that offer's hydration rather than aborting the crawl.
+#### Scenario: A sitemap entry becomes an offer identity
 
-#### Scenario: New offer is hydrated with a description
+- **WHEN** the justjoin.it sitemap names `https://justjoin.it/job-offer/acme-senior-go`
+- **THEN** the offer's `ExternalID` is `acme-senior-go` and its `URL` is that address
 
-- **WHEN** the crawl encounters an offer whose guid is not in the seen set
-- **THEN** the adapter fetches that offer's detail and yields a `Job` whose description is
-  the sanitized detail `body`, with skills and seniority set from the detail when they map to
-  freehire's vocabularies
+#### Scenario: A foreign or malformed entry is skipped
 
-#### Scenario: Already-ingested offer skips the detail request and preserves content
+- **WHEN** a sitemap entry is on another host or its path is not an offer slug
+- **THEN** the adapter skips it
 
-- **WHEN** the crawl encounters an offer whose guid is already in the seen set
-- **THEN** the adapter yields a liveness-refresh `Job` (marked, no detail request), and the
-  pipeline only refreshes the row's last-seen/open state — its stored description and facets are
-  not overwritten
+#### Scenario: An unreadable sitemap part fails the crawl
 
-#### Scenario: A single offer's detail failure does not abort the crawl
+- **WHEN** one part of the sitemap index cannot be fetched
+- **THEN** the crawl fails instead of yielding the offers of the other parts
 
-- **WHEN** the detail request for one unseen offer fails
-- **THEN** the adapter logs and skips that offer's hydration and continues crawling the
-  remaining offers
+### Requirement: Only unseen offers are read, within a per-run bound
 
-### Requirement: One-time backfill of existing empty JustJoin descriptions
+The adapter SHALL receive a `seen(externalID)` predicate. For a seen offer it SHALL yield a
+liveness-refresh job (`SeenRefresh`, no page request), so the pipeline refreshes the row's
+last-seen and open state without rewriting its content. For unseen offers it SHALL read at
+most a bounded number of pages a run, picked by `hydrationLanes`: the freshest offers plus a
+backlog window that moves each hour, so offers the pipeline discards unsaved cannot starve
+the older ones. Offers past the bound are deferred to later runs and logged.
 
-The system SHALL provide a run-once `cmd/backfill-justjoin` worker that, for existing
-catalogue rows with `source = 'justjoin'`, fetches each posting's detail from
-`/v1/offers/{slug}` (slug taken from the stored URL) and updates the row's description, so
-the rows ingested before hydration gain a body and re-index (their `content_hash` moves). A
-single posting's detail failure SHALL be isolated and counted, never aborting the run.
+Requests SHALL be paced (one a second across sitemap and offer pages) with bounded
+concurrency, and page reads SHALL stop a margin before the run's deadline, leaving the
+pipeline time to write what was read. An offer whose page fails SHALL be logged and skipped,
+not abort the crawl; but a run that asked for pages and got no answer at all SHALL fail.
 
-#### Scenario: Existing empty row gains a description
+#### Scenario: An already-ingested offer is refreshed without a page request
 
-- **WHEN** the backfill worker processes a `justjoin` row whose detail fetch succeeds
-- **THEN** it updates that row's description with the sanitized detail body
+- **WHEN** the sitemap names an offer whose slug is in the seen set
+- **THEN** the adapter yields a liveness-refresh job for it and does not request its page
 
-#### Scenario: Backfill isolates a failed posting
+#### Scenario: One failed page does not abort the crawl
 
-- **WHEN** the detail fetch for one row fails or the posting is gone
-- **THEN** the worker logs and skips that row and continues with the rest
+- **WHEN** the page of one unseen offer fails to load
+- **THEN** the adapter logs it, skips that offer, and keeps reading the rest
 
-### Requirement: JustJoin is a registered boardless aggregator provider
+#### Scenario: A run where no page answers fails
 
-The `justjoin` provider SHALL crawl `justjoin.it` through its public JSON API
-(`api.justjoin.it/v2/user-panel/offers/by-cursor`), paginating by following `meta.next.cursor`
-up to a defensive maximum-page cap. Each posting maps to the normalized job shape with the
-employer from `companyName` and `WorkMode` derived from the structured `workplaceType`
-(`remote`/`hybrid`/`office`). The list response carries no apply link, so the adapter SHALL
-synthesize the canonical `URL` from the posting `slug` as `https://justjoin.it/job-offer/<slug>`.
+- **WHEN** the adapter requested offer pages and every one of them failed
+- **THEN** the crawl returns an error
 
-#### Scenario: JustJoin posting maps to a job with synthesized URL and structured work mode
+### Requirement: An offer page maps to a job
 
-- **WHEN** a `justjoin` posting has slug `acme-senior-go`, `companyName` "Acme", and `workplaceType` "remote"
-- **THEN** the job's `URL` is `https://justjoin.it/job-offer/acme-senior-go`, its `Company` is "Acme", and its `WorkMode` is "remote"
+The adapter SHALL read the offer object from the page's server-rendered Next.js flight,
+resolving a body given as a flight text reference. A page answering 404 or 410, or whose
+offer says `isOfferActive` false (the sitemap names an expired offer for about a day), SHALL
+count as a gone offer and yield nothing. A page that carries no offer object, or a body
+reference the flight does not hold, SHALL be an error, not a gone offer. An offer with no
+title, employer or body SHALL be dropped.
 
-#### Scenario: JustJoin is crawled across cursor pages
+The job SHALL carry the title, the employer from `companyName`, the city, the country from
+`countryCode` (Poland as fallback), `WorkMode` from `workplaceType`, the posted-at time from
+`publishedAt`, and from the offer's structured fields: seniority from `experienceLevel`
+(justjoin's `mid` meaning `middle`, unknown levels dropped), employment type from
+`workingTime`, skills from `requiredSkills` canonicalized through the skill dictionary, and
+the English level from `languages` when it is a CEFR level. The adapter SHALL NOT derive a
+category from the platform's category, which is a stack tag rather than a role.
 
-- **WHEN** the API response includes a non-null `meta.next.cursor`
-- **THEN** the adapter requests the next page with that cursor until the cursor is absent or the defensive page cap is reached
+Pay is listed per contract type, once in its original currency and again converted. The
+adapter SHALL read only the original-currency entries with a full range and a known period.
+The structured salary SHALL take the employment contract's range when there is one, else the
+first other contract type's, and the description SHALL begin with a "Wynagrodzenie" paragraph
+stating each retained range with its contract type and gross or net basis. An offer with no
+retained range SHALL carry neither a structured salary nor the paragraph.
+
+#### Scenario: An offer page becomes a job
+
+- **WHEN** an unseen offer's page carries an offer with title, `companyName` "Acme",
+  `workplaceType` "remote" and an employment-contract salary
+- **THEN** the job's `Company` is "Acme", its `WorkMode` is "remote", its salary is the
+  employment contract's range, and its description starts with the pay paragraph
+
+#### Scenario: An expired offer is gone
+
+- **WHEN** an offer page answers 404 or its offer says `isOfferActive` false
+- **THEN** the adapter yields no job for it and counts the page as answered
+
+#### Scenario: A page without an offer object is an error
+
+- **WHEN** an offer page answers but its flight carries no offer object
+- **THEN** the adapter treats the page as failed, not as a gone offer
