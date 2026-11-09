@@ -224,6 +224,11 @@ func run() int {
 	if *facetdOnly {
 		return 0 // Meilisearch was not rebuilt: the outbox rows are still owed to it
 	}
+	if t, ok := rb.(*teeRebuild); ok && t.secondaryDown {
+		// facetd kept its old generation and never saw these rows' changes; the drain still owes them to it
+		log.Printf("reindex: facetd rebuild failed, search_outbox entries kept for the drain")
+		return 0
+	}
 
 	// Best-effort: the reindex itself already succeeded, so a purge failure just leaves
 	// those rows for the next cycle rather than failing this run.

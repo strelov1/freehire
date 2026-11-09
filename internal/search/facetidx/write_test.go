@@ -408,3 +408,28 @@ func mustApply(t *testing.T, s *Store, b Batch) {
 		t.Fatal(err)
 	}
 }
+
+// TestWalkSkipsDocumentsNewerThanTheForwardArray: a batch that adds documents without a field
+// keeps that field's forward array, which is shorter than the new document ids; walking a
+// filter that selects such a document must skip it, not index past the array.
+func TestWalkSkipsDocumentsNewerThanTheForwardArray(t *testing.T) {
+	docs := manyDocs(3000)
+	ix := build(t, docs...)
+	added := `{"id":5000,"work_mode":"remote"}`
+	next, err := ix.apply(Batch{Upserts: [][]byte{[]byte(added)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fld := next.fields["company_slug"]
+	if fld.off == nil || len(fld.off) > int(next.n) {
+		t.Fatalf("setup: want company_slug's forward array kept from before the batch")
+	}
+	f, err := next.match(`id IN [5000, 7]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := toMap(fld, fld.walk(f)); !reflect.DeepEqual(got, map[string]int64{"co0007": 1}) {
+		t.Fatalf("walk = %v", got)
+	}
+	sameAnswers(t, "after adding a document without company_slug", next, build(t, append(docs, added)...))
+}

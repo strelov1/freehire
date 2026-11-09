@@ -108,8 +108,9 @@ never slow or fail a user request.
   the existing serve-probe idea extended to facetd, nightly rebuild from Postgres.
 - [~3 GB RSS on an already loaded core] → forward arrays only for facets where the walk wins
   (high-cardinality and multi-value); measured heap otherwise ~1.3 GB. MemoryHigh in the unit.
-- [Two engines to operate] → facetd is stateless-rebuildable in about a minute; `meili` mode is the
-  rollback.
+- [Two engines to operate] → a restart is fast (snapshot + write-ahead log, no Postgres); a lost
+  or unreadable snapshot means a full rebuild through `cmd/reindex`, which takes hours, and
+  Meilisearch serves the traffic meanwhile; `meili` mode is the rollback.
 
 ## Migration Plan
 

@@ -127,6 +127,9 @@ func (fld *field) walk(f *roaring.Bitmap) []valueCount {
 			break
 		}
 		for _, d := range buf[:n] {
+			if int(d)+1 >= len(fld.off) {
+				continue // added after this field's forward array was built, so it holds no value here
+			}
 			a, b := fld.off[d], fld.off[d+1]
 			if fld.fwd16 != nil {
 				for _, v := range fld.fwd16[a:b] {
@@ -194,6 +197,9 @@ func (h *worstFirst) Pop() any {
 
 // stat is the smallest and largest number the attribute holds among the documents of f.
 func (fld *field) stat(f *roaring.Bitmap) (Stat, bool) {
+	if !fld.numeric.Intersects(f) {
+		return Stat{}, false // otherwise the scans below walk the whole column for nothing
+	}
 	var st Stat
 	found := false
 	for _, e := range fld.num {

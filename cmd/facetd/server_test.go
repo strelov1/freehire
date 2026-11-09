@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func doc(id int, source string) string {
@@ -201,4 +202,29 @@ func TestSnapshotRoundTripAndCorrupt(t *testing.T) {
 func writeFile(path string, b []byte) error {
 	_, err := writeFileAtomic(path, func(w io.Writer) error { _, err := w.Write(b); return err })
 	return err
+}
+
+// TestIdleRebuildIsAbandoned: a rebuild nobody pushes to for rebuildLease stops recording
+// /write batches, so a reindex killed between begin and commit cannot grow them forever.
+func TestIdleRebuildIsAbandoned(t *testing.T) {
+	s, h := loaded(t, "", doc(1, "a"))
+	call(t, h, "POST", "/rebuild/begin", "")
+	s.mu.Lock()
+	s.rebuildAt = s.rebuildAt.Add(-rebuildLease - time.Second)
+	s.mu.Unlock()
+	if c, out := call(t, h, "POST", "/write", `{"upserts":[`+doc(2, "b")+`]}`); c != 200 {
+		t.Fatalf("write: %d %v", c, out)
+	}
+	s.mu.Lock()
+	rebuilding, pending := s.rebuilding, len(s.pending)
+	s.mu.Unlock()
+	if rebuilding || pending != 0 {
+		t.Fatalf("rebuilding=%t pending=%d, want the idle rebuild abandoned", rebuilding, pending)
+	}
+	if c, _ := call(t, h, "POST", "/rebuild/push", `{"docs":[`+doc(3, "c")+`]}`); c != 409 {
+		t.Errorf("push into an abandoned rebuild = %d, want 409", c)
+	}
+	if got := total(t, h, "null"); got != 2 {
+		t.Errorf("total = %v, want 2: the write is applied to the live index", got)
+	}
 }

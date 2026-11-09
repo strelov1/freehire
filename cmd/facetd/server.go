@@ -49,8 +49,9 @@ type Server struct {
 	committing bool       // Build is running off-lock; push/begin/commit are refused
 	builder    *facetidx.Builder
 	pending    []facetidx.Batch
-	wal        *os.File // guarded by mu, like the three below
-	walOff     int64    // bytes of good records in the log
+	rebuildAt  time.Time // last begin or push; a rebuild idle past rebuildLease is abandoned
+	wal        *os.File  // guarded by mu, like the three below
+	walOff     int64     // bytes of good records in the log
 	walRecs    int
 	walBroken  bool // a rollback failed: refuse writes rather than log behind garbage
 
@@ -160,6 +161,18 @@ func writeFileAtomic(path string, write func(io.Writer) error) (int64, error) {
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
+		return 0, err
+	}
+	// The rename is durable only once its directory is synced; the WAL is rotated after this.
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return 0, err
+	}
+	err = dir.Sync()
+	if cerr := dir.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
 		return 0, err
 	}
 	return st.Size(), nil
@@ -373,6 +386,7 @@ func (s *Server) write(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.store.Load()
+	s.expireRebuildLocked()
 	if st == nil && !s.rebuilding {
 		s.notReady(w)
 		return
@@ -404,8 +418,22 @@ func (s *Server) rebuildBegin(w http.ResponseWriter, _ *http.Request) {
 		fail(w, http.StatusConflict, "a rebuild commit is running")
 		return
 	}
-	s.builder, s.pending, s.rebuilding = facetidx.NewBuilder(), nil, true
+	s.builder, s.pending, s.rebuilding, s.rebuildAt = facetidx.NewBuilder(), nil, true, time.Now()
 	reply(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// rebuildLease is how long an open rebuild may go without a push before /write stops
+// recording batches for it: a reindex killed between begin and commit never aborts, and
+// the recorded batches would otherwise grow without bound.
+const rebuildLease = 30 * time.Minute
+
+// expireRebuildLocked abandons an open rebuild idle past rebuildLease. Caller holds mu.
+func (s *Server) expireRebuildLocked() {
+	if !s.rebuilding || s.committing || time.Since(s.rebuildAt) < rebuildLease {
+		return
+	}
+	log.Printf("facetd: rebuild idle since %s, abandoned (%d recorded writes dropped)", s.rebuildAt.Format(time.RFC3339), len(s.pending))
+	s.builder, s.pending, s.rebuilding = nil, nil, false
 }
 
 func (s *Server) rebuildPush(w http.ResponseWriter, r *http.Request) {
@@ -417,10 +445,12 @@ func (s *Server) rebuildPush(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.expireRebuildLocked()
 	if s.builder == nil {
 		fail(w, http.StatusConflict, "no rebuild open")
 		return
 	}
+	s.rebuildAt = time.Now()
 	for _, d := range req.Docs {
 		if err := s.builder.Add([]byte(d)); err != nil {
 			fail(w, http.StatusBadRequest, "%v", err)

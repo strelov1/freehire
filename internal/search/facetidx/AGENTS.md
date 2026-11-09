@@ -4,8 +4,9 @@
 The in-memory facet engine behind facetd (openspec/changes/facetd): roaring bitmaps per
 attribute value, a filter evaluator over the Meilisearch fragments our own code builds, and
 facet counts, totals and distinct counts that must equal Meilisearch v1.49's. It imports
-nothing from `internal/search/search` (that package will import this one); only its external
-integration test does.
+nothing from `internal/search/search` (that package's attribute guard imports this one); only
+its external integration test does. The HTTP service around it is `cmd/facetd`, the router
+that calls it is `internal/search/search/route.go`, and full rebuilds come from `cmd/reindex`.
 
 ## Always true
 
@@ -97,7 +98,6 @@ integration test does.
   answers every tested filter and facet exactly as a `Builder` over the resulting documents.
 
 ## Not here yet
-The HTTP service (`cmd/facetd`), the Postgres rebuild and the router in
-`internal/search/search`. Range filters build a bitmap from the sorted column, so a bound that
+Range filters build a bitmap from the sorted column, so a bound that
 selects most of a multi-valued column costs a pass over it; a bucketed index is the seam if it
 shows in shadow traffic.
