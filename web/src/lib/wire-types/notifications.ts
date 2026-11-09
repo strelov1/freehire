@@ -18,7 +18,7 @@ export interface NotificationSettings {
 }
 
 /** The notification-center event kinds a `user_notifications` row can carry — matches
- *  internal/notify/reminder/nudge's kind strings exactly (see
+ *  internal/engage/{notify,reminder,nudge}'s kind strings exactly (see
  *  openspec/changes/add-notification-center/design.md decision 1), plus two recorded
  *  directly by auto-apply's own write paths rather than by one of those background
  *  engines: `auto_apply_tailor_ready` (auto-apply-tailored-resume; historical rows only —
