@@ -790,7 +790,14 @@
         return;
       }
       deferredNew = false;
-      await openSession(created.id);
+      try {
+        await openSession(created.id);
+      } catch (err) {
+        // The session exists and is active, so a resend goes to it; only this send is lost.
+        if (start.kind === 'message') giveBack(start);
+        report(err, s.openChatFailed);
+        return;
+      }
       if (activeId !== created.id) {
         if (start.kind === 'message') giveBack(start);
         return;
