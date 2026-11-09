@@ -270,3 +270,17 @@ func TestCommitReportsSnapshotFailure(t *testing.T) {
 		t.Errorf("committed index not live: total = %v", n)
 	}
 }
+
+func TestMetricsCarryMemoryAndBatchSize(t *testing.T) {
+	_, h := loaded(t, "", doc(1, "a"))
+	call(t, h, "POST", "/write", `{"close":[1],"upserts":[`+doc(2, "b")+`]}`)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/metrics", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	body := rec.Body.String()
+	for _, want := range []string{"facetd_write_batch_jobs_count 1", "facetd_write_batch_jobs_sum 2", "go_memstats_heap_alloc_bytes"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/metrics lacks %q", want)
+		}
+	}
+}
