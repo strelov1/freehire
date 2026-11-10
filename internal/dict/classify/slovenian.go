@@ -103,6 +103,24 @@ var slovenianCategoryTable = []aliasEntry{
 	{"slascicarsk*", "hospitality"},
 	{"pralnic*", "hospitality"},
 	{"klicn* centr*", "support"},
+	// The carer ("varuh", the masculine of "varuhinja") is healthcare; the Ombudsman
+	// ("Varuh človekovih pravic") names an employer, not the role.
+	{"varuh* clovekov*", categoryNone},
+	{"varuh", "healthcare"},
+	{"kozmetik", "personal_services"},
+	// The machine floor by its machine or plant: the welding robot, the rubber goods,
+	// the woodworking machines, the food and pharmaceutical plants, the SMD/THT
+	// assembly lines, as "Machine Operator" is.
+	{"variln* robot*", "manufacturing"},
+	{"gumen* izdelk*", "manufacturing"},
+	{"pri stroj*", "manufacturing"},
+	{"lesnoobdelovaln*", "manufacturing"},
+	{"zivilsk* obrat*", "manufacturing"},
+	{"operater* v farmacevtsk*", "manufacturing"},
+	{"operater* tehnolosk*", "manufacturing"},
+	{"smd operater*", "manufacturing"},
+	{"tht operater*", "manufacturing"},
+	{"gradben* tehnik*", "skilled_trades"},
 }
 
 // slovenianSeniorityTable lists the Slovenian grades. Višji is senior only in the forms that
