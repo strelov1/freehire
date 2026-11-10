@@ -163,11 +163,12 @@ func (s avature) detail(ctx context.Context, e CompanyEntry, entry sitemapLoc) (
 
 	workMode := avatureWorkMode(avatureFieldValue(root, "Work Model"))
 	return Job{
-		ExternalID:  id,
-		URL:         entry.Loc,
-		Title:       title,
-		Company:     e.Company,
-		Location:    avatureLabeledValue(root, "Locations"),
+		ExternalID: id,
+		URL:        entry.Loc,
+		Title:      title,
+		Company:    e.Company,
+		// UNOPS states the place as a sidebar "Duty Station(s)" field, not a Locations line.
+		Location:    firstNonEmpty(avatureLabeledValue(root, "Locations"), avatureFieldValue(root, "Duty Station(s)")),
 		Description: description,
 		Remote:      workMode == "remote",
 		WorkMode:    workMode,
@@ -274,12 +275,64 @@ func avatureLabeledValue(root *html.Node, label string) string {
 	return out
 }
 
-// avatureDescription returns the inner HTML of the job ad body — the richest (most text)
-// field value that carries prose markup (a paragraph/heading/list). The prose requirement
-// keeps a long inline value such as the Locations field's hidden multi-location dump (plain
-// text, no block tags) from being mistaken for the description. It falls back to the richest
-// value overall if none carries prose markup.
+// avatureDescription returns the inner HTML of the job ad body: every field that has no
+// sidebar label and is not an inline-labeled value ("<strong>Locations</strong>: …"),
+// joined in page order. Most tenants render the body as one such field (EA); UNOPS splits it
+// into a dozen sections, each opening with its own <style>, and picking the "richest" one
+// kept only the closing disclaimer, its length inflated by CSS. A page with no field
+// wrappers falls back to avatureRichestValue.
 func avatureDescription(root *html.Node) string {
+	var parts []string
+	walk(root, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || !HasClass(n, "article__content__view__field") {
+			return true
+		}
+		var labeled bool
+		var value *html.Node
+		walk(n, func(c *html.Node) bool {
+			if c.Type == html.ElementNode {
+				if HasClass(c, "article__content__view__field__label") {
+					labeled = true
+				} else if value == nil && HasClass(c, "article__content__view__field__value") {
+					value = c
+				}
+			}
+			return true
+		})
+		if !labeled && value != nil && !avatureInlineLabeled(value) {
+			if body := innerHTML(value); strings.TrimSpace(sanitizeHTML(body)) != "" {
+				parts = append(parts, body)
+			}
+		}
+		return false
+	})
+	if len(parts) > 0 {
+		return strings.Join(parts, "\n")
+	}
+	return avatureRichestValue(root)
+}
+
+// avatureInlineLabeled reports whether a field value opens with its own bold label and a
+// colon — the shape avatureLabeledValue reads ("<strong>Locations</strong>: Austin").
+func avatureInlineLabeled(value *html.Node) bool {
+	var strong string
+	walk(value, func(c *html.Node) bool {
+		if strong == "" && c.Type == html.ElementNode && c.Data == "strong" {
+			strong = strings.TrimSpace(textContent(c))
+		}
+		return strong == ""
+	})
+	text := strings.TrimSpace(textContent(value))
+	return strong != "" && strings.HasPrefix(text, strong) &&
+		strings.HasPrefix(strings.TrimSpace(strings.TrimPrefix(text, strong)), ":")
+}
+
+// avatureRichestValue returns the inner HTML of the richest (most text) field value that
+// carries prose markup (a paragraph/heading/list). The prose requirement keeps a long inline
+// value such as the Locations field's hidden multi-location dump (plain text, no block tags)
+// from being mistaken for the description. It falls back to the richest value overall if
+// none carries prose markup.
+func avatureRichestValue(root *html.Node) string {
 	var prose, any string
 	proseLen, anyLen := 0, 0
 	walk(root, func(n *html.Node) bool {
