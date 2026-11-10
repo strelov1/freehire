@@ -328,15 +328,25 @@ func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid, 
 	// queue per index, so submission order IS execution order — the reset still lands
 	// first. Awaiting it here instead would leave a live index embedder-less for the
 	// round trip between the two, and a match-sort query arriving in that window gets a
-	// 400. Both task ids are awaited below, in the order they were queued.
+	// 400. Every task id is awaited below, in the order it was queued.
 	st, err := idx.UpdateSettingsWithContext(ctx, settings)
 	if err != nil {
 		return fmt.Errorf("search: update settings: %w", err)
 	}
-	if err := c.awaitTask(ctx, idx, reset.TaskUID); err != nil {
-		return err
+	// facetSearch goes on its own: the client's Settings tags it `omitempty`, so a false
+	// never leaves UpdateSettings, and a fresh index defaults it to true. Nothing calls
+	// /facet-search (counts come from facets, value lookup from list_filter_values in
+	// Go), yet while it is on Meilisearch rebuilds its facet-search data on every write.
+	fs, err := idx.UpdateFacetSearchWithContext(ctx, settings.FacetSearch)
+	if err != nil {
+		return fmt.Errorf("search: update facet search on %s: %w", uid, err)
 	}
-	return c.awaitTask(ctx, idx, st.TaskUID)
+	for _, task := range []int64{reset.TaskUID, st.TaskUID, fs.TaskUID} {
+		if err := c.awaitTask(ctx, idx, task); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // createIndex creates the index (keyed by pk) if absent. An already-existing index is
