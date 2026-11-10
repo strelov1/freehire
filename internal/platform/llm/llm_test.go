@@ -263,6 +263,45 @@ func TestGenerateJSON_observesErrorAndReturnsUnchangedError(t *testing.T) {
 	}
 }
 
+func TestGenerateJSON_callerCancellationIsObservedAsCancelled(t *testing.T) {
+	// langchaingo reports a cancelled request as a bare error that no longer wraps
+	// context.Canceled; the client must still tell it apart from a provider failure.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ct := &captureTracer{}
+	c := &Client{model: &fakeModel{err: errors.New("request cancelled")}, timeout: time.Second, tracer: ct, source: "enrich"}
+
+	if _, err := c.GenerateJSON(ctx, "s", "u"); err == nil {
+		t.Fatal("expected an error from a cancelled call")
+	}
+	if len(ct.got) != 1 || ct.got[0].Err == nil || !ct.got[0].Cancelled {
+		t.Fatalf("expected one cancelled error generation, got %+v", ct.got)
+	}
+}
+
+func TestGenerateJSON_timeoutIsNotCancelled(t *testing.T) {
+	// Our own per-call deadline firing is a real failure, not a caller cancellation.
+	ct := &captureTracer{}
+	c := &Client{model: blockingModel{}, timeout: 10 * time.Millisecond, tracer: ct, source: "enrich"}
+
+	if _, err := c.GenerateJSON(context.Background(), "s", "u"); err == nil {
+		t.Fatal("expected a timeout error")
+	}
+	if len(ct.got) != 1 || ct.got[0].Err == nil || ct.got[0].Cancelled {
+		t.Fatalf("expected one non-cancelled error generation, got %+v", ct.got)
+	}
+}
+
+func TestGenerateJSON_providerErrorIsNotCancelled(t *testing.T) {
+	ct := &captureTracer{}
+	c := &Client{model: &fakeModel{err: errors.New("gateway boom")}, timeout: time.Second, tracer: ct, source: "enrich"}
+
+	_, _ = c.GenerateJSON(context.Background(), "s", "u")
+	if len(ct.got) != 1 || ct.got[0].Cancelled {
+		t.Fatalf("a provider failure must not be marked cancelled, got %+v", ct.got)
+	}
+}
+
 func TestGenerateJSON_nilTracerIsUnchanged(t *testing.T) {
 	// A client with no tracer must behave exactly as before: no panic, same result.
 	f := &fakeModel{resp: `{"a":1}`}
