@@ -138,6 +138,8 @@ func TestDerive(t *testing.T) {
 		{"bcs branch", "Voditelj poslovnice (m/ž)", "people_manager"},
 		{"bcs branch slash", "VODITELJ/ICA POSLOVNICE", "people_manager"},
 		{"bcs deputy store", "Zamjenik voditelja trgovine (m/ž)", "people_manager"},
+		{"bcs secretary of a head", "Tajnica voditelja odjela", ""},
+		{"sl assistant of a head", "Asistent vodje sektorja (m/ž)", ""},
 		{"bcs outlet", "VODITELJ / VODITELJICA MALOPRODAJNOG MJESTA", "people_manager"},
 		{"bcs department", "VODITELJ/VODITELJICA ODJELA DELIKATESA", "people_manager"},
 		{"bcs store manager", "Poslovođa (m/ž)", "people_manager"},

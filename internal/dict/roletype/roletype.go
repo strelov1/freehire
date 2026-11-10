@@ -190,7 +190,7 @@ func Derive(title string) string {
 			}
 		}
 	}
-	if bcsHead.MatchString(foldBCS(s)) {
+	if bcsHead.MatchString(bcsAideOfHead.ReplaceAllString(foldBCS(s), " ")) {
 		return "people_manager"
 	}
 	return ""
@@ -209,6 +209,13 @@ func Derive(title string) string {
 // uredu direktora", "v tajništvu generalnega direktorja", "pomoćnik direktora" work
 // for the director, as the Russian "помощник директора" does (headBlindPhrases).
 var bcsHead = regexp.MustCompile(`\b(?:(?:voditelj(?:ica|a|ice)?|sef(?:ica|a|ice)?|vodj[ae])\s+(?:poslovnice|maloprodajnog\s+mj?esta|prodajnog\s+mj?esta|trgovine|prodavaonice|prodavnice|odjela|odeljenja|sluzbe|sektora|smjene|smene|restorana|poslovalnice|poslovne\s+enote|izmene|oddelka|sektorja|skupine|prodajalne|restavracije)|(?:poslovodj|izmenovodj|skupinovodj)[aeiu]|direktor(?:ica|ka)?|(?:zamj?enik|zamj?enica|namestnik|namestnica)\s+(?:(?:generaln|izvrsn)\w*\s+)?direktor(?:a|ja|ice))\b`)
+
+// bcsAideOfHead is staff who work FOR a workplace head: "Tajnica voditelja odjela",
+// "Asistent vodje sektorja". The head word is cut with its aide so bcsHead does not read
+// the secretary as the manager. The "pomoćnik/pomočnik" of a head is left alone: in a
+// shop it is the assistant manager ("Pomočnik vodje poslovne enote"), whom English
+// "Assistant Manager" marks too.
+var bcsAideOfHead = regexp.MustCompile(`\b(?:tajni(?:k|ca)|sekretar(?:ka|ica)?|asistent(?:ka|ica)?|administrator(?:ka|ica)?|referent(?:ka|ica)?)\s+(?:voditelj|vodj|sef|direktor)\w*`)
 
 // bcsGenderSlash is the feminine form written after a slash ("Voditelj/ica",
 // "Šef/ica"), cut so the masculine word before it reads on.
