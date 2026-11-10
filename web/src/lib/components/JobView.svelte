@@ -42,7 +42,7 @@
   import type { Job, MatchAnalysisResponse, PlanState, UserJob } from '#lib/types.js';
   import { companyLogoUrl } from '#lib/logo.js';
   import { profileStore } from '#lib/profile.svelte.js';
-  import { Button, Chip, EntityLogo, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { Button, Chip, EntityLogo, ProviderIcon, TabStrip, tabStripId } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { formatDate, formatDateOrAgo, formatDateTime } from '#lib/utils.js';
   import BackerBadge from './BackerBadge.svelte';
@@ -1396,7 +1396,7 @@
           class="inline-flex shrink-0 items-center gap-1.5 self-stretch border-b border-border pl-3 text-sm text-muted-foreground hover:text-foreground"
         >
           Find people
-          <ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />
+          <ProviderIcon provider="linkedin" class="size-3.5 shrink-0" />
         </a>
       {/if}
     </div>
