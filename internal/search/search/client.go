@@ -341,13 +341,11 @@ func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid, 
 	if err != nil {
 		return fmt.Errorf("search: update facet search on %s: %w", uid, err)
 	}
-	if err := c.awaitTask(ctx, idx, reset.TaskUID); err != nil {
-		return err
-	}
-	if err := c.awaitTask(ctx, idx, st.TaskUID); err != nil {
-		return err
-	}
-	return c.awaitTask(ctx, idx, fs.TaskUID)
+	return errors.Join(
+		c.awaitTask(ctx, idx, reset.TaskUID),
+		c.awaitTask(ctx, idx, st.TaskUID),
+		c.awaitTask(ctx, idx, fs.TaskUID),
+	)
 }
 
 // createIndex creates the index (keyed by pk) if absent. An already-existing index is
