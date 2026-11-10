@@ -49,7 +49,7 @@
     "oxlint": "^1.90.0",
     "storybook": "10.6.5",
     "style-dictionary": "^5.7.1",
-    "svelte": "^5.57.2",
+    "svelte": "^5.57.3",
     "svelte-check": "^4.7.8",
     "svelte-eslint-parser": "^1.10.0",
     "tailwindcss": "^4.3.3",
