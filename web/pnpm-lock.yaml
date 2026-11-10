@@ -86,8 +86,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.8.0(jiti@2.7.0))
       '@lucide/svelte':
-        specifier: ^1.65.0
-        version: 1.65.0(svelte@5.57.2(@typescript-eslint/types@8.65.0))
+        specifier: ^1.66.0
+        version: 1.70.0(svelte@5.57.2(@typescript-eslint/types@8.65.0))
       '@playwright/test':
         specifier: ^1.64.1
         version: 1.64.1
@@ -553,8 +553,8 @@ packages:
   '@lezer/yaml@1.0.4':
     resolution: {integrity: sha512-2lrrHqxalACEbxIbsjhqGpSW8kWpUKuY6RHgnSAFZa6qK62wvnPxA8hGOwOoDbwHcOFs5M4o27mjGu+P7TvBmw==}
 
-  '@lucide/svelte@1.65.0':
-    resolution: {integrity: sha512-VfM4Ej7JFYz33WXm/JdqtOsOqRtfca5H9eFcyfcbFthWvbOnvvCerY/YkEk0ZiAvOvqo5hpK3u+opC0zY7Caxw==}
+  '@lucide/svelte@1.70.0':
+    resolution: {integrity: sha512-zvx7K/WLxo82c4ZYqbsfcYUPDVFrq4561xH0NHfSHJJbajj0AONTQ14EO095/WnfI4XUEl1tyS/nbjQNNiNxdQ==}
     peerDependencies:
       svelte: ^5
 
@@ -4239,7 +4239,7 @@ snapshots:
       '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.12
 
-  '@lucide/svelte@1.65.0(svelte@5.57.2(@typescript-eslint/types@8.65.0))':
+  '@lucide/svelte@1.70.0(svelte@5.57.2(@typescript-eslint/types@8.65.0))':
     dependencies:
       svelte: 5.57.2(@typescript-eslint/types@8.65.0)
 
