@@ -42,6 +42,10 @@ type Stats struct {
 	// only part of it, so it must never prove coverage (boardQualifies). It is not Failed: the
 	// board did nothing wrong, the run simply ran out of time around it.
 	Interrupted int
+	// RecentUnsupported counts boards a recent-only run skipped because their adapter has no
+	// date filter (sources.RecentSource). Reported so the run says what it left alone rather
+	// than doing a hidden full crawl.
+	RecentUnsupported int
 	// SeenUnknown counts boards a hydrating adapter crawled without the catalogue's seen-set,
 	// because the lookup failed. Every stored posting then reads as new, so a budgeted adapter
 	// yields only its budget of them and refreshes none of the rest: the crawl is no evidence
@@ -91,6 +95,7 @@ func (s *Stats) add(o Stats) {
 	s.Unreadable += o.Unreadable
 	s.Interrupted += o.Interrupted
 	s.SeenUnknown += o.SeenUnknown
+	s.RecentUnsupported += o.RecentUnsupported
 	s.QualifyingBoards = append(s.QualifyingBoards, o.QualifyingBoards...)
 	s.EmptyBoards = append(s.EmptyBoards, o.EmptyBoards...)
 	s.UnprovenCompanies = append(s.UnprovenCompanies, o.UnprovenCompanies...)

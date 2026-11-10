@@ -65,6 +65,12 @@ A few notes cover more than one adapter, and a note can name other adapters too,
 
 **Telegram ingest** is a two-stage queue (crawl then LLM-extract): `cmd/tg-ingest` crawls the active `telegram_channels` rows into `telegram_posts`; `cmd/tg-extract` drains via the LLM. Both are run-once-and-exit cron workers.
 
+## Recent-only crawls (`RecentSource`)
+
+An adapter whose platform documents a publication-date filter implements `RecentSource.FetchRecent(ctx, e, window)`, which `cmd/ingest` calls instead of `Fetch` when the run sets `INGEST_RECENT_DAYS`. It returns only postings published inside the window and never signals a removal; the pipeline treats the result as no evidence of what is gone (no sweep, no board-health writes). An adapter without it is skipped and counted (`recent_unsupported`), never crawled in full. Adzuna is the only adopter: it sends the window as `max_days_old`.
+
+Adding another adapter takes its own change, citing the source's documented date parameter and checking it against the live API by hand: fixtures prove only the request shape. Do not adopt it by sorting newest-first and stopping early, which is a guess about the source's ordering rather than a filter.
+
 ## Limitations
 
 - The ingest sweep has a trade-off: a missed run can leave an orphan open until a future reconcile; the change window is sized wide enough to absorb a skipped cron.

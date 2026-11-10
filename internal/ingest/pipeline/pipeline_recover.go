@@ -30,7 +30,7 @@ type boardKey struct{ provider, board, region string }
 // probes" becomes a full second crawl of the one board that happened to answer.
 func (r Runner) recoverProviders(ctx context.Context, entries []sources.CompanyEntry) map[boardKey]Stats {
 	handled := make(map[boardKey]Stats)
-	if r.BoardHealth == nil {
+	if r.BoardHealth == nil || r.recent() {
 		return handled
 	}
 	byProvider := entriesByProvider(entries)

@@ -37,6 +37,12 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		return Stats{Failed: 1}
 	}
 
+	if r.recent() {
+		if _, ok := src.(sources.RecentSource); !ok {
+			return Stats{RecentUnsupported: 1, SkippedBoards: skippedBoard(e)}
+		}
+	}
+
 	// Independent of which Fetch variant this board takes below: a company-level
 	// description is a fact about the board, not about any one posting.
 	r.fillCompanyDescription(ctx, e, src)
@@ -44,7 +50,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 	// A streaming adapter persists postings as it crawls, so a long rate-limited board's
 	// progress is saved incrementally (and survives an interrupted run) rather than buffered
 	// until the whole board finishes.
-	if ss, streaming := src.(sources.StreamingSource); streaming {
+	if ss, streaming := src.(sources.StreamingSource); streaming && !r.recent() {
 		st, listed := r.ingestStream(ctx, e, ss)
 		// A streaming board that made no progress at all AND failed is a true outage;
 		// partial progress is a success signal, not a board failure. A rejected posting is

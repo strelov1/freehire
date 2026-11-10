@@ -221,6 +221,19 @@ type HydratingSource interface {
 	FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error)
 }
 
+// RecentSource is a Source whose platform can filter a listing by publication date, so a run
+// can ask for only the newest postings. FetchRecent returns the postings published within the
+// last window (a whole number of days) and nothing older. It NEVER signals a removal: a recent listing omits every older posting
+// by construction, so the pipeline treats the result as no evidence about what is gone (see
+// pipeline.Runner.RecentDays).
+//
+// An adapter opts in only when the source documents a date filter that was verified against it.
+// An adapter that does not implement this is skipped in a recent run rather than crawled in full.
+type RecentSource interface {
+	Source
+	FetchRecent(ctx context.Context, e CompanyEntry, window time.Duration) ([]Job, error)
+}
+
 // CoverageGated is a HydratingSource that can also skip a posting's detail when the pipeline is
 // going to discard that posting anyway — the aggregator-coverage gate because the employer is
 // already covered by a non-aggregator source, or the catalogue filter because the title is
