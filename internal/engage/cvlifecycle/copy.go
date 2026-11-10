@@ -15,6 +15,8 @@ type spec struct {
 	heading   string
 	body      *template.Template
 	text      func(data) string
+	// footer says why the account is getting the letter; the CV letters' reason when empty.
+	footer template.HTML
 }
 
 // body parses a letter's markup with the founder's signature appended.
@@ -25,6 +27,8 @@ func body(name, markup string) *template.Template {
 const listStyle = `margin:0 0 14px 0;padding-left:20px;font-size:15px;line-height:1.6;`
 
 var specs = map[Step]spec{
+	StepPaywall: paywallSpec,
+
 	StepATS: {
 		subject:   func(d data) string { return fmt.Sprintf("Your CV scored %d/100 in an ATS check", d.Overall) },
 		preheader: func(d data) string { return "What is costing your CV the most points." },
@@ -78,6 +82,28 @@ var specs = map[Step]spec{
 			return fmt.Sprintf("If tailoring your CV sounded useful, here is %d%% off your first month of Pro.\n\nCode: %s\n\nUse the code: %s\n\n", d.Percent, d.Code, d.OfferURL) +
 				"If you would rather not, ignore this letter: nothing changes and I will not send another about it.\n"
 		},
+	},
+}
+
+var paywallSpec = spec{
+	subject:   func(d data) string { return "You wanted to " + d.AttemptGeneric },
+	preheader: func(d data) string { return "It needs Pro, and your account is on the free plan." },
+	heading:   "About what you just tried",
+	footer:    "You’re getting this because you tried a Pro feature on freehire.",
+	body: body("paywall", `
+{{template "p" (printf "You wanted to %s. It did not run: that is part of Pro, and your account is on the free plan." .Attempt)}}
+{{template "p" "If it is still on your list, Pro unlocks it along with the rest of the AI tools. If something was unclear, or you pressed it by accident, reply and tell me. I read every reply myself."}}
+{{template "button" (mailLink .PricingURL "See what Pro includes")}}
+{{if .JobURL}}{{template "p-link" (mailTextLink "Or go back to the posting:" .JobURL .JobLabel)}}{{end}}`),
+	text: func(d data) string {
+		var b strings.Builder
+		fmt.Fprintf(&b, "You wanted to %s. It did not run: that is part of Pro, and your account is on the free plan.\n\n", d.Attempt)
+		b.WriteString("If it is still on your list, Pro unlocks it along with the rest of the AI tools. If something was unclear, or you pressed it by accident, reply and tell me. I read every reply myself.\n\n")
+		fmt.Fprintf(&b, "See what Pro includes: %s\n", d.PricingURL)
+		if d.JobURL != "" {
+			fmt.Fprintf(&b, "Or go back to the posting (%s): %s\n", d.JobLabel, d.JobURL)
+		}
+		return b.String()
 	},
 }
 

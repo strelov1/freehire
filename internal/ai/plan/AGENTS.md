@@ -100,6 +100,9 @@ transaction. `store.go` is the transaction around it and nothing else.
   `ats_review` / `mail_recall` / `autofill` for the three routes with no allowance, chosen
   from the route template. The table links an account to jobs it looked at; it is erased with
   the account (`ON DELETE CASCADE`), and has no retention sweep yet.
+  `cv-lifecycle-mail` reads it: about an hour after a hit, the account gets one letter naming
+  the feature and the job (see [internal/engage/cvlifecycle/AGENTS.md](../../engage/cvlifecycle/AGENTS.md)).
+  A new paid-AI route label needs its words in `cvlifecycle.attempts`.
 
   Operator report, who hit which paywall in the last 7 days (change `7` for another window):
 

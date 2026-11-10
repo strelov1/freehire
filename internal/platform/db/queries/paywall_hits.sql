@@ -7,13 +7,16 @@
 -- first row did not say. The vacancy is resolved here from whichever identifier the route
 -- carries, as a bound parameter, so no request text is stored and no extra round trip is
 -- made: a job slug, or the CV or assistant session the route is about (both scoped to the
--- caller, so another user's id resolves to nothing). An unknown identifier leaves job_id NULL.
+-- caller, so another user's id resolves to nothing; a private job resolves only for its creator,
+-- so a leaked slug never puts its title in another account's letter). An unknown identifier
+-- leaves job_id NULL.
 INSERT INTO paywall_hits (user_id, feature, job_id, day)
 VALUES (
     sqlc.arg(user_id),
     sqlc.arg(feature)::text,
     COALESCE(
-        (SELECT j.id FROM jobs j WHERE j.public_slug = sqlc.narg(job_slug)::text),
+        (SELECT j.id FROM jobs j WHERE j.public_slug = sqlc.narg(job_slug)::text
+           AND (NOT j.is_private OR j.created_by = sqlc.arg(user_id))),
         (SELECT c.job_id FROM cvs c WHERE c.id = sqlc.narg(cv_id)::uuid AND c.user_id = sqlc.arg(user_id)),
         (SELECT s.job_id FROM assistant_sessions s WHERE s.id = sqlc.narg(session_id)::uuid AND s.user_id = sqlc.arg(user_id))
     ),

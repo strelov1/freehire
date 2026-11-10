@@ -1,8 +1,10 @@
 // Command cv-lifecycle-mail is the CV lifecycle letters worker. One run observes who has
 // started paying, enrolls accounts whose CV has just parsed, and sends each due letter (up
 // to three, on days 1, 6 and 13 after the upload) to a free user who has not paid or
-// unsubscribed. Run it on a schedule (hourly is plenty) and it exits. The rules and the
-// reports are in internal/engage/cvlifecycle/AGENTS.md.
+// unsubscribed. The same run sends the paywall letter, one letter about an hour after a
+// free user pressed a paid AI button, ahead of the CV letters. Run it on a schedule (hourly
+// is plenty) and it exits. The rules and the reports are in
+// internal/engage/cvlifecycle/AGENTS.md.
 //
 // It needs the SES transport (AWS_REGION + NOTIFY_EMAIL_FROM) and ONBOARDING_REPLY_TO, the
 // human inbox that answers these letters; without the latter it refuses to run, since the
@@ -16,10 +18,11 @@
 //
 //	-dry-run                 count what a pass would do; writes nothing, sends nothing
 //	-to ADDR -to-user ID     send ONE letter for inspection and exit; touches no table
-//	-step N                  which letter -to sends (1, 2 or 3); default 1
+//	-step N                  which letter -to sends (1, 2, 3 or 4, the paywall letter); default 1
 //
-// The preview computes the account's real score, so it needs the same CV and search
-// configuration as a pass; letter 3 needs the promo code.
+// The preview of letters 1 and 2 computes the account's real score, so it needs the same CV
+// and search configuration as a pass; letter 3 needs the promo code; letter 4 is a fixed
+// sample, since it is about a refused attempt rather than the CV.
 //
 // Environment: CV_LIFECYCLE_MAX_PER_RUN (default 200) bounds one run's letters.
 // It exits non-zero when a send failed or an input could not be read, so the timer's
@@ -49,7 +52,7 @@ var (
 	dryRun   = flag.Bool("dry-run", false, "count what a pass would do and exit; nothing is written or sent")
 	sendTo   = flag.String("to", "", "send one letter to this address and exit (no ledger, no claim)")
 	sendUser = flag.Int64("to-user", 0, "the account id -to belongs to; required with -to, the letter carries that account's unsubscribe link and score")
-	sendStep = flag.Int("step", 1, "which letter -to sends: 1 | 2 | 3")
+	sendStep = flag.Int("step", 1, "which letter -to sends: 1 | 2 | 3 | 4")
 )
 
 func main() {
@@ -137,8 +140,8 @@ func run() int {
 			log.Printf("cv-lifecycle-mail: %v", err)
 			return 1
 		}
-		log.Printf("cv-lifecycle-mail: dry run: %d accounts would enroll; due letters 1=%d 2=%d 3=%d (cap %d per run)",
-			stats.Enrollable, stats.Due[cvlifecycle.StepATS], stats.Due[cvlifecycle.StepPotential], stats.Due[cvlifecycle.StepOffer], runnerCfg.MaxPerRun)
+		log.Printf("cv-lifecycle-mail: dry run: %d accounts would enroll; due letters 1=%d 2=%d 3=%d paywall=%d (cap %d per run)",
+			stats.Enrollable, stats.Due[cvlifecycle.StepATS], stats.Due[cvlifecycle.StepPotential], stats.Due[cvlifecycle.StepOffer], stats.Due[cvlifecycle.StepPaywall], runnerCfg.MaxPerRun)
 		return 0
 	}
 
@@ -157,7 +160,7 @@ func run() int {
 	log.Printf("cv-lifecycle-mail: enrolled=%d paid=%d entitled=%d unsubscribed=%d pruned_claims=%d",
 		stats.Enrolled, stats.Paid, stats.Entitled, stats.Unsubscribed, stats.Pruned)
 	failed := 0
-	for _, step := range cvlifecycle.Steps {
+	for _, step := range append([]cvlifecycle.Step{cvlifecycle.StepPaywall}, cvlifecycle.Steps...) {
 		log.Printf("cv-lifecycle-mail: letter %d sent=%d failed=%d skipped=%d deferred=%d",
 			step, stats.Sent[step], stats.Failed[step], stats.Skipped[step], stats.Deferred[step])
 		failed += stats.Failed[step]
@@ -178,7 +181,7 @@ func preview(ctx context.Context, content *cvlifecycle.Content, mailer *cvlifecy
 		return 2
 	}
 	step := cvlifecycle.Step(*sendStep)
-	letter, err := content.Compose(ctx, step, *sendUser)
+	letter, err := composePreview(ctx, content, step, *sendUser)
 	if errors.Is(err, cvlifecycle.ErrSkip) {
 		log.Printf("cv-lifecycle-mail: letter %d does not apply to user %d: %v", step, *sendUser, err)
 		return 1
@@ -193,4 +196,15 @@ func preview(ctx context.Context, content *cvlifecycle.Content, mailer *cvlifecy
 	}
 	log.Printf("cv-lifecycle-mail: sent letter %d to %s (ledger untouched)", step, *sendTo)
 	return 0
+}
+
+// composePreview is Compose, except for the paywall letter, which is about a refused
+// attempt and so has no account data to compute: it previews as a fixed sample.
+func composePreview(ctx context.Context, content *cvlifecycle.Content, step cvlifecycle.Step, userID int64) (cvlifecycle.Letter, error) {
+	if step == cvlifecycle.StepPaywall {
+		return cvlifecycle.Letter{Step: step, Paywall: &cvlifecycle.Paywall{
+			Feature: "tailor", JobTitle: "Senior Go Engineer", Company: "Example Co", JobSlug: "senior-go-engineer-example-co",
+		}}, nil
+	}
+	return content.Compose(ctx, step, userID)
 }

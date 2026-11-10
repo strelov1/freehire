@@ -31,6 +31,19 @@ type Letter struct {
 	Keywords []string
 	// Offer is the first-month discount (letter 3 only).
 	Offer *Offer
+	// Paywall is the refused attempt the paywall letter answers (StepPaywall only).
+	Paywall *Paywall
+}
+
+// Paywall is what a paywall hit says about what the account tried. Feature is the label the
+// gate recorded (a plan feature or one of its fixed names); the job fields are empty when
+// the hit concerned no vacancy or the vacancy is gone. They are a posting's public title and
+// company, never anything the account wrote.
+type Paywall struct {
+	Feature  string
+	JobTitle string
+	Company  string
+	JobSlug  string
 }
 
 // Offer is a promo code that the promo service has just confirmed is usable by this account.

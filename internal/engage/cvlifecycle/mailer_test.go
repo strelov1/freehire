@@ -33,6 +33,7 @@ func letters() []Letter {
 		{Step: StepATS, Overall: 61, Potential: 84, Gaps: []string{"Add a summary section"}, Keywords: []string{"Kubernetes"}},
 		{Step: StepPotential, Overall: 61, Potential: 84},
 		{Step: StepOffer, Offer: &Offer{Code: "ZZLETTER", Percent: 23}},
+		{Step: StepPaywall, Paywall: &Paywall{Feature: "tailor", JobTitle: "Go Engineer", Company: "Acme", JobSlug: "go-engineer-acme-1"}},
 	}
 }
 

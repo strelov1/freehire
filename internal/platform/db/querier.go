@@ -565,6 +565,10 @@ type Querier interface {
 	// already holds it and the caller must not send. The day is returned so a release after
 	// a failure that straddles midnight removes the row that was written, not today's.
 	ClaimMailDay(ctx context.Context, arg ClaimMailDayParams) (pgtype.Date, error)
+	// Writes the step-4 row if, and only if, the account is STILL eligible and still has a hit
+	// inside the window: the one statement that gates the send. No row back (pgx.ErrNoRows)
+	// means do not send. Written before SES is called, like ClaimCVLifecycleSend.
+	ClaimPaywallLetterSend(ctx context.Context, arg ClaimPaywallLetterSendParams) (int64, error)
 	// Claim-and-delete a bounded batch, oldest first, joined to jobs for the fields the
 	// feed displays. company_slug rides along beside company: recentfeed.Group buckets a
 	// same-company burst by the slug (the canonical company key — see AGENTS.md, "Company
@@ -5060,6 +5064,21 @@ type Querier interface {
 	// Who hit which paywall in the last window_days, by feature and newest first: the operator
 	// report. job_slug is NULL when the action concerned no vacancy, or the vacancy is gone.
 	ListPaywallHitsByFeature(ctx context.Context, windowDays int32) ([]ListPaywallHitsByFeatureRow, error)
+	// The paywall letter (step 4): one letter to a free user who was refused by the paid-AI gate,
+	// about an hour after the first refusal that is still fresh. It shares the CV letters'
+	// ledger (cv_lifecycle_sends), consent switch, free-tier test and holdout, but it is not
+	// gated on an enrolment: the account may never have uploaded a CV. The holdout is the same
+	// hash enrolment stores, so an account is in the same group for every letter. The predicate
+	// appears in the list and in the claim, as above: change one, change both.
+	// Accounts the paywall letter is due for, with the earliest hit inside the window to name:
+	// at least hold_minutes old (the letter answers the attempt a while after, not mid-click) and
+	// at most max_age_hours old (an old hit is no longer "what you just tried"). One row per
+	// account, whatever the number of hits, and none once the step row exists: the letter is
+	// once per account, never once per hit. The job, when the hit carries one, is read here so
+	// the letter is composed from the row; a job that is gone, or a private one the account did
+	// not create, leaves the strings empty.
+	// Paged by user id like ListCVLifecycleDue.
+	ListPaywallLetterDue(ctx context.Context, arg ListPaywallLetterDueParams) ([]ListPaywallLetterDueRow, error)
 	// The moderator review queue: every claim that could not auto-activate (unknown or
 	// mismatched work-email domain), oldest first so the queue drains in claim order. A claim
 	// whose code was never entered is not reviewable — nobody has shown they can read that
@@ -6491,7 +6510,9 @@ type Querier interface {
 	// first row did not say. The vacancy is resolved here from whichever identifier the route
 	// carries, as a bound parameter, so no request text is stored and no extra round trip is
 	// made: a job slug, or the CV or assistant session the route is about (both scoped to the
-	// caller, so another user's id resolves to nothing). An unknown identifier leaves job_id NULL.
+	// caller, so another user's id resolves to nothing; a private job resolves only for its creator,
+	// so a leaked slug never puts its title in another account's letter). An unknown identifier
+	// leaves job_id NULL.
 	RecordPaywallHit(ctx context.Context, arg RecordPaywallHitParams) error
 	// Queries for the limit-nudge feature (internal/engage/limitnudge): one personal mail,
 	// sent once per account, to a free-tier user who has run into a plan ceiling.

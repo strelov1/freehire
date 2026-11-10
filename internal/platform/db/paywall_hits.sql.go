@@ -62,7 +62,8 @@ VALUES (
     $1,
     $2::text,
     COALESCE(
-        (SELECT j.id FROM jobs j WHERE j.public_slug = $3::text),
+        (SELECT j.id FROM jobs j WHERE j.public_slug = $3::text
+           AND (NOT j.is_private OR j.created_by = $1)),
         (SELECT c.job_id FROM cvs c WHERE c.id = $4::uuid AND c.user_id = $1),
         (SELECT s.job_id FROM assistant_sessions s WHERE s.id = $5::uuid AND s.user_id = $1)
     ),
@@ -87,7 +88,9 @@ type RecordPaywallHitParams struct {
 // first row did not say. The vacancy is resolved here from whichever identifier the route
 // carries, as a bound parameter, so no request text is stored and no extra round trip is
 // made: a job slug, or the CV or assistant session the route is about (both scoped to the
-// caller, so another user's id resolves to nothing). An unknown identifier leaves job_id NULL.
+// caller, so another user's id resolves to nothing; a private job resolves only for its creator,
+// so a leaked slug never puts its title in another account's letter). An unknown identifier
+// leaves job_id NULL.
 func (q *Queries) RecordPaywallHit(ctx context.Context, arg RecordPaywallHitParams) error {
 	_, err := q.db.Exec(ctx, recordPaywallHit,
 		arg.UserID,

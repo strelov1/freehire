@@ -60,6 +60,13 @@ func (m *Mailer) Send(ctx context.Context, letter Letter, userID int64, to strin
 	})
 }
 
+func (s spec) footerText() template.HTML {
+	if s.footer != "" {
+		return s.footer
+	}
+	return "You’re getting this because you uploaded a CV to freehire."
+}
+
 type rendered struct {
 	subject, html, text string
 }
@@ -78,6 +85,12 @@ type data struct {
 	PortraitURL        string
 	LinkedInIcon       string
 	LinkedInURL        string
+
+	// The paywall letter: what the account tried (Attempt names the posting when the hit
+	// had one, AttemptGeneric never does, for the subject) and where to go next.
+	Attempt, AttemptGeneric string
+	PricingURL              string
+	JobURL, JobLabel        string
 }
 
 func (m *Mailer) data(l Letter) (data, error) {
@@ -88,6 +101,17 @@ func (m *Mailer) data(l Letter) (data, error) {
 		PortraitURL:  m.baseURL + "/ilya.jpg",
 		LinkedInIcon: m.baseURL + "/email-icon-linkedin.png",
 		LinkedInURL:  mailtpl.LinkedInURL,
+	}
+	if l.Step == StepPaywall {
+		if l.Paywall == nil {
+			return data{}, fmt.Errorf("cvlifecycle: step %d needs the paywall hit it answers", l.Step)
+		}
+		d.AttemptGeneric, d.Attempt = l.Paywall.described()
+		d.PricingURL = m.baseURL + "/pricing?utm_source=email"
+		if l.Paywall.JobSlug != "" {
+			d.JobURL = m.baseURL + "/jobs/" + url.PathEscape(l.Paywall.JobSlug) + "?utm_source=email"
+			d.JobLabel = l.Paywall.posting()
+		}
 	}
 	if l.Step == StepOffer {
 		// A letter that states a discount must have one confirmed by the promo service;
@@ -119,7 +143,7 @@ func (m *Mailer) render(l Letter, unsubscribe string) (rendered, error) {
 		Preheader:      spec.preheader(d),
 		Heading:        spec.heading,
 		Content:        template.HTML(body.String()), //nolint:gosec // html/template output: every account-derived value was escaped as a field of data
-		Footer:         "You’re getting this because you uploaded a CV to freehire.",
+		Footer:         spec.footerText(),
 		UnsubscribeURL: unsubscribe,
 	})
 	text := spec.text(d) + "\n— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n" + emailprefs.TextFooter(unsubscribe)
