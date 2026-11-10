@@ -17,7 +17,7 @@
 INSERT INTO cv_lifecycle_enrollments (user_id, uploaded_at, holdout)
 SELECT u.id, u.resume_uploaded_at, cv_lifecycle_holdout(u.id)
 FROM users u
-WHERE mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND cv_parsed(u.resume_extract_status, u.resume_structured_uploaded_at, u.resume_uploaded_at)
   AND (u.pro_until IS NULL OR u.pro_until <= now())
   AND (u.ultra_until IS NULL OR u.ultra_until <= now())
@@ -31,7 +31,7 @@ ON CONFLICT (user_id) DO NOTHING;
 -- What EnrollCVLifecycleUsers would enrol, for a dry run. Same predicate, no LIMIT.
 SELECT count(*)
 FROM users u
-WHERE mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND cv_parsed(u.resume_extract_status, u.resume_structured_uploaded_at, u.resume_uploaded_at)
   AND (u.pro_until IS NULL OR u.pro_until <= now())
   AND (u.ultra_until IS NULL OR u.ultra_until <= now())
@@ -91,13 +91,13 @@ WHERE ns.user_id = e.user_id
 -- left out, so a capped pass is not spent on people the claim would refuse.
 -- Paged by user id (`after_user_id`, 0 for the first page): accounts the runner skips stay
 -- due, and without a cursor they would fill the head of every page and starve the rest.
-SELECT e.user_id, mail_recipient(u.email, u.email_verified, u.last_active_at)::text AS email
+SELECT e.user_id, mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS email
 FROM cv_lifecycle_enrollments e
 JOIN users u ON u.id = e.user_id
 LEFT JOIN notification_settings ns ON ns.user_id = e.user_id
 WHERE e.status IN ('active', 'entitled')
   AND NOT e.holdout
-  AND mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+  AND mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND COALESCE(ns.news_email_enabled, true)
   AND (u.pro_until IS NULL OR u.pro_until <= now())
   AND (u.ultra_until IS NULL OR u.ultra_until <= now())
@@ -130,7 +130,7 @@ LEFT JOIN notification_settings ns ON ns.user_id = e.user_id
 WHERE e.user_id = sqlc.arg(user_id)
   AND e.status IN ('active', 'entitled')
   AND NOT e.holdout
-  AND mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+  AND mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND COALESCE(ns.news_email_enabled, true)
   AND (u.pro_until IS NULL OR u.pro_until <= now())
   AND (u.ultra_until IS NULL OR u.ultra_until <= now())

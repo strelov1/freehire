@@ -223,6 +223,9 @@ type Querier interface {
 	// A key in use is the account in use, so the same statement keeps users.last_active_at
 	// current (at most once a day), as GetUserTokenVersion does for a session: optional
 	// mail stops after 180 idle days (mail_recipient, migration 0247).
+	//
+	// A banned owner's keys do not authenticate (and are not touched). OAuth grants need no
+	// such clause: they die with the ban's token_version bump (AuthenticateOAuthGrant).
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error)
 	// Resolve a presented bearer token to its owning user, touching last_used_at in
 	// the same statement. A grant is live only while BOTH hold: it has not outlived
@@ -264,6 +267,13 @@ type Querier interface {
 	// The dead-letter markers win over blocked_at where a row carries both, so the three
 	// counts stay mutually exclusive and a stacked graph reads correctly.
 	AutoApplyQueueMetrics(ctx context.Context) (AutoApplyQueueMetricsRow, error)
+	// Ban an account by hand. Advances token_version so everything bound to a generation
+	// (recent-auth proofs, mobile exchange codes, OAuth grants and codes) dies with the
+	// sessions, and deletes nothing else. The WHERE refuses an admin and the moderator's own
+	// account here rather than in Go, so no call site can ban around the rule. No row means
+	// the target is missing, already banned, an admin or the actor itself; the handler tells
+	// those apart with GetUserModerationState.
+	BanUser(ctx context.Context, arg BanUserParams) (int64, error)
 	// Block the other participant of a conversation and close EVERY conversation between the
 	// two, of any kind, in one statement so no half can land alone. Only a participant
 	// matches; no row means the caller must say the conversation is not theirs. Closing is
@@ -2601,6 +2611,9 @@ type Querier interface {
 	// A link that normalizes to nothing matches nothing: a posting with no outside page
 	// stores an empty url, and "https://www." must not answer with one of those.
 	FindOpenJobByURL(ctx context.Context, url string) (string, error)
+	// The moderator's lookup: one account by id, exact email (case-insensitive) or username,
+	// with its ban state. The query is matched against all three; an id only when numeric.
+	FindUserForModeration(ctx context.Context, arg FindUserForModerationParams) (FindUserForModerationRow, error)
 	// The (id, title) of one company's open canonical postings — deliberately WITHOUT the
 	// description. The caller groups these into buckets with the same normalized-title function the
 	// rest of the codebase uses (jobhash.RoleKey), then loads descriptions for the buckets that
@@ -3251,6 +3264,7 @@ type Querier interface {
 	// and the OAuth merge policy (an unverified account is seized, not silently joined).
 	// language is included so a password login's response carries the account's
 	// preference the same as /auth/me, rather than reporting the zero value.
+	// banned drives the sign-in refusal and the silence of the reset-code mail.
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
 	// Profile lookup for the authenticated user. role is included so /auth/me can tell a
 	// client whether to surface moderator-only UI. The password hash itself never leaves
@@ -3373,6 +3387,11 @@ type Querier interface {
 	// The same statement stamps last_active_at, at most once a day, because this is the
 	// one place every signed-in request passes; mail_recipient (migration 0247) reads it
 	// to stop optional mail to people who have not used freehire in 180 days.
+	//
+	// A banned account returns no row, which every caller already reads as "session revoked"
+	// (middleware.resolveSession, the introspection endpoint) or, at sign-in, as a refusal
+	// (authHandlers.sessionVersion). This is the one place a ban meets every cookie and
+	// Bearer-JWT credential, and a ban does not stamp last_active_at.
 	GetUserTokenVersion(ctx context.Context, id int64) (int32, error)
 	// The account's own username (NULL until claimed/allocated) and, when set, the
 	// time of its last EXPLICIT change via SetUsername — NULL for a lazily
@@ -5131,7 +5150,8 @@ type Querier interface {
 	// as keyset on (created_at, id) rather than OFFSET, because an OFFSET page silently
 	// repeats or skips a row when a profile is approved mid-browse.
 	ListPublishedMentors(ctx context.Context, arg ListPublishedMentorsParams) ([]ListPublishedMentorsRow, error)
-	// The caller's own registered devices, for a test send or a future delivery.
+	// The caller's own registered devices, for a test send or a future delivery. A banned
+	// account has none: every push sender reads its devices here, so this is the one gate.
 	ListPushTokensForUser(ctx context.Context, userID int64) ([]UserPushToken, error)
 	// The session's most recent messages, newest first — the bounded counterpart of
 	// ListAssistantMessages, for rebuilding the model's own history every turn. Runner.trim()
@@ -7921,6 +7941,9 @@ type Querier interface {
 	// current work, not an archive, and each row carries two operation documents on the table
 	// behind every CV page.
 	TrimCVRevisions(ctx context.Context, arg TrimCVRevisionsParams) (int64, error)
+	// Lift a ban. Sessions and grants stay dead (the ban bumped token_version); the person
+	// signs in again. 0 rows: the account is missing or was not banned.
+	UnbanUser(ctx context.Context, id int64) (int64, error)
 	// The id span cmd/report-unclassified-titles walks. Same shape as
 	// ClassifyDriftReportBounds.
 	UnclassifiedTitleReportBounds(ctx context.Context) (UnclassifiedTitleReportBoundsRow, error)

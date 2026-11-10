@@ -19,7 +19,9 @@ RETURNING id, email, role, beta_tester, email_verified, created_at, timezone, la
 -- and the OAuth merge policy (an unverified account is seized, not silently joined).
 -- language is included so a password login's response carries the account's
 -- preference the same as /auth/me, rather than reporting the zero value.
-SELECT id, email, role, beta_tester, email_verified, password_hash, created_at, language
+-- banned drives the sign-in refusal and the silence of the reset-code mail.
+SELECT id, email, role, beta_tester, email_verified, password_hash, created_at, language,
+       (banned_at IS NOT NULL)::boolean AS banned
 FROM users
 WHERE lower(email) = lower($1);
 
@@ -88,13 +90,18 @@ WHERE id = $1;
 -- The same statement stamps last_active_at, at most once a day, because this is the
 -- one place every signed-in request passes; mail_recipient (migration 0247) reads it
 -- to stop optional mail to people who have not used freehire in 180 days.
+--
+-- A banned account returns no row, which every caller already reads as "session revoked"
+-- (middleware.resolveSession, the introspection endpoint) or, at sign-in, as a refusal
+-- (authHandlers.sessionVersion). This is the one place a ban meets every cookie and
+-- Bearer-JWT credential, and a ban does not stamp last_active_at.
 WITH seen AS (
     UPDATE users AS su SET last_active_at = now()
-    WHERE su.id = $1 AND su.last_active_at < now() - interval '1 day'
+    WHERE su.id = $1 AND su.banned_at IS NULL AND su.last_active_at < now() - interval '1 day'
 )
 SELECT u.token_version
 FROM users AS u
-WHERE u.id = $1;
+WHERE u.id = $1 AND u.banned_at IS NULL;
 
 -- name: BumpUserTokenVersion :one
 -- Invalidate every token issued for this account (sign out everywhere) by advancing
@@ -605,3 +612,34 @@ SELECT agents_may_apply FROM users WHERE id = sqlc.arg(id);
 
 -- name: SetAgentsMayApply :exec
 UPDATE users SET agents_may_apply = sqlc.arg(agents_may_apply) WHERE id = sqlc.arg(id);
+
+-- name: BanUser :one
+-- Ban an account by hand. Advances token_version so everything bound to a generation
+-- (recent-auth proofs, mobile exchange codes, OAuth grants and codes) dies with the
+-- sessions, and deletes nothing else. The WHERE refuses an admin and the moderator's own
+-- account here rather than in Go, so no call site can ban around the rule. No row means
+-- the target is missing, already banned, an admin or the actor itself; the handler tells
+-- those apart with GetUserModerationState.
+UPDATE users
+SET banned_at = now(), ban_reason = sqlc.arg(reason), banned_by = sqlc.arg(actor_id),
+    token_version = token_version + 1
+WHERE id = sqlc.arg(id) AND banned_at IS NULL AND role <> 'admin' AND id <> sqlc.arg(actor_id)
+RETURNING id;
+
+-- name: UnbanUser :execrows
+-- Lift a ban. Sessions and grants stay dead (the ban bumped token_version); the person
+-- signs in again. 0 rows: the account is missing or was not banned.
+UPDATE users
+SET banned_at = NULL, ban_reason = NULL, banned_by = NULL
+WHERE id = $1 AND banned_at IS NOT NULL;
+
+-- name: FindUserForModeration :one
+-- The moderator's lookup: one account by id, exact email (case-insensitive) or username,
+-- with its ban state. The query is matched against all three; an id only when numeric.
+SELECT id, email, username, role, banned_at, ban_reason
+FROM users
+WHERE id = sqlc.arg(user_id)::bigint
+   OR lower(email) = lower(sqlc.arg(query)::text)
+   OR username = sqlc.arg(query)::text
+ORDER BY (id = sqlc.arg(user_id)::bigint) DESC
+LIMIT 1;

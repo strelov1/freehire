@@ -1821,6 +1821,9 @@ type User struct {
 	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
 	AgentsMayApply     bool               `json:"agents_may_apply"`
 	LastActiveAt       pgtype.Timestamptz `json:"last_active_at"`
+	BannedAt           pgtype.Timestamptz `json:"banned_at"`
+	BanReason          pgtype.Text        `json:"ban_reason"`
+	BannedBy           pgtype.Int8        `json:"banned_by"`
 }
 
 type UserBlock struct {

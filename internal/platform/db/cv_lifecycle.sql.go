@@ -20,7 +20,7 @@ LEFT JOIN notification_settings ns ON ns.user_id = e.user_id
 WHERE e.user_id = $2
   AND e.status IN ('active', 'entitled')
   AND NOT e.holdout
-  AND mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+  AND mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND COALESCE(ns.news_email_enabled, true)
   AND (u.pro_until IS NULL OR u.pro_until <= now())
   AND (u.ultra_until IS NULL OR u.ultra_until <= now())
@@ -60,7 +60,7 @@ func (q *Queries) ClaimCVLifecycleSend(ctx context.Context, arg ClaimCVLifecycle
 const countCVLifecycleEnrollable = `-- name: CountCVLifecycleEnrollable :one
 SELECT count(*)
 FROM users u
-WHERE mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND cv_parsed(u.resume_extract_status, u.resume_structured_uploaded_at, u.resume_uploaded_at)
   AND (u.pro_until IS NULL OR u.pro_until <= now())
   AND (u.ultra_until IS NULL OR u.ultra_until <= now())
@@ -81,7 +81,7 @@ const enrollCVLifecycleUsers = `-- name: EnrollCVLifecycleUsers :execrows
 INSERT INTO cv_lifecycle_enrollments (user_id, uploaded_at, holdout)
 SELECT u.id, u.resume_uploaded_at, cv_lifecycle_holdout(u.id)
 FROM users u
-WHERE mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND cv_parsed(u.resume_extract_status, u.resume_structured_uploaded_at, u.resume_uploaded_at)
   AND (u.pro_until IS NULL OR u.pro_until <= now())
   AND (u.ultra_until IS NULL OR u.ultra_until <= now())
@@ -141,13 +141,13 @@ func (q *Queries) ExitCVLifecycleUnsubscribed(ctx context.Context) (int64, error
 }
 
 const listCVLifecycleDue = `-- name: ListCVLifecycleDue :many
-SELECT e.user_id, mail_recipient(u.email, u.email_verified, u.last_active_at)::text AS email
+SELECT e.user_id, mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS email
 FROM cv_lifecycle_enrollments e
 JOIN users u ON u.id = e.user_id
 LEFT JOIN notification_settings ns ON ns.user_id = e.user_id
 WHERE e.status IN ('active', 'entitled')
   AND NOT e.holdout
-  AND mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+  AND mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND COALESCE(ns.news_email_enabled, true)
   AND (u.pro_until IS NULL OR u.pro_until <= now())
   AND (u.ultra_until IS NULL OR u.ultra_until <= now())

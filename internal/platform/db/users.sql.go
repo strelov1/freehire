@@ -11,6 +11,33 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const banUser = `-- name: BanUser :one
+UPDATE users
+SET banned_at = now(), ban_reason = $1, banned_by = $2,
+    token_version = token_version + 1
+WHERE id = $3 AND banned_at IS NULL AND role <> 'admin' AND id <> $2
+RETURNING id
+`
+
+type BanUserParams struct {
+	Reason  pgtype.Text `json:"reason"`
+	ActorID pgtype.Int8 `json:"actor_id"`
+	ID      int64       `json:"id"`
+}
+
+// Ban an account by hand. Advances token_version so everything bound to a generation
+// (recent-auth proofs, mobile exchange codes, OAuth grants and codes) dies with the
+// sessions, and deletes nothing else. The WHERE refuses an admin and the moderator's own
+// account here rather than in Go, so no call site can ban around the rule. No row means
+// the target is missing, already banned, an admin or the actor itself; the handler tells
+// those apart with GetUserModerationState.
+func (q *Queries) BanUser(ctx context.Context, arg BanUserParams) (int64, error) {
+	row := q.db.QueryRow(ctx, banUser, arg.Reason, arg.ActorID, arg.ID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const bumpUserTokenVersion = `-- name: BumpUserTokenVersion :one
 UPDATE users
 SET token_version = token_version + 1
@@ -167,6 +194,46 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	return err
 }
 
+const findUserForModeration = `-- name: FindUserForModeration :one
+SELECT id, email, username, role, banned_at, ban_reason
+FROM users
+WHERE id = $1::bigint
+   OR lower(email) = lower($2::text)
+   OR username = $2::text
+ORDER BY (id = $1::bigint) DESC
+LIMIT 1
+`
+
+type FindUserForModerationParams struct {
+	UserID int64  `json:"user_id"`
+	Query  string `json:"query"`
+}
+
+type FindUserForModerationRow struct {
+	ID        int64              `json:"id"`
+	Email     string             `json:"email"`
+	Username  pgtype.Text        `json:"username"`
+	Role      string             `json:"role"`
+	BannedAt  pgtype.Timestamptz `json:"banned_at"`
+	BanReason pgtype.Text        `json:"ban_reason"`
+}
+
+// The moderator's lookup: one account by id, exact email (case-insensitive) or username,
+// with its ban state. The query is matched against all three; an id only when numeric.
+func (q *Queries) FindUserForModeration(ctx context.Context, arg FindUserForModerationParams) (FindUserForModerationRow, error) {
+	row := q.db.QueryRow(ctx, findUserForModeration, arg.UserID, arg.Query)
+	var i FindUserForModerationRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Username,
+		&i.Role,
+		&i.BannedAt,
+		&i.BanReason,
+	)
+	return i, err
+}
+
 const getAgentsMayApply = `-- name: GetAgentsMayApply :one
 SELECT agents_may_apply FROM users WHERE id = $1
 `
@@ -316,7 +383,8 @@ func (q *Queries) GetUserATSAnalysis(ctx context.Context, id int64) ([]byte, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, role, beta_tester, email_verified, password_hash, created_at, language
+SELECT id, email, role, beta_tester, email_verified, password_hash, created_at, language,
+       (banned_at IS NOT NULL)::boolean AS banned
 FROM users
 WHERE lower(email) = lower($1)
 `
@@ -330,6 +398,7 @@ type GetUserByEmailRow struct {
 	PasswordHash  pgtype.Text        `json:"password_hash"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	Language      string             `json:"language"`
+	Banned        bool               `json:"banned"`
 }
 
 // Login lookup. Case-insensitive on email; returns password_hash so the handler
@@ -338,6 +407,7 @@ type GetUserByEmailRow struct {
 // and the OAuth merge policy (an unverified account is seized, not silently joined).
 // language is included so a password login's response carries the account's
 // preference the same as /auth/me, rather than reporting the zero value.
+// banned drives the sign-in refusal and the silence of the reset-code mail.
 func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, lower)
 	var i GetUserByEmailRow
@@ -350,6 +420,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.Language,
+		&i.Banned,
 	)
 	return i, err
 }
@@ -632,11 +703,11 @@ func (q *Queries) GetUserRole(ctx context.Context, id int64) (string, error) {
 const getUserTokenVersion = `-- name: GetUserTokenVersion :one
 WITH seen AS (
     UPDATE users AS su SET last_active_at = now()
-    WHERE su.id = $1 AND su.last_active_at < now() - interval '1 day'
+    WHERE su.id = $1 AND su.banned_at IS NULL AND su.last_active_at < now() - interval '1 day'
 )
 SELECT u.token_version
 FROM users AS u
-WHERE u.id = $1
+WHERE u.id = $1 AND u.banned_at IS NULL
 `
 
 // The account's current session generation, read on every authenticated request to
@@ -646,6 +717,11 @@ WHERE u.id = $1
 // The same statement stamps last_active_at, at most once a day, because this is the
 // one place every signed-in request passes; mail_recipient (migration 0247) reads it
 // to stop optional mail to people who have not used freehire in 180 days.
+//
+// A banned account returns no row, which every caller already reads as "session revoked"
+// (middleware.resolveSession, the introspection endpoint) or, at sign-in, as a refusal
+// (authHandlers.sessionVersion). This is the one place a ban meets every cookie and
+// Bearer-JWT credential, and a ban does not stamp last_active_at.
 func (q *Queries) GetUserTokenVersion(ctx context.Context, id int64) (int32, error) {
 	row := q.db.QueryRow(ctx, getUserTokenVersion, id)
 	var token_version int32
@@ -1221,6 +1297,22 @@ type SetUsernameIfAbsentParams struct {
 // case by re-reading GetUsernameByUser.
 func (q *Queries) SetUsernameIfAbsent(ctx context.Context, arg SetUsernameIfAbsentParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setUsernameIfAbsent, arg.ID, arg.Username)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const unbanUser = `-- name: UnbanUser :execrows
+UPDATE users
+SET banned_at = NULL, ban_reason = NULL, banned_by = NULL
+WHERE id = $1 AND banned_at IS NOT NULL
+`
+
+// Lift a ban. Sessions and grants stay dead (the ban bumped token_version); the person
+// signs in again. 0 rows: the account is missing or was not banned.
+func (q *Queries) UnbanUser(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, unbanUser, id)
 	if err != nil {
 		return 0, err
 	}

@@ -211,3 +211,15 @@ export interface PendingCompanyRelation {
   /** `approved` marks a merge whose job move stopped part-way; approving again resumes it. */
   status: 'pending' | 'approved';
 }
+
+/** An account as the moderator's user lookup shows it: who it is and whether a moderator
+ *  banned it (with the reason they left). */
+export interface ModeratedUser {
+  id: number;
+  email: string;
+  username: string | null;
+  role: string;
+  banned: boolean;
+  banned_at: string | null;
+  ban_reason: string | null;
+}
