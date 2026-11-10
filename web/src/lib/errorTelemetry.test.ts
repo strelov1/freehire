@@ -51,6 +51,21 @@ describe('error telemetry', () => {
     expect(exporter.getFinishedLogRecords()).toHaveLength(20);
     await telemetry?.shutdown();
   });
+  it('reports noise the caller vouches broke the page, tagged with its error code', async () => {
+    const exporter = new InMemoryLogRecordExporter();
+    const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', exporter });
+    const chunk = new TypeError('Importing a module script failed.');
+    telemetry?.capture(chunk);
+    telemetry?.capture(chunk, { reportNoise: true, errorId: 'ab12cd34' });
+    await telemetry?.flush();
+    const records = exporter.getFinishedLogRecords();
+    expect(records).toHaveLength(1);
+    expect(records[0]?.attributes).toMatchObject({
+      'exception.message': 'Importing a module script failed.',
+      'error.id': 'ab12cd34',
+    });
+    await telemetry?.shutdown();
+  });
   it('is inert without configuration', () => {
     expect(createErrorTelemetry({ service: 'freehire-web' })).toBeUndefined();
   });
@@ -289,6 +304,31 @@ it('handles Firefox and Safari extension stacks while retaining mixed stacks', (
   mixed.stack = 'execute@moz-extension://visitor/content.js:1:2\nrender@https://freehire.test/app.js:3:4';
   target.dispatchEvent(Object.assign(new Event('error'), { error: mixed }));
   expect(capture).toHaveBeenCalledWith(mixed);
+});
+
+it('drops parse errors from scripts we did not ship while keeping our own', () => {
+  const capture = vi.fn();
+  const target = new EventTarget();
+  installErrorListeners(target, { capture });
+  for (const filename of ['https://freehire.test/jobs/some-job', '']) {
+    const injected = new SyntaxError('Unexpected end of input');
+    injected.stack = 'SyntaxError: Unexpected end of input';
+    target.dispatchEvent(Object.assign(new Event('error'), { error: injected, filename }));
+  }
+  expect(capture).not.toHaveBeenCalled();
+  const ours = new SyntaxError('Unexpected token');
+  target.dispatchEvent(
+    Object.assign(new Event('error'), {
+      error: ours,
+      filename: 'https://freehire.test/_app/immutable/chunks/app.js',
+    }),
+  );
+  expect(capture).toHaveBeenCalledWith(ours);
+  const runtime = new TypeError('page defect');
+  target.dispatchEvent(
+    Object.assign(new Event('error'), { error: runtime, filename: 'https://freehire.test/jobs/some-job' }),
+  );
+  expect(capture).toHaveBeenCalledWith(runtime);
 });
 
 it('preserves opaque errors and primitive rejection reporting without provenance', () => {

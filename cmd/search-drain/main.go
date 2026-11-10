@@ -18,7 +18,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"time"
 
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -51,9 +55,14 @@ func run() int {
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 	q := db.New(pool)
 
+	facetd, err := newFacetd(db.New(pool))
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
 	runner := searchdrain.Runner{
 		Store:   newDBStore(pool),
-		Indexer: searchIndexer{client: client, q: q},
+		Indexer: searchIndexer{client: client, q: q, mirror: facetd.mirror()},
 	}
 
 	opt := searchdrain.RunOptions{
@@ -69,7 +78,7 @@ func run() int {
 	// removals. A short wave ends that queue's pass until the next scheduled run.
 	deletions := searchdrain.DeletionRunner{
 		Store:   newDeletionStore(pool),
-		Deleter: facetDeleter{client: client, q: db.New(pool)},
+		Deleter: facetDeleter{client: client, q: db.New(pool), mirror: facetd.mirror()},
 	}
 	stats, del, err := searchdrain.Drain(ctx, runner, deletions, opt)
 	if err != nil {
@@ -77,7 +86,51 @@ func run() int {
 		return 1
 	}
 
+	facetd.retry(ctx, newDBFacetdRetryStore(pool), opt)
+
 	log.Printf("search-drain done: indexed=%d deleted=%d failed=%d dead_lettered=%d",
 		stats.Indexed, del.Deleted, stats.Failed+del.Failed, stats.DeadLettered+del.DeadLettered)
 	return worker.ExitCode(stats.Failed+del.Failed, stats.DeadLettered+del.DeadLettered)
+}
+
+// facetdSetup is the optional facetd mirror (FACETD_URL); the zero value is "off".
+type facetdSetup struct {
+	client *search.FacetdClient
+	m      *facetdMirror
+	q      *db.Queries
+}
+
+// newFacetd reads FACETD_URL and FACETD_WRITE_TIMEOUT (default 10s). Unset URL: no facetd
+// calls and no queue writes.
+func newFacetd(q *db.Queries) (facetdSetup, error) {
+	url := os.Getenv("FACETD_URL")
+	if url == "" {
+		return facetdSetup{}, nil
+	}
+	timeout := 10 * time.Second
+	if v := os.Getenv("FACETD_WRITE_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			return facetdSetup{}, fmt.Errorf("FACETD_WRITE_TIMEOUT %q: want a positive duration like 10s", v)
+		}
+		timeout = d
+	}
+	c := search.NewFacetdClient(url, &http.Client{})
+	return facetdSetup{
+		client: c,
+		q:      q,
+		m:      &facetdMirror{client: c, queue: dbFacetdQueue{q}, timeout: timeout},
+	}, nil
+}
+
+// mirror is nil when facetd is off, which the mirror's methods accept.
+func (f facetdSetup) mirror() *facetdMirror { return f.m }
+
+// retry runs the retry pass after the Meilisearch passes and publishes the metrics.
+func (f facetdSetup) retry(ctx context.Context, store facetdRetryStore, opt searchdrain.RunOptions) {
+	if f.m == nil {
+		return
+	}
+	facetdRetry{store: store, facetd: f.client, build: docBuilder{f.q}.build, mirror: f.m}.Run(ctx, opt)
+	publishFacetdMetrics(ctx, store, f.m.failures.Load())
 }

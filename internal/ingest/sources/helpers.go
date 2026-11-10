@@ -182,7 +182,7 @@ func workplaceTypeMode(t string) string {
 		return "remote"
 	case "hybrid":
 		return "hybrid"
-	case "on-site", "onsite", "on site", "office":
+	case "on-site", "onsite", "on site", "on_site", "office":
 		return "onsite"
 	default:
 		return ""

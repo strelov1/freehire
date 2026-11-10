@@ -75,9 +75,20 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
   return {
     // `kitError`: the caller vouches this is SvelteKit's { status, message } and not an
     // arbitrary object (a rejection reason may look the same and carry personal data).
-    capture(error: unknown, context: { route?: string | null; method?: string; kitError?: boolean } = {}) {
+    // `reportNoise`: the caller knows this failure already broke the page (handleError), so
+    // the transient-noise filter must not hide it. `errorId` is the code the error page shows.
+    capture(
+      error: unknown,
+      context: {
+        route?: string | null;
+        method?: string;
+        kitError?: boolean;
+        reportNoise?: boolean;
+        errorId?: string;
+      } = {},
+    ) {
       try {
-        if (isTransientNoise(error)) return;
+        if (!context.reportNoise && isTransientNoise(error)) return;
         if (error instanceof Error && /\[['"]@context['"]\]\.toLowerCase/.test(error.message)) return;
         let rawMessage = 'Non-Error exception';
         let type: string = typeof error;
@@ -124,6 +135,7 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
             'exception.stacktrace': stack,
             ...(route && { 'http.route': route }),
             ...(method && { 'http.request.method': method }),
+            ...(context.errorId && { 'error.id': sanitize(context.errorId, 64) }),
           },
         });
       } catch {
@@ -171,6 +183,18 @@ function fromExtensionOnly(error: unknown): boolean {
   );
 }
 
+// A parse error reaches the window listener with no frames at all, so the stack cannot
+// say whose code it was; the event's filename can. Everything we ship is a module under
+// /_app/ (and a chunk that fails to parse rejects its import() rather than firing here),
+// so a SyntaxError from any other script is code a visitor's tooling injected: an
+// automated browser evaluating a truncated script once per page view filled the client
+// error stream with "Unexpected end of input" and nothing to act on. The static inline
+// scripts in app.html are the one exception, and they run on every page, so a broken one
+// fails every visit in the e2e run long before it could hide here.
+function foreignParseError(error: unknown, filename: string): boolean {
+  return error instanceof Error && error.name === 'SyntaxError' && !filename.includes('/_app/');
+}
+
 /** A provenance predicate is required in content scripts sharing a host page. */
 export function installErrorListeners(
   target: EventTarget,
@@ -186,6 +210,7 @@ export function installErrorListeners(
     const failure = event as ErrorEvent;
     if (failure.error == null) return;
     if (foreign?.(failure.error)) return;
+    if (!owns && foreignParseError(failure.error, failure.filename || '')) return;
     if (!owns || (failure.error instanceof Error && owns(failure.error, failure.filename || '')))
       telemetry?.capture(failure.error);
   });

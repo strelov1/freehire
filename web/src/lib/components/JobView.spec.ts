@@ -321,3 +321,34 @@ it("keeps the viewed mark visible on the employer's own page", () => {
   );
   expect(marks).toHaveLength(1);
 });
+
+describe('JobRow meta and geography lines', () => {
+  const visibleText = (root: Element) =>
+    [...root.querySelectorAll('span')]
+      .filter((s) => s.children.length === 0 && !s.closest('.hidden, .sr-only'))
+      .map((s) => s.textContent?.trim())
+      .join(' ');
+
+  it('separates the plain reality age from the facts that follow it', () => {
+    // Without the dot the two ran together as "Open 87d Full-time".
+    const view = render(JobRow, {
+      job: {
+        ...job,
+        reality: { class: 'stale', age_days: 87, repost_count: 0, mass_posting_count: 0, fake_freshness: false },
+        enrichment: { employment_type: 'full_time' },
+      },
+    });
+    expect(visibleText(view.container)).toMatch(/Open 87d · Full-time/);
+  });
+
+  it('puts the arrangement with the flags on its own line, not among the facts', () => {
+    const view = render(JobRow, {
+      job: { ...job, work_mode: 'remote', countries: ['US'], enrichment: { employment_type: 'full_time' } },
+    });
+    const remote = screen.getByText('Remote');
+    const geoLine = remote.closest('div');
+    expect(geoLine?.textContent).not.toContain('Full-time');
+    expect(geoLine?.querySelector('img, svg, [aria-label]')).toBeTruthy();
+    expect(view.container.textContent).toContain('Full-time');
+  });
+});

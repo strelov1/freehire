@@ -604,7 +604,7 @@ type CvLifecycleEnrollment struct {
 	ExitedAt pgtype.Timestamptz `json:"exited_at"`
 }
 
-// CV lifecycle letters step ledger. PK (user_id, step) = one claim per pair, ever; error is the transport failure that burned the step.
+// CV lifecycle letters step ledger. PK (user_id, step) = one claim per pair, ever; error is the transport failure that burned the step. Steps 1-3 are the CV letters, step 4 the paywall letter.
 type CvLifecycleSend struct {
 	UserID int64              `json:"user_id"`
 	Step   int16              `json:"step"`
@@ -796,6 +796,16 @@ type ExperienceEmployment struct {
 	PeriodEndMonth   pgtype.Int2        `json:"period_end_month"`
 }
 
+type FacetdOutbox struct {
+	ID        int64              `json:"id"`
+	JobID     int64              `json:"job_id"`
+	Attempts  int64              `json:"attempts"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	FailedAt  pgtype.Timestamptz `json:"failed_at"`
+	LastError string             `json:"last_error"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type GhostReport struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`
@@ -953,6 +963,12 @@ type InsightsSkillHistory struct {
 	Skill     string      `json:"skill"`
 	WeekStart pgtype.Date `json:"week_start"`
 	OpenCount int32       `json:"open_count"`
+}
+
+type InsightsSkillNeighbour struct {
+	Skill     string `json:"skill"`
+	Neighbour string `json:"neighbour"`
+	Count     int64  `json:"count"`
 }
 
 type InsightsSkillStat struct {
@@ -1805,6 +1821,9 @@ type User struct {
 	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
 	AgentsMayApply     bool               `json:"agents_may_apply"`
 	LastActiveAt       pgtype.Timestamptz `json:"last_active_at"`
+	BannedAt           pgtype.Timestamptz `json:"banned_at"`
+	BanReason          pgtype.Text        `json:"ban_reason"`
+	BannedBy           pgtype.Int8        `json:"banned_by"`
 }
 
 type UserBlock struct {

@@ -657,8 +657,6 @@ function post(overrides: Partial<PostMeta> = {}): PostMeta {
 }
 
 describe('articleJsonLd', () => {
-  const ORIGIN = 'https://freehire.me';
-
   it('builds an Article with headline, description, date, url and keywords', () => {
     const ld = articleJsonLd(post(), ORIGIN);
     expect(ld['@type']).toBe('Article');

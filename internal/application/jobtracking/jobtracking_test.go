@@ -75,7 +75,7 @@ type fakeRepo struct {
 	appIDCalls []int64
 }
 
-func (f *fakeRepo) JobIDBySlug(_ context.Context, slug string) (int64, error) {
+func (f *fakeRepo) JobIDBySlug(_ context.Context, _ int64, slug string) (int64, error) {
 	f.slugCalls++
 	id, ok := f.slugs[slug]
 	if !ok {

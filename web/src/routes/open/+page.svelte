@@ -8,6 +8,7 @@
   import { OPEN_FAQ } from '#lib/openFaq.js';
   import { breadcrumbJsonLd, datasetJsonLd, faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
   import { SENIORITY_LABELS, WORK_MODE_LABELS } from '#lib/labels.js';
+  import type { EngagementStats } from '#lib/types.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -164,8 +165,7 @@
   // compact form at all, so the row would round some numbers and not others at a
   // threshold nobody can see. Compact notation also BOUNDS the width for good ("1.2B"
   // is four characters), which is what lets the figures keep the larger type below.
-  const engagement = $derived.by(() => {
-    const e = data.engagement;
+  const engagementCells = (e: EngagementStats | null) => {
     if (!e) return null;
     return [
       {
@@ -181,7 +181,7 @@
       { value: nf.format(e.alert_subscribers), label: 'people with job alerts on' },
       { value: nf.format(e.inboxes_connected), label: 'inboxes connected' },
     ];
-  });
+  };
 </script>
 
 {#snippet distributionBars(items: Bar[])}
@@ -303,29 +303,34 @@
       tracked, CVs written and tailored to a vacancy, people who turned on job alerts, and inboxes wired up for
       application mail.
     </p>
-    {#if engagement}
-      <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
-        {#each engagement as e (e.label)}
-          <div class="flex flex-col bg-background p-5 sm:p-6">
-            <!-- The window rides in the LABEL, above the figure, not under it: the
+    {#await data.engagement}
+      <p class="text-sm text-muted-foreground">Loading engagement figures…</p>
+    {:then stats}
+      {@const engagement = engagementCells(stats)}
+      {#if engagement}
+        <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
+          {#each engagement as e (e.label)}
+            <div class="flex flex-col bg-background p-5 sm:p-6">
+              <!-- The window rides in the LABEL, above the figure, not under it: the
                  numbers are bottom-aligned across the row by `mt-auto`, so a caption
                  below one of them would lift that cell's number out of line with its
                  seven neighbours. -->
-            <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">
-              {e.label}{#if e.note}<span class="block font-normal normal-case">{e.note}</span>{/if}
-            </dt>
-            <!-- This type size is safe only because the view count is rendered compactly:
+              <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">
+                {e.label}{#if e.note}<span class="block font-normal normal-case">{e.note}</span>{/if}
+              </dt>
+              <!-- This type size is safe only because the view count is rendered compactly:
                  spelled out, its seven digits overflowed a 1/4-width cell into the
                  neighbour, and no font size fits a figure that keeps growing. Compact
                  notation is what bounds it ("1.2B" is four characters), so a figure that
                  goes exact again has to come back down to text-2xl/sm:text-3xl. -->
-            <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{e.value}</dd>
-          </div>
-        {/each}
-      </dl>
-    {:else}
-      <p class="text-sm text-muted-foreground">Engagement data is unavailable right now.</p>
-    {/if}
+              <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{e.value}</dd>
+            </div>
+          {/each}
+        </dl>
+      {:else}
+        <p class="text-sm text-muted-foreground">Engagement data is unavailable right now.</p>
+      {/if}
+    {/await}
   </section>
 
   <!-- C. What's inside -->

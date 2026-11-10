@@ -22,6 +22,8 @@ const PAGE_TTL_MS = 60 * 1000;
 type OpenPayload = Awaited<ReturnType<typeof buildPayload>>;
 let pageCache: { at: number; data: OpenPayload } | null = null;
 
+const settledValue = <T>(r: PromiseSettledResult<T>): T | null => (r.status === 'fulfilled' ? r.value : null);
+
 async function buildPayload(fetchImpl: typeof fetch) {
   const api = serverApi(fetchImpl);
   // One call for the whole scale strip instead of two list totals: the figures come
@@ -29,18 +31,19 @@ async function buildPayload(fetchImpl: typeof fetch) {
   // measured at different moments. That snapshot also carries `unique_open_jobs` —
   // Meilisearch's own de-duplicated count, computed once by cmd/rollup-stats rather
   // than a live search call here, so this leg never counts on the request path.
-  const [scale, activity, facets, growth, engagement, github] = await Promise.allSettled([
+  // Engagement is streamed, not awaited: it is the slowest leg (a sum over the whole
+  // view rollup on a cache miss) and sits far below the fold, so the page goes out
+  // without it and the section fills in when it lands.
+  const engagement = api.engagementStats().catch(() => null);
+  const [scale, activity, facets, growth, github] = await Promise.allSettled([
     api.catalogScale(),
     api.jobsActivity('day'),
     api.statsFacets(),
     api.userGrowth(),
-    api.engagementStats(),
     githubStats(fetchImpl),
   ]);
 
-  const value = <T>(r: PromiseSettledResult<T>): T | null => (r.status === 'fulfilled' ? r.value : null);
-
-  const catalog = value(scale);
+  const catalog = settledValue(scale);
   // A degraded snapshot carries the approximate job count and the registry figures;
   // the counts that exist only in the database (or, for unique_open_jobs, only in
   // Meilisearch) come back as zero. Map those to null rather than passing the zero
@@ -56,17 +59,19 @@ async function buildPayload(fetchImpl: typeof fetch) {
       sources: catalog?.sources ?? null,
       telegramChannels: dbOnly(catalog?.telegram_channels),
     },
-    activity: value(activity) ?? [],
-    facets: value(facets) ?? null,
-    growth: value(growth) ?? [],
-    engagement: value(engagement),
-    github: value(github),
+    activity: settledValue(activity) ?? [],
+    facets: settledValue(facets) ?? null,
+    growth: settledValue(growth) ?? [],
+    engagement,
+    github: settledValue(github),
   };
 }
 
 export const load: PageServerLoad = async ({ fetch, setHeaders }) => {
   // The figures move slowly; let the CDN/browser hold the page briefly too.
-  setHeaders({ 'cache-control': 'public, max-age=300' });
+  // X-Accel-Buffering: nginx would otherwise hold the whole response until the
+  // streamed engagement leg resolves, which is the wait streaming exists to remove.
+  setHeaders({ 'cache-control': 'public, max-age=300', 'x-accel-buffering': 'no' });
 
   if (pageCache && Date.now() - pageCache.at < PAGE_TTL_MS) return pageCache.data;
 

@@ -32,7 +32,7 @@ const {
 // Hoisted with the mocks: `vi.mock` is lifted above ordinary declarations, so a class
 // declared normally here is still in its temporal dead zone when the factory runs.
 const { StubApiError } = vi.hoisted(() => ({
-  StubApiError: class StubApiError extends Error {
+  StubApiError: class extends Error {
     constructor(
       public status: number,
       message = 'failed',

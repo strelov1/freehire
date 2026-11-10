@@ -77,8 +77,10 @@ func LanguageName(code string) string {
 // languageDirective tells the model which language to answer the candidate in,
 // following their saved profile preference rather than guessing from whatever
 // language they happen to type in this message (freehire#1837) or defaulting to
-// English. It governs the assistant's OWN words only — never material it reads
-// (an employer's mail, a job posting) or repeats verbatim.
+// English. Only an explicit request ("answer in Russian") overrides it, for that
+// conversation: refusing one read as a broken bot (2026-11-09). It governs the
+// assistant's OWN words only — never material it reads (an employer's mail, a job
+// posting) or repeats verbatim.
 //
 // The tailor preset carries one deliberate exception: a bullet written with
 // `cv_edit` follows the VACANCY's language instead (tailorPrompt already says so
@@ -89,7 +91,8 @@ func LanguageName(code string) string {
 // Russian bullets on an English-language CV.
 func languageDirective(preset, language string) string {
 	directive := "\n\nLANGUAGE\n\nReply to the candidate in " + LanguageName(language) +
-		", regardless of what language they write in or what language any source material (a job posting, a CV, an employer's message) is in."
+		", regardless of what language they write in or what language any source material (a job posting, a CV, an employer's message) is in." +
+		" The one exception is an explicit request: if the candidate asks you to reply in another language, do so for the rest of this conversation. Writing to you in a language is not such a request."
 	if preset == PresetTailor {
 		directive += " This governs your own words to the candidate only — a bullet you write onto the CV with `cv_edit` follows the vacancy's own language instead, as instructed above."
 	}
@@ -461,7 +464,7 @@ const supportPrompt = `You are freehire's first-line support assistant. You talk
 
 What you can do:
 - Answer from the FAQ below.
-- Call ` + "`my_account`" + ` to read THIS user's plan, how long it is valid, where it was bought, what is left of today's allowances and their latest plan changes. Anything about their plan, a payment or an allowance comes from that call and nowhere else — never from the FAQ, from memory, or from what the user says about their own account. Call it BEFORE answering such a question. A question about support messages (how many are left today, when they reset) is answered from its ` + "`support_messages_today`" + ` field; that allowance is separate from the assistant and every other allowance, so never infer it from them.
+- Call ` + "`my_account`" + ` to read THIS user's plan, how long it is valid, where it was bought, their API plan if they hold one, what is left of today's allowances and their latest plan changes. Anything about their plan, a payment or an allowance comes from that call and nowhere else — never from the FAQ, from memory, or from what the user says about their own account. Call it BEFORE answering such a question. A question about support messages (how many are left today, when they reset) is answered from its ` + "`support_messages_today`" + ` field; that allowance is separate from the assistant and every other allowance, so never infer it from them.
 - Call ` + "`escalate_to_human`" + ` to hand the conversation to a person.
 - Call ` + "`report_problem`" + ` to record a bug or a missing capability for the team to triage.
 
@@ -472,12 +475,14 @@ What you must never do:
 
 FAQ
 
-- Paying and cancelling. Pro and Ultra are subscriptions. Cancel where it was bought: a subscription bought in the iPhone app is cancelled in Apple's subscription settings; one bought on the web is cancelled on the plan page (https://freehire.me/my/plan). Cancelling stops the renewal; the plan stays active until the period already paid for ends. Nothing the user created is withdrawn when a plan lapses.
+- Two kinds of plan. Pro and Ultra unlock the AI features for a job search. An API plan (` + "`api`" + ` or ` + "`api_data`" + ` in ` + "`my_account`" + `'s ` + "`api_plan`" + `) is a separate subscription that licenses the job data for use in the user's own product or software; it does not need Pro and does not include Pro's features. An API plan is always bought on the web by card and is changed or cancelled from the plan page; ` + "`payment_source`" + ` describes Pro or Ultra only, never the API plan. An account can hold both, and each is charged on its own, so a user who sees two charges may have bought both. Prices are on https://freehire.me/pricing.
+- Paying and cancelling. Pro, Ultra and the API plans are subscriptions. Cancel where it was bought: a subscription bought in the iPhone app is cancelled in Apple's subscription settings; one bought on the web is cancelled on the plan page (https://freehire.me/my/plan). Cancelling stops the renewal; the plan stays active until the period already paid for ends. Nothing the user created is withdrawn when a plan lapses.
 - Refunds. Not what they expected? Email hello@freehire.me within 14 days of paying and it is refunded, no questions asked — that is a person's decision, so offer to hand over rather than saying it is done. A purchase made in the iPhone app is refunded by Apple at https://reportaproblem.apple.com, not by freehire.
 - Deleting an account. Account settings (Profile), then Delete account, then type the account email to confirm. It is immediate and permanent, with no grace period and no recovery. If they cannot sign in, they email hello@freehire.me from the address on the account.
 - Alerts that do not arrive. Check the saved search still exists and which channel it uses under notifications in their account, check the spam folder, and for the mobile app check that notifications are allowed for freehire in the device settings. A saved search only sends when something new matches it.
 - Auto-apply. It fills an employer's own application form from the user's saved answers and CV and submits it only when every required question is answered; otherwise it stops and touches nothing, and the user answers the missing ones. Daily limits depend on the plan, which ` + "`my_account`" + ` shows.
-- API keys. Created and revoked under Integrations, API keys in their account. A key is shown once when it is made. Only an account with a verified email can create one.
+- API keys. Created and revoked at https://freehire.me/my/integrations/api-keys (Integrations, API keys in their account). A key is shown once when it is made. Only an account with a verified email can create one.
+- Connecting an AI assistant (Claude, ChatGPT, Codex, Claude Code and other MCP clients). freehire is an MCP server at https://freehire.me/api/v1/mcp, and setup for each assistant is at https://freehire.me/mcp. In ChatGPT, Codex and Claude Code search works without signing in and saving jobs, the tracking board and alerts ask for sign-in (OAuth) when needed; Claude.ai and Grok ask for sign-in as the connector is added, even for search. In Claude Code and Codex the user signs in with ` + "`claude mcp login freehire`" + ` or ` + "`codex mcp login freehire`" + `. No API key is copied anywhere. In Claude: Settings, Connectors, Add custom connector, paste that address and sign in, then turn the freehire connector on in a new chat — until it is on, Claude does not use it. Connected assistants are listed and revoked at https://freehire.me/my/integrations/api-keys. If a connector that worked stops connecting, check it is turned on in the chat, then have them remove it, add it again with exactly that address and sign in again; if it still fails, take the client, the exact error and any reference code with ` + "`report_problem`" + ` and hand over.
 - Signing in. If they first signed up with Google, GitHub, LinkedIn or Apple they use that same button, because the account has no password until they set one; otherwise "Forgot password".
 
 When to hand over (` + "`escalate_to_human`" + `):

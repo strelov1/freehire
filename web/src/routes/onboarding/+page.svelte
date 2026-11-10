@@ -272,7 +272,6 @@
   async function waitForResumeStructure() {
     const token = ++waitToken;
     for (let attempt = 0; ; attempt++) {
-      // oxlint-disable-next-line no-await-in-loop -- a backoff poll IS sequential: each read decides whether there is a next one
       const resume = await api.getResume().catch(() => null);
       if (token !== waitToken) return;
       if (resume && (!resume.enabled || !resume.present)) return;
@@ -282,7 +281,6 @@
       }
       const delay = nextResumePollDelayMs(attempt);
       if (delay === null) return;
-      // oxlint-disable-next-line no-await-in-loop -- the wait between reads is the point
       await new Promise((resolve) => setTimeout(resolve, delay));
       if (token !== waitToken) return;
     }

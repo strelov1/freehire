@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 // djinni adapts djinni.co, a Ukrainian/CEE IT job board. Each anonymous listing page
@@ -86,12 +88,16 @@ func (s djinni) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 		if len(nodes) == 0 {
 			break // a non-redirected page with no postings — nothing more to read
 		}
+		modes := djinniCardModes(root)
 		for _, raw := range nodes {
 			var p djinniPosting
 			if json.Unmarshal(raw, &p) != nil {
 				continue // a posting that fails to decode is skipped, never aborting the page
 			}
 			if job, ok := p.toJob(); ok {
+				if job.WorkMode == "" {
+					job.WorkMode = modes[p.Identifier]
+				}
 				jobs = append(jobs, job)
 			}
 		}
@@ -100,9 +106,10 @@ func (s djinni) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 }
 
 // djinniPosting is one schema.org JobPosting from the listing. identifier is a bare integer;
-// jobLocationType (TELECOMMUTE/ON_SITE) is the work-arrangement signal; the applicant location
-// requirement carries the candidate-residence rule Djinni renders as "Countries where we consider
-// candidates", as EITHER a country or a macro-region — see toJob.
+// jobLocationType is TELECOMMUTE or absent (never ON_SITE), so it marks only remote postings and
+// djinniCardModes reads the other modes from the card; the applicant location requirement carries
+// the candidate-residence rule Djinni renders as "Countries where we consider candidates", as
+// EITHER a country or a macro-region — see toJob.
 type djinniPosting struct {
 	Title              string `json:"title"`
 	Description        string `json:"description"`
@@ -160,6 +167,56 @@ func (p djinniPosting) toJob() (Job, bool) {
 		EmploymentType: schemaEmploymentType(p.EmploymentType),
 		PostedAt:       djinniDate(p.DatePosted),
 	}, true
+}
+
+// djinniCardLabels maps the arrangement label a listing card shows to a work mode. Djinni shows
+// one label only when the employer picked one arrangement; a card listing several ("Office,
+// Remote" on the posting page) shows none, and its mode stays "" rather than a guess.
+var djinniCardLabels = map[string]string{
+	"Full Remote":   "remote",
+	"Hybrid Remote": "hybrid",
+	"Office Work":   "onsite",
+}
+
+// djinniCardModes reads the work mode of each card on a listing page, keyed by posting id. The
+// JSON-LD marks only remote postings (1,130 of 5,108 open djinni rows had no mode, #4370), while
+// a card (div#job-item-<id>) carries the label in its metadata row (div.fw-medium).
+func djinniCardModes(root *html.Node) map[int64]string {
+	modes := map[int64]string{}
+	walk(root, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || n.Data != "div" {
+			return true
+		}
+		id, ok := strings.CutPrefix(Attr(n, "id"), "job-item-")
+		if !ok {
+			return true
+		}
+		if jid, err := strconv.ParseInt(id, 10, 64); err == nil {
+			if mode := djinniCardMode(n); mode != "" {
+				modes[jid] = mode
+			}
+		}
+		return false
+	})
+	return modes
+}
+
+// djinniCardMode returns the mode of one card's label, a span of its metadata row. It is the
+// first span except on a part-time posting, where "Part-time" precedes it.
+func djinniCardMode(card *html.Node) string {
+	mode := ""
+	walk(card, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || n.Data != "div" || !HasClass(n, "fw-medium") {
+			return mode == ""
+		}
+		for c := n.FirstChild; c != nil && mode == ""; c = c.NextSibling {
+			if c.Type == html.ElementNode && c.Data == "span" {
+				mode = djinniCardLabels[collapseSpace(textContent(c))]
+			}
+		}
+		return false
+	})
+	return mode
 }
 
 // djinniDate parses Djinni's datePosted, an ISO-8601 local datetime WITHOUT a zone (e.g.

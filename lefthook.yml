@@ -162,6 +162,11 @@ pre-commit:
     doc-links:
       run: node scripts/check-doc-links.mjs
 
+    # Staged files over the token limit (scripts/check-file-size.mjs holds the limit, the
+    # ignore list and the splitting instructions). The file-size CI job runs it over every file.
+    file-size:
+      run: node scripts/check-file-size.mjs
+
     # THE ONLY HOOK HERE THAT PREVENTS SOMETHING RATHER THAN REPORTING IT.
     #
     # Everything else in this file is a convenience: it fails locally so CI does not
@@ -215,7 +220,7 @@ pre-commit:
     # {staged_files} to eslint, which does not read that file and answers "File ignored
     # because no matching configuration was supplied" — a warning where the intent was a
     # check, so the glob would add noise and cover nothing. design-system-lint runs
-    # `pnpm run lint` over its whole package, which is `oxlint && eslint .`, so there
+    # `pnpm run lint` over its whole package, which is `oxlint --deny-warnings && eslint .`, so there
     # the config genuinely decides the outcome. The web and extension CI jobs run that
     # same whole-package lint on every push, which is what covers a rule switched off
     # here.

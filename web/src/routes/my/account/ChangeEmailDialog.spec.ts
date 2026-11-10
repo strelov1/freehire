@@ -12,7 +12,7 @@ const { requestEmailChange, confirmEmailChange, reauthenticatePassword, invalida
 }));
 
 const { StubApiError } = vi.hoisted(() => ({
-  StubApiError: class StubApiError extends Error {
+  StubApiError: class extends Error {
     constructor(
       public status: number,
       message = 'failed',

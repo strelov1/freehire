@@ -87,6 +87,7 @@ func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []l
 		wrapped := fmt.Errorf("llm: chat: %w", err)
 		g := gen()
 		g.Err = wrapped
+		g.Cancelled = callerCancelled(ctx)
 		c.observe(g)
 		return nil, wrapped
 	}

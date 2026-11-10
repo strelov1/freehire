@@ -120,7 +120,7 @@ function checkPackage() {
   const used = new Set();
   const files = readdirSync(packageSrc)
     .filter((f) => f.endsWith('.svelte'))
-    .sort();
+    .toSorted();
 
   for (const file of files) {
     for (const hit of hitsIn(readFileSync(join(packageSrc, file), 'utf-8'), RADII.package)) {

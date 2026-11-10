@@ -6,7 +6,7 @@ import { must } from './test-utils';
 
 const slot = (html: string) => createRawSnippet(() => ({ render: () => html }));
 
-const open = (open: boolean) => ({ open, children: slot('<p>body</p>') });
+const open = (isOpen: boolean) => ({ open: isOpen, children: slot('<p>body</p>') });
 
 describe('Dialog', () => {
   it('uses the description as its accessible name when no title is provided', () => {

@@ -184,7 +184,11 @@ func runServer(cfg config.Settings) error {
 	// is a long-lived object here rather than something built per request.
 	var suggestSvc *suggest.Service
 	if cfg.MeiliKey != "" {
-		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
+		facetOpts, err := facetEngineOptions(ctx, redisClient)
+		if err != nil {
+			return err
+		}
+		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey, facetOpts...)
 		suggestSvc = suggest.New(suggest.NewIndex(searchClient))
 		startSuggestRefresh(ctx, suggestSvc)
 	}
@@ -195,16 +199,6 @@ func runServer(cfg config.Settings) error {
 	if err != nil {
 		return fmt.Errorf("direct apply: %w", err)
 	}
-
-	// An agent's opt-in semantic search embeds its query against EMBED_URL. Unset, the
-	// embedder is nil and every such request is answered keyword-only and told so — which
-	// is also the rollback. A value that is set but unreadable fails the start: a mistyped
-	// threshold would otherwise look exactly like a tuned one.
-	semanticCfg, err := config.LoadSemanticSearch()
-	if err != nil {
-		return fmt.Errorf("semantic search: %w", err)
-	}
-	queryEmbedder := search.NewQueryEmbedder(semanticCfg.URL, semanticCfg.APIKey, semanticCfg.QueryTimeout)
 
 	// Résumé storage is optional: only when all four S3 settings are present does
 	// blobstore.New build a client (it returns nil otherwise). Nil disables storage —
@@ -389,8 +383,6 @@ func runServer(cfg config.Settings) error {
 		GmailConnector:              gmailConnector,
 		GmailCipher:                 gmailCipher,
 		OJCPSigner:                  ojcpSigner,
-		QueryEmbedder:               queryEmbedder,
-		SemanticScoreThreshold:      semanticCfg.ScoreThreshold,
 		MailboxDomain:               cfg.MailboxDomain,
 		Search:                      searchClient,
 		Suggest:                     suggestSvc,

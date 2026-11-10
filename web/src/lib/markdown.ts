@@ -6,7 +6,7 @@
 // lets this module be unit-tested under the node-environment vitest config.
 
 import { Marked } from 'marked';
-import DOMPurify from 'isomorphic-dompurify';
+import { addHook, removeHook, sanitize } from 'isomorphic-dompurify';
 
 const md = new Marked({ gfm: true, breaks: true });
 
@@ -82,15 +82,15 @@ function openLinksInNewTab(node: Element) {
 /** Render one markdown string from the model to sanitized HTML for `{@html}`. */
 export function renderMarkdown(text: string): string {
   const html = md.parse(text, { async: false }) as string;
-  DOMPurify.addHook('afterSanitizeAttributes', openLinksInNewTab);
+  addHook('afterSanitizeAttributes', openLinksInNewTab);
   try {
-    return DOMPurify.sanitize(html, {
+    return sanitize(html, {
       ALLOWED_TAGS,
       ALLOWED_ATTR,
       ALLOWED_URI_REGEXP,
       ALLOW_DATA_ATTR: false,
     });
   } finally {
-    DOMPurify.removeHook('afterSanitizeAttributes');
+    removeHook('afterSanitizeAttributes');
   }
 }

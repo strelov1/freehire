@@ -92,8 +92,11 @@
   }
 </script>
 
-<div class="flex flex-col items-end gap-1">
+<!-- No box of its own: the button and the lines under it are items of the header's wrapping
+     row, so the lines can take a full row instead of widening the button's column. -->
+<div class="contents">
   <Button
+    class="shrink-0"
     variant={watched ? 'secondary' : 'outline'}
     size="sm"
     onclick={toggle}
@@ -105,7 +108,7 @@
     <span class="hidden sm:inline">{watched ? 'Watching' : 'Watch'}</span>
   </Button>
   {#if justWatched && !alertOn}
-    <p class="max-w-56 text-right text-xs text-muted-foreground">
+    <p class="basis-full text-right text-xs text-muted-foreground">
       Added to your watchlist.
       <a href={resolve('/my/watchlist')} class="font-medium text-foreground underline underline-offset-2">
         Turn on alerts
@@ -114,6 +117,6 @@
     </p>
   {/if}
   {#if error}
-    <p class="max-w-56 text-right text-xs text-destructive">{error}</p>
+    <p class="basis-full text-right text-xs text-destructive">{error}</p>
   {/if}
 </div>

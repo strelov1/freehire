@@ -136,3 +136,30 @@ func TestTraffitFetchStopsOnEmptyPage(t *testing.T) {
 		t.Fatalf("fake.calls = %d, want 2 (stop at the empty page)", fake.calls)
 	}
 }
+
+// TestTraffitMapsRemoteStatus guards the employer's remote-status picklist (job.remoteStatus):
+// one ticked value is the posting's work mode, several leave it empty rather than guessing, and
+// a tenant that never fills it (null) stays empty.
+func TestTraffitMapsRemoteStatus(t *testing.T) {
+	page := `{"count":5,"items":[
+		{"advertId":1,"title":"A","job":{"remoteStatus":["remote"]}},
+		{"advertId":2,"title":"B","job":{"remoteStatus":["hybrid"]}},
+		{"advertId":3,"title":"C","job":{"remoteStatus":["on_site"]}},
+		{"advertId":4,"title":"D","job":{"remoteStatus":["hybrid","remote"]}},
+		{"advertId":5,"title":"E","job":{"remoteStatus":null}}
+	]}`
+	fake := (&routedHTTP{}).route("offset=0", page)
+	jobs, err := NewTraffit(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Provider: "traffit", Board: "acme"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	want := map[string]string{"1": "remote", "2": "hybrid", "3": "onsite", "4": "", "5": ""}
+	if len(jobs) != len(want) {
+		t.Fatalf("got %d jobs, want %d", len(jobs), len(want))
+	}
+	for _, j := range jobs {
+		if j.WorkMode != want[j.ExternalID] || j.Remote != (want[j.ExternalID] == "remote") {
+			t.Errorf("advert %s: WorkMode=%q Remote=%v, want %q", j.ExternalID, j.WorkMode, j.Remote, want[j.ExternalID])
+		}
+	}
+}

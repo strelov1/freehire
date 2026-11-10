@@ -309,3 +309,52 @@ func TestDjinniIsAggregator(t *testing.T) {
 		t.Error("djinni missing from AggregatorProviders — it would not inherit ATS suppression")
 	}
 }
+
+// djinniCardModeHTML mirrors the live listing (2026-11-08): a posting without jobLocationType
+// still renders its arrangement in the card's metadata row, after "Part-time" on a part-time one.
+// A card that lists several arrangements shows no label at all.
+const djinniCardModeHTML = `<html><head>
+<script type="application/ld+json">
+[{"@type":"JobPosting","title":"Office role","url":"https://djinni.co/jobs/857134-office/","identifier":857134,"hiringOrganization":{"name":"Sine"}},
+{"@type":"JobPosting","title":"Hybrid role","url":"https://djinni.co/jobs/857158-hybrid/","identifier":857158,"hiringOrganization":{"name":"Wonder"}},
+{"@type":"JobPosting","title":"Mixed role","url":"https://djinni.co/jobs/857137-mixed/","identifier":857137,"hiringOrganization":{"name":"Xpand"}},
+{"@type":"JobPosting","title":"Remote role","url":"https://djinni.co/jobs/837549-remote/","identifier":837549,"jobLocationType":"TELECOMMUTE","hiringOrganization":{"name":"Acme"}}]
+</script></head><body>
+<div id="job-item-857134" class="job-item"><a href="/jobs/857134-office/"><header><span class="text-body-tertiary fw-medium">$$$$</span></header></a>
+  <div class="fw-medium d-flex flex-wrap"><span class="text-nowrap">Office Work</span><span class="middot"> · </span><span><span class="location-text">Ukraine</span></span></div></div>
+<div id="job-item-857158" class="job-item"><a href="/jobs/857158-hybrid/"></a>
+  <div class="fw-medium d-flex flex-wrap">
+    <span class="text-nowrap">Part-time</span><span class="middot"> · </span>
+    <span class="text-nowrap">
+      Hybrid Remote
+    </span><span class="middot"> · </span></div></div>
+<div id="job-item-857137" class="job-item"><a href="/jobs/857137-mixed/"></a>
+  <div class="fw-medium d-flex flex-wrap"><span><span class="location-text">Ukraine</span></span><span class="middot"> · </span><span class="text-nowrap">0.5 years of experience</span></div></div>
+<div id="job-item-837549" class="job-item"><div class="fw-medium"><span class="text-nowrap">Full Remote</span></div></div>
+</body></html>`
+
+func TestDjinniReadsWorkModeFromListingCard(t *testing.T) {
+	fake := &djinniPagedHTTP{bodies: map[int]string{1: djinniCardModeHTML}}
+	jobs, err := NewDjinni(fake).Fetch(context.Background(), CompanyEntry{Provider: "djinni"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	want := map[string]struct {
+		mode   string
+		remote bool
+	}{
+		"857134": {"onsite", false},
+		"857158": {"hybrid", false},
+		"857137": {"", false}, // several arrangements: no label, no guess
+		"837549": {"remote", true},
+	}
+	if len(jobs) != len(want) {
+		t.Fatalf("got %d jobs, want %d", len(jobs), len(want))
+	}
+	for _, j := range jobs {
+		w := want[j.ExternalID]
+		if j.WorkMode != w.mode || j.Remote != w.remote {
+			t.Errorf("%s: WorkMode=%q Remote=%v, want %q/%v", j.ExternalID, j.WorkMode, j.Remote, w.mode, w.remote)
+		}
+	}
+}

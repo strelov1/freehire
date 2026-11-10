@@ -30,7 +30,6 @@ type fakeOJCPStore struct {
 	liveness    []db.ListJobLivenessBySlugsRow
 	livenessErr error
 	// The reads the ChatGPT app's market tools need beyond the job itself.
-	chunks       []db.JobSemanticChunk
 	jobsByID     []db.Job
 	salary       []db.ListInsightsSalaryRow
 	salaryByCat  []db.ListInsightsSalaryByCategoryRow
@@ -55,10 +54,6 @@ func (f fakeOJCPStore) GetCompany(context.Context, string) (db.Company, error) {
 
 func (f fakeOJCPStore) GetJobDuplicateOwner(context.Context, int64) (int64, error) {
 	return f.job.ID, nil
-}
-
-func (f fakeOJCPStore) ListSemanticChunksForJobs(context.Context, []int64) ([]db.JobSemanticChunk, error) {
-	return f.chunks, nil
 }
 
 func (f fakeOJCPStore) GetJobsByIDs(context.Context, []int64) ([]db.Job, error) {

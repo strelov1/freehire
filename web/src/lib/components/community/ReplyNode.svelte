@@ -7,6 +7,7 @@
   import { Button } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { timeAgo } from '#lib/utils.js';
+  // oxlint-disable-next-line import/no-self-import -- Svelte 5 recurses by importing the component's own file; `<svelte:self>` is deprecated
   import Self from './ReplyNode.svelte';
 
   let {

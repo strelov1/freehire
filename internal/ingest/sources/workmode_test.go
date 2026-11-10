@@ -19,6 +19,7 @@ func TestWorkplaceTypeMode(t *testing.T) {
 		"on-site":     "onsite",
 		"onsite":      "onsite",
 		"On-Site":     "onsite",
+		"on_site":     "onsite",
 		"unspecified": "",
 		"":            "",
 		"weird":       "",

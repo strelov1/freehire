@@ -20,7 +20,7 @@ FROM (
 ) h
 JOIN users u ON u.id = h.user_id
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
-WHERE mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND u.limit_nudge_sent_at IS NULL
   AND (u.pro_until IS NULL OR u.pro_until <= now())
   AND (u.ultra_until IS NULL OR u.ultra_until <= now())

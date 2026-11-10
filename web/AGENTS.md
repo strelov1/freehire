@@ -149,8 +149,10 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   `remote_regions` overlap facet.
 - **`AssistantChat` has three hosts**: `/my/assistant`, `/tailor/[slug]`, and the profile
   page's Experience tab (`ExperienceAssistantPanel.svelte`). It needs a flex parent with a
-  bounded height, and it boots a session on mount — so never mount it before the user asks
-  for one, or every visitor mints an empty conversation. **`kickoff` is read once**, into a
+  bounded height. A plain chat with nothing to resume opens blank and creates its session
+  with the first message (`deferredNew`); every other preset, a support chat and a "New chat"
+  click still create one on mount — so never mount those before the user asks for one, or
+  every visitor mints an empty conversation. **`kickoff` is read once**, into a
   deliberately non-reactive `arrival`, and spent after the first send: setting the prop on a
   live chat does nothing, so aiming it at a new subject means remounting it (the Experience
   panel keys on a launch token). Unmounting cancels a streaming turn, which is why closing

@@ -413,8 +413,8 @@
   let companies = $state.raw<CompanyListItem[]>([]);
 
   $effect(() => {
-    const q = settledQuery.trim();
-    if (q.length < SUGGEST_MIN_CHARS || !suggest) {
+    const typed = settledQuery.trim();
+    if (typed.length < SUGGEST_MIN_CHARS || !suggest) {
       completions = [];
       completionParts = new Map();
       jobs = [];
@@ -434,12 +434,12 @@
       // a schedule — a cold or missing one must cost the box its completions, not its
       // postings.
       const [s, j, c] = await Promise.allSettled([
-        api.suggest(q, completionsLimit, ac.signal),
-        api.searchJobs(new URLSearchParams({ q }), jobsLimit, 0, ac.signal),
+        api.suggest(typed, completionsLimit, ac.signal),
+        api.searchJobs(new URLSearchParams({ q: typed }), jobsLimit, 0, ac.signal),
         // Over-fetch: most of what the fuzzy endpoint returns is discarded below, and
         // asking for exactly three would leave the section empty whenever the fourth
         // was the only real match.
-        api.listCompanies(q, companiesFetch, 0, undefined, ac.signal),
+        api.listCompanies(typed, companiesFetch, 0, undefined, ac.signal),
       ]);
       // An abort rejects all three, and `allSettled` would otherwise report that as
       // three empty sections — blanking the panel a fresher query is about to fill.
@@ -448,7 +448,7 @@
       completions = fromApi(rows);
       completionParts = new Map(completions.map((row, i) => [row.slug, rows[i]?.parts ?? []]));
       jobs = j.status === 'fulfilled' ? j.value.items : [];
-      companies = c.status === 'fulfilled' ? namedCompanies(c.value.items, q, companiesLimit) : [];
+      companies = c.status === 'fulfilled' ? namedCompanies(c.value.items, typed, companiesLimit) : [];
     })();
     return () => ac.abort();
   });
