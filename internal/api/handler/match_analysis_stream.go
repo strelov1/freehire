@@ -108,6 +108,9 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	if err := jobVisibleToCaller(job, userID, true); err != nil {
+		return err
+	}
 	cvUploadedAt, hasCV := h.cvUploadedAt(c, userID)
 	// Reserve the credit before opening the stream (the fiber ctx is still valid here, so an
 	// out-of-credits new job returns a real 402 instead of an SSE error). Only a CV-backed

@@ -65,7 +65,10 @@ func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 	}
 	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
-		return err // ErrNoRows → 404
+		return err
+	}
+	if err := jobVisibleToCaller(job, userID, true); err != nil {
+		return err
 	}
 	app, err := h.queries.GetUserApplication(c.Context(), db.GetUserApplicationParams{UserID: userID, JobID: job.ID})
 	if err != nil {

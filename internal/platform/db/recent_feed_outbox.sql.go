@@ -24,6 +24,9 @@ WITH claimed AS (
 SELECT j.id AS job_id, j.title, j.company, j.company_slug, j.public_slug
 FROM claimed c
 JOIN jobs j ON j.id = c.job_id
+WHERE j.closed_at IS NULL
+  AND j.duplicate_of IS NULL
+  AND NOT j.is_private
 `
 
 type ClaimRecentFeedOutboxBatchRow struct {

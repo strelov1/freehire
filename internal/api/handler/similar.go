@@ -27,6 +27,9 @@ func (h *searchHandlers) SimilarJobs(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	if err := jobVisibleToCaller(row, 0, false); err != nil {
+		return err
+	}
 	limit := min(max(c.QueryInt("limit", defaultSimilarLimit), 1), maxSimilarLimit)
 	views, err := similarViews(c.Context(), h.search, h.queries, row, limit, h.semantic.threshold, func(row db.Job) bool {
 		return !row.ClosedAt.Valid && !row.IsPrivate

@@ -145,6 +145,10 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 		// RenderError maps pgx.ErrNoRows to 404, anything else to 500.
 		return err
 	}
+	callerID, signedIn := auth.UserID(c)
+	if err := jobVisibleToCaller(job, callerID, signedIn); err != nil {
+		return err
+	}
 
 	view, err := jobview.FromRow(job)
 	if err != nil {
@@ -378,4 +382,14 @@ func jobBySlugOrCode(ctx context.Context, q jobSlugReader, slug string) (db.Job,
 		return db.Job{}, pgx.ErrNoRows
 	}
 	return matched, nil
+}
+
+func jobVisibleToCaller(job db.Job, callerID int64, signedIn bool) error {
+	if !job.IsPrivate {
+		return nil
+	}
+	if signedIn && job.CreatedBy.Valid && job.CreatedBy.Int64 == callerID {
+		return nil
+	}
+	return pgx.ErrNoRows
 }
