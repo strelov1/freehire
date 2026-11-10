@@ -27,7 +27,7 @@
     "@opentelemetry/sdk-logs": "^3.0.0",
     "flag-icons": "^7.5.0",
     "freehire-design-system": "file:../design-system",
-    "svelte": "^5.57.2"
+    "svelte": "^5.57.3"
   },
   "overrides": {
     "minimatch@>=7.0.0 <11.0.1": "11.0.1"
