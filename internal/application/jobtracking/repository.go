@@ -35,15 +35,22 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository 
 
 // JobIDBySlug returns the internal job id for the given public slug, or
 // ErrJobNotFound when no job matches.
-func (r *QueriesRepository) JobIDBySlug(ctx context.Context, slug string) (int64, error) {
-	id, err := r.q.GetJobIDBySlug(ctx, slug)
+func (r *QueriesRepository) JobIDBySlug(ctx context.Context, userID int64, slug string) (int64, error) {
+	job, err := r.q.GetJobBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, ErrJobNotFound
 	}
 	if err != nil {
 		return 0, err
 	}
-	return id, nil
+	return trackedJobID(job, userID)
+}
+
+func trackedJobID(job db.Job, userID int64) (int64, error) {
+	if job.IsPrivate && (!job.CreatedBy.Valid || job.CreatedBy.Int64 != userID) {
+		return 0, ErrJobNotFound
+	}
+	return job.ID, nil
 }
 
 // RecordView records (or refreshes) a user's view of a job.

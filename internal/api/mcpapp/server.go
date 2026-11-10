@@ -123,9 +123,7 @@ func newCatalogueServer(r Reader, origin, instructions, surface string) *mcp.Ser
 			"mode, seniority and skills go in their filters, never in the query. If suspiciously " +
 			"few results come back, loosen one constraint at a time and say which. Present " +
 			"results as a table of title, company, location, posted date and link (the employer's " +
-			"posting and ours), naming the source. Set semantic for a need described in words " +
-			"(\"keep our payment systems secure\"), not for a job title or a non-technical role, " +
-			"where plain keywords answer better.",
+			"posting and ours), naming the source.",
 		Annotations: readOnly(),
 		Meta:        rendersInWidget(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchJobsResult, error) {

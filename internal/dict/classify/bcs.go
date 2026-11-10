@@ -362,6 +362,7 @@ var bcsCategoryTable = []aliasEntry{
 	{"rukovalac gradjevinsk* masin*", "skilled_trades"},
 	{"operater* na montaz*", "manufacturing"},
 	{"radnik* na montaz*", "manufacturing"},
+	{"radnic* na montaz*", "manufacturing"},
 	{"radnik* na stroj*", "manufacturing"},
 	{"radnik* na masin*", "manufacturing"},
 	{"graficki radnik*", "manufacturing"},
@@ -407,6 +408,50 @@ var bcsCategoryTable = []aliasEntry{
 	{"organizator* medjunarodn* transport*", "logistics"},
 	{"zastupnik* u osiguranj*", "sales"},
 	{"promocij* lijek*", "sales"},
+	// The teaching assistant ("pomoćnik u nastavi", the aide for pupils with
+	// disabilities) is education, as "Teaching Assistant" is; the home care aide
+	// ("radnik za njegu", "pomoć u kući") is healthcare, as "Home Care Aide" is.
+	{"u nastavi", "education"},
+	// The agronomist and the civil engineer by their field, before the farm and
+	// construction trades below.
+	{"inzenjer* poljoprivred*", "science"},
+	{"inzenjer* niskogradnj*", "industrial_engineering"},
+	{"inzenjer* visokogradnj*", "industrial_engineering"},
+	{"pomocnik* za djec*", "education"},
+	{"pomocnic* za djec*", "education"},
+	{"za ucenik* s teskocam*", "education"},
+	{"za njegu", "healthcare"},
+	{"pomoc* u kuc*", "healthcare"},
+	// Construction machinery, excavators, loaders and cranes are the heavy-equipment
+	// operator (skilled_trades); machine tools and the other machines a "rukovatelj"
+	// runs are the plant's machine operator, as "Machine Operator" is.
+	{"gradjevinsk* stroj*", "skilled_trades"},
+	{"radn* stroj*", "skilled_trades"},
+	{"alatn* stroj*", "manufacturing"},
+	{"rukovatelj* stroj*", "manufacturing"},
+	{"rukovatelj* linij*", "manufacturing"},
+	{"rukovatelj* uredjaj*", "manufacturing"},
+	// The sanitary engineer, filed where the Slovenian "sanitarni inženir" is.
+	{"sanitarn* inzenjer*", "occupational_safety"},
+	{"sanitarn* inzenjerstv*", "occupational_safety"},
+	{"zdravlj* na rad*", "occupational_safety"},
+	// A shop's deli, fish and produce counters are retail, as "Deli Clerk" and
+	// "Produce Clerk" are; the shop worker ("trgovački radnik") too.
+	{"gastro odjel*", "retail"},
+	{"ribarnic*", "retail"},
+	{"voc* i povrc*", "retail"},
+	{"trgovack* radnik*", "retail"},
+	{"trgovack* radnic*", "retail"},
+	{"u marketu", "retail"},
+	// The real-estate agent ("posredovanje u prometu nekretninama") is sales, as
+	// "Real Estate Agent" is; the travel agency is hospitality, as "Travel Agent" is.
+	{"promet* nekretnin*", "sales"},
+	{"agent* za nekretnin*", "sales"},
+	{"turistick* agencij*", "hospitality"},
+	{"hr specijalist*", "hr"},
+	{"hr generalist*", "hr"},
+	{"sportsk* trener*", "education"},
+	{"trener* plivanj*", "education"},
 
 	// Band 2. The role nouns, in the inflected and feminine forms the main table does
 	// not list.
@@ -459,6 +504,42 @@ var bcsCategoryTable = []aliasEntry{
 	{"nastavnik*", "education"},
 	{"ucitelj*", "education"},
 	{"tajnic*", "administration"},
+	// Farm, livestock, forestry and garden work is a trade, where the Slovenian
+	// "kmetijski delavec" and "vrtnar" are filed; the sawmill and wood processing are
+	// the plant floor, as "obdelava lesa" is.
+	{"poljoprivredn* radnik*", "skilled_trades"},
+	{"poljoprivredn* radnic*", "skilled_trades"},
+	{"stocar*", "skilled_trades"},
+	{"stocarsk*", "skilled_trades"},
+	{"sumsk*", "skilled_trades"},
+	{"sumarsk*", "skilled_trades"},
+	{"sjekac*", "skilled_trades"},
+	{"peradar*", "skilled_trades"},
+	{"uzgajivac*", "skilled_trades"},
+	{"vrtlar*", "skilled_trades"},
+	{"hortikultur*", "skilled_trades"},
+	{"drvopreradjivac*", "manufacturing"},
+	{"drvopreradjivack*", "manufacturing"},
+	{"pilan*", "manufacturing"},
+	// The construction trades, as "Construction Laborer" is: the site technician
+	// and worker, civil and building works, the tile setter.
+	{"gradjevinsk* tehnicar*", "skilled_trades"},
+	{"gradjevinsk* radnik*", "skilled_trades"},
+	{"gradjevinsk* radnic*", "skilled_trades"},
+	{"gradjevinsk* radov*", "skilled_trades"},
+	{"niskogradnj*", "skilled_trades"},
+	{"visokogradnj*", "skilled_trades"},
+	{"polagac*", "skilled_trades"},
+	{"bager*", "skilled_trades"},
+	{"utovarivac*", "skilled_trades"},
+	{"dizalic*", "skilled_trades"},
+	{"vilicar*", "logistics"},
+	{"knjiznicar*", "education"},
+	{"vatrogasc*", "public_safety"},
+	{"vatrogasn* oprem*", categoryNone},
+	{"vatrogasn*", "public_safety"},
+	{"butik*", "retail"},
+	{"ciscenj*", "personal_services"},
 
 	// Band 3. The fields.
 	{"prodaj*", "sales"},
@@ -587,6 +668,35 @@ var bcsCategoryTable = []aliasEntry{
 	{"laboratorij*", "science"},
 	{"hemijsk* ispitivanj*", "science"},
 	{"kemijsk* ispitivanj*", "science"},
+	// The allied health degrees ("prvostupnik sestrinstva/fizioterapije") and the
+	// clinical laboratory are healthcare, as nursing, "Physical Therapist" and
+	// "Medical Lab Technician" are; the psychologist too, the biologist is science.
+	{"sestrinstv*", "healthcare"},
+	{"fizioterapij*", "healthcare"},
+	{"radn* terapij*", "healthcare"},
+	{"primaljstv*", "healthcare"},
+	{"radiolosk* tehnologij*", "healthcare"},
+	{"laboratorijsk* dijagnostik*", "healthcare"},
+	{"medicinsk* biokemij*", "healthcare"},
+	{"psiholog*", "healthcare"},
+	{"magistar psihologij*", "healthcare"},
+	{"magistra psihologij*", "healthcare"},
+	{"biolog*", "science"},
+	{"biologij*", "science"},
+	{"edukacijsk* rehabilitacij*", "education"},
+	// Civil protection is public safety, as the firefighter is.
+	{"civiln* zastit*", "public_safety"},
+	// Customs and road haulage are logistics ("carinski referent" above), payroll is
+	// finance, learning and development HR, public relations marketing, commercial
+	// work sales.
+	{"carin*", "logistics"},
+	{"drumsk* transport*", "logistics"},
+	{"obracun* zarad*", "finance"},
+	{"ucenj* i razvoj*", "hr"},
+	{"odnos* s javnosc*", "marketing"},
+	{"komercijaln*", "sales"},
+	{"tiskarsk*", "manufacturing"},
+	{"stamparij*", "manufacturing"},
 
 	// Band 4. The desk words.
 	{"administracij*", "administration"},

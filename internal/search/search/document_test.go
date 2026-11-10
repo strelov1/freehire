@@ -19,7 +19,7 @@ import (
 // also gone from the JSON, because a rebuild is the only thing that removes it from the
 // live index and a field still marshalled would quietly put it back.
 func TestFromJob_NoLongerCarriesRoles(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Seniority: "senior", Category: "backend", Title: "Senior Backend Engineer"}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Seniority: "senior", Category: "backend", Title: "Senior Backend Engineer"}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestFromJob_NoLongerCarriesRoles(t *testing.T) {
 }
 
 func TestFromJob_RoleTypeDerivedButIndexOnly(t *testing.T) {
-	mgr, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Head of Platform Engineering"}, nil, "")
+	mgr, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Head of Platform Engineering"}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestFromJob_RoleTypeDerivedButIndexOnly(t *testing.T) {
 
 	// An unresolved title carries no value — and is still indexed. Empty means "no
 	// marker in the title", never "individual contributor".
-	ic, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", Title: "Backend Engineer"}, nil, "")
+	ic, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", Title: "Backend Engineer"}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestFromJob_AIArchetypeDerivedButIndexOnly(t *testing.T) {
 	doc, err := FromJob(db.Job{
 		ID: 1, PublicSlug: "s", Category: "ai_engineering",
 		Skills: []string{"rag", "langchain", "langgraph", "vector-databases"},
-	}, nil, "")
+	}, "")
 
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
@@ -204,7 +204,7 @@ func TestFromJob_AIArchetypeDerivedButIndexOnly(t *testing.T) {
 	nonAI, err := FromJob(db.Job{
 		ID: 2, PublicSlug: "s2", Category: "backend",
 		Skills: []string{"rag", "langchain", "langgraph", "vector-databases"},
-	}, nil, "")
+	}, "")
 
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
@@ -244,7 +244,7 @@ func TestFromJob_DocumentFlattensIDAndViewToTopLevelJSON(t *testing.T) {
 	// and the embedded jobview.Job must flatten (no nesting) so its fields are
 	// the searchable attributes. A json tag on the embedded field would break
 	// this. Enrichment itself stays a nested object (filtered via dot paths).
-	doc, err := FromJob(db.Job{ID: 42, Title: "Go Dev", PublicSlug: "go-dev-acme-x"}, nil, "")
+	doc, err := FromJob(db.Job{ID: 42, Title: "Go Dev", PublicSlug: "go-dev-acme-x"}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestFromJob_PostedTSIsEffectiveDateEpoch(t *testing.T) {
 	created := pgtype.Timestamptz{Time: time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC), Valid: true}
 	past := pgtype.Timestamptz{Time: time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC), Valid: true}
 
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: past}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: past}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestFromJob_PostedTSIsEffectiveDateEpoch(t *testing.T) {
 	}
 
 	future := pgtype.Timestamptz{Time: time.Now().Add(48 * time.Hour), Valid: true}
-	docFuture, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created, PostedAt: future}, nil, "")
+	docFuture, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created, PostedAt: future}, "")
 	if err != nil {
 		t.Fatalf("FromJob future: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestFromJob_CreatedTSIsFirstSeenEpoch(t *testing.T) {
 	// whose source restates its date as today. posted_ts follows the source; created_ts
 	// must not.
 	rewritten := pgtype.Timestamptz{Time: time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC), Valid: true}
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: rewritten}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: rewritten}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -337,7 +337,7 @@ func TestFromJob_CreatedTSIsFirstSeenEpoch(t *testing.T) {
 
 	// An undated source: posted_ts falls back to created_at, so the two agree. That is
 	// not a bug to guard against — it is the same instant, honestly reported twice.
-	docUndated, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created}, nil, "")
+	docUndated, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created}, "")
 	if err != nil {
 		t.Fatalf("FromJob undated: %v", err)
 	}
@@ -372,7 +372,7 @@ func TestFromJob_CapsIndexedDescription(t *testing.T) {
 	// serves the full text from Postgres. A long description is trimmed to at most
 	// maxIndexedDescriptionRunes runes; a short one is left verbatim.
 	long := strings.Repeat("alpha beta ", 600) // ~6000 runes
-	doc, err := FromJob(db.Job{ID: 1, Title: "Go Dev", Description: long}, nil, "")
+	doc, err := FromJob(db.Job{ID: 1, Title: "Go Dev", Description: long}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -384,7 +384,7 @@ func TestFromJob_CapsIndexedDescription(t *testing.T) {
 	}
 
 	short := "Build backend services in Go."
-	docShort, err := FromJob(db.Job{ID: 2, Title: "Go Dev", Description: short}, nil, "")
+	docShort, err := FromJob(db.Job{ID: 2, Title: "Go Dev", Description: short}, "")
 	if err != nil {
 		t.Fatalf("FromJob short: %v", err)
 	}
@@ -405,7 +405,7 @@ func TestMergeClosureGeographyWidensMetros(t *testing.T) {
 func TestFromJob_DuplicateStatusIsInternal(t *testing.T) {
 	for _, duplicate := range []bool{false, true} {
 		row := db.Job{ID: 42, Title: "Engineer", PublicSlug: "engineer", DuplicateOf: pgtype.Int8{Int64: 7, Valid: duplicate}}
-		doc, err := FromJob(row, nil, "")
+		doc, err := FromJob(row, "")
 		if err != nil {
 			t.Fatal(err)
 		}

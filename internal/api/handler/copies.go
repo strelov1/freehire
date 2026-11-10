@@ -42,14 +42,16 @@ func (h *jobsHandlers) JobCopies(c *fiber.Ctx) error {
 		return err
 	}
 
-	id, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
+	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
-		// RenderError maps pgx.ErrNoRows to 404, anything else to 500.
+		return err
+	}
+	if err := jobVisibleToCaller(job, 0, false); err != nil {
 		return err
 	}
 
 	rows, err := h.queries.ListJobCopies(c.Context(), db.ListJobCopiesParams{
-		JobID:     id,
+		JobID:     job.ID,
 		RowLimit:  int32(limit),
 		RowOffset: int32(offset),
 	})

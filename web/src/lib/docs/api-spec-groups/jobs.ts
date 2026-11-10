@@ -256,8 +256,7 @@ export const jobsGroup: Group = {
       summary: 'Similar jobs within the same location and specialization.',
       description:
         'Searches the live Meilisearch index with the source job’s known location and ' +
-        'specialization as mandatory filters. Uses stored-vector hybrid ranking when ' +
-        'available, falling back to keyword search under the same filters. Returns an ' +
+        'specialization as mandatory filters, ranked by keyword search on its title. Returns an ' +
         'empty list when location or specialization is unknown or no visible matches remain.',
       pathParams: [
         {

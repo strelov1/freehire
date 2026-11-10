@@ -196,6 +196,18 @@ func TestParse_CategoryPassTwo(t *testing.T) {
 		{"Менеджер проектов", "project_management", ""},
 		{"Hr-менеджер", "hr", ""},
 		{"PR-менеджер", "marketing", ""},
+		// English titles their twins already filed (#4412), declared after the bare
+		// "support" so nothing it placed moves.
+		{"HR Assistant", "hr", "as Human Resources Assistant"},
+		{"Office Administrator", "administration", "as Office Assistant"},
+		{"Finance Specialist (m/ž)", "finance", "as Accounting Specialist"},
+		{"Purchasing Specialist", "operations", "as Procurement Specialist"},
+		{"Supply Planner (m/f)", "logistics", "as Supply Chain Planner"},
+		{"Google Ads Specialist (m/ž)", "marketing", "as PPC Specialist"},
+		{"Spanish speaking Lead Prospector - Google Ads Products", "", "sells the ads, names no category"},
+		{"Senior MSK Physiotherapist", "healthcare", "as Physical Therapist"},
+		{"Band 5 & 6 Registered Midwife", "healthcare", ""},
+		{"Administrator", "", "names no field"},
 	}
 	for _, c := range cases {
 		if got := Parse(c.title).Category; got != c.want {

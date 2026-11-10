@@ -72,7 +72,10 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	}
 	job, err := h.queries.GetJobBySlug(c.Context(), slug)
 	if err != nil {
-		return err // unknown slug → pgx.ErrNoRows → 404 via RenderError
+		return err
+	}
+	if err := jobVisibleToCaller(job, userID, true); err != nil {
+		return err
 	}
 	analysis := h.optionalAnalysis(c.Context(), userID, job.ID)
 	// Attach the hard-constraint blockers + score ceiling to the analysis the tailoring

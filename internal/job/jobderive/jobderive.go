@@ -39,7 +39,8 @@ import (
 // submitter/moderator stated by hand). Unlike the scalars they fully replace the
 // location-dictionary derivation for that facet when present — an explicit place is
 // authoritative, not a hint the dictionary refines — and when empty the dictionary
-// derives as before.
+// derives as before. The one exception is a Countries signal beside a location line that
+// states a scope at least as broad, which the line outranks (lineOutranksCountries).
 type Input struct {
 	Title       string
 	Company     string
@@ -218,7 +219,12 @@ func Derive(in Input) Derived {
 	// along with it (the same pairing Parse itself does for a country it resolves), so a
 	// structured country with no separate region statement still lands under the right
 	// region facet instead of falling back to whatever the free-text location parsed.
-	if len(in.Countries) > 0 {
+	// The exception is a location line whose own scope is at least as broad: then the
+	// adapter's country is an office address (Ashby's postalAddress US beside "Remote |
+	// North America or Europe"), and replacing the line with it narrowed a Europe-open
+	// role to one country.
+	lineWins := len(in.Countries) > 0 && lineOutranksCountries(geo, in.Countries)
+	if len(in.Countries) > 0 && !lineWins {
 		countries = in.Countries
 		regions = regionsForCountries(in.Countries)
 	}
@@ -229,7 +235,13 @@ func Derive(in Input) Derived {
 	// phrase as a "region" must not reach the facet, and one that folds to nothing
 	// is no signal at all.
 	if r := location.NormalizeRegions(in.Regions); len(r) > 0 {
-		regions = r
+		if lineWins {
+			// rederive feeds a stored row's regions back beside its country; a line that
+			// outranks the country must not be narrowed back by them.
+			regions = unionSorted(regions, r)
+		} else {
+			regions = r
+		}
 	}
 	// Parse already drops a global the location line contradicts; this applies the same
 	// rule to the final answer, whose countries and regions may come from a structured
@@ -445,6 +457,46 @@ func regionsForCountries(countries []string) []string {
 		if r, ok := countryToRegion[c]; ok {
 			set[r] = struct{}{}
 		}
+	}
+	return stringset.Sorted(set)
+}
+
+// lineOutranksCountries reports whether the location line states a scope at least as broad as
+// the adapter's structured countries, so that the adapter's country is an office address
+// (Ashby's postalAddress) rather than a narrowing. Two shapes qualify:
+//   - the line names a macro-region outright, one none of its own countries explains
+//     ("Remote | Europe", "North America or Europe"). The open-anywhere "global" does not
+//     count, so a country beside "Anywhere" still pins the posting;
+//   - the line is countries alone, no city, and names every structured country ("US or
+//     Canada" beside US). A line with a city keeps yielding even when it names the country
+//     too: a state code beside a town is where the dictionary misreads a second country,
+//     which is what the structured one corrects.
+func lineOutranksCountries(geo location.Geo, structured []string) bool {
+	own := regionsForCountries(geo.Countries)
+	for _, r := range geo.Regions {
+		if r != "global" && !slices.Contains(own, r) {
+			return true
+		}
+	}
+	if len(geo.Cities) > 0 {
+		return false
+	}
+	for _, c := range structured {
+		if !slices.Contains(geo.Countries, c) {
+			return false
+		}
+	}
+	return true
+}
+
+// unionSorted is the sorted, deduplicated union of two string sets.
+func unionSorted(a, b []string) []string {
+	set := make(map[string]struct{}, len(a)+len(b))
+	for _, s := range a {
+		set[s] = struct{}{}
+	}
+	for _, s := range b {
+		set[s] = struct{}{}
 	}
 	return stringset.Sorted(set)
 }

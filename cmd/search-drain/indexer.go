@@ -133,18 +133,10 @@ func (b docBuilder) build(ctx context.Context, jobs []db.Job) ([]search.JobDocum
 		}
 	}
 
-	// The description vectors carry the same hazard as the geography: a document built
-	// without them sends `desc: null`, which CLEARS the vectors already indexed. So a failed
-	// read skips the wave rather than pushing documents that would erase them.
-	desc, err := search.ChunkVectorsForJobs(ctx, ix.q, geoIDs)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %v", searchdrain.ErrSkipWave, err)
-	}
-
 	// The application forms' question counts. A document without one would not erase a
 	// stored count (the push merges fields), but a document indexed for the first time
 	// would go without until something queued it again — so a failed read skips the wave
-	// like the two reads above, and the lease brings it back.
+	// like the read above, and the lease brings it back.
 	questions, err := applyform.QuestionCounts(ctx, ix.q, geoIDs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: apply-form question counts for wave: %v", searchdrain.ErrSkipWave, err)
@@ -163,7 +155,7 @@ func (b docBuilder) build(ctx context.Context, jobs []db.Job) ([]search.JobDocum
 			withheld = append(withheld, job.ID)
 			continue
 		}
-		doc, err := search.FromJob(job, desc[job.ID], sourceTypeOf(job.Source))
+		doc, err := search.FromJob(job, sourceTypeOf(job.Source))
 		if err != nil {
 			return nil, nil, fmt.Errorf("build document (job %d): %w", job.ID, err)
 		}

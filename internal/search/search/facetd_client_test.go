@@ -195,7 +195,7 @@ func TestFacetdClientWriteAndReady(t *testing.T) {
 	c := NewFacetdClient(srv.URL, srv.Client())
 
 	doc := JobDocument{ID: 7}
-	doc.Vectors = DocumentVectors{Skills: []float32{0.5}, Desc: [][]float32{{1}}}
+	doc.Vectors = DocumentVectors{Skills: []float32{0.5}}
 	if err := c.Write(context.Background(), FacetdWrite{Upserts: []JobDocument{doc}, Close: []int64{1}, Delete: []int64{2, 3}}); err != nil {
 		t.Fatal(err)
 	}

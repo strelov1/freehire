@@ -38,7 +38,7 @@ func TestStreamOpenDocs_CarriesTheApplyQuestionCount(t *testing.T) {
 	}
 
 	var got []search.JobDocument
-	_, _, err := streamOpenDocs(context.Background(), reader, nil, nil, nil, forms, time.Now(),
+	_, _, err := streamOpenDocs(context.Background(), reader, nil, nil, forms, time.Now(),
 		func(_ context.Context, docs []search.JobDocument) error {
 			got = append(got, docs...)
 			return nil

@@ -33,8 +33,7 @@ func (f *facetdRebuild) Promote(ctx context.Context) error {
 }
 func (f *facetdRebuild) Cleanup(ctx context.Context) error { return f.post(ctx, "/rebuild/abort", nil) }
 
-// Push sends the batch without its vectors: facetd indexes no `_vectors`, and the
-// description chunks are most of a document's bytes.
+// Push sends the batch without its vectors: facetd indexes no `_vectors`.
 func (f *facetdRebuild) Push(ctx context.Context, docs []search.JobDocument) error {
 	slim := make([]search.JobDocument, len(docs))
 	for i, d := range docs {

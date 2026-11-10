@@ -255,22 +255,15 @@ func (c *Client) embedChunk(ctx context.Context, inputs []string) ([][]float64, 
 // Transport errors, 429, and 5xx are transient (retriable); a 4xx or a mismatched vector
 // count is deterministic (not retriable); a cancelled parent context is terminal.
 func (c *Client) embedOnce(ctx context.Context, body []byte, n int) ([][]float64, bool, error) {
-	return embedCall(ctx, c.embedURL, c.embedKey, body, n)
-}
-
-// embedCall is embedOnce without a Client, so the request-path QueryEmbedder speaks the
-// same wire shape against the same backend without inheriting a Client's default URL.
-// It caps the call at embedAttemptTimeout; a caller's shorter deadline wins.
-func embedCall(ctx context.Context, url, key string, body []byte, n int) ([][]float64, bool, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, embedAttemptTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, c.embedURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, false, fmt.Errorf("search: embed request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if key != "" {
-		req.Header.Set("Authorization", "Bearer "+key)
+	if c.embedKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.embedKey)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -326,51 +319,4 @@ func toFloat32(v []float64) []float32 {
 		f[i] = float32(x)
 	}
 	return f
-}
-
-// QueryEmbedder embeds a search query on the request path, for an agent's opt-in semantic
-// search (openspec/changes/agent-semantic-search). It is deliberately not a Client method:
-// a Client falls back to embedderURL when no backend is configured, and a request path
-// must instead know it has none, so it can answer keyword-only at once.
-//
-// One call, bounded by timeout, never retried. embedChunk's retries with backoff suit a
-// batch drain that must not abort on one blip; on a request they turn a slow backend into
-// a slow search, which is the failure this exists to prevent.
-type QueryEmbedder struct {
-	url     string
-	key     string
-	timeout time.Duration
-}
-
-// NewQueryEmbedder returns an embedder for the TEI /embed endpoint at url, or nil when url
-// is empty — the configuration in which semantic search is unavailable.
-func NewQueryEmbedder(url, key string, timeout time.Duration) *QueryEmbedder {
-	if url == "" {
-		return nil
-	}
-	return &QueryEmbedder{url: url, key: key, timeout: timeout}
-}
-
-// EmbedQuery returns the query's vector in the e5 query form. e5 is asymmetric: passages
-// were embedded with "passage: " (see jobChunkPassages), so the query side carries
-// "query: " or the two land in different regions of the space.
-func (e *QueryEmbedder) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
-	body, err := json.Marshal(map[string]any{"inputs": []string{"query: " + text}})
-	if err != nil {
-		return nil, fmt.Errorf("search: embed query marshal: %w", err)
-	}
-	ctx, cancel := context.WithTimeout(ctx, e.timeout)
-	defer cancel()
-	vecs, _, err := embedCall(ctx, e.url, e.key, body, 1)
-	if err != nil {
-		return nil, fmt.Errorf("search: embed query: %w", err)
-	}
-	out := make([]float32, len(vecs[0]))
-	for i, v := range vecs[0] {
-		out[i] = float32(v)
-	}
-	if len(out) != descDimensions {
-		return nil, fmt.Errorf("search: embed query: got %d dimensions, want %d", len(out), descDimensions)
-	}
-	return out, nil
 }

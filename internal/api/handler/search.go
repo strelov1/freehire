@@ -50,9 +50,6 @@ type searchHandlers struct {
 	// userProfile reads the caller's profile skills for the match sort. Nil disables
 	// that sort entirely, which is exactly how it degrades everywhere else.
 	userProfile profileReader
-	// semantic answers /agent/jobs/search's opt-in `semantic=true`; shared with OJCP.
-	// The public /jobs/search never asks for it.
-	semantic semanticSearch
 	// agentViews receives the postings /agent/jobs/search serves; nil records nothing.
 	agentViews agentview.Sink
 	// appliedCompanies reads the employers a signed-in caller has applied to, for
@@ -407,8 +404,8 @@ func (h *searchHandlers) seenExclusionFor(ctx context.Context, userID int64, val
 
 // jobSearchOutcome is what runJobSearch hands back: the raw hits, the applied
 // limit/offset, every value-level ignored-param report gathered while building the
-// query, and — only when the caller asked for semantic search and it could be tried —
-// whether the hybrid answered (ojcp.SemanticApplied / ojcp.SemanticUnavailable).
+// query, and — only when the caller asked for semantic search and it could apply —
+// that it was answered by keywords instead (ojcp.SemanticUnavailable).
 type jobSearchOutcome struct {
 	res      search.SearchResult
 	limit    int
@@ -519,9 +516,9 @@ func personalCompanies(former []string, hasFormer bool, watch []string, hasWatch
 // degrade below (nil in the ordinary case), for the caller to merge into its own
 // ignoredParams(c, own) report.
 //
-// wantSemantic runs the query as a hybrid through h.semantic; a flag it cannot honour
-// (see semanticDropped) is reported as a dropped param. exclude names job ids to keep
-// out of the result (hide_seen); nil excludes nothing. personal is the applied-company
+// wantSemantic is the caller's semantic flag, which is never honoured (see
+// semanticOutcome); one with nothing to apply to is reported as a dropped param.
+// exclude names job ids to keep out of the result (hide_seen); nil excludes nothing. personal is the applied-company
 // exclusion fragment; an empty fragment leaves the result unchanged. match, when set, keeps
 // only the postings at or above the caller's minimum skill match (see skillMatchFilter).
 func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude []int64, personal string, match *skillMatchFilter) (jobSearchOutcome, error) {
@@ -600,7 +597,8 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 	if in.match != nil {
 		res, err = in.match.scan(ctx, h.search, params)
 	} else {
-		res, outcome, err = h.semantic.search(ctx, h.search, params, wantSemantic)
+		res, err = h.search.Search(ctx, params)
+		outcome = semanticOutcomeFor(params, wantSemantic)
 	}
 	if outcome == semanticDropped {
 		dropped = append(dropped, search.UnknownParam{Param: "semantic"})
@@ -640,17 +638,13 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		// Which single param Meilisearch minded is not knowable from its own
 		// error, so every active filter param is reported rather than a guess.
 		dropped = append(dropped, search.ActiveFilterParams(vals)...)
-		// The retry is keyword-only, so a semantic request was not answered by meaning.
-		if outcome == semanticApplied {
-			outcome = semanticUnavailable
-		}
 	}
 
 	res = h.dropPendingRemovals(ctx, res)
 	h.recordQuery(vals.Get("q"))
 	return jobSearchOutcome{
 		res: res, limit: limit, offset: offset, dropped: dropped,
-		semantic:        outcome.wire(ojcp.SemanticApplied, ojcp.SemanticUnavailable),
+		semantic:        outcome.wire(ojcp.SemanticUnavailable),
 		formerEmployers: in.hasFormer,
 		watchlist:       in.hasWatch,
 	}, nil

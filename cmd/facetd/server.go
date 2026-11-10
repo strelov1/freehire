@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/strelov1/freehire/internal/search/facetidx"
@@ -422,6 +423,7 @@ func (s *Server) write(w http.ResponseWriter, r *http.Request) {
 		s.pending = append(s.pending, b)
 	}
 	s.lastWrite.Store(time.Now().UnixNano())
+	s.m.writeBatch.Observe(float64(len(req.Upserts) + len(req.Close) + len(req.Duplicate) + len(req.Delete)))
 	reply(w, http.StatusOK, map[string]uint64{"generation": gen})
 }
 
@@ -551,6 +553,7 @@ type metrics struct {
 	walRecords          prometheus.Gauge
 	walReplayed         prometheus.Counter
 	walErrors           prometheus.Counter
+	writeBatch          prometheus.Histogram
 }
 
 func newMetrics(s *Server) *metrics {
@@ -568,6 +571,8 @@ func newMetrics(s *Server) *metrics {
 		walRecords:          prometheus.NewGauge(prometheus.GaugeOpts{Name: "facetd_wal_records", Help: "Batches in the write-ahead log."}),
 		walReplayed:         prometheus.NewCounter(prometheus.CounterOpts{Name: "facetd_wal_replayed_total", Help: "Log records replayed at start."}),
 		walErrors:           prometheus.NewCounter(prometheus.CounterOpts{Name: "facetd_wal_errors_total", Help: "Write-ahead log failures: append, rollback, rotation, replay, corruption."}),
+		writeBatch: prometheus.NewHistogram(prometheus.HistogramOpts{Name: "facetd_write_batch_jobs", Help: "Jobs per applied /write batch: upserts, closes, duplicates and deletes.",
+			Buckets: []float64{1, 10, 50, 100, 500, 1000, 5000, 15000}}),
 	}
 	cur := func(f func(ix *facetidx.Index) float64) func() float64 {
 		return func() float64 {
@@ -577,7 +582,9 @@ func newMetrics(s *Server) *metrics {
 			return 0
 		}
 	}
-	m.reg.MustRegister(m.requests, m.latency, m.refused, m.snapshotSeconds, m.snapshotBytes, m.snapshotLastSuccess, m.snapshotErrors, m.walBytes, m.walRecords, m.walReplayed, m.walErrors,
+	m.reg.MustRegister(m.requests, m.latency, m.refused, m.snapshotSeconds, m.snapshotBytes, m.snapshotLastSuccess, m.snapshotErrors, m.walBytes, m.walRecords, m.walReplayed, m.walErrors, m.writeBatch,
+		// go_* and process_*: heap, RSS and GC pauses (MemoryHigh also counts page cache).
+		collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "facetd_documents", Help: "Documents in the index, closed and duplicate included."},
 			cur(func(ix *facetidx.Index) float64 { t, _ := ix.Docs(); return float64(t) })),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "facetd_documents_live", Help: "Documents every answer counts."},

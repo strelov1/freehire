@@ -834,6 +834,39 @@ func TestDerive_ExplicitCountryOverrideAlsoDerivesRegion(t *testing.T) {
 	}
 }
 
+// A location line whose scope is at least as broad outranks the adapter's country: Ashby
+// states the employer's postal address as the country, beside a line that names the hiring
+// scope (Chromatic, freehire report 2026-11-10). A line with a city, one naming other
+// countries, or one that names only "Anywhere" still yields to the country.
+func TestDerive_RegionLineOutranksAdapterCountry(t *testing.T) {
+	cases := []struct {
+		name, location string
+		countries      []string
+		regions        []string // a stored row's regions, as rederive feeds them back
+		wantC, wantR   []string
+	}{
+		{"line names regions outright", "Remote | North America or Europe", []string{"us"}, nil, []string{}, []string{"eu", "north_america"}},
+		{"line names the region the office is in", "Remote | Europe", []string{"nl"}, nil, []string{}, []string{"eu"}},
+		{"a line of more countries outranks", "Remote | US or Canada", []string{"us"}, nil, []string{"ca", "us"}, []string{"north_america"}},
+		{"a line of other countries yields", "Canada", []string{"us"}, nil, []string{"us"}, []string{"north_america"}},
+		{"a line with a city yields", "London, UK or Berlin", []string{"gb"}, nil, []string{"gb"}, []string{"uk"}},
+		{"a country the line misreads yields", "Porto Alegre, RS, Brasil", []string{"br"}, nil, []string{"br"}, []string{"latam"}},
+		{"rederive's stored regions do not narrow it back", "Remote | North America or Europe", []string{"us"}, []string{"north_america"}, []string{}, []string{"eu", "north_america"}},
+		{"a contradicting line yields", "Berlin", []string{"at"}, nil, []string{"at"}, []string{"eu"}},
+		{"an open-anywhere line yields", "Anywhere", []string{"us"}, nil, []string{"us"}, []string{"north_america"}},
+		{"a bare remote line yields", "Remote", []string{"nl"}, nil, []string{"nl"}, []string{"eu"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Derive(Input{Title: "Engineer", Company: "Acme", Source: "ashby", ExternalID: "1",
+				Location: tc.location, Countries: tc.countries, Regions: tc.regions})
+			if !slices.Equal(got.Countries, tc.wantC) || !slices.Equal(got.Regions, tc.wantR) {
+				t.Errorf("Countries, Regions = %v, %v; want %v, %v", got.Countries, got.Regions, tc.wantC, tc.wantR)
+			}
+		})
+	}
+}
+
 // An explicit Regions signal still wins over the region an explicit Countries signal
 // would otherwise pair in — the same "most specific wins" precedence Regions already
 // has over the dictionary.

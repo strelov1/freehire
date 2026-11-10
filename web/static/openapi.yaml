@@ -259,14 +259,9 @@ paths:
         Responses are several times larger per hit than `searchJobs`, so prefer a
         small `limit`.
 
-        Send `semantic=true` to rank by meaning as well as keywords (a hybrid search
-        over posting descriptions) — for a need described in words, not a job title
-        or a non-technical role, where keywords answer better. `meta.semantic` then says whether that ran
-        (`applied`) or the request was answered by keywords alone (`unavailable`);
-        it is omitted when the flag was not sent. An `applied` answer also carries
-        `meta.total_is_lower_bound: true`: a vector search has no count, so
-        `meta.total` is "at least this many" — what the pages so far reached, plus
-        one when there is a next page.
+        `semantic=true` (ranking by meaning) is currently not available: a request
+        that sends it is answered by keywords alone and `meta.semantic` says
+        `unavailable`. It is omitted when the flag was not sent.
       x-openai-isConsequential: false
       parameters:
         - $ref: "#/components/parameters/Q"
@@ -366,12 +361,9 @@ paths:
         silently dropped: an answer that widened because a parameter was not understood
         says so.
 
-        Send `semantic: true` to rank by meaning as well as keywords (a hybrid search
-        over posting descriptions) — for a need described in words, not a job title
-        or a non-technical role, where keywords answer better. The response's `semantic` then says whether that ran
-        (`applied`) or fell back to keyword search (`unavailable`); a slow or absent
-        embedding backend never fails the request. An `applied` answer marks
-        `total_results` with `total_is_lower_bound: true` — "at least", not a count.
+        `semantic: true` (ranking by meaning) is currently not available: a request
+        that sends it is answered by keyword search and the response's `semantic`
+        says `unavailable`; it never fails the request.
       x-openai-isConsequential: false
       requestBody:
         required: false
@@ -407,9 +399,10 @@ paths:
                 semantic:
                   type: boolean
                   description: |
-                    Extension. `true` blends meaning-based ranking into the keyword
-                    search. Needs a non-empty `query`; without one it is reported in
-                    `ignored_params`.
+                    Extension. `true` asks for meaning-based ranking, which is
+                    currently not available: the answer is the keyword search and
+                    `semantic` says `unavailable`. Without a non-empty `query` it is
+                    reported in `ignored_params` instead.
       responses:
         "200":
           description: An OJCP search-jobs response.
@@ -442,9 +435,9 @@ paths:
                   total_is_lower_bound:
                     type: boolean
                     description: |
-                      Extension. True on an `applied` semantic answer:
-                      `total_results` is a minimum (what this page reaches, plus
-                      one when there is a next page), not a count of the match.
+                      Extension. True when `total_results` is a minimum (what this
+                      page reaches, plus one when there is a next page), not a count
+                      of the match.
         default:
           $ref: "#/components/responses/Error"
   /ojcp/v1/jobs/{slug}:
@@ -706,9 +699,8 @@ paths:
       summary: Find jobs similar to a job
       description: |
         Related jobs from the live search index within the same specialization and
-        known location (country and city when available). Uses hybrid text/vector
-        search when the source has an embedding, falling back to keyword search
-        under the same filters. Unknown specialization or location returns an empty
+        known location (country and city when available), ranked by keyword search
+        on the source's title. Unknown specialization or location returns an empty
         list. Closed, private, duplicate and unseen postings are excluded.
       x-openai-isConsequential: false
       parameters:
@@ -1268,12 +1260,9 @@ components:
         type: boolean
         default: false
       description: |
-        `true` also matches postings that describe `q` in other words, e.g.
-        "help kids learn to read" finding a reading interventionist. Needs `q`
-        (without it the flag is reported in `meta.ignored_params`) and is not
-        combined with `sort=match`. Use it for a need described in words; leave
-        it off for a job title or a non-technical role — description vectors
-        cover technical roles only, and there plain keywords answer better.
+        Currently not available: a request that sends `true` is answered by
+        keywords alone and `meta.semantic` says `unavailable`. Without `q`, or
+        with `sort=match`, the flag is reported in `meta.ignored_params` instead.
     Regions:
       name: regions
       in: query

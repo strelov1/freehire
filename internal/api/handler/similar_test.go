@@ -4,14 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/pgvector/pgvector-go"
 
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -19,19 +17,14 @@ import (
 )
 
 type fakeSimilarReader struct {
-	chunks   []db.JobSemanticChunk
-	chunkErr error
-	owner    int64
-	rows     []db.Job
+	owner int64
+	rows  []db.Job
 }
 
 func (f fakeSimilarReader) GetJobDuplicateOwner(context.Context, int64) (int64, error) {
 	return f.owner, nil
 }
 
-func (f fakeSimilarReader) ListSemanticChunksForJobs(context.Context, []int64) ([]db.JobSemanticChunk, error) {
-	return f.chunks, f.chunkErr
-}
 func (f fakeSimilarReader) GetJobsByIDs(context.Context, []int64) ([]db.Job, error) {
 	out := slices.Clone(f.rows)
 	slices.Reverse(out)
@@ -40,17 +33,12 @@ func (f fakeSimilarReader) GetJobsByIDs(context.Context, []int64) ([]db.Job, err
 
 type similarSearch struct {
 	calls      []search.SearchParams
-	hybrid     search.SearchResult
 	keyword    search.SearchResult
-	hybridErr  error
 	keywordErr error
 }
 
 func (f *similarSearch) Search(_ context.Context, p search.SearchParams) (search.SearchResult, error) {
 	f.calls = append(f.calls, p)
-	if len(p.SemanticVector) > 0 {
-		return f.hybrid, f.hybridErr
-	}
 	return f.keyword, f.keywordErr
 }
 
@@ -114,62 +102,25 @@ func TestSimilarParamsKeepsCountryCityAndSpecializationInSeparateGroups(t *testi
 	}
 }
 
-func TestSimilarViewsHybridAndKeywordFallback(t *testing.T) {
-	for _, mode := range []string{"hybrid", "no vectors", "chunk read fails", "hybrid refused", "hybrid empty", "hybrid hidden", "keyword fails"} {
-		t.Run(mode, func(t *testing.T) {
-			reader := fakeSimilarReader{
-				chunks: []db.JobSemanticChunk{{JobID: 99, Embedding: pgvector.NewVector([]float32{1, 0})}},
-				rows:   []db.Job{{ID: 1, PublicSlug: "hybrid"}, {ID: 2, PublicSlug: "keyword"}, {ID: 3, IsPrivate: true}},
-			}
-			idx := &similarSearch{
-				hybrid:  search.SearchResult{Hits: []search.JobDocument{{ID: 1}}},
-				keyword: search.SearchResult{Hits: []search.JobDocument{{ID: 2}}},
-			}
-			switch mode {
-			case "no vectors":
-				reader.chunks = nil
-			case "chunk read fails":
-				reader.chunkErr = errors.New("db read failed")
-			case "hybrid refused":
-				idx.hybridErr = search.ErrBadQuery
-			case "hybrid empty":
-				idx.hybrid.Hits = nil
-			case "hybrid hidden":
-				idx.hybrid.Hits = []search.JobDocument{{ID: 3}}
-			case "keyword fails":
-				reader.chunks = nil
-				idx.keywordErr = errors.New("Meili unavailable")
-			}
-			views, err := similarViews(t.Context(), idx, reader, similarSource(), 6, .925, visiblePublic)
-			if mode == "keyword fails" {
-				if err == nil {
-					t.Fatal("hidden keyword error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			want := "keyword"
-			if mode == "hybrid" {
-				want = "hybrid"
-			}
-			if len(views) != 1 || views[0].PublicSlug != want {
-				t.Fatalf("views = %v, want %s", views, want)
-			}
-			if len(idx.calls) == 2 {
-				a, b := idx.calls[0], idx.calls[1]
-				if !reflect.DeepEqual(a.Filter, b.Filter) || a.Query != b.Query {
-					t.Fatal("fallback changed scope")
-				}
-				if b.SemanticVector != nil || b.ScoreThreshold != 0 {
-					t.Fatal("keyword fallback retained hybrid parameters")
-				}
-			}
-			if mode == "hybrid" && idx.calls[0].ScoreThreshold != .925 {
-				t.Fatal("hybrid lost threshold")
-			}
-		})
+// Similar jobs is one keyword search under similarParams' filters; its failure is the
+// caller's.
+func TestSimilarViewsSearchesByKeyword(t *testing.T) {
+	reader := fakeSimilarReader{rows: []db.Job{{ID: 2, PublicSlug: "keyword"}}}
+	idx := &similarSearch{keyword: search.SearchResult{Hits: []search.JobDocument{{ID: 2}}}}
+	views, err := similarViews(t.Context(), idx, reader, similarSource(), 6, visiblePublic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(views) != 1 || views[0].PublicSlug != "keyword" || len(idx.calls) != 1 {
+		t.Fatalf("views = %v after %d searches, want the keyword hit from one search", views, len(idx.calls))
+	}
+	if idx.calls[0].Query != "Go Developer" || idx.calls[0].Vector != nil {
+		t.Errorf("request = %+v, want the source title as a plain keyword query", idx.calls[0])
+	}
+
+	idx = &similarSearch{keywordErr: errors.New("Meili unavailable")}
+	if _, err := similarViews(t.Context(), idx, reader, similarSource(), 6, visiblePublic); err == nil {
+		t.Fatal("hidden keyword error")
 	}
 }
 
@@ -183,7 +134,7 @@ func TestSimilarViewsPreservesSearchOrderAndChecksCurrentVisibility(t *testing.T
 	}
 	hits := []search.JobDocument{{ID: 99}, {ID: 2}, {ID: 6}, {ID: 3}, {ID: 4}, {ID: 5}, {ID: 1000}, {ID: 6}, {ID: 1}}
 	idx := &similarSearch{keyword: search.SearchResult{Hits: hits}}
-	views, err := similarViews(t.Context(), idx, fakeSimilarReader{rows: rows}, similarSource(), 6, 0, visiblePublic)
+	views, err := similarViews(t.Context(), idx, fakeSimilarReader{rows: rows}, similarSource(), 6, visiblePublic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +183,7 @@ func TestSimilarViewsExcludesCanonicalOwnerOfDuplicateSource(t *testing.T) {
 	source.DuplicateOf = pgtype.Int8{Int64: 10, Valid: true}
 	reader := fakeSimilarReader{owner: 1, rows: []db.Job{{ID: 1, PublicSlug: "same-posting"}, {ID: 2, PublicSlug: "another-job"}}}
 	idx := &similarSearch{keyword: search.SearchResult{Hits: []search.JobDocument{{ID: 1}, {ID: 2}}}}
-	got, err := similarViews(t.Context(), idx, reader, source, 6, 0, visiblePublic)
+	got, err := similarViews(t.Context(), idx, reader, source, 6, visiblePublic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +195,7 @@ func TestSimilarViewsExcludesCanonicalOwnerOfDuplicateSource(t *testing.T) {
 	}
 	reader.owner = 0 // a cycle or broken chain has no safe canonical owner.
 	idx.calls = nil
-	got, err = similarViews(t.Context(), idx, reader, source, 6, 0, visiblePublic)
+	got, err = similarViews(t.Context(), idx, reader, source, 6, visiblePublic)
 	if err != nil || len(got) != 0 || len(idx.calls) != 0 {
 		t.Fatalf("unresolved ownership searched: %v %v", got, err)
 	}

@@ -32,9 +32,9 @@ func indexJobsForSitemap(t *testing.T, c *Client, jobs []db.Job, classes []strin
 	ctx := context.Background()
 	docs := make([]JobDocument, 0, len(jobs))
 	for i, j := range jobs {
-		d, err := FromJob(j, nil, "")
+		d, err := FromJob(j, "")
 		if err != nil {
-			t.Fatalf("FromJob(%d, nil): %v", j.ID, err)
+			t.Fatalf("FromJob(%d): %v", j.ID, err)
 		}
 		if classes[i] != "" {
 			d.Reality = &jobview.Reality{Class: classes[i]}

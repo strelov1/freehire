@@ -24,14 +24,13 @@ type SearchJobsResponse struct {
 	// narrowing never happened, and neither can the person reading what it found.
 	IgnoredParams []string `json:"ignored_params,omitempty"`
 	// Semantic reports which search answered an agent that asked for semantic search
-	// (SearchInput.Semantic): SemanticApplied or SemanticUnavailable. Omitted when it did
-	// not ask. An EXTENSION for the same reason as IgnoredParams — an answer that degraded
+	// (SearchInput.Semantic). Only SemanticUnavailable is produced today: semantic ranking
+	// is not available. Omitted when it did not ask. An EXTENSION for the same reason as IgnoredParams — an answer that degraded
 	// to keyword-only has to say so, or an agent reads keyword relevance as meaning.
 	Semantic string `json:"semantic,omitempty"`
-	// TotalIsLowerBound marks a semantic answer's TotalResults as "at least this many": a
-	// vector search has no count to report, only whether a next page exists. An EXTENSION
-	// for the reason Semantic is one — without it an agent reads the bound as the size of
-	// the match.
+	// TotalIsLowerBound marks TotalResults as "at least this many" rather than a count. An
+	// EXTENSION for the reason Semantic is one — without it an agent reads the bound as the
+	// size of the match.
 	TotalIsLowerBound bool `json:"total_is_lower_bound,omitempty"`
 }
 
@@ -39,8 +38,8 @@ type SearchJobsResponse struct {
 const (
 	// SemanticApplied: the query was embedded and the hybrid search ran.
 	SemanticApplied = "applied"
-	// SemanticUnavailable: the embedding backend was absent, slow or failing, and the
-	// answer is the keyword search.
+	// SemanticUnavailable: semantic ranking could not run, and the answer is the keyword
+	// search.
 	SemanticUnavailable = "unavailable"
 )
 

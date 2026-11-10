@@ -3949,8 +3949,7 @@ type Querier interface {
 	ListAppliedCompanySlugs(ctx context.Context, arg ListAppliedCompanySlugsParams) ([]string, error)
 	// The captured forms of a BATCH of jobs, for the search-index writers that count each
 	// form's questions onto its document (applyform.QuestionCounts). One call per writer
-	// batch, never one per document — the same shape ListSemanticChunksForJobs gives the
-	// description vectors. A job with no captured form simply has no row.
+	// batch, never one per document. A job with no captured form simply has no row.
 	ListApplyFormsForJobs(ctx context.Context, jobIds []int64) ([]ListApplyFormsForJobsRow, error)
 	// The notify fan-out targets: every approved referrer of a company with their email and
 	// linked Telegram chat (NULL when unlinked). Email is '' when mail_recipient (0247) says
@@ -5246,12 +5245,6 @@ type Querier interface {
 	// One candidate's whole bank, newest first — what the management surface lists and what the
 	// profile assembler merges into the answer map.
 	ListScreeningAnswers(ctx context.Context, userID int64) ([]ScreeningAnswerBank, error)
-	// Every chunk vector of a BATCH of jobs, for the search-index writers that copy them into
-	// the jobs index's `desc` embedder (openspec/changes/agent-semantic-search, Decision 3).
-	// One call per writer batch, never one per document: a full rebuild walks the whole open
-	// catalogue, and ~862k of those jobs carry chunks. Ordered so a caller can group rows by
-	// job without sorting, and so a job's vectors keep their chunk order.
-	ListSemanticChunksForJobs(ctx context.Context, jobIds []int64) ([]JobSemanticChunk, error)
 	// The active members most like the viewer, best first, one page. The score is
 	//   w_category*(same category) + w_countries*(countries overlap) + w_regions*(regions
 	//   overlap) + w_company*(shared companies, at most company_cap counted)

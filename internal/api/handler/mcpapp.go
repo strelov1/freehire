@@ -53,9 +53,6 @@ type mcpappHandlers struct {
 	facets    facetCounter
 	cache     cache.Cache
 	projector mcpapp.Projector
-	// semantic answers search_jobs' opt-in `semantic: true`; the same value the OJCP and
-	// agent search surfaces hold.
-	semantic semanticSearch
 	// origin is the site's address; the MCP server builds its icon and website link from it.
 	origin string
 }
@@ -91,9 +88,10 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 		Offset: offset,
 	}
 	ignored := in.Unsupported()
-	res, outcome, err := h.semantic.search(ctx, h.search, params, in.WantsSemantic())
+	res, err := h.search.Search(ctx, params)
+	outcome := semanticOutcomeFor(params, in.WantsSemantic())
 	if outcome == semanticDropped {
-		// Nothing to embed, so the flag was not honoured and says so like any dropped filter.
+		// No text to apply it to, so the flag was not honoured and says so like any dropped filter.
 		ignored = append(ignored, "semantic")
 	}
 	if err != nil {
@@ -117,7 +115,7 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 		Offset:            offset,
 		Jobs:              jobs,
 		IgnoredParams:     ignored,
-		Semantic:          outcome.wire(mcpapp.SemanticApplied, mcpapp.SemanticUnavailable),
+		Semantic:          outcome.wire(mcpapp.SemanticUnavailable),
 		TotalIsLowerBound: res.TotalIsLowerBound,
 	}, nil
 }
@@ -254,7 +252,7 @@ func (h *mcpappHandlers) SimilarJobs(ctx context.Context, slug string, limit int
 		return mcpapp.SimilarJobsResult{}, err
 	}
 
-	views, err := similarViews(ctx, h.search, h.store, row, limit, h.semantic.threshold, publishedToAgents)
+	views, err := similarViews(ctx, h.search, h.store, row, limit, publishedToAgents)
 	if err != nil {
 		return mcpapp.SimilarJobsResult{}, err
 	}
