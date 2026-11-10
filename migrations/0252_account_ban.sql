@@ -18,7 +18,7 @@ ALTER TABLE users
     -- squawk-ignore constraint-missing-not-valid -- every existing row has all three NULL, so the scan is instant
     ADD CONSTRAINT users_ban_consistent CHECK (
         (banned_at IS NULL AND ban_reason IS NULL AND banned_by IS NULL)
-        OR (banned_at IS NOT NULL AND btrim(ban_reason) <> '')
+        OR (banned_at IS NOT NULL AND ban_reason IS NOT NULL AND btrim(ban_reason) <> '')
     );
 
 -- Every column referencing users needs its own index (TestEveryUserForeignKeyIsIndexed).

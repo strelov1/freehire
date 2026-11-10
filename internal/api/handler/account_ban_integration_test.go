@@ -228,3 +228,97 @@ func TestAccountBan(t *testing.T) {
 		}
 	})
 }
+
+// The moderation endpoints' refusals, one case each. Every case states the status the
+// caller must see and, where a write was refused, that the account is unchanged.
+func TestAccountBanModerationErrors(t *testing.T) {
+	r := newBanRig(t)
+	ctx := context.Background()
+	modID, modCookie := r.signUp(t, "mod2@example.test", "moderator")
+	adminID, _ := r.signUp(t, "admin2@example.test", "admin")
+	victimID, _ := r.signUp(t, "victim2@example.test", "user")
+	if got := r.ban(t, modCookie, victimID, "spam").StatusCode; got != fiber.StatusOK {
+		t.Fatalf("setup ban = %d", got)
+	}
+	liveID, _ := r.signUp(t, "live2@example.test", "user")
+
+	cases := []struct {
+		name         string
+		method, path string
+		body         string
+		want         int
+	}{
+		{"ban: non-numeric id", fiber.MethodPost, "/api/v1/moderation/users/abc/ban", `{"reason":"x"}`, fiber.StatusBadRequest},
+		{"ban: malformed body", fiber.MethodPost, fmt.Sprintf("/api/v1/moderation/users/%d/ban", liveID), `{`, fiber.StatusBadRequest},
+		{"ban: empty reason", fiber.MethodPost, fmt.Sprintf("/api/v1/moderation/users/%d/ban", liveID), `{"reason":""}`, fiber.StatusBadRequest},
+		{"ban: whitespace reason", fiber.MethodPost, fmt.Sprintf("/api/v1/moderation/users/%d/ban", liveID), `{"reason":"   "}`, fiber.StatusBadRequest},
+		{"ban: reason too long", fiber.MethodPost, fmt.Sprintf("/api/v1/moderation/users/%d/ban", liveID), fmt.Sprintf(`{"reason":%q}`, strings.Repeat("x", 501)), fiber.StatusBadRequest},
+		{"ban: unknown user", fiber.MethodPost, "/api/v1/moderation/users/999999999/ban", `{"reason":"x"}`, fiber.StatusNotFound},
+		{"ban: already banned", fiber.MethodPost, fmt.Sprintf("/api/v1/moderation/users/%d/ban", victimID), `{"reason":"again"}`, fiber.StatusConflict},
+		{"ban: an admin", fiber.MethodPost, fmt.Sprintf("/api/v1/moderation/users/%d/ban", adminID), `{"reason":"x"}`, fiber.StatusForbidden},
+		{"ban: self", fiber.MethodPost, fmt.Sprintf("/api/v1/moderation/users/%d/ban", modID), `{"reason":"x"}`, fiber.StatusForbidden},
+		{"unban: non-numeric id", fiber.MethodPost, "/api/v1/moderation/users/abc/unban", ``, fiber.StatusBadRequest},
+		{"unban: not banned", fiber.MethodPost, fmt.Sprintf("/api/v1/moderation/users/%d/unban", liveID), ``, fiber.StatusNotFound},
+		{"unban: unknown user", fiber.MethodPost, "/api/v1/moderation/users/999999999/unban", ``, fiber.StatusNotFound},
+		{"find: no query", fiber.MethodGet, "/api/v1/moderation/users", ``, fiber.StatusBadRequest},
+		{"find: no match", fiber.MethodGet, "/api/v1/moderation/users?q=nobody%40nowhere.test", ``, fiber.StatusNotFound},
+		{"find: by email", fiber.MethodGet, "/api/v1/moderation/users?q=LIVE2%40example.test", ``, fiber.StatusOK},
+		{"find: by id", fiber.MethodGet, fmt.Sprintf("/api/v1/moderation/users?q=%d", liveID), ``, fiber.StatusOK},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := r.do(t, tc.method, tc.path, tc.body, modCookie).StatusCode; got != tc.want {
+				t.Errorf("status = %d, want %d", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("the refused writes changed nothing", func(t *testing.T) {
+		var banned []int64
+		rows, err := r.pool.Query(ctx, `SELECT id FROM users WHERE banned_at IS NOT NULL`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				t.Fatal(err)
+			}
+			banned = append(banned, id)
+		}
+		if len(banned) != 1 || banned[0] != victimID {
+			t.Errorf("banned accounts = %v, want only %d", banned, victimID)
+		}
+	})
+	t.Run("find shows the ban and its reason", func(t *testing.T) {
+		resp := r.do(t, fiber.MethodGet, fmt.Sprintf("/api/v1/moderation/users?q=%d", victimID), "", modCookie)
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status = %d", resp.StatusCode)
+		}
+		var banned bool
+		var reason string
+		if err := r.pool.QueryRow(ctx, `SELECT banned_at IS NOT NULL, ban_reason FROM users WHERE id = $1`, victimID).Scan(&banned, &reason); err != nil || !banned || reason != "spam" {
+			t.Errorf("banned=%v reason=%q err=%v", banned, reason, err)
+		}
+	})
+}
+
+// users_ban_consistent: a ban must carry a non-blank reason, and a NULL reason is not
+// blank-by-accident (a CHECK passes on NULL, so the constraint has to say it outright).
+func TestAccountBanConstraintRefusesAMissingReason(t *testing.T) {
+	r := newBanRig(t)
+	ctx := context.Background()
+	id, _ := r.signUp(t, "check@example.test", "user")
+	for name, reason := range map[string]any{"NULL": nil, "blank": "  "} {
+		if _, err := r.pool.Exec(ctx, `UPDATE users SET banned_at = now(), ban_reason = $2 WHERE id = $1`, id, reason); err == nil {
+			t.Errorf("a ban with a %s reason was accepted", name)
+		}
+	}
+	if _, err := r.pool.Exec(ctx, `UPDATE users SET banned_at = now(), ban_reason = 'ok' WHERE id = $1`, id); err != nil {
+		t.Errorf("a ban with a reason was refused: %v", err)
+	}
+	if _, err := r.pool.Exec(ctx, `UPDATE users SET ban_reason = NULL WHERE id = $1`, id); err == nil {
+		t.Error("clearing the reason while banned was accepted")
+	}
+}
