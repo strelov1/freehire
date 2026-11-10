@@ -301,6 +301,7 @@ func (c *Client) GenerateJSON(ctx context.Context, system, user string, opts ...
 		wrapped := fmt.Errorf("llm: generate: %w", err)
 		g := gen()
 		g.Err = wrapped
+		g.Cancelled = callerCancelled(ctx)
 		c.observe(g)
 		return "", wrapped
 	}
@@ -339,6 +340,15 @@ func contextOverrules(ctx context.Context, err error) error {
 		return ctx.Err()
 	}
 	return err
+}
+
+// callerCancelled reports whether a failed call was abandoned by our own caller
+// rather than failed by the provider. ctx is the per-call context: its own deadline
+// yields DeadlineExceeded (a real failure), only a cancelled parent yields Canceled.
+// The returned error cannot tell us: langchaingo's OpenAI client replaces a
+// context.Canceled with a bare "request cancelled" error, so errors.Is misses it.
+func callerCancelled(ctx context.Context) bool {
+	return errors.Is(ctx.Err(), context.Canceled)
 }
 
 // GenerateJSONStream is the streaming sibling of GenerateJSON: it sends the same
@@ -401,6 +411,7 @@ func (c *Client) GenerateJSONStream(
 		wrapped := fmt.Errorf("llm: generate stream: %w", err)
 		g := gen()
 		g.Err = wrapped
+		g.Cancelled = callerCancelled(ctx)
 		c.observe(g)
 		return "", wrapped
 	}
