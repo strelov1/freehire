@@ -101,11 +101,7 @@ function formatOperator(key: OperatorKey, value: string): string {
 
 /** Replace a token with its picked value and a trailing space, so the visitor can keep
  *  typing. Returns the caret position just past that space. */
-export function replaceToken(
-  text: string,
-  token: OperatorToken,
-  value: string,
-): { text: string; caret: number } {
+export function replaceToken(text: string, token: OperatorToken, value: string): { text: string; caret: number } {
   const head = text.slice(0, token.start) + formatOperator(token.key, value) + ' ';
   return { text: head + text.slice(token.end).trimStart(), caret: head.length };
 }
@@ -161,9 +157,7 @@ export function operatorPlan(parsed: ParsedOperators, resolve: OperatorResolvers
  *  catalogue carries. */
 export function matchSource(value: string, options: readonly FacetOption[]): string | null {
   const v = value.toLowerCase();
-  const hit = options.find(
-    (o) => o.value.toLowerCase() === v || sourceLabel(o.value).toLowerCase() === v,
-  );
+  const hit = options.find((o) => o.value.toLowerCase() === v || sourceLabel(o.value).toLowerCase() === v);
   return hit?.value ?? null;
 }
 
@@ -184,11 +178,7 @@ export function matchCompany(value: string, items: readonly CompanyListItem[]): 
  *  they are picking a company, so `company:"Google Inc."` showing Google is the help
  *  they need, not a stray row. An empty value lists what the endpoint returns for no
  *  query, so `company:` alone already offers some. */
-export function companyOptions(
-  items: readonly CompanyListItem[],
-  value: string,
-  limit: number,
-): OperatorOption[] {
+export function companyOptions(items: readonly CompanyListItem[], value: string, limit: number): OperatorOption[] {
   // Busiest first among the names that match: `goo` means Google far more often than
   // a two-posting namesake, and the endpoint's order is relevance, not size.
   const named = namedCompanies(items, value, items.length).sort((a, b) => b.job_count - a.job_count);
@@ -204,11 +194,7 @@ export function companyOptions(
 
 /** Source rows for `source:<value>`, busiest first. Picking writes the KEY — stable,
  *  spaceless, and what `matchSource` resolves without a lookup. */
-export function sourceOptions(
-  dist: readonly FacetOption[],
-  value: string,
-  limit: number,
-): OperatorOption[] {
+export function sourceOptions(dist: readonly FacetOption[], value: string, limit: number): OperatorOption[] {
   const v = value.trim().toLowerCase();
   return dist
     .filter((o) => o.value.toLowerCase().startsWith(v) || sourceLabel(o.value).toLowerCase().startsWith(v))
@@ -221,9 +207,11 @@ export function sourceOptions(
  *  title. A row completing to a skill or a category is a facet, not a title, and
  *  writing its text after `title:` would search titles for a word the row did not mean. */
 export function titleOptions(rows: readonly ApiSuggestion[]): OperatorOption[] {
-  return rows
-    .filter((r) => r.parts.at(-1)?.kind === 'title')
-    // The index is in the id because two rows CAN share a text, and a duplicate {#each}
-    // key takes the block down — the same guard `fromApi` keeps.
-    .map((r, i) => ({ key: 'title', value: r.text, label: r.text, id: `${i}:${r.text}`, count: r.jobs }));
+  return (
+    rows
+      .filter((r) => r.parts.at(-1)?.kind === 'title')
+      // The index is in the id because two rows CAN share a text, and a duplicate {#each}
+      // key takes the block down — the same guard `fromApi` keeps.
+      .map((r, i) => ({ key: 'title', value: r.text, label: r.text, id: `${i}:${r.text}`, count: r.jobs }))
+  );
 }

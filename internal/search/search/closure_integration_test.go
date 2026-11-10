@@ -35,9 +35,8 @@ func TestIntegration_VisibilityUpdatesRetainContentAndHideFromAllReaders(t *test
 			for i := range docs {
 				docs[i].Reality = &jobview.Reality{Class: "fresh"}
 			}
-			docs[0].Vectors = DocumentVectors{Skills: make([]float32, 1280), Desc: [][]float32{make([]float32, 768)}}
+			docs[0].Vectors = DocumentVectors{Skills: make([]float32, 1280)}
 			docs[0].Vectors.Skills[0] = 1
-			docs[0].Vectors.Desc[0][0] = 1
 			docs[1].Vectors = docs[0].Vectors
 			if err := c.IndexJobs(ctx, docs); err != nil {
 				t.Fatal(err)
@@ -82,15 +81,9 @@ func TestIntegration_VisibilityUpdatesRetainContentAndHideFromAllReaders(t *test
 					t.Fatalf("hidden job counted in facets: %+v", facets)
 				}
 			}
-			for _, p := range []SearchParams{
-				{Query: "Golang", Vector: docs[0].Vectors.Skills, Limit: 10},
-				{Query: "Golang", SemanticVector: docs[0].Vectors.Desc[0], Limit: 10},
-				{Query: "Golang OR engineer", SemanticVector: docs[0].Vectors.Desc[0], Limit: 10},
-			} {
-				found, err := c.Search(ctx, p)
-				if err != nil || len(found.Hits) != 1 || found.Hits[0].ID != 2 {
-					t.Fatalf("marked document reached vector search: %+v err=%v", found, err)
-				}
+			found, err := c.Search(ctx, SearchParams{Query: "Golang", Vector: docs[0].Vectors.Skills, Limit: 10})
+			if err != nil || len(found.Hits) != 1 || found.Hits[0].ID != 2 {
+				t.Fatalf("marked document reached vector search: %+v err=%v", found, err)
 			}
 			page, total, err := c.ListSitemapPage(ctx, 0, 10)
 			if err != nil || total != 1 || len(page) != 1 || page[0].Slug != "open-job" {

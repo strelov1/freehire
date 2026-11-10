@@ -1,9 +1,8 @@
 // Package search provides Meilisearch-backed full-text and faceted keyword search
 // over jobs. It owns the document shape and the single facet/keyword index
 // configuration and read/write helpers. The jobs index carries userProvided skill
-// vectors for the match sort and description chunk vectors for hybrid search,
-// including similar jobs. TEI embedding calls (embed.go) feed job_semantic_chunks
-// in Postgres; index writers copy those stored vectors into Meilisearch.
+// vectors for the match sort. TEI embedding calls (embed.go) feed job_semantic_chunks
+// in Postgres; those description vectors stay there and never reach Meilisearch.
 package search
 
 import (
@@ -50,10 +49,6 @@ const (
 	// ops step 8.3), triggering the full-catalogue re-embed through the chunking
 	// pipeline — not bundled into the deploy that shipped the pipeline itself.
 	embedderModel = "intfloat/multilingual-e5-base-chunked-v1"
-	// descDimensions is embedderModel's output width — job_semantic_chunks.embedding is
-	// vector(768) for the same reason. Changing the model's width means a new column, a
-	// re-embed, a settings change and a full rebuild, in that order.
-	descDimensions = 768
 	// embedderURL is the default embedding backend: the host2 TEI's native /embed route
 	// (see embedChunk) — the co-located loopback TEI of the production topology. A worker
 	// can override it (WithEmbedURL, wired from EMBED_URL) to point at a faster backend
@@ -112,6 +107,9 @@ type Client struct {
 	// concurrency, but a remote GPU endpoint does (it hides per-call latency) — a bulk
 	// reindex sets it high.
 	embedConcurrency int
+	// router sends facet requests without query text to a second engine; nil means
+	// Meilisearch only (WithFacetEngine).
+	router *facetRouter
 }
 
 // Option customizes a Client at construction (see NewClient).
@@ -411,8 +409,8 @@ func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, do
 }
 
 // maxPushBytes keeps one documents request under Meilisearch's http_payload_size_limit
-// (100 MB by default). Each description vector is ~9.5 KB of JSON, so a wave of older,
-// embedded jobs reached ~240 MB on 2026-11-06 and was rejected whole.
+// (100 MB by default). A wave of older jobs reached ~240 MB on 2026-11-06, when each
+// carried its ~9.5 KB-per-chunk description vectors, and was rejected whole.
 var maxPushBytes = 64 << 20 // a var only so a test can force a split
 
 // ndjsonParts encodes docs as NDJSON bodies of at most limit bytes each. A document
@@ -512,17 +510,6 @@ type SearchParams struct {
 	// over vector ranking in Meilisearch, so sending both silently discards the match
 	// order rather than erroring.
 	Vector []float32
-	// SemanticVector, when set, turns a text query into a HYBRID one: Meilisearch blends
-	// the keyword ranking of Query with the nearest description chunk under DescEmbedder,
-	// weighted by semanticRatio. It is the query's own embedding (QueryEmbedder), unlike
-	// Vector, which ranks by a candidate's skills and discards the text score. The two are
-	// mutually exclusive; Vector wins if both are set, since only the match sort sends it.
-	SemanticVector []float32
-	// ScoreThreshold drops hits whose ranking score falls below it. A hybrid query needs
-	// one: vector search ranks EVERY embedded document, so without a floor the page fills
-	// with postings whose only link to the query is a distant vector and the estimated
-	// total approaches the embedded catalogue. Zero sends none.
-	ScoreThreshold float64
 	// QFields restricts Query matching to these searchable attributes (see
 	// QFieldsFromValues). Nil means Meilisearch's default: all of them.
 	QFields []string
@@ -532,27 +519,10 @@ type SearchParams struct {
 type SearchResult struct {
 	Hits  []JobDocument
 	Total int64
-	// TotalIsLowerBound marks a hybrid (SemanticVector) answer, whose Total is "at least
-	// this many" rather than an estimate of the whole match: see hybridPage.
+	// TotalIsLowerBound marks a Total that is "at least this many" rather than an estimate
+	// of the whole match. Search never sets it; a caller that filters the ranking itself
+	// and stops early does (the handler's min_skill_match scan).
 	TotalIsLowerBound bool
-}
-
-// hybridPage turns a hybrid query's hits into a page and a total that can be trusted.
-//
-// Meilisearch's estimatedTotalHits is no count under a vector search: it reported the
-// whole index (3.67M) for a query 34 postings passed the score floor of, measured
-// 2026-10-21. Nor is there an exact count to ask for instead — the vector side ranks a
-// candidate pool whose size follows the request, so the same query counted 34 in page
-// mode and 13 with hitsPerPage 0. What IS knowable is whether a next page exists, so
-// Search asks for one hit more than the page (limit+1) and this drops it: the total is
-// what the caller has been shown so far, plus one when there is more.
-func hybridPage(docs []JobDocument, limit, offset int) SearchResult {
-	total := int64(offset + len(docs))
-	if len(docs) > limit {
-		docs = docs[:limit]
-		total = int64(offset + limit + 1)
-	}
-	return SearchResult{Hits: docs, Total: total, TotalIsLowerBound: true}
 }
 
 // ErrBadQuery marks a search request Meilisearch rejected as malformed — a 400,
@@ -593,7 +563,7 @@ func queryErr(ctx context.Context, op string, err error) error {
 }
 
 // buildSearchRequest translates SearchParams into the SDK's request. It is split out
-// of Search so the vector/hybrid pairing is unit-testable without a live engine: a
+// of Search so the vector/embedder pairing is unit-testable without a live engine: a
 // Vector sent without an embedder name is a 400, so the two must never drift apart.
 func buildSearchRequest(p SearchParams) *meilisearch.SearchRequest {
 	req := &meilisearch.SearchRequest{
@@ -608,22 +578,9 @@ func buildSearchRequest(p SearchParams) *meilisearch.SearchRequest {
 		// SemanticRatio 1.0 asks for pure vector ranking. Anything less blends in the
 		// keyword score, which for the empty query this sort runs under is noise.
 		req.Hybrid = &meilisearch.SearchRequestHybrid{Embedder: SkillEmbedder, SemanticRatio: 1}
-	} else if len(p.SemanticVector) > 0 {
-		req.Vector = p.SemanticVector
-		req.Hybrid = &meilisearch.SearchRequestHybrid{Embedder: DescEmbedder, SemanticRatio: semanticRatio}
 	}
-	req.RankingScoreThreshold = p.ScoreThreshold
 	return req
 }
-
-// semanticRatio is how much of a hybrid query's ranking the description vectors decide
-// (0 = keyword only, 1 = vector only). Sampled against 19 agent-shaped queries on
-// 2026-10-21: at 0.5 a query with ANY keyword match got zero vector hits, so the flag
-// changed nothing whenever a word matched ("help kids learn to read" stayed lifeguards).
-// At 0.7, with the SEMANTIC_SCORE_THRESHOLD floor, a query worded by meaning reaches the
-// postings that say it in other words, and a query outside the embedded (is_tech-only)
-// catalogue still falls back to its keyword hits instead of distant vector matches.
-const semanticRatio = 0.7
 
 // Search runs a query against the jobs (facet/keyword) index and decodes the hits.
 func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, error) {
@@ -637,13 +594,6 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 		if err != nil {
 			return SearchResult{}, err
 		}
-	}
-	// The match sort wins over a semantic vector (see buildSearchRequest), so only a
-	// request without one is a hybrid.
-	hybrid := len(p.Vector) == 0 && len(p.SemanticVector) > 0
-	pageLimit := p.Limit
-	if hybrid {
-		p.Limit++ // the probe hit hybridPage drops
 	}
 	var (
 		hits  meilisearch.Hits
@@ -670,9 +620,6 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 	var docs []JobDocument
 	if err := hits.DecodeInto(&docs); err != nil {
 		return SearchResult{}, fmt.Errorf("search: decode hits: %w", err)
-	}
-	if hybrid {
-		return hybridPage(docs, pageLimit, p.Offset), nil
 	}
 	return SearchResult{Hits: docs, Total: total}, nil
 }
@@ -853,17 +800,6 @@ func facetSettings() *meilisearch.Settings {
 			SkillEmbedder: {
 				Source:     meilisearch.UserProvidedEmbedderSource,
 				Dimensions: skillvec.Dimensions,
-			},
-			// The description chunk vectors behind an agent's opt-in semantic search
-			// (openspec/changes/agent-semantic-search). Also `userProvided`: the vectors
-			// are computed outside the engine (cmd/embed, the volunteer broker) and copied
-			// from job_semantic_chunks by the indexers, and the query vector is embedded by
-			// EmbedQuery against the same model. The same two ordering hazards apply as to
-			// the skill embedder above — settings before the binary that queries it, and
-			// no vectors until a full rebuild.
-			DescEmbedder: {
-				Source:     meilisearch.UserProvidedEmbedderSource,
-				Dimensions: descDimensions,
 			},
 		},
 		// Typo tolerance is left at Meilisearch's defaults (on, with sensible min

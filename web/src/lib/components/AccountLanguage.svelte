@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check } from '@lucide/svelte';
+  import { Check, ChevronDown } from '@lucide/svelte';
   import { CountryFlag } from '#lib/ui/index.js';
   import { currentUser, updateLanguage } from '#lib/auth.svelte.js';
   import { ApiError } from '#lib/api.js';
@@ -167,7 +167,7 @@
   <div class="flex items-center gap-3">
     <div class="min-w-0 flex-1">
       <h2 id={headingId} class="text-sm font-semibold leading-tight">{s.heading}</h2>
-      <p class="text-xs text-muted-foreground">
+      <p class="mt-0.5 text-sm text-muted-foreground">
         {s.description}
       </p>
     </div>
@@ -175,7 +175,9 @@
     {#if saveState === 'saving'}
       <span class="text-xs text-muted-foreground">{s.saving}</span>
     {:else if saveState === 'saved'}
-      <span class="flex items-center gap-1 text-xs text-brand-strong"><Check class="size-3.5" aria-hidden="true" /> {s.saved}</span>
+      <span class="flex items-center gap-1 text-xs text-brand-strong"
+        ><Check class="size-3.5" aria-hidden="true" /> {s.saved}</span
+      >
     {:else if saveState === 'error'}
       <span class="text-xs text-destructive">{saveErrorMessage ?? s.saveFailed}</span>
     {/if}
@@ -207,7 +209,12 @@
         aria-controls={listId}
         aria-autocomplete="list"
         aria-activedescendant={activeDescendant}
-        class="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="w-full rounded-md border border-border bg-background py-2 pl-9 pr-8 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      <!-- The chevron every other select carries, so this reads as a picker, not a text field. -->
+      <ChevronDown
+        class="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden="true"
       />
     </div>
 
@@ -230,7 +237,9 @@
               void pick(lang);
             }}
             onmouseenter={() => (activeIndex = i)}
-            class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left hover:bg-accent {i === activeIndex ? 'bg-accent' : ''}"
+            class="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left hover:bg-accent {i === activeIndex
+              ? 'bg-accent'
+              : ''}"
           >
             <CountryFlag code={lang.flag} label={lang.label} class="text-base" />
             <span class="truncate text-sm font-medium">{lang.label}</span>

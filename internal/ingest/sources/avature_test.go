@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 // avatureDetailHTML mirrors an Avature JobDetail page: og:title carries the title, and the
@@ -260,5 +262,74 @@ func TestAvatureSkipsRobotsTxtWhenCareersAlreadyWorks(t *testing.T) {
 	}
 	if len(jobs) != 1 {
 		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+}
+
+// UNOPS (careers.unops.org/…/JobDetail/Design-Engineer/5053, freehire report 2026-11-10)
+// states its place as a sidebar "Duty Station(s)" field and splits the body into sections,
+// each opening with its own <style>. Picking the "richest" section kept only the closing
+// disclaimer (its length was mostly CSS) and the location came out empty.
+func TestAvatureReadsDutyStationAndJoinsASplitBody(t *testing.T) {
+	const page = `<html><head><meta property="og:title" content="Design Engineer"/></head><body>
+<div class="article__content__view__field regular-fields--cols-2Z-clearer">
+  <div class="article__content__view__field__label">Duty Station(s)</div>
+  <div class="article__content__view__field__value">Yangon</div>
+</div>
+<div class="article__content__view__field ">
+  <div class="article__content__view__field__value">This role offers a unique opportunity in Myanmar.</div>
+</div>
+<div class="article__content__view__field ">
+  <div class="article__content__view__field__value"><style>#s { font-size: inherit; }</style><p>Key Functions: technical design and planning.</p></div>
+</div>
+<div class="article__content__view__field ">
+  <div class="article__content__view__field__value"><style>.justified-content { text-align: justify !important; } .justified-content p { margin: 0; } .justified-content li { margin: 0; }</style><ul><li>UNOPS does not accept unsolicited resumes.</li></ul></div>
+</div>
+</body></html>`
+	job := "https://careers.unops.org/careersmarketplace/JobDetail/Design-Engineer/5053"
+	fake := (&routedHTTP{}).
+		route("/careers/sitemap_index.xml", avatureSitemapIndex("https://careers.unops.org/en_US/careers/sitemap.xml")).
+		route("/en_US/careers/sitemap.xml", avatureURLset(job)).
+		route("/JobDetail/Design-Engineer/5053", page)
+
+	jobs, err := NewAvature(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "UNOPS", Provider: "avature", Board: "careers.unops.org",
+	})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("Fetch = %d jobs, %v; want 1", len(jobs), err)
+	}
+	j := jobs[0]
+	if j.Location != "Yangon" {
+		t.Errorf("Location = %q, want Yangon", j.Location)
+	}
+	intro := strings.Index(j.Description, "unique opportunity")
+	functions := strings.Index(j.Description, "Key Functions")
+	disclaimer := strings.Index(j.Description, "unsolicited resumes")
+	if intro < 0 || functions < intro || disclaimer < functions {
+		t.Errorf("Description should hold every section in page order: %q", j.Description)
+	}
+	if strings.Contains(j.Description, "font-size") {
+		t.Errorf("Description kept the sections' CSS: %q", j.Description)
+	}
+}
+
+// A body section that opens with a bold heading and a colon is prose, not an inline-labeled
+// metadata value; dropping it lost the main body whenever another section (a disclaimer) kept
+// the joined description non-empty.
+func TestAvatureKeepsABodySectionOpeningWithABoldHeading(t *testing.T) {
+	const page = `<html><body>
+<div class="article__content__view__field"><div class="article__content__view__field__value"><strong>Locations</strong>: Austin, Texas&nbsp;</div></div>
+<div class="article__content__view__field"><div class="article__content__view__field__value"><p><strong>Responsibilities</strong>: design the platform.</p></div></div>
+<div class="article__content__view__field"><div class="article__content__view__field__value"><p>We do not accept unsolicited resumes.</p></div></div>
+</body></html>`
+	root, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := avatureDescription(root)
+	if !strings.Contains(d, "design the platform") || !strings.Contains(d, "unsolicited resumes") {
+		t.Errorf("description lost a body section: %q", d)
+	}
+	if strings.Contains(d, "Austin") {
+		t.Errorf("description kept the Locations value: %q", d)
 	}
 }

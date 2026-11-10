@@ -1,0 +1,80 @@
+#!/usr/bin/env node
+// Fails when a file people or agents write is larger than MAX_TOKENS (tokens = bytes / 4).
+// A big file is expensive for an agent to read and easy to edit wrongly; small files keep
+// every read cheap. Default: the staged files (the pre-commit hook). `--all`: every
+// tracked file (CI, since --no-verify walks past the hook).
+//
+// The limit is lowered step by step as the oversized files are split; the goal is 5000.
+// Lower it in the same change that splits the files above the new value.
+
+import { execFileSync } from "node:child_process";
+import { statSync } from "node:fs";
+
+const MAX_TOKENS = 20000;
+
+// Files nobody writes by hand: lockfiles, generated code, binary or data assets and frozen
+// history (archived specs, old plans and reviews).
+const IGNORED = [
+  /(^|\/)(pnpm-lock\.yaml|package-lock\.json|go\.sum)$/,
+  /(^|\/)(testdata|fixtures|generated)\//,
+  /^internal\/platform\/db\/[^/]+\.go$/, // sqlc output
+  /^openspec\/changes\/archive\//,
+  /^docs\/(superpowers|reviews)\//,
+  /^docs\/API(\.internal)?\.md$/,
+  /^web\/src\/lib\/worldMap\.ts$/, // Natural Earth geometry, regenerated rather than edited
+  /^web\/static\/geo-cities\.json$/,
+  /^web\/static\/openapi\.yaml$/, // served whole at /openapi.yaml; splitting it needs a bundler
+  /^web\/src\/lib\/data\/contributors\.json$/, // fetched from GitHub
+  /\.(gif|png|jpe?g|webp|ico|ttf|otf|woff2?|pdf|svg|tsv|csv|excalidraw)$/,
+];
+// An applied migration is never edited, so only a NEW one is held to the limit. --all has no
+// base to tell new from applied, so there the pre-commit hook is the only check.
+const APPLIED_MIGRATION = /^migrations\//;
+
+const git = (...args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 1 << 26 });
+const all = process.argv.includes("--all");
+
+const added = new Set(
+  all ? [] : git("diff", "--cached", "--name-only", "--diff-filter=AC", "-z").split("\0"),
+);
+const files = (
+  all ? git("ls-files", "-z") : git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
+)
+  .split("\0")
+  .filter((f) => f && !IGNORED.some((re) => re.test(f)))
+  .filter((f) => !APPLIED_MIGRATION.test(f) || added.has(f));
+
+// Staged: the size of what is being committed, not of the working copy.
+const size = (f) => (all ? statSync(f).size : Number(git("cat-file", "-s", `:${f}`).trim()));
+
+const tooBig = files
+  .map((f) => ({ f, tokens: Math.ceil(size(f) / 4) }))
+  .filter(({ tokens }) => tokens > MAX_TOKENS)
+  .sort((a, b) => b.tokens - a.tokens);
+
+if (tooBig.length === 0) process.exit(0);
+
+console.error(`These files are over ${MAX_TOKENS} tokens (tokens = bytes / 4):\n`);
+for (const { f, tokens } of tooBig) console.error(`  ${f}  ${tokens} tokens`);
+console.error(`
+Split each file into smaller files by responsibility. Do not raise the limit.
+
+How to split:
+  1. Find the seams: groups of functions, types or sections that work on one thing.
+     Each group becomes its own file, named after that thing.
+  2. Move code, do not rewrite it. Keep names, signatures and behaviour the same,
+     so the diff is a pure move and review stays easy.
+  3. Go: keep the same package and move code to new files in the same directory
+     (pipeline.go -> pipeline_dedup.go, pipeline_index.go). Split a big _test.go the
+     same way, along the code it tests.
+  4. TypeScript: move each group to its own module and import it where it is used.
+     Svelte: extract child components or move logic into a .ts module next to it.
+  5. SQL query files (sqlc): split by entity into new .sql files in the same queries/
+     directory, then run make sqlc.
+  6. Markdown: split by top-level section into files in a directory and link them
+     from a short index. Fix every link (pnpm check:links).
+  7. Data tables (dictionaries, lists): split by key range or category into files
+     that build the same table.
+  8. Rebuild and rerun the tests. Then commit again.
+`);
+process.exit(1);

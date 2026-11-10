@@ -30,11 +30,14 @@ FROM (
 ) h
 JOIN users u ON u.id = h.user_id
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
-WHERE mail_recipient(u.email, u.email_verified, u.last_active_at) <> ''
+WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
   AND u.limit_nudge_sent_at IS NULL
   AND (u.pro_until IS NULL OR u.pro_until <= now())
   AND (u.ultra_until IS NULL OR u.ultra_until <= now())
   AND COALESCE(ns.news_email_enabled, true)
+  AND NOT EXISTS (
+      SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
+  )
 ORDER BY u.id
 LIMIT sqlc.arg(max_rows)::int;
 

@@ -18,7 +18,7 @@ export interface AutoApplyProgressStep {
 function steps(
   tailoring: AutoApplyProgressStepState,
   review: AutoApplyProgressStepState,
-  submitted: AutoApplyProgressStepState
+  submitted: AutoApplyProgressStepState,
 ): AutoApplyProgressStep[] {
   return [
     { id: 'tailoring', state: tailoring },
@@ -31,7 +31,7 @@ function steps(
  *  attempt and no confirmed auto-apply submission on record. */
 export function autoApplyProgressSteps(
   status: string | null | undefined,
-  autoApplied: boolean
+  autoApplied: boolean,
 ): AutoApplyProgressStep[] | null {
   switch (status) {
     case 'tailoring':

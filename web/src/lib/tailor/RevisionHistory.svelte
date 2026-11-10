@@ -130,8 +130,8 @@
 
   {#if groups.length === 0}
     <p class="text-sm text-muted-foreground">
-      Nothing has changed this CV yet. Every edit — yours or the assistant's — shows up here, and
-      each one can be undone on its own.
+      Nothing has changed this CV yet. Every edit — yours or the assistant's — shows up here, and each one can be undone
+      on its own.
     </p>
   {:else}
     <ul class="space-y-1">

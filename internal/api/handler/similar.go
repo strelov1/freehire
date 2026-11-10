@@ -27,8 +27,11 @@ func (h *searchHandlers) SimilarJobs(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	if err := jobVisibleToCaller(row, 0, false); err != nil {
+		return err
+	}
 	limit := min(max(c.QueryInt("limit", defaultSimilarLimit), 1), maxSimilarLimit)
-	views, err := similarViews(c.Context(), h.search, h.queries, row, limit, h.semantic.threshold, func(row db.Job) bool {
+	views, err := similarViews(c.Context(), h.search, h.queries, row, limit, func(row db.Job) bool {
 		return !row.ClosedAt.Valid && !row.IsPrivate
 	})
 	if err != nil {
@@ -38,7 +41,6 @@ func (h *searchHandlers) SimilarJobs(c *fiber.Ctx) error {
 }
 
 type similarReader interface {
-	search.ChunkLister
 	GetJobDuplicateOwner(ctx context.Context, jobID int64) (int64, error)
 	GetJobsByIDs(ctx context.Context, ids []int64) ([]db.Job, error)
 }
@@ -95,11 +97,9 @@ func facetGroups(key string, values []string) ([][]string, bool) {
 	return groups, ok && len(groups) > 0
 }
 
-// similarViews uses the first stored passage (title and opening description) as
-// the hybrid query vector. No request-time model call or offline similarity list
-// is needed. Missing vectors, a failed hybrid, or no visible hybrid hits fall back
-// to keywords under the SAME filters. Re-read hits to enforce current visibility.
-func similarViews(ctx context.Context, idx searcher, q similarReader, source db.Job, limit int, threshold float64, show func(db.Job) bool) ([]jobview.Job, error) {
+// similarViews searches by the source's title under those filters, then re-reads the
+// hits to enforce current visibility.
+func similarViews(ctx context.Context, idx searcher, q similarReader, source db.Job, limit int, show func(db.Job) bool) ([]jobview.Job, error) {
 	if idx == nil {
 		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
@@ -122,28 +122,6 @@ func similarViews(ctx context.Context, idx searcher, q similarReader, source db.
 			return []jobview.Job{}, nil
 		}
 		params.Filter = append(params.Filter.([][]string), []string{fmt.Sprintf("id != %d", excludedID)})
-	}
-	chunks, err := search.ChunkVectorsForJobs(ctx, q, []int64{source.ID})
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	if err == nil && len(chunks[source.ID]) > 0 {
-		hybrid := params
-		hybrid.SemanticVector = chunks[source.ID][0]
-		hybrid.ScoreThreshold = threshold
-		res, err := idx.Search(ctx, hybrid)
-		if err == nil {
-			views, err := visibleSimilar(ctx, q, excludedID, res.Hits, limit, show)
-			if err != nil {
-				return nil, err
-			}
-			if len(views) > 0 {
-				return views, nil
-			}
-		}
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
 	}
 	res, err := idx.Search(ctx, params)
 	if err != nil {

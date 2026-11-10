@@ -54,9 +54,7 @@
   const ICONS = { globe: Globe, remote: House, hybrid: Blend, onsite: Building } as const;
   // The head geography and its roll-up as one string; either half can be empty (a
   // format with no geography draws its icon alone, worldwide draws the globe alone).
-  const trailing = $derived(
-    [summary.text, summary.extra > 0 ? `+${summary.extra}` : ''].filter(Boolean).join(' '),
-  );
+  const trailing = $derived([summary.text, summary.extra > 0 ? `+${summary.extra}` : ''].filter(Boolean).join(' '));
 
   // The accessible name carries the whole story, because the visual marking is a
   // dashed underline and an underline reads to nobody. It also names the way out —

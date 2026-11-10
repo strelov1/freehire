@@ -76,10 +76,10 @@ func (h *assistantHandlers) slugActionTool(name, title, description string, effe
 				return nil, err
 			}
 			if in.Slug == "" {
-				return nil, errors.New("slug is required")
+				return nil, fiber.NewError(fiber.StatusBadRequest, "slug is required")
 			}
 			if h.tracking == nil || h.tracking.tracking == nil {
-				return nil, errors.New("job tracking is not available")
+				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "job tracking is not available")
 			}
 			res, err := act(ctx, userID, in.Slug)
 			if err != nil {
@@ -118,18 +118,18 @@ func (h *assistantHandlers) trackJobTool() assistant.Tool {
 				return nil, err
 			}
 			if in.Slug == "" {
-				return nil, errors.New("slug is required")
+				return nil, fiber.NewError(fiber.StatusBadRequest, "slug is required")
 			}
 			if in.Stage == nil && in.Note == nil {
-				return nil, errors.New("nothing to change — pass a stage, a note, or both")
+				return nil, fiber.NewError(fiber.StatusBadRequest, "nothing to change — pass a stage, a note, or both")
 			}
 			// Reject an invented stage here rather than letting the service's generic
 			// error come back: the model needs to see the closed vocabulary to retry.
 			if in.Stage != nil && !userjob.ValidStage(*in.Stage) {
-				return nil, fmt.Errorf("unknown stage %q — valid stages are: %s", *in.Stage, strings.Join(userjob.Stages, ", "))
+				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("unknown stage %q — valid stages are: %s", *in.Stage, strings.Join(userjob.Stages, ", ")))
 			}
 			if h.tracking == nil || h.tracking.tracking == nil {
-				return nil, errors.New("job tracking is not available")
+				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "job tracking is not available")
 			}
 			res, err := h.tracking.tracking.Track(ctx, userID, in.Slug, in.Stage, in.Note, appevent.SourceAssistant)
 			if err != nil {
@@ -165,7 +165,7 @@ func (h *assistantHandlers) myJobsTool() assistant.Tool {
 				return nil, err
 			}
 			if h.tracking == nil || h.tracking.tracking == nil {
-				return nil, errors.New("job tracking is not available")
+				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "job tracking is not available")
 			}
 			limit := in.Limit
 			if limit <= 0 {

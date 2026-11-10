@@ -69,6 +69,23 @@ an "ask for a referral" affordance only when a referral is available.
 - **WHEN** a company has no approved referral offer (or only pending/rejected)
 - **THEN** the company and its jobs report referral availability as false
 
+### Requirement: Job page links to potential referrers
+
+The job page SHALL offer a quiet text link to find people at the employer on
+LinkedIn, worded as finding people rather than promising a referrer. When
+the company has an approved referral offer, the existing in-product request
+SHALL appear before the LinkedIn option; when it has none, no empty referral
+card SHALL appear. The LinkedIn option SHALL open the stored company page's
+People tab when `company_info.linkedin` names one, or a people search for the
+company otherwise. freehire SHALL NOT read or store LinkedIn member profiles
+for this action.
+
+#### Scenario: Finding a potential referrer from a job
+
+- **WHEN** a seeker chooses "Find people at <company> on LinkedIn" on a job page
+- **THEN** the company People tab opens when available, or a people search
+  prefilled with the company name opens instead
+
 ### Requirement: Seeker requests a referral
 
 A signed-in seeker SHALL be able to request a referral into a referral-eligible

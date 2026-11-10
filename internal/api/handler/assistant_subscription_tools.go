@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -119,13 +120,13 @@ func (h *assistantHandlers) requireDeliverable(ctx context.Context, userID int64
 	}
 	available := deliverableChannels(state)
 	if len(available) == 0 {
-		return nil, errors.New("nothing was changed: this account has no way to receive job alerts — " +
-			"alert email is turned off and no other channel is connected. Ask the person to " + alertChannelsHelp(origin))
+		return nil, fiber.NewError(fiber.StatusConflict, "nothing was changed: this account has no way to receive job alerts — "+
+			"alert email is turned off and no other channel is connected. Ask the person to "+alertChannelsHelp(origin))
 	}
 	for _, ch := range want {
 		if !slices.Contains(available, ch) {
-			return nil, fmt.Errorf("nothing was changed: the %s channel cannot reach this account (connected: %s). "+
-				"Choose one of those, or ask the person to %s", ch, strings.Join(available, ", "), alertChannelsHelp(origin))
+			return nil, fiber.NewError(fiber.StatusConflict, fmt.Sprintf("nothing was changed: the %s channel cannot reach this account (connected: %s). "+
+				"Choose one of those, or ask the person to %s", ch, strings.Join(available, ", "), alertChannelsHelp(origin)))
 		}
 	}
 	return available, nil
@@ -263,14 +264,14 @@ func (a *alertSearch) addOther(k string, vs []string) {
 func alertSavedSearchError(err error, name string) error {
 	switch {
 	case errors.Is(err, savedsearch.ErrDuplicateName):
-		return fmt.Errorf("a saved search named %q already exists on this account — choose another name", name)
+		return fiber.NewError(fiber.StatusConflict, fmt.Sprintf("a saved search named %q already exists on this account — choose another name", name))
 	case errors.Is(err, savedsearch.ErrCapExceeded):
-		return errors.New("this account has reached its limit of saved searches — remove one on the website's " +
+		return fiber.NewError(fiber.StatusConflict, "this account has reached its limit of saved searches — remove one on the website's "+
 			"alerts page and try again")
 	case errors.Is(err, savedsearch.ErrInvalidName):
-		return errors.New("name must be 1-100 characters")
+		return fiber.NewError(fiber.StatusBadRequest, "name must be 1-100 characters")
 	case errors.Is(err, savedsearch.ErrQueryTooLong):
-		return errors.New("this search has too many filters to save — narrow it to fewer values")
+		return fiber.NewError(fiber.StatusBadRequest, "this search has too many filters to save — narrow it to fewer values")
 	}
 	return err
 }
@@ -356,7 +357,7 @@ func (h *assistantHandlers) ownAlert(ctx context.Context, userID, id int64) (ale
 			return a, nil
 		}
 	}
-	return alert{}, fmt.Errorf("this account has no job alert with id %d — call list_subscriptions for the ids", id)
+	return alert{}, fiber.NewError(fiber.StatusNotFound, fmt.Sprintf("this account has no job alert with id %d — call list_subscriptions for the ids", id))
 }
 
 type subscribeResult struct {
@@ -412,7 +413,7 @@ func (h *assistantHandlers) subscribeTool(origin string) assistant.Tool {
 			// Checked before anything is saved, so a refused alert leaves no saved search
 			// behind. subscription.Service.Create asks the same question again.
 			if !search.Narrows(vals) {
-				return nil, errors.New(withIgnored(unfilteredRefusal, ignored))
+				return nil, fiber.NewError(fiber.StatusBadRequest, withIgnored(unfilteredRefusal, ignored))
 			}
 			channels := nonEmptyStrings(in.Channels)
 			available, err := h.requireDeliverable(ctx, userID, channels, origin)
@@ -436,7 +437,7 @@ func (h *assistantHandlers) subscribeTool(origin string) assistant.Tool {
 				case errors.Is(err, subscription.ErrDuplicate):
 					out.Outcomes = append(out.Outcomes, subscribeOutcome{Channel: ch, Status: "already_subscribed"})
 				case errors.Is(err, subscription.ErrUnfilteredSearch):
-					return nil, errors.New(unfilteredRefusal)
+					return nil, fiber.NewError(fiber.StatusBadRequest, unfilteredRefusal)
 				case err != nil:
 					return nil, err
 				default:
@@ -595,7 +596,7 @@ func (h *assistantHandlers) updateSubscriptionTool(origin string) assistant.Tool
 				}
 				ignored = dropped
 				if !search.Narrows(vals) {
-					return nil, errors.New(withIgnored("nothing was changed: "+unfilteredRefusal, ignored))
+					return nil, fiber.NewError(fiber.StatusBadRequest, withIgnored("nothing was changed: "+unfilteredRefusal, ignored))
 				}
 				if q := savedsearch.EncodeQuery(vals); !savedsearch.SameSelection(q, current.query) {
 					newQuery = &q
@@ -605,7 +606,7 @@ func (h *assistantHandlers) updateSubscriptionTool(origin string) assistant.Tool
 			if raw := in.Channels; raw != nil {
 				want := slices.Compact(slices.Sorted(slices.Values(nonEmptyStrings(raw))))
 				if len(want) == 0 {
-					return nil, errors.New("nothing was changed: channels cannot be empty — to stop the alert use unsubscribe, to hold it use paused")
+					return nil, fiber.NewError(fiber.StatusBadRequest, "nothing was changed: channels cannot be empty — to stop the alert use unsubscribe, to hold it use paused")
 				}
 				for _, ch := range want {
 					if !slices.ContainsFunc(current.Channels, func(c alertChannel) bool { return c.Channel == ch }) {
@@ -722,7 +723,7 @@ func (h *assistantHandlers) unsubscribeTool() assistant.Tool {
 				stopped = append(stopped, c.Channel)
 			}
 			if len(stopped) == 0 {
-				return nil, fmt.Errorf("alert %d is not delivered on %s", in.ID, in.Channel)
+				return nil, fiber.NewError(fiber.StatusNotFound, fmt.Sprintf("alert %d is not delivered on %s", in.ID, in.Channel))
 			}
 			return map[string]any{"id": in.ID, "stopped_channels": stopped}, nil
 		},
@@ -811,7 +812,7 @@ func updatesSince(now time.Time, since string, days int) (time.Time, error) {
 	if since = strings.TrimSpace(since); since != "" {
 		t, err := time.Parse(time.RFC3339, since)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("since must be an RFC 3339 time such as 2026-10-20T00:00:00Z: %w", err)
+			return time.Time{}, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("since must be an RFC 3339 time such as 2026-10-20T00:00:00Z: %v", err))
 		}
 		return t, nil
 	}

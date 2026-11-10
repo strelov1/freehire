@@ -29,9 +29,7 @@
   const PANEL_ID = 'activity-tabpanel';
 
   const active = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'saved'));
-  const tabs = $derived(
-    SECTIONS.map((sec) => ({ ...sec, label: s.tabs[sec.id], href: resolve(sec.href) })),
-  );
+  const tabs = $derived(SECTIONS.map((sec) => ({ ...sec, label: s.tabs[sec.id], href: resolve(sec.href) })));
 </script>
 
 <svelte:head>
@@ -40,7 +38,7 @@
 </svelte:head>
 
 <div class="flex flex-col gap-4">
-  <h1 class="text-2xl font-semibold tracking-tight max-lg:sr-only">{s.title}</h1>
+  <h1 class="text-2xl max-lg:text-xl font-semibold tracking-tight">{s.title}</h1>
 
   <TabStrip {tabs} {active} label={s.tablistLabel} panelId={PANEL_ID} />
 

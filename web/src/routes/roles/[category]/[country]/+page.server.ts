@@ -20,27 +20,24 @@ const TOP_SKILLS = 3;
 
 /** The axes read off the pair-scoped distribution. Counting is paid per facet and the
  *  wide-valued ones dominate, so the call names exactly what the page renders — this
- *  is the request that would otherwise count cities and companies for nothing. */
-const PAIR_FACETS = [
-  'skills',
-  'seniority',
-  'work_mode',
-  'visa_sponsorship',
-  'english_level',
-  'reality',
-  'company_size',
-];
+ *  is the request that would otherwise count cities and companies for nothing. Skills
+ *  is NOT here: at ~1,100 values it costs more than all of these together, so it is
+ *  its own call under the day-long cache (see `pairSkills` below). */
+const PAIR_FACETS = ['seniority', 'work_mode', 'visa_sponsorship', 'english_level', 'reality', 'company_size'];
 
 // Server-render one category × country landing.
 //
-// Five upstream reads, all in parallel. Three are facet counts because each answers a
+// Six upstream reads, all in parallel. Four are facet counts because each answers a
 // question at a different scope and no one call spans them:
 //
 //   byCountry  ({category})            the countries distribution — BOTH the
 //                                      publication gate for this pair and the sibling
 //                                      country links, which is why it is one call and
 //                                      not two.
-//   pair       ({category, countries}) everything the page states about the pair.
+//   pair       ({category, countries}) everything the page states about the pair,
+//                                      except its skills —
+//   pairSkills (same scope)            — which are a call of their own only because
+//                                      that one distribution is worth a day's cache.
 //   byCategory ({countries})           the other categories hiring in this country.
 //                                      Country-scoped on purpose: the global category
 //                                      ranking would recommend management and sales
@@ -79,13 +76,16 @@ export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) =
   const pageNumber = parsePage(url.searchParams);
   // Before the search: a page past the window is the costliest one the URL could
   // name, so refusing it afterwards would mean paying for it first. See FEED_WINDOW.
-  // The five calls below run together, so this cannot sit between them — a refusal
-  // inside a Promise.all still lets the other four be issued.
+  // The six calls below run together, so this cannot sit between them — a refusal
+  // inside a Promise.all still lets the other five be issued.
   if (!pageWithinWindow(pageNumber)) error(404, 'Page not found');
 
-  const [byCountry, pair, byCategory, salary, initial] = await Promise.all([
+  const [byCountry, pair, pairSkills, byCategory, salary, initial] = await Promise.all([
     api.facetCounts(new URLSearchParams({ category }), { facets: ['countries'] }),
     api.facetCounts(new URLSearchParams(scope), { facets: PAIR_FACETS }),
+    // The page shows the top eight, which move over days; a crawler sweep over the
+    // pairs is what this cache absorbs (2026-11-07/08, the engine starved into 500s).
+    api.facetCountsDaily(new URLSearchParams(scope), { facets: ['skills'] }),
     api.facetCounts(new URLSearchParams({ countries: countryCode }), { facets: ['category'] }),
     api.insightsSalaryByCategoryInCountry(category, countryCode),
     api.searchJobs(feedFacets, LIMIT, pageOffset(pageNumber)),
@@ -106,7 +106,7 @@ export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) =
   // with the visitor's filters, and the page describes the market, not their view.
   const total = countryCounts[countryCode] ?? 0;
   const fresh = freshCount(pair.facets.reality ?? {});
-  const topSkills = Object.entries(pair.facets.skills ?? {})
+  const topSkills = Object.entries(pairSkills.facets.skills ?? {})
     .sort((a, b) => b[1] - a[1])
     .slice(0, TOP_SKILLS)
     .map(([skill]) => skill);
@@ -124,7 +124,7 @@ export const load: PageServerLoad = async ({ params, url, fetch, setHeaders }) =
     total,
     fresh,
     intro: landingIntro({ category, countryCode, total, fresh, topSkills }),
-    skills: pair.facets.skills ?? {},
+    skills: pairSkills.facets.skills ?? {},
     seniority: pair.facets.seniority ?? {},
     workMode: pair.facets.work_mode ?? {},
     visa: pair.facets.visa_sponsorship ?? {},

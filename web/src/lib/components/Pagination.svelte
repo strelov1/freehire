@@ -65,10 +65,7 @@
       {#if page === null}
         <span class="px-2 py-2 text-sm text-muted-foreground" aria-hidden="true">…</span>
       {:else if page === current}
-        <span
-          class="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground"
-          aria-current="page"
-        >
+        <span class="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground" aria-current="page">
           {page}
         </span>
       {:else}

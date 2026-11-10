@@ -71,7 +71,11 @@ right. The panel follows the card in the DOM so a narrow screen reads the card f
       </div>
     </div>
 
-    <CandidateCardSections {card} {specializations} emptyMessage="This candidate has joined the network but has not published anything yet." />
+    <CandidateCardSections
+      {card}
+      {specializations}
+      emptyMessage="This candidate has joined the network but has not published anything yet."
+    />
   </div>
 
   {#if card.skills.length}

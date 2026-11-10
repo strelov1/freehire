@@ -152,6 +152,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `requires_clearance` | Security clearance required | true, false |
 | `via_recruiter` | Posting says a recruiter publishes it for a client | true — the description says so; false — every posting not marked, including recruiter posts that never say so |
 | `former_employers` | Hiring again: companies you have worked at and left | true — signed in only, read from your experience bank; a name that does not resolve to exactly one company is left out. Anonymous, it is reported in meta.ignored_params. `/jobs/facets` never applies this filter, so its counts ignore it even for signed-in callers |
+| `watchlist` | Your watchlist: companies you follow | true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it |
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
 | `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |
 | `experience_years_min` | Minimum experience | integer — jobs requiring at least this many years |
@@ -387,7 +388,7 @@ curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b"
 
 Similar jobs within the same location and specialization.
 
-Searches the live Meilisearch index with the source job’s known location and specialization as mandatory filters. Uses stored-vector hybrid ranking when available, falling back to keyword search under the same filters. Returns an empty list when location or specialization is unknown or no visible matches remain.
+Searches the live Meilisearch index with the source job’s known location and specialization as mandatory filters, ranked by keyword search on its title. Returns an empty list when location or specialization is unknown or no visible matches remain.
 
 **Path parameters**
 
@@ -2942,7 +2943,7 @@ Validation failures answer 422; a company with no approved referrer answers 409;
 | `job_slug` | string | no | The opening the request is made from, when there is one (`job_id` is still read for older clients). |
 | `cv_kind` | string | no | Which CV to attach: `original` (your uploaded one) or `built`. |
 | `cv_id` | string (uuid) | no | The built CV, when `cv_kind` is `built`: one you tailored for that opening, or — with no opening — for any opening at the company (see `cv-options`). Any other CV answers 422. |
-| `linkedin_url` | string | no | Your profile. |
+| `linkedin_url` | string | yes | Your LinkedIn profile URL. |
 | `contact_telegram` | string | no | How the referrer reaches you. |
 | `contact_email` | string | no | How the referrer reaches you. |
 | `note` | string | no | A short message to the referrer. |
@@ -2950,11 +2951,11 @@ Validation failures answer 422; a company with no approved referrer answers 409;
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/referrals/requests" \
   -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' \
-  -d '{"company_slug":"acme","cv_kind":"stored","contact_email":"you@example.com"}'
+  -d '{"company_slug":"acme","cv_kind":"original","linkedin_url":"https://www.linkedin.com/in/you","contact_email":"you@example.com"}'
 ```
 
 ```json
-{ "data": { "id": "c92f…", "company_slug": "acme", "status": "open", "created_at": "2026-07-28T20:05:00Z" } }
+{ "data": { "id": "c92f…", "company_slug": "acme", "status": "sent", "created_at": "2026-07-28T20:05:00Z" } }
 ```
 
 ### `GET /me/referrals/cv-options`
@@ -3005,7 +3006,7 @@ curl "https://freehire.me/api/v1/me/referrals/incoming" -H "Authorization: Beare
 ```
 
 ```json
-{ "data": [ { "id": "c92f…", "company_slug": "acme", "cv_kind": "stored", "status": "open", "note": "Backend, 8 years Go" } ] }
+{ "data": [ { "id": "c92f…", "company_slug": "acme", "cv_kind": "original", "status": "sent", "note": "Backend, 8 years Go" } ] }
 ```
 
 ### `GET /me/referrals/incoming/{id}/cv`

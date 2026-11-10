@@ -6,6 +6,7 @@
   import { companyLogoUrl } from '#lib/logo.js';
   import { Badge, EntityLogo } from '#lib/ui/index.js';
   import { humanizeStage } from '#lib/stages.js';
+  import { columnOf } from '#lib/board.js';
   import { chasedLabel, cvOpenedLabel } from '#lib/followup.js';
   import { autoApplyNeedsReviewBadge } from '#lib/autoApplyReview.js';
   import type { MyJob } from '#lib/types.js';
@@ -33,6 +34,10 @@
   const statusId = `${indicatorsId}-status`;
   const hasStatus = $derived(Boolean(item.job?.closed_at || item.job?.application_deadline));
   const s = $derived(t(messages, locale()));
+  // A stage that only repeats the column the card sits in ("Preparing" under Preparing)
+  // is said to assistive technology alone; a finer one ("Phone screen" under Interview)
+  // still shows.
+  const stageRepeatsColumn = $derived(item.stage === columnOf(item));
 
   const hasNotes = $derived(!!item.notes && item.notes.trim().length > 0);
   // pending_review (a decision to make) or blocked (a submission attempt stopped) —
@@ -96,108 +101,113 @@
      positioned, and without a positioned ancestor it escaped the column's scroll box and
      stretched the page by the column's full height: blank scrolling past the footer. -->
 <div class="relative">
-<BoardPreview {item}>
-<div
-  role="button"
-  tabindex="0"
-  onclick={() => onopen(item)}
-  onkeydowncapture={openOnKey}
-  aria-label="Open {title} at {company || 'unknown company'}"
-  aria-describedby="{location ? `${locationId} ` : ''}{hasStatus ? `${statusId} ` : ''}{indicatorsId} {hintId}"
-  class="relative flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
->
-  <span class="flex min-h-8 items-center gap-1.5 pr-11 text-sm font-semibold sm:min-h-0 sm:pr-7">
-    <EntityLogo name={company} src={companyLogoUrl(company) ?? undefined} shape="square" size="xs" />
-    <span class="min-w-0 truncate">{company || 'Unknown company'}</span>
-  </span>
-  <span class="line-clamp-2 text-sm">{title}</span>
-  {#if location}
-    <span id={locationId} title={location} class="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-      <MapPin class="size-3 shrink-0" aria-hidden="true" />
-      <span class="truncate">{location}</span>
-    </span>
-  {/if}
-  <!-- Indicators, every one of them. The silence marker used to be the way into the
+  <BoardPreview {item}>
+    <div
+      role="button"
+      tabindex="0"
+      onclick={() => onopen(item)}
+      onkeydowncapture={openOnKey}
+      aria-label="Open {title} at {company || 'unknown company'}"
+      aria-describedby="{location ? `${locationId} ` : ''}{hasStatus ? `${statusId} ` : ''}{indicatorsId} {hintId}"
+      class="relative flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      <!-- The company is the quiet eyebrow and the role the strong line, as on every job card. -->
+      <span
+        class="flex min-h-8 items-center gap-1.5 pr-11 text-xs font-medium text-muted-foreground sm:min-h-0 sm:pr-7"
+      >
+        <EntityLogo name={company} src={companyLogoUrl(company) ?? undefined} shape="square" size="xs" />
+        <span class="min-w-0 truncate">{company || 'Unknown company'}</span>
+      </span>
+      <span class="line-clamp-2 text-sm font-semibold">{title}</span>
+      {#if location}
+        <span id={locationId} title={location} class="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+          <MapPin class="size-3 shrink-0" aria-hidden="true" />
+          <span class="truncate">{location}</span>
+        </span>
+      {/if}
+      <!-- Indicators, every one of them. The silence marker used to be the way into the
        follow-up draft; that offer moved into the opened application when the card gave
        up its controls, and the marker went back to reporting. -->
-  <BoardPostingStatus job={item.job} id={statusId} />
-  <span id={indicatorsId} class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-    {#if item.stage}
-      <Badge variant="secondary">{humanizeStage(item.stage, locale())}</Badge>
-    {/if}
-    {#if needsAutoApplyReview}
-      <span
-        class="flex items-center gap-1 text-xs font-medium text-warning-strong"
-        title="Auto-apply needs your review"
-        aria-label="Auto-apply needs your review"
-      >
-        <span class="size-1.5 shrink-0 rounded-full bg-warning-strong" aria-hidden="true"></span>
-        <FileCheck class="size-3 shrink-0" aria-hidden="true" />
-        Review
+      <BoardPostingStatus job={item.job} id={statusId} />
+      <span id={indicatorsId} class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        {#if item.stage}
+          <Badge variant="secondary" class={stageRepeatsColumn ? 'sr-only' : undefined}
+            >{humanizeStage(item.stage, locale())}</Badge
+          >
+        {/if}
+        {#if needsAutoApplyReview}
+          <span
+            class="flex items-center gap-1 text-xs font-medium text-warning-strong"
+            title="Auto-apply needs your review"
+            aria-label="Auto-apply needs your review"
+          >
+            <span class="size-1.5 shrink-0 rounded-full bg-warning-strong" aria-hidden="true"></span>
+            <FileCheck class="size-3 shrink-0" aria-hidden="true" />
+            Review
+          </span>
+        {/if}
+        {#if item.silence_state === 'silent'}
+          <span
+            class="flex items-center gap-0.5 text-xs tabular-nums text-warning-strong"
+            title="No reply for {item.days_silent} days"
+            aria-label="No reply for {item.days_silent} days"
+          >
+            <Clock class="size-3 shrink-0" aria-hidden="true" />
+            {item.days_silent}d
+          </span>
+        {:else if item.silence_state === 'unconfirmed'}
+          <span
+            class="flex items-center gap-0.5 text-xs text-muted-foreground"
+            title="Mail may be from them — confirm the link to know"
+            aria-label="Mail awaiting confirmation"
+          >
+            <MessageSquare class="size-3 shrink-0" aria-hidden="true" />
+            ?
+          </span>
+        {/if}
+        {#if chased}
+          <span class="text-xs text-muted-foreground">{chased}</span>
+        {/if}
+        {#if cvOpened}
+          <span
+            class="text-xs text-muted-foreground"
+            title="A link in the CV you sent was opened. Company mail scanners follow links automatically, so this is a hint rather than proof someone read it."
+            >{cvOpened}</span
+          >
+        {/if}
+        {#if item.email_count > 0}
+          <span
+            class="flex items-center gap-0.5 text-xs tabular-nums text-muted-foreground"
+            title="{item.email_count} linked email{item.email_count === 1 ? '' : 's'}"
+            aria-label="{item.email_count} linked email{item.email_count === 1 ? '' : 's'}"
+          >
+            <Mail class="size-3 shrink-0" aria-hidden="true" />
+            {item.email_count}
+          </span>
+        {/if}
+        {#if hasNotes}
+          <svg
+            class="size-3 shrink-0 text-muted-foreground"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            role="img"
+            aria-label="Has notes"
+          >
+            <title>Has notes</title>
+            <path d="M8 7h8M8 12h8M8 17h5" />
+          </svg>
+        {/if}
       </span>
-    {/if}
-    {#if item.silence_state === 'silent'}
-      <span
-        class="flex items-center gap-0.5 text-xs tabular-nums text-warning-strong"
-        title="No reply for {item.days_silent} days"
-        aria-label="No reply for {item.days_silent} days"
-      >
-        <Clock class="size-3 shrink-0" aria-hidden="true" />
-        {item.days_silent}d
-      </span>
-    {:else if item.silence_state === 'unconfirmed'}
-      <span
-        class="flex items-center gap-0.5 text-xs text-muted-foreground"
-        title="Mail may be from them — confirm the link to know"
-        aria-label="Mail awaiting confirmation"
-      >
-        <MessageSquare class="size-3 shrink-0" aria-hidden="true" />
-        ?
-      </span>
-    {/if}
-    {#if chased}
-      <span class="text-xs text-muted-foreground">{chased}</span>
-    {/if}
-    {#if cvOpened}
-      <span
-        class="text-xs text-muted-foreground"
-        title="A link in the CV you sent was opened. Company mail scanners follow links automatically, so this is a hint rather than proof someone read it."
-      >{cvOpened}</span>
-    {/if}
-    {#if item.email_count > 0}
-      <span
-        class="flex items-center gap-0.5 text-xs tabular-nums text-muted-foreground"
-        title="{item.email_count} linked email{item.email_count === 1 ? '' : 's'}"
-        aria-label="{item.email_count} linked email{item.email_count === 1 ? '' : 's'}"
-      >
-        <Mail class="size-3 shrink-0" aria-hidden="true" />
-        {item.email_count}
-      </span>
-    {/if}
-    {#if hasNotes}
-      <svg
-        class="size-3 shrink-0 text-muted-foreground"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        role="img"
-        aria-label="Has notes"
-      >
-        <title>Has notes</title>
-        <path d="M8 7h8M8 12h8M8 17h5" />
-      </svg>
-    {/if}
-  </span>
-  <span id={hintId} class="sr-only">{s.moveHint}</span>
-</div>
-
-</BoardPreview>
-{#if onremove}
-  <span class="absolute right-1.5 top-1.5">
-    <BoardRemoveButton {item} {onremove} disabled={removing} />
-  </span>
-{/if}
+      <span id={hintId} class="sr-only">{s.moveHint}</span>
+    </div>
+  </BoardPreview>
+  {#if onremove}
+    <span class="absolute right-1.5 top-1.5">
+      <BoardRemoveButton {item} {onremove} disabled={removing} />
+    </span>
+  {/if}
 </div>

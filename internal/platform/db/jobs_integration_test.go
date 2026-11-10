@@ -417,7 +417,7 @@ func TestListJobsOpenOnlyAndEstimate(t *testing.T) {
 // TestListJobsExcludesPrivateJobs covers the jd-tailor-intake gate: a private job (see
 // jobs.is_private) is open (closed_at IS NULL) and not a repost, yet must never appear in
 // the public DB-backed list or its total — it is visible only to its creator, through a
-// different read path (GetJobBySlug, gated in the handler layer).
+// different read path (GetJobBySlug, gated in the handler with jobVisibleToCaller).
 func TestListJobsExcludesPrivateJobs(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)

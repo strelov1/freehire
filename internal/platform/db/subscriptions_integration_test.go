@@ -699,3 +699,40 @@ func TestSavedSearchQueryRevisionGuardsStaleMatches(t *testing.T) {
 		}
 	})
 }
+
+// Matches recorded before an account switched job-alert email off (an RFC 8058
+// one-click unsubscribe writes alerts_email_enabled=false) are still pending, and
+// must not be claimed for delivery. The switch is email-only: the same person's
+// Telegram subscription keeps being claimed.
+func TestClaimSubscriptionMatches_AlertsEmailOptOut(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateSubs(t, pool)
+
+	uid := insertUser(t, pool, "optout@example.test")
+	ssID := insertSavedSearch(t, pool, uid, "s", "q=go")
+	subs := map[string]int64{}
+	for _, channel := range []string{"email", "telegram"} {
+		sub, err := q.CreateSubscription(ctx, CreateSubscriptionParams{Channel: channel, SavedSearchID: ssID, UserID: uid})
+		if err != nil {
+			t.Fatalf("create %s subscription: %v", channel, err)
+		}
+		subs[channel] = sub.ID
+		if _, err := recordMatch(ctx, q, sub.ID, insertJob(t, pool, "optout-"+channel)); err != nil {
+			t.Fatalf("record %s match: %v", channel, err)
+		}
+	}
+
+	if err := q.SetEmailGroupSwitches(ctx, SetEmailGroupSwitchesParams{UserID: uid, AlertsEmailEnabled: false, NewsEmailEnabled: true}); err != nil {
+		t.Fatalf("switch alerts off: %v", err)
+	}
+
+	claimed, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 100})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if len(claimed) != 1 || claimed[0].SubscriptionID != subs["telegram"] || claimed[0].Channel != "telegram" {
+		t.Fatalf("claimed %+v, want only the telegram subscription's match", claimed)
+	}
+}

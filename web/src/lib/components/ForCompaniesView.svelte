@@ -61,16 +61,13 @@
 <div class="flex flex-col gap-16">
   <!-- Hero -->
   <section class="dot-grid -mx-4 flex flex-col gap-7 px-4 pb-4 pt-2">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-      // for companies &amp; employers
-    </p>
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// for companies &amp; employers</p>
     <h1 class="max-w-2xl text-balance text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-6xl">
       Get your whole job board indexed.
     </h1>
     <p class="max-w-xl text-lg leading-relaxed text-muted-foreground">
-      Want your openings here? If you use a supported ATS, add your board with one line — or
-      contribute an adapter for your own. freehire crawls it regularly and folds the roles into one
-      clean, searchable feed of tech jobs.
+      Want your openings here? If you use a supported ATS, add your board with one line — or contribute an adapter for
+      your own. freehire crawls it regularly and folds the roles into one clean, searchable feed of tech jobs.
     </p>
     <div class="flex flex-wrap items-center gap-3">
       <Button href={repoUrl} variant="primary" size="lg">Add your board on GitHub</Button>
@@ -94,7 +91,8 @@
         </p>
         <pre
           class="overflow-x-auto rounded-lg border border-border bg-secondary/60 p-3 font-mono text-sm leading-relaxed"><span
-            class="text-muted-foreground"># sources/greenhouse.yml</span>
+            class="text-muted-foreground"># sources/greenhouse.yml</span
+          >
 - company: Acme Corp
   board: acmecorp</pre>
         <div class="flex flex-wrap gap-2">
@@ -116,9 +114,8 @@
         </div>
         <p class="text-sm leading-relaxed text-muted-foreground">
           freehire is open source, so a new platform is one adapter in
-          <code class="font-mono text-foreground">internal/sources</code> — a small reader over your
-          public job API. Send it as a pull request, or open an issue asking for the platform and
-          point us at your careers page.
+          <code class="font-mono text-foreground">internal/sources</code> — a small reader over your public job API. Send
+          it as a pull request, or open an issue asking for the platform and point us at your careers page.
         </p>
         <div class="flex flex-wrap gap-3">
           <Button href={repoUrl} variant="outline" size="sm">View the source</Button>
@@ -135,14 +132,14 @@
       <div class="flex flex-col gap-4">
         <p class="text-sm leading-relaxed text-muted-foreground">
           Rather push than be pulled? Mint an
-          <a href={resolve('/my/integrations/api-keys')} class="font-medium text-foreground underline-offset-4 hover:underline"
-            >API key</a
+          <a
+            href={resolve('/my/integrations/api-keys')}
+            class="font-medium text-foreground underline-offset-4 hover:underline">API key</a
           >
           and post roles straight to freehire — one call per vacancy, from your own systems or the
           <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline"
             >freehire CLI</a
-          >. Submissions go through the same moderator review as everything else, then join the
-          catalogue.
+          >. Submissions go through the same moderator review as everything else, then join the catalogue.
         </p>
         <p class="text-sm leading-relaxed text-muted-foreground">
           See the
@@ -158,7 +155,8 @@
       </div>
       <pre
         class="overflow-x-auto rounded-lg border border-border bg-secondary/60 p-3 font-mono text-sm leading-relaxed"><span
-          class="text-muted-foreground"># POST a vacancy — goes to moderation review</span>
+          class="text-muted-foreground"># POST a vacancy — goes to moderation review</span
+        >
 curl -X POST https://freehire.me/api/v1/submissions \
   -H <span class="text-foreground">"Authorization: Bearer $FREEHIRE_API_KEY"</span> \
   -H <span class="text-foreground">"Content-Type: application/json"</span> \
@@ -208,8 +206,7 @@ curl -X POST https://freehire.me/api/v1/submissions \
   <section class="flex flex-col items-start gap-4 rounded-lg border border-border bg-secondary/40 p-6">
     <h2 class="text-xl font-semibold tracking-tight">Ready to list your board?</h2>
     <p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
-      Open an issue on GitHub and we'll take it from there. Questions first? Reach the community on
-      Telegram.
+      Open an issue on GitHub and we'll take it from there. Questions first? Reach the community on Telegram.
     </p>
     <div class="flex flex-wrap gap-3">
       <Button href="{repoUrl}/issues/new" variant="primary" size="lg">Open an issue on GitHub</Button>

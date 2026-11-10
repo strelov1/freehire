@@ -1,13 +1,15 @@
 <script lang="ts">
-  import { buttonVariants, cn } from '#lib/ui/index.js';
+  import { buttonVariants, cn, type ButtonVariant } from '#lib/ui/index.js';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { formatMinorUnits } from '#lib/money.js';
   import { promptSignIn } from '#lib/signin.js';
-  import type { PublicPrice } from '#lib/types.js';
+  import type { ApiPlan, PublicPrice } from '#lib/types.js';
 
-  const { prices }: { prices: PublicPrice[] } = $props();
+  // `buttonVariant`: the API's own page sells the API, so its buttons are the page's CTA;
+  // under the Pro plan on /pricing they step down to outline so Pro keeps the one fill.
+  const { prices, buttonVariant = 'cta' }: { prices: PublicPrice[]; buttonVariant?: ButtonVariant } = $props();
 
   // One card per tier, and only for a tier that is actually sold: the monthly price when there
   // is one, otherwise whatever interval the deployment offers.
@@ -18,7 +20,23 @@
   const apiPrice = $derived(pick('api'));
   const dataPrice = $derived(pick('api_data'));
 
-  const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency);
+  const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency, undefined, { trimWhole: true });
+
+  // The tier the caller already holds, so its card says so instead of selling it again.
+  let held = $state<ApiPlan['tier']>('');
+  // Cleared first: a sign-out or account switch without a reload must not keep the last tier.
+  $effect(() => {
+    held = '';
+    if (!isAuthenticated()) return;
+    let live = true;
+    api
+      .getApiPlan()
+      .then((p) => live && (held = p.tier))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  });
 
   // Which plan's checkout is opening, so only its own button says so.
   let busyId = $state<string | null>(null);
@@ -52,10 +70,7 @@
         price: dataPrice,
         name: 'Data',
         blurb: 'For mirroring the catalogue at volume.',
-        perks: [
-          'Everything in API',
-          'Bulk catalogue files — coming soon',
-        ],
+        perks: ['Everything in API', 'Bulk catalogue files — coming soon'],
       },
     ].filter((c) => !!c);
   });
@@ -64,11 +79,15 @@
 {#if cards.length > 0}
   <section id="api" class="flex scroll-mt-20 flex-col gap-6">
     <header class="flex flex-col items-center gap-2 text-center">
-      <h2 class="text-2xl font-semibold tracking-tight">API</h2>
+      <h2 class="text-2xl font-semibold tracking-tight">Jobs API</h2>
       <p class="max-w-2xl text-balance text-muted-foreground">
-        The read API is free for personal and non-commercial use. An API plan licenses
-        the data for use in your product. Send a full-access key as
+        The read API is free for personal and non-commercial use. An API plan licenses the data for use in your product.
+        Send a full-access key as
         <code class="text-sm">Authorization: Bearer</code>.
+      </p>
+      <p class="max-w-2xl text-balance text-sm text-muted-foreground">
+        API plans are billed separately from Pro. You do not need Pro to use the API, and an API plan does not include
+        Pro's AI job-search features.
       </p>
     </header>
 
@@ -90,10 +109,15 @@
               <li class="border-b border-border/60 pb-2 text-muted-foreground">{perk}</li>
             {/each}
           </ul>
-          {#if isAuthenticated()}
+          {#if held === card.price.tier}
+            <a
+              href={resolve('/my/integrations/api-keys')}
+              class={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'mt-auto')}>Your current plan · API keys</a
+            >
+          {:else if isAuthenticated()}
             <button
               type="button"
-              class={cn(buttonVariants({ variant: 'cta', size: 'lg' }), 'mt-auto disabled:opacity-60')}
+              class={cn(buttonVariants({ variant: buttonVariant, size: 'lg' }), 'mt-auto disabled:opacity-60')}
               disabled={busyId !== null}
               onclick={() => buy(card.price)}
             >
@@ -102,7 +126,7 @@
           {:else}
             <button
               type="button"
-              class={cn(buttonVariants({ variant: 'cta', size: 'lg' }), 'mt-auto')}
+              class={cn(buttonVariants({ variant: buttonVariant, size: 'lg' }), 'mt-auto')}
               onclick={promptSignIn}>Sign in to subscribe</button
             >
           {/if}
@@ -116,14 +140,18 @@
       What the API carries and who it is for is on the <a
         href={resolve('/jobs-api')}
         class="font-medium text-foreground underline-offset-4 hover:underline">Jobs API</a
-      > page. Keys live on your <a
+      >
+      page. Keys live on your
+      <a
         href={resolve('/my/integrations/api-keys')}
         class="font-medium text-foreground underline-offset-4 hover:underline">API keys</a
-      > page. What you may do with the data is in the
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() is applied; the rule cannot see through the appended section anchor -->
-      <a href={resolve('/terms') + '#data-licence'} class="font-medium text-foreground underline-offset-4 hover:underline"
-        >data licence</a
-      >.
+      >
+      page. What you may do with the data is in the
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() is applied; the rule cannot see through the appended section anchor -->
+      <a
+        href={resolve('/terms') + '#data-licence'}
+        class="font-medium text-foreground underline-offset-4 hover:underline">data licence</a
+      ><!-- eslint-enable svelte/no-navigation-without-resolve -->.
     </p>
   </section>
 {/if}

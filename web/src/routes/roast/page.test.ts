@@ -42,7 +42,9 @@ describe('api.roastCv', () => {
     const fetcher = ((url: string, init?: RequestInit) => {
       seen.url = url;
       seen.init = init;
-      return Promise.resolve(fakeResponse({ report: SAMPLE_REPORT, role: '', market_scoped: false, market_available: false }));
+      return Promise.resolve(
+        fakeResponse({ report: SAMPLE_REPORT, role: '', market_scoped: false, market_available: false }),
+      );
     }) as unknown as typeof fetch;
 
     await createApi(fetcher).roastCv('Some CV text');
@@ -58,7 +60,9 @@ describe('api.roastCv', () => {
     const seen: { init?: RequestInit } = {};
     const fetcher = ((_url: string, init?: RequestInit) => {
       seen.init = init;
-      return Promise.resolve(fakeResponse({ report: SAMPLE_REPORT, role: 'backend', market_scoped: true, market_available: false }));
+      return Promise.resolve(
+        fakeResponse({ report: SAMPLE_REPORT, role: 'backend', market_scoped: true, market_available: false }),
+      );
     }) as unknown as typeof fetch;
     const file = new File(['%PDF-1.4 fake'], 'cv.pdf', { type: 'application/pdf' });
 
@@ -73,7 +77,9 @@ describe('api.roastCv', () => {
     const urls: string[] = [];
     const fetcher = ((url: string) => {
       urls.push(url);
-      return Promise.resolve(fakeResponse({ report: SAMPLE_REPORT, role: 'devops', market_scoped: true, market_available: false }));
+      return Promise.resolve(
+        fakeResponse({ report: SAMPLE_REPORT, role: 'devops', market_scoped: true, market_available: false }),
+      );
     }) as unknown as typeof fetch;
 
     await createApi(fetcher).roastCv('text', 'devops');
@@ -225,7 +231,7 @@ describe('/roast page markup', () => {
     // page it was called from, which is wrong for an audience that has never heard of us
     // and has no account to log into. This must open the register form (no `mode`) and
     // land on the page the CTA promises.
-    expect(PAGE).toContain('signinUrl({ returnTo: \'/my/profile/cv-readiness\' })');
+    expect(PAGE).toContain("signinUrl({ returnTo: '/my/profile/cv-readiness' })");
     expect(PAGE).not.toContain('promptSignIn');
   });
 });

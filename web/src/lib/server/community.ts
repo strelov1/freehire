@@ -13,11 +13,7 @@ import { threadMatchesSubject } from './threadSubject';
  *  instead of breaking the page — a failed list renders empty and an unreadable subject
  *  falls back to its slug. Neither is the reader's own data, and the discussion is
  *  still worth showing without them. */
-export async function loadDiscussionIndex(
-  fetchImpl: typeof fetch,
-  subjectType: 'company' | 'job',
-  slug: string,
-) {
+export async function loadDiscussionIndex(fetchImpl: typeof fetch, subjectType: 'company' | 'job', slug: string) {
   const api = serverApi(fetchImpl);
   const [{ threads, nextCursor }, subject] = await Promise.all([
     api.listThreads(subjectType, slug).catch(() => ({ threads: [], nextCursor: undefined })),

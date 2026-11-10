@@ -62,10 +62,12 @@
             class="thread-list__link"
             href={subjectType === 'company'
               ? resolve('/companies/[slug]/discussion/[threadId]', { slug: subjectSlug, threadId: String(t.id) })
-              : resolve('/jobs/[slug]/discussion/[threadId]', { slug: subjectSlug, threadId: String(t.id) })}>
+              : resolve('/jobs/[slug]/discussion/[threadId]', { slug: subjectSlug, threadId: String(t.id) })}
+          >
             <span class="thread-list__title">{t.title}</span>
             <span class="thread-list__meta">
-              {t.author} · {t.reply_count} {t.reply_count === 1 ? 'reply' : 'replies'} · {timeAgo(t.created_at, locale())}
+              {t.author} · {t.reply_count}
+              {t.reply_count === 1 ? 'reply' : 'replies'} · {timeAgo(t.created_at, locale())}
             </span>
           </a>
         </li>

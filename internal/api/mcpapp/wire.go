@@ -70,10 +70,11 @@ type SearchJobsResult struct {
 	// refusing — a retired facet must not break a saved search, and silence is what let a
 	// mistyped country pass for a search of that country.
 	IgnoredParams []string `json:"ignored_params,omitempty" jsonschema:"filters that were not applied; the answer is wider than asked. Replace the value and search again rather than reporting that nothing was found"`
-	// Semantic reports what became of a `semantic: true` request: SemanticApplied, or
-	// SemanticUnavailable when it was answered by keywords alone. Omitted when not asked.
-	Semantic string `json:"semantic,omitempty" jsonschema:"applied: matched by meaning as asked; unavailable: answered by keywords only"`
-	// TotalIsLowerBound: a semantic answer has no count, only "this many and maybe more".
+	// Semantic reports what became of a `semantic: true` request. Only SemanticUnavailable
+	// is produced today: semantic matching is not available, so it is answered by keywords.
+	// Omitted when not asked.
+	Semantic string `json:"semantic,omitempty" jsonschema:"unavailable: a semantic request was answered by keywords only"`
+	// TotalIsLowerBound: the total is "this many and maybe more", not a count.
 	TotalIsLowerBound bool `json:"total_is_lower_bound,omitempty" jsonschema:"true: total is a minimum, not a count — say 'at least', never 'of N'"`
 }
 

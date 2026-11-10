@@ -7,11 +7,12 @@
       variant: {
         primary: 'bg-brand text-brand-foreground hover:opacity-90',
         // The page's one call to action (create the account, show the results, pay,
-        // tailor the CV on a job page): the brand fill framed by a soft ring of itself
-        // with a gap of page between. Focus keeps its own state by thickening the ring to
-        // the solid focus colour. One per view; the ring is decoration, not the indicator.
-        cta: 'bg-brand text-brand-foreground ring-2 ring-brand/30 ring-offset-2 ring-offset-background hover:opacity-90 focus-visible:ring-4 focus-visible:ring-ring',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-accent',
+        // apply on a job page): the brand fill, lifted by a soft shadow. One per view.
+        cta: 'bg-brand text-brand-foreground shadow-sm hover:opacity-90',
+        // A bordered white button, lifted a hair off the page: the one look for every
+        // non-primary action. It was a grey fill, which beside the outline buttons made two
+        // secondary styles that no reader could tell a rule apart from.
+        secondary: 'border border-border bg-card text-foreground shadow-xs hover:bg-accent',
         outline: 'border border-border bg-background hover:bg-accent hover:text-accent-foreground',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         // Filled, for the action that destroys something and cannot be undone —
@@ -47,16 +48,7 @@
   } & HTMLButtonAttributes &
     HTMLAnchorAttributes;
 
-  let {
-    variant = 'secondary',
-    size = 'md',
-    class: className,
-    href,
-    target,
-    rel,
-    children,
-    ...rest
-  }: Props = $props();
+  let { variant = 'secondary', size = 'md', class: className, href, target, rel, children, ...rest }: Props = $props();
 
   // A target="_blank" anchor keeps a window.opener handle back to this page unless
   // rel says otherwise — the reverse-tabnabbing gap. Fill in the safe default once,

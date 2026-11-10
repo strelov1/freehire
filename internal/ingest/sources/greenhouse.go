@@ -305,9 +305,11 @@ func greenhousePayPeriod(text string) string {
 // that restriction wins.
 //
 // So it is deliberately narrow:
-//   - only a location that is a bare remote marker. "Remote - EMEA", "Americas Remote",
-//     "Europe & Remote" state a scope the dictionary cannot read, and an office there
-//     would narrow a region to one country;
+//   - only a location that is a bare remote or bare "Hybrid" marker. "Remote - EMEA",
+//     "Americas Remote", "Europe & Remote" state a scope the dictionary cannot read, and an
+//     office there would narrow a region to one country. A hybrid role works from its
+//     offices, so there they are the place itself (Cloudflare's "Hybrid" over Austin, New
+//     York and San Francisco had no country at all);
 //   - an office is read by its geocoded location, and by its label only when it has none;
 //     an office labelled just "Remote" is no place and is skipped;
 //   - every other office must resolve to a country (an "EMEA" or "Headquarters" office
@@ -315,7 +317,7 @@ func greenhousePayPeriod(text string) string {
 //     exactly one: a list of offices in several countries is the employer's footprint,
 //     not this posting's scope.
 func greenhouseOfficeCountry(j GreenhousePosting) []string {
-	if !isBareRemote(j.Location.Name) {
+	if !isBareRemote(j.Location.Name) && !isBareHybrid(j.Location.Name) {
 		return nil
 	}
 	var country string
@@ -348,6 +350,11 @@ func isBareRemote(s string) bool {
 		return true
 	}
 	return false
+}
+
+// isBareHybrid is isBareRemote's counterpart for "Hybrid" alone.
+func isBareHybrid(s string) bool {
+	return strings.ToLower(strings.Trim(s, " \t()[]-–—:,.|/")) == "hybrid"
 }
 
 // greenhouseMetadataEmploymentType reads the employer-configured "Employment Type"

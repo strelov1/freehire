@@ -11,10 +11,11 @@ export const messages = defineMessages(
       '/my/profile': 'Profile',
       '/my/activity': 'Activity',
       '/my/tracking': 'Tracking',
+      '/my/watchlist': 'Watchlist',
       '/my/inbox': 'Inbox',
       '/my/market-pulse': 'Market Pulse',
       '/my/assistant': 'Agent',
-      '/my/cvs': 'Tailor',
+      '/my/cvs': 'CVs',
       '/my/talent-network': 'Talent Network',
       '/my/referrals': 'Referral requests',
       '/my/referrals/offers': 'Offers to refer',
@@ -56,8 +57,7 @@ export const messages = defineMessages(
     },
     // `main` has no heading: it is the workspace itself.
     navGroups: {
-      found: 'Get found · anonymous',
-      help: 'Get help',
+      network: 'Network',
       settings: 'Settings',
     },
     rail: {
@@ -71,10 +71,11 @@ export const messages = defineMessages(
         '/my/profile': 'Профиль',
         '/my/activity': 'Активность',
         '/my/tracking': 'Трекинг',
+        '/my/watchlist': 'Избранные компании',
         '/my/inbox': 'Входящие',
         '/my/market-pulse': 'Пульс рынка',
         '/my/assistant': 'Агент',
-        '/my/cvs': 'Адаптация CV',
+        '/my/cvs': 'Резюме',
         '/my/talent-network': 'Сеть талантов',
         '/my/referrals': 'Запросы рекомендаций',
         '/my/referrals/offers': 'Готов рекомендовать',
@@ -120,8 +121,7 @@ export const messages = defineMessages(
         employer: 'Ваша компания и вакансии',
       },
       navGroups: {
-        found: 'Вас находят · анонимно',
-        help: 'Помощь',
+        network: 'Сеть',
         settings: 'Настройки',
       },
       rail: {
@@ -134,10 +134,6 @@ export const messages = defineMessages(
 
 /** A nav item's translated label, falling back to its English default (the
  *  literal from accountNav.ts) if this catalog has no entry for its href. */
-export function navLabel(
-  resolved: { navItems: Record<string, string> },
-  href: string,
-  fallback: string,
-): string {
+export function navLabel(resolved: { navItems: Record<string, string> }, href: string, fallback: string): string {
   return resolved.navItems[href] ?? fallback;
 }

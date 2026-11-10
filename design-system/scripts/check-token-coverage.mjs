@@ -78,7 +78,7 @@ const ALLOWED = [
     kind: 'Tailwind arbitrary value',
     reason:
       "the xs tile (size-5, promoted from CompanyLogo's smallest call sites) is too small " +
-      "for any stock text size — 9px is a deliberate one-off, not a value worth a token",
+      'for any stock text size — 9px is a deliberate one-off, not a value worth a token',
   },
   {
     file: 'provider-icon.svelte',
@@ -87,13 +87,6 @@ const ALLOWED = [
       "Google's brand mark is specified in these four exact colours; a token would " +
       'misrepresent the mark, and no other provider path uses a literal (they follow ' +
       'currentColor instead)',
-  },
-  {
-    file: 'section-label.svelte',
-    kind: 'Tailwind arbitrary value',
-    reason:
-      '0.2em tracking for one mono heading style; Tailwind\'s own scale tops out at ' +
-      'tracking-widest (0.1em) and no other primitive needs this value',
   },
   {
     file: 'dialog.svelte',
@@ -125,7 +118,9 @@ function fail(message) {
 // The package radius: zero, and it stays zero.
 function checkPackage() {
   const used = new Set();
-  const files = readdirSync(packageSrc).filter((f) => f.endsWith('.svelte')).sort();
+  const files = readdirSync(packageSrc)
+    .filter((f) => f.endsWith('.svelte'))
+    .toSorted();
 
   for (const file of files) {
     for (const hit of hitsIn(readFileSync(join(packageSrc, file), 'utf-8'), RADII.package)) {

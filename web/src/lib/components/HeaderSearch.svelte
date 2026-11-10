@@ -128,9 +128,7 @@
   // stepper instead — a role index the new list has no word for steps past on the next
   // tick rather than needing this seed to be recomputed.
   // svelte-ignore state_referenced_locally
-  let typewriter = $state<TypewriterState>(
-    typewriterStart(typeof placeholder === 'string' ? [] : placeholder.roles),
-  );
+  let typewriter = $state<TypewriterState>(typewriterStart(typeof placeholder === 'string' ? [] : placeholder.roles));
   let typingStopped = $state(false);
 
   function stopTyping() {
@@ -250,10 +248,16 @@
    *  are reasoning about switches on the same breakpoint. */
   const WIDE_QUERY = '(min-width: 640px)';
 
+  // True while the caret sits where the page put it, before the visitor touched anything:
+  // the focus ring is for focus somebody moved, and drawn on load it framed the homepage's
+  // search in a heavy ring nobody asked for. The first key or pointer press inside clears it.
+  let autoFocused = $state(false);
+
   $effect(() => {
     if (!autofocus) return;
     if (!window.matchMedia(WIDE_QUERY).matches) return;
     inputEl?.focus();
+    autoFocused = true;
     // Focusing normally opens the dropdown, and on a landing page that would drop a
     // ten-row panel over the page on every load, covering the very shortcuts printed
     // underneath it. A caret the visitor did not place is not the question "what can I
@@ -393,9 +397,7 @@
   // answers "is there a query yet", so there is no gap for a state to fall into.
   const starters = $derived(suggest ? starterSuggestions(suggest.counts()) : []);
   let completions = $state.raw<Suggestion[]>([]);
-  const suggestions = $derived(
-    settled.text.trim().length < SUGGEST_MIN_CHARS ? starters : completions,
-  );
+  const suggestions = $derived(settled.text.trim().length < SUGGEST_MIN_CHARS ? starters : completions);
   // The parts each completion applies, by row key — kept beside the rows rather than
   // inside them because a Suggestion is what the dropdown RENDERS, and these are what
   // choosing it DOES.
@@ -411,8 +413,8 @@
   let companies = $state.raw<CompanyListItem[]>([]);
 
   $effect(() => {
-    const q = settledQuery.trim();
-    if (q.length < SUGGEST_MIN_CHARS || !suggest) {
+    const typed = settledQuery.trim();
+    if (typed.length < SUGGEST_MIN_CHARS || !suggest) {
       completions = [];
       completionParts = new Map();
       jobs = [];
@@ -432,12 +434,12 @@
       // a schedule — a cold or missing one must cost the box its completions, not its
       // postings.
       const [s, j, c] = await Promise.allSettled([
-        api.suggest(q, completionsLimit, ac.signal),
-        api.searchJobs(new URLSearchParams({ q }), jobsLimit, 0, ac.signal),
+        api.suggest(typed, completionsLimit, ac.signal),
+        api.searchJobs(new URLSearchParams({ q: typed }), jobsLimit, 0, ac.signal),
         // Over-fetch: most of what the fuzzy endpoint returns is discarded below, and
         // asking for exactly three would leave the section empty whenever the fourth
         // was the only real match.
-        api.listCompanies(q, companiesFetch, 0, undefined, ac.signal),
+        api.listCompanies(typed, companiesFetch, 0, undefined, ac.signal),
       ]);
       // An abort rejects all three, and `allSettled` would otherwise report that as
       // three empty sections — blanking the panel a fresher query is about to fill.
@@ -446,8 +448,7 @@
       completions = fromApi(rows);
       completionParts = new Map(completions.map((row, i) => [row.slug, rows[i]?.parts ?? []]));
       jobs = j.status === 'fulfilled' ? j.value.items : [];
-      companies =
-        c.status === 'fulfilled' ? namedCompanies(c.value.items, q, companiesLimit) : [];
+      companies = c.status === 'fulfilled' ? namedCompanies(c.value.items, typed, companiesLimit) : [];
     })();
     return () => ac.abort();
   });
@@ -919,10 +920,17 @@
 <!-- `min-w-0` lets this flex item shrink below its content's intrinsic width (flex-1
      alone keeps min-width:auto), so the box narrows to fit the header row instead of
      overflowing it — the inner input (also min-w-0) absorbs the shrink. -->
-<div bind:this={wrapEl} class="relative min-w-0 flex-1">
+<div
+  bind:this={wrapEl}
+  class="relative min-w-0 flex-1"
+  onkeydowncapture={() => (autoFocused = false)}
+  onpointerdowncapture={() => (autoFocused = false)}
+  onfocusout={() => (autoFocused = false)}
+>
   <div
     class={cn(
-      'flex items-center border border-border bg-background focus-within:ring-2 focus-within:ring-ring',
+      'flex items-center border border-border bg-background',
+      !autoFocused && 'focus-within:ring-2 focus-within:ring-ring',
       hero
         ? // Taller, rounder and lifted off the page: at the centre of an otherwise
           // empty screen this is the only interactive thing, so it carries the weight
@@ -1018,7 +1026,10 @@
       aria-expanded={suggestOpen}
       aria-controls="role-suggestions"
       aria-activedescendant={activeIndex >= 0 ? `role-suggestion-${activeIndex}` : undefined}
-      class={cn('min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground', !hero && 'placeholder:text-sm')}
+      class={cn(
+        'min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground',
+        !hero && 'placeholder:text-sm',
+      )}
     />
     {#if draft.text}
       <!-- Clearing is an explicit act, not typing, so it commits at once: the visitor
@@ -1036,10 +1047,7 @@
         <X class="size-4" aria-hidden="true" />
       </button>
     {:else}
-      <kbd
-        class="hidden shrink-0 rounded border border-border px-1.5 text-xs text-muted-foreground sm:inline"
-        >/</kbd
-      >
+      <kbd class="hidden shrink-0 rounded border border-border px-1.5 text-xs text-muted-foreground sm:inline">/</kbd>
     {/if}
     <!-- All-filters trigger, mirroring the Location scope-prefix on the left: divided
          from the input and pinned to the right edge. Opens the active page's own filter
@@ -1057,9 +1065,7 @@
       <button
         type="button"
         onclick={filterTrigger.open}
-        aria-label={filterTrigger.count > 0
-          ? `Filters (${filterTrigger.count} active)`
-          : 'Filters'}
+        aria-label={filterTrigger.count > 0 ? `Filters (${filterTrigger.count} active)` : 'Filters'}
         title="Filters"
         class="-mr-3 grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
       >
@@ -1099,9 +1105,7 @@
         <span class="flex flex-col gap-1">
           <span>We don't have this one yet.</span>
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query string appended to a resolved path -->
-          <a href={signinHref} class="font-medium underline underline-offset-4">
-            Sign in to send it to us →
-          </a>
+          <a href={signinHref} class="font-medium underline underline-offset-4"> Sign in to send it to us → </a>
         </span>
       {:else if linkStep?.kind === 'outcome'}
         <IntakeOutcome resolved={linkStep.resolved} />
@@ -1214,9 +1218,7 @@
             {/if}
             <span class="min-w-0 flex-1 truncate">{row.suggestion.label}</span>
             {#if row.suggestion.count !== undefined}
-              <span class="shrink-0 text-xs text-muted-foreground"
-                >{row.suggestion.count.toLocaleString()}</span
-              >
+              <span class="shrink-0 text-xs text-muted-foreground">{row.suggestion.count.toLocaleString()}</span>
             {/if}
           {:else if row.kind === 'job'}
             <!-- Same mark the launcher dropdown renders, from the same resolver: the
@@ -1260,15 +1262,11 @@
             {/if}
             <span class="min-w-0 flex-1 truncate">{row.option.label}</span>
             {#if row.option.count !== undefined}
-              <span class="shrink-0 text-xs text-muted-foreground"
-                >{row.option.count.toLocaleString()}</span
-              >
+              <span class="shrink-0 text-xs text-muted-foreground">{row.option.count.toLocaleString()}</span>
             {/if}
           {:else if row.kind === 'text'}
             <Search class="size-4 shrink-0 text-muted-foreground" />
-            <span class="min-w-0 flex-1 truncate text-muted-foreground"
-              >Search “{row.text}” as text</span
-            >
+            <span class="min-w-0 flex-1 truncate text-muted-foreground">Search “{row.text}” as text</span>
           {/if}
         </li>
       {/each}

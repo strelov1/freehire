@@ -32,4 +32,11 @@ describe('formatMinorUnits', () => {
   it('falls back to dollars when the provider sent no currency', () => {
     expect(formatMinorUnits(500, '')).toBe(asCurrency(5, 'USD'));
   });
+
+  it('drops a zero fraction only when asked, and keeps real cents', () => {
+    expect(formatMinorUnits(500, 'usd', 'en')).toBe('$5.00');
+    expect(formatMinorUnits(500, 'usd', 'en', { trimWhole: true })).toBe('$5');
+    expect(formatMinorUnits(499, 'usd', 'en', { trimWhole: true })).toBe('$4.99');
+    expect(formatMinorUnits(1000, 'jpy', 'en', { trimWhole: true })).toBe('¥1,000');
+  });
 });

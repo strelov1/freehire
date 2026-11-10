@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
-	"sort"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -25,10 +24,6 @@ type atsReviewStore interface {
 	GetUserATSAnalysis(ctx context.Context, id int64) ([]byte, error)
 	SetUserATSAnalysis(ctx context.Context, arg db.SetUserATSAnalysisParams) error
 }
-
-// atsRoleTopN is how many of the role's most in-demand skills the CV keyword-match
-// is scored against.
-const atsRoleTopN = 20
 
 // atsResponse is the wire shape for the CV ATS report. HasCV is false when the
 // caller has no stored CV (storage off or none uploaded) — the SPA then prompts an
@@ -146,7 +141,7 @@ func (h *resumeHandlers) deterministicReport(c *fiber.Ctx, userID int64, profile
 		return nil, "", true, err
 	}
 	cvSkills := skilltag.Parse(cvText, skilltag.WithResumeAcronyms())
-	report := atscheck.Score(cvText, cvSkills, topRoleSkills(res.Facets["skills"], atsRoleTopN))
+	report := atscheck.Score(cvText, cvSkills, atscheck.TopRoleSkills(res.Facets["skills"], atscheck.RoleTopN))
 	return &report, cvText, true, nil
 }
 
@@ -177,33 +172,6 @@ func (h *resumeHandlers) storedCVText(c *fiber.Ctx, userID int64) (string, bool,
 		return "", false, err
 	}
 	return text, true, nil
-}
-
-// topRoleSkills ranks a skills facet distribution by demand (count desc, slug asc)
-// and returns the top n slugs — the role's most in-demand skills.
-func topRoleSkills(facet map[string]int64, n int) []string {
-	type skillCount struct {
-		slug  string
-		count int64
-	}
-	ranked := make([]skillCount, 0, len(facet))
-	for slug, count := range facet {
-		ranked = append(ranked, skillCount{slug, count})
-	}
-	sort.Slice(ranked, func(i, j int) bool {
-		if ranked[i].count != ranked[j].count {
-			return ranked[i].count > ranked[j].count
-		}
-		return ranked[i].slug < ranked[j].slug
-	})
-	if len(ranked) > n {
-		ranked = ranked[:n]
-	}
-	out := make([]string, len(ranked))
-	for i, r := range ranked {
-		out[i] = r.slug
-	}
-	return out
 }
 
 // reviewableResume reads the structure of the user's stored CV as its contact-free projection,

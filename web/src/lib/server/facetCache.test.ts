@@ -19,6 +19,20 @@ describe('createFacetCache', () => {
     expect(live).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps an entry for the TTL it was built with', async () => {
+    const live = vi.fn().mockResolvedValue(result(3));
+    const cached = createFacetCache(10, 60 * 60_000)(live);
+
+    await cached(new URLSearchParams());
+    vi.advanceTimersByTime(30 * 60_000); // past the default ten minutes, inside the hour
+    await cached(new URLSearchParams());
+    expect(live).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(31 * 60_000);
+    await cached(new URLSearchParams());
+    expect(live).toHaveBeenCalledTimes(2);
+  });
+
   it('shares one in-flight request between concurrent callers', async () => {
     const live = vi.fn().mockResolvedValue(result(1));
     const cached = createFacetCache()(live);

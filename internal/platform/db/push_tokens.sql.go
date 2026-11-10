@@ -29,10 +29,13 @@ func (q *Queries) DeletePushToken(ctx context.Context, arg DeletePushTokenParams
 }
 
 const listPushTokensForUser = `-- name: ListPushTokensForUser :many
-SELECT id, user_id, token, platform, created_at, last_seen_at FROM user_push_tokens WHERE user_id = $1
+SELECT t.id, t.user_id, t.token, t.platform, t.created_at, t.last_seen_at FROM user_push_tokens t
+JOIN users u ON u.id = t.user_id
+WHERE t.user_id = $1 AND u.banned_at IS NULL
 `
 
-// The caller's own registered devices, for a test send or a future delivery.
+// The caller's own registered devices, for a test send or a future delivery. A banned
+// account has none: every push sender reads its devices here, so this is the one gate.
 func (q *Queries) ListPushTokensForUser(ctx context.Context, userID int64) ([]UserPushToken, error) {
 	rows, err := q.db.Query(ctx, listPushTokensForUser, userID)
 	if err != nil {

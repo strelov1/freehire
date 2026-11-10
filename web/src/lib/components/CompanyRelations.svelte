@@ -66,7 +66,7 @@
   const jobs = (n: number) => `${n} open job${n === 1 ? '' : 's'}`;
 </script>
 
-<div class="mt-3 flex flex-col gap-2 text-sm">
+<div class="mt-2 flex flex-col gap-2 text-sm">
   {#if parent}
     <p class="text-muted-foreground">
       Part of
@@ -89,7 +89,9 @@
       {/each}
     </div>
   {/if}
-  <div>
+  <!-- Right-aligned under the header card, as its footnote, rather than a loose line
+       between the card and the tabs. -->
+  <div class="flex justify-end">
     <button type="button" class="text-xs text-muted-foreground underline-offset-2 hover:underline" onclick={openForm}>
       Same company listed twice, or part of a group? Suggest a correction
     </button>
@@ -121,9 +123,7 @@
           <input type="radio" class="mt-0.5" name="kind" value="subsidiary" bind:group={kind} />
           <span>
             a subsidiary or local entity of another company
-            <span class="block text-xs text-muted-foreground">
-              Both pages stay, and each links to the other.
-            </span>
+            <span class="block text-xs text-muted-foreground"> Both pages stay, and each links to the other. </span>
           </span>
         </label>
       </fieldset>

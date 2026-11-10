@@ -13,11 +13,11 @@
 
 <svelte:head><title>{s.headTitle}</title></svelte:head>
 
-<!-- The account shell (my/+layout) owns the container, auth gate, and noindex;
-     an inner max-width keeps the content readable within the content column.
+<!-- The account shell (my/+layout) owns the container, auth gate, and noindex.
+     Full column width, like every other section, so card edges do not move between pages.
      Connected devices (MCP OAuth grants, freehire#3114) sits below API keys:
      both are credentials an account owner manages from one place. -->
-<div class="flex max-w-3xl flex-col gap-10">
+<div class="flex flex-col gap-10">
   <ApiKeysView />
   <ApiPlanPanel />
   <ConnectedDevicesView />

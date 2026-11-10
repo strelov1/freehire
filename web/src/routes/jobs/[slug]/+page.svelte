@@ -9,13 +9,7 @@
   import { filterHref } from '#lib/enrichment.js';
   import { categoryLabel } from '#lib/labels.js';
   import { categoryLandingLink } from '#lib/roleLandings.js';
-  import {
-    breadcrumbJsonLd,
-    jobPageTitle,
-    jobPostingJsonLd,
-    jsonLdScript,
-    metaDescription,
-  } from '#lib/seo.js';
+  import { breadcrumbJsonLd, jobPageTitle, jobPostingJsonLd, jsonLdScript, metaDescription } from '#lib/seo.js';
   import type { Job } from '#lib/types.js';
   import { Breadcrumbs } from '#lib/ui/index.js';
   import type { PageData } from './$types';
@@ -51,7 +45,7 @@
     metaDescription(data.job.description) ||
       (data.job.company
         ? `${data.job.title} at ${data.job.company} — apply on freehire.`
-        : `${data.job.title} — apply on freehire.`)
+        : `${data.job.title} — apply on freehire.`),
   );
   // The one breadcrumb trail behind both the visible nav (via visibleBreadcrumbItems below)
   // and the structured data — a single array so the two can never disagree about what the
@@ -94,7 +88,7 @@
           url: item.href ? `${origin}${item.href}` : canonical,
         })),
       ),
-    ])
+    ]),
   );
 </script>
 
@@ -112,38 +106,37 @@
 <div class="mx-auto w-full max-w-6xl px-5 py-6 sm:px-4">
   <JobView job={data.job} applyForm={data.applyForm} hasSimilar={similar.length > 0} />
 
-  <!-- `#similar-jobs` is where a closed posting's notice points its reader. JobRelated opens
-       on the Similar tab whenever there are similar postings, which is the only case in
-       which JobView offers the link. -->
-  <div id="similar-jobs">
-    <JobRelated
-      {similar}
-      copies={data.copies}
-      copiesTotal={data.copiesTotal}
-      slug={data.job.public_slug}
-    />
+  <!-- Everything below the posting stays in its content column from lg (the 20rem rail plus
+       the grid's 1.5rem gap), so the page keeps one grid instead of widening halfway down. -->
+  <div class="lg:pl-86">
+    <!-- `#similar-jobs` is where a closed posting's notice points its reader. JobRelated opens
+         on the Similar tab whenever there are similar postings, which is the only case in
+         which JobView offers the link. -->
+    <div id="similar-jobs">
+      <JobRelated {similar} copies={data.copies} copiesTotal={data.copiesTotal} slug={data.job.public_slug} />
+    </div>
+
+    <!-- Below the related postings and right above "See also" on every width: at the top
+         of the page it sat far from the title/apply button on a phone, and it stole space
+         from the match card and provenance line above the title on a wide screen too. -->
+    <Breadcrumbs items={visibleBreadcrumbItems} class="my-4" />
+
+    <JobSeeAlso cards={data.seeAlso} />
+
+    <!-- The bridge from a posting to the market pages. Costs nothing to render: the
+         category is already on the job, and the category table needs no gate check
+         (see categoryLandingLink). Without this the /roles tree is reachable only from
+         the footer and the sitemap, which is how a page ends up crawled but not
+         weighted. -->
+    {#if marketLink}
+      <p class="mt-8 text-sm">
+        <a
+          href={resolve('/roles/[category]', { category: marketLink.slug })}
+          class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+        >
+          {marketLink.label} jobs by country — openings, pay and top skills →
+        </a>
+      </p>
+    {/if}
   </div>
-
-  <!-- Below the related postings and right above "See also" on every width: at the top
-       of the page it sat far from the title/apply button on a phone, and it stole space
-       from the match card and provenance line above the title on a wide screen too. -->
-  <Breadcrumbs items={visibleBreadcrumbItems} class="my-4" />
-
-  <JobSeeAlso cards={data.seeAlso} />
-
-  <!-- The bridge from a posting to the market pages. Costs nothing to render: the
-       category is already on the job, and the category table needs no gate check
-       (see categoryLandingLink). Without this the /roles tree is reachable only from
-       the footer and the sitemap, which is how a page ends up crawled but not
-       weighted. -->
-  {#if marketLink}
-    <p class="mt-8 text-sm">
-      <a
-        href={resolve('/roles/[category]', { category: marketLink.slug })}
-        class="text-brand-strong hover:underline"
-      >
-        {marketLink.label} jobs by country — openings, pay and top skills →
-      </a>
-    </p>
-  {/if}
 </div>

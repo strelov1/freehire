@@ -14,10 +14,7 @@
   // and the real numbers render as plain HTML underneath the canvas regardless of
   // whether WebGL, motion, or JavaScript itself is available. The canvas is a pure
   // enhancement layered on top; losing it loses nothing true about the page.
-  let {
-    sources,
-    companies,
-  }: { sources: number | null; companies: number | null } = $props();
+  let { sources, companies }: { sources: number | null; companies: number | null } = $props();
 
   const compactNf = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
   const companiesLabel = $derived(companies != null ? compactNf.format(companies) : null);
@@ -25,6 +22,21 @@
   let container = $state<HTMLDivElement | undefined>(undefined);
   let canvas = $state<HTMLCanvasElement | undefined>(undefined);
   let cleanup: (() => void) | undefined;
+
+  // A plain numeric-index read on a typed array is `number | undefined` under
+  // this project's tsconfig; every read here is bounds-safe by construction
+  // (i*3(+0..2) never exceeds pointCount*3), so this is purely a type escape
+  // hatch, not a real fallback.
+  const at = (arr: Float32Array, i: number) => arr[i] ?? 0;
+
+  // Uniform-random point on a unit sphere (rejection-free: this parametrization
+  // does not clump at the poles the way naive lat/long sampling would).
+  const randomOnSphere = (): [number, number, number] => {
+    const cosPhi = Math.random() * 2 - 1;
+    const sinPhi = Math.sqrt(1 - cosPhi * cosPhi);
+    const theta = Math.random() * Math.PI * 2;
+    return [Math.cos(theta) * sinPhi, cosPhi, Math.sin(theta) * sinPhi];
+  };
 
   onMount(() => {
     let cancelled = false;
@@ -75,24 +87,10 @@
       const colors = new Float32Array(pointCount * 3);
       const brand = readCssColor('--brand');
 
-      // A plain numeric-index read on a typed array is `number | undefined` under
-      // this project's tsconfig; every read here is bounds-safe by construction
-      // (i*3(+0..2) never exceeds pointCount*3), so this is purely a type escape
-      // hatch, not a real fallback.
-      const at = (arr: Float32Array, i: number) => arr[i] ?? 0;
       // BufferGeometry.getAttribute() is typed to return possibly-undefined too, for
       // an attribute name that was in fact just set two lines above every call site.
       const attrOf = (g: InstanceType<typeof THREE.BufferGeometry>, name: string) =>
         g.getAttribute(name) as InstanceType<typeof THREE.BufferAttribute>;
-
-      // Uniform-random point on a unit sphere (rejection-free: this parametrization
-      // does not clump at the poles the way naive lat/long sampling would).
-      const randomOnSphere = (): [number, number, number] => {
-        const cosPhi = Math.random() * 2 - 1;
-        const sinPhi = Math.sqrt(1 - cosPhi * cosPhi);
-        const theta = Math.random() * Math.PI * 2;
-        return [Math.cos(theta) * sinPhi, cosPhi, Math.sin(theta) * sinPhi];
-      };
 
       // (Re)launches point i on a chord from one random point on the outer shell to
       // another — a trajectory that has nothing to do with where the core sits, so
@@ -385,10 +383,7 @@
   });
 </script>
 
-<div
-  bind:this={container}
-  class="relative h-72 overflow-hidden sm:h-80 lg:h-96"
->
+<div bind:this={container} class="relative h-72 overflow-hidden sm:h-80 lg:h-96">
   <canvas
     bind:this={canvas}
     class="absolute inset-0 h-full w-full"
@@ -402,8 +397,8 @@
       <span class="text-muted-foreground">companies</span>
     </p>
     <p class="max-w-sm text-sm leading-relaxed text-muted-foreground">
-      Every open role traces back to one of them — crawled straight from where they
-      actually posted it, not a copy of a copy.
+      Every open role traces back to one of them — crawled straight from where they actually posted it, not a copy of a
+      copy.
     </p>
   </div>
 </div>

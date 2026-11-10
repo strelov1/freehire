@@ -131,7 +131,7 @@ func (a adzuna) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // FetchRecent reads the same slice as Fetch but bounds it to the run's window. The window goes
-// out as max_days_old, which Adzuna's search API documents as "the age of the oldest advertisment
+// out as max_days_old, which Adzuna's search API documents as "the age of the oldest advertisement
 // in days that will be returned" (https://developer.adzuna.com/docs/search). A window under one
 // day still asks for one, the finest grain the parameter has.
 func (a adzuna) FetchRecent(ctx context.Context, e CompanyEntry, window time.Duration) ([]Job, error) {

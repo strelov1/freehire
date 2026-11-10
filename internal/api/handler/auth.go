@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -469,6 +468,8 @@ func accountsError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "email already registered")
 	case errors.Is(err, accounts.ErrInvalidCredentials):
 		return fiber.NewError(fiber.StatusUnauthorized, "invalid credentials")
+	case errors.Is(err, accounts.ErrAccountSuspended):
+		return errAccountSuspended
 	case errors.Is(err, accounts.ErrUserNotFound):
 		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
 	case errors.Is(err, accounts.ErrInvalidTimezone):
@@ -484,22 +485,9 @@ func accountsError(err error) error {
 	case errors.Is(err, accounts.ErrUsernameCooldown):
 		return fiber.NewError(fiber.StatusTooManyRequests, "username changed too recently")
 	default:
-		if isInfraError(err) {
-			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
-		}
+		// Anything else is ours: classify answers a client cancel 499 and reports the rest.
 		return err
 	}
-}
-
-func isInfraError(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return true
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "connection") || strings.Contains(msg, "closed") || strings.Contains(msg, "timeout") || strings.Contains(msg, "refusal") || strings.Contains(msg, "pool")
 }
 
 // Register creates an account, starts a session (auth cookie), and returns the
@@ -578,11 +566,31 @@ func (h *authHandlers) LogoutAll(c *fiber.Ctx) error {
 // stamped with the account's current session generation, so it is born valid and any
 // later revocation strands it.
 func (h *authHandlers) setSession(c *fiber.Ctx, userID int64) error {
-	version, err := h.queries.GetUserTokenVersion(c.Context(), userID)
+	version, err := h.sessionVersion(c.Context(), userID)
 	if err != nil {
-		return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
+		return err
 	}
 	return h.setSessionAt(c, userID, version)
+}
+
+// errAccountSuspended is what every sign-in path answers for a banned account.
+var errAccountSuspended = authError(fiber.StatusForbidden, "account_suspended", "This account is suspended")
+
+// sessionVersion is the account's current session generation, the number a new session is
+// stamped with. GetUserTokenVersion returns no row for a banned account, so this is the
+// choke point that stops every path that ends in a session (password, OAuth, Apple, the
+// mobile exchange, the extension connect) from signing one in; paths that hand out a
+// code first call it to refuse early.
+func (h *authHandlers) sessionVersion(ctx context.Context, userID int64) (int32, error) {
+	version, err := h.queries.GetUserTokenVersion(ctx, userID)
+	switch {
+	case err == nil:
+		return version, nil
+	case errors.Is(err, pgx.ErrNoRows):
+		return 0, errAccountSuspended
+	default:
+		return 0, fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
+	}
 }
 
 // setSessionAt writes a session cookie for a known generation. Callers that just bumped

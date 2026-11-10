@@ -183,9 +183,7 @@ describe('scopeToApplication', () => {
       { frame: 0, form: 0, label: 'Search' },
       { frame: 18, form: 0, label: 'First Name' },
     ];
-    expect(scopeToApplication(framed, [{ frame: 18, form: 0 }])).toEqual([
-      { frame: 18, form: 0, label: 'First Name' },
-    ]);
+    expect(scopeToApplication(framed, [{ frame: 18, form: 0 }])).toEqual([{ frame: 18, form: 0, label: 'First Name' }]);
   });
 
   it('keeps every field when the upload names a group holding none', () => {
@@ -923,9 +921,7 @@ describe('fillByLabel on a group', () => {
     ]);
 
     expect([us.checked, de.checked, ca.checked]).toEqual([true, true, false]);
-    expect(outcomes).toEqual([
-      { label: 'Which countries are you authorized to work in?', status: 'filled' },
-    ]);
+    expect(outcomes).toEqual([{ label: 'Which countries are you authorized to work in?', status: 'filled' }]);
   });
 });
 
@@ -982,9 +978,7 @@ describe('matchFieldKey', () => {
     // Live on Roku. "country" appears mid-sentence in a Yes/No question; taking
     // it would put the user's country into a radio group.
     expect(
-      matchFieldKey(
-        'Are you authorized to lawfully work for Roku in the country to which you are applying?',
-      ),
+      matchFieldKey('Are you authorized to lawfully work for Roku in the country to which you are applying?'),
     ).toBeNull();
     expect(matchFieldKey('Which city office would your manager be based in?')).toBeNull();
   });
@@ -995,9 +989,9 @@ describe('matchFieldKey', () => {
 
   it('maps screening-answer questions to their canonical keys', () => {
     expect(matchFieldKey('Which countries are you authorized to work in?')).toBe('authorizedCountries');
-    expect(
-      matchFieldKey('Will you now or in the future require sponsorship to work in this country?'),
-    ).toBe('visaSponsorshipNeeded');
+    expect(matchFieldKey('Will you now or in the future require sponsorship to work in this country?')).toBe(
+      'visaSponsorshipNeeded',
+    );
     expect(matchFieldKey('Desired salary')).toBe('desiredSalary');
     expect(matchFieldKey('What is your notice period?')).toBe('noticePeriod');
     expect(matchFieldKey('Are you willing to relocate?')).toBe('willingToRelocate');

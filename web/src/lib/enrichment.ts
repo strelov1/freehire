@@ -9,8 +9,14 @@ import type { Card as JobCard } from './generated/contracts';
 import { ENGAGEMENT_LABELS } from './generated/contracts';
 import { countryLabel } from './facets';
 import {
-  REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
-  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
+  REGION_LABELS,
+  SENIORITY_LABELS,
+  EMPLOYMENT_LABELS,
+  WORK_MODE_LABELS,
+  CATEGORY_LABELS,
+  DOMAIN_LABELS,
+  COMPANY_TYPE_LABELS,
+  ENGLISH_LEVEL_LABELS,
   RELOCATION_LABELS,
 } from './labels';
 
@@ -80,15 +86,11 @@ export function formatSalary(e: Enrichment, notation: 'compact' | 'standard' = '
   const { salary_min, salary_max } = e;
   if (salary_min == null && salary_max == null) return null;
 
-  const symbol = e.salary_currency
-    ? (CURRENCY_SYMBOL[e.salary_currency] ?? e.salary_currency)
-    : '';
+  const symbol = e.salary_currency ? (CURRENCY_SYMBOL[e.salary_currency] ?? e.salary_currency) : '';
   const period = e.salary_period ? (PERIOD_SUFFIX[e.salary_period] ?? '') : '';
   const tail = `${symbol}${period}`;
 
-  const formatAmount = notation === 'compact'
-    ? compactAmount
-    : (n: number) => n.toLocaleString('en-US');
+  const formatAmount = notation === 'compact' ? compactAmount : (n: number) => n.toLocaleString('en-US');
 
   let amount: string;
   if (salary_min != null && salary_max != null) {
@@ -122,7 +124,7 @@ export function seniorityLabel(e: Pick<Enrichment, 'seniority'>): string | null 
  * reach or an onsite role's area). Null when regions is unknown (empty is
  * unknown, not global).
  */
-function regionLabel(job: Pick<Job, 'regions'>): string | null {
+export function regionLabel(job: Pick<Job, 'regions'>): string | null {
   if (!job.regions?.length) return null;
   return job.regions.map((r) => label(REGION_LABELS, r)).join(', ');
 }
@@ -152,12 +154,7 @@ export function cardTagsFromCard(card: JobCard): string[] {
   return tagRow(card);
 }
 
-function tagRow(f: {
-  work_mode?: string;
-  regions?: string[];
-  employment_type?: string;
-  seniority?: string;
-}): string[] {
+function tagRow(f: { work_mode?: string; regions?: string[]; employment_type?: string; seniority?: string }): string[] {
   const tags: string[] = [];
 
   const arrangement = workArrangement({ work_mode: f.work_mode ?? '' });
@@ -190,12 +187,7 @@ export function summaryFacets(job: Job): Facet[] {
 
   // A scalar facet that maps to a search filter: one clickable value, its text
   // resolved from the code via the facet's label map.
-  const link = (
-    name: string,
-    param: string,
-    code: string | null | undefined,
-    map: Record<string, string>,
-  ) => {
+  const link = (name: string, param: string, code: string | null | undefined, map: Record<string, string>) => {
     if (code) facets.push({ label: name, values: [{ text: label(map, code), href: filterHref(param, code) }] });
   };
   // An array facet (region/country/industry): one clickable value per code. When

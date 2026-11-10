@@ -287,12 +287,12 @@ SELECT p.conversation_id,
        p.notified_at AS prev_notified_at,
        coalesce(p.last_read_message_id, 0)::bigint AS last_read,
        u.oldest_id,
-       mail_recipient(us.email, us.email_verified, us.last_active_at)::text AS email,
+       mail_recipient(us.email, us.email_verified, us.last_active_at, us.banned_at)::text AS email,
        tl.chat_id
 FROM conversation_participants p
 JOIN conversations c ON c.id = p.conversation_id AND c.status IN ('open', 'pending')
 JOIN users us ON us.id = p.user_id
-LEFT JOIN telegram_links tl ON tl.user_id = p.user_id
+LEFT JOIN telegram_links tl ON tl.user_id = p.user_id AND us.banned_at IS NULL
 CROSS JOIN LATERAL (
     SELECT msg.id AS oldest_id, msg.created_at AS oldest_at
     FROM messages msg

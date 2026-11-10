@@ -82,7 +82,7 @@
        the page had begun. The description and the secondary View link come back from
        `sm` up, where there is room for them beside the actions. -->
   <Card
-    class="mb-4 flex items-center justify-between gap-3 p-3 sm:flex-wrap sm:gap-4 sm:p-5"
+    class="mb-6 flex items-center justify-between gap-3 bg-secondary/40 p-3 shadow-none sm:flex-wrap sm:gap-4 sm:px-4 sm:py-3"
   >
     <div class="flex min-w-0 items-center gap-3 sm:items-start">
       <Radar class="size-5 shrink-0 text-muted-foreground sm:mt-0.5" aria-hidden="true" />
@@ -97,13 +97,11 @@
                  statement belongs on the page where the decision is made
                  (/my/talent-network); what this teaser must not do is promise more than
                  that page delivers. -->
-            Appear in a public catalogue — your skills and experience, never your name or
-            contacts.
+            Appear in a public catalogue — your skills and experience, never your name or contacts.
           {:else if listed}
             Your anonymous profile is in the public catalogue.
           {:else}
-            You're in, but not shown yet — your profile needs a CV we have finished
-            reading.
+            You're in, but not shown yet — your profile needs a CV we have finished reading.
           {/if}
         </span>
       </div>
@@ -121,7 +119,8 @@
           View
         </Button>
       {/if}
-      <Button variant={isMember ? 'secondary' : 'primary'} href={resolve('/my/talent-network')}>
+      <!-- Outline: it rides above every section, so a brand fill here outshouted each page's own action. -->
+      <Button variant={isMember ? 'secondary' : 'outline'} size="sm" href={resolve('/my/talent-network')}>
         {isMember ? 'Manage' : 'Join'}
       </Button>
       <button

@@ -25,8 +25,14 @@
   let chartEl = $state<HTMLDivElement | null>(null);
   let valuesEl = $state<HTMLUListElement | null>(null);
 
-  const PERIOD_LABEL: Record<string, string> = { year: 'per year', month: 'per month', day: 'per day', hour: 'per hour' };
-  const seriesLabel = (s: { currency: string; period: string }) => `${s.currency} ${PERIOD_LABEL[s.period] ?? s.period}`;
+  const PERIOD_LABEL: Record<string, string> = {
+    year: 'per year',
+    month: 'per month',
+    day: 'per day',
+    hour: 'per hour',
+  };
+  const seriesLabel = (s: { currency: string; period: string }) =>
+    `${s.currency} ${PERIOD_LABEL[s.period] ?? s.period}`;
 
   // Pinned to en-US and UTC: the page is server-rendered, and a locale or time zone
   // that differs between server and browser would rename a month on hydration.
@@ -42,7 +48,9 @@
     const p = model?.points[i];
     if (!p) return '';
     const r = p.row;
-    const shift = p.mixShift ? `; postings rose at least ${MIX_SHIFT_RATIO}-fold from the month before, so part of the change is which postings are counted` : '';
+    const shift = p.mixShift
+      ? `; postings rose at least ${MIX_SHIFT_RATIO}-fold from the month before, so part of the change is which postings are counted`
+      : '';
     return `${longMonth(p.month)}${p.partial ? ' (so far)' : ''}: median ${money(r.p50)}, middle half ${money(r.p25)} to ${money(r.p75)}, ${r.sample_size.toLocaleString('en-US')} postings${shift}`;
   }
 
@@ -120,8 +128,12 @@
         <line x1="0" y1={model.topY} x2={model.width} y2={model.topY} class="stroke-border" stroke-dasharray="2 3" />
         <!-- Axis text is drawn in the viewBox, so a phone shrinks it to ~4px; there it is
              hidden and the same range is written as text under the chart. -->
-        <text x="0" y={model.topY - 6} class="fill-muted-foreground max-sm:hidden" font-size="12">{money(model.max)}</text>
-        <text x="0" y={model.baselineY - 6} class="fill-muted-foreground max-sm:hidden" font-size="12">{money(model.min)}</text>
+        <text x="0" y={model.topY - 6} class="fill-muted-foreground max-sm:hidden" font-size="12"
+          >{money(model.max)}</text
+        >
+        <text x="0" y={model.baselineY - 6} class="fill-muted-foreground max-sm:hidden" font-size="12"
+          >{money(model.min)}</text
+        >
 
         {#each model.segments as seg, s (s)}
           {#if seg.length > 1}
@@ -145,7 +157,15 @@
             {/each}
           {:else if seg[0]}
             <!-- A month with no neighbour: its band is a bar, there is no line to draw. -->
-            <line x1={seg[0].x} y1={seg[0].yHigh} x2={seg[0].x} y2={seg[0].yLow} class="stroke-brand/25" stroke-width="8" stroke-linecap="round" />
+            <line
+              x1={seg[0].x}
+              y1={seg[0].yHigh}
+              x2={seg[0].x}
+              y2={seg[0].yLow}
+              class="stroke-brand/25"
+              stroke-width="8"
+              stroke-linecap="round"
+            />
           {/if}
         {/each}
 
@@ -192,7 +212,8 @@
           <div class="text-muted-foreground">{hoveredPoint.row.sample_size.toLocaleString('en-US')} postings</div>
           {#if hoveredPoint.mixShift}
             <div class="mt-1 max-w-56 text-muted-foreground">
-              {MIX_SHIFT_RATIO}× or more postings than the month before — part of the change is which postings are counted.
+              {MIX_SHIFT_RATIO}× or more postings than the month before — part of the change is which postings are
+              counted.
             </div>
           {/if}
         </div>
@@ -200,7 +221,11 @@
     </div>
 
     <p class="mt-1 flex justify-between text-xs text-muted-foreground tabular-nums sm:hidden">
-      <span>{longMonth(model.slots[0] ?? currentMonth)} – {longMonth(model.slots[model.slots.length - 1] ?? currentMonth)}</span>
+      <span
+        >{longMonth(model.slots[0] ?? currentMonth)} – {longMonth(
+          model.slots[model.slots.length - 1] ?? currentMonth,
+        )}</span
+      >
       <span>{money(model.min)} – {money(model.max)}</span>
     </p>
 
@@ -209,7 +234,12 @@
     <ul class="sr-only" bind:this={valuesEl}>
       {#each model.points as p, i (p.month)}
         <li>
-          <button type="button" tabindex={i === (hovered ?? 0) ? 0 : -1} onfocus={() => showPoint(i)} onkeydown={onValueKey}>
+          <button
+            type="button"
+            tabindex={i === (hovered ?? 0) ? 0 : -1}
+            onfocus={() => showPoint(i)}
+            onkeydown={onValueKey}
+          >
             {pointText(i)}
           </button>
         </li>
@@ -217,12 +247,11 @@
     </ul>
 
     <p class="mt-2 text-xs text-muted-foreground">
-      Months follow the date a posting was published, and count postings closed since — the
-      table below counts only those open now. A month needs 30 postings with a salary
-      to be shown; a missing month is a gap, not a guess. A dashed step means the month had at
-      least {MIX_SHIFT_RATIO}× the postings of the one before, so part of that change is which
-      postings are counted. The hollow point is the current month, still filling up. These are
-      postings on freehire, not the whole job market.
+      Months follow the date a posting was published, and count postings closed since — the table below counts only
+      those open now. A month needs 30 postings with a salary to be shown; a missing month is a gap, not a guess. A
+      dashed step means the month had at least {MIX_SHIFT_RATIO}× the postings of the one before, so part of that change
+      is which postings are counted. The hollow point is the current month, still filling up. These are postings on
+      freehire, not the whole job market.
     </p>
   </section>
 {/if}

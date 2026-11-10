@@ -95,7 +95,9 @@
           {/if}
           <span class="text-xs text-muted-foreground">proposed {timeAgo(p.created_at, locale())}</span>
           {#if p.status === 'approved'}
-            <span class="text-xs text-destructive">Approved, but its jobs did not all move. Resume to finish the merge.</span>
+            <span class="text-xs text-destructive"
+              >Approved, but its jobs did not all move. Resume to finish the merge.</span
+            >
           {/if}
         </div>
         <div class="flex shrink-0 gap-2">
@@ -110,9 +112,8 @@
     {/each}
   </ul>
   <p class="mt-4 text-xs text-muted-foreground">
-    A merge moves the first company's jobs to the second and redirects its page there. It is
-    recorded as a moderator decision, separate from the automatic merges. The search index
-    catches up on the next scheduled reindex.
+    A merge moves the first company's jobs to the second and redirects its page there. It is recorded as a moderator
+    decision, separate from the automatic merges. The search index catches up on the next scheduled reindex.
   </p>
 {/if}
 

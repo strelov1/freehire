@@ -184,7 +184,7 @@ func seedEmptyFeedProvider(t *testing.T, pool *pgxpool.Pool) {
 // than testing each member in its own function on purpose: a further closing query added
 // later is a one-line addition here, and leaving it out is the exact mistake that would put
 // jobs in the index forever with nothing to notice it. Keep this list in step with the
-// queries that set closed_at in internal/platform/db/queries/jobs.sql.
+// queries that set closed_at in internal/platform/db/queries/jobs*.sql.
 //
 // It is a hand-written list, so it can only be as complete as its last reader: cmd/liveness'
 // two closes (the age rule and the probe's own) were both absent from it until 2026-09-06,

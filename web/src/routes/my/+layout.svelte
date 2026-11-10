@@ -8,9 +8,8 @@
   import { messages, navLabel } from '#lib/i18n/shell.js';
   import { t } from '#lib/i18n/t.js';
   import { cn } from '#lib/ui/index.js';
-  import { accountNav, activeSection, isSectionActive, workspaceFor } from '#lib/accountNav.js';
+  import { accountNav, activeSection } from '#lib/accountNav.js';
   import { accountNavIcons } from '#lib/accountNavIcons.js';
-  import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import AccountNavDrawer from '#lib/components/AccountNavDrawer.svelte';
   import AccountNavGroups from '#lib/components/AccountNavGroups.svelte';
   import { messages as supportMessages } from '#lib/components/SupportPanel.messages.js';
@@ -84,17 +83,17 @@
     <!-- No signed-out branch here: +layout.server.ts redirects an anonymous visitor to
          /signin before this renders, so the shell only ever draws for a session. -->
 
-
     <!-- Below lg: a section switcher naming where you are, opening the drawer. A chevron,
          not a burger: the site header already carries one, and two identical icons a row
          apart read as the same control. The accessible name keeps the visible label in it
          (WCAG 2.5.3), prefixed so a screen reader hears what the button switches. The
          negative right margin aligns the control with the content's right edge.
 
-         It is also the section's visible title below lg: each section's own heading and
-         description carry `max-lg:sr-only`, since repeating the name this button already
-         shows only pushed the content down on a phone. -->
-    <div class="-mr-3 mb-3 flex items-center justify-end gap-1">
+         Each section still shows its own heading below lg (a size smaller), and hides only
+         its description there: with the heading gone too, a phone screen had no visible
+         title at all. -->
+    <!-- lg and up, Help lives in the sidebar's top row; this row held nothing else there. -->
+    <div class="-mr-3 mb-3 flex items-center justify-end gap-1 lg:hidden">
       <button
         type="button"
         onclick={() => (helpOpen = !helpOpen)}
@@ -131,48 +130,51 @@
            an <aside>: a named complementary landmark wrapping a nav of the same name read
            as two "Account sections" landmarks, one inside the other. The nav is the
            landmark. -->
-      <div
-        class={cn(
-          'hidden shrink-0 transition-[width] duration-200 lg:block',
-          collapsed ? 'lg:w-14' : 'lg:w-56',
-        )}
-      >
+      <div class={cn('hidden shrink-0 transition-[width] duration-200 lg:block', collapsed ? 'lg:w-14' : 'lg:w-56')}>
         <!-- top-20 clears the sticky site header (h-14), the offset every other sticky
              side panel uses; at top-6 the collapse toggle sat behind it. Capped to the
              window and scrollable, so on a short window the last links stay reachable. -->
         <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-1 overflow-y-auto">
-          <button
-            type="button"
-            onclick={toggleNav}
-            title={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
-            aria-label={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
-            class={cn(
-              'mb-1 flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
-              collapsed && 'justify-center',
-            )}
-          >
-            {#if collapsed}
-              <PanelLeft class="size-4" />
-            {:else}
-              <PanelLeftClose class="size-4" />
-            {/if}
-          </button>
           <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
             <AccountNavGroups variant="sidebar" iconOnly={collapsed} />
           </nav>
+          <!-- Help and the collapse toggle close the column, so the nav's first item lines up
+               with the section heading instead of under a row of utilities. -->
+          <div
+            class={cn(
+              'mt-2 flex items-center border-t border-border pt-2',
+              collapsed ? 'flex-col gap-1' : 'justify-between',
+            )}
+          >
+            <button
+              type="button"
+              onclick={() => (helpOpen = !helpOpen)}
+              aria-haspopup="dialog"
+              aria-expanded={helpOpen}
+              title={helpLabel}
+              class="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
+              <span class={collapsed ? 'sr-only' : undefined}>{helpLabel}</span>
+            </button>
+            <button
+              type="button"
+              onclick={toggleNav}
+              title={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
+              aria-label={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
+              class="flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              {#if collapsed}
+                <PanelLeft class="size-4" />
+              {:else}
+                <PanelLeftClose class="size-4" />
+              {/if}
+            </button>
+          </div>
         </div>
       </div>
 
       <div class="min-w-0 flex-1">
-        <!-- Above the section's own heading, and above every section rather than only
-             Profile's — the card itself argues why, and collapses to a single row on a
-             phone so it does not push that heading down. All this layer decides is the
-             one page it must not appear on: a banner pointing at the page you are reading
-             is noise. Dismissal is the card's own business. -->
-        {#if workspaceFor(path) === 'seeker' && !isSectionActive(path, '/my/talent-network')}
-          <TalentNetworkInvite />
-        {/if}
-
         {@render children()}
       </div>
     </div>

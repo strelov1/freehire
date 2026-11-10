@@ -30,8 +30,9 @@ export default {
   // Scripts invoked from the CI workflow and from this package's own scripts, which knip
   // reads and cannot resolve: each CI job sets its own working-directory, and `check:dead`
   // reaches svelte-kit through `pnpm --dir web`, so neither binary belongs to the workspace
-  // knip is looking in.
-  ignoreBinaries: ['build', 'check', 'build-storybook', 'svelte-kit'],
+  // knip is looking in. `playwright` is the same shape: ci.yml's `playwright install` step
+  // runs in web/, where it is a devDependency.
+  ignoreBinaries: ['build', 'check', 'build-storybook', 'svelte-kit', 'playwright'],
 
   workspaces: {
     // scripts/*.py is the harvest tooling — Python, invisible to knip either way.
@@ -47,8 +48,11 @@ export default {
     'design-system': {
       entry: ['src/*.stories.ts', 'scripts/*.mjs'],
       project: ['src/**', 'scripts/**'],
-      // Loaded by name from eslint.config.js, never imported.
-      ignoreDependencies: ['svelte-eslint-parser'],
+      // svelte-eslint-parser: loaded by name from eslint.config.js, never imported.
+      // tailwindcss: reached only through CSS (`@import "tailwindcss"` in
+      // .storybook/preview.css) and as @tailwindcss/vite's peer, neither of which knip
+      // follows. tailwind-variants 3 listed it as a peer and hid this; 4 does not.
+      ignoreDependencies: ['svelte-eslint-parser', 'tailwindcss'],
     },
 
     // WXT builds the extension from entrypoints/, so those are the roots — nothing imports

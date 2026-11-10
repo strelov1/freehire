@@ -13,14 +13,15 @@
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { track } from '#lib/analytics.js';
-  import { cardTags, cardTagsFromCard, formatSalary } from '#lib/enrichment.js';
-  import { computeClientMatch, matchTeaser, resolveMatchState } from '#lib/jobMatch.js';
+  import { cardTags, cardTagsFromCard, formatSalary, regionLabel, workArrangement } from '#lib/enrichment.js';
+  import { computeClientMatch, resolveMatchState } from '#lib/jobMatch.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { foreignContentLang, metaDescription } from '#lib/seo.js';
   import type { Job, JobCard } from '#lib/types.js';
   import { Badge, Button, EntityLogo } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { supersedesReality } from '#lib/ghost.js';
+  import { realityBadge } from '#lib/reality.js';
   import CredentialBadge from './CredentialBadge.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import { credentialBadges } from '#lib/credentials.js';
@@ -73,6 +74,8 @@
     dimViewed = true,
     newTab = false,
     compact = false,
+    hideCompany = false,
+    flat = false,
     footer,
     onHide,
     unsave = api.unsaveJob,
@@ -85,6 +88,10 @@
     dimViewed?: boolean;
     newTab?: boolean;
     compact?: boolean;
+    // On the employer's own page every card would repeat its logo, name and backers.
+    hideCompany?: boolean;
+    // A row in a divided list (the feed draws the frame and the dividers), not a framed card.
+    flat?: boolean;
     footer?: Snippet;
     onHide?: (slug: string) => void;
     /** Allows a saved list to serialize removal with pagination. */
@@ -162,6 +169,45 @@
   const freshness = $derived(cardFreshnessBadges(job.posted_at, reality, job.closed_at));
 
   const MAX_SKILLS = 5;
+  // The region is dropped when the flags already name the country ("UK · 🇬🇧 United
+  // Kingdom" said one place twice); with no country it is the only geography and stays.
+  const regionTag = $derived(job.countries?.length ? regionLabel({ regions: job.regions ?? [] }) : null);
+  // Where the role can be done from — the arrangement ("Remote") and, when no flag names a
+  // country, the region — reads as one thought with the flags and the city, so the three
+  // take a line of their own under the facts instead of being scattered across the end of it.
+  const geoTags = $derived(
+    [
+      workArrangement({ work_mode: job.work_mode ?? '' }),
+      job.countries?.length ? null : regionLabel({ regions: job.regions ?? [] }),
+    ].filter((t): t is string => !!t && tags.includes(t)),
+  );
+  // On the employer's own page the rail (logo, name, date) is not drawn, so the date leads
+  // the meta line instead — the same place a reader finds it relative to the title elsewhere.
+  // On touch, Apply and Hide never hide, so the corner cluster is wide; the date then
+  // moves from the rail to the meta line so the company name keeps its room.
+  const touchActions = $derived(!compact && Boolean(applyJob || directApply));
+  const touchPosted = $derived(touchActions && !hideCompany ? posted : null);
+  const metaFacts = $derived(
+    [
+      // With no rail on the employer's own page, its date, views and deadline lead this line.
+      ...(hideCompany
+        ? [
+            posted,
+            views > 0 ? `${formatCount(views)} ${views === 1 ? 'view' : 'views'}` : null,
+            job.application_deadline ? `Apply by ${job.application_deadline}` : null,
+          ]
+        : []),
+      ...tags.filter((t) => t !== regionTag && !geoTags.includes(t)),
+      equity,
+      questions,
+    ].filter((f): f is string => Boolean(f)),
+  );
+  // The meta line continues whatever plain text precedes it — a freshness label, or the
+  // reality age ("Open 87d") when it renders as text rather than a warning pill — so it
+  // opens with a dot exactly then; without one the two ran together as "Open 87d 3 weeks ago".
+  const metaLeadDot = $derived(
+    freshness.length > 0 || (!supersedesReality(ghost, locale()) && realityBadge(reality)?.tone === 'muted'),
+  );
   const shownSkills = $derived(skills.slice(0, MAX_SKILLS));
   const extraSkills = $derived(skills.length - MAX_SKILLS);
 
@@ -184,35 +230,27 @@
   // The viewer's skills as a lowercase set, only when there's a real match to show —
   // used to tint each skill chip (a skill you have vs one you're missing). Null in the
   // locked states, where the teaser below decides the tint instead.
-  const haveSet = $derived(
-    matchState === 'ready' ? new Set(profileSkills.map((s) => s.toLowerCase())) : null,
-  );
+  const haveSet = $derived(matchState === 'ready' ? new Set(profileSkills.map((s) => s.toLowerCase())) : null);
   const match = $derived(matchState === 'ready' ? computeClientMatch(skills, profileSkills) : null);
 
-  // A viewer with no match to show — signed out, or signed in with no skills — gets the
-  // job's deterministic teaser instead of an empty card corner: the same chips and strip,
-  // blurred, as an invitation to sign in. Seeded from the slug, so the figures survive
-  // hydration and agree with the sidebar block on the job's own page.
-  const teaser = $derived(
-    matchState === 'guest' || matchState === 'no-profile'
-      ? matchTeaser(job.public_slug, skills)
-      : null,
-  );
+  // A viewer with no match to show — signed out, or signed in with no skills. It used to
+  // drive a blurred strip and tinted chips on every card; a feed of blurred grey read as a
+  // page that failed to load, so the card now shows neutral chips and one quiet invitation
+  // in its action row. The blurred figures stay on the job's own page.
+  const teaser = $derived((matchState === 'guest' || matchState === 'no-profile') && skills.length > 0);
 
-  // One copy of the invitation, shared by the sighted line under the blurred strip and
-  // the sr-only span that stands in for it — so the two can't drift into different
-  // wording for the same call to action.
+  // One copy of the invitation, shared by the compact card's line and the normal card's
+  // action-row button — so the two can't drift into different wording.
   const matchInvite = $derived(
     matchState === 'guest' ? 'Sign in to see your match' : 'Upload your CV to see your match',
   );
 
-  // A chip is red when the viewer's own profile lacks the skill, or — under the teaser —
-  // when the teaser marked it missing. Both tints come from the same source as the strip
-  // below, so the chips and the percentage can never tell different stories.
-  function chipVariant(skill: string): 'brand' | 'missing' {
+  // A chip is red when the viewer's own profile lacks the skill — the same source as the
+  // strip below, so the chips and the percentage can never tell different stories. With
+  // no profile to compare against there is nothing to tint: the chips are plain facts.
+  function chipVariant(skill: string): 'brand' | 'missing' | 'outline' {
     if (haveSet) return haveSet.has(skill.toLowerCase()) ? 'brand' : 'missing';
-    if (teaser) return teaser.missing.has(skill) ? 'missing' : 'brand';
-    return 'brand';
+    return 'outline';
   }
 
   // Whether the signed-in user has saved this job, read from the shared saved set
@@ -315,7 +353,9 @@
       salary ?? '',
       equity ?? '',
       questions ?? '',
-    ].filter(Boolean).join(', '),
+    ]
+      .filter(Boolean)
+      .join(', '),
   );
 
   // Apply-intent — fired regardless of auth, the same event and shape the job page's own
@@ -353,276 +393,303 @@
      `group` lets the hover-revealed hide control fade in on card hover. -->
 <div
   data-testid="job-card"
-  class="group relative rounded-xl border border-border bg-card transition hover:border-brand hover:bg-accent"
->
-<a
-  href={resolve('/jobs/[slug]', { slug: job.public_slug })}
-  target={newTab ? '_blank' : undefined}
-  rel={newTab ? 'noopener' : undefined}
-  aria-label={linkName}
-  aria-describedby={summary ? summaryId : undefined}
   class={[
-    'block hover:opacity-100',
-    compact ? 'p-3' : 'p-4',
+    'group relative transition hover:bg-accent',
+    !flat && 'rounded-xl border border-border/70 bg-card hover:border-brand',
   ]}
-  class:opacity-90={isViewed}
 >
-  <!-- Company + timestamp rail: a quiet eyebrow that yields the stage to the title.
+  <a
+    href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+    target={newTab ? '_blank' : undefined}
+    rel={newTab ? 'noopener' : undefined}
+    aria-label={linkName}
+    aria-describedby={summary ? summaryId : undefined}
+    class={['block hover:opacity-100', compact ? 'p-3' : 'px-4 py-3.5']}
+    class:opacity-90={isViewed}
+  >
+    <!-- Company + timestamp rail: a quiet eyebrow that yields the stage to the title.
        The name truncates to a single line, so a long company (e.g. "Veterinary
        Emergency Group (VEG)") keeps the logo centred and the card rhythm even
        instead of wrapping into a ragged multi-line header. -->
-  <!-- Reserves the top-right corner for the Save overlay outside this link, so the
+    <!-- Reserves the top-right corner for the Save overlay outside this link, so the
        timestamp never slides under it. Only a compact card keeps Save up here; a normal
        card has moved it into the action row at its foot, leaving the corner free. -->
-  <div class={['flex items-center justify-between gap-3', compact && 'pr-11']}>
-    <div class="flex min-w-0 items-center gap-2">
-      <EntityLogo
-        name={job.company || 'Unknown company'}
-        src={companyLogoUrl(job.company) ?? undefined}
-        shape="square"
-        size="sm"
-      />
-      <span class="truncate text-sm font-medium text-muted-foreground">
-        {job.company || 'Unknown company'}
-      </span>
-      <!-- Who backed the employer, next to the employer. A fact about the company,
+    <!-- Not drawn on the employer's own page (`hideCompany`): with no company the rail would
+       hold only small facts floating above the title, so they lead the meta line instead. -->
+    <div
+      class={[
+        'flex items-center gap-2',
+        !compact && onHide ? 'pr-20' : 'pr-11',
+        touchActions && 'pointer-coarse:pr-30',
+        hideCompany && 'hidden',
+      ]}
+    >
+      <div class="flex min-w-0 items-center gap-2">
+        {#if !hideCompany}
+          <EntityLogo
+            name={job.company || 'Unknown company'}
+            src={companyLogoUrl(job.company) ?? undefined}
+            shape="square"
+            size="sm"
+          />
+          <span class="truncate text-sm font-medium text-muted-foreground">
+            {job.company || 'Unknown company'}
+          </span>
+          <!-- Who backed the employer, next to the employer. A fact about the company,
            so it reads with the company name rather than joining the signal row
            below, which carries role-level facts and already wraps on a phone. The
            whole card is a link, so the mark is display-only here. -->
-      <BackerBadge collections={job.collections} class="shrink-0" />
-    </div>
-    <div class="flex shrink-0 items-center gap-1.5 text-muted-foreground">
-      {#if isViewed}
-        <!-- A quiet "you've seen this" marker, paired with the lighter dim on the card
+          <BackerBadge collections={job.collections} class="shrink-0" />
+        {/if}
+      </div>
+      <!-- The date reads with the company ("Stripe · 2 hours ago"), not pinned to the far
+         edge where it floated alone beside the corner controls. -->
+      {#if !hideCompany && (posted || views > 0 || isViewed || job.application_deadline)}
+        <span class={['text-muted-foreground', touchActions && 'pointer-coarse:hidden']} aria-hidden="true">·</span>
+      {/if}
+      <div class="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+        {#if isViewed}
+          <!-- A quiet "you've seen this" marker, paired with the lighter dim on the card
              so viewed jobs recede without becoming hard to read. The dim is 90%, not
              80%: on the hover fill (`accent`) 80% took muted text to 4.15:1 in the light
              theme, under the 4.5:1 floor; 90% keeps it at 5.2:1 in both themes.
              A check, not an eye: the eye beside it carries the PUBLIC view count, and
              two eyes in one rail meaning different things cannot be told apart. -->
-        <Check class="size-3.5" aria-label="You have viewed this" />
-      {/if}
-      {#if views > 0}
-        <!-- Abbreviated only because the rail shares its width with a company name that
+          <Check class="size-3.5" aria-label="You have viewed this" />
+        {/if}
+        {#if views > 0}
+          <!-- Abbreviated only because the rail shares its width with a company name that
              truncates, and a five-digit figure spelled out crowds the name off the card.
              A screen reader has no such constraint, so it hears the exact figure — the
              same one the job's own page shows. -->
-        <span class="flex items-center gap-1 text-xs tabular-nums">
-          <Eye class="size-3.5" aria-hidden="true" />
-          <span aria-hidden="true">{formatCount(views)}</span>
-          <span class="sr-only">{views} views</span>
-        </span>
-      {/if}
-      {#if posted}
-        <span class="text-xs tabular-nums">{posted}</span>
-      {/if}
-      {#if job.application_deadline}
-        <span class="whitespace-nowrap text-xs tabular-nums">
-          Apply by <time datetime={job.application_deadline}>{job.application_deadline}</time>
-        </span>
-      {/if}
+          <span class="flex items-center gap-1 text-xs tabular-nums">
+            <Eye class="size-3.5" aria-hidden="true" />
+            <span aria-hidden="true">{formatCount(views)}</span>
+            <span class="sr-only">{views} views</span>
+          </span>
+        {/if}
+        {#if posted && !hideCompany}
+          <span class={['text-xs tabular-nums', touchActions && 'pointer-coarse:hidden']}>{posted}</span>
+        {/if}
+        {#if job.application_deadline}
+          <span class="whitespace-nowrap text-xs tabular-nums">
+            Apply by <time datetime={job.application_deadline}>{job.application_deadline}</time>
+          </span>
+        {/if}
+      </div>
     </div>
-  </div>
 
-  <!-- The title is the card's hero — a size up from the body with tight leading, so
+    <!-- The title is the card's hero — a size up from the body with tight leading, so
        the eye lands on the role first.
 
        `lang` sits on the card rather than anywhere above it because one listing
        can hold a Russian, a German and an English title in a row. -->
-  <h3
-    lang={foreignContentLang(job)}
-    class={[
-      'font-semibold leading-snug tracking-tight',
-      compact ? 'mt-2 line-clamp-1 text-base' : 'mt-2.5 line-clamp-2 text-lg sm:text-[1.35rem]',
-    ]}
-  >
-    {job.title}
-  </h3>
+    <h3
+      lang={foreignContentLang(job)}
+      class={[
+        'font-semibold leading-snug tracking-tight',
+        compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-base sm:text-lg',
+        !compact && !hideCompany && 'mt-1.5',
+        hideCompany && 'pr-10',
+      ]}
+    >
+      {job.title}
+    </h3>
 
-  <!-- Signal row: reality chip + the region/employment facets, grouped under the
+    <!-- Signal row: reality chip + the region/employment facets, grouped under the
        title as quiet outline chips so they read as metadata, not decoration. -->
-  <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
+    <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions}
-    <div class="mt-2 flex flex-wrap items-center gap-1.5">
-      <!-- evergreen_posting IS the reality verdict, so showing both chips states one
+    {#if reality || freshness.length > 0 || metaFacts.length > 0 || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && (posted || views > 0 || isViewed || job.application_deadline)) || touchPosted}
+      <div class="mt-2 flex flex-wrap items-center gap-1.5">
+        <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
            checklist; where ghost is silent, reality renders exactly as before. -->
-      {#if directApply}
-        <DirectApplyBadge />
-      {/if}
-      <!-- A fact about the reader, not the posting: they applied to this employer before.
+        {#if directApply}
+          <DirectApplyBadge />
+        {/if}
+        <!-- A fact about the reader, not the posting: they applied to this employer before.
            Ahead of the posting's own signals because it changes what the card is for —
            a second application to the same company is a different decision. -->
-      {#if appliedToCompany}
-        <AppliedCompanyBadge />
-      {/if}
-      {#if supersedesReality(ghost, locale())}
-        <GhostBadge {ghost} />
-      {:else}
-        <RealityBadge {reality} />
-      {/if}
-      <!-- A separate fact from the two above: those describe the POSTING's reality, this
+        {#if appliedToCompany}
+          <AppliedCompanyBadge />
+        {/if}
+        {#if supersedesReality(ghost, locale())}
+          <GhostBadge {ghost} />
+        {:else}
+          <RealityBadge {reality} plain />
+        {/if}
+        <!-- A separate fact from the two above: those describe the POSTING's reality, this
            describes how the EMPLOYER screens. It is neutral and joins them rather than
            superseding either. Renders nothing when nobody has reported. -->
-      <AIInterviewBadge count={job.ai_interview_reports} />
-      <!-- Freshness before the facets: "New" is a fact about right now, the facets are
+        <AIInterviewBadge count={job.ai_interview_reports} />
+        <!-- Freshness before the facets: "New" is a fact about right now, the facets are
            stable attributes of the role. Both sit behind the reality/ghost chip, because
            a warning that a posting may not be real outranks a note that it is fresh.
            The badge's title is the claim's own basis (when it was posted), not a
            restatement of its label. -->
-      {#each freshness as badge (badge.label)}
-        <!-- The tooltip rides a wrapper, not the Badge: the primitive takes only
+        {#each freshness as badge (badge.label)}
+          <!-- The tooltip rides a wrapper, not the Badge: the primitive takes only
              variant/class/children, so a `title` passed to it would be dropped
              silently and the badge would state a claim with its evidence gone. The
              wrapper (rather than a span inside) also makes the badge's own padding
              hoverable — the same shape the job's own page uses. -->
-        <span title={badge.tooltip} class="inline-flex shrink-0">
-          <Badge variant="brand">{badge.label}</Badge>
-        </span>
-      {/each}
-      {#each tags as tag (tag)}
-        <Badge variant="outline">{tag}</Badge>
-      {/each}
-      <!-- Facts about the pay and the cost of applying, after the role's own facets.
-           Outside the tags' each block: a tag's text could equal one of these. -->
-      {#if equity}
-        <Badge variant="outline">{equity}</Badge>
-      {/if}
-      {#if questions}
-        <Badge variant="outline">{questions}</Badge>
-      {/if}
-      <!-- Register-backed employer credentials (visa-sponsor licences). A fact about
+          <span title={badge.tooltip} class="inline-flex shrink-0">
+            <!-- Plain text, not a pill and not the accent: it says the least on the row, so it
+               must not be its loudest shape, and the brand colour is kept for primary actions. -->
+            <span class="text-xs font-semibold text-foreground">{badge.label}</span>
+          </span>
+        {/each}
+        <!-- The role's facets, then the pay and the cost of applying, as one line of quiet
+           text joined by dots rather than a row of outlined chips: the skills below are
+           chips already, and two rows of identical outlines made every card noisy.
+           Indexed keys: a tag's text could equal one of the trailing facts. -->
+        {#if metaFacts.length || salary || touchPosted || (hideCompany && isViewed)}
+          <!-- Inline flow, not a flex row: it wraps between facts the way a sentence does. Each
+               fact is an inline-block carrying the dot that follows it, so a wrapped line ends
+               on "·" and the next one starts on a fact — a flex row left the dots as items of
+               their own, free to open a line. The gap is a margin, not a space: Svelte trims
+               whitespace at an {#each} boundary, which is how "views ·Remote" ran together.
+               The opening dot is a flex item of its own, so when the whole line wraps under
+               the badges it stays behind at the end of theirs; when the touch-only date is all
+               the line holds, it is touch-only too, or a desktop card ends on "New ·". -->
+          {#if metaLeadDot}<span
+              class={[
+                'text-xs text-muted-foreground',
+                !(metaFacts.length || salary || (hideCompany && isViewed)) && 'hidden pointer-coarse:inline',
+              ]}
+              aria-hidden="true">·</span
+            >{/if}
+          <span class="min-w-0 text-xs font-medium text-muted-foreground">
+            <!-- The rail's viewed mark, for the employer's page where the rail is not drawn. -->
+            {#if hideCompany && isViewed}<Check
+                class="mr-1 inline size-3.5 align-text-bottom"
+                aria-label="You have viewed this"
+              />{/if}
+            {#if touchPosted}
+              <span class="mr-1 hidden whitespace-nowrap tabular-nums pointer-coarse:inline-block"
+                >{touchPosted}{#if metaFacts.length || salary}<span aria-hidden="true">&nbsp;·</span>{/if}</span
+              >
+            {/if}
+            {#each metaFacts as fact, i (i)}
+              <span class="mr-1 inline-block whitespace-nowrap"
+                >{fact}{#if i < metaFacts.length - 1 || salary}<span aria-hidden="true">&nbsp;·</span>{/if}</span
+              >
+            {/each}
+            <!-- The pay leads into the same line, in ink, rather than standing alone in bold at
+               the card's foot, where cards with and without it ended at different heights. -->
+            {#if salary}
+              <span class="inline-block whitespace-nowrap font-semibold tabular-nums text-foreground">{salary}</span>
+            {/if}
+          </span>
+        {/if}
+        <!-- Register-backed employer credentials (visa-sponsor licences). A fact about
            the employer, so it sits with the metadata chips and carries its own
            disclaimer rather than reading as a promise about this role. -->
-      <CredentialBadge collections={job.collections} />
-      <!-- Eligible countries as an overlapping flag cluster. Display-only here: the
+        <!-- Not on the employer's own page, whose header already states it for every row. -->
+        {#if !hideCompany}<CredentialBadge collections={job.collections} plain />{/if}
+      </div>
+    {/if}
+
+    <!-- The geography line: arrangement, then the flags, then the city the flags do not name. -->
+    {#if geoTags.length || job.countries?.length || place}
+      <div class="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs font-medium text-muted-foreground">
+        {#each geoTags as tag, i (tag)}
+          {#if i > 0}<span aria-hidden="true">·</span>{/if}
+          <span>{tag}</span>
+        {/each}
+        <!-- Eligible countries as an overlapping flag cluster. Display-only here: the
            whole card is a link, so the flags carry no nested filter links. -->
-      {#if job.countries?.length}
-        <CountryFlagStack codes={job.countries} max={MAX_FLAGS} class="ml-0.5 text-base" />
-      {/if}
-      <!-- The place the flags do not name: one employer's postings in seven cities
-           otherwise read identically until opened. A muted caption beside the flags
-           rather than a chip, so it reads as part of the geography, not a new signal. -->
-      {#if place}
-        <span title={job.location} class="flex min-w-0 max-w-56 items-center gap-1 text-xs font-medium text-muted-foreground">
-          <MapPin class="size-3.5 shrink-0" aria-hidden="true" />
-          <span class="truncate">{place}</span>
-        </span>
-      {/if}
-    </div>
-  {/if}
+        {#if job.countries?.length}
+          <CountryFlagStack
+            codes={job.countries}
+            max={MAX_FLAGS}
+            class={geoTags.length ? 'ml-1 text-base' : 'text-base'}
+          />
+        {/if}
+        <!-- The place the flags do not name: one employer's postings in seven cities
+           otherwise read identically until opened. -->
+        {#if place}
+          <span title={job.location} class="flex min-w-0 max-w-56 items-center gap-1">
+            <MapPin class="size-3.5 shrink-0" aria-hidden="true" />
+            <span class="truncate">{place}</span>
+          </span>
+        {/if}
+      </div>
+    {/if}
 
-  {#if blurb && !compact}
-    <p class="mt-2 line-clamp-2 text-sm text-muted-foreground">{blurb}</p>
-  {/if}
+    {#if blurb && !compact}
+      <p class="mt-2 line-clamp-2 text-sm text-muted-foreground">{blurb}</p>
+    {/if}
 
-  <!-- No corner gutter here any more: Hide moved into the action row at the foot of the
-       card, so nothing overlays this corner and the skills tail and salary can use the
-       full width.
-       On a phone the salary is ~160px of the ~360px card, so sharing a row with it
-       squeezed the chips into a five-line stack. Stacking the two below `sm` gives the
-       chips the full width (three lines become two); from `sm` up the original
-       chips-left / salary-right row is unchanged. -->
-  <div
-    class="mt-3 flex flex-col items-start gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3"
-  >
-    <!-- flex-1 (not the default basis:auto) so the chips get every pixel the salary
-         doesn't need. With basis:auto the row's width is derived from its max-content
-         width, so shorter chips would ironically shrink the row and cause *more*
-         wrapping. -->
-    <!-- Under the teaser the chips are blurred with the strip below, because their
-         green/red tint is part of the same not-yet-computed signal. The blur stops at
-         this container so the salary beside it — real information — stays crisp. The
-         skill names themselves are left announced to assistive technology: they're the
-         job's own facet, and colour was never conveyed there in the first place. -->
-    <div
-      class={[
-        'flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:flex-1',
-        teaser && 'pointer-events-none select-none opacity-90 blur-[1.5px]',
-      ]}
-    >
-      <!-- A long dictionary slug ("event-driven-architecture") would wrap inside its
+    <!-- The skills, as the card's one chip row (the pay rides the meta line above). -->
+    {#if skills.length}
+      <div class="mt-3 flex min-w-0 flex-wrap items-center gap-1.5">
+        <!-- A long dictionary slug ("event-driven-architecture") would wrap inside its
            own chip and stretch the row to two lines, breaking the card's rhythm on a
            phone. Each chip stays one line and truncates with an ellipsis past max-w; the full skill is
            in `title` for anyone who needs it. -->
-      <!-- The label, not the slug: a card read "ci-cd" where the filter panel beside it
+        <!-- The label, not the slug: a card read "ci-cd" where the filter panel beside it
            read "CI/CD". No definition here, unlike the chips on the posting itself —
            these sit inside the card's navigation <a>, where a second activation target
            is invalid markup and the hazard the comment at the top of this file is
            about. The card is for scanning; the posting is where you read. -->
-      {#each shownSkills as skill (skill)}
-        <Badge variant={chipVariant(skill)} class="max-w-[9rem] gap-1">
-          <SkillIcon slug={skill} />
-          <span class="truncate" title={skillLabel(skill)}>{skillLabel(skill)}</span>
-        </Badge>
-      {/each}
-      {#if extraSkills > 0}
-        <span class="text-xs text-muted-foreground">+{extraSkills} skills</span>
-      {/if}
-    </div>
-    {#if salary}
-      <span class="self-end shrink-0 text-sm font-semibold tabular-nums tracking-tight sm:self-auto">
-        {salary}
-      </span>
+        {#each shownSkills as skill (skill)}
+          <Badge variant={chipVariant(skill)} class="max-w-[9rem] gap-1">
+            <SkillIcon slug={skill} />
+            <span class="truncate" title={skillLabel(skill)}>{skillLabel(skill)}</span>
+          </Badge>
+        {/each}
+        {#if extraSkills > 0}
+          <span class="text-xs text-muted-foreground">+{extraSkills} skills</span>
+        {/if}
+      </div>
     {/if}
-  </div>
 
-  <!-- Card-level profile match: the real client-computed coverage bar for a signed-in
-       viewer with a skills profile, the blurred teaser for one without. `blurred` is
-       gated on there being no real match too, so the two props cannot contradict each
-       other and render a genuine score under a blur. No `gutterRight`: the hide control
-       it used to keep clear of now lives in the action row below, not over this corner. -->
-  <JobMatchBar match={match ?? teaser} blurred={!match && !!teaser} />
-  {#if teaser}
-    <!-- The sighted invitation, under the blurred strip rather than over it — the same
-         icon + line the job page's own match block uses below its teaser. `aria-hidden`
-         because the accessible equivalent is the sr-only span below, outside the <a> —
-         this text sits inside the card-wide link and must not join its accessible name.
-         No button here (unlike the job page's): a second activation target inside this
-         <a> would be invalid markup, and the card itself is already the link. -->
-    <div
-      class="mt-1.5 flex items-center justify-center gap-1.5 text-xs text-muted-foreground"
-      aria-hidden="true"
-    >
-      {#if matchState === 'guest'}
-        <Lock class="size-3.5 shrink-0" />
-      {:else}
-        <FileText class="size-3.5 shrink-0" />
-      {/if}
-      {matchInvite}
-    </div>
-  {/if}
-</a>
+    <!-- Card-level profile match: the real client-computed coverage bar, only for a
+       signed-in viewer with a skills profile. -->
+    <JobMatchBar {match} />
+    {#if teaser && compact}
+      <!-- The compact card has no action row, so its invitation stays a caption inside the
+         link. `aria-hidden`: the sr-only span below, outside the <a>, says it instead,
+         so it does not join the link's accessible name. -->
+      <div class="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground" aria-hidden="true">
+        {#if matchState === 'guest'}
+          <Lock class="size-3.5 shrink-0" />
+        {:else}
+          <FileText class="size-3.5 shrink-0" />
+        {/if}
+        {matchInvite}
+      </div>
+    {/if}
+  </a>
 
-<!-- The card link's description (see `summary`). `hidden` keeps it off the page and out
+  <!-- The card link's description (see `summary`). `hidden` keeps it off the page and out
      of browse mode, where the same facts are read from the card itself; a description
      reference still reaches hidden content. -->
-{#if summary}
-  <span id={summaryId} hidden>{summary}</span>
-{/if}
+  {#if summary}
+    <span id={summaryId} hidden>{summary}</span>
+  {/if}
 
-{#if teaser}
-  <!-- The blurred strip is hidden from assistive technology, so this is what stands in
-       for it — the invitation that would actually get this viewer a real match. It sits
-       outside the card link deliberately: `sr-only` is clip-based, not display:none, so
-       inside the <a> it would join the link's accessible name and every card in the feed
-       would announce a sign-in instruction that the link doesn't carry out. -->
-  <span class="sr-only">{matchInvite}</span>
-{/if}
+  {#if teaser && compact}
+    <!-- Stands in for the compact card's aria-hidden caption. Outside the card link on
+       purpose: `sr-only` is clip-based, so inside the <a> it would join the link's name. -->
+    <span class="sr-only">{matchInvite}</span>
+  {/if}
 
-{#if footer && compact}
-  <!-- Optional in-card actions row (e.g. the assistant deck's rationale), divided from
+  {#if footer && compact}
+    <!-- Optional in-card actions row (e.g. the assistant deck's rationale), divided from
        the content and rendered outside the <a> so its controls stay clickable. Its
        inline padding tracks the card's own, or the row would sit 4px out of line.
        A normal card has an action row of its own, and the caller's controls join it
        rather than stacking a second bordered row under the first. -->
-  <div class="border-t border-border px-3 py-2.5">
-    {@render footer()}
-  </div>
-{/if}
+    <div class="border-t border-border px-3 py-2.5">
+      {@render footer()}
+    </div>
+  {/if}
 
-<!-- Save toggle. Outside the <a> (a sibling, not a descendant) either way, so activating
+  <!-- Save toggle. Outside the <a> (a sibling, not a descendant) either way, so activating
      it never navigates to the posting.
 
      Two presentations, one rule: a labelled button on a normal card, the older icon-only
@@ -631,162 +698,157 @@
      unlabelled glyph in a corner asked people to guess that. It says which of the two
      states it is in rather than which action it performs, because the state is what a
      card in a long feed has to answer at a glance. -->
-{#if compact}
-  <button
-    type="button"
-    onclick={toggleSave}
-    disabled={saving}
-    aria-pressed={saved}
-    aria-label={saved ? 'Remove from your board' : 'Save to your board'}
-    title={saved ? 'On your board' : 'Save to board'}
-    class={[
-      'absolute right-2.5 top-4 grid size-8 place-items-center rounded-lg transition hover:bg-accent hover:text-brand disabled:pointer-events-none disabled:opacity-50',
-      saved ? 'text-brand' : 'text-muted-foreground',
-    ]}
-  >
-    <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
-  </button>
-{:else}
-  <!-- The card's action row. Save leads it; Hide, where the feed asked for one, sits at
-       the far end. Hide used to be an overlay pinned to the card's bottom-right corner,
-       which is exactly where this row now is — so it moves in here rather than being
-       covered by it, and it keeps its hover-reveal (a destructive-feeling gesture that
-       should not compete with Save for attention). `pointer-coarse` keeps it visible on
-       touch, which has no hover to reveal anything. -->
-  <div class="flex items-center gap-2 border-t border-border px-4 py-2.5">
-    <!-- No `aria-pressed`, unlike the compact glyph: this button's visible name already
-         changes with the state, so the toggle role would announce the same fact twice in
-         two vocabularies. The glyph needs it precisely because its name cannot.
-         But only half of that visible name is an action. "Save to board" says what
-         activating does; "On your board" is a state, and on its own it leaves a screen
-         reader user with a button whose effect is unstated. So the saved case — and only
-         it — overrides the name with the action, while sighted readers keep the state. -->
+  {#if compact}
     <button
       type="button"
       onclick={toggleSave}
       disabled={saving}
-      aria-label={saved ? 'Remove from saved' : undefined}
+      aria-pressed={saved}
+      aria-label={saved ? 'Remove from your board' : 'Save to your board'}
+      title={saved ? 'On your board' : 'Save to board'}
       class={[
-        'flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
-        saved
-          ? 'bg-brand/10 text-brand hover:bg-brand/15'
-          : 'border border-border text-foreground hover:bg-accent',
+        'absolute right-2.5 top-4 grid size-8 place-items-center rounded-lg transition hover:bg-accent hover:text-brand disabled:pointer-events-none disabled:opacity-50',
+        saved ? 'text-brand' : 'text-muted-foreground',
       ]}
     >
-      <Bookmark class="size-4 {saved ? 'fill-current' : ''}" aria-hidden="true" />
-      {saved ? 'Remove from saved' : 'Save to board'}
+      <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
     </button>
+  {:else}
+    <!-- The card's controls ride its top-right corner, beside the date, rather than a row of
+       their own at its foot: that row added ~40px to every card in a feed of dozens. Save
+       is a bookmark glyph with its title and accessible name; Apply and
+       Hide, where the card has them, hover-reveal beside it (over the date, which they cover
+       only while the pointer is on the card). `pointer-coarse`
+       keeps Hide visible on touch, which has no hover to reveal anything; there Apply shrinks
+       to its icon and the date moves to the meta line, so the company name is not cut to
+       two letters. The rail inside the link reserves the corner (see its `pr-*`), so the
+       date never slides under it. -->
+    <div class="absolute right-3 top-3 flex items-center gap-1">
+      <!-- Direct-apply shortcut (freehire#2755): a way out to the posting's own site
+         without opening the job page first. Outline, never the brand-green primary —
+         that loud slot is reserved for auto-apply on the job page itself, and a list
+         card outshouting the page it links to states the wrong priority. `bg-transparent`
+         drops the outline variant's default `bg-background` fill: unlike a lone button on
+         a page, this one sits on the card's own background, and that fill read as a solid
+         chip louder than every other control on the card — Save carries the same border
+         with no fill, and Apply should read as its equal, not its loudest element.
+         Hover-reveal matches Hide; `pointer-coarse` is load-bearing, not decoration — a
+         phone has no hover, so without it the button is invisible to every touch visitor.
+         `nofollow`: the destination is the poster's own site, which the catalogue never
+         vetted (the same stance JobView.svelte's own Apply link takes) — without it a
+         submitted vacancy buys a followed link from every card in every list. -->
+      {#if directApply}
+        <Button
+          variant="outline"
+          href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+          aria-label="Apply to {job.title}"
+          class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:w-8 pointer-coarse:px-0 pointer-coarse:opacity-100"
+        >
+          <FileText class="hidden size-4 pointer-coarse:block" aria-hidden="true" />
+          <span class="pointer-coarse:sr-only">Apply</span>
+        </Button>
+      {/if}
+      {#if applyJob}
+        <Button
+          variant="outline"
+          href={isAuthenticated() ? applyJob.url : undefined}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          onclick={onApplyClick}
+          aria-label={isAuthenticated()
+            ? `Apply to ${job.title} on the employer's site (opens in a new tab)`
+            : `Choose how to apply to ${job.title}`}
+          class="h-8 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:w-8 pointer-coarse:px-0 pointer-coarse:opacity-100"
+        >
+          <ExternalLink class="size-4" aria-hidden="true" />
+          <span class="pointer-coarse:sr-only">Apply</span>
+        </Button>
+      {/if}
 
-    <!-- The caller's own controls share this row rather than getting a second bordered
-         one under it — two stacked rules under one card read as a layout mistake. -->
-    {@render footer?.()}
+      {#if onHide}
+        <button
+          type="button"
+          onclick={hide}
+          disabled={hiding}
+          aria-label="Hide this job"
+          title="Not interested — hide this job"
+          class="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground opacity-0 transition hover:border-border hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 disabled:pointer-events-none disabled:opacity-50"
+        >
+          <EyeOff class="size-3.5" aria-hidden="true" />
+        </button>
+      {/if}
+      <!-- No `aria-pressed`, unlike the compact glyph: this button's visible name already
+         changes with the state, so the toggle role would announce the same fact twice.
+         "Saved" is a state, though, and on its own leaves a screen reader user with a
+         button whose effect is unstated — so each state's name says what activating does,
+         and keeps the visible word in it. -->
+      <button
+        type="button"
+        onclick={toggleSave}
+        disabled={saving}
+        aria-label={saved ? 'Remove from saved' : 'Save to board'}
+        title={saved ? 'On your board' : 'Save to board'}
+        class={[
+          'grid size-8 shrink-0 place-items-center rounded-lg transition disabled:pointer-events-none disabled:opacity-50',
+          saved
+            ? 'bg-brand/10 text-brand hover:bg-brand/15'
+            : 'text-muted-foreground hover:bg-background hover:text-foreground',
+        ]}
+      >
+        <Bookmark class="size-4 {saved ? 'fill-current' : ''}" aria-hidden="true" />
+        <!-- Icon only, with its title and aria-label carrying the action: twenty labelled Save
+           buttons down a feed were repeated chrome beside each title. -->
+        <span class="sr-only">{saved ? 'Saved' : 'Save'}</span>
+      </button>
+    </div>
 
-    <!-- Apply and Hide share the row's far end, one `ml-auto` wrapper (not one each —
-         two auto margins on adjacent items split the leftover space and pull them
-         apart) pulling both away from Save so the destination and the dismissal read
-         as a distinct group instead of crowding Save's own affirmative slot. -->
-    {#if applyJob || onHide}
-      <div class="ml-auto flex shrink-0 items-center gap-2">
-        <!-- Direct-apply shortcut (freehire#2755): a way out to the posting's own site
-             without opening the job page first. Outline, never the brand-green primary —
-             that loud slot is reserved for auto-apply on the job page itself, and a list
-             card outshouting the page it links to states the wrong priority. `bg-transparent`
-             drops the outline variant's default `bg-background` fill: unlike a lone button on
-             a page, this one sits on the card's own background, and that fill read as a solid
-             chip louder than every other control on the card — Save carries the same border
-             with no fill, and Apply should read as its equal, not its loudest element.
-             Hover-reveal matches Hide; `pointer-coarse` is load-bearing, not decoration — a
-             phone has no hover, so without it the button is invisible to every touch visitor.
-             `nofollow`: the destination is the poster's own site, which the catalogue never
-             vetted (the same stance JobView.svelte's own Apply link takes) — without it a
-             submitted vacancy buys a followed link from every card in every list. -->
-        {#if directApply}
-          <Button
-            variant="outline"
-            href={resolve('/jobs/[slug]', { slug: job.public_slug })}
-            aria-label="Apply to {job.title}"
-            class="h-9 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
-          >
-            Apply
-          </Button>
-        {/if}
-        {#if applyJob}
-          <Button
-            variant="outline"
-            href={isAuthenticated() ? applyJob.url : undefined}
-            target="_blank"
-            rel="nofollow noopener noreferrer"
-            onclick={onApplyClick}
-            aria-label={isAuthenticated()
-              ? `Apply to ${job.title} on the employer's site (opens in a new tab)`
-              : `Choose how to apply to ${job.title}`}
-            class="h-9 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
-          >
-            <ExternalLink class="size-4" aria-hidden="true" />
-            Apply
-          </Button>
-        {/if}
-
-        <!-- A visible border on reveal gives Hide the same weight as Apply and Save
-             instead of a bare hover-fill floating unanchored next to two bordered
-             buttons — it stays transparent at rest, same hover-reveal as before. -->
-        {#if onHide}
-          <button
-            type="button"
-            onclick={hide}
-            disabled={hiding}
-            aria-label="Hide this job"
-            title="Not interested — hide this job"
-            class="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground opacity-0 transition hover:border-border hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 disabled:pointer-events-none disabled:opacity-50"
-          >
-            <EyeOff class="size-3.5" aria-hidden="true" />
-          </button>
-        {/if}
+    <!-- The caller's own controls, when it passes any, get the one row under the content. -->
+    {#if footer}
+      <div class="-mt-1 flex items-center gap-2 px-4 pb-3">
+        {@render footer()}
       </div>
     {/if}
-  </div>
-{/if}
+  {/if}
 
-{#if justSaved && saved && !compact}
-  <!-- The same confirmation the job page shows after applying: saving puts the job on
+  {#if justSaved && saved && !compact}
+    <!-- The same confirmation the job page shows after applying: saving puts the job on
        the tracking board, and this is the way there while the click is still fresh.
        Not in `compact`, where the chat column has no room for a second row. -->
-  <div
-    class="relative z-10 mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand/30 bg-brand-muted px-3 py-2 text-sm"
-  >
-    <span class="inline-flex items-center gap-1.5 font-medium text-brand-strong">
-      <Check class="size-4 shrink-0" aria-hidden="true" /> Saved to your board
-    </span>
-    <a
-      href={resolve('/my/tracking/[id]', { id: job.public_slug })}
-      class="font-medium text-brand-strong underline underline-offset-4"
+    <div
+      class="relative z-10 mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand/30 bg-brand-muted px-3 py-2 text-sm"
     >
-      Open in tracker →
-    </a>
-  </div>
-{/if}
-
-<div class="sr-only" aria-live="polite" aria-atomic="true">
-  {#if showApplyGate && applyJob}
-    Choose how to apply to {job.title}: sign in, sign up, or continue without signing in.
-  {/if}
-</div>
-
-{#if showApplyGate && applyJob}
-  <div
-    class="relative z-10 mx-4 mb-3 flex flex-col gap-3 rounded-lg border border-border bg-secondary px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-  >
-    <span class="text-sm text-pretty">Sign in to keep track of the jobs you apply to.</span>
-    <!-- Two equal buttons over a full-width escape on a phone, where three in a wrapping
-         row left the last one stranded on a line of its own; one row from sm up. -->
-    <div class="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:items-center">
-      <Button variant="primary" onclick={signInFromApplyGate}>Sign in</Button>
-      <Button variant="outline" onclick={signUpFromApplyGate}>Sign up</Button>
-      <Button variant="ghost" class="col-span-2" onclick={viewApplyWithoutSigningIn}>
-        Continue without signing in
-      </Button>
+      <span class="inline-flex items-center gap-1.5 font-medium text-brand-strong">
+        <Check class="size-4 shrink-0" aria-hidden="true" /> Saved to your board
+      </span>
+      <a
+        href={resolve('/my/tracking/[id]', { id: job.public_slug })}
+        class="font-medium text-brand-strong underline underline-offset-4"
+      >
+        Open in tracker →
+      </a>
     </div>
-  </div>
-{/if}
+  {/if}
 
+  <div class="sr-only" aria-live="polite" aria-atomic="true">
+    {#if showApplyGate && applyJob}
+      Choose how to apply to {job.title}: sign in, sign up, or continue without signing in.
+    {/if}
+  </div>
+
+  {#if showApplyGate && applyJob}
+    <div
+      class="relative z-10 mx-4 mb-3 flex flex-col gap-3 rounded-lg border border-border bg-secondary px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <span class="text-sm text-pretty">Sign in to keep track of the jobs you apply to.</span>
+      <!-- Two equal buttons over a full-width escape on a phone, where three in a wrapping
+         row left the last one stranded on a line of its own; one row from sm up. -->
+      <div class="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:items-center">
+        <Button variant="primary" onclick={signInFromApplyGate}>Sign in</Button>
+        <Button variant="outline" onclick={signUpFromApplyGate}>Sign up</Button>
+        <Button variant="ghost" class="col-span-2" onclick={viewApplyWithoutSigningIn}>
+          Continue without signing in
+        </Button>
+      </div>
+    </div>
+  {/if}
 </div>

@@ -130,9 +130,7 @@
   async function reloadAfterMutation() {
     const next = await readBank();
     bank = next;
-    const alive = new Set(
-      [...next.employments.flatMap((e) => e.atoms), ...next.unplaced].map((a) => a.id),
-    );
+    const alive = new Set([...next.employments.flatMap((e) => e.atoms), ...next.unplaced].map((a) => a.id));
     selected = selected.filter((id) => alive.has(id));
   }
 
@@ -178,9 +176,7 @@
     try {
       const next = await readBank();
       bank = next;
-      const alive = new Set(
-        [...next.employments.flatMap((e) => e.atoms), ...next.unplaced].map((a) => a.id),
-      );
+      const alive = new Set([...next.employments.flatMap((e) => e.atoms), ...next.unplaced].map((a) => a.id));
       selected = selected.filter((id) => alive.has(id));
     } catch {
       // The transcript beside it already says what happened; a failed background refetch
@@ -250,12 +246,10 @@
         resumeParse = 'idle';
         return;
       }
-      // oxlint-disable-next-line no-await-in-loop -- the wait between reads is the point
       await new Promise((resolve) => setTimeout(resolve, delay));
       if (token !== resumeWaitToken) return;
       let status: string | undefined;
       try {
-        // oxlint-disable-next-line no-await-in-loop -- a backoff poll is sequential by design
         const resume = await api.getResume();
         status = resume.parse_status;
       } catch {
@@ -273,9 +267,7 @@
     }
   }
 
-  const allAtoms = $derived(
-    bank ? [...bank.employments.flatMap((e) => e.atoms), ...bank.unplaced] : [],
-  );
+  const allAtoms = $derived(bank ? [...bank.employments.flatMap((e) => e.atoms), ...bank.unplaced] : []);
   const jobs = $derived(bank?.employments.filter((e) => e.kind === 'job') ?? []);
   const projects = $derived(bank?.employments.filter((e) => e.kind === 'project') ?? []);
   const atomById = $derived(new Map(allAtoms.map((a) => [a.id, a])));
@@ -511,11 +503,7 @@
 
   /** Create a project employment and attach this unplaced achievement to it. Returns
    *  whether it succeeded, so the row knows whether to leave the promote form. */
-  async function savePromoteToProject(
-    atom: ExperienceAtom,
-    name: string,
-    link: string,
-  ): Promise<boolean> {
+  async function savePromoteToProject(atom: ExperienceAtom, name: string, link: string): Promise<boolean> {
     if (busy || !name.trim()) return false;
     busy = true;
     try {
@@ -621,250 +609,243 @@
 />
 
 <div class="min-w-0">
-    {#if resumeParse === 'failed'}
-      <!-- The CV's parse_status, surfaced where a candidate actually manages experience
+  {#if resumeParse === 'failed'}
+    <!-- The CV's parse_status, surfaced where a candidate actually manages experience
            rather than only once at sign-up. -->
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/5 px-4 py-3 text-sm">
-        <p>Couldn't read your CV — that may be why this looks empty.</p>
-        <Button size="sm" variant="outline" onclick={() => void retryResumeExtraction()}>
-          Try again
-        </Button>
-      </div>
-    {:else if resumeParse === 'waiting'}
-      <div class="mb-4 rounded-lg bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-        Reading your CV again…
-      </div>
-    {/if}
-    {#if loading}
-      <States state="loading" />
-    {:else if loadError}
-      <States state="error" message={loadError} onRetry={() => void load()} />
-    {:else if bank}
-      <!-- An empty bank renders the same sections as a full one: it is the one that most
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/5 px-4 py-3 text-sm">
+      <p>Couldn't read your CV — that may be why this looks empty.</p>
+      <Button size="sm" variant="outline" onclick={() => void retryResumeExtraction()}>Try again</Button>
+    </div>
+  {:else if resumeParse === 'waiting'}
+    <div class="mb-4 rounded-lg bg-muted/40 px-4 py-3 text-sm text-muted-foreground">Reading your CV again…</div>
+  {/if}
+  {#if loading}
+    <States state="loading" />
+  {:else if loadError}
+    <States state="error" message={loadError} onRetry={() => void load()} />
+  {:else if bank}
+    <!-- An empty bank renders the same sections as a full one: it is the one that most
            needs filling, and the assistant is a paid feature, so the manual "Add" buttons
            below are the only way in that every plan has. -->
-      <div class="flex flex-col gap-6">
-        {#if actionError.message}
-          <Alert variant="destructive" live={false} class="items-center py-2">
-            <span class="flex-1">{actionError.message}</span>
-            <button
-              type="button"
-              onclick={() => actionError.clear()}
-              aria-label="Dismiss error"
-              class="-m-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-destructive/10"
-            >
-              <X class="size-4" aria-hidden="true" />
-            </button>
-          </Alert>
-        {/if}
+    <div class="flex flex-col gap-6">
+      {#if actionError.message}
+        <Alert variant="destructive" live={false} class="items-center py-2">
+          <span class="flex-1">{actionError.message}</span>
+          <button
+            type="button"
+            onclick={() => actionError.clear()}
+            aria-label="Dismiss error"
+            class="-m-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-destructive/10"
+          >
+            <X class="size-4" aria-hidden="true" />
+          </button>
+        </Alert>
+      {/if}
 
-        <!-- The header states what this page is FOR, because "experience bank" means nothing
+      <!-- The header states what this page is FOR, because "experience bank" means nothing
              to someone meeting it for the first time. -->
-        <!-- A container query, not a viewport one: the same view fills /my/profile and sits in
+      <!-- A container query, not a viewport one: the same view fills /my/profile and sits in
              the tailoring workspace's ~350px side panel, where a wide viewport still left the
              paragraph one word per line beside the button. -->
-        <div class="@container">
-          <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-            <p class="max-w-prose flex-1 text-sm text-muted-foreground">
-              {#if totalAtoms === 0}
-                Nothing recorded yet. Upload a CV, add a job or project below, or talk it through
-                with the assistant — whatever you confirm is kept here and reused in every CV you
-                build.
-              {:else}
-                {totalAtoms} achievement{totalAtoms === 1 ? '' : 's'} on record. These are what your
-                tailored CVs are built from — edit or remove anything that is not right.
-              {/if}
-            </p>
-            <!-- Capped, and right-aligned only once it shares the row: the example is two lines
+      <div class="@container">
+        <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <p class="max-w-prose flex-1 text-sm text-muted-foreground">
+            {#if totalAtoms === 0}
+              Nothing recorded yet. Upload a CV, add a job or project below, or talk it through with the assistant —
+              whatever you confirm is kept here and reused in every CV you build.
+            {:else}
+              {totalAtoms} achievement{totalAtoms === 1 ? '' : 's'} on record. These are what your tailored CVs are built
+              from — edit or remove anything that is not right.
+            {/if}
+          </p>
+          <!-- Capped, and right-aligned only once it shares the row: the example is two lines
                  of hint, and letting it set the row's width pushed the whole action under the
                  paragraph. Narrow, it takes its own line and follows the text's edge.
                  `basis-full` below `@lg` is what forces that own line — `flex-wrap` alone could not,
                  because the paragraph beside it is `flex-1` (so `flex-basis: 0`) and never claims
                  enough width to push anything down. With the action also refusing to shrink, it held
                  its full 16rem on a phone and crushed the paragraph to one word per line. -->
-            <div
-              class="flex basis-full flex-col items-start gap-1.5 text-left @lg:max-w-[16rem] @lg:basis-auto @lg:shrink-0 @lg:items-end @lg:text-right"
-            >
-              {@render interviewEntry()}
-            </div>
-          </div>
-        </div>
-
-        {#if needsConfirming > 0}
-          <button
-            type="button"
-            onclick={jumpToUnconfirmed}
-            class="rounded-lg bg-warning/5 px-4 py-3 text-left text-sm transition-colors hover:bg-warning/10"
-          >
-            <strong class="font-medium">{needsConfirming} not confirmed.</strong>
-            The assistant recorded these as its own reading of something you said. They will not
-            appear on any CV until you confirm them — click to jump to one, then confirm it as-is,
-            edit it to change it first, or remove it.
-          </button>
-        {/if}
-
-        {#if selected.length > 0}
           <div
-            class="sticky top-14 z-30 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-sm"
-            role="toolbar"
-            aria-label="Selected achievements"
+            class="flex basis-full flex-col items-start gap-1.5 text-left @lg:max-w-[16rem] @lg:basis-auto @lg:shrink-0 @lg:items-end @lg:text-right"
           >
-            <span class="text-sm text-muted-foreground">
-              {selected.length} selected
+            {@render interviewEntry()}
+          </div>
+        </div>
+      </div>
+
+      {#if needsConfirming > 0}
+        <button
+          type="button"
+          onclick={jumpToUnconfirmed}
+          class="rounded-lg bg-warning/5 px-4 py-3 text-left text-sm transition-colors hover:bg-warning/10"
+        >
+          <strong class="font-medium">{needsConfirming} not confirmed.</strong>
+          The assistant recorded these as its own reading of something you said. They will not appear on any CV until you
+          confirm them — click to jump to one, then confirm it as-is, edit it to change it first, or remove it.
+        </button>
+      {/if}
+
+      {#if selected.length > 0}
+        <div
+          class="sticky top-14 z-30 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-sm"
+          role="toolbar"
+          aria-label="Selected achievements"
+        >
+          <span class="text-sm text-muted-foreground">
+            {selected.length} selected
+          </span>
+          <Button size="sm" disabled={!mergeReady || busy} onclick={requestMerge}>Merge</Button>
+          <Button size="sm" variant="secondary" disabled={turnActive} onclick={() => launchInterview(selected)}>
+            <Bot class="size-3.5" />Tailor with assistant
+          </Button>
+          <Button size="sm" variant="ghost" onclick={() => (selected = [])}>Clear</Button>
+          {#if selected.length === 2 && !mergeReady}
+            <span class="basis-full text-xs text-muted-foreground">
+              Merge needs two achievements from the same place (or both untied).
             </span>
-            <Button size="sm" disabled={!mergeReady || busy} onclick={requestMerge}>
-              Merge
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={turnActive}
-              onclick={() => launchInterview(selected)}
-            >
-              <Bot class="size-3.5" />Tailor with assistant
-            </Button>
-            <Button size="sm" variant="ghost" onclick={() => (selected = [])}>
-              Clear
-            </Button>
-            {#if selected.length === 2 && !mergeReady}
-              <span class="basis-full text-xs text-muted-foreground">
-                Merge needs two achievements from the same place (or both untied).
-              </span>
-            {/if}
+          {/if}
+        </div>
+      {/if}
+
+      <div class="flex flex-col gap-4">
+        {@render sectionHeader('job', Briefcase, 'Work history', 'Add experience', () => {
+          addingJob = true;
+          jobCompany = '';
+          jobRole = '';
+          jobLocation = '';
+          jobStart = undefined;
+          jobEnd = undefined;
+          jobCurrent = false;
+        })}
+
+        {#if addingJob}
+          <div class="flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
+            <p class="text-sm font-medium">New experience</p>
+            <FormField label="Company">
+              {#snippet children({ id, describedBy })}
+                <CompanyPicker {id} aria-describedby={describedBy} bind:value={jobCompany} />
+              {/snippet}
+            </FormField>
+            <div class="flex gap-2">
+              <FormField label="Role" class="flex-1">
+                {#snippet children({ id, describedBy })}
+                  <Input {id} aria-describedby={describedBy} bind:value={jobRole} />
+                {/snippet}
+              </FormField>
+              <FormField label="Location" class="flex-1">
+                {#snippet children({ id, describedBy })}
+                  <Input {id} aria-describedby={describedBy} bind:value={jobLocation} />
+                {/snippet}
+              </FormField>
+            </div>
+            <div class="flex gap-2">
+              <PeriodDateInput bind:value={jobStart} placeholder="Start" label="Job start" />
+              {#if !jobCurrent}
+                <PeriodDateInput bind:value={jobEnd} placeholder="End" label="Job end" />
+              {/if}
+            </div>
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" bind:checked={jobCurrent} class="h-4 w-4" />
+              <span class="text-muted-foreground">I currently work here</span>
+            </label>
+            <div class="flex gap-2">
+              <Button size="sm" variant="primary" disabled={busy || !jobCompany.trim()} onclick={createJob}>Save</Button
+              >
+              <Button size="sm" variant="ghost" onclick={() => (addingJob = false)}>Cancel</Button>
+            </div>
           </div>
         {/if}
 
-        <div class="flex flex-col gap-4">
-          {@render sectionHeader('job', Briefcase, 'Work history', 'Add experience', () => {
-            addingJob = true;
-            jobCompany = '';
-            jobRole = '';
-            jobLocation = '';
-            jobStart = undefined;
-            jobEnd = undefined;
-            jobCurrent = false;
-          })}
-
-          {#if addingJob}
-            <div class="flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
-              <p class="text-sm font-medium">New experience</p>
-              <FormField label="Company">
-                {#snippet children({ id, describedBy })}
-                  <CompanyPicker {id} aria-describedby={describedBy} bind:value={jobCompany} />
-                {/snippet}
-              </FormField>
-              <div class="flex gap-2">
-                <FormField label="Role" class="flex-1">
-                  {#snippet children({ id, describedBy })}
-                    <Input {id} aria-describedby={describedBy} bind:value={jobRole} />
-                  {/snippet}
-                </FormField>
-                <FormField label="Location" class="flex-1">
-                  {#snippet children({ id, describedBy })}
-                    <Input {id} aria-describedby={describedBy} bind:value={jobLocation} />
-                  {/snippet}
-                </FormField>
-              </div>
-              <div class="flex gap-2">
-                <PeriodDateInput bind:value={jobStart} placeholder="Start" label="Job start" />
-                {#if !jobCurrent}
-                  <PeriodDateInput bind:value={jobEnd} placeholder="End" label="Job end" />
-                {/if}
-              </div>
-              <label class="flex items-center gap-2 text-sm">
-                <input type="checkbox" bind:checked={jobCurrent} class="h-4 w-4" />
-                <span class="text-muted-foreground">I currently work here</span>
-              </label>
-              <div class="flex gap-2">
-                <Button size="sm" variant="primary" disabled={busy || !jobCompany.trim()} onclick={createJob}>Save</Button>
-                <Button size="sm" variant="ghost" onclick={() => (addingJob = false)}>Cancel</Button>
-              </div>
-            </div>
-          {/if}
-
-          <div class="flex flex-col gap-6">
-            {#each jobs as employment (employment.id)}
-              {@render employmentCard(employment)}
-            {/each}
-          </div>
-          {#if jobs.length === 0 && !addingJob}
-            <p class="text-sm text-muted-foreground">Nothing here yet.</p>
-          {/if}
+        <div class="flex flex-col gap-6">
+          {#each jobs as employment (employment.id)}
+            {@render employmentCard(employment)}
+          {/each}
         </div>
-
-        <div class="flex flex-col gap-4">
-          {@render sectionHeader('project', FolderKanban, 'Projects', 'Add project', () => {
-            addingProject = true;
-            projName = '';
-            projLink = '';
-            projStart = undefined;
-            projEnd = undefined;
-          })}
-
-          {#if addingProject}
-            <div class="flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
-              <p class="text-sm font-medium">New project</p>
-              <FormField label="Name">
-                {#snippet children({ id, describedBy })}
-                  <Input {id} aria-describedby={describedBy} bind:value={projName} />
-                {/snippet}
-              </FormField>
-              <FormField label="Link" hint="Optional">
-                {#snippet children({ id, describedBy })}
-                  <Input {id} aria-describedby={describedBy} bind:value={projLink} placeholder="https://…" />
-                {/snippet}
-              </FormField>
-              <div class="flex gap-2">
-                <PeriodDateInput bind:value={projStart} placeholder="Start" label="Project start" />
-                <PeriodDateInput bind:value={projEnd} placeholder="End" label="Project end" />
-              </div>
-              <div class="flex gap-2">
-                <Button size="sm" variant="primary" disabled={busy || !projName.trim()} onclick={createProject}>Save</Button>
-                <Button size="sm" variant="ghost" onclick={() => (addingProject = false)}>Cancel</Button>
-              </div>
-            </div>
-          {/if}
-
-          <div class="flex flex-col gap-6">
-            {#each projects as employment (employment.id)}
-              {@render employmentCard(employment)}
-            {/each}
-          </div>
-          {#if projects.length === 0 && !addingProject}
-            <p class="text-sm text-muted-foreground">Nothing here yet.</p>
-          {/if}
-        </div>
-
-        {#if bank.unplaced.length > 0}
-          <section class="flex flex-col gap-2">
-            <div class="flex flex-col gap-0.5">
-              <h3 id="experience-section-unplaced" tabindex="-1" class="text-sm font-semibold text-foreground focus:outline-none">
-                Not tied to a role
-              </h3>
-              <p class="text-xs text-muted-foreground">
-                Achievements from chat with no job or project yet. Save one as a project when it belongs to portfolio work.
-              </p>
-            </div>
-            <ul class="flex flex-col gap-1.5">
-              {#each sortNeedsAttentionFirst(bank.unplaced) as atom (atom.id)}
-                <ExperienceAchievementRow
-                  {atom}
-                  selected={selected.includes(atom.id)}
-                  {busy}
-                  {turnActive}
-                  scrollToAtomId={bannerTarget?.employmentId === null ? bannerTarget.atomId : undefined}
-                  onToggleSelect={toggleSelect}
-                  onConfirm={confirmAtom}
-                  onSaveEdit={saveAtomEdit}
-                  onSavePromote={savePromoteToProject}
-                  onRemove={requestRemove}
-                />
-              {/each}
-            </ul>
-          </section>
+        {#if jobs.length === 0 && !addingJob}
+          <p class="text-sm text-muted-foreground">Nothing here yet.</p>
         {/if}
       </div>
-    {/if}
+
+      <div class="flex flex-col gap-4">
+        {@render sectionHeader('project', FolderKanban, 'Projects', 'Add project', () => {
+          addingProject = true;
+          projName = '';
+          projLink = '';
+          projStart = undefined;
+          projEnd = undefined;
+        })}
+
+        {#if addingProject}
+          <div class="flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
+            <p class="text-sm font-medium">New project</p>
+            <FormField label="Name">
+              {#snippet children({ id, describedBy })}
+                <Input {id} aria-describedby={describedBy} bind:value={projName} />
+              {/snippet}
+            </FormField>
+            <FormField label="Link" hint="Optional">
+              {#snippet children({ id, describedBy })}
+                <Input {id} aria-describedby={describedBy} bind:value={projLink} placeholder="https://…" />
+              {/snippet}
+            </FormField>
+            <div class="flex gap-2">
+              <PeriodDateInput bind:value={projStart} placeholder="Start" label="Project start" />
+              <PeriodDateInput bind:value={projEnd} placeholder="End" label="Project end" />
+            </div>
+            <div class="flex gap-2">
+              <Button size="sm" variant="primary" disabled={busy || !projName.trim()} onclick={createProject}
+                >Save</Button
+              >
+              <Button size="sm" variant="ghost" onclick={() => (addingProject = false)}>Cancel</Button>
+            </div>
+          </div>
+        {/if}
+
+        <div class="flex flex-col gap-6">
+          {#each projects as employment (employment.id)}
+            {@render employmentCard(employment)}
+          {/each}
+        </div>
+        {#if projects.length === 0 && !addingProject}
+          <p class="text-sm text-muted-foreground">Nothing here yet.</p>
+        {/if}
+      </div>
+
+      {#if bank.unplaced.length > 0}
+        <section class="flex flex-col gap-2">
+          <div class="flex flex-col gap-0.5">
+            <h3
+              id="experience-section-unplaced"
+              tabindex="-1"
+              class="text-sm font-semibold text-foreground focus:outline-none"
+            >
+              Not tied to a role
+            </h3>
+            <p class="text-xs text-muted-foreground">
+              Achievements from chat with no job or project yet. Save one as a project when it belongs to portfolio
+              work.
+            </p>
+          </div>
+          <ul class="flex flex-col gap-1.5">
+            {#each sortNeedsAttentionFirst(bank.unplaced) as atom (atom.id)}
+              <ExperienceAchievementRow
+                {atom}
+                selected={selected.includes(atom.id)}
+                {busy}
+                {turnActive}
+                scrollToAtomId={bannerTarget?.employmentId === null ? bannerTarget.atomId : undefined}
+                onToggleSelect={toggleSelect}
+                onConfirm={confirmAtom}
+                onSaveEdit={saveAtomEdit}
+                onSavePromote={savePromoteToProject}
+                onRemove={requestRemove}
+              />
+            {/each}
+          </ul>
+        </section>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 {#snippet employmentCard(employment: ExperienceEmploymentWithAtoms)}

@@ -136,6 +136,10 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, formerEmployers: on });
   }
 
+  setWatchlist(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, watchlist: on });
+  }
+
   setApplyQuestionsMax(n: number | null) {
     this.#url.setNow({ ...this.#url.value, applyQuestionsMax: n });
   }

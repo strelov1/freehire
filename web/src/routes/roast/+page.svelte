@@ -152,18 +152,11 @@
   <header class="flex flex-col items-center gap-3 text-center">
     <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Roast my CV</h1>
     <p class="max-w-xl text-balance text-muted-foreground">
-      Drop your CV for an instant, no-account ATS score — and see how many open roles your
-      skills actually reach.
+      Drop your CV for an instant, no-account ATS score — and see how many open roles your skills actually reach.
     </p>
   </header>
 
-  <input
-    type="file"
-    accept="application/pdf,.pdf"
-    class="hidden"
-    bind:this={fileInput}
-    onchange={onFile}
-  />
+  <input type="file" accept="application/pdf,.pdf" class="hidden" bind:this={fileInput} onchange={onFile} />
   <!-- A drop-target enhancement over the button inside, which is fully keyboard-accessible
        on its own. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -213,8 +206,7 @@
           </p>
         {:else}
           <p data-testid="roast-role-unscoped" class="text-sm text-muted-foreground">
-            We couldn't tell which role this CV is for — this reading covers the whole
-            catalogue.
+            We couldn't tell which role this CV is for — this reading covers the whole catalogue.
           </p>
         {/if}
         <label class="flex items-center gap-2 text-xs text-muted-foreground">

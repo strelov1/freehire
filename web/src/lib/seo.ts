@@ -33,9 +33,7 @@ const namedEntities: Record<string, string> = {
 };
 
 function decodeEntities(value: string): string {
-  const quotes = value
-    .replace(/&amp;(?:amp;)?#39;/g, '&#39;')
-    .replace(/&amp;(?:amp;)?#34;/g, '&#34;');
+  const quotes = value.replace(/&amp;(?:amp;)?#39;/g, '&#39;').replace(/&amp;(?:amp;)?#34;/g, '&#34;');
   return quotes.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]*);/g, (entity, body: string) => {
     if (body.charAt(0) !== '#') return namedEntities[body] ?? entity;
     const hex = body.startsWith('#x');
@@ -224,16 +222,9 @@ type CountryRef = { '@type': 'Country'; name: string };
 // them (the precise fact), else the countries its region groups. A worldwide
 // reach ('global') groups none and states no requirement, which is correct — it
 // restricts nobody.
-function applicantRegions(
-  regions?: string[],
-  countries?: string[]
-): CountryRef | CountryRef[] | undefined {
-  const iso = countries?.length
-    ? countries
-    : (regions ?? []).flatMap((r) => REGION_COUNTRIES[r] ?? []);
-  const named = [
-    ...new Set(iso.map(countryName).filter((n): n is string => Boolean(n))),
-  ].sort();
+function applicantRegions(regions?: string[], countries?: string[]): CountryRef | CountryRef[] | undefined {
+  const iso = countries?.length ? countries : (regions ?? []).flatMap((r) => REGION_COUNTRIES[r] ?? []);
+  const named = [...new Set(iso.map(countryName).filter((n): n is string => Boolean(n)))].sort();
   if (named.length === 0) return undefined;
   const entries: CountryRef[] = named.map((name) => ({ '@type': 'Country', name }));
   // schema.org reads a lone object and a one-element array alike; emit the object
@@ -289,10 +280,7 @@ function isPlaceholderLocation(location: string): boolean {
 //
 // Returns undefined for a string that names no place, so the caller omits
 // jobLocation rather than emitting an unresolvable one.
-function jobLocationFromText(
-  location: string,
-  countries?: string[]
-): Record<string, unknown> | undefined {
+function jobLocationFromText(location: string, countries?: string[]): Record<string, unknown> | undefined {
   if (isPlaceholderLocation(location)) return undefined;
   const address: Record<string, unknown> = {
     '@type': 'PostalAddress',
@@ -607,7 +595,7 @@ export function collectionPageJsonLd(
   title: string,
   description: string,
   url: string,
-  items: { name: string; url: string }[]
+  items: { name: string; url: string }[],
 ): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
@@ -637,7 +625,7 @@ export function jobListItems(jobs: Job[], origin: string): { name: string; url: 
  *  the directory lists fit without a cast. */
 export function companyListItems(
   companies: { name: string; slug: string }[],
-  origin: string
+  origin: string,
 ): { name: string; url: string }[] {
   return companies.map((c) => ({ name: c.name, url: `${origin}/companies/${c.slug}` }));
 }
@@ -656,7 +644,7 @@ export function datasetJsonLd(
   description: string,
   url: string,
   origin: string,
-  distributions: { name: string; contentUrl: string }[] = []
+  distributions: { name: string; contentUrl: string }[] = [],
 ): Record<string, unknown> {
   const ld: Record<string, unknown> = {
     '@context': 'https://schema.org',
@@ -742,10 +730,7 @@ export function webApiJsonLd(origin: string): Record<string, unknown> {
 /** schema.org SoftwareApplication for the CLI page. Free and open source, so the
  *  zero-price `offers` is a fact rather than a marketing claim; `softwareHelp`
  *  points back at the page that documents it. */
-export function cliApplicationJsonLd(
-  origin: string,
-  repositories: string[]
-): Record<string, unknown> {
+export function cliApplicationJsonLd(origin: string, repositories: string[]): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -767,10 +752,7 @@ export function cliApplicationJsonLd(
  *  is passed in rather than written here so it comes from the same constant the
  *  page's buttons use (`extensionLinks.ts`) — structured data must not name a
  *  destination the page does not offer. One URL per store the page links. */
-export function extensionApplicationJsonLd(
-  origin: string,
-  installUrls: string[]
-): Record<string, unknown> {
+export function extensionApplicationJsonLd(origin: string, installUrls: string[]): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',

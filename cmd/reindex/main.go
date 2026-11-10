@@ -14,8 +14,10 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -61,6 +63,15 @@ func main() {
 }
 
 func run() int {
+	// -facetd-only rebuilds facetd (FACETD_URL) alone: no Meilisearch.
+	facetdOnly := flag.Bool("facetd-only", false, "rebuild only facetd (needs FACETD_URL), skipping Meilisearch")
+	flag.Parse()
+	facetdURL := os.Getenv("FACETD_URL")
+	if *facetdOnly && facetdURL == "" {
+		log.Print("config: -facetd-only needs FACETD_URL")
+		return 1
+	}
+
 	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
@@ -122,7 +133,7 @@ func run() int {
 	// Bootstrap owns config + pool, so this required-config check lands just after
 	// the pool opens rather than before it. The connect is cheap and cleanup closes
 	// it on this early return, so the only cost of a missing key is one DB handshake.
-	if cfg.MeiliKey == "" {
+	if cfg.MeiliKey == "" && !*facetdOnly {
 		log.Print("config: MEILI_MASTER_KEY is required")
 		return 1
 	}
@@ -134,9 +145,11 @@ func run() int {
 
 	// Guard free disk for the swap rebuild up front — BEFORE the expensive recompute —
 	// so a disk refusal is a true no-op (no prod writes, no full-catalogue scans).
-	if err := guardDisk(rcfg.MeiliDataDir, rcfg.MinFreeGB, statfsFree); err != nil {
-		log.Printf("reindex: %v", err)
-		return 1
+	if !*facetdOnly {
+		if err := guardDisk(rcfg.MeiliDataDir, rcfg.MinFreeGB, statfsFree); err != nil {
+			log.Printf("reindex: %v", err)
+			return 1
+		}
 	}
 
 	// The duplicate-marker passes run only when asked for (REINDEX_DEDUP=1) — see
@@ -180,15 +193,26 @@ func run() int {
 	// Only from here does the rebuild write to Meilisearch, so only from here does it compete
 	// with the drain, whose pushes re-merge the whole index. Everything above reads Postgres:
 	// pausing the drain from the start kept new jobs and alerts waiting about 6 hours for nothing.
-	releaseDrain, err := worker.HoldPause(ctx, cfg.RedisURL, worker.SearchDrainJob, drainHoldTTL)
-	if err != nil {
-		log.Printf("reindex: could not pause the drain, the load will compete with it: %v", err)
-	} else {
-		defer releaseDrain()
+	if !*facetdOnly {
+		releaseDrain, err := worker.HoldPause(ctx, cfg.RedisURL, worker.SearchDrainJob, drainHoldTTL)
+		if err != nil {
+			log.Printf("reindex: could not pause the drain, the load will compete with it: %v", err)
+		} else {
+			defer releaseDrain()
+		}
 	}
-	log.Print("reindex: target=facet scope=full mode=swap")
+	var rb rebuilder
+	switch {
+	case *facetdOnly:
+		rb = newFacetdRebuild(facetdURL)
+	case facetdURL != "":
+		rb = &teeRebuild{primary: client.NewFacetRebuild(), secondary: newFacetdRebuild(facetdURL)}
+	default:
+		rb = client.NewFacetRebuild()
+	}
+	log.Printf("reindex: target=facet scope=full mode=swap facetd=%t facetd_only=%t", facetdURL != "", *facetdOnly)
 	done = worker.Stage("index and swap")
-	indexed, skipped, err := reindexFull(ctx, reader, client.NewFacetRebuild(), lookup, geo, q, q, time.Now())
+	indexed, skipped, err := reindexFull(ctx, reader, rb, lookup, geo, q, time.Now())
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
@@ -196,6 +220,14 @@ func run() int {
 	done()
 	worker.ReportWork(int64(indexed+skipped), int64(indexed))
 	log.Printf("reindex done: target=facet scope=full indexed=%d skipped=%d", indexed, skipped)
+	if *facetdOnly {
+		return 0 // Meilisearch was not rebuilt: the outbox rows are still owed to it
+	}
+	if t, ok := rb.(*teeRebuild); ok && t.secondaryDown {
+		// facetd kept its old generation and never saw these rows' changes; the drain still owes them to it
+		log.Printf("reindex: facetd rebuild failed, search_outbox entries kept for the drain")
+		return 0
+	}
 
 	// Best-effort: the reindex itself already succeeded, so a purge failure just leaves
 	// those rows for the next cycle rather than failing this run.
@@ -293,7 +325,7 @@ type rebuilder interface {
 // index never held them, so unlike the in-place path there is nothing to delete).
 // fetch pages by keyset (id > last seen) so rows inserted or re-ordered during the
 // run cannot be skipped or repeated.
-func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo closureGeoLookup, chunks search.ChunkLister, forms applyform.FormLister, now time.Time) (int, int, error) {
+func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo closureGeoLookup, forms applyform.FormLister, now time.Time) (int, int, error) {
 	if err := b.Prepare(ctx); err != nil {
 		return 0, 0, err
 	}
@@ -315,7 +347,7 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 		}
 	}()
 
-	indexed, skipped, err := streamOpenDocs(ctx, reader, lookup, geo, chunks, forms, now, b.Push)
+	indexed, skipped, err := streamOpenDocs(ctx, reader, lookup, geo, forms, now, b.Push)
 	if err != nil {
 		return indexed, skipped, err
 	}
@@ -334,10 +366,9 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 // differed only in the per-batch sink; that path is gone (see openspec/changes/
 // drop-hybrid-search-pgvector-similar), so reindexFull is its only caller now.
 //
-// chunks supplies each batch's description vectors in one query per batch; nil (tests
-// that do not exercise vectors) writes every document with none. forms supplies each
-// batch's application-form question counts the same way; nil writes none.
-func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo closureGeoLookup, chunks search.ChunkLister, forms applyform.FormLister, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
+// forms supplies each batch's application-form question counts in one query per batch;
+// nil writes none.
+func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo closureGeoLookup, forms applyform.FormLister, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
 	var indexed atomic.Int64
 	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
 		log.Printf("reindex: progress indexed=%d", indexed.Load())
@@ -354,16 +385,13 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 		skipped += len(corrupted)
 
 		if len(jobs) > 0 {
-			desc, err := batchChunkVectors(ctx, chunks, jobs)
+			docs, _, err := splitJobs(jobs, lookup, geo, now) // closed jobs (deleteIDs) are dropped, not indexed
 			if err != nil {
 				return int(indexed.Load()), skipped, err
 			}
-			docs, _, err := splitJobs(jobs, lookup, geo, desc, now) // closed jobs (deleteIDs) are dropped, not indexed
-			if err != nil {
-				return int(indexed.Load()), skipped, err
-			}
-			// Asked for the whole page, like the vectors above. A job with no captured form
-			// is absent from the map and its document carries no count — unknown, not short.
+			// Asked for the whole page, including the jobs splitJobs dropped: filtering first
+			// would mean deciding indexability twice. A job with no captured form is absent
+			// from the map and its document carries no count — unknown, not short.
 			questions, err := applyform.QuestionCounts(ctx, forms, pageIDs(jobs))
 			if err != nil {
 				return int(indexed.Load()), skipped, err
@@ -386,16 +414,6 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 		afterID = lastID
 	}
 	return int(indexed.Load()), skipped, nil
-}
-
-// batchChunkVectors reads one page's description vectors. Every id in the page is asked
-// for, including the ones splitJobs will still drop (an unresolved category, no visible
-// description): filtering first would mean deciding indexability twice.
-func batchChunkVectors(ctx context.Context, chunks search.ChunkLister, jobs []db.Job) (map[int64][][]float32, error) {
-	if chunks == nil {
-		return nil, nil
-	}
-	return search.ChunkVectorsForJobs(ctx, chunks, pageIDs(jobs))
 }
 
 // pageIDs is the ids of one page of the reindex feed.
@@ -697,7 +715,7 @@ var unseenWindows = search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(
 // carrying its reality signal, classified against `now` and its cluster counts);
 // closed, private, or withheld jobs become deletions so they leave the index (see
 // search.Withheld and the job-search spec).
-func splitJobs(jobs []db.Job, lookup realityLookup, geo closureGeoLookup, desc map[int64][][]float32, now time.Time) ([]search.JobDocument, []int64, error) {
+func splitJobs(jobs []db.Job, lookup realityLookup, geo closureGeoLookup, now time.Time) ([]search.JobDocument, []int64, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	deleteIDs := make([]int64, 0, len(jobs))
 	for _, j := range jobs {
@@ -717,7 +735,7 @@ func splitJobs(jobs []db.Job, lookup realityLookup, geo closureGeoLookup, desc m
 		if lookup != nil {
 			repost, mass = lookup(j.CompanySlug, j.RoleFingerprint.String)
 		}
-		doc, err := search.FromJob(j, desc[j.ID], sourceTypeOf(j.Source))
+		doc, err := search.FromJob(j, sourceTypeOf(j.Source))
 		if err != nil {
 			return nil, nil, err
 		}

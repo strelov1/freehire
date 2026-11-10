@@ -10,8 +10,8 @@ import {
 } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the twenty-three account sections', () => {
-    expect(accountNav).toHaveLength(23);
+  it('lists the twenty-four account sections', () => {
+    expect(accountNav).toHaveLength(24);
   });
 
   // Submissions and the invite link are tabs of Contributions and Plan now; their old
@@ -60,9 +60,9 @@ describe('accountNav config', () => {
   it('every item links under /my/ (or to a named space outside it) and has a label', () => {
     // Interview buddies needs the full width the cabinet's sidebar takes, so it lives at
     // /buddies; the cabinet still leads there.
-    const outsideMy = ['/buddies'];
+    const outsideMy = new Set(['/buddies']);
     for (const item of accountNav) {
-      expect(item.href.startsWith('/my/') || outsideMy.includes(item.href)).toBe(true);
+      expect(item.href.startsWith('/my/') || outsideMy.has(item.href)).toBe(true);
       expect(item.label.length).toBeGreaterThan(0);
     }
   });
@@ -159,11 +159,10 @@ describe('isSectionActive', () => {
 });
 
 describe('the burger menu duplicates what is opened from anywhere', () => {
-  it('names the tailoring section after what it is for', () => {
-    // "CV builder" described the tool this grew out of; every CV in here is aimed at one
-    // vacancy, which is what the section is actually for.
-    const tailor = accountNav.find((i) => i.href === '/my/cvs');
-    expect(tailor?.label).toBe('Tailor');
+  it('names the CV section after the page it opens', () => {
+    // The sidebar label and the page heading must agree: "Tailor" opened a page titled CVs.
+    const cvs = accountNav.find((i) => i.href === '/my/cvs');
+    expect(cvs?.label).toBe('CVs');
   });
 });
 
@@ -184,7 +183,7 @@ describe('workspaceFor', () => {
 
   // A session is read by both parties, so it has an address per role: one shared address
   // dropped a mentor into Job search the moment they opened a booking.
-  it("keeps a session in the workspace of the side that opened it", () => {
+  it('keeps a session in the workspace of the side that opened it', () => {
     expect(workspaceFor('/my/mentorship/bookings/abc123')).toBe('mentor');
     expect(workspaceFor('/my/mentorship/sessions/abc123')).toBe('seeker');
   });
@@ -231,13 +230,13 @@ describe('workspaceNav', () => {
           '/my/activity',
           '/my/tracking',
           '/my/inbox',
+          '/my/watchlist',
           '/my/market-pulse',
           '/my/assistant',
           '/my/cvs',
         ],
       ],
-      ['found', ['/my/talent-network']],
-      ['help', ['/my/referrals', '/my/mentorship']],
+      ['network', ['/my/talent-network', '/my/referrals', '/my/mentorship']],
       ['settings', SETTINGS],
     ]);
   });
@@ -265,8 +264,8 @@ describe('workspaceNav', () => {
 
   // A group the gate empties must disappear rather than render as a lone heading.
   it('drops the beta-only mentorship entry, and never leaves an empty group', () => {
-    const help = workspaceNav('seeker', false, false).find((g) => g.group === 'help');
-    expect(help?.items.map((i) => i.href)).toEqual(['/my/referrals']);
+    const network = workspaceNav('seeker', false, false).find((g) => g.group === 'network');
+    expect(network?.items.map((i) => i.href)).toEqual(['/my/talent-network', '/my/referrals']);
     expect(workspaceNav('mentor', false, false).map((g) => g.group)).toEqual(['settings']);
   });
 });
@@ -277,7 +276,7 @@ describe('visibleWorkspaces', () => {
     expect(visibleWorkspaces(true).map((w) => w.id)).toEqual(['seeker', 'buddies', 'mentor', 'referrer', 'employer']);
   });
 
-  it("opens each workspace on one of its own sections", () => {
+  it('opens each workspace on one of its own sections', () => {
     for (const w of visibleWorkspaces(true)) expect(workspaceFor(w.home)).toBe(w.id);
   });
 });

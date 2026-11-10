@@ -30,7 +30,7 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   after `key`/`cookie`), and `paidAI(feature)` — the paid-entitlement gate every route that
   makes a model call for its caller mounts AFTER its authentication gate (`paid_ai.go`: 402
   for an unpaid caller in the ordinary plan-refusal body, 503 when the plan cannot be read,
-  otherwise it marks `c.UserContext()`). The binding (`user_llm.go`) refuses a model client
+  otherwise it marks `c.UserContext()`; a 402 also records a paywall hit — user, feature, job — through a detached, panic-recovered goroutine that never delays or alters the refusal, see internal/ai/plan/AGENTS.md; the auto-apply orchestrator's tailor refusal calls `authorizePaidAIUnrecorded` and records nothing). The binding (`user_llm.go`) refuses a model client
   for an unmarked context, so handlers pass `c.UserContext()` (or a context detached from
   it, as the assistant turn and the fit stream do) to `bind`/`caller`. Tests that are not
   about the gate mount `markPaidAI` in its place..
@@ -89,6 +89,7 @@ metadata is attribution only; it never grants application permissions.
 ## Every `/api/v1/me/*` route refuses an anonymous caller (`signed_in_door.go`)
 
 - **This is load-bearing outside the repo.** Cloudflare challenges the hosting/VPN networks the enumeration fleet rents, and a CLI cannot solve a challenge; the edge rule exempts `/api/v1/me/*` precisely because nothing there answers without a credential, so the exemption hands the fleet nothing. A public read added under `/me/` would quietly reopen it to the fleet.
+- The same edge rule also exempts paths starting `/api/v1/mcp` (that is `/api/v1/mcp` and `/api/v1/mcp/account`; the OJCP server at `/api/v1/ojcp/mcp` is still challenged) and `/.well-known/oauth-*`, since 2026-11-09: an MCP client cannot solve a challenge either, and a VPN user's connector failed with "Couldn't reach". Unlike `/me/*`, `/api/v1/mcp` answers anonymous callers (the public tools), so from the fleet's networks those reads are now held back only by the origin gateway's `agentsearch` quota. Loosening that quota, or adding a heavier public MCP tool, reopens the catalogue to the fleet.
 - `/api/v1/me/api/<rest>` is the signed-in door: it checks `RequireAuthOrKey` and serves the request as `/api/v1/<rest>`, which is how a signed-in CLI on a VPN reaches the public reads. The CLI uses it only after the edge has answered a challenge (`cf-mitigated: challenge`). The target route keeps every gate of its own. It rewrites the path and lets routing continue rather than calling `RestartRouting`, which would replay the app-wide middleware and count and log every request twice; so it must stay mounted before every `/api/v1` route.
 
 ## Account Deletion (`me_delete.go`)

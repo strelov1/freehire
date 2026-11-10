@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -70,6 +71,11 @@ func (h *statsHandlers) register(api fiber.Router, optionalAuth fiber.Handler) {
 	// section stays off the live Meilisearch facet count. Aggregate-only — per-value
 	// counts only.
 	api.Get("/stats/facets", h.StatsFacets)
+
+	// Public skill co-occurrence snapshot: the skills most often listed beside one
+	// skill, for the /skills/<slug> glossary page. Served from insights_skill_neighbours
+	// (cmd/rollup-facets) so a page render never asks the engine for a skills facet.
+	api.Get("/stats/skills/:slug/neighbours", h.SkillNeighbours)
 
 	// Public Trends & Insights reads: aggregate market intelligence (role & skill
 	// demand, hiring velocity, salary bands) served from the insights_* rollups
@@ -241,8 +247,34 @@ func (h *statsHandlers) CatalogScale(c *fiber.Ctx) error {
 	})
 }
 
+// engagementCacheKey and engagementCacheTTL hold the engagement row between requests.
+// The query sums the whole job_daily_views rollup, which only grows (2-2.7s measured
+// from outside on 2026-11-08, /open's slowest leg), and the figures are totals nobody
+// reads to the minute.
+const (
+	engagementCacheKey = "stats:engagement:v1"
+	engagementCacheTTL = 10 * time.Minute
+)
+
+func (h *statsHandlers) engagementStats(ctx context.Context) (db.GetEngagementStatsRow, error) {
+	if h.cache != nil {
+		if s, found, err := cache.GetJSON[db.GetEngagementStatsRow](ctx, h.cache, engagementCacheKey); err == nil && found {
+			return s, nil
+		}
+	}
+	s, err := h.queries.GetEngagementStats(ctx)
+	if err != nil {
+		return s, err
+	}
+	if h.cache != nil {
+		// Best-effort: a failed write only means the next request recomputes.
+		_ = cache.SetJSON(ctx, h.cache, engagementCacheKey, s, engagementCacheTTL)
+	}
+	return s, nil
+}
+
 func (h *statsHandlers) EngagementStats(c *fiber.Ctx) error {
-	s, err := h.queries.GetEngagementStats(c.Context())
+	s, err := h.engagementStats(c.Context())
 	if err != nil {
 		return err
 	}

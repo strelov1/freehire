@@ -4,17 +4,18 @@
   import { Briefcase, ClipboardList, Tags, User } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { Badge, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { TabStrip, tabStripId } from '#lib/ui/index.js';
   import { activeRouteTab } from '#lib/routeTabs.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { format, t } from '#lib/i18n/t.js';
+  import { t } from '#lib/i18n/t.js';
   import { profileCompleteness } from '#lib/profileCompleteness.svelte.js';
   import type { CompletenessSection } from '#lib/profileCompleteness.js';
   import { resumeStore } from '#lib/resume.svelte.js';
   import { experienceBankStore } from '#lib/experienceBank.svelte.js';
   import { screeningStore } from '#lib/screening.svelte.js';
   import AccountSetupCard from '#lib/components/AccountSetupCard.svelte';
+  import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import States from '#lib/components/States.svelte';
   import { profileStore } from '#lib/profile.svelte.js';
   import { messages } from './messages';
@@ -167,9 +168,9 @@
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. The
      heading sits above the gate so the section is titled while it is still loading and
      whether or not a profile exists yet, the way every other /my section titles itself. -->
-<div class="mb-6 flex flex-col gap-1 max-lg:sr-only">
-  <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
-  <p class="text-sm text-muted-foreground">{s.description}</p>
+<div class="mb-6 flex flex-col gap-1">
+  <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">{s.title}</h1>
+  <p class="text-sm text-muted-foreground max-lg:sr-only">{s.description}</p>
 </div>
 
 {#if status === 'loading'}
@@ -179,42 +180,23 @@
 {:else}
   <!-- Above the tab strip: what is left to set up belongs to the account rather than to
        whichever section happens to be open — a card inside a section would be
-       re-announced on every tab switch. The Talent Network invitation used to sit beside
-       it and has moved further out still, to the account shell (`my/+layout`), which puts
-       it above every section rather than only above Profile's. -->
+       re-announced on every tab switch. It is one folded line; the Talent Network
+       invitation rides inside it while steps remain, and stands alone once they don't. -->
   <div class="mb-6">
-    <AccountSetupCard />
+    <AccountSetupCard>
+      {#snippet extra()}
+        <div class="mt-4 [&>*]:mb-0">
+          <TalentNetworkInvite />
+        </div>
+      {/snippet}
+    </AccountSetupCard>
   </div>
 
-  <!-- The overall count reads the same helper the tab dots do, so the two cannot
-       disagree. Shown only while something is missing — a finished profile needs no
-       scoreboard. It sits above the strip rather than inside it: the strip is navigation,
-       and this is a measurement of the whole profile. -->
-  {#if completeness && completeness.filled < completeness.total}
-    <div class="mb-3 flex justify-end">
-      <Badge variant="outline" class="tabular-nums">
-        {format(s.completeness.summary, {
-          filled: String(completeness.filled),
-          total: String(completeness.total),
-        })}
-      </Badge>
-    </div>
-  {/if}
+  <!-- No separate "n/m sections" count: the tab dots already mark the empty sections, and
+       a third progress meter beside the setup checklist read as clutter. -->
+  <TabStrip {tabs} active={activeSectionId} label="Profile sections" panelId={PANEL_ID} class="mb-6" />
 
-  <TabStrip
-    {tabs}
-    active={activeSectionId}
-    label="Profile sections"
-    panelId={PANEL_ID}
-    class="mb-6"
-  />
-
-  <div
-    id={PANEL_ID}
-    role="tabpanel"
-    aria-labelledby={tabStripId(PANEL_ID, activeSectionId)}
-    tabindex="0"
-  >
+  <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, activeSectionId)} tabindex="0">
     {@render children()}
   </div>
 {/if}

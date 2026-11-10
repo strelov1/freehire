@@ -123,14 +123,11 @@ func TestFacetSearchConvertsMergedFacets(t *testing.T) {
 			FacetStats:         map[string]json.RawMessage{"enrichment.salary_min": json.RawMessage(`{"min":1,"max":9}`)},
 		}, nil
 	}}}
-	resp, err := c.facetSearch(context.Background(), "x OR y", nil, []string{"source"})
+	raw, err := c.facetSearch(context.Background(), "x OR y", nil, []string{"source"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	fr, err := buildFacetResult(resp)
-	if err != nil {
-		t.Fatal(err)
-	}
+	fr := buildFacetResult(raw)
 	if fr.Total != 3 || fr.Facets["source"]["a"] != 2 || fr.Stats["enrichment.salary_min"].Max != 9 {
 		t.Fatalf("FacetResult = %+v", fr)
 	}

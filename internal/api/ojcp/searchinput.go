@@ -29,12 +29,12 @@ type SearchInput struct {
 	// candidate PII; the field is declared so an agent sending it gets an answer rather
 	// than a rejection, per the standard's own extensibility rule.
 	CandidateContext any `json:"candidate_context,omitempty"`
-	// Semantic opts into meaning-based ranking: the query is embedded and blended with
-	// keyword relevance. An EXTENSION, like IgnoredParams on the response — OJCP has no
-	// such field and its extensibility rule permits one. A pointer for the same reason as
-	// RemoteOK: absent and false both mean keyword search, but only an explicit true asks.
-	// The response's `semantic` says which search actually ran.
-	Semantic *bool `json:"semantic,omitempty" jsonschema:"Extension: true ranks by meaning as well as keywords (hybrid search over posting descriptions). Use it for a need described in words, e.g. 'keep our payment systems secure' or 'help kids learn to read'; leave it off for a job title or a non-technical role, which keywords answer better. Needs query. The response's semantic field reports applied or unavailable."`
+	// Semantic asks for meaning-based ranking, which is currently not available: a request
+	// that sets it is answered by keywords and the response's `semantic` says unavailable.
+	// An EXTENSION, like IgnoredParams on the response — OJCP has no such field and its
+	// extensibility rule permits one. A pointer for the same reason as RemoteOK: absent and
+	// false both mean keyword search, but only an explicit true asks.
+	Semantic *bool `json:"semantic,omitempty" jsonschema:"Extension: currently not available. A request that sets it is answered by keywords, and the response's semantic field reports unavailable."`
 }
 
 // WantsSemantic reports whether the agent asked for semantic search.

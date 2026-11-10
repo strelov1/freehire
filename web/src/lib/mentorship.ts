@@ -140,9 +140,7 @@ export function mentorFilterOptions(mentors: Mentor[]): MentorFilterOptions {
   }
 
   return {
-    companies: [...companies]
-      .map(([slug, name]) => ({ slug, name }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
+    companies: [...companies].map(([slug, name]) => ({ slug, name })).sort((a, b) => a.name.localeCompare(b.name)),
     topics: [...topics].sort((a, b) => a.localeCompare(b)),
     languages: [...languages].sort((a, b) => a.localeCompare(b)),
     // Career order (SENIORITY_VALUES), not alphabetical — alpha would scramble
@@ -212,7 +210,7 @@ export function monthOf(day: string): string {
 export function addMonths(month: string, delta: number): string {
   const year = Number(month.slice(0, 4));
   const index = Number(month.slice(5, 7)) - 1 + delta;
-  return `${year + Math.floor(index / 12)}-${pad2(((index % 12) + 12) % 12 + 1)}`;
+  return `${year + Math.floor(index / 12)}-${pad2((((index % 12) + 12) % 12) + 1)}`;
 }
 
 /** Length of a `YYYY-MM`, Gregorian leap rules included — divisible by 4, except
@@ -237,8 +235,7 @@ function weekdayMondayFirst(year: number, month: number, day: number): number {
   // month under the wrong weekdays, which reads as a design choice.
   if (offset === undefined) throw new RangeError(`month out of range: ${month}`);
   const y = month < 3 ? year - 1 : year;
-  const sunday0 =
-    (y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + offset + day) % 7;
+  const sunday0 = (y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + offset + day) % 7;
   return (sunday0 + 6) % 7;
 }
 
@@ -383,9 +380,7 @@ export function groupCalendarByLocalDay(
 /** Which statuses a day shows, in the same priority the domain partition itself carves
  *  the window in — booked over busy over free over closed. Drives the month grid's
  *  compact per-day indicator; the expanded day view shows the actual intervals. */
-export function dayStatuses(
-  dayIntervals: MentorCalendarInterval[],
-): MentorCalendarInterval['status'][] {
+export function dayStatuses(dayIntervals: MentorCalendarInterval[]): MentorCalendarInterval['status'][] {
   const present = new Set(dayIntervals.map((iv) => iv.status));
   return (['booked', 'busy', 'free', 'closed'] as const).filter((s) => present.has(s));
 }
@@ -397,15 +392,7 @@ export function dayStatuses(
 // so neither is "fixed" — they are mapped, once, below. Getting it backwards shifts a
 // mentor's whole week by a day, which reads as though they typed it wrong.
 
-const WEEKDAY_NAMES = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-];
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 /** The three-letter column heading for a STORED weekday number, for a grid too narrow to
  *  spell the day out. Here rather than in the calendar component, because the module says
@@ -441,9 +428,7 @@ export function splitAvailability(rules: MentorAvailabilityRule[]): {
         (position.get(a.weekday as number) ?? 0) - (position.get(b.weekday as number) ?? 0) ||
         a.start.localeCompare(b.start),
     );
-  const dated = rules
-    .filter((r) => r.date != null)
-    .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  const dated = rules.filter((r) => r.date != null).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
   return { weekly, dated };
 }
 
@@ -464,7 +449,9 @@ export function weekDraft(weekly: MentorAvailabilityRule[]): { weekday: number; 
 }
 
 /** A draft week flattened into the rows the replace-week endpoint takes, in display order. */
-export function weekRows(draft: { weekday: number; ranges: WeekRange[] }[]): { weekday: number; start: string; end: string }[] {
+export function weekRows(
+  draft: { weekday: number; ranges: WeekRange[] }[],
+): { weekday: number; start: string; end: string }[] {
   return draft.flatMap((day) => day.ranges.map((r) => ({ weekday: day.weekday, start: r.start, end: r.end })));
 }
 
@@ -507,10 +494,7 @@ export function exceptionDayLabel(date: string): string {
  *  resolved in the viewer's zone, so converting it again moves it. A booking arrives with
  *  only `starts_at`, an instant ending in `Z`, which is unambiguous and has to be read in
  *  some zone before a person can act on it. */
-export function formatInstantIn(
-  instant: string,
-  timezone: string,
-): { day: string; time: string; offset: string } {
+export function formatInstantIn(instant: string, timezone: string): { day: string; time: string; offset: string } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     year: 'numeric',
@@ -566,10 +550,7 @@ export function canReview(s: MentorSession): boolean {
  *  partly because `URLSearchParams` inside a `.svelte` file trips
  *  `svelte/prefer-svelte-reactivity` — the rule is right that a mutable built-in is not
  *  reactive state, and the fix it wants is for this not to be state at all. */
-export function withSearchParams(
-  current: URLSearchParams,
-  next: Record<string, string | null>,
-): string {
+export function withSearchParams(current: URLSearchParams, next: Record<string, string | null>): string {
   const params = new URLSearchParams(current);
   for (const [key, value] of Object.entries(next)) {
     if (value) params.set(key, value);

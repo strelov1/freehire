@@ -212,6 +212,21 @@ func TestChatObservesModelError(t *testing.T) {
 	}
 }
 
+func TestChatCallerCancellationIsObservedAsCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ct := &captureTracer{}
+	c := &Client{model: &chatModel{err: errors.New("request cancelled")}, timeout: time.Second, tracer: ct, source: "assistant"}
+
+	if _, err := c.Chat(ctx,
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, ChatStream{}); err == nil {
+		t.Fatal("expected an error from a cancelled call")
+	}
+	if len(ct.got) != 1 || !ct.got[0].Cancelled {
+		t.Fatalf("expected one cancelled error generation, got %+v", ct.got)
+	}
+}
+
 func TestChatTimesOutOnStalledModel(t *testing.T) {
 	c := &Client{model: blockingModel{}, timeout: 20 * time.Millisecond}
 	done := make(chan error, 1)

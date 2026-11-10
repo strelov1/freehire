@@ -48,15 +48,24 @@ export function companyFiltersToParams(f: CompanyFilters): URLSearchParams {
   return p;
 }
 
-/** Parse back from URL params. Facet values are a set, so duplicates from a
- *  shared/edited link are collapsed (the keyed {#each} in the controls throws on a
- *  repeat), mirroring the job filters' guard. An unrecognized `sort` falls back
+/** Parse back from URL params. A value may be comma-joined (`countries=de,br`),
+ *  which the server reads as equivalent to repeated keys, so it is split the same
+ *  way. Facet values are a set, so duplicates from a shared/edited link are
+ *  collapsed (the keyed {#each} in the controls throws on a repeat), mirroring
+ *  the job filters' guard. An unrecognized `sort` falls back
  *  to the default rather than forwarding an arbitrary value to the backend. */
 export function companyFiltersFromParams(p: URLSearchParams): CompanyFilters {
   const f = emptyCompanyFilters();
   f.q = p.get('q') ?? '';
   for (const def of COMPANY_FACETS) {
-    const values = [...new Set(p.getAll(def.param))];
+    const values = [
+      ...new Set(
+        p
+          .getAll(def.param)
+          .flatMap((v) => v.split(','))
+          .filter((v) => v !== ''),
+      ),
+    ];
     if (values.length > 0) f.facets[def.param] = values;
   }
   f.sort = p.get('sort') === 'rating' ? 'rating' : DEFAULT_COMPANY_SORT;
@@ -93,7 +102,11 @@ export function addCompanyFacet(f: CompanyFilters, param: string, raw: string): 
 
 /** Remove a value from the facet. */
 export function removeCompanyFacet(f: CompanyFilters, param: string, v: string): CompanyFilters {
-  return withFacet(f, param, (f.facets[param] ?? []).filter((x) => x !== v));
+  return withFacet(
+    f,
+    param,
+    (f.facets[param] ?? []).filter((x) => x !== v),
+  );
 }
 
 /** Reset a single facet. */

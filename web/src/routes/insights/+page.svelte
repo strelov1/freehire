@@ -56,8 +56,10 @@
   <h1 class="text-3xl font-bold tracking-tight text-foreground">Job Market Insights</h1>
   <p class="mt-3 text-lg text-muted-foreground">{description}</p>
   <p class="mt-1 text-sm text-muted-foreground">
-    Aggregated from open postings on freehire, refreshed through the day. All data is
-    also available on the <a href={resolve('/docs/api')} class="text-brand-strong hover:underline">open API</a>.
+    Aggregated from open postings on freehire, refreshed through the day. All data is also available on the <a
+      href={resolve('/docs/api')}
+      class="text-brand-strong hover:underline">open API</a
+    >.
   </p>
 
   <a
@@ -66,7 +68,9 @@
   >
     <span>
       <span class="text-lg font-semibold text-foreground">Company hiring signal</span>
-      <span class="mt-0.5 block text-sm text-muted-foreground">Which companies are ramping up or slowing down hiring</span>
+      <span class="mt-0.5 block text-sm text-muted-foreground"
+        >Which companies are ramping up or slowing down hiring</span
+      >
     </span>
     <span aria-hidden="true" class="text-muted-foreground">→</span>
   </a>
@@ -82,11 +86,22 @@
       {#each data.covered as c (c.category)}
         <div class="rounded-lg border border-border p-4">
           <h2 class="text-lg font-semibold text-foreground">{c.label}</h2>
-          <p class="mt-0.5 text-xs text-muted-foreground">{(gridOpen.get(c.category) ?? c.openCount).toLocaleString('en-US')} open roles</p>
+          <p class="mt-0.5 text-xs text-muted-foreground">
+            {(gridOpen.get(c.category) ?? c.openCount).toLocaleString('en-US')} open roles
+          </p>
           <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            <a href={resolve('/insights/salary/[category]', { category: c.category })} class="text-brand-strong hover:underline">Salaries</a>
-            <a href={resolve('/insights/skills/[category]', { category: c.category })} class="text-brand-strong hover:underline">Skills</a>
-            <a href={resolve('/insights/roles/[category]', { category: c.category })} class="text-brand-strong hover:underline">Roles</a>
+            <a
+              href={resolve('/insights/salary/[category]', { category: c.category })}
+              class="text-brand-strong hover:underline">Salaries</a
+            >
+            <a
+              href={resolve('/insights/skills/[category]', { category: c.category })}
+              class="text-brand-strong hover:underline">Skills</a
+            >
+            <a
+              href={resolve('/insights/roles/[category]', { category: c.category })}
+              class="text-brand-strong hover:underline">Roles</a
+            >
           </div>
         </div>
       {/each}

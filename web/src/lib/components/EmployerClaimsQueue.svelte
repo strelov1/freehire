@@ -78,8 +78,8 @@
     {/each}
   </ul>
   <p class="mt-4 text-xs text-muted-foreground">
-    Approving checks the work email is plausibly this company's own and, if the company's
-    website was unknown, records the confirmed domain.
+    Approving checks the work email is plausibly this company's own and, if the company's website was unknown, records
+    the confirmed domain.
   </p>
 {/if}
 

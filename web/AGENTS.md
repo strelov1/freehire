@@ -42,8 +42,9 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   reused by every CV. `GET /api/v1/me/photo` is metadata — the bytes are the `/image`
   sub-resource, and the URL carries `?v=<uploaded_at>` because it is otherwise stable. The
   control renders nothing when `enabled` is false (object storage unconfigured).
-- `ResumeStructuredView.svelte` is read-only; the backend serves the structured CV from
-  `GET /api/v1/me/resume` (`structured` field, null when absent/stale/unconfigured).
+- The profile tabs read the structured CV through one store, `src/lib/resume.svelte.ts`, from
+  `GET /api/v1/me/resume` (`structured` field: banked experience and the candidate-owned
+  contacts composed over the extract, so a stale extract does not empty it; null only when nothing worth serving is left).
 - Environment variables reach the app only through `src/env.ts`. SvelteKit 3 exposes
   nothing undeclared — not even through the deprecated `$env/*` modules — so a variable
   missing there is `undefined` at runtime however the host sets it, and nothing reports it.
@@ -148,8 +149,10 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   `remote_regions` overlap facet.
 - **`AssistantChat` has three hosts**: `/my/assistant`, `/tailor/[slug]`, and the profile
   page's Experience tab (`ExperienceAssistantPanel.svelte`). It needs a flex parent with a
-  bounded height, and it boots a session on mount — so never mount it before the user asks
-  for one, or every visitor mints an empty conversation. **`kickoff` is read once**, into a
+  bounded height. A plain chat with nothing to resume opens blank and creates its session
+  with the first message (`deferredNew`); every other preset, a support chat and a "New chat"
+  click still create one on mount — so never mount those before the user asks for one, or
+  every visitor mints an empty conversation. **`kickoff` is read once**, into a
   deliberately non-reactive `arrival`, and spent after the first send: setting the prop on a
   live chat does nothing, so aiming it at a new subject means remounting it (the Experience
   panel keys on a launch token). Unmounting cancels a streaming turn, which is why closing

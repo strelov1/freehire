@@ -44,10 +44,7 @@
     onclick={expandable ? () => (open = !open) : undefined}
     aria-expanded={expandable ? open : undefined}
     aria-controls={expandable ? id : undefined}
-    class={[
-      'group flex w-full items-start gap-2 py-2 text-left',
-      expandable && 'cursor-pointer',
-    ]}
+    class={['group flex w-full items-start gap-2 py-2 text-left', expandable && 'cursor-pointer']}
   >
     {#if expandable}
       <ChevronDown

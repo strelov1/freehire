@@ -214,6 +214,13 @@ WITH claimable AS (
         FOR UPDATE SKIP LOCKED
     ) m
     WHERE s.active
+      -- The account-wide "job alerts by email" switch, the same gate ListActiveSubscriptions
+      -- applies when matches are recorded. Recording alone is not enough: matches recorded
+      -- BEFORE an opt-out (an RFC 8058 one-click unsubscribe) are still pending, and without
+      -- this predicate the next digest mails them to a user who has just unsubscribed. They
+      -- stay unclaimed and age out through ExpireStaleSubscriptionMatches. Email only: the
+      -- switch does not govern Telegram, push or webhook.
+      AND (s.channel <> 'email' OR COALESCE(ns.alerts_email_enabled, true))
       -- An 'interval' subscription (no settings row reads as 'daily' since migration
       -- 0246; the interval default is one hour) is claimed only once its interval has elapsed since the last digest. The
       -- gate lives HERE rather than beside the quiet-hours check in deliverMessage because a
@@ -346,10 +353,10 @@ WHERE s.id = m.subscription_id
 SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_digest_sent_at,
        ss.name AS saved_search_name,
        ss.query AS saved_search_query,
-       mail_recipient(u.email, u.email_verified, u.last_active_at)::text AS account_email,
+       mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS account_email,
        u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,
-       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id) AS has_push_device,
+       (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id))::boolean AS has_push_device,
        wc.url AS webhook_url,
        COALESCE(wc.enabled, false) AS webhook_enabled,
        COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
@@ -359,8 +366,8 @@ SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_dige
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 JOIN users u ON u.id = s.user_id
-LEFT JOIN telegram_links tl ON tl.user_id = s.user_id
-LEFT JOIN webhook_configs wc ON wc.user_id = s.user_id
+LEFT JOIN telegram_links tl ON tl.user_id = s.user_id AND u.banned_at IS NULL
+LEFT JOIN webhook_configs wc ON wc.user_id = s.user_id AND u.banned_at IS NULL
 LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
 WHERE s.id = $1;
 
@@ -448,12 +455,12 @@ WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND channel = 'email' AN
 -- MCP server reads it so an agent can only subscribe on a channel that will deliver,
 -- instead of creating a subscription whose matches are soft-skipped forever.
 SELECT COALESCE(ns.alerts_email_enabled, true)::boolean AS email_alerts_enabled,
-       EXISTS(SELECT 1 FROM telegram_links tl WHERE tl.user_id = u.id) AS telegram_linked,
-       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = u.id) AS has_push_device,
+       (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM telegram_links tl WHERE tl.user_id = u.id))::boolean AS telegram_linked,
+       (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = u.id))::boolean AS has_push_device,
        COALESCE(wc.enabled, false)::boolean AS webhook_enabled
 FROM users u
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
-LEFT JOIN webhook_configs wc ON wc.user_id = u.id
+LEFT JOIN webhook_configs wc ON wc.user_id = u.id AND u.banned_at IS NULL
 WHERE u.id = $1;
 
 -- name: ListSubscriptionDeliveryStats :many

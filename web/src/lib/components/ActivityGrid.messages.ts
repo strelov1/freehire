@@ -10,12 +10,11 @@ import { defineMessages, plurals } from '#lib/i18n/t.js';
 // with by the catalog.
 export const messages = defineMessages(
   {
-    headTitle: 'Activity — Tracking — freehire',
+    headTitle: 'Streak — Tracking — freehire',
     heading: 'Your last year',
     // Said on the page rather than left to be inferred. Someone who sees four events on
     // Calendar and three squares here is owed the reason, and this caption is it.
-    caption:
-      'One square per day, shaded by what you did — applications, follow-ups, and stages you moved yourself.',
+    caption: 'One square per day, shaded by what you did — applications, follow-ups, and stages you moved yourself.',
     loadError: "Couldn't load your activity.",
     legendLess: 'Less',
     legendMore: 'More',
@@ -27,8 +26,7 @@ export const messages = defineMessages(
     noActions: 'No actions',
     // The empty state is an invitation, not a scolding: a blank year is what everybody's
     // first week looks like.
-    empty:
-      'Nothing here yet. Apply to a job, follow one up, or move an application along, and the day lights up.',
+    empty: 'Nothing here yet. Apply to a job, follow one up, or move an application along, and the day lights up.',
     emptyCta: 'Go to your board',
     panelNothing: 'Nothing happened on this day.',
     recordedByYou: 'recorded by you',
@@ -37,7 +35,7 @@ export const messages = defineMessages(
   },
   {
     ru: {
-      headTitle: 'Активность — Отслеживание — freehire',
+      headTitle: 'Серия — Отслеживание — freehire',
       heading: 'Ваш последний год',
       caption:
         'Один квадрат — один день, оттенок зависит от того, что вы сделали: отклики, напоминания и стадии, которые вы передвинули сами.',
@@ -50,8 +48,7 @@ export const messages = defineMessages(
       days: plurals({ one: 'день', few: 'дня', many: 'дней', other: 'дня' }),
       actions: plurals({ one: 'действие', few: 'действия', many: 'действий', other: 'действия' }),
       noActions: 'Ничего не было',
-      empty:
-        'Пока пусто. Откликнитесь на вакансию, напомните о себе или передвиньте отклик — и день загорится.',
+      empty: 'Пока пусто. Откликнитесь на вакансию, напомните о себе или передвиньте отклик — и день загорится.',
       emptyCta: 'Перейти на доску',
       panelNothing: 'В этот день ничего не происходило.',
       recordedByYou: 'записано вами',

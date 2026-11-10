@@ -253,10 +253,10 @@ func (q *Queries) GetReferralRequest(ctx context.Context, id uuid.UUID) (Referra
 }
 
 const listApprovedReferrerRecipients = `-- name: ListApprovedReferrerRecipients :many
-SELECT o.user_id, mail_recipient(u.email, u.email_verified, u.last_active_at)::text AS email, t.chat_id
+SELECT o.user_id, mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS email, t.chat_id
 FROM referral_offers o
 JOIN users u ON u.id = o.user_id
-LEFT JOIN telegram_links t ON t.user_id = o.user_id
+LEFT JOIN telegram_links t ON t.user_id = o.user_id AND u.banned_at IS NULL
 WHERE o.company_slug = $1 AND o.status = 'approved'
 `
 

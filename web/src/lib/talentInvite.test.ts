@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  TALENT_INVITE_DISMISSED_KEY,
-  dismissTalentInvite,
-  isTalentInviteDismissed,
-} from './talentInvite';
+import { TALENT_INVITE_DISMISSED_KEY, dismissTalentInvite, isTalentInviteDismissed } from './talentInvite';
 
 // The node environment has no localStorage at all, so each test installs the one it
 // needs and removes it afterwards — the same shape cliPromo.test.ts uses.

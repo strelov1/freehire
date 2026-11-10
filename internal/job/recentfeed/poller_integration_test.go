@@ -85,6 +85,35 @@ func TestPoller_PollDrainsOutboxAndPublishesEntries(t *testing.T) {
 	}
 }
 
+func TestPoller_PollSkipsPrivateJobs(t *testing.T) {
+	pool := testdb.Pool(t)
+	q := db.New(pool)
+	ctx := context.Background()
+
+	jobID := insertPollerTestJob(t, pool, "Secret Role", "Stealth")
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET is_private = true WHERE id = $1`, jobID); err != nil {
+		t.Fatalf("mark private: %v", err)
+	}
+	if err := q.EnqueueRecentFeedOutbox(ctx, jobID); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	b := NewBroadcaster(10)
+	p := NewPoller(q, b, 100)
+	if err := p.Poll(ctx); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+
+	backlog, _, cancel := b.Subscribe()
+	defer cancel()
+	if len(backlog) != 0 {
+		t.Errorf("backlog = %d entries for a private job, want 0: %+v", len(backlog), backlog)
+	}
+	if n := outboxRowCount(t, pool, jobID); n != 0 {
+		t.Errorf("outbox still holds %d row(s) for private job %d, want 0 (claim deletes even when unpublished)", n, jobID)
+	}
+}
+
 func TestPoller_PollOnEmptyOutboxPublishesNothing(t *testing.T) {
 	pool := testdb.Pool(t)
 	q := db.New(pool)

@@ -14,12 +14,7 @@
   import { companyLogoUrl } from '#lib/logo.js';
   import { sortNeedsAttentionFirst } from '#lib/experienceBank.js';
   import { formatPeriodRange } from '#lib/periodDate.js';
-  import type {
-    ExperienceAtom,
-    ExperienceEmployment,
-    ExperienceEmploymentWithAtoms,
-    PeriodDate,
-  } from '#lib/types.js';
+  import type { ExperienceAtom, ExperienceEmployment, ExperienceEmploymentWithAtoms, PeriodDate } from '#lib/types.js';
 
   let {
     employment,
@@ -44,12 +39,7 @@
     scrollToAtomId?: string;
     onToggleSelect: (id: string) => void;
     onConfirmAtom: (atom: ExperienceAtom) => void;
-    onSaveAtomEdit: (
-      atom: ExperienceAtom,
-      claim: string,
-      context: string,
-      metricsRaw: string,
-    ) => Promise<boolean>;
+    onSaveAtomEdit: (atom: ExperienceAtom, claim: string, context: string, metricsRaw: string) => Promise<boolean>;
     onSavePromote: (atom: ExperienceAtom, name: string, link: string) => Promise<boolean>;
     onRemoveAtom: (atom: ExperienceAtom) => void;
     onSaveEmployment: (employment: ExperienceEmployment, body: Partial<ExperienceEmployment>) => Promise<boolean>;
@@ -57,9 +47,7 @@
   } = $props();
 
   const placeLabel = $derived(
-    employment.kind === 'project'
-      ? employment.name || employment.role
-      : employment.role || employment.company,
+    employment.kind === 'project' ? employment.name || employment.role : employment.role || employment.company,
   );
   const placeSecondary = $derived.by(() => {
     if (employment.kind === 'project') return employment.link;
@@ -88,10 +76,7 @@
   let empCurrent = $state(false);
 
   function startEdit() {
-    empName =
-      employment.kind === 'project'
-        ? employment.name || ''
-        : employment.company || employment.role || '';
+    empName = employment.kind === 'project' ? employment.name || '' : employment.company || employment.role || '';
     empRole = employment.role || '';
     empLocation = employment.location || '';
     empSummary = employment.summary || '';
@@ -216,8 +201,7 @@
                   aria-describedby={describedBy}
                   class="w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   rows="2"
-                  bind:value={empSummary}
-                ></textarea>
+                  bind:value={empSummary}></textarea>
               {/snippet}
             </FormField>
             <FormField label="Stack" hint="Comma-separated, optional">

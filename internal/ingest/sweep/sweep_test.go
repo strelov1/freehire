@@ -288,6 +288,22 @@ func TestSweepableBoards(t *testing.T) {
 			want:  []pipeline.BoardRef{{Board: "6290", Region: "my"}, {Board: "6290", Region: "sg"}},
 		},
 		{
+			// seek: a finished slice closes on the grace window and keeps its market, since
+			// subclassification "6290" is a board in AU and NZ alike.
+			name:  "a region-scoped slice provider keeps each finished slice's region",
+			scope: BoardScope{HasGrace: true, SliceBoardListing: true, RegionScoped: true},
+			stats: pipeline.Stats{QualifyingBoards: []pipeline.BoardRef{{Board: "6290", Region: "nz"}, {Board: "6290", Region: "au"}}},
+			want:  []pipeline.BoardRef{{Board: "6290", Region: "au"}, {Board: "6290", Region: "nz"}},
+		},
+		{
+			// A slice that failed, was interrupted or read too little never reaches
+			// QualifyingBoards, so it must not be swept.
+			name:  "a slice that did not qualify is not swept",
+			scope: BoardScope{HasGrace: true, SliceBoardListing: true, RegionScoped: true},
+			stats: pipeline.Stats{QualifyingBoards: []pipeline.BoardRef{{Board: "6290", Region: "au"}}},
+			want:  []pipeline.BoardRef{{Board: "6290", Region: "au"}},
+		},
+		{
 			name:  "any other provider's boards are keyed on the id alone",
 			scope: BoardScope{FullBoardListing: true},
 			stats: pipeline.Stats{QualifyingBoards: []pipeline.BoardRef{{Board: "acme", Region: "us"}, {Board: "acme", Region: ""}}},

@@ -57,12 +57,7 @@
   );
 </script>
 
-<Seo
-  title="{who.login} — freehire contributors"
-  {description}
-  {canonical}
-  image={`${canonical}/og.png`}
-/>
+<Seo title="{who.login} — freehire contributors" {description} {canonical} image={`${canonical}/og.png`} />
 
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
@@ -144,9 +139,7 @@
 
   <section class="mt-12 rounded-xl border border-border bg-muted/30 p-6">
     <h2 class="text-lg font-semibold tracking-tight">Share this page</h2>
-    <p class="mt-1 text-sm text-muted-foreground">
-      It is yours — your work, your link, your face on the preview card.
-    </p>
+    <p class="mt-1 text-sm text-muted-foreground">It is yours — your work, your link, your face on the preview card.</p>
     <!-- eslint-disable svelte/no-navigation-without-resolve -- both are external share intents, not SvelteKit routes -->
     <div class="mt-4 flex flex-wrap gap-3">
       <a

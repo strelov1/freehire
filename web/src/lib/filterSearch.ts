@@ -133,6 +133,11 @@ function buildJobCatalog(): FilterSearchHit[] {
     aliases: ['former employers', 'past employers', 'previous employers'],
   });
   hits.push({
+    ...actionHit('company_slug', 'Company', 'Your watchlist', 'watchlist'),
+    param: 'company_slug',
+    aliases: ['watched companies', 'followed companies', 'companies I follow'],
+  });
+  hits.push({
     ...actionHit('posted', 'Posted', 'Hide viewed', 'hide-seen'),
     aliases: ['viewed', 'seen', 'opened', 'already viewed'],
   });
@@ -148,9 +153,7 @@ function buildJobCatalog(): FilterSearchHit[] {
   pushFacet(hits, 'relocation', 'relocation');
   pushFacet(hits, 'relocation', 'collections', EMPLOYER_CREDENTIALS, 'Employer credentials');
   hits.push(actionHit('relocation', 'Visa', 'Offers visa sponsorship', 'visa'));
-  hits.push(
-    actionHit('relocation', 'AI interviews', 'Hide employers reported to interview with AI', 'hide-ai'),
-  );
+  hits.push(actionHit('relocation', 'AI interviews', 'Hide employers reported to interview with AI', 'hide-ai'));
   hits.push(actionHit('relocation', 'Auto-apply', 'Auto-apply available', 'auto-apply'));
   hits.push(actionHit('relocation', 'Application', 'Short application', 'short-apply'));
   pushFacet(hits, 'relocation', 'clearance_levels', undefined, 'Security clearance');
@@ -162,6 +165,7 @@ export function jobFilterSearchItems(opts?: {
   railKeys?: readonly string[];
   openWithin?: boolean;
   formerEmployers?: boolean;
+  watchlist?: boolean;
   hideSeen?: boolean;
 }): FilterSearchHit[] {
   jobCatalog ??= buildJobCatalog();
@@ -172,6 +176,7 @@ export function jobFilterSearchItems(opts?: {
     if (hit.param && exclude.has(hit.param)) return false;
     if (!opts?.openWithin && hit.action?.startsWith('open:')) return false;
     if (!opts?.formerEmployers && hit.action === 'former-employers') return false;
+    if (!opts?.watchlist && hit.action === 'watchlist') return false;
     if (!opts?.hideSeen && hit.action === 'hide-seen') return false;
     return true;
   });

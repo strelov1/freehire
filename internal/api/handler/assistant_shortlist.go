@@ -38,7 +38,7 @@ func normalizeShortlistQuery(raw string) (string, error) {
 			vals.Del(name)
 		}
 	}
-	if unknown := search.UnknownParams(vals, []string{"q", "sort", "order", "q_fields", hideSeenParam, hideAppliedCompaniesParam, formerEmployersParam}); len(unknown) > 0 {
+	if unknown := search.UnknownParams(vals, []string{"q", "sort", "order", "q_fields", hideSeenParam, hideAppliedCompaniesParam, formerEmployersParam, search.WatchlistParam}); len(unknown) > 0 {
 		return "", fmt.Errorf("unsupported search condition: %s", unknown[0].Param)
 	}
 	if ignored := search.IgnoredValues(vals); len(ignored) > 0 {
@@ -64,7 +64,7 @@ func normalizeShortlistQuery(raw string) (string, error) {
 			if err != nil || n < 0 || search.FilterFromValues(url.Values{name: {value}}) == nil {
 				return "", fmt.Errorf("invalid search bound: %s", name)
 			}
-		case "visa_sponsorship", hideSeenParam, hideAppliedCompaniesParam, formerEmployersParam, search.ExperienceIncludeUnspecifiedParam, search.SeniorityIncludeUnspecifiedParam, search.ExperienceOnlySeniorityUnspecifiedParam:
+		case "visa_sponsorship", hideSeenParam, hideAppliedCompaniesParam, formerEmployersParam, search.WatchlistParam, search.ExperienceIncludeUnspecifiedParam, search.SeniorityIncludeUnspecifiedParam, search.ExperienceOnlySeniorityUnspecifiedParam:
 			if value != "true" && value != "false" {
 				return "", fmt.Errorf("invalid search boolean: %s", name)
 			}
@@ -113,7 +113,14 @@ func (h *searchHandlers) runShortlistSearch(ctx context.Context, userID int64, q
 	if vals.Get(formerEmployersParam) == "true" && !applied {
 		return search.SearchResult{}, fmt.Errorf("cannot enforce former_employers")
 	}
-	result, err := h.executeJobSearch(ctx, vals, jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: applied, vector: h.matchVectorFor(ctx, userID, vals), exclude: exclude, personal: personal, strict: true})
+	watch, watchApplied, err := h.watchlistSlugsFor(ctx, userID, vals)
+	if err != nil {
+		return search.SearchResult{}, err
+	}
+	if search.WantsWatchlist(vals) && !watchApplied {
+		return search.SearchResult{}, fmt.Errorf("cannot enforce watchlist")
+	}
+	result, err := h.executeJobSearch(ctx, vals, jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: applied, watch: watch, hasWatch: watchApplied, vector: h.matchVectorFor(ctx, userID, vals), exclude: exclude, personal: personal, strict: true})
 	return result.res, err
 }
 

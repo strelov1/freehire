@@ -101,7 +101,11 @@
   // region" pill then hides — see nameMatch); with no query every region stays.
   const visibleRegions = $derived(
     regions
-      .map((region) => ({ region, countryCodes: (countriesByRegion[region] ?? []).filter(matchCountry), nameMatch: matchRegion(region) }))
+      .map((region) => ({
+        region,
+        countryCodes: (countriesByRegion[region] ?? []).filter(matchCountry),
+        nameMatch: matchRegion(region),
+      }))
       .filter((r) => r.nameMatch || r.countryCodes.length),
   );
 
@@ -115,17 +119,17 @@
   const selectedChips = $derived.by((): GeoChip[] => {
     const out: GeoChip[] = [];
     const push = (param: string, values: string[], label: (v: string) => string, exclude: boolean) => {
-      for (const v of values) out.push({ key: `${param}:${v}`, label: label(v), exclude, remove: () => store.remove(param, v) });
+      for (const v of values)
+        out.push({ key: `${param}:${v}`, label: label(v), exclude, remove: () => store.remove(param, v) });
     };
-    const cityText = (city: string) => city;
     push('regions', regionF.include, regionLabel, false);
     push('countries', countryF.include, countryLabel, false);
     push('metros', metroF.include, metroLabel, false);
-    push('cities', cityF.include, cityText, false);
+    push('cities', cityF.include, (city) => city, false);
     push('regions', regionF.exclude, regionLabel, true);
     push('countries', countryF.exclude, countryLabel, true);
     push('metros', metroF.exclude, metroLabel, true);
-    push('cities', cityF.exclude, cityText, true);
+    push('cities', cityF.exclude, (city) => city, true);
     return out;
   });
 
@@ -205,7 +209,9 @@
   {/if}
 </div>
 
-<div class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3 focus-within:ring-2 focus-within:ring-ring">
+<div
+  class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3 focus-within:ring-2 focus-within:ring-ring"
+>
   <Search class="size-4 shrink-0 text-muted-foreground" />
   <input
     bind:value={query}
@@ -218,9 +224,17 @@
 {#if selectedChips.length}
   <div class="mb-4 flex flex-wrap gap-1.5 border-b border-border pb-3">
     {#each selectedChips as chip (chip.key)}
-      <Chip variant={chip.exclude ? 'destructive' : 'brand'} class={`gap-1 py-1 pr-1.5 ${chip.exclude ? 'line-through' : ''}`}>
+      <Chip
+        variant={chip.exclude ? 'destructive' : 'brand'}
+        class={`gap-1 py-1 pr-1.5 ${chip.exclude ? 'line-through' : ''}`}
+      >
         {chip.label}{#if chip.exclude}<span class="sr-only">, excluded</span>{/if}
-        <button type="button" aria-label={chip.exclude ? `Remove excluded ${chip.label}` : `Remove ${chip.label}`} onclick={chip.remove} class="relative inline-flex opacity-70 transition-opacity after:absolute after:-inset-1.5 hover:opacity-100">
+        <button
+          type="button"
+          aria-label={chip.exclude ? `Remove excluded ${chip.label}` : `Remove ${chip.label}`}
+          onclick={chip.remove}
+          class="relative inline-flex opacity-70 transition-opacity after:absolute after:-inset-1.5 hover:opacity-100"
+        >
           <X class="size-3" />
         </button>
       </Chip>
@@ -279,9 +293,14 @@
         aria-expanded={isOpen}
         onclick={() => (expandedRegions.has(region) ? expandedRegions.delete(region) : expandedRegions.add(region))}
       >
-        <ChevronDown class={['size-4 text-muted-foreground transition-transform', !isOpen && '-rotate-90']} aria-hidden="true" />
+        <ChevronDown
+          class={['size-4 text-muted-foreground transition-transform', !isOpen && '-rotate-90']}
+          aria-hidden="true"
+        />
         {REGION_LABELS[region] ?? region}
-        {#if regionCount(region)}<span class="text-xs font-normal text-muted-foreground"><span class="sr-only">, </span>{fmt(regionCount(region))}</span>{/if}
+        {#if regionCount(region)}<span class="text-xs font-normal text-muted-foreground"
+            ><span class="sr-only">, </span>{fmt(regionCount(region))}</span
+          >{/if}
       </button>
     </h3>
 
@@ -311,7 +330,9 @@
             class={pillClass(cInc || cExc, cExc, 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm')}
           >
             <!-- Decorative here: the flag's own label is the country name printed beside it. -->
-            <span aria-hidden="true" class="contents"><CountryFlag {code} label={countryLabel(code)} class="text-base" /></span>
+            <span aria-hidden="true" class="contents"
+              ><CountryFlag {code} label={countryLabel(code)} class="text-base" /></span
+            >
             {countryLabel(code)}<PillMeta included={cInc} excluded={cExc} />
           </button>
         {/each}

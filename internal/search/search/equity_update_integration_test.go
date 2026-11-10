@@ -23,7 +23,7 @@ func TestEquityRemovedFromIndexAfterDescriptionEdit(t *testing.T) {
 			row.Description = "Build public web applications."
 			row.Equity = pgtype.Text{}
 		}
-		doc, err := FromJob(row, nil, "ats")
+		doc, err := FromJob(row, "ats")
 		if err != nil {
 			t.Fatal(err)
 		}

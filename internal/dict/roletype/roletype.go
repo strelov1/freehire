@@ -27,8 +27,10 @@
 package roletype
 
 import (
+	"regexp"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/dict/wordmatch"
 )
 
@@ -188,7 +190,48 @@ func Derive(title string) string {
 			}
 		}
 	}
+	if bcsHead.MatchString(bcsAideOfHead.ReplaceAllString(foldBCS(s), " ")) {
+		return "people_manager"
+	}
 	return ""
+}
+
+// bcsHead is the Croatian, Serbian, Bosnian and Slovenian head of a workplace, matched
+// on a folded title (foldBCS): the director (English "director"), and a "voditelj",
+// "šef" or Slovenian "vodja" of a branch, shop, department, service, sector, shift or
+// group — the English "Branch/Store/Department/Shift/Team Manager" and "Head of". The
+// head words are the manager nouns of these languages, and like the English bare
+// "manager" none is a marker alone: "voditelj projekta" runs a project, "vodja
+// prodaje" a sales desk, so only the workplace nouns after them are listed, in the
+// genitive the title puts them in. The store manager and the shift and group leaders
+// written as one word (poslovođa, izmenovodja, skupinovodja) need no unit. The
+// director counts in the nominative, and in the genitive only after a deputy: "u
+// uredu direktora", "v tajništvu generalnega direktorja", "pomoćnik direktora" work
+// for the director, as the Russian "помощник директора" does (headBlindPhrases).
+var bcsHead = regexp.MustCompile(`\b(?:(?:voditelj(?:ica|a|ice)?|sef(?:ica|a|ice)?|vodj[ae])\s+(?:poslovnice|maloprodajnog\s+mj?esta|prodajnog\s+mj?esta|trgovine|prodavaonice|prodavnice|odjela|odeljenja|sluzbe|sektora|smjene|smene|restorana|poslovalnice|poslovne\s+enote|izmene|oddelka|sektorja|skupine|prodajalne|restavracije)|(?:poslovodj|izmenovodj|skupinovodj)[aeiu]|direktor(?:ica|ka)?|(?:zamj?enik|zamj?enica|namestnik|namestnica)\s+(?:(?:generaln|izvrsn)\w*\s+)?direktor(?:a|ja|ice))\b`)
+
+// bcsAideOfHead is staff who work FOR a workplace head: "Tajnica voditelja odjela",
+// "Asistent vodje sektorja". The head word is cut with its aide so bcsHead does not read
+// the secretary as the manager. The "pomoćnik/pomočnik" of a head is left alone: in a
+// shop it is the assistant manager ("Pomočnik vodje poslovne enote"), whom English
+// "Assistant Manager" marks too.
+var bcsAideOfHead = regexp.MustCompile(`\b(?:tajni(?:k|ca)|sekretar(?:ka|ica)?|asistent(?:ka|ica)?|administrator(?:ka|ica)?|referent(?:ka|ica)?)\s+(?:voditelj|vodj|sef|direktor)\w*`)
+
+// bcsGenderSlash is the feminine form written after a slash ("Voditelj/ica",
+// "Šef/ica"), cut so the masculine word before it reads on.
+var bcsGenderSlash = regexp.MustCompile(`(\pL)\s*/\s*(?:ica|ice|ka|ke|a|e)\b`)
+
+// bcsASCII drops the diacritics the BCS and Slovenian alphabets use, đ written "dj".
+var bcsASCII = strings.NewReplacer("č", "c", "ć", "c", "š", "s", "ž", "z", "đ", "dj")
+
+// foldBCS writes a lowercased title as the BCS and Slovenian heads are matched: Serbian
+// Cyrillic in Latin, the slash feminine cut, the diacritics dropped. Russian and other
+// Cyrillic titles pass through the transliteration harmlessly — no bcsHead word is
+// spelled in them, and their own heads were read above.
+func foldBCS(s string) string {
+	s = normalize.LatinizeSerbian(s)
+	s = bcsGenderSlash.ReplaceAllString(s, "$1")
+	return bcsASCII.Replace(s)
 }
 
 // cutWord replaces every whole-word occurrence of phrase in s with a space. It is

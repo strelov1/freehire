@@ -67,8 +67,8 @@
       {people} people build freehire.
     </h1>
     <p class="mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-      Everyone below has merged code or opened an issue against the repository. The list comes
-      straight from GitHub — nobody is added by hand, and nobody is left out by forgetting.
+      Everyone below has merged code or opened an issue against the repository. The list comes straight from GitHub —
+      nobody is added by hand, and nobody is left out by forgetting.
     </p>
   </header>
 
@@ -87,8 +87,8 @@
     <SectionLabel text="contributed by" />
     <h2 class="mt-3 text-xl font-semibold tracking-tight">Most recent first</h2>
     <p class="mb-6 mt-1 text-sm text-muted-foreground">
-      Ordered by when someone last contributed, not by how much — so the newest arrival is at the
-      top, where they should be.
+      Ordered by when someone last contributed, not by how much — so the newest arrival is at the top, where they should
+      be.
     </p>
 
     <div class="grid gap-3 sm:grid-cols-2">
@@ -101,8 +101,8 @@
   <section class="rounded-xl border border-border bg-muted/30 p-6 sm:p-8">
     <h2 class="text-xl font-semibold tracking-tight">Your name goes here next.</h2>
     <p class="mt-2 max-w-2xl text-muted-foreground">
-      An opened issue counts as much as merged code. Pick something that annoys you about freehire
-      and tell us, or fix it.
+      An opened issue counts as much as merged code. Pick something that annoys you about freehire and tell us, or fix
+      it.
     </p>
     <div class="mt-5 flex flex-wrap gap-3">
       <a

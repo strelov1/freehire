@@ -23,11 +23,25 @@ const STRIPE_HUNDREDFOLD = new Set(['ISK', 'UGX']);
 
 // `locale` defaults to the runtime's own. A caller whose text is rendered on the server
 // and hydrated in the browser passes one, since the two runtimes need not share a locale.
-export function formatMinorUnits(minor: number, currency: string, locale?: string): string {
+// `trimWhole` drops a zero fraction ("$5", not "$5.00") for a price headline; amounts that
+// carry cents keep them.
+export function formatMinorUnits(
+  minor: number,
+  currency: string,
+  locale?: string,
+  { trimWhole = false }: { trimWhole?: boolean } = {},
+): string {
   const code = (currency || 'usd').toUpperCase();
   const fmt = new Intl.NumberFormat(locale, { style: 'currency', currency: code });
-  const exponent = STRIPE_HUNDREDFOLD.has(code)
-    ? 2
-    : (fmt.resolvedOptions().maximumFractionDigits ?? 2);
-  return fmt.format(minor / 10 ** exponent);
+  const exponent = STRIPE_HUNDREDFOLD.has(code) ? 2 : (fmt.resolvedOptions().maximumFractionDigits ?? 2);
+  const value = minor / 10 ** exponent;
+  if (trimWhole && Number.isInteger(value)) {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: code,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  }
+  return fmt.format(value);
 }

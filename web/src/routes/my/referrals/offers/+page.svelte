@@ -12,7 +12,7 @@
 <svelte:head><title>{s.headTitle}</title></svelte:head>
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
-<div class="max-w-3xl">
-  <h1 class="mb-4 text-2xl max-lg:sr-only font-semibold tracking-tight">{s.tabs.offers}</h1>
+<div>
+  <h1 class="mb-4 text-2xl max-lg:text-xl font-semibold tracking-tight">{s.tabs.offers}</h1>
   <ReferralsView tab="offers" />
 </div>

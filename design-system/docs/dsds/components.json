@@ -462,7 +462,7 @@
       "id": "component.avatar",
       "type": "component",
       "name": "Avatar",
-      "description": "Image-or-initials avatar with deterministic hue from name. A broken/missing src falls back to the initials render. Also exported as EntityLogo (same component) for the company/entity-mark call site, as distinct from a person avatar.",
+      "description": "Image-or-initials avatar with deterministic hue from name. A broken/missing src falls back to the initials render. It never shrinks in a flex row (shrink-0): beside a long name that truncates, a logo squeezed into a sliver reads as broken; a caller's class can still override it. Also exported as EntityLogo (same component) for the company/entity-mark call site, as distinct from a person avatar.",
       "source": {
         "file": "../../src/avatar.svelte"
       },
@@ -509,7 +509,7 @@
       "id": "component.entity-logo",
       "type": "component",
       "name": "EntityLogo",
-      "description": "Same implementation as Avatar (src/avatar.svelte), exported under a second name for the company/entity-mark call site — a rounded-square tile, as distinct from Avatar's circular person default.",
+      "description": "Same implementation as Avatar (src/avatar.svelte), exported under a second name for the company/entity-mark call site — a rounded-square tile, as distinct from Avatar's circular person default. It never shrinks in a flex row (shrink-0): beside a long name that truncates, a logo squeezed into a sliver reads as broken; a caller's class can still override it.",
       "source": {
         "file": "../../src/avatar.svelte"
       },
@@ -733,7 +733,7 @@
       "id": "component.section-label",
       "type": "component",
       "name": "SectionLabel",
-      "description": "Mono `// label` heading used to head a page section. The `//` is part of the rendering — callers pass the bare section name.",
+      "description": "Small uppercase label that heads a page section, in the same eyebrow voice as every other section label (medium weight, wide tracking, muted). Callers pass the bare section name; `as` makes it a heading where it is the section's only title.",
       "source": {
         "file": "../../src/section-label.svelte"
       },
@@ -862,7 +862,7 @@
       "id": "component.tab-strip",
       "type": "component",
       "name": "TabStrip",
-      "description": "Horizontally-scrolling, fade-masked underline tab strip with roving-tabindex arrow-key navigation. A tab carrying an href renders as an anchor (so a strip of routes stays middle-clickable and openable in a new tab) and then the arrows move focus only, since activating a link navigates. Distinct from Tabs (a pill/segmented control with no overflow handling) — for a row that can outgrow its container. Screen-reader attention labels stay contained within the scrolling strip, avoiding page overflow on narrow screens. Also exports the tabStripId(panelId, tab) helper.",
+      "description": "Tab icons are hidden below `sm`, so a phone strip shows labels only. Horizontally-scrolling, fade-masked underline tab strip with roving-tabindex arrow-key navigation. A tab carrying an href renders as an anchor (so a strip of routes stays middle-clickable and openable in a new tab) and then the arrows move focus only, since activating a link navigates. Distinct from Tabs (a pill/segmented control with no overflow handling) — for a row that can outgrow its container. Screen-reader attention labels stay contained within the scrolling strip, avoiding page overflow on narrow screens. Also exports the tabStripId(panelId, tab) helper.",
       "source": {
         "file": "../../src/tab-strip.svelte"
       },

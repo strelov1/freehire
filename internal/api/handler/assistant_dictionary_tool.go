@@ -3,7 +3,8 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"errors"
+
+	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
@@ -44,10 +45,10 @@ func (h *assistantHandlers) dictionaryMCPTools() []assistant.Tool {
 				return nil, err
 			}
 			if userID <= 0 {
-				return nil, errors.New("a signed-in account is required")
+				return nil, fiber.NewError(fiber.StatusUnauthorized, "a signed-in account is required")
 			}
 			if h.dictionary == nil {
-				return nil, errors.New("dictionary suggestions are not available")
+				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "dictionary suggestions are not available")
 			}
 			return h.dictionary.recordTerm(ctx, userID, in)
 		},

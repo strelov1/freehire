@@ -43,8 +43,7 @@ export const FILTER_COLLECTIONS: FilterCollection[] = [
     slug: 'remote-worldwide',
     group: 'remote',
     title: 'Remote Worldwide',
-    description:
-      'Fully remote roles open to candidates anywhere in the world, not tied to a country or region.',
+    description: 'Fully remote roles open to candidates anywhere in the world, not tied to a country or region.',
     params: { work_mode: 'remote', regions: 'global' },
   },
   // Regional remote landings. Params use the canonical facet vocabulary: regions
@@ -353,7 +352,8 @@ export const FILTER_COLLECTIONS: FilterCollection[] = [
     slug: 'data-analytics',
     group: 'field',
     title: 'Data Analytics',
-    description: 'Data and analytics roles — analysts, analytics engineers and BI — turning data into reporting and decisions.',
+    description:
+      'Data and analytics roles — analysts, analytics engineers and BI — turning data into reporting and decisions.',
     params: { category: 'data_analytics' },
   },
   {
@@ -1212,13 +1212,9 @@ export function collectionBySlug(slug: string): ResolvedCollection | undefined {
 // category alongside anything else is narrower than "all <category> jobs", and
 // offering it under that label would send the reader somewhere smaller than promised.
 // 15 of the 37 categories have one; the rest returning undefined is ordinary.
-export function collectionForCategory(
-  category: string
-): { slug: string; title: string } | undefined {
+export function collectionForCategory(category: string): { slug: string; title: string } | undefined {
   if (!category) return undefined;
-  const match = FILTER_COLLECTIONS.find(
-    (c) => c.params.category === category && Object.keys(c.params).length === 1
-  );
+  const match = FILTER_COLLECTIONS.find((c) => c.params.category === category && Object.keys(c.params).length === 1);
   return match ? { slug: match.slug, title: match.title } : undefined;
 }
 
@@ -1242,9 +1238,7 @@ export function collectionForCategory(
 // set. No entry is list-valued today; the guard is for the next one.
 export function collectionForSkill(skill: string): { slug: string; title: string } | undefined {
   if (!skill) return undefined;
-  const match = FILTER_COLLECTIONS.find(
-    (c) => c.params.skills === skill && Object.keys(c.params).length === 1
-  );
+  const match = FILTER_COLLECTIONS.find((c) => c.params.skills === skill && Object.keys(c.params).length === 1);
   return match ? { slug: match.slug, title: match.title } : undefined;
 }
 
@@ -1378,10 +1372,7 @@ export function relatedCollectionSlugs(job: JobFacets, target = 10): string[] {
 // link. This is what JobSeeAlso renders; kept as a pure function (rather than
 // resolving inline in the component) so it's unit-testable like the rest of
 // this module, matching web/'s no-component-test-harness convention.
-export function relatedCollectionLinks(
-  job: JobFacets,
-  target = 10
-): { slug: string; title: string }[] {
+export function relatedCollectionLinks(job: JobFacets, target = 10): { slug: string; title: string }[] {
   return relatedCollectionSlugs(job, target)
     .map((slug) => {
       const collection = collectionBySlug(slug);

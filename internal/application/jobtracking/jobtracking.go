@@ -179,7 +179,7 @@ var (
 type Repository interface {
 	// JobIDBySlug returns the internal job id for the given public slug, or
 	// ErrJobNotFound when no job matches.
-	JobIDBySlug(ctx context.Context, slug string) (int64, error)
+	JobIDBySlug(ctx context.Context, userID int64, slug string) (int64, error)
 
 	RecordView(ctx context.Context, userID, jobID int64) (Interaction, error)
 
@@ -434,7 +434,7 @@ func (s *Service) Pipeline(ctx context.Context, userID int64) (userjob.Pipeline,
 
 // RecordView resolves slug → jobID then delegates to the repository.
 func (s *Service) RecordView(ctx context.Context, userID int64, slug string) (Interaction, error) {
-	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	jobID, err := s.repo.JobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
@@ -444,7 +444,7 @@ func (s *Service) RecordView(ctx context.Context, userID int64, slug string) (In
 // MarkApplied resolves slug → jobID then delegates to the repository. `source` is
 // the appevent source of the recording, supplied by the caller.
 func (s *Service) MarkApplied(ctx context.Context, userID int64, slug, source string) (Interaction, error) {
-	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	jobID, err := s.repo.JobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
@@ -460,7 +460,7 @@ func (s *Service) MarkApplied(ctx context.Context, userID int64, slug, source st
 // MarkAppliedAt resolves slug → jobID then records an application dated by `at`
 // — the mail-reconstruction path (see Repository.MarkAppliedAt).
 func (s *Service) MarkAppliedAt(ctx context.Context, userID int64, slug string, at time.Time, source string) (Interaction, error) {
-	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	jobID, err := s.repo.JobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
@@ -490,7 +490,7 @@ func (s *Service) MarkAppliedOn(ctx context.Context, userID int64, slug string, 
 	if err := applydate.Validate(day, now); err != nil {
 		return Interaction{}, err
 	}
-	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	jobID, err := s.repo.JobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
@@ -504,7 +504,7 @@ func (s *Service) MarkAppliedOn(ctx context.Context, userID int64, slug string, 
 
 // SaveJob resolves slug → jobID then delegates to the repository.
 func (s *Service) SaveJob(ctx context.Context, userID int64, slug string) (Interaction, error) {
-	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	jobID, err := s.repo.JobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
@@ -521,7 +521,7 @@ func (s *Service) SaveJob(ctx context.Context, userID int64, slug string) (Inter
 // returns ErrNoInteraction (no row to clear), the method returns a zero
 // Interaction with only JobID set — unsaving is idempotent.
 func (s *Service) Unsave(ctx context.Context, userID int64, slug string) (Interaction, error) {
-	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	jobID, err := s.repo.JobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
@@ -540,7 +540,7 @@ func (s *Service) Unsave(ctx context.Context, userID int64, slug string) (Intera
 // Dismiss resolves slug → jobID then delegates to the repository, marking the
 // job dismissed in the swipe deck.
 func (s *Service) Dismiss(ctx context.Context, userID int64, slug string) (Interaction, error) {
-	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	jobID, err := s.repo.JobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
@@ -551,7 +551,7 @@ func (s *Service) Dismiss(ctx context.Context, userID int64, slug string) (Inter
 // repository returns ErrNoInteraction (no row to clear), the method returns a
 // zero Interaction with only JobID set — undismissing is idempotent.
 func (s *Service) Undismiss(ctx context.Context, userID int64, slug string) (Interaction, error) {
-	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	jobID, err := s.repo.JobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
@@ -565,7 +565,7 @@ func (s *Service) Undismiss(ctx context.Context, userID int64, slug string) (Int
 // ClearProgress resolves slug → jobID then drops stage and applied state, keeping
 // saved_at/viewed_at/notes intact (the "drag back to Saved" Kanban action).
 func (s *Service) ClearProgress(ctx context.Context, userID int64, slug string) (Interaction, error) {
-	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	jobID, err := s.repo.JobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
@@ -575,7 +575,7 @@ func (s *Service) ClearProgress(ctx context.Context, userID int64, slug string) 
 // Untrack resolves slug → jobID then removes the job from the board by clearing
 // saved_at, applied_at, stage, and notes while keeping viewed_at.
 func (s *Service) Untrack(ctx context.Context, userID int64, slug string) (Interaction, error) {
-	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	jobID, err := s.repo.JobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
@@ -595,7 +595,7 @@ func (s *Service) Track(ctx context.Context, userID int64, slug string, stage, n
 	if stage != nil && !userjob.ValidStage(*stage) {
 		return Interaction{}, ErrInvalidStage
 	}
-	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	jobID, err := s.repo.JobIDBySlug(ctx, userID, slug)
 	if err != nil {
 		return Interaction{}, err
 	}

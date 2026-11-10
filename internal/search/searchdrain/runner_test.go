@@ -182,6 +182,9 @@ type fakeIndexer struct {
 	opaqueErr error
 	// waveErr fails every call outright, batch and per-item alike.
 	waveErr error
+	// maxBatch, when set, rejects any call with more jobs, standing in for Meilisearch's
+	// HTTP payload limit (413).
+	maxBatch int
 }
 
 func newFakeIndexer() *fakeIndexer { return &fakeIndexer{indexErr: map[int64]error{}} }
@@ -214,6 +217,9 @@ func (ix *fakeIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	}
 	if ix.batchFails && len(jobs) > 1 {
 		return errors.New("batch index failed")
+	}
+	if ix.maxBatch > 0 && len(jobs) > ix.maxBatch {
+		return errors.New("payload_too_large")
 	}
 	for _, j := range jobs {
 		if err := ix.indexErr[j.ID]; err != nil {
@@ -328,6 +334,56 @@ func TestRunnerFallsBackToPerItemOnBatchFailure(t *testing.T) {
 	}
 	if len(store.failCalls) != 1 || store.failCalls[0].outboxID != 20 {
 		t.Errorf("failCalls = %+v, want one for outbox 20 (job 2)", store.failCalls)
+	}
+}
+
+// A wave the index rejects as a whole — prod 2026-11-06: 15000 documents over
+// Meilisearch's 100 MB payload limit, HTTP 413 — must be split, not pushed one document at
+// a time. Per-item took ~22s a document and held the run for what would have been ~90h.
+func TestRunnerSplitsAWaveTheIndexRejectsAsTooLarge(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	ix.maxBatch = 4
+	for id := int64(1); id <= 16; id++ {
+		seed(store, id)
+	}
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 16 || stats.Failed != 0 || len(store.failCalls) != 0 {
+		t.Fatalf("stats = %+v, failCalls = %+v, want all 16 indexed and nothing charged", stats, store.failCalls)
+	}
+	// 16 rejected, 2x8 rejected, 4x4 accepted.
+	if len(ix.indexCalls) != 7 {
+		t.Errorf("IndexBatch calls = %v, want 7 (halving down to the accepted size), not one per document",
+			ix.indexCalls)
+	}
+}
+
+// One poison row among many costs a logarithmic number of pushes, not one per entry.
+func TestRunnerIsolatesAPoisonRowByHalving(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	for id := int64(1); id <= 64; id++ {
+		seed(store, id)
+	}
+	ix.indexErr[37] = errors.New("job 37 is poison")
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 63 || stats.Failed != 1 {
+		t.Fatalf("stats = %+v, want indexed=63 failed=1", stats)
+	}
+	if len(store.failCalls) != 1 || store.failCalls[0].outboxID != 370 {
+		t.Errorf("failCalls = %+v, want one for outbox 370 (job 37)", store.failCalls)
+	}
+	// 1 + 2 per level for 6 levels (64 -> 1) = 13; per-item would be 65.
+	if len(ix.indexCalls) > 13 {
+		t.Errorf("IndexBatch calls = %d, want at most 13", len(ix.indexCalls))
 	}
 }
 

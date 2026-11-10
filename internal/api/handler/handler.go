@@ -459,11 +459,6 @@ type Config struct {
 	// OJCPSigner signs the OJCP manifest. Nil = the manifest is unsigned and no key set is
 	// published.
 	OJCPSigner *ojcp.Signer
-	// QueryEmbedder embeds an agent's query for its opt-in semantic search. Nil = no
-	// embedding backend: such requests are answered keyword-only and say so.
-	QueryEmbedder *search.QueryEmbedder
-	// SemanticScoreThreshold is the ranking-score floor of an agent's hybrid query.
-	SemanticScoreThreshold float64
 	// MailboxDomain enables the hosted-mailbox option: the receiving domain user
 	// addresses live on (<handle>@MailboxDomain). Empty = the feature is off.
 	MailboxDomain string
@@ -565,6 +560,7 @@ func Register(app *fiber.App, cfg Config) {
 	embedProgressH := newEmbedProgressHandlers(embedProgressSrc)
 	ogH := newOGHandlers(queries, cfg.Cache)
 	votesH := newVoteHandlers(queries, cfg.Pool)
+	companyWatchH := newCompanyWatchHandlers(queries)
 	communityH := newCommunityHandlers(queries)
 	// Feedback reuses communityH's persona minting (via the communityPersonas
 	// adapter) so a user's pseudonym stays the same one discussion threads show,
@@ -749,23 +745,13 @@ func Register(app *fiber.App, cfg Config) {
 		sitemapFreshJobs = cfg.Search
 	}
 	sitemapH := newSitemapHandlers(sitemapJobs, sitemapCompanies, sitemapFreshJobs)
-	// One opt-in semantic search for both agent surfaces, so OJCP and /agent/jobs/search
-	// cannot disagree about when a query was answered by meaning. The embedder is assigned
-	// only when set: a nil *search.QueryEmbedder in the interface field would be a non-nil
-	// interface, and the "no backend" check would never fire.
-	semantic := semanticSearch{threshold: cfg.SemanticScoreThreshold}
-	if cfg.QueryEmbedder != nil {
-		semantic.embedder = cfg.QueryEmbedder
-	}
 	searchH := newSearchHandlers(jobSearch, facets, queries, cfg.Cache, profileSvc)
-	searchH.semantic = semantic
 	searchH.agentViews = cfg.AgentViews
 	// The OJCP read surface. It shares the search backend and the store with the handlers
 	// above rather than holding its own: an agent's question and a browser's must reach the
 	// same catalogue, or the two answers drift.
 	ojcpH := newOJCPHandlers(jobSearch, queries, cfg.FrontendOrigin, atsapply.SubmittableProviders())
 	ojcpH.signer = cfg.OJCPSigner
-	ojcpH.semantic = semantic
 	ojcpH.agentViews = cfg.AgentViews
 	// The ChatGPT app's MCP surface. A SECOND MCP server beside the OJCP one, over the same
 	// search backend and the same store: that one renders a foreign schema for agents which
@@ -779,7 +765,6 @@ func Register(app *fiber.App, cfg Config) {
 	)
 	mcpappH.facets = facets
 	mcpappH.cache = cfg.Cache
-	mcpappH.semantic = semantic
 	mcpappH.agentViews = cfg.AgentViews
 	// The completion dictionary. Left nil when search is unconfigured — same reason as
 	// jobSearch above: a nil *suggest.Service wrapped in the interface would be a
@@ -976,6 +961,7 @@ func Register(app *fiber.App, cfg Config) {
 		buddy.NewMockMailNotifier(queries, mockMail, cfg.NotifyEmailFrom, cfg.FrontendOrigin))
 	conversationH := newConversationHandlers(messagingSvc, buddyMocks)
 	buddyH := newBuddyHandlers(buddySvc, buddyMocks)
+	assistantH.buddies = buddyH
 
 	// The mentorship marketplace: referral's opposite number, where the insider is named
 	// and chosen rather than anonymous. A nil notifier is a deployment with no mail
@@ -1128,7 +1114,10 @@ func Register(app *fiber.App, cfg Config) {
 	// segment under /me/tracking — see the comment on its register.
 	timelineH.register(api, mw)
 	votesH.register(api, mw)
+	companyWatchH.register(api, mw)
 	companyFeedbackH.register(api, mw)
+	// The manual account ban (see userModerationHandlers).
+	newUserModerationHandlers(queries).register(api, mw)
 	companyProcessReportH.register(api, mw)
 	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
 	matchH.register(api, mw)

@@ -84,9 +84,7 @@ describe('JobBoard — empty board', () => {
     expect(screen.getByText('Your board is empty')).toBeTruthy();
     expect(screen.getByText(/Save a job from any listing and it lands here/)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Find jobs' }).getAttribute('href')).toBe('/jobs');
-    expect(screen.getByRole('link', { name: 'Upload your CV' }).getAttribute('href')).toBe(
-      '/my/profile',
-    );
+    expect(screen.getByRole('link', { name: 'Upload your CV' }).getAttribute('href')).toBe('/my/profile');
     // The columns behind it are not drawn at all.
     expect(screen.queryByRole('heading', { name: 'Applied' })).toBeNull();
     expect(screen.queryByRole('searchbox')).toBeNull();
@@ -132,9 +130,7 @@ describe('JobBoard — removing an application', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Remove from board' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() =>
-      expect(screen.getByText("Couldn't remove it from your board. Try again.")).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText("Couldn't remove it from your board. Try again.")).toBeTruthy());
     expect(screen.queryByText('Your board is empty')).toBeNull();
   });
 });
@@ -200,9 +196,7 @@ describe('JobBoard — a failed stage change', () => {
     await fireEvent.change(picker, { target: { value: 'interview' } });
 
     await waitFor(() =>
-      expect(
-        screen.getByText("Couldn't move Backend Engineer — it's back in Applied. Try again."),
-      ).toBeTruthy(),
+      expect(screen.getByText("Couldn't move Backend Engineer — it's back in Applied. Try again.")).toBeTruthy(),
     );
   });
 });
@@ -258,7 +252,6 @@ describe('JobBoard — the list view drawing a page at a time', () => {
   });
 });
 
-
 describe('JobBoard — quick triage', () => {
   const posting = {
     ...application,
@@ -291,19 +284,33 @@ describe('JobBoard — quick triage', () => {
 
   it.each(['board', 'list'] as const)('sorts %s by company and date added', async (view) => {
     const rows = [
-      { ...application, id: 'z', role_title: 'Z role', company_slug: 'zeta', added_to_board_at: '2026-10-30T00:00:00Z' },
-      { ...application, id: 'a', role_title: 'A role', company_slug: 'alpha', added_to_board_at: '2026-10-01T00:00:00Z' },
+      {
+        ...application,
+        id: 'z',
+        role_title: 'Z role',
+        company_slug: 'zeta',
+        added_to_board_at: '2026-10-30T00:00:00Z',
+      },
+      {
+        ...application,
+        id: 'a',
+        role_title: 'A role',
+        company_slug: 'alpha',
+        added_to_board_at: '2026-10-01T00:00:00Z',
+      },
     ];
     render(JobBoard, { initial: rows, view });
     const sort = screen.getByRole('combobox', { name: 'Sort applications' });
     await fireEvent.change(sort, { target: { value: 'company' } });
-    const titles = () => (view === 'board' ? within(screen.getByRole('region', { name: 'Applied' })) : screen).getAllByText(/^[AZ] role$/).map((el) => el.textContent);
+    const titles = () =>
+      (view === 'board' ? within(screen.getByRole('region', { name: 'Applied' })) : screen)
+        .getAllByText(/^[AZ] role$/)
+        .map((el) => el.textContent);
     expect(titles()).toEqual(['A role', 'Z role']);
     await fireEvent.change(sort, { target: { value: 'added' } });
     expect(titles()).toEqual(['Z role', 'A role']);
   });
 });
-
 
 describe('JobBoard — List navigation', () => {
   it('keeps a list application on the List route so refresh preserves its presentation', async () => {

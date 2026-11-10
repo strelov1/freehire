@@ -16,14 +16,12 @@
   <div class="flex flex-col gap-8">
     <header class="flex flex-col gap-3">
       <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// legal</p>
-      <h1 class="text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-5xl">
-        Delete Your Account
-      </h1>
+      <h1 class="text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-5xl">Delete Your Account</h1>
     </header>
 
     <p class="text-base leading-relaxed text-muted-foreground">
-      You can permanently delete your freehire account and its data at any time, from the website
-      or the mobile app. This cannot be undone — there is no grace period and no recovery.
+      You can permanently delete your freehire account and its data at any time, from the website or the mobile app.
+      This cannot be undone — there is no grace period and no recovery.
     </p>
 
     <section class="flex flex-col gap-3">
@@ -57,9 +55,8 @@
       <h2 class="text-xl font-semibold tracking-tight">Can't sign in?</h2>
       <p class="text-sm leading-relaxed text-muted-foreground">
         If you can't access your account to delete it yourself, email us at
-        <a
-          href="mailto:{contactEmail}"
-          class="font-medium text-foreground underline-offset-4 hover:underline">{contactEmail}</a
+        <a href="mailto:{contactEmail}" class="font-medium text-foreground underline-offset-4 hover:underline"
+          >{contactEmail}</a
         >
         from the address on the account and we'll delete it for you.
       </p>

@@ -16,7 +16,7 @@ import {
   Link2,
   Handshake,
   GraduationCap,
-  Coins,
+  Gauge,
   Settings,
   TrendingUp,
   Plug,
@@ -29,6 +29,7 @@ import {
   HandHelping,
   UserPlus,
   Briefcase,
+  Eye,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
 import type { AccountNavItem, WorkspaceId } from './accountNav';
@@ -53,6 +54,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/referrals/incoming': UserPlus,
   '/my/employer/vacancies': Briefcase,
   '/my/tracking': LayoutList,
+  '/my/watchlist': Eye,
   '/my/activity': Activity,
   '/my/inbox': Inbox,
   '/my/market-pulse': TrendingUp,
@@ -60,7 +62,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/integrations': Plug,
   '/my/contributions': Link2,
   '/my/employer': Building2,
-  '/my/plan': Coins,
+  '/my/plan': Gauge, // daily allowances; a coin stack read like the chain icon beside it
   '/my/account': Settings,
 };
 

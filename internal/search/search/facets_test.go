@@ -20,16 +20,15 @@ func TestDisjunctiveFacetCounts(t *testing.T) {
 	}
 	var mu sync.Mutex
 	var calls []call
-	searcher := func(_ context.Context, _ string, filter any, facets []string) (*meilisearch.SearchResponse, error) {
+	searcher := func(_ context.Context, _ string, filter any, facets []string) (rawFacets, error) {
 		mu.Lock()
 		calls = append(calls, call{filter, facets})
 		mu.Unlock()
 		if len(facets) == 0 { // total-only query under the full filter
-			return &meilisearch.SearchResponse{EstimatedTotalHits: 1234}, nil
+			return rawFacets{Total: 1234}, nil
 		}
 		attr := facets[0]
-		dist, _ := json.Marshal(map[string]map[string]int64{attr: {"x": 10, "y": 5}})
-		return &meilisearch.SearchResponse{FacetDistribution: dist, EstimatedTotalHits: 99}, nil
+		return rawFacets{Distribution: map[string]map[string]int64{attr: {"x": 10, "y": 5}}, Total: 99}, nil
 	}
 
 	reqs := []FacetReq{{Attr: "seniority", Filter: "F_sen"}, {Attr: "category", Filter: "F_cat"}}
@@ -71,18 +70,17 @@ func TestDisjunctiveFacetCounts_EuropeCountIncludesUK(t *testing.T) {
 	// Europe OR the UK, counted once — not the bare "eu" bucket of the distribution.
 	var mu sync.Mutex
 	var widened any
-	searcher := func(_ context.Context, _ string, filter any, facets []string) (*meilisearch.SearchResponse, error) {
+	searcher := func(_ context.Context, _ string, filter any, facets []string) (rawFacets, error) {
 		if len(facets) > 0 {
-			dist, _ := json.Marshal(map[string]map[string]int64{"regions": {"eu": 100, "uk": 30, "latam": 7}})
-			return &meilisearch.SearchResponse{FacetDistribution: dist}, nil
+			return rawFacets{Distribution: map[string]map[string]int64{"regions": {"eu": 100, "uk": 30, "latam": 7}}}, nil
 		}
 		if groups, ok := filter.([][]string); ok && len(groups) == 2 {
 			mu.Lock()
 			widened = filter
 			mu.Unlock()
-			return &meilisearch.SearchResponse{EstimatedTotalHits: 120}, nil
+			return rawFacets{Total: 120}, nil
 		}
-		return &meilisearch.SearchResponse{EstimatedTotalHits: 500}, nil
+		return rawFacets{Total: 500}, nil
 	}
 
 	reqs := []FacetReq{{Attr: "regions", Filter: [][]string{{`work_mode = "remote"`}}}}
@@ -103,8 +101,8 @@ func TestDisjunctiveFacetCounts_EuropeCountIncludesUK(t *testing.T) {
 }
 
 func TestDisjunctiveFacetCounts_ErrorPropagates(t *testing.T) {
-	searcher := func(context.Context, string, any, []string) (*meilisearch.SearchResponse, error) {
-		return nil, errors.New("boom")
+	searcher := func(context.Context, string, any, []string) (rawFacets, error) {
+		return rawFacets{}, errors.New("boom")
 	}
 	if _, err := disjunctiveFacetCounts(context.Background(), "", []FacetReq{{Attr: "a", Filter: "f"}}, "full", searcher); err == nil {
 		t.Fatal("expected error to propagate")
@@ -115,8 +113,8 @@ func TestDisjunctiveFacetCounts_ErrorPropagates(t *testing.T) {
 // communication error, so a client disconnect is not misreported upstream as a
 // fault — mirrors Search's classification (client.go).
 func TestDisjunctiveFacetCounts_CancelledContextReRaisesSentinel(t *testing.T) {
-	searcher := func(context.Context, string, any, []string) (*meilisearch.SearchResponse, error) {
-		return nil, errors.New("meilisearch: could not perform request: context canceled")
+	searcher := func(context.Context, string, any, []string) (rawFacets, error) {
+		return rawFacets{}, errors.New("meilisearch: could not perform request: context canceled")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -130,8 +128,8 @@ func TestDisjunctiveFacetCounts_CancelledContextReRaisesSentinel(t *testing.T) {
 // A Meili 400 (malformed filter) must map to ErrBadQuery so the handler can render
 // it as a client mistake and skip reporting.
 func TestDisjunctiveFacetCounts_BadRequestMapsToErrBadQuery(t *testing.T) {
-	searcher := func(context.Context, string, any, []string) (*meilisearch.SearchResponse, error) {
-		return nil, &meilisearch.Error{StatusCode: http.StatusBadRequest}
+	searcher := func(context.Context, string, any, []string) (rawFacets, error) {
+		return rawFacets{}, &meilisearch.Error{StatusCode: http.StatusBadRequest}
 	}
 
 	_, err := disjunctiveFacetCounts(context.Background(), "", []FacetReq{{Attr: "a", Filter: "f"}}, "full", searcher)
@@ -175,10 +173,11 @@ func TestBuildFacetResult(t *testing.T) {
 			FacetDistribution:  json.RawMessage(`{"regions":{"eu":800}}`),
 			FacetStats:         json.RawMessage(`{"enrichment.salary_min":{"min":0,"max":400000}}`),
 		}
-		got, err := buildFacetResult(resp)
+		raw, err := rawFromResponse(resp)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+		got := buildFacetResult(raw)
 		if got.Total != 1234 {
 			t.Errorf("Total = %d, want 1234", got.Total)
 		}
@@ -192,10 +191,11 @@ func TestBuildFacetResult(t *testing.T) {
 
 	t.Run("empty facets yield nil maps but keep total", func(t *testing.T) {
 		resp := &meilisearch.SearchResponse{EstimatedTotalHits: 7}
-		got, err := buildFacetResult(resp)
+		raw, err := rawFromResponse(resp)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+		got := buildFacetResult(raw)
 		if got.Total != 7 || got.Facets != nil || got.Stats != nil {
 			t.Errorf("got %+v, want total=7 nil maps", got)
 		}
@@ -203,7 +203,7 @@ func TestBuildFacetResult(t *testing.T) {
 
 	t.Run("invalid distribution errors", func(t *testing.T) {
 		resp := &meilisearch.SearchResponse{FacetDistribution: json.RawMessage(`{bad`)}
-		if _, err := buildFacetResult(resp); err == nil {
+		if _, err := rawFromResponse(resp); err == nil {
 			t.Error("expected error for invalid distribution")
 		}
 	})

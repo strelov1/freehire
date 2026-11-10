@@ -162,8 +162,9 @@
 {/snippet}
 
 {#if iconsOnly}
-  <!-- Just the marks, each a way into the full setup on /mcp. -->
-  <nav class="flex gap-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Assistants">
+  <!-- Just the marks, each a way into the full setup on /mcp. They wrap rather than scroll:
+       a hidden-scrollbar row cut its last mark mid-word at the card edge ("Cc…"). -->
+  <nav class="flex flex-wrap gap-x-5 gap-y-2" aria-label="Assistants">
     {#each hosts as h (h.id)}
       <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() path plus the host query -->
       <a
@@ -183,154 +184,156 @@
     {/each}
   </nav>
 {:else}
-<!-- Setup: one address, with instructions for each assistant. Every host's panel stays in the
+  <!-- Setup: one address, with instructions for each assistant. Every host's panel stays in the
      HTML, `hidden` when unselected, so crawlers and agents read all of them. -->
-<section class={compact ? '' : 'rounded-2xl border border-border bg-secondary/20 p-5 sm:p-8'}>
-  <div class={['flex flex-wrap items-end justify-between gap-3', compact && 'min-h-14']}>
-    <h2 class="text-sm text-muted-foreground">Pick your assistant</h2>
-    {#if compact && selected?.directory}
-      <!-- The selected host's one-click install, lifted above the picker: it needs no
+  <section class={compact ? '' : 'rounded-2xl border border-border bg-secondary/20 p-5 sm:p-8'}>
+    <div class={['flex flex-wrap items-end justify-between gap-3', compact && 'min-h-14']}>
+      <h2 class="text-sm text-muted-foreground">Pick your assistant</h2>
+      {#if compact && selected?.directory}
+        <!-- The selected host's one-click install, lifted above the picker: it needs no
            address or steps at all, so it leads whenever the host has one. -->
-      {@const d = selected.directory}
-      <div class="flex flex-col items-end gap-1.5">
-        <!-- eslint-disable svelte/no-navigation-without-resolve -- external directory URL, not a SvelteKit route -->
-        <a
-          href={d.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
-          style:background-color="#{d.brand.hex}"
-          style:color={glyphColorFor(`#${d.brand.hex}`)}
+        {@const d = selected.directory}
+        <div class="flex flex-col items-end gap-1.5">
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- external directory URL, not a SvelteKit route -->
+          <a
+            href={d.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+            style:background-color="#{d.brand.hex}"
+            style:color={glyphColorFor(`#${d.brand.hex}`)}
+          >
+            <svg viewBox={d.brand.viewBox ?? '0 0 24 24'} class="size-4 fill-current" aria-hidden="true"
+              ><path d={d.brand.path} /></svg
+            >
+            Add to {selected?.label} ↗
+          </a>
+          <!-- eslint-enable svelte/no-navigation-without-resolve -->
+          <span class="text-xs text-muted-foreground">{d.note}</span>
+        </div>
+      {/if}
+    </div>
+    <div
+      class="mt-4 flex gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      role="group"
+      aria-label="Assistant"
+    >
+      {#each hosts as h (h.id)}
+        <button
+          type="button"
+          aria-pressed={host === h.id}
+          onclick={() => (host = h.id)}
+          class={[
+            'flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors',
+            host === h.id
+              ? 'border-border bg-background text-foreground shadow-sm'
+              : 'border-transparent text-muted-foreground hover:text-foreground',
+          ]}
         >
-          <svg viewBox={d.brand.viewBox ?? '0 0 24 24'} class="size-4 fill-current" aria-hidden="true"><path d={d.brand.path} /></svg>
-          Add to {selected?.label} ↗
-        </a>
-        <!-- eslint-enable svelte/no-navigation-without-resolve -->
-        <span class="text-xs text-muted-foreground">{d.note}</span>
+          <EntityLogo
+            name={h.label}
+            src={h.logo ?? sourceLogoUrl(h.label, h.domain) ?? undefined}
+            size="xs"
+            shape="square"
+            class={h.mono ? 'dark:invert' : undefined}
+          />
+          {h.label}
+        </button>
+      {/each}
+    </div>
+
+    {#each hosts as h (h.id)}
+      <div hidden={h.id !== host} class={compact ? 'mt-6' : 'mt-8'}>
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <h3 class={['font-semibold tracking-tight', compact ? 'text-base' : 'text-xl']}>Add it to {h.label}</h3>
+          {#if h.directory && !compact}
+            <div class="flex flex-col items-end gap-1.5">
+              <!-- eslint-disable svelte/no-navigation-without-resolve -- external directory URL, not a SvelteKit route -->
+              <a
+                href={h.directory.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+                style:background-color="#{h.directory.brand.hex}"
+                style:color={glyphColorFor(`#${h.directory.brand.hex}`)}
+              >
+                <svg viewBox={h.directory.brand.viewBox ?? '0 0 24 24'} class="size-4 fill-current" aria-hidden="true"
+                  ><path d={h.directory.brand.path} /></svg
+                >
+                Add to {h.label} ↗
+              </a>
+              <!-- eslint-enable svelte/no-navigation-without-resolve -->
+              <span class="text-xs text-muted-foreground">{h.directory.note}</span>
+            </div>
+          {/if}
+        </div>
+
+        <div class="max-w-2xl">
+          <p class="mt-4 text-sm leading-relaxed text-muted-foreground">
+            One connection for public search and your account. Search jobs, employers and market data without signing
+            in. Sign in with OAuth to use your profile, saved jobs, tracking and alerts.
+          </p>
+
+          <div class="mt-4 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
+            <code class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">{url}</code>
+            {@render copyButton(url, 'connector address')}
+          </div>
+          <p class="mt-2 text-xs text-muted-foreground">
+            No API key needed. Approve account access in your browser and revoke it from Connected devices at any time.
+          </p>
+
+          <div class="mt-5">
+            <ol class="space-y-3">
+              {#each h.steps as step, i (i)}
+                <li class="flex gap-4">
+                  <span
+                    class="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background"
+                    >{i + 1}</span
+                  >
+                  <span class={['leading-relaxed text-muted-foreground', compact && 'text-sm']}>{step}</span>
+                </li>
+              {/each}
+            </ol>
+            {#if h.snippet}
+              {@const text = h.snippet(url)}
+              <figure class="mt-5 overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">
+                <figcaption
+                  class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
+                >
+                  <span class="font-mono">{h.file ?? 'terminal'}</span>
+                  <span class="ml-auto">{@render copyButton(text, `${h.label} setup`)}</span>
+                </figcaption>
+                <pre class="overflow-x-auto p-4 font-mono text-sm leading-relaxed">{text}</pre>
+              </figure>
+            {/if}
+            <p class="mt-5 text-sm leading-relaxed text-muted-foreground">
+              {#if h.id === 'codex'}
+                For personal tools, run <code>codex mcp login freehire</code> and approve the connection in your browser.
+              {:else if h.id === 'claude-code'}
+                For personal tools, run <code>claude mcp login freehire</code>, or use <code>/mcp</code> inside Claude Code
+                and choose Authenticate for freehire. Public search works before you sign in.
+              {:else}
+                For personal tools, use your assistant's sign-in or authentication control and approve the freehire
+                connection in your browser. Keep the same server address.
+              {/if}
+            </p>
+          </div>
+        </div>
+      </div>
+    {/each}
+
+    {#if !compact}
+      {@const agentPrompt = `Add the freehire MCP server to ${selected?.label ?? 'this assistant'}. Its address is ${url} (streamable HTTP transport). Public search works without an account. For personal tools, start OAuth sign-in and let me approve access in my browser. Keep this same server address. When it is connected, run one job search to confirm it works, then tell me it is ready.`}
+      <div class="mt-8 max-w-2xl">
+        <h3 class="text-sm font-medium">Or copy this and send it to your agent</h3>
+        <figure class="mt-3 overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">
+          <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
+            <span>prompt</span>
+            <span class="ml-auto">{@render copyButton(agentPrompt, 'agent prompt')}</span>
+          </figcaption>
+          <p class="p-4 text-sm leading-relaxed">{agentPrompt}</p>
+        </figure>
       </div>
     {/if}
-  </div>
-  <div
-    class="mt-4 flex gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    role="group"
-    aria-label="Assistant"
-  >
-    {#each hosts as h (h.id)}
-      <button
-        type="button"
-        aria-pressed={host === h.id}
-        onclick={() => (host = h.id)}
-        class={[
-          'flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors',
-          host === h.id
-            ? 'border-border bg-background text-foreground shadow-sm'
-            : 'border-transparent text-muted-foreground hover:text-foreground',
-        ]}
-      >
-        <EntityLogo
-          name={h.label}
-          src={h.logo ?? sourceLogoUrl(h.label, h.domain) ?? undefined}
-          size="xs"
-          shape="square"
-          class={h.mono ? 'dark:invert' : undefined}
-        />
-        {h.label}
-      </button>
-    {/each}
-  </div>
-
-  {#each hosts as h (h.id)}
-    <div hidden={h.id !== host} class={compact ? 'mt-6' : 'mt-8'}>
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <h3 class={['font-semibold tracking-tight', compact ? 'text-base' : 'text-xl']}>Add it to {h.label}</h3>
-        {#if h.directory && !compact}
-          <div class="flex flex-col items-end gap-1.5">
-            <!-- eslint-disable svelte/no-navigation-without-resolve -- external directory URL, not a SvelteKit route -->
-            <a
-              href={h.directory.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
-              style:background-color="#{h.directory.brand.hex}"
-              style:color={glyphColorFor(`#${h.directory.brand.hex}`)}
-            >
-              <svg viewBox={h.directory.brand.viewBox ?? '0 0 24 24'} class="size-4 fill-current" aria-hidden="true"
-                ><path d={h.directory.brand.path} /></svg
-              >
-              Add to {h.label} ↗
-            </a>
-            <!-- eslint-enable svelte/no-navigation-without-resolve -->
-            <span class="text-xs text-muted-foreground">{h.directory.note}</span>
-          </div>
-        {/if}
-      </div>
-
-      <div class="max-w-2xl">
-      <p class="mt-4 text-sm leading-relaxed text-muted-foreground">
-        One connection for public search and your account. Search jobs, employers and market data without signing in.
-        Sign in with OAuth to use your profile, saved jobs, tracking and alerts.
-      </p>
-
-      <div class="mt-4 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
-        <code class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">{url}</code>
-        {@render copyButton(url, 'connector address')}
-      </div>
-      <p class="mt-2 text-xs text-muted-foreground">
-        No API key needed. Approve account access in your browser and revoke it from Connected devices at any time.
-      </p>
-
-      <div class="mt-5">
-        <ol class="space-y-3">
-          {#each h.steps as step, i (i)}
-            <li class="flex gap-4">
-              <span
-                class="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background"
-                >{i + 1}</span
-              >
-              <span class={['leading-relaxed text-muted-foreground', compact && 'text-sm']}>{step}</span>
-            </li>
-          {/each}
-        </ol>
-        {#if h.snippet}
-          {@const text = h.snippet(url)}
-          <figure class="mt-5 overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">
-            <figcaption
-              class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
-            >
-              <span class="font-mono">{h.file ?? 'terminal'}</span>
-              <span class="ml-auto">{@render copyButton(text, `${h.label} setup`)}</span>
-            </figcaption>
-            <pre class="overflow-x-auto p-4 font-mono text-sm leading-relaxed">{text}</pre>
-          </figure>
-        {/if}
-        <p class="mt-5 text-sm leading-relaxed text-muted-foreground">
-          {#if h.id === 'codex'}
-            For personal tools, run <code>codex mcp login freehire</code> and approve the connection in your browser.
-          {:else if h.id === 'claude-code'}
-            For personal tools, run <code>claude mcp login freehire</code>, or use <code>/mcp</code> inside Claude Code
-            and choose Authenticate for freehire. Public search works before you sign in.
-          {:else}
-            For personal tools, use your assistant's sign-in or authentication control and approve the freehire
-            connection in your browser. Keep the same server address.
-          {/if}
-        </p>
-      </div>
-      </div>
-    </div>
-  {/each}
-
-  {#if !compact}
-    {@const agentPrompt = `Add the freehire MCP server to ${selected?.label ?? 'this assistant'}. Its address is ${url} (streamable HTTP transport). Public search works without an account. For personal tools, start OAuth sign-in and let me approve access in my browser. Keep this same server address. When it is connected, run one job search to confirm it works, then tell me it is ready.`}
-    <div class="mt-8 max-w-2xl">
-      <h3 class="text-sm font-medium">Or copy this and send it to your agent</h3>
-      <figure class="mt-3 overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">
-        <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
-          <span>prompt</span>
-          <span class="ml-auto">{@render copyButton(agentPrompt, 'agent prompt')}</span>
-        </figcaption>
-        <p class="p-4 text-sm leading-relaxed">{agentPrompt}</p>
-      </figure>
-    </div>
-  {/if}
-</section>
+  </section>
 {/if}

@@ -81,7 +81,7 @@ const ContributorGate = 2
 // The worker re-stamps on every run, so a stamp older than this means the worker
 // has stopped — and a stopped worker must fall silent rather than keep accusing
 // the catalogue from a frozen snapshot. The value is the LAST TOLERATED day, not
-// the first offending one, matching internal/application/userjob's silence ladder.
+// the first offending one, matching internal/job/silence's ladder.
 const absenceStampMaxAgeDays = 14
 
 // convergence is how many criteria must fire before any level is assigned. One

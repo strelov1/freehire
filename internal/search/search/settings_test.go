@@ -9,12 +9,11 @@ import (
 )
 
 // Every embedder the facet index carries must stay model-free: the skill vectors are
-// arithmetic over a finite dictionary, and the description vectors are copied from
-// job_semantic_chunks, so a rebuild still contacts no embedding service. A model-backed
+// arithmetic over a finite dictionary, so a rebuild contacts no embedding service. A model-backed
 // embedder here would turn every rebuild into a full-catalogue inference run.
 func TestFacetSettingsDeclaresOnlyModelFreeEmbedders(t *testing.T) {
 	s := facetSettings()
-	wantDims := map[string]int64{SkillEmbedder: skillvec.Dimensions, DescEmbedder: descDimensions}
+	wantDims := map[string]int64{SkillEmbedder: skillvec.Dimensions}
 	if len(s.Embedders) != len(wantDims) {
 		t.Fatalf("facetSettings() declares %d embedders (%v), want %d", len(s.Embedders), s.Embedders, len(wantDims))
 	}

@@ -80,23 +80,50 @@
 </script>
 
 <svelte:window
-  onkeydown={visible ? (e) => { if (e.key === 'Escape') hide(); } : undefined}
+  onkeydown={visible
+    ? (e) => {
+        if (e.key === 'Escape') hide();
+      }
+    : undefined}
   onresize={visible ? hide : undefined}
-  onpointerup={pointerPressed ? () => { pointerPressed = false; } : undefined}
-  onpointercancel={pointerPressed ? () => { pointerPressed = false; } : undefined}
+  onpointerup={pointerPressed
+    ? () => {
+        pointerPressed = false;
+      }
+    : undefined}
+  onpointercancel={pointerPressed
+    ? () => {
+        pointerPressed = false;
+      }
+    : undefined}
 />
 
 <!-- The wrapper delegates hover and keyboard focus to its interactive child. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div bind:this={trigger} class={className} onpointerenter={(e) => { if (e.pointerType === 'mouse') scheduleShow(); }} onmouseleave={scheduleHide} onfocusin={focusIn} onfocusout={hide} onpointerdown={pointerDown}>
+<div
+  bind:this={trigger}
+  class={className}
+  onpointerenter={(e) => {
+    if (e.pointerType === 'mouse') scheduleShow();
+  }}
+  onmouseleave={scheduleHide}
+  onfocusin={focusIn}
+  onfocusout={hide}
+  onpointerdown={pointerDown}
+>
   {@render children()}
 </div>
 {#if visible}
   <!-- Portalled so a column's scroll container cannot clip the preview. -->
-  <div {@attach portal()} {id} role="tooltip"
-    onmouseenter={() => clearTimeout(timer)} onmouseleave={scheduleHide}
+  <div
+    {@attach portal()}
+    {id}
+    role="tooltip"
+    onmouseenter={() => clearTimeout(timer)}
+    onmouseleave={scheduleHide}
     class="fixed z-popover w-80 max-w-11/12 rounded-md border border-border bg-popover p-3 text-sm text-popover-foreground shadow-md"
-    style:left="{left}px" style:top="{top}px"
+    style:left="{left}px"
+    style:top="{top}px"
   >
     {loading ? s.loading : text || s.unavailable}
   </div>

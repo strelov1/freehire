@@ -8,7 +8,7 @@
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { PRO_PERKS } from '#lib/proPerks.js';
   import Seo from '#lib/components/Seo.svelte';
-  import { ProviderIcon, buttonVariants, cn } from '#lib/ui/index.js';
+  import { ProviderIcon, SectionLabel, buttonVariants, cn } from '#lib/ui/index.js';
   import type { PlanTierAllowance, PlansMatrix, PublicPrice } from '#lib/types.js';
   import { Check } from '@lucide/svelte';
   import type { PageData } from './$types';
@@ -40,17 +40,14 @@
   // Yearly — the plan vanishing as a side effect of looking at the other one. The interval
   // shown is read off the price itself, so a fallback says "$19 / month" rather than
   // implying an annual price that does not exist.
-  const ultraChosen = $derived(
-    (interval === 'year' ? ultraAnnual : ultraMonthly) ?? ultraMonthly ?? ultraAnnual,
-  );
+  const ultraChosen = $derived((interval === 'year' ? ultraAnnual : ultraMonthly) ?? ultraMonthly ?? ultraAnnual);
 
-  const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency);
+  const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency, undefined, { trimWhole: true });
 
   // What one tier's allowance reads as. `unlimited` makes the number a fair-use guard rather
   // than a ceiling, so it is not shown — quoting a guard as a limit would promise less than
   // the plan gives. Zero is "not on this plan" rather than "nothing today".
-  const allowanceText = (a: PlanTierAllowance) =>
-    a.unlimited ? 'Unlimited' : a.limit > 0 ? `${a.limit} / day` : '—';
+  const allowanceText = (a: PlanTierAllowance) => (a.unlimited ? 'Unlimited' : a.limit > 0 ? `${a.limit} / day` : '—');
 
   // What the annual price saves against twelve monthly ones, as a whole percentage. Shown
   // only when both prices exist and the saving is real — a "save 0%" badge is worse than
@@ -217,7 +214,7 @@
 
 <Seo
   title="Pricing — freehire"
-  description="Search, alerts, tracking, the inbox and agent access over MCP are free. Pro adds CV tailoring, the AI assistant, the browser extension that fills applications, and background auto-apply. $5 a month, cancel any time."
+  description="For job seekers: search, alerts, tracking, the inbox and agent access over MCP are free; Pro adds CV tailoring, the AI assistant, the extension that fills applications and background auto-apply for $5 a month. For builders: the Jobs API licenses the catalogue for your product at a flat monthly price."
   canonical={`${origin}/pricing`}
 />
 
@@ -225,10 +222,12 @@
   <header class="flex flex-col items-center gap-3 text-center">
     <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Simple plans</h1>
     <p class="max-w-2xl text-balance text-muted-foreground">
-      Finding and tracking jobs is free, for good. Pro adds the AI that does the applying
-      with you.
+      Finding and tracking jobs is free, for good — on the site, in your AI agent and from the CLI. Pro adds the AI that
+      does the applying with you; the Jobs API is for building on the catalogue.
     </p>
   </header>
+
+  <SectionLabel text="for job seekers" class="-mb-6 text-center" />
 
   {#if monthly && annual}
     <div class="flex justify-center">
@@ -245,7 +244,7 @@
           aria-selected={interval === 'month'}
           aria-controls="pricing-plans"
           class="rounded-md px-4 py-1.5 text-sm font-medium {interval === 'month'
-            ? 'bg-primary text-primary-foreground'
+            ? 'bg-secondary text-foreground shadow-xs'
             : 'text-muted-foreground'}"
           onclick={() => (interval = 'month')}
         >
@@ -258,60 +257,63 @@
           aria-selected={interval === 'year'}
           aria-controls="pricing-plans"
           class="rounded-md px-4 py-1.5 text-sm font-medium {interval === 'year'
-            ? 'bg-primary text-primary-foreground'
+            ? 'bg-secondary text-foreground shadow-xs'
             : 'text-muted-foreground'}"
           onclick={() => (interval = 'year')}
         >
           Yearly
           {#if saving > 0}
-            <span class="ml-1 text-xs opacity-80">−{saving}%</span>
+            <!-- The saving is the reason to pick this tab, so it gets the accent, not a fade. -->
+            <span class="ml-1 rounded-full bg-brand-muted px-1.5 py-0.5 text-xs font-semibold text-brand-strong"
+              >−{saving}%</span
+            >
           {/if}
         </button>
       </div>
     </div>
   {/if}
 
-<!-- What a plan includes, each line linking to the page that explains it. -->
-{#snippet perkList(items: Perk[])}
-  <ul class="flex flex-col gap-2 text-sm">
-    {#each items as item (item.text)}
-      <li class="flex items-baseline gap-2">
-        <Check class="size-4 shrink-0 translate-y-0.5 text-primary" aria-hidden="true" />
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every href is built with resolve() in FREE_FEATURES / PRO_PERKS; the linter can't trace it via the variable -->
-        <a href={item.href} class="hover:underline">{item.text}</a>
-      </li>
-    {/each}
-  </ul>
-{/snippet}
-
-<!-- The daily amounts of the metered features, as the backend states them. -->
-{#snippet allowanceList(items: PlansMatrix['features'], tier: 'free' | 'pro' | 'ultra')}
-  <div class="flex flex-col gap-2">
-    <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Daily allowance</p>
+  <!-- What a plan includes, each line linking to the page that explains it. -->
+  {#snippet perkList(items: Perk[])}
     <ul class="flex flex-col gap-2 text-sm">
-      {#each items as f (f.feature)}
-        <li class="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
-          <span class="text-muted-foreground">{label(f.feature)}</span>
-          <span class="shrink-0 font-medium tabular-nums">{allowanceText(f[tier])}</span>
+      {#each items as item (item.text)}
+        <li class="flex items-baseline gap-2">
+          <Check class="size-4 shrink-0 translate-y-0.5 text-primary" aria-hidden="true" />
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every href is built with resolve() in FREE_FEATURES / PRO_PERKS; the linter can't trace it via the variable -->
+          <a href={item.href} class="hover:underline">{item.text}</a>
         </li>
       {/each}
     </ul>
-  </div>
-{/snippet}
+  {/snippet}
+
+  <!-- The daily amounts of the metered features, as the backend states them. -->
+  {#snippet allowanceList(items: PlansMatrix['features'], tier: 'free' | 'pro' | 'ultra')}
+    <div class="flex flex-col gap-2">
+      <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Daily allowance</p>
+      <ul class="flex flex-col gap-2 text-sm">
+        {#each items as f (f.feature)}
+          <li class="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
+            <span class="text-muted-foreground">{label(f.feature)}</span>
+            <span class="shrink-0 font-medium tabular-nums">{allowanceText(f[tier])}</span>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/snippet}
 
   <!-- The one thing on this page that is NOT a daily amount, so it cannot be a row in the
      allowance lists: free does not get a smaller share of it, it gets none. It is rendered on
      the paid cards and simply absent from the free one, because a crossed-out row would say
      "you cannot" — the thing this page is built to never say. A snippet, so the two paid
      cards cannot drift apart about how the one perk they share is worded. -->
-{#snippet discordPerk()}
-  <p class="flex items-baseline gap-2 text-sm">
-    <ProviderIcon provider="discord" class="size-4 shrink-0 translate-y-0.5" />
-    <span class="text-muted-foreground">Members-only channels on the community Discord.</span>
-  </p>
-{/snippet}
+  {#snippet discordPerk()}
+    <p class="flex items-baseline gap-2 text-sm">
+      <ProviderIcon provider="discord" class="size-4 shrink-0 translate-y-0.5" />
+      <span class="text-muted-foreground">Members-only channels on the community Discord.</span>
+    </p>
+  {/snippet}
 
-<!-- What a visitor in the account's own country would otherwise learn from Stripe, in
+  <!-- What a visitor in the account's own country would otherwise learn from Stripe, in
      Stripe's words, after their card was already refused. Checkout is hosted there, so
      that page is the one place we cannot write on — this is the last moment we can say
      anything at all.
@@ -320,30 +322,29 @@
      deliberately left alone, because geography reports where somebody is and not what
      they are carrying, and a guess this soft must not take a decision away.
      A snippet, so the two paid cards cannot drift apart about it. -->
-{#snippet localCardWarning()}
-  {#if cardsUnsupported}
-    <p
-      class="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground"
-    >
-      Cards issued in {ACCOUNT_COUNTRY_NAME} can’t be charged here — payments are taken in
-      USD. Use a card from a bank outside {ACCOUNT_COUNTRY_NAME}.
-    </p>
-  {/if}
-{/snippet}
+  {#snippet localCardWarning()}
+    {#if cardsUnsupported}
+      <p class="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+        Cards issued in {ACCOUNT_COUNTRY_NAME} can’t be charged here — payments are taken in USD. Use a card from a bank outside
+        {ACCOUNT_COUNTRY_NAME}.
+      </p>
+    {/if}
+  {/snippet}
 
-<!-- Three tracks only when there is a third card to fill one: a grid fixed at
+  <!-- Three tracks only when there is a third card to fill one: a grid fixed at
      lg:grid-cols-3 with two children leaves the third an empty gap on wide screens instead
      of the two cards sharing the row the way they already do at the sm breakpoint.
      The billing-interval tabs above (rendered only when both intervals are sold) control
      the prices on these cards, so the grid is their tabpanel. -->
-<div
-  id="pricing-plans"
-  role={monthly && annual ? 'tabpanel' : undefined}
-  aria-labelledby={monthly && annual ? `pricing-tab-${interval}` : undefined}
-  class="grid gap-4 sm:grid-cols-2 {ultraChosen ? 'lg:grid-cols-3' : ''}"
->
-    <!-- Free -->
-    <section class="flex flex-col gap-4 rounded-xl border border-border p-6">
+  <div
+    id="pricing-plans"
+    role={monthly && annual ? 'tabpanel' : undefined}
+    aria-labelledby={monthly && annual ? `pricing-tab-${interval}` : undefined}
+    class="grid gap-4 sm:grid-cols-2 {ultraChosen ? 'lg:grid-cols-3' : ''}"
+  >
+    <!-- Free. As tall as its own content (`self-start`): stretched to Pro's height it opened a
+         hollow band between its list and its button. -->
+    <section class="flex flex-col gap-4 self-start rounded-xl border border-border p-6">
       <div class="flex flex-col gap-1">
         <h2 class="text-lg font-semibold">Free</h2>
         <p class="text-3xl font-semibold tracking-tight">$0</p>
@@ -363,7 +364,7 @@
     </section>
 
     <!-- Pro -->
-    <section class="flex flex-col gap-4 rounded-xl border-2 border-primary p-6">
+    <section class="flex flex-col gap-4 rounded-xl border border-brand/40 bg-brand/[0.03] p-6 shadow-sm">
       <div class="flex flex-col gap-1">
         <h2 class="text-lg font-semibold">Pro</h2>
         {#if chosen}
@@ -387,9 +388,7 @@
         {@render localCardWarning()}
         {#if isAuthenticated()}
           <div class="mt-auto flex flex-col gap-2">
-            <label class="text-sm text-muted-foreground" for="promo-code">
-              Have a promo code?
-            </label>
+            <label class="text-sm text-muted-foreground" for="promo-code"> Have a promo code? </label>
             <div class="flex gap-2">
               <!-- The placeholder is deliberately not shaped like a code. A public
                    repository showing an example that looks redeemable is showing a code,
@@ -487,14 +486,17 @@
   </div>
 
   {#if plans}
-    <ApiPlans prices={plans.prices} />
+    {#if plans.prices.some((p) => p.tier === 'api' || p.tier === 'api_data')}
+      <SectionLabel text="for builders" class="-mb-6 text-center" />
+    {/if}
+    <ApiPlans prices={plans.prices} buttonVariant="outline" />
   {/if}
 
   <!-- Said plainly rather than buried: what a subscription does and does not commit anyone
        to is the question people actually hesitate on. -->
   <p class="text-center text-sm text-muted-foreground">
-    Cancel any time — you keep your plan until the end of the period you have paid for. Nothing you
-    have created is ever withdrawn when a plan lapses. Not what you expected? Email us within 14
-    days and we'll refund it, no questions asked.
+    Cancel any time — you keep your plan until the end of the period you have paid for. Nothing you have created is ever
+    withdrawn when a plan lapses. Not what you expected? Email us within 14 days and we'll refund it, no questions
+    asked.
   </p>
 </div>

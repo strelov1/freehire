@@ -44,10 +44,7 @@ export function parseFrames(buffer: string): { frames: SSEFrame[]; rest: string 
  * when the stream ends. An aborted fetch surfaces as a rejected read, which the
  * caller treats as "the user cancelled", not as a failure.
  */
-export async function readFrames(
-  body: ReadableStream<Uint8Array>,
-  onFrame: (frame: SSEFrame) => void,
-): Promise<void> {
+export async function readFrames(body: ReadableStream<Uint8Array>, onFrame: (frame: SSEFrame) => void): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';

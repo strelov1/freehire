@@ -28,17 +28,18 @@
 </script>
 
 <AssistantPanel {open} title={s.title} {onClose}>
+  <!-- In the header row rather than a band of its own under it. -->
+  {#snippet headerActions()}
+    <button
+      type="button"
+      onclick={() => chatKey++}
+      disabled={replying}
+      class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+    >
+      <Plus class="size-3.5" />{s.newChat}
+    </button>
+  {/snippet}
   <div class="flex min-h-0 flex-1 flex-col">
-    <div class="flex shrink-0 justify-end border-b border-border px-3 py-1.5">
-      <button
-        type="button"
-        onclick={() => chatKey++}
-        disabled={replying}
-        class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-      >
-        <Plus class="size-3.5" />{s.newChat}
-      </button>
-    </div>
     {#key chatKey}
       <AssistantChat
         preset="support"

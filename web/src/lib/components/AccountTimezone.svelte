@@ -21,10 +21,7 @@
   // Set collapses the prepend into their entry rather than keying two
   // identical <option>s off it.
   const ZONES: string[] = [
-    ...new Set([
-      'UTC',
-      ...(typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []),
-    ]),
+    ...new Set(['UTC', ...(typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [])]),
   ];
 
   let value = $state(currentUser()?.timezone ?? '');

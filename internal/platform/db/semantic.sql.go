@@ -335,38 +335,6 @@ func (q *Queries) InsertJobSemanticChunks(ctx context.Context, arg InsertJobSema
 	return err
 }
 
-const listSemanticChunksForJobs = `-- name: ListSemanticChunksForJobs :many
-SELECT job_id, chunk_index, embedding
-FROM job_semantic_chunks
-WHERE job_id = ANY($1::bigint[])
-ORDER BY job_id, chunk_index
-`
-
-// Every chunk vector of a BATCH of jobs, for the search-index writers that copy them into
-// the jobs index's `desc` embedder (openspec/changes/agent-semantic-search, Decision 3).
-// One call per writer batch, never one per document: a full rebuild walks the whole open
-// catalogue, and ~862k of those jobs carry chunks. Ordered so a caller can group rows by
-// job without sorting, and so a job's vectors keep their chunk order.
-func (q *Queries) ListSemanticChunksForJobs(ctx context.Context, jobIds []int64) ([]JobSemanticChunk, error) {
-	rows, err := q.db.Query(ctx, listSemanticChunksForJobs, jobIds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []JobSemanticChunk{}
-	for rows.Next() {
-		var i JobSemanticChunk
-		if err := rows.Scan(&i.JobID, &i.ChunkIndex, &i.Embedding); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const recordSemanticFailure = `-- name: RecordSemanticFailure :one
 UPDATE semantic_outbox
 SET attempts   = attempts + 1,

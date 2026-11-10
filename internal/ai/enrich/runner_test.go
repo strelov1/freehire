@@ -117,7 +117,7 @@ func TestRun_corruptedJobDeadLettersImmediately(t *testing.T) {
 		return Enrichment{Seniority: "senior", WorkMode: "remote"}, nil
 	}}
 
-	stats, err := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	stats, err := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestRun_validIsWrittenAndDequeued(t *testing.T) {
 		return Enrichment{Seniority: "senior", WorkMode: "remote"}, nil
 	}}
 
-	stats, err := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	stats, err := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestRun_outOfVocabEnumIsSanitizedAndWritten(t *testing.T) {
 		return Enrichment{Seniority: "sr", Category: "frontend"}, nil
 	}}
 
-	stats, err := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	stats, err := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestRun_providerErrorIsFailed(t *testing.T) {
 		return Enrichment{}, errors.New("llm down")
 	}}
 
-	stats, _ := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	stats, _ := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
 	if len(store.completed) != 0 || len(store.failed) != 1 {
 		t.Errorf("completed=%v failed=%v, want failed only", store.completed, store.failed)
 	}
@@ -215,7 +215,7 @@ func TestRun_transportErrorIsRetried(t *testing.T) {
 		return Enrichment{}, errors.New("gateway timeout")
 	}}
 
-	stats, _ := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	stats, _ := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
 	if prov.callCount() != 2 {
 		t.Errorf("provider called %d times, want 2 (a transport error is retried once)", prov.callCount())
 	}
@@ -235,7 +235,7 @@ func TestRun_unparseableResponseIsNotRetried(t *testing.T) {
 		return Enrichment{}, fmt.Errorf("%w: trailing garbage", errUnparseableResponse)
 	}}
 
-	stats, _ := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	stats, _ := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
 	if prov.callCount() != 1 {
 		t.Errorf("provider called %d times, want 1 (an unparseable response must not be retried in-process)", prov.callCount())
 	}
@@ -254,7 +254,7 @@ func TestRun_deadLetterCounted(t *testing.T) {
 		return Enrichment{}, errors.New("boom")
 	}}
 
-	stats, _ := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	stats, _ := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
 	if stats.DeadLettered != 1 || stats.Failed != 0 {
 		t.Errorf("stats = %+v, want DeadLettered:1", stats)
 	}
@@ -275,7 +275,7 @@ func TestRun_oneFailureDoesNotAbortBatch(t *testing.T) {
 		return Enrichment{Seniority: "junior"}, nil
 	}}
 
-	stats, err := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	stats, err := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -305,7 +305,7 @@ func TestRun_jobFetchErrorIsFailed(t *testing.T) {
 		return Enrichment{}, nil
 	}}
 
-	stats, _ := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	stats, _ := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
 	if len(store.failed) != 1 || stats.Failed != 1 {
 		t.Errorf("failed=%v stats=%+v, want one failure", store.failed, stats)
 	}
@@ -336,7 +336,7 @@ func TestRun_progressCountsOnlyWrittenEnrichments(t *testing.T) {
 	}}
 	progress := &Progress{}
 
-	if _, err := (Runner{Provider: prov, Store: store, Progress: progress}).Run(context.Background(), opts()); err != nil {
+	if _, err := (Runner{Provider: prov, Store: store, wait: noWait, Progress: progress}).Run(context.Background(), opts()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if got := progress.Completed(); got != 2 {
@@ -353,7 +353,7 @@ func TestRun_nilProgressIsAllowed(t *testing.T) {
 	prov := &funcProvider{fn: func(JobInput) (Enrichment, error) {
 		return Enrichment{Seniority: "senior", WorkMode: "remote"}, nil
 	}}
-	if _, err := (Runner{Provider: prov, Store: store}).Run(context.Background(), opts()); err != nil {
+	if _, err := (Runner{Provider: prov, Store: store, wait: noWait}).Run(context.Background(), opts()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 }

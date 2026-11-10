@@ -119,7 +119,8 @@
       href={resolve('/my/market-pulse')}
       class="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
     >
-      <ArrowLeft class="size-4" /> {s.backLink}
+      <ArrowLeft class="size-4" />
+      {s.backLink}
     </a>
 
     {#if status === 'loading'}
@@ -196,13 +197,7 @@
           {#each ticks as i (i)}
             {@const p = model.points[i]}
             {#if p}
-              <text
-                x={p.x}
-                y={model.baselineY + 16}
-                text-anchor="middle"
-                class="fill-muted-foreground"
-                font-size="11"
-              >
+              <text x={p.x} y={model.baselineY + 16} text-anchor="middle" class="fill-muted-foreground" font-size="11">
                 {shortDate(p.weekStart)}
               </text>
             {/if}
@@ -231,7 +226,8 @@
               onfocus={() => showPoint(i)}
               onkeydown={onValueKey}
             >
-              {fullDate(p.weekStart)}: {p.openCount.toLocaleString()} {plural(locale(), p.openCount, s.openRoles)}
+              {fullDate(p.weekStart)}: {p.openCount.toLocaleString()}
+              {plural(locale(), p.openCount, s.openRoles)}
             </button>
           </li>
         {/each}

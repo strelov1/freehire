@@ -18,7 +18,15 @@
   import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { notifications } from '#lib/notifications.svelte.js';
-  import { emptyFilters, appliesWorkModeRemoteAnywhere, queryNarrows, savedSearchQuery, workModeRemoteLabel, type FilterStore, type JobFilters } from '#lib/filters.js';
+  import {
+    emptyFilters,
+    appliesWorkModeRemoteAnywhere,
+    queryNarrows,
+    savedSearchQuery,
+    workModeRemoteLabel,
+    type FilterStore,
+    type JobFilters,
+  } from '#lib/filters.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';
   import { SHORT_APPLICATION_MAX } from '#lib/jobFacts.js';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '#lib/filterSections.js';
@@ -61,6 +69,7 @@
     plain = false,
     savedSearches = false,
     formerEmployersAvailable = false,
+    watchlistAvailable = false,
     hideSeenAvailable = false,
     open = false,
     onClose,
@@ -79,6 +88,8 @@
     savedSearches?: boolean;
     /** Personal company filter: enabled only by a feed whose search uses the session. */
     formerEmployersAvailable?: boolean;
+    /** Personal watchlist filter: enabled by the same feeds as the former-employers one. */
+    watchlistAvailable?: boolean;
     hideSeenAvailable?: boolean;
     title?: string;
     applyLabel?: string;
@@ -111,11 +122,14 @@
   // to it, so the jump never lands on a missing tab.
   const hasSavedTab = $derived(savedSearches && !railKeys);
   const showHideSeen = $derived(hideSeenAvailable && !plain && isAuthenticated());
-  // Both personal filters are applied by the search only: /jobs/facets ignores them, so a
-  // count or a facet distribution fetched with either staged would describe a wider set
+  // The personal filters are applied by the search only: /jobs/facets ignores them, so a
+  // count or a facet distribution fetched with any staged would describe a wider set
   // than "Show results" returns.
-  const personalStaged = $derived(staged.value.formerEmployers || (showHideSeen && staged.value.hideSeen));
+  const personalStaged = $derived(
+    staged.value.formerEmployers || staged.value.watchlist || (showHideSeen && staged.value.hideSeen),
+  );
   const showFormerEmployers = $derived(formerEmployersAvailable && !plain && isAuthenticated());
+  const showWatchlist = $derived(watchlistAvailable && !plain && isAuthenticated());
 
   // Warm the Telegram feature flag and the user's profile when the modal opens for a
   // signed-in user on the full job modal: the footer "save for TG alerts" nudge gates on
@@ -144,7 +158,9 @@
 
   // The footer nudge shows only when the My-filters tab exists (so the jump lands
   // somewhere), Telegram alerts are available, and there's a search worth saving.
-  const showSaveNudge = $derived(hasSavedTab && notifications.telegram.enabled && queryNarrows(savedSearchQuery(staged.value)));
+  const showSaveNudge = $derived(
+    hasSavedTab && notifications.telegram.enabled && queryNarrows(savedSearchQuery(staged.value)),
+  );
 
   // The "My filters" (saved searches) tab. It heads the rail on the full job modal, but
   // not when the caller restricts the rail to a facet subset (e.g. the profile modal),
@@ -156,9 +172,7 @@
   // and a 'facet' entry is hidden when its param is excluded (e.g. Company on a company page).
   const visibleRail = $derived([
     ...(hasSavedTab ? [SAVED_ENTRY] : []),
-    ...RAIL.filter(
-      (e) => (!railKeys || railKeys.includes(e.key)) && !(e.facetParam && exclude.includes(e.facetParam)),
-    ),
+    ...RAIL.filter((e) => (!railKeys || railKeys.includes(e.key)) && !(e.facetParam && exclude.includes(e.facetParam))),
   ]);
 
   const jobCollectionValues = JOB_COLLECTION.map((o) => o.value);
@@ -181,12 +195,11 @@
     if (e.kind === 'category') return selCount(f, 'category') + selCount(f, 'ai_archetype');
     if (e.kind === 'experience')
       return selCount(f, 'seniority') + selCount(f, 'role_type') + (f.experienceYearsMax != null ? 1 : 0);
-    if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'metros') + selCount(f, 'cities');
+    if (e.kind === 'location')
+      return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'metros') + selCount(f, 'cities');
     if (e.kind === 'salary')
       return (
-        selCount(f, 'salary_currency') +
-        (f.salaryMin != null || f.salaryMax != null ? 1 : 0) +
-        selCount(f, 'equity')
+        selCount(f, 'salary_currency') + (f.salaryMin != null || f.salaryMax != null ? 1 : 0) + selCount(f, 'equity')
       );
     if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type') + selCount(f, 'engagement');
     if (e.kind === 'industry')
@@ -212,7 +225,12 @@
     // The Minimum skill match threshold lives at the top of the Skills pane, so it
     // counts toward that tab's badge alongside the skills facet selections.
     if (e.key === 'skills') return selCount(f, 'skills') + (matchAvailable && f.minSkillMatch != null ? 1 : 0);
-    if (e.key === 'company_slug') return selCount(f, 'company_slug') + (showFormerEmployers && f.formerEmployers ? 1 : 0);
+    if (e.key === 'company_slug')
+      return (
+        selCount(f, 'company_slug') +
+        (showFormerEmployers && f.formerEmployers ? 1 : 0) +
+        (showWatchlist && f.watchlist ? 1 : 0)
+      );
     if (e.key === 'source') return selCount(f, 'source_type') + selCount(f, 'source');
     return selCount(f, e.facetParam ?? e.key);
   }
@@ -262,16 +280,29 @@
           },
         ]
       : []),
-    ...jobFilterSearchItems({ exclude, railKeys, openWithin: openWithinAvailable, formerEmployers: showFormerEmployers, hideSeen: showHideSeen }),
+    ...jobFilterSearchItems({
+      exclude,
+      railKeys,
+      openWithin: openWithinAvailable,
+      formerEmployers: showFormerEmployers,
+      watchlist: showWatchlist,
+      hideSeen: showHideSeen,
+    }),
     ...remoteHits,
   ]);
 
   $effect(() => {
     const q = filterQuery.trim();
     const wantCompany =
-      open && q.length >= FILTER_SEARCH_MIN_QUERY && !exclude.includes('company_slug') && (!railKeys || railKeys.includes('company_slug'));
+      open &&
+      q.length >= FILTER_SEARCH_MIN_QUERY &&
+      !exclude.includes('company_slug') &&
+      (!railKeys || railKeys.includes('company_slug'));
     const wantCities =
-      open && q.length >= FILTER_SEARCH_MIN_QUERY && !exclude.includes('cities') && (!railKeys || railKeys.includes('location'));
+      open &&
+      q.length >= FILTER_SEARCH_MIN_QUERY &&
+      !exclude.includes('cities') &&
+      (!railKeys || railKeys.includes('location'));
     if (!wantCompany && !wantCities) {
       if (remoteHits.length > 0) remoteHits = [];
       return;
@@ -316,7 +347,15 @@
     if (!action) return null;
     const colon = action.indexOf(':');
     if (colon < 0) {
-      if (action === 'visa' || action === 'hide-ai' || action === 'auto-apply' || action === 'short-apply' || action === 'former-employers' || action === 'hide-seen')
+      if (
+        action === 'visa' ||
+        action === 'hide-ai' ||
+        action === 'auto-apply' ||
+        action === 'short-apply' ||
+        action === 'former-employers' ||
+        action === 'watchlist' ||
+        action === 'hide-seen'
+      )
         return { kind: action, rest: '' };
       return null;
     }
@@ -333,6 +372,8 @@
     switch (action?.kind) {
       case 'former-employers':
         return { ...off, included: staged.value.formerEmployers };
+      case 'watchlist':
+        return { ...off, included: staged.value.watchlist };
       case 'hide-seen':
         return { ...off, included: staged.value.hideSeen };
       case 'visa':
@@ -364,6 +405,9 @@
     switch (action?.kind) {
       case 'former-employers':
         if (showFormerEmployers) staged.setFormerEmployers(!staged.value.formerEmployers);
+        return;
+      case 'watchlist':
+        if (showWatchlist) staged.setWatchlist(!staged.value.watchlist);
         return;
       case 'hide-seen':
         if (showHideSeen) staged.setHideSeen(!staged.value.hideSeen);
@@ -500,7 +544,7 @@
     <button
       type="button"
       onclick={applyProfileOrSignIn}
-      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 ring-2 ring-brand/30 ring-offset-2 ring-offset-background"
+      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 shadow-sm"
     >
       <UserRound class="size-4 shrink-0" aria-hidden="true" />
       Apply my profile
@@ -557,22 +601,28 @@
 {#snippet unrecognized(noun: string, param: 'specialization' | 'skill', term: string)}
   <p class="py-1 text-sm text-muted-foreground">
     No {noun} matches “{term}”.
-    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve()d /dictionary plus a query string -->
-    <a href={`${resolve('/dictionary')}?${new URLSearchParams({ [param]: term })}`} class="font-medium text-foreground underline underline-offset-4">Help us recognize it</a>
+    <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve()d /dictionary plus a query string -->
+    <a
+      href={`${resolve('/dictionary')}?${new URLSearchParams({ [param]: term })}`}
+      class="font-medium text-foreground underline underline-offset-4">Help us recognize it</a
+    ><!-- eslint-enable svelte/no-navigation-without-resolve -->
   </p>
 {/snippet}
 {#snippet unrecognizedRole(term: string)}{@render unrecognized('specialization', 'specialization', term)}{/snippet}
 {#snippet unrecognizedSkill(term: string)}{@render unrecognized('skill', 'skill', term)}{/snippet}
 
 {#snippet recognizeLink(noun: string, query: string)}
-  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve()d /dictionary plus a query string -->
-  <a href={`${resolve('/dictionary')}${query}`} class="mt-6 inline-block text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+  <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve()d /dictionary plus a query string -->
+  <a
+    href={`${resolve('/dictionary')}${query}`}
+    class="mt-6 inline-block text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+  >
     Can't find your {noun}? Help us recognize it →
-  </a>
+  </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
 {/snippet}
 
 {#snippet pane(entry: RailEntry, live: FacetCounts | null)}
-  {@const c = personalStaged ? null : live ?? counts}
+  {@const c = personalStaged ? null : (live ?? counts)}
   {#if entry.kind === 'saved'}
     <SavedSearches store={staged} />
   {:else if entry.kind === 'category'}
@@ -602,12 +652,28 @@
         <p class="mt-1 text-xs text-muted-foreground">Only jobs at companies you have worked at and left.</p>
       </div>
     {/if}
+    {#if entry.key === 'company_slug' && showWatchlist}
+      <div class="mb-6">
+        <label class="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            class="size-4 rounded border-border"
+            checked={staged.value.watchlist}
+            onchange={(e) => staged.setWatchlist(e.currentTarget.checked)}
+          />
+          <span>Your watchlist</span>
+        </label>
+        <p class="mt-1 text-xs text-muted-foreground">Only jobs at the companies you follow.</p>
+      </div>
+    {/if}
     {#if entry.key === 'skills' && matchAvailable}
       <!-- Under best match the server applies `minSkillMatch` across the catalogue; under any
            other ordering it narrows the fetched page in memory, so the footer's count does not move. -->
       <div class="mb-2 flex items-center justify-between">
         <h3 class="text-sm font-semibold tracking-tight">Minimum skill match</h3>
-        <span class="text-xs font-medium text-muted-foreground">{staged.value.minSkillMatch != null ? `${staged.value.minSkillMatch}%+` : 'Any'}</span>
+        <span class="text-xs font-medium text-muted-foreground"
+          >{staged.value.minSkillMatch != null ? `${staged.value.minSkillMatch}%+` : 'Any'}</span
+        >
       </div>
       <input
         type="range"
@@ -626,12 +692,16 @@
            is one pill here, where it would be a hundred source exclusions below. -->
       <div class="mb-6"><ChipFacet store={staged} param="source_type" label="Source type" counts={c} /></div>
     {/if}
-    {#if def}<FacetSection {def} store={staged} counts={c} expand empty={entry.key === 'skills' ? unrecognizedSkill : undefined} />{/if}
+    {#if def}<FacetSection
+        {def}
+        store={staged}
+        counts={c}
+        expand
+        empty={entry.key === 'skills' ? unrecognizedSkill : undefined}
+      />{/if}
     {#if entry.key === 'skills'}{@render recognizeLink('skill', '?tab=skill')}{/if}
     {#if entry.key === 'perks'}
-      <p class="mt-2 text-xs text-muted-foreground">
-        Based on job descriptions — not every employer lists every perk.
-      </p>
+      <p class="mt-2 text-xs text-muted-foreground">Based on job descriptions — not every employer lists every perk.</p>
     {/if}
   {:else if entry.kind === 'salary'}
     <ChipFacet store={staged} param="salary_currency" label="Currency" counts={c} />
@@ -679,7 +749,9 @@
            unless this is ticked. Disabled until a level is included: excluding levels
            already keeps the unlabelled postings, so there is nothing to widen. -->
       <label
-        class="mt-3 flex items-center gap-2 text-sm {noLevelPicked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}"
+        class="mt-3 flex items-center gap-2 text-sm {noLevelPicked
+          ? 'cursor-not-allowed opacity-50'
+          : 'cursor-pointer'}"
       >
         <input
           type="checkbox"
@@ -703,8 +775,7 @@
     <div class:mt-6={showSeniority || showRoleType}>
       <div class="mb-2 flex items-center justify-between">
         <h3 class="text-sm font-semibold tracking-tight">Years of experience</h3>
-        <span class="text-xs font-medium text-muted-foreground"
-          >{experienceLabel(staged.value.experienceYearsMax)}</span
+        <span class="text-xs font-medium text-muted-foreground">{experienceLabel(staged.value.experienceYearsMax)}</span
         >
       </div>
       <input
@@ -807,7 +878,9 @@
     </div>
   {:else if entry.kind === 'language'}
     {#if englishDef}<FacetSection def={englishDef} store={staged} counts={c} expand />{/if}
-    <div class="mt-4">{#if postingDef}<FacetSection def={postingDef} store={staged} counts={c} expand />{/if}</div>
+    <div class="mt-4">
+      {#if postingDef}<FacetSection def={postingDef} store={staged} counts={c} expand />{/if}
+    </div>
   {:else if entry.kind === 'relocation'}
     <ChipFacet store={staged} param="relocation" label="Relocation" counts={c} />
     <div class="mt-6">
@@ -850,9 +923,7 @@
       />
       <span>Auto-apply available</span>
     </label>
-    <p class="mt-1 text-xs text-muted-foreground">
-      Best-effort — successful submission isn't guaranteed.
-    </p>
+    <p class="mt-1 text-xs text-muted-foreground">Best-effort — successful submission isn't guaranteed.</p>
     <!-- Checked for ANY bound, not only the toggle's own: a link carrying
          apply_questions_max=5 still narrows the list, and a box reading unchecked over
          it would lie. Unchecking clears whichever bound it was. -->

@@ -2,7 +2,7 @@
 
 The canonical MCP at `/api/v1/mcp` combines anonymous catalogue reads with
 OAuth account tools (`mixed.go`). Anonymous and OAuth sessions discover the same
-38 tools; personal calls without authentication never reach business code.
+51 tools; personal calls without authentication never reach business code.
 ChatGPT (User-Agent `openai-mcp`) gets an error result carrying `mcp/www_authenticate`,
 the in-band challenge its Apps SDK opens sign-in from. Every other host gets HTTP 401 with
 `WWW-Authenticate`, because Grok and Claude.ai ignore the in-band challenge and open sign-in
@@ -30,8 +30,10 @@ It also admits a **full-scope API key** (`fhk_…`), the mirror of REST admittin
 grant wherever a key goes. That is how the local npm server (`freehire-mcp`), which holds a
 key and no grant, manages job alerts through these same tools instead of a second
 implementation. `mcpKeyTools` omits OAuth-only actions: auto-apply, dictionary
-suggestions and problem reports. Dictionary suggestions preserve the cookie-only REST
-gate; problem reports use the signed-in agent's reporting workflow. A narrow (`cv`) key is a 403.
+suggestions, problem reports and the interview-buddy tools. Dictionary suggestions and the
+buddy tools (`internal/api/handler/buddy_mcp_tools.go`: membership, mock hosts, slots,
+booking, cancelling and the hosting schedule) preserve the cookie-only REST gate; problem
+reports use the signed-in agent's reporting workflow. A narrow (`cv`) key is a 403.
 
 OAuth clients use `suggest_dictionary_term` when a user-requested specialization, skill
 or company industry cannot be resolved; zero search hits alone do not prove a gap.
@@ -77,15 +79,21 @@ shows. Neither is a trade worth making.
 
 ## Semantic search
 
-`search_jobs` takes `semantic: true` and answers it through the same `semanticSearch` value
-(`internal/api/handler/semantic_search.go`) OJCP and `/agent/jobs/search` hold, so the three
-cannot disagree about when a query was matched by meaning. The result's `semantic` says
-`applied` or `unavailable`; the latter is a keyword-only answer, never an error. It is off
-unless asked: description vectors exist only for `is_tech` postings, so for most of the
-catalogue the keyword hits are the answer anyway.
+`search_jobs` still takes `semantic: true`, but it is currently not available: the index
+carries no description vectors, so the request is answered by keywords and the result's
+`semantic` says `unavailable` — never an error. The outcome is decided by
+`semanticOutcomeFor` (`internal/api/handler/semantic_search.go`), shared with OJCP and
+`/agent/jobs/search`, so the three cannot disagree.
 
 ## What the tools must not do
 
+- **Hand an internal error's text to the agent.** On the signed-in server a failed tool's
+  text reaches a third-party model verbatim, so `agentErrorText` (`account.go`) shows it
+  only for a `*fiber.Error` or a bad argument (`assistant.ErrInvalidArguments`); anything
+  else reads as a generic sentence, and is not logged either, because the tool logs carry
+  no error text. A message written for the agent ("slug is required", "no such answer")
+  is therefore a `fiber.NewError` with its status, never `errors.New`: a plain one reaches
+  the agent as "something went wrong". Its status is also what the metrics count it as.
 - **Return a full description from `search_jobs`.** `/agent/jobs/search` rehydrates every
   hit's body from Postgres, deliberately, because a programmatic consumer reading whole
   bodies is what it is for. Here ten of those in one turn is the context window spent on
@@ -171,7 +179,7 @@ All three read what the website already computes, through functions the website'
 handlers now share, so the two cannot quote different figures:
 
 - **`similar_jobs`** — the website's Meilisearch related-jobs search with mandatory
-  location and specialization filters, stored-vector hybrid ranking and keyword fallback.
+  location and specialization filters, ranked by keywords on the source's title.
   The source and rehydrated results must pass `publishedToAgents`; private and absent
   source slugs answer identically. No offline similarity backfill is needed.
 - **`salary_stats`** — `salaryBands` (handler/insights.go), the `/insights/salary` read,

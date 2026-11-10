@@ -622,6 +622,29 @@ func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs
 	return refreshed, nil
 }
 
+// CloseCovered closes the open stored rows an aggregator board listed for employers the
+// coverage gate found already crawled first-hand, and records each closed row's company as
+// crawled, as RefreshCovered does. Implements pipeline.CoveredCloser.
+func (s *dbStore) CloseCovered(ctx context.Context, source string, externalIDs []string) ([]string, error) {
+	var closed []string
+	for chunk := range slices.Chunk(externalIDs, refreshCoveredChunk) {
+		slugs, err := s.q.CloseCoveredJobs(ctx, db.CloseCoveredJobsParams{
+			Source:      source,
+			ExternalIds: chunk,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("close covered jobs %s: %w", source, err)
+		}
+		closed = append(closed, slugs...)
+	}
+	if s.crawled != nil {
+		for _, slug := range closed {
+			s.crawled.record(source, slug)
+		}
+	}
+	return closed, nil
+}
+
 // CompanyDescriptionDue implements pipeline.CompanyDescriptionFiller: whether the company
 // still lacks a description and has had no answered fetch since checkedSince.
 func (s *dbStore) CompanyDescriptionDue(ctx context.Context, slug string, checkedSince time.Time) (bool, error) {
