@@ -152,3 +152,48 @@ func TestCutshortSeniorityAndEmploymentHelpers(t *testing.T) {
 		t.Errorf("employment fulltime = %q", got)
 	}
 }
+
+func TestCutshortRowEdgeCases(t *testing.T) {
+	base := func() cutshortItem {
+		return cutshortItem{PartnerJobID: "id1", Company: "Acme", Title: "Dev", URL: "https://cutshort.io/job/x", Country: "India"}
+	}
+
+	noCountry := base()
+	noCountry.Country = ""
+	if job, ok := noCountry.toJob(); !ok || job.Countries != nil || !slices.Equal(job.FallbackCountries, []string{"in"}) {
+		t.Errorf("missing country: Countries=%v FallbackCountries=%v", job.Countries, job.FallbackCountries)
+	}
+
+	for name, band := range map[string]cutshortSalary{
+		"no period":    {Period: ""},
+		"empty amount": {Period: "yearly"},
+		"not a number": func() cutshortSalary {
+			var b cutshortSalary
+			b.Period, b.LowEnd.Amount, b.HighEnd.Amount = "yearly", "seven lakh", "n/a"
+			return b
+		}(),
+	} {
+		it := base()
+		it.Salaries = []cutshortSalary{band}
+		job, _ := it.toJob()
+		if job.SalaryMin != nil || job.SalaryMax != nil || job.SalaryPeriod != "" || job.SalaryCurrency != "" {
+			t.Errorf("%s: salary should stay unset, got %v-%v %s/%s", name, job.SalaryMin, job.SalaryMax, job.SalaryCurrency, job.SalaryPeriod)
+		}
+	}
+}
+
+func TestCutshortFetchRemoteCityRowWins(t *testing.T) {
+	row := func(city, mode string) string {
+		return `<job><partnerJobId>id1</partnerJobId><company>Acme</company><title>Dev</title>` +
+			`<url>https://cutshort.io/job/x</url><country>India</country><city>` + city +
+			`</city><workplaceTypes>` + mode + `</workplaceTypes></job>`
+	}
+	feed := `<source>` + row("Pune", "On-site") + row("Delhi", "Remote") + `</source>`
+	jobs, err := NewCutshort((&routedHTTP{}).route("jobs_data_for_freehire.xml", feed)).Fetch(context.Background(), CompanyEntry{})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("Fetch: %d jobs, err %v", len(jobs), err)
+	}
+	if j := jobs[0]; !j.Remote || j.WorkMode != "remote" || j.Location != "Pune; Delhi" {
+		t.Errorf("merged = Remote=%v WorkMode=%q Location=%q", j.Remote, j.WorkMode, j.Location)
+	}
+}
