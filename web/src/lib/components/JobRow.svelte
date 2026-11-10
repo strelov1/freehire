@@ -13,7 +13,7 @@
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { track } from '#lib/analytics.js';
-  import { cardTags, cardTagsFromCard, formatSalary, regionLabel } from '#lib/enrichment.js';
+  import { cardTags, cardTagsFromCard, formatSalary, regionLabel, workArrangement } from '#lib/enrichment.js';
   import { computeClientMatch, resolveMatchState } from '#lib/jobMatch.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { foreignContentLang, metaDescription } from '#lib/seo.js';
@@ -21,6 +21,7 @@
   import { Badge, Button, EntityLogo } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { supersedesReality } from '#lib/ghost.js';
+  import { realityBadge } from '#lib/reality.js';
   import CredentialBadge from './CredentialBadge.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import { credentialBadges } from '#lib/credentials.js';
@@ -171,6 +172,15 @@
   // The region is dropped when the flags already name the country ("UK · 🇬🇧 United
   // Kingdom" said one place twice); with no country it is the only geography and stays.
   const regionTag = $derived(job.countries?.length ? regionLabel({ regions: job.regions ?? [] }) : null);
+  // Where the role can be done from — the arrangement ("Remote") and, when no flag names a
+  // country, the region — reads as one thought with the flags and the city, so the three
+  // take a line of their own under the facts instead of being scattered across the end of it.
+  const geoTags = $derived(
+    [
+      workArrangement({ work_mode: job.work_mode ?? '' }),
+      job.countries?.length ? null : regionLabel({ regions: job.regions ?? [] }),
+    ].filter((t): t is string => !!t && tags.includes(t)),
+  );
   // On the employer's own page the rail (logo, name, date) is not drawn, so the date leads
   // the meta line instead — the same place a reader finds it relative to the title elsewhere.
   // On touch, Apply and Hide never hide, so the corner cluster is wide; the date then
@@ -187,10 +197,16 @@
             job.application_deadline ? `Apply by ${job.application_deadline}` : null,
           ]
         : []),
-      ...tags.filter((t) => t !== regionTag),
+      ...tags.filter((t) => t !== regionTag && !geoTags.includes(t)),
       equity,
       questions,
     ].filter((f): f is string => Boolean(f)),
+  );
+  // The meta line continues whatever plain text precedes it — a freshness label, or the
+  // reality age ("Open 87d") when it renders as text rather than a warning pill — so it
+  // opens with a dot exactly then; without one the two ran together as "Open 87d 3 weeks ago".
+  const metaLeadDot = $derived(
+    freshness.length > 0 || (!supersedesReality(ghost, locale()) && realityBadge(reality)?.tone === 'muted'),
   );
   const shownSkills = $derived(skills.slice(0, MAX_SKILLS));
   const extraSkills = $derived(skills.length - MAX_SKILLS);
@@ -485,7 +501,7 @@
     <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-    {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && (posted || views > 0 || isViewed || job.application_deadline)) || touchPosted}
+    {#if reality || freshness.length > 0 || metaFacts.length > 0 || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && (posted || views > 0 || isViewed || job.application_deadline)) || touchPosted}
       <div class="mt-2 flex flex-wrap items-center gap-1.5">
         <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
@@ -530,24 +546,41 @@
            chips already, and two rows of identical outlines made every card noisy.
            Indexed keys: a tag's text could equal one of the trailing facts. -->
         {#if metaFacts.length || salary || touchPosted || (hideCompany && isViewed)}
-          <span class="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-muted-foreground">
-            {#if freshness.length}<span aria-hidden="true">·</span>{/if}
+          <!-- Inline flow, not a flex row: it wraps between facts the way a sentence does. Each
+               fact is an inline-block carrying the dot that follows it, so a wrapped line ends
+               on "·" and the next one starts on a fact — a flex row left the dots as items of
+               their own, free to open a line. The gap is a margin, not a space: Svelte trims
+               whitespace at an {#each} boundary, which is how "views ·Remote" ran together.
+               The opening dot is a flex item of its own, so when the whole line wraps under
+               the badges it stays behind at the end of theirs; when the touch-only date is all
+               the line holds, it is touch-only too, or a desktop card ends on "New ·". -->
+          {#if metaLeadDot}<span
+              class={[
+                'text-xs text-muted-foreground',
+                !(metaFacts.length || salary || (hideCompany && isViewed)) && 'hidden pointer-coarse:inline',
+              ]}
+              aria-hidden="true">·</span
+            >{/if}
+          <span class="min-w-0 text-xs font-medium text-muted-foreground">
             <!-- The rail's viewed mark, for the employer's page where the rail is not drawn. -->
-            {#if hideCompany && isViewed}<Check class="size-3.5" aria-label="You have viewed this" />{/if}
+            {#if hideCompany && isViewed}<Check
+                class="mr-1 inline size-3.5 align-text-bottom"
+                aria-label="You have viewed this"
+              />{/if}
             {#if touchPosted}
-              <span class="hidden tabular-nums pointer-coarse:inline">{touchPosted}</span>
-              {#if metaFacts.length || salary}<span class="hidden pointer-coarse:inline" aria-hidden="true">·</span
-                >{/if}
+              <span class="mr-1 hidden whitespace-nowrap tabular-nums pointer-coarse:inline-block"
+                >{touchPosted}{#if metaFacts.length || salary}<span aria-hidden="true">&nbsp;·</span>{/if}</span
+              >
             {/if}
             {#each metaFacts as fact, i (i)}
-              {#if i > 0}<span aria-hidden="true">·</span>{/if}
-              <span>{fact}</span>
+              <span class="mr-1 inline-block whitespace-nowrap"
+                >{fact}{#if i < metaFacts.length - 1 || salary}<span aria-hidden="true">&nbsp;·</span>{/if}</span
+              >
             {/each}
             <!-- The pay leads into the same line, in ink, rather than standing alone in bold at
                the card's foot, where cards with and without it ended at different heights. -->
             {#if salary}
-              {#if metaFacts.length}<span aria-hidden="true">·</span>{/if}
-              <span class="font-semibold tabular-nums text-foreground">{salary}</span>
+              <span class="inline-block whitespace-nowrap font-semibold tabular-nums text-foreground">{salary}</span>
             {/if}
           </span>
         {/if}
@@ -556,19 +589,29 @@
            disclaimer rather than reading as a promise about this role. -->
         <!-- Not on the employer's own page, whose header already states it for every row. -->
         {#if !hideCompany}<CredentialBadge collections={job.collections} plain />{/if}
+      </div>
+    {/if}
+
+    <!-- The geography line: arrangement, then the flags, then the city the flags do not name. -->
+    {#if geoTags.length || job.countries?.length || place}
+      <div class="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs font-medium text-muted-foreground">
+        {#each geoTags as tag, i (tag)}
+          {#if i > 0}<span aria-hidden="true">·</span>{/if}
+          <span>{tag}</span>
+        {/each}
         <!-- Eligible countries as an overlapping flag cluster. Display-only here: the
            whole card is a link, so the flags carry no nested filter links. -->
         {#if job.countries?.length}
-          <CountryFlagStack codes={job.countries} max={MAX_FLAGS} class="ml-0.5 text-base" />
+          <CountryFlagStack
+            codes={job.countries}
+            max={MAX_FLAGS}
+            class={geoTags.length ? 'ml-1 text-base' : 'text-base'}
+          />
         {/if}
         <!-- The place the flags do not name: one employer's postings in seven cities
-           otherwise read identically until opened. A muted caption beside the flags
-           rather than a chip, so it reads as part of the geography, not a new signal. -->
+           otherwise read identically until opened. -->
         {#if place}
-          <span
-            title={job.location}
-            class="flex min-w-0 max-w-56 items-center gap-1 text-xs font-medium text-muted-foreground"
-          >
+          <span title={job.location} class="flex min-w-0 max-w-56 items-center gap-1">
             <MapPin class="size-3.5 shrink-0" aria-hidden="true" />
             <span class="truncate">{place}</span>
           </span>
