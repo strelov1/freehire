@@ -45,10 +45,13 @@ type Input struct {
 	// decides what the letter is actually written in.
 	PostingLanguage string
 	Bounds          Bounds
+	// Referral uses the same evidence gate and bounds for a request-only message.
+	Referral *Referral
 }
 
-// Analyzer runs the three-stage chain. A nil client (LLM unconfigured) makes Draft a no-op,
-// so a server without a gateway degrades rather than errors.
+// Analyzer runs the three-stage cover-letter chain and the one-call referral draft.
+// A nil client (LLM unconfigured) makes Draft a no-op, so a server without a
+// gateway degrades rather than errors.
 type Analyzer struct {
 	client *llm.Client
 }
@@ -117,12 +120,29 @@ func (a *Analyzer) Draft(ctx context.Context, in Input) (*Letter, error) {
 	return a.DraftStream(ctx, in, func(string, bool) {})
 }
 
-// DraftStream runs select → draft → audit, calling emit as each stage opens and closes.
+// DraftStream runs select → draft → audit for cover letters. Referral messages take
+// the top Gather evidence through one draft call with citations. Each path reports
+// its stage boundaries to emit.
 //
 // Returns (nil, nil) when the LLM is unconfigured. Returns ErrNoPublishableEvidence when the
 // gate leaves nothing to write from. Any gateway failure is returned as an error with no
 // letter, so a caller can never overwrite a stored draft with an empty one.
 func (a *Analyzer) DraftStream(ctx context.Context, in Input, emit Emit) (*Letter, error) {
+	if in.Referral != nil {
+		if !in.Referral.Valid() {
+			return nil, ErrInvalidReferral
+		}
+		in.Band = BandShort
+		in.Bounds = Bounds{ShortCeiling: 900, Floor: 60, MaxCited: 3}.OrDefault()
+		if in.Referral.Channel == "email" {
+			in.Bounds.ShortCeiling = 1400
+		}
+		if a != nil {
+			clone := *a
+			clone.client = a.client.WithoutTracing()
+			a = &clone
+		}
+	}
 	if a == nil || a.client == nil {
 		return nil, nil
 	}
@@ -140,6 +160,9 @@ func (a *Analyzer) DraftStream(ctx context.Context, in Input, emit Emit) (*Lette
 	}
 	offered := IDs(atoms)
 	language := LanguageOf(in.PostingLanguage)
+	if in.Referral != nil {
+		return a.draftReferral(ctx, in, atoms, language, emit)
+	}
 
 	emit(StageSelect, false)
 	selected, err := a.selectEvidence(ctx, in, atoms)
@@ -252,7 +275,8 @@ func (a *Analyzer) write(ctx context.Context, in Input, atoms []experience.Atom,
 	if err != nil {
 		return Letter{}, err
 	}
-	raw, err := a.client.GenerateJSON(ctx, draftSystemPrompt(in.Band, in.Bounds), prompt)
+	system := draftSystemPrompt(in.Band, in.Bounds)
+	raw, err := a.client.GenerateJSON(ctx, system, prompt)
 	if err != nil {
 		return Letter{}, fmt.Errorf("coverletter: draft: %w", err)
 	}
@@ -275,7 +299,8 @@ func (a *Analyzer) audit(ctx context.Context, in Input, drafted Letter, atoms []
 	if err != nil {
 		return nil, err
 	}
-	raw, err := a.client.GenerateJSON(ctx, auditSystemPrompt(in.Band, in.Bounds), prompt)
+	system := auditSystemPrompt(in.Band, in.Bounds)
+	raw, err := a.client.GenerateJSON(ctx, system, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("coverletter: audit: %w", err)
 	}

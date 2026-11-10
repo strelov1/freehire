@@ -224,6 +224,17 @@ it('offers a LinkedIn people search when no in-product referrer is available', (
   expect(people.getAttribute('target')).toBe('_blank');
 });
 
+it('clears a referral draft when navigating to another job', async () => {
+  const view = render(JobView, { job });
+  await fireEvent.click(screen.getByRole('button', { name: 'Draft a referral message' }));
+  const profile = await screen.findByLabelText<HTMLTextAreaElement>("Contact's public profile text");
+  await fireEvent.input(profile, { target: { value: 'Sam, engineer at Acme' } });
+
+  await view.rerender({ job: { ...job, public_slug: 'globex-job', company: 'Globex', company_slug: 'globex' } });
+
+  expect(screen.queryByLabelText("Contact's public profile text")).toBeNull();
+});
+
 it('omits the LinkedIn action when the employer name is blank', () => {
   render(JobView, { job: { ...job, company: '  ' } });
   expect(screen.queryByRole('link', { name: /^Find people at\b.*\bon LinkedIn$/ })).toBeNull();

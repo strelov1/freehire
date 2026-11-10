@@ -65,16 +65,31 @@ func draftSystemPrompt(band Band, bounds Bounds) string {
 	return b.String()
 }
 
+// draftUserPrompt gives both cover letters and referral messages the bounded job,
+// candidate projection, and offered evidence; referral profiles remain quoted data.
 func draftUserPrompt(in Input, atoms []experience.Atom, language string) (string, error) {
 	var b strings.Builder
-	b.WriteString("Write the letter in this language (ISO code): " + language + ".\n")
-	b.WriteString("It is the language of the VACANCY. The employer reads this letter, not the candidate.\n\n")
+	if in.Referral != nil {
+		b.WriteString("Write the message in this language (ISO code): " + language + ".\n")
+		b.WriteString("The recipient reads this message; use the vacancy's language.\n\n")
+	} else {
+		b.WriteString("Write the letter in this language (ISO code): " + language + ".\n")
+		b.WriteString("It is the language of the VACANCY. The employer reads this letter, not the candidate.\n\n")
+	}
 	b.WriteString(vacancyBlock(in))
-	b.WriteString("\nREQUIREMENTS THE CV UNDERSELLS (this is what the letter is for):\n")
+	if in.Referral != nil {
+		b.WriteString("\nREQUIREMENTS THE CV UNDERSELLS:\n")
+	} else {
+		b.WriteString("\nREQUIREMENTS THE CV UNDERSELLS (this is what the letter is for):\n")
+	}
 	b.WriteString(requirementList(in.Context.MissingHave))
 	b.WriteString("\nGENUINE GAPS (claim no experience with these):\n")
 	b.WriteString(requirementList(in.Context.MissingGap))
-	b.WriteString("\nACHIEVEMENTS THE LETTER MAY STAND ON:\n")
+	if in.Referral != nil {
+		b.WriteString("\nBANKED ACHIEVEMENTS:\n")
+	} else {
+		b.WriteString("\nACHIEVEMENTS THE LETTER MAY STAND ON:\n")
+	}
 	blob, err := json.Marshal(atomsForPrompt(atoms))
 	if err != nil {
 		return "", fmt.Errorf("coverletter: marshal atoms: %w", err)
@@ -87,6 +102,7 @@ func draftUserPrompt(in Input, atoms []experience.Atom, language string) (string
 	}
 	b.WriteString(llm.TruncateRunes(string(cand), maxCandidateRunes))
 	b.WriteString("\n")
+	b.WriteString(referralProfileBlock(in.Referral))
 	return b.String(), nil
 }
 

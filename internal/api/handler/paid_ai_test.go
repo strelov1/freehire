@@ -87,6 +87,7 @@ type gatedRoute struct {
 // calls a model means adding it here — and mounting mw.paidAI on it, or the first test
 // below fails.
 var gatedRoutes = []gatedRoute{
+	{fiber.MethodPost, "/api/v1/jobs/some-job/referral-message/stream", plan.FeatureCoverLetter},
 	{fiber.MethodPost, "/api/v1/jobs/some-job/fit", plan.FeatureFit},
 	{fiber.MethodGet, "/api/v1/jobs/some-job/fit/stream", plan.FeatureFit},
 	{fiber.MethodPost, "/api/v1/jobs/some-job/match-analysis", plan.FeatureFit},
@@ -147,6 +148,7 @@ func gatedApp(t *testing.T, plans paidEntitlement) *fiber.App {
 	(&matchHandlers{}).register(api, mw)
 	(&assistantHandlers{}).register(api, mw)
 	(&cvHandlers{}).register(api, mw)
+	(&referralMessageHandlers{}).register(api, mw)
 	(&resumeHandlers{}).register(api, mw)
 	(&speechHandlers{}).register(api, mw)
 	(&intentHandlers{}).register(api, mw)

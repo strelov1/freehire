@@ -130,6 +130,32 @@
   let DirectApplyDialog = $state.raw<DirectApplyDialogComponent | null>(null);
   let showDirectApply = $state(false);
   let loadingDirectApply = $state(false);
+  type ReferralMessageDialogComponent = typeof import('./ReferralMessageDialog.svelte').default;
+  let ReferralMessageDialog = $state.raw<ReferralMessageDialogComponent | null>(null);
+  let showReferralMessage = $state(false);
+  let loadingReferralMessage = $state(false);
+  let referralMessageLoadError = $state(false);
+
+  /** Load the drafting dialog only when a signed-in seeker opens it. */
+  async function openReferralMessage() {
+    if (!isAuthenticated()) {
+      promptSignIn();
+      return;
+    }
+    referralMessageLoadError = false;
+    if (!ReferralMessageDialog) {
+      loadingReferralMessage = true;
+      try {
+        ReferralMessageDialog = (await import('./ReferralMessageDialog.svelte')).default;
+      } catch {
+        referralMessageLoadError = true;
+        return;
+      } finally {
+        loadingReferralMessage = false;
+      }
+    }
+    showReferralMessage = true;
+  }
   // Whether THIS candidate's application reached the employer — read from the application
   // itself, never from tracking: a vacancy marked applied by hand must still take the
   // application, and a delivered one must not offer Apply again if tracking lagged.
@@ -301,6 +327,7 @@
     justApplied = false;
     showSignInPrompt = false;
     showDirectApply = false;
+    showReferralMessage = false;
     directApplied = false;
     if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
     untrack(ensureAppliedCompaniesLoaded);
@@ -1168,6 +1195,20 @@
       />
     {/if}
 
+    {#if job.company?.trim() && !closed}
+      <button
+        type="button"
+        disabled={loadingReferralMessage}
+        onclick={() => void openReferralMessage()}
+        class="w-fit text-sm text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
+      >
+        Draft a referral message
+      </button>
+      {#if referralMessageLoadError}
+        <span role="alert" class="text-sm text-destructive">Could not open the draft form. Please try again.</span>
+      {/if}
+    {/if}
+
     <!-- Mentorship is a separate way to get help from someone at this company. -->
     {#if job.company_slug}
       <MentorBlock companySlug={job.company_slug} companyName={job.company} />
@@ -1497,6 +1538,10 @@
 
 {#if showReport}
   <ReportDialog slug={job.public_slug} companySlug={job.company_slug} onClose={() => (showReport = false)} />
+{/if}
+
+{#if showReferralMessage && ReferralMessageDialog}
+  <ReferralMessageDialog slug={job.public_slug} company={job.company} onClose={() => (showReferralMessage = false)} />
 {/if}
 
 <style>

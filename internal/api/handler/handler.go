@@ -30,6 +30,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/pii"
@@ -666,7 +667,8 @@ func Register(app *fiber.App, cfg Config) {
 	authH.withInvites(promoSvc)
 	// Public: a pricing page that needs an account cannot do a pricing page's job.
 	plansH := newPlansHandlers(cfg.Plan, billingSvc)
-	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, plans)
+	fitSvc := fitanalysis.New(queries, meterOrNil(plans), matchAnalyzer)
+	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, fitSvc, plans)
 	// The CV store is shared: the CV surface owns the write path, referrals render from it
 	// and autofill reads the base CV's contact header out of it. AGENTS.md puts shared
 	// services here rather than inside whichever feature happened to need one first.
@@ -704,6 +706,7 @@ func Register(app *fiber.App, cfg Config) {
 	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cvPDF, cfg.TracerLinkSalt, cfg.FrontendOrigin, resumeStore, photoStore, plans, matchH, bankGate{bank: bank}, trackingJobs, letterDeps, !cfg.CVEditAllowBulletTruncation)
 
 	cvH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
+	referralMessageH := newReferralMessageHandlers(queries, bank, resumeStore, fitSvc, letterDeps.chain, llmBinding{client: cfg.LLM, keys: llmKeys}, plans)
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	discordH := newDiscordHandlers(cfg.DiscordLinker, cfg.DiscordClientID, cfg.FrontendOrigin, cfg.CookieSecure)
@@ -1191,6 +1194,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// CV builder + AI tailoring (see cvHandlers).
 	cvH.register(api, mw)
+	referralMessageH.register(api, mw)
 
 	// Mail inbox (Gmail connect + hosted mailbox) and email ↔ application linking
 	// (see inboxHandlers). Registered after the static /me/tracking/* routes so

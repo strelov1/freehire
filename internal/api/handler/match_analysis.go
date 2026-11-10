@@ -59,13 +59,14 @@ type matchHandlers struct {
 	plans *plan.Store
 }
 
-func newMatchHandlers(queries *db.Queries, userProfile *userprofile.Service, resumeStore *resume.Store, analyzer *matchanalysis.Analyzer, plans *plan.Store) *matchHandlers {
+// newMatchHandlers accepts the shared fit service used by matching and referral drafting.
+func newMatchHandlers(queries *db.Queries, userProfile *userprofile.Service, resumeStore *resume.Store, analyzer *matchanalysis.Analyzer, fit *fitanalysis.Service, plans *plan.Store) *matchHandlers {
 	return &matchHandlers{
 		queries:       queries,
 		userProfile:   userProfile,
 		resume:        resumeStore,
 		matchAnalysis: analyzer,
-		fit:           fitanalysis.New(queries, meterOrNil(plans), analyzer),
+		fit:           fit,
 		bank:          newCandidateProfiler(queries),
 		plans:         plans,
 	}

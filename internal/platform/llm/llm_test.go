@@ -151,6 +151,32 @@ type captureTracer struct{ got []Generation }
 func (c *captureTracer) Observe(g Generation)           { c.got = append(c.got, g) }
 func (c *captureTracer) Shutdown(context.Context) error { return nil }
 
+// TestWithoutTracing keeps the shared client observable while hiding ephemeral prompts.
+func TestWithoutTracing(t *testing.T) {
+	var nilClient *Client
+	if nilClient.WithoutTracing() != nil {
+		t.Fatal("nil client should remain nil")
+	}
+	tracer := &captureTracer{}
+	client := NewWithModel(&fakeModel{resp: `{"ok":true}`}, WithTracer(tracer, "test"))
+	private := client.WithoutTracing()
+	if private == client || private.tracer != nil || client.tracer != tracer {
+		t.Fatal("tracing was not disabled on a separate client copy")
+	}
+	if _, err := private.GenerateJSON(context.Background(), "private system", "private user"); err != nil {
+		t.Fatal(err)
+	}
+	if len(tracer.got) != 0 {
+		t.Fatal("ephemeral prompts reached the tracer")
+	}
+	if _, err := client.GenerateJSON(context.Background(), "shared system", "shared user"); err != nil {
+		t.Fatal(err)
+	}
+	if len(tracer.got) != 1 {
+		t.Fatalf("shared client observed %d generations, want 1", len(tracer.got))
+	}
+}
+
 func TestGenerateJSON_observesSuccessWithUsage(t *testing.T) {
 	f := &fakeModel{
 		resp:    `{"a":1}`,
