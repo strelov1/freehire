@@ -73,7 +73,7 @@ type SearchJobsResult struct {
 	// Semantic reports what became of a `semantic: true` request. Only SemanticUnavailable
 	// is produced today: semantic matching is not available, so it is answered by keywords.
 	// Omitted when not asked.
-	Semantic string `json:"semantic,omitempty" jsonschema:"applied: matched by meaning as asked; unavailable: answered by keywords only"`
+	Semantic string `json:"semantic,omitempty" jsonschema:"unavailable: a semantic request was answered by keywords only"`
 	// TotalIsLowerBound: the total is "this many and maybe more", not a count.
 	TotalIsLowerBound bool `json:"total_is_lower_bound,omitempty" jsonschema:"true: total is a minimum, not a count — say 'at least', never 'of N'"`
 }

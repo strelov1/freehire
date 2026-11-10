@@ -475,6 +475,7 @@ func TestIntegration_DuplicateStatusRetainsContentAndRestoresCanonicalJob(t *tes
 		if err != nil {
 			t.Fatal(err)
 		}
+		row.Skills = []string{"go", "docker"}
 		doc, err := search.FromJob(row, "")
 		if err != nil {
 			t.Fatal(err)
