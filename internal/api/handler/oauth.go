@@ -171,6 +171,12 @@ func (h *authHandlers) OAuthCallback(c *fiber.Ctx) error {
 	// account created within the hour.
 	h.attributeInvite(c, userID)
 
+	// Refused here, before a code is minted for the app; the web path below is refused by
+	// setSession. A banned account is sent back with the same generic marker.
+	if _, err := h.sessionVersion(c.Context(), userID); err != nil {
+		return h.oauthFail(c, p.Name(), returnTo, mobile, err)
+	}
+
 	if mobile {
 		// Hand the app a single-use code instead of a cookie; the app exchanges
 		// it over its own client so the session cookie lands in its jar.

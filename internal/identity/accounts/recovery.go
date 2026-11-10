@@ -32,6 +32,9 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) error 
 	if err != nil {
 		return err
 	}
+	if user.Banned {
+		return nil // a banned account gets no code, and the caller cannot tell
+	}
 
 	code, err := s.issueCode(ctx, user.ID, PurposeResetPassword, "")
 	if err != nil {
@@ -58,6 +61,9 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 	}
 	if err != nil {
 		return err
+	}
+	if user.Banned {
+		return ErrInvalidCode // no code was sent, so none can match
 	}
 	if err := validatePassword(newPassword); err != nil {
 		// Checked before the code is consumed: a valid code must not be burnt because

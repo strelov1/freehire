@@ -15,9 +15,11 @@ const authenticateAPIKey = `-- name: AuthenticateAPIKey :one
 WITH k AS (
     UPDATE api_keys
     SET last_used_at = now()
-    WHERE token_hash = $1
-      AND (expires_at IS NULL OR expires_at > now())
-    RETURNING user_id, scope, id
+    FROM users AS owner
+    WHERE api_keys.token_hash = $1
+      AND owner.id = api_keys.user_id AND owner.banned_at IS NULL
+      AND (api_keys.expires_at IS NULL OR api_keys.expires_at > now())
+    RETURNING api_keys.user_id, api_keys.scope, api_keys.id
 ), seen AS (
     UPDATE users SET last_active_at = now()
     FROM k
@@ -40,6 +42,9 @@ type AuthenticateAPIKeyRow struct {
 // A key in use is the account in use, so the same statement keeps users.last_active_at
 // current (at most once a day), as GetUserTokenVersion does for a session: optional
 // mail stops after 180 idle days (mail_recipient, migration 0247).
+//
+// A banned owner's keys do not authenticate (and are not touched). OAuth grants need no
+// such clause: they die with the ban's token_version bump (AuthenticateOAuthGrant).
 func (q *Queries) AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error) {
 	row := q.db.QueryRow(ctx, authenticateAPIKey, tokenHash)
 	var i AuthenticateAPIKeyRow
@@ -211,6 +216,7 @@ SELECT k.user_id, k.scope, k.expires_at, u.api_until_stripe, u.api_data_until_st
 FROM api_keys k
 JOIN users u ON u.id = k.user_id
 WHERE k.token_hash = $1
+  AND u.banned_at IS NULL
   AND (k.expires_at IS NULL OR k.expires_at > now())
 `
 

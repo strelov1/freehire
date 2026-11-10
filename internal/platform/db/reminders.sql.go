@@ -192,10 +192,10 @@ SELECT r.id, r.user_id, r.job_id, r.channels,
        COALESCE(ns.enabled, true)::bool AS notifications_enabled,
        (j.closed_at IS NULL)::bool AS job_open,
        COALESCE(uj.saved_at IS NOT NULL AND a.applied_at IS NULL, false)::bool AS still_actionable,
-       mail_recipient(u.email, u.email_verified, u.last_active_at)::text AS account_email,
+       mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS account_email,
        u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,
-       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = r.user_id) AS has_push_device,
+       (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = r.user_id))::boolean AS has_push_device,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end
 FROM job_reminders r
@@ -203,7 +203,7 @@ JOIN jobs j ON j.id = r.job_id
 JOIN users u ON u.id = r.user_id
 LEFT JOIN user_jobs uj ON uj.user_id = r.user_id AND uj.job_id = r.job_id
 LEFT JOIN applications a ON a.user_id = r.user_id AND a.job_id = r.job_id
-LEFT JOIN telegram_links tl ON tl.user_id = r.user_id
+LEFT JOIN telegram_links tl ON tl.user_id = r.user_id AND u.banned_at IS NULL
 LEFT JOIN notification_settings ns ON ns.user_id = r.user_id
 WHERE r.id = $1
 `

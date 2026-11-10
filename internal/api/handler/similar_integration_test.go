@@ -62,6 +62,10 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 	if status != 404 {
 		t.Fatalf("unknown slug status=%d", status)
 	}
+	status, _ = doGet(t, app, "/jobs/private/similar")
+	if status != 404 {
+		t.Fatalf("private slug status=%d, want 404", status)
+	}
 }
 
 func TestSimilarJobsResolvesTransitiveDuplicateOwner(t *testing.T) {

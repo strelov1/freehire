@@ -336,4 +336,21 @@ var coreCategoryTable17 = []aliasEntry{
 	// title that no alias above has placed. While it sat beside "customer service"
 	// it outranked every profession declared after it.
 	{"support", "support"},
+
+	// English titles filed by their twin, after the bare "support" so no title it
+	// placed moves: the HR assistant ("Human Resources Assistant"), the office
+	// administrator ("Office Assistant"), the finance and purchasing specialists
+	// ("Accounting/Procurement Specialist"), the supply and demand planners ("Supply
+	// Chain Planner"), the Google Ads specialist ("PPC Specialist"), the
+	// physiotherapist ("Physical Therapist") and the midwife.
+	{"hr assistant", "hr"},
+	{"office administrator", "administration"},
+	{"finance specialist", "finance"},
+	{"financial specialist", "finance"},
+	{"purchasing specialist", "operations"},
+	{"supply planner", "logistics"},
+	{"demand planner", "logistics"},
+	{"google ads specialist", "marketing"},
+	{"physiotherapist", "healthcare"},
+	{"midwife", "healthcare"},
 }

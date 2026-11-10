@@ -1,7 +1,17 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
-  import { Briefcase, Building2, FileText, Flag, GraduationCap, Handshake, Star, UsersRound } from '@lucide/svelte';
+  import {
+    Briefcase,
+    Building2,
+    FileText,
+    Flag,
+    GraduationCap,
+    Handshake,
+    Star,
+    UserX,
+    UsersRound,
+  } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api } from '#lib/api.js';
@@ -18,11 +28,21 @@
   import EmployerClaimsQueue from './EmployerClaimsQueue.svelte';
   import ConversationReportsQueue from './ConversationReportsQueue.svelte';
   import CompanyRelationsQueue from './CompanyRelationsQueue.svelte';
+  import UserBanPanel from './UserBanPanel.svelte';
   import States from './States.svelte';
 
   const isModerator = $derived(currentUser()?.role === 'moderator');
 
-  type View = 'queue' | 'reports' | 'feedback' | 'referrals' | 'mentors' | 'employer' | 'conversations' | 'companies';
+  type View =
+    | 'queue'
+    | 'reports'
+    | 'feedback'
+    | 'referrals'
+    | 'mentors'
+    | 'employer'
+    | 'conversations'
+    | 'companies'
+    | 'users';
   const sections: { value: View; label: string; icon: LucideIcon }[] = [
     { value: 'queue', label: 'Moderation queue', icon: FileText },
     { value: 'reports', label: 'Reported jobs', icon: Flag },
@@ -38,6 +58,8 @@
     { value: 'conversations', label: 'Conversation reports', icon: UsersRound },
     // Company merges and parent links people proposed from a company page (freehire#3895).
     { value: 'companies', label: 'Company corrections', icon: Building2 },
+    // Manual account ban: find an account, ban it with a reason, lift the ban.
+    { value: 'users', label: 'Ban an account', icon: UserX },
   ];
 
   // The active section is mirrored in `?tab=` so moderator deep-links (the
@@ -261,6 +283,8 @@
           <ConversationReportsQueue />
         {:else if view === 'companies'}
           <CompanyRelationsQueue />
+        {:else if view === 'users'}
+          <UserBanPanel />
         {:else}
           <div class="flex flex-col gap-6">
             <p class="text-sm text-muted-foreground">

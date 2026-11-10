@@ -23,20 +23,22 @@ import (
 // at all are roughly a sixth of technical ones), so the 404 is the ordinary case rather
 // than an error worth logging.
 func (h *jobsHandlers) JobApplyForm(c *fiber.Ctx) error {
-	id, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
+	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
-		// RenderError maps pgx.ErrNoRows to 404, anything else to 500.
+		return err
+	}
+	if err := jobVisibleToCaller(job, 0, false); err != nil {
 		return err
 	}
 
-	row, err := h.queries.GetApplyFormByJobID(c.Context(), id)
+	row, err := h.queries.GetApplyFormByJobID(c.Context(), job.ID)
 	if err != nil {
 		return err
 	}
 
 	var form applyform.Form
 	if err := json.Unmarshal(row.Payload, &form); err != nil {
-		return fmt.Errorf("decode apply form for job %d: %w", id, err)
+		return fmt.Errorf("decode apply form for job %d: %w", job.ID, err)
 	}
 	// The provider is authoritative on the row rather than inside the payload: the row
 	// is what a re-capture rewrites and what a per-provider purge would select on.

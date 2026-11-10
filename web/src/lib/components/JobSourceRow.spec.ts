@@ -71,7 +71,7 @@ describe('JobSourceRow', () => {
     profileStoreMock.profile = { excluded_sources: ['smartrecruiters'] };
     render(JobSourceRow, props);
 
-    const undo = screen.getByRole('button', { name: /Stop avoiding/ });
+    const undo = screen.getByRole('button', { name: /Stop avoiding this source/ });
     await fireEvent.click(undo);
 
     expect(unavoidSource).toHaveBeenCalledWith('smartrecruiters');
@@ -83,16 +83,17 @@ describe('JobSourceRow', () => {
     profileStoreMock.profile = { excluded_sources: ['SmartRecruiters'] };
     render(JobSourceRow, props);
 
-    expect(screen.getByRole('button', { name: /Stop avoiding/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Stop avoiding this source/ })).toBeTruthy();
   });
 
-  it('says plainly that the scope is every posting, not this one', () => {
-    // Avoiding here edits the PROFILE. A control that reads as "hide this job" and instead
-    // hides thousands is the kind of surprise that gets undone by deleting the account.
+  it('is an icon inside the source chip, named for screen readers', () => {
+    // Icon-only: the visible words live in the tooltip, so the accessible name has to be
+    // on the button itself or a screen reader announces an unlabelled control.
     render(JobSourceRow, props);
 
-    const button = screen.getByRole('button', { name: /Avoid this source/ });
-    expect(button.getAttribute('title')).toMatch(/every SmartRecruiters posting/);
+    const button = screen.getByRole('button', { name: 'Avoid this source' });
+    expect(button.textContent?.trim()).toBe('');
+    expect(button.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('shows no control at all to a signed-out reader', () => {

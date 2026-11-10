@@ -31,6 +31,8 @@ type fakeStore struct {
 	events []string
 	users  []int64
 	sends  map[sendKey]string
+	// paywall is whom the paywall list returns, by account, until their step-4 row exists.
+	paywall map[int64]db.ListPaywallLetterDueRow
 
 	// ineligible makes the claim refuse an account, as the statement does once it
 	// unsubscribes or pays between the list and the claim.
@@ -117,6 +119,35 @@ func (s *fakeStore) ClaimCVLifecycleSend(_ context.Context, arg db.ClaimCVLifecy
 	return arg.UserID, nil
 }
 
+func (s *fakeStore) ListPaywallLetterDue(_ context.Context, arg db.ListPaywallLetterDueParams) ([]db.ListPaywallLetterDueRow, error) {
+	var ids []int64
+	for id := range s.paywall {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	var rows []db.ListPaywallLetterDueRow
+	for _, id := range ids {
+		if id <= arg.AfterUserID || int32(len(rows)) == arg.MaxRows {
+			continue
+		}
+		if _, sent := s.sends[sendKey{id, int16(StepPaywall)}]; sent || s.Holder(id) != "" {
+			continue
+		}
+		rows = append(rows, s.paywall[id])
+	}
+	return rows, nil
+}
+
+func (s *fakeStore) ClaimPaywallLetterSend(_ context.Context, arg db.ClaimPaywallLetterSendParams) (int64, error) {
+	key := sendKey{arg.UserID, int16(StepPaywall)}
+	if _, exists := s.sends[key]; exists || s.ineligible[arg.UserID] {
+		return 0, pgx.ErrNoRows
+	}
+	s.sends[key] = ""
+	s.log("claim-step:%d:%d", StepPaywall, arg.UserID)
+	return arg.UserID, nil
+}
+
 func (s *fakeStore) RecordCVLifecycleSendError(_ context.Context, arg db.RecordCVLifecycleSendErrorParams) error {
 	if s.recordErr != nil {
 		return s.recordErr
@@ -145,9 +176,10 @@ func (c *fakeComposer) Compose(_ context.Context, step Step, userID int64) (Lett
 }
 
 type fakeSender struct {
-	store *fakeStore
-	err   map[int64]error
-	sent  []string
+	store   *fakeStore
+	err     map[int64]error
+	sent    []string
+	letters []Letter
 }
 
 func (s *fakeSender) Send(_ context.Context, l Letter, userID int64, to string) error {
@@ -156,6 +188,7 @@ func (s *fakeSender) Send(_ context.Context, l Letter, userID int64, to string) 
 		return err
 	}
 	s.sent = append(s.sent, fmt.Sprintf("%d:%d:%s", l.Step, userID, to))
+	s.letters = append(s.letters, l)
 	return nil
 }
 
@@ -421,8 +454,113 @@ func TestNew_RefusesAScheduleThatCouldSendOutOfOrder(t *testing.T) {
 	}
 }
 
+// paywallRow is what the paywall list returns for a hit on a posting.
+func paywallRow(id int64, feature string) db.ListPaywallLetterDueRow {
+	return db.ListPaywallLetterDueRow{
+		UserID: id, Email: fmt.Sprintf("user%d@example.test", id), Feature: feature,
+		JobTitle: "Go Engineer", JobCompany: "Acme", JobSlug: "go-engineer-acme-1",
+	}
+}
+
+func TestRun_PaywallLetterWinsTheDayOverACVLetter(t *testing.T) {
+	r := newRig(t, 10, 7)
+	r.store.paywall = map[int64]db.ListPaywallLetterDueRow{7: paywallRow(7, "tailor")}
+	stats := r.run(t)
+
+	want := "enroll prune claim-step:4:7 claim-day:7 send:4:7"
+	if got := r.events(); got != want {
+		t.Fatalf("events = %q, want %q: the paywall letter must be sent first and take the day", got, want)
+	}
+	if stats.Sent[StepPaywall] != 1 || stats.Sent[StepATS] != 0 {
+		t.Errorf("Sent = %v, want the paywall letter and not the CV letter", stats.Sent)
+	}
+
+	// The CV letter is not lost: it goes out when the day is free again.
+	r.store.Memory = maildaily.Memory{}
+	r.run(t)
+	if got := strings.Join(r.sender.sent, ","); got != "4:7:user7@example.test,1:7:user7@example.test" {
+		t.Errorf("sent %s, want the paywall letter then, a day later, the CV letter", got)
+	}
+}
+
+func TestRun_PaywallLetterCarriesTheAttemptAndGoesOutOnce(t *testing.T) {
+	r := newRig(t, 10)
+	r.store.paywall = map[int64]db.ListPaywallLetterDueRow{7: paywallRow(7, "cover-letter")}
+	r.run(t)
+	r.store.Memory = maildaily.Memory{}
+	r.run(t)
+
+	if len(r.sender.letters) != 1 {
+		t.Fatalf("sent %v, want exactly one paywall letter across two runs", r.sender.sent)
+	}
+	l := r.sender.letters[0]
+	if l.Step != StepPaywall || l.Paywall == nil || *l.Paywall != (Paywall{
+		Feature: "cover-letter", JobTitle: "Go Engineer", Company: "Acme", JobSlug: "go-engineer-acme-1",
+	}) {
+		t.Errorf("letter = %+v, want the hit's feature and posting", l)
+	}
+}
+
+func TestRun_PaywallLetterBehindAnotherSendersDayStaysPending(t *testing.T) {
+	r := newRig(t, 10)
+	r.store.paywall = map[int64]db.ListPaywallLetterDueRow{7: paywallRow(7, "tailor")}
+	r.store.Hold(7, maildaily.SourceOnboarding)
+	r.run(t)
+	if len(r.sender.sent) != 0 || r.store.Holder(7) != maildaily.SourceOnboarding {
+		t.Fatalf("sent %v, holder %q: another sender's day was not respected", r.sender.sent, r.store.Holder(7))
+	}
+
+	r.store.Memory = maildaily.Memory{}
+	r.run(t)
+	if len(r.sender.sent) != 1 {
+		t.Fatalf("sent %v on the next day, want the pending paywall letter", r.sender.sent)
+	}
+}
+
+func TestRun_PaywallLetterForAnAccountThatStoppedBeingEligibleIsSkipped(t *testing.T) {
+	r := newRig(t, 10)
+	r.store.paywall = map[int64]db.ListPaywallLetterDueRow{7: paywallRow(7, "tailor")}
+	r.store.ineligible[7] = true
+	stats := r.run(t)
+
+	if len(r.sender.sent) != 0 || stats.Skipped[StepPaywall] != 1 || r.store.Holder(7) != "" {
+		t.Fatalf("sent %v skipped %v holder %q", r.sender.sent, stats.Skipped, r.store.Holder(7))
+	}
+}
+
+func TestRun_PaywallLettersSpendTheSameCapAsCVLetters(t *testing.T) {
+	r := newRig(t, 1, 5)
+	r.store.paywall = map[int64]db.ListPaywallLetterDueRow{7: paywallRow(7, "tailor")}
+	stats := r.run(t)
+	if total := attempted(&stats); total != 1 || stats.Sent[StepPaywall] != 1 {
+		t.Fatalf("sent %v with MaxPerRun 1, want only the paywall letter", stats.Sent)
+	}
+}
+
+func TestDryRun_CountsDuePaywallLetters(t *testing.T) {
+	r := newRig(t, 10)
+	r.store.paywall = map[int64]db.ListPaywallLetterDueRow{7: paywallRow(7, "tailor"), 8: paywallRow(8, "match")}
+	stats, err := r.runner.DryRun(context.Background())
+	if err != nil {
+		t.Fatalf("DryRun: %v", err)
+	}
+	if stats.Due[StepPaywall] != 2 || len(r.store.sends) != 0 || len(r.sender.sent) != 0 {
+		t.Fatalf("due %v sends %v sent %v", stats.Due, r.store.sends, r.sender.sent)
+	}
+}
+
+func TestNew_RefusesAPaywallWindowThatNeverOpens(t *testing.T) {
+	for _, c := range []struct{ after, within int32 }{{-1, 24}, {60, 0}, {1440, 24}, {2000, 24}} {
+		cfg := DefaultConfig()
+		cfg.PaywallAfterMinutes, cfg.PaywallWithinHours = c.after, c.within
+		if _, err := New(newFakeStore(), &fakeComposer{}, &fakeSender{}, cfg); err == nil {
+			t.Errorf("New accepted a paywall window of %d min / %d h", c.after, c.within)
+		}
+	}
+}
+
 func TestStep_Campaign(t *testing.T) {
-	for step, want := range map[Step]string{StepATS: "cv-letter-1", StepPotential: "cv-letter-2", StepOffer: "cv-letter-3"} {
+	for step, want := range map[Step]string{StepATS: "cv-letter-1", StepPotential: "cv-letter-2", StepOffer: "cv-letter-3", StepPaywall: "paywall-letter"} {
 		if got := step.Campaign(); got != want {
 			t.Errorf("Step(%d).Campaign() = %q, want %q", step, got, want)
 		}

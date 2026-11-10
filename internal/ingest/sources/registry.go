@@ -469,6 +469,10 @@ func All(c HTTPClient) map[string]Source {
 		// (pacedDevGlobalJobsGetter) so pagination and detail hydration share the bucket.
 		NewDevGlobalJobs(pacedDevGlobalJobsGetter(c)),
 		NewWeWorkRemotely(c),
+		// Cutshort: Indian hiring platform, one public syndication XML carrying every
+		// posting's body and structured facets inline. City-expanded rows collapse on
+		// partnerJobId. See cutshort.go.
+		NewCutshort(c),
 		NewNoDesk(c),
 		NewCryptocurrencyJobs(c),
 		NewJobspresso(c),

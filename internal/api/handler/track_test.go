@@ -21,7 +21,7 @@ import (
 // the validation order ever regresses and a request unexpectedly reaches them).
 type stubTrackingRepo struct{}
 
-func (stubTrackingRepo) JobIDBySlug(context.Context, string) (int64, error) { return 1, nil }
+func (stubTrackingRepo) JobIDBySlug(context.Context, int64, string) (int64, error) { return 1, nil }
 func (stubTrackingRepo) RecordView(context.Context, int64, int64) (jobtracking.Interaction, error) {
 	return jobtracking.Interaction{JobID: 1}, nil
 }

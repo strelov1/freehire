@@ -169,9 +169,10 @@ func logIngestionErrors(body io.Reader) {
 }
 
 // Generation is one observed LLM call, handed to a Tracer. A non-nil Err records
-// the call at error level; a nil Usage means the provider reported no token counts
-// (recorded as absent rather than zero). Source labels the originating workload
-// (e.g. "enrich" / "telegram").
+// the call at error level, or at warning level when Cancelled says our own caller
+// abandoned it; a nil Usage means the provider reported no token counts (recorded
+// as absent rather than zero). Source labels the originating workload (e.g.
+// "enrich" / "telegram").
 type Generation struct {
 	Model  string
 	System string
@@ -182,6 +183,11 @@ type Generation struct {
 	End    time.Time
 	Err    error
 	Source string
+	// Cancelled marks a failed call whose caller cancelled it (a worker shutting
+	// down mid-call, a user leaving a chat) rather than one the model or gateway
+	// failed. It is not an outage, so it must not count among the failed
+	// generations the error-rate alert watches.
+	Cancelled bool
 }
 
 // Usage is the token accounting for a single call.
@@ -280,6 +286,9 @@ func newGenerationBody(g Generation, traceID string) generationBody {
 	}
 	if g.Err != nil {
 		b.Level = "ERROR"
+		if g.Cancelled {
+			b.Level = "WARNING"
+		}
 		b.StatusMessage = g.Err.Error()
 	}
 	return b

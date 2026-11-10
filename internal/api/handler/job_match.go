@@ -32,6 +32,9 @@ func (h *matchHandlers) JobMatch(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	if err := jobVisibleToCaller(job, userID, true); err != nil {
+		return err
+	}
 	profile, err := h.userProfile.Get(c.Context(), userID)
 	if err != nil {
 		return profileError(err)

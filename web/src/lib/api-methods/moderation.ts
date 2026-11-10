@@ -1,5 +1,5 @@
 import type { Http } from '../api-core';
-import type { IncomingReferralRequest, ReferralOffer, Submission } from '../types';
+import type { IncomingReferralRequest, ModeratedUser, ReferralOffer, Submission } from '../types';
 import { jsonBody } from '../api-core';
 
 export function moderationApi({ requestData, baseUrl }: Http) {
@@ -63,7 +63,25 @@ export function moderationApi({ requestData, baseUrl }: Http) {
     );
   }
 
+  /** Find an account by id, exact email or exact username. Moderator-only. */
+  async function findUserForModeration(query: string): Promise<ModeratedUser> {
+    return requestData<ModeratedUser>(`/api/v1/moderation/users?q=${encodeURIComponent(query)}`);
+  }
+
+  /** Ban an account (every session and key stops working, sign-in is refused). */
+  async function banUser(id: number, reason: string): Promise<ModeratedUser> {
+    return requestData<ModeratedUser>(`/api/v1/moderation/users/${id}/ban`, jsonBody('POST', { reason }));
+  }
+
+  /** Lift a ban. */
+  async function unbanUser(id: number): Promise<ModeratedUser> {
+    return requestData<ModeratedUser>(`/api/v1/moderation/users/${id}/unban`, jsonBody('POST', {}));
+  }
+
   return {
+    findUserForModeration,
+    banUser,
+    unbanUser,
     listIncomingReferrals,
     resolveReferral,
     referralCvUrl,

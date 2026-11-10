@@ -30,7 +30,7 @@ type trackingRepo struct {
 	listedOffset  int32
 }
 
-func (r *trackingRepo) JobIDBySlug(_ context.Context, slug string) (int64, error) {
+func (r *trackingRepo) JobIDBySlug(_ context.Context, _ int64, slug string) (int64, error) {
 	if slug != r.slug {
 		return 0, jobtracking.ErrJobNotFound
 	}
