@@ -131,6 +131,41 @@ func TestDerive(t *testing.T) {
 		// 116,893 postings and only 3,303 carry any management marker, so the word
 		// names the IC ladder far more often than a manager. Guessing either way
 		// would break the dict-only rule.
+		// Croatian, Serbian, Bosnian and Slovenian heads (#4412): a manager noun
+		// ("voditelj", "šef", "vodja") counts only before a workplace — branch, shop,
+		// department, service, sector, shift, group — as "Branch/Department/Shift
+		// Manager" do; the director in the nominative, or after a deputy.
+		{"bcs branch", "Voditelj poslovnice (m/ž)", "people_manager"},
+		{"bcs branch slash", "VODITELJ/ICA POSLOVNICE", "people_manager"},
+		{"bcs deputy store", "Zamjenik voditelja trgovine (m/ž)", "people_manager"},
+		{"bcs outlet", "VODITELJ / VODITELJICA MALOPRODAJNOG MJESTA", "people_manager"},
+		{"bcs department", "VODITELJ/VODITELJICA ODJELA DELIKATESA", "people_manager"},
+		{"bcs store manager", "Poslovođa (m/ž)", "people_manager"},
+		{"bcs deputy store manager", "Zamenik poslovođe", "people_manager"},
+		{"bcs shift", "Voditelj smjene (m/ž)", "people_manager"},
+		{"bcs shift chief", "Šef smene (na pumpi)", "people_manager"},
+		{"bcs head of department", "Šef/ica odeljenja za razvoj platnih kartica", "people_manager"},
+		{"bcs director", "DIREKTOR/DIREKTORICA PODRUŽNICE DUGA RESA", "people_manager"},
+		{"bcs deputy director", "Zamjenik direktora (m/ž)", "people_manager"},
+		{"sr cyrillic director", "Директор маркета", "people_manager"},
+		{"sr cyrillic branch", "Шеф пословнице", "people_manager"},
+		{"sl branch", "Vodja poslovalnice, Cash & Carry Ljubljana", "people_manager"},
+		{"sl business unit deputy", "Namestnik vodje poslovne enote Kamnik", "people_manager"},
+		{"sl shift", "Vodja izmene SPAR Sežana", "people_manager"},
+		{"sl shift one word", "Izmenovodja (m/ž)", "people_manager"},
+		{"sl group", "Skupinovodja v sektorju prometne signalizacije (m/ž)", "people_manager"},
+		{"sl department", "VODJA ODDELKA (ODDELEK AVTOELEKTRIKE)", "people_manager"},
+		{"sl general director", "Generalni direktor", "people_manager"},
+
+		// …and the same nouns without a workplace, or working for the director.
+		{"bcs project lead", "Voditelj projekta (m/ž)", ""},
+		{"sl sales lead", "Vodja prodaje", ""},
+		{"bcs bare voditelj", "Voditelj/ica", ""},
+		{"bcs director's assistant", "Pomoćnik direktora", ""},
+		{"sl director's office", "Svetovalec za področje podpore in koordinacije projektov v Uradu direktorja", ""},
+		{"sl director's secretariat", "STROKOVNI SODELAVEC VII/1 V TAJNIŠTVU GENERALNEGA DIREKTORJA", ""},
+		{"directorate is not director", "VIŠJI SVETOVALEC, DIREKTORAT ZA OKOLJE", ""},
+
 		{"tech lead", "Tech Lead", ""},
 		{"lead engineer", "Lead Software Engineer", ""},
 		{"team lead", "Team Lead", ""},
