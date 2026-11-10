@@ -490,7 +490,9 @@
         'font-semibold leading-snug tracking-tight',
         compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-base sm:text-lg',
         !compact && !hideCompany && 'mt-1.5',
-        hideCompany && 'pr-10',
+        // With the rail hidden the title is the top line, so it reserves the corner controls' room the rail would have.
+        hideCompany && (!compact && onHide ? 'pr-20' : 'pr-11'),
+        hideCompany && touchActions && 'pointer-coarse:pr-30',
       ]}
     >
       {job.title}
