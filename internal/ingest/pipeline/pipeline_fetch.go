@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 
@@ -37,6 +38,14 @@ func (r Runner) save(ctx context.Context, dj job.Job, form *applyform.Form) erro
 // write. A non-hydrating board has no seen-set and returns nil, which reads as "no evidence" for
 // every lookup — harmless, because such a board yields no refreshes.
 func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sources.Source) (fetchedBoard, error) {
+	if r.recent() {
+		rs, ok := src.(sources.RecentSource)
+		if !ok {
+			return fetchedBoard{}, fmt.Errorf("provider %q has no recent-only listing", e.Provider)
+		}
+		jobs, err := rs.FetchRecent(ctx, e, r.RecentWindow)
+		return fetchedBoard{jobs: jobs}, err
+	}
 	hs, hydrating := src.(sources.HydratingSource)
 	sl, canLookUp := r.Store.(SeenLookup)
 	if !hydrating || !canLookUp {

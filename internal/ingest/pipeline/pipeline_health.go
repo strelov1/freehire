@@ -89,7 +89,7 @@ func healthContext(ctx context.Context) (context.Context, context.CancelFunc) {
 // cool every board in flight at once on a provider whose run regularly meets its deadline.
 // Recording nothing leaves the row as it was, which is what the board earned this run.
 func (r Runner) recordSuccess(ctx context.Context, e sources.CompanyEntry, ingested int, reached bool, fingerprint string) {
-	if r.BoardHealth == nil {
+	if r.BoardHealth == nil || r.recent() {
 		return
 	}
 	hctx, cancel := healthContext(ctx)
@@ -100,7 +100,7 @@ func (r Runner) recordSuccess(ctx context.Context, e sources.CompanyEntry, inges
 }
 
 func (r Runner) recordFailure(ctx context.Context, e sources.CompanyEntry, msg string) {
-	if r.BoardHealth == nil {
+	if r.BoardHealth == nil || r.recent() {
 		return
 	}
 	if ctx.Err() != nil {

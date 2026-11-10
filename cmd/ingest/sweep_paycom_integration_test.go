@@ -86,7 +86,7 @@ func TestTruncatedPaycomRunClosesWhatAFinishedBoardStoppedListing(t *testing.T) 
 		t.Fatalf("run: %v", err)
 	}
 	// truncated: the run's deadline stopped the crawl before it reached the second board.
-	if failed := sweep(ctx, q, registry, runStats, crawled, nil, true); failed != 0 {
+	if failed := sweep(ctx, q, registry, runStats, crawled, nil, true, false); failed != 0 {
 		t.Fatalf("sweep reported %d failures", failed)
 	}
 

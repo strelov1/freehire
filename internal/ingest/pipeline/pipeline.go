@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/worker"
@@ -26,7 +27,16 @@ type Runner struct {
 	Coverage CoverageLookup
 	// Aliases is optional (nil keeps every posting on its derived company slug).
 	Aliases AliasLookup
+	// RecentWindow, when positive, makes this a recent-only run: each board is read through its
+	// adapter's FetchRecent for postings published within the window, and a board whose adapter
+	// has no date filter is skipped (Stats.RecentUnsupported) instead of crawled in full. A
+	// recent listing omits every older posting by construction, so such a run records no board
+	// health at all — neither success, yield nor failure — and never recovers a cooled provider.
+	// Zero is the ordinary full crawl.
+	RecentWindow time.Duration
 }
+
+func (r Runner) recent() bool { return r.RecentWindow > 0 }
 
 // AliasLookup resolves folded company slugs to the canonical slug a merge elected for that
 // employer (company_slug_aliases). Keyed on the FOLD rather than on the slug so a spelling

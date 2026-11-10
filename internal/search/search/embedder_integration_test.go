@@ -210,3 +210,28 @@ func TestIntegration_EnsureDropsAnUndeclaredEmbedder(t *testing.T) {
 		}
 	}
 }
+
+// facetSearch has to be OFF on the live index and on a rebuild's, even though the
+// client cannot carry a false inside Settings: a fresh index defaults it to true, and
+// while it is on every document write also rebuilds the facet-search data.
+func TestIntegration_EnsureTurnsFacetSearchOff(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+
+	if err := c.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+	r := c.NewFacetRebuild()
+	if err := r.Prepare(ctx); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	for name, idx := range map[string]meilisearch.IndexManager{"live": c.facet, "rebuild": r.rebuild} {
+		on, err := idx.GetFacetSearchWithContext(ctx)
+		if err != nil {
+			t.Fatalf("GetFacetSearch(%s): %v", name, err)
+		}
+		if on {
+			t.Errorf("%s index has facetSearch on; want off", name)
+		}
+	}
+}

@@ -127,6 +127,16 @@ func run() int {
 	if refetchAll {
 		log.Printf("ingest: INGEST_REFETCH_ALL — every listed posting is treated as new, so stored rows are re-written, not just refreshed")
 	}
+	recentWindow, err := recentWindowFor(os.Getenv("INGEST_RECENT_DAYS"))
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	if recentWindow > 0 {
+		log.Printf("ingest: INGEST_RECENT_DAYS — recent-only run over the last %v: boards without a date filter are skipped, nothing is closed and no board health is recorded", recentWindow)
+	} else {
+		log.Printf("ingest: full crawl")
+	}
 	bodies, err := sweeppolicy.BodyRefreshFor(os.Getenv("BODY_REFRESH_DAYS"), os.Getenv("BODY_REFRESH_SLICE"), time.Now())
 	if err != nil {
 		log.Printf("config: %v", err)
@@ -217,7 +227,8 @@ func run() int {
 		Coverage: newCoverage(pool),
 		// Same object as Store: the alias registry is a read the store's pool already
 		// serves, and the pipeline asks for it once per board run.
-		Aliases: store,
+		Aliases:      store,
+		RecentWindow: recentWindow,
 	}
 
 	crawlCtx, cancelCrawl := budget.crawlContext(ctx, started)
@@ -238,8 +249,8 @@ func run() int {
 	}
 
 	total := runStats.Total()
-	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d unreadable=%d interrupted=%d cooled=%d quiet=%d truncated=%t",
-		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected, total.Unreadable, total.Interrupted, total.Cooled, total.Quiet, truncated)
+	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d unreadable=%d interrupted=%d cooled=%d quiet=%d recent_unsupported=%d truncated=%t",
+		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected, total.Unreadable, total.Interrupted, total.Cooled, total.Quiet, total.RecentUnsupported, truncated)
 
 	// A provider at 0% took the cheap write for nothing all run — a hashed field is churning
 	// between crawls, which costs a full row rewrite AND a pointless index push every pass.
@@ -284,7 +295,7 @@ func run() int {
 	// interrupted board fails). Before the crawl deadline existed a timed-out run swept nothing
 	// at all, so this withholds nothing a run used to do.
 	queries := db.New(pool)
-	failed += sweep(sweepCtx, queries, registry, runStats, crawled, crossShardAmbiguousBoards, truncated)
+	failed += sweep(sweepCtx, queries, registry, runStats, crawled, crossShardAmbiguousBoards, truncated, recentWindow > 0)
 
 	// Surface which boards are failing / cooled without grepping logs — one line naming them,
 	// their failure count, and when they next become eligible. After the sweep rather than
@@ -309,7 +320,12 @@ func crawlReachedNothing(total pipeline.Stats) bool {
 // sweep runs the post-crawl stale-job closes for every provider in runStats and returns how many
 // of them failed. ctx must be the sweep's own context (runBudget.sweepContext), never the crawl's.
 // truncated narrows every provider to the board scope — see the comment at its call site.
-func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources.Source, runStats pipeline.RunStats, crawled *crawledSet, crossShardAmbiguousBoards map[string]bool, truncated bool) int {
+func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources.Source, runStats pipeline.RunStats, crawled *crawledSet, crossShardAmbiguousBoards map[string]bool, truncated, recent bool) int {
+	// A recent-only listing omits every older posting by construction, so it proves nothing about
+	// what is gone. Stronger than the truncated run's board scope: no scope at all.
+	if recent {
+		return 0
+	}
 	var failed int
 	now := time.Now()
 	// A slice-crawled source (e.g. whatjobs) declares a window wider than staleAfter: its crawl
@@ -601,6 +617,24 @@ func refetchAllFor(env string) (bool, error) {
 	default:
 		return false, fmt.Errorf("INGEST_REFETCH_ALL must be 1 or true when set, got %q", env)
 	}
+}
+
+// maxRecentDays caps INGEST_RECENT_DAYS. A window this wide is already a near-full read, and a
+// typo like 365 would pass for a recent run while asking a source for a year of postings.
+const maxRecentDays = 30
+
+// recentWindowFor reads INGEST_RECENT_DAYS: unset means a full crawl (0), otherwise a positive
+// whole number of days up to maxRecentDays. A bad value fails the run rather than falling back,
+// because a typo here would otherwise start an expensive full crawl where a cheap one was meant.
+func recentWindowFor(env string) (time.Duration, error) {
+	if env == "" {
+		return 0, nil
+	}
+	days, err := strconv.Atoi(env)
+	if err != nil || days < 1 || days > maxRecentDays {
+		return 0, fmt.Errorf("INGEST_RECENT_DAYS must be a whole number of days from 1 to %d when set, got %q", maxRecentDays, env)
+	}
+	return time.Duration(days) * 24 * time.Hour, nil
 }
 
 // sweepProvider closes one provider's unseen jobs: the bulk UPDATE (CloseUnseenJobs or

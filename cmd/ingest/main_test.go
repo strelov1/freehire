@@ -99,3 +99,35 @@ func TestCrawlReachedNothing(t *testing.T) {
 		}
 	}
 }
+
+func TestRecentWindowFor(t *testing.T) {
+	for _, tc := range []struct {
+		env     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"", 0, false},
+		{"1", 24 * time.Hour, false},
+		{"3", 72 * time.Hour, false},
+		{"30", 30 * 24 * time.Hour, false},
+		{"0", 0, true},
+		{"-2", 0, true},
+		{"31", 0, true},
+		{"abc", 0, true},
+		{"1.5", 0, true},
+		{" 3", 0, true},
+	} {
+		got, err := recentWindowFor(tc.env)
+		if (err != nil) != tc.wantErr || got != tc.want {
+			t.Errorf("recentWindowFor(%q) = %v, %v; want %v, err=%t", tc.env, got, err, tc.want, tc.wantErr)
+		}
+	}
+}
+
+// A recent run must not reach the database at all: nil queries would panic if any close ran.
+func TestSweepDoesNothingInRecentMode(t *testing.T) {
+	stats := pipeline.RunStats{"adzuna": {Ingested: 5, QualifyingBoards: []pipeline.BoardRef{{Board: "it-jobs", Region: "gb"}}}}
+	if failed := sweep(t.Context(), nil, nil, stats, newCrawledSet(), nil, false, true); failed != 0 {
+		t.Fatalf("failed = %d, want 0", failed)
+	}
+}
