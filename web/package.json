@@ -53,7 +53,7 @@
     "oxfmt": "0.77.0",
     "oxlint": "^1.77.0",
     "size-limit": "^14.3.0",
-    "svelte": "^5.57.2",
+    "svelte": "^5.57.3",
     "svelte-check": "^4.7.5",
     "svelte-eslint-parser": "^1.8.0",
     "tailwindcss": "^4.3.1",
