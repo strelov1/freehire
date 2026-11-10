@@ -50,7 +50,7 @@
     "storybook": "10.6.5",
     "style-dictionary": "^5.7.1",
     "svelte": "^5.57.2",
-    "svelte-check": "^4.7.7",
+    "svelte-check": "^4.7.8",
     "svelte-eslint-parser": "^1.10.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
