@@ -197,7 +197,7 @@ func genDocs(t *testing.T, r *rand.Rand, n int, withEquity bool) []search.JobDoc
 			t.Fatal(err)
 		}
 		j.Enrichment = raw
-		doc, err := search.FromJob(j, nil, pick(r, append([]string{""}, pools["source_type"]...)))
+		doc, err := search.FromJob(j, pick(r, append([]string{""}, pools["source_type"]...)))
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}

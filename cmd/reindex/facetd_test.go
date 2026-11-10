@@ -106,7 +106,7 @@ func TestFacetdRebuildWire(t *testing.T) {
 		t.Fatal(err)
 	}
 	docs := docsOf(7)
-	docs[0].Vectors = search.DocumentVectors{Skills: []float32{0.5}, Desc: [][]float32{{0.1, 0.2}}}
+	docs[0].Vectors = search.DocumentVectors{Skills: []float32{0.5}}
 	if err := f.Push(ctx, docs); err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestFacetdRebuildWire(t *testing.T) {
 	if len(pushed.Docs) != 1 || pushed.Docs[0]["id"].(float64) != 7 {
 		t.Errorf("pushed = %v", pushed)
 	}
-	if v, _ := pushed.Docs[0]["_vectors"].(map[string]any); v["skills"] != nil || v["desc"] != nil {
+	if v, _ := pushed.Docs[0]["_vectors"].(map[string]any); v["skills"] != nil {
 		t.Errorf("facetd got vectors it does not index: %v", v)
 	}
 }

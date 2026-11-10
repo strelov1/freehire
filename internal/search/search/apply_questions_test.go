@@ -62,7 +62,7 @@ func TestApplyQuestionsMaxReportsDeclinedValues(t *testing.T) {
 // The count rides the document only when a form was captured: absent is "unknown",
 // and a present zero is a real answer that must survive serialisation.
 func TestAttachApplyQuestions(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 7, PublicSlug: "s", Title: "Engineer"}, nil, "")
+	doc, err := FromJob(db.Job{ID: 7, PublicSlug: "s", Title: "Engineer"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

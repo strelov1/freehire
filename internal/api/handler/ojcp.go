@@ -48,8 +48,6 @@ type ojcpHandlers struct {
 	// signer signs the manifest and publishes the key that verifies it. Nil means this
 	// deployment has no signing key: the manifest goes out unsigned and no key set exists.
 	signer *ojcp.Signer
-	// semantic answers an agent's opt-in semantic search; shared with /agent/jobs/search.
-	semantic semanticSearch
 	// origin is the site's address; the MCP server builds its icon and website link from it.
 	origin string
 }
@@ -165,8 +163,7 @@ func (h *ojcpHandlers) OJCPSearchJobs(c *fiber.Ctx) error {
 //
 // It runs the query the public search runs, built from the same values. OJCP has no sort
 // directive and no match vector, so neither is read — a text query gets the index's own
-// relevance ordering (unless it opts into semantic search, see semanticSearch), an empty one
-// the freshest first (defaultSort).
+// relevance ordering, an empty one the freshest first (defaultSort).
 func (h *ojcpHandlers) SearchJobs(ctx context.Context, input ojcp.SearchInput) (ojcp.SearchJobsResponse, error) {
 	if h.search == nil {
 		return ojcp.SearchJobsResponse{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
@@ -182,13 +179,14 @@ func (h *ojcpHandlers) SearchJobs(ctx context.Context, input ojcp.SearchInput) (
 		Limit:  limit,
 		Offset: offset,
 	}
-	res, outcome, err := h.semantic.search(ctx, h.search, params, input.WantsSemantic())
+	res, err := h.search.Search(ctx, params)
+	outcome := semanticOutcomeFor(params, input.WantsSemantic())
 	if outcome == semanticDropped {
-		// Nothing to embed: a semantic search over no text is the plain filtered listing,
-		// so the flag was not honoured and says so like any dropped param.
+		// A semantic search over no text is the plain filtered listing, so the flag was not
+		// honoured and says so like any dropped param.
 		unsupported = append(unsupported, "semantic")
 	}
-	semantic := outcome.wire(ojcp.SemanticApplied, ojcp.SemanticUnavailable)
+	semantic := outcome.wire(ojcp.SemanticUnavailable)
 	if err != nil {
 		return ojcp.SearchJobsResponse{}, err
 	}

@@ -3,8 +3,7 @@
 // Integration tests for the writes that used to reach the search index only at the next
 // full rebuild: a duplicate's change re-queuing its canonical owner (migration 0240), a
 // withheld-as-unseen posting re-queued when its source lists it again, the time-crossings
-// pass, and the view-count rollup. Reuses startPostgres/truncate, insertChunkTestJob and
-// searchOutboxCount.
+// pass, and the view-count rollup. Reuses startPostgres/truncate and insertChunkTestJob.
 package db
 
 import (
@@ -15,6 +14,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// searchOutboxCount counts a job's search_outbox rows.
+func searchOutboxCount(t *testing.T, pool *pgxpool.Pool, jobID int64) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM search_outbox WHERE job_id = $1", jobID).Scan(&n); err != nil {
+		t.Fatalf("count search_outbox for job %d: %v", jobID, err)
+	}
+	return n
+}
 
 func TestSearchReachWithoutRebuild(t *testing.T) {
 	pool := startPostgres(t)

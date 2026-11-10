@@ -1,9 +1,7 @@
 package search
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -123,8 +121,6 @@ type JobDocument struct {
 	// Omitting the key is NOT a third state: with the embedder declared, Meilisearch
 	// rejects the whole document ("no vectors provided for document"), which would drop
 	// the posting out of the index rather than merely out of the match ordering.
-	//
-	// The same two states hold for DescEmbedder, the description chunk vectors.
 	Vectors DocumentVectors `json:"_vectors"`
 }
 
@@ -136,21 +132,12 @@ type JobDocument struct {
 type DocumentVectors struct {
 	// Skills is the match sort's single skill vector.
 	Skills []float32 `json:"skills"`
-	// Desc is one vector per job_semantic_chunks row — the posting's description, chunked
-	// and embedded by cmd/embed or the volunteer broker. Meilisearch scores a multi-vector
-	// document by its nearest vector, so the passage closest to the query decides.
-	Desc [][]float32 `json:"desc"`
 }
 
 // SkillEmbedder is the name of the Meilisearch embedder carrying skill vectors. It
 // keys both the document's _vectors object and the hybrid search request, so the
 // stored side and the query side cannot drift apart.
 const SkillEmbedder = "skills"
-
-// DescEmbedder is the name of the Meilisearch embedder carrying description chunk
-// vectors, the target of an agent's opt-in semantic search
-// (openspec/changes/agent-semantic-search).
-const DescEmbedder = "desc"
 
 // FromJob maps a database job row to its index document. An empty or absent
 // enrichment payload yields the zero Enrichment (the job is still fully
@@ -161,15 +148,10 @@ const DescEmbedder = "desc"
 // attaches it to the returned document via doc.Reality so it backs the
 // `reality.class` facet.
 //
-// desc is the job's description chunk vectors, in chunk order (see
-// ChunkVectorsForJobs); nil for a job nobody has embedded, which clears any stored ones.
-// It is a parameter rather than something a writer attaches afterwards because a writer
-// that forgot would not fail — it would silently erase the vectors already in the index.
-//
-// sourceType is the job's source kind (see JobDocument.SourceType), a parameter for the
-// same reason: a writer that forgot would silently drop the posting out of every
-// `source_type` filter.
-func FromJob(j db.Job, desc [][]float32, sourceType string) (JobDocument, error) {
+// sourceType is the job's source kind (see JobDocument.SourceType). It is a parameter
+// rather than something a writer attaches afterwards because a writer that forgot would
+// not fail — it would silently drop the posting out of every `source_type` filter.
+func FromJob(j db.Job, sourceType string) (JobDocument, error) {
 	view, err := jobview.FromRow(j)
 	if err != nil {
 		return JobDocument{}, err
@@ -200,7 +182,7 @@ func FromJob(j db.Job, desc [][]float32, sourceType string) (JobDocument, error)
 	// ALWAYS set the key. With the embedder declared, Meilisearch REJECTS any document
 	// that omits it — "no vectors provided for document" — so an omission is not a
 	// no-op, it drops the posting out of the index entirely.
-	doc.Vectors = DocumentVectors{Skills: skillvec.JobVector(j.Skills), Desc: desc}
+	doc.Vectors = DocumentVectors{Skills: skillvec.JobVector(j.Skills)}
 	return doc, nil
 }
 
@@ -294,28 +276,4 @@ func truncateRunes(s string, n int) string {
 		cut = cut[:i]
 	}
 	return cut
-}
-
-// ChunkLister is the one query the index writers need to attach description vectors.
-// *db.Queries satisfies it.
-type ChunkLister interface {
-	ListSemanticChunksForJobs(ctx context.Context, jobIDs []int64) ([]db.JobSemanticChunk, error)
-}
-
-// ChunkVectorsForJobs reads the description chunk vectors of a batch of jobs in one
-// query and groups them by job, in chunk order, ready for FromJob. A job with no chunks
-// has no entry, so a map lookup yields the nil FromJob reads as "clear".
-func ChunkVectorsForJobs(ctx context.Context, q ChunkLister, jobIDs []int64) (map[int64][][]float32, error) {
-	if len(jobIDs) == 0 {
-		return nil, nil
-	}
-	rows, err := q.ListSemanticChunksForJobs(ctx, jobIDs)
-	if err != nil {
-		return nil, fmt.Errorf("search: list chunk vectors: %w", err)
-	}
-	out := make(map[int64][][]float32, len(jobIDs))
-	for _, r := range rows {
-		out[r.JobID] = append(out[r.JobID], r.Embedding.Slice())
-	}
-	return out, nil
 }

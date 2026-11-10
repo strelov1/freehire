@@ -63,7 +63,7 @@ func main() {
 }
 
 func run() int {
-	// -facetd-only rebuilds facetd (FACETD_URL) alone: no Meilisearch, no description vectors.
+	// -facetd-only rebuilds facetd (FACETD_URL) alone: no Meilisearch.
 	facetdOnly := flag.Bool("facetd-only", false, "rebuild only facetd (needs FACETD_URL), skipping Meilisearch")
 	flag.Parse()
 	facetdURL := os.Getenv("FACETD_URL")
@@ -202,10 +202,9 @@ func run() int {
 		}
 	}
 	var rb rebuilder
-	var chunks search.ChunkLister = q // description vectors are Meilisearch's; facetd ignores them
 	switch {
 	case *facetdOnly:
-		rb, chunks = newFacetdRebuild(facetdURL), nil
+		rb = newFacetdRebuild(facetdURL)
 	case facetdURL != "":
 		rb = &teeRebuild{primary: client.NewFacetRebuild(), secondary: newFacetdRebuild(facetdURL)}
 	default:
@@ -213,7 +212,7 @@ func run() int {
 	}
 	log.Printf("reindex: target=facet scope=full mode=swap facetd=%t facetd_only=%t", facetdURL != "", *facetdOnly)
 	done = worker.Stage("index and swap")
-	indexed, skipped, err := reindexFull(ctx, reader, rb, lookup, geo, chunks, q, time.Now())
+	indexed, skipped, err := reindexFull(ctx, reader, rb, lookup, geo, q, time.Now())
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
@@ -326,7 +325,7 @@ type rebuilder interface {
 // index never held them, so unlike the in-place path there is nothing to delete).
 // fetch pages by keyset (id > last seen) so rows inserted or re-ordered during the
 // run cannot be skipped or repeated.
-func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo closureGeoLookup, chunks search.ChunkLister, forms applyform.FormLister, now time.Time) (int, int, error) {
+func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo closureGeoLookup, forms applyform.FormLister, now time.Time) (int, int, error) {
 	if err := b.Prepare(ctx); err != nil {
 		return 0, 0, err
 	}
@@ -348,7 +347,7 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 		}
 	}()
 
-	indexed, skipped, err := streamOpenDocs(ctx, reader, lookup, geo, chunks, forms, now, b.Push)
+	indexed, skipped, err := streamOpenDocs(ctx, reader, lookup, geo, forms, now, b.Push)
 	if err != nil {
 		return indexed, skipped, err
 	}
@@ -367,10 +366,9 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 // differed only in the per-batch sink; that path is gone (see openspec/changes/
 // drop-hybrid-search-pgvector-similar), so reindexFull is its only caller now.
 //
-// chunks supplies each batch's description vectors in one query per batch; nil (tests
-// that do not exercise vectors) writes every document with none. forms supplies each
-// batch's application-form question counts the same way; nil writes none.
-func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo closureGeoLookup, chunks search.ChunkLister, forms applyform.FormLister, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
+// forms supplies each batch's application-form question counts in one query per batch;
+// nil writes none.
+func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo closureGeoLookup, forms applyform.FormLister, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
 	var indexed atomic.Int64
 	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
 		log.Printf("reindex: progress indexed=%d", indexed.Load())
@@ -387,16 +385,13 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 		skipped += len(corrupted)
 
 		if len(jobs) > 0 {
-			desc, err := batchChunkVectors(ctx, chunks, jobs)
+			docs, _, err := splitJobs(jobs, lookup, geo, now) // closed jobs (deleteIDs) are dropped, not indexed
 			if err != nil {
 				return int(indexed.Load()), skipped, err
 			}
-			docs, _, err := splitJobs(jobs, lookup, geo, desc, now) // closed jobs (deleteIDs) are dropped, not indexed
-			if err != nil {
-				return int(indexed.Load()), skipped, err
-			}
-			// Asked for the whole page, like the vectors above. A job with no captured form
-			// is absent from the map and its document carries no count — unknown, not short.
+			// Asked for the whole page, including the jobs splitJobs dropped: filtering first
+			// would mean deciding indexability twice. A job with no captured form is absent
+			// from the map and its document carries no count — unknown, not short.
 			questions, err := applyform.QuestionCounts(ctx, forms, pageIDs(jobs))
 			if err != nil {
 				return int(indexed.Load()), skipped, err
@@ -419,16 +414,6 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 		afterID = lastID
 	}
 	return int(indexed.Load()), skipped, nil
-}
-
-// batchChunkVectors reads one page's description vectors. Every id in the page is asked
-// for, including the ones splitJobs will still drop (an unresolved category, no visible
-// description): filtering first would mean deciding indexability twice.
-func batchChunkVectors(ctx context.Context, chunks search.ChunkLister, jobs []db.Job) (map[int64][][]float32, error) {
-	if chunks == nil {
-		return nil, nil
-	}
-	return search.ChunkVectorsForJobs(ctx, chunks, pageIDs(jobs))
 }
 
 // pageIDs is the ids of one page of the reindex feed.
@@ -730,7 +715,7 @@ var unseenWindows = search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(
 // carrying its reality signal, classified against `now` and its cluster counts);
 // closed, private, or withheld jobs become deletions so they leave the index (see
 // search.Withheld and the job-search spec).
-func splitJobs(jobs []db.Job, lookup realityLookup, geo closureGeoLookup, desc map[int64][][]float32, now time.Time) ([]search.JobDocument, []int64, error) {
+func splitJobs(jobs []db.Job, lookup realityLookup, geo closureGeoLookup, now time.Time) ([]search.JobDocument, []int64, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	deleteIDs := make([]int64, 0, len(jobs))
 	for _, j := range jobs {
@@ -750,7 +735,7 @@ func splitJobs(jobs []db.Job, lookup realityLookup, geo closureGeoLookup, desc m
 		if lookup != nil {
 			repost, mass = lookup(j.CompanySlug, j.RoleFingerprint.String)
 		}
-		doc, err := search.FromJob(j, desc[j.ID], sourceTypeOf(j.Source))
+		doc, err := search.FromJob(j, sourceTypeOf(j.Source))
 		if err != nil {
 			return nil, nil, err
 		}

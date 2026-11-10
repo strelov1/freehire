@@ -2,8 +2,8 @@
 
 ## Scope
 Incremental semantic embedding via the `semantic_outbox` queue, mirroring the enrichment pipeline.
-The worker stores description vectors in `job_semantic_chunks`; Meilisearch index writers
-copy them into the jobs index for semantic and similar-job search. It does not precompute
+The worker stores description vectors in `job_semantic_chunks`; they do not reach the
+Meilisearch jobs index (its `desc` embedder was removed). It does not precompute
 similarity lists. The legacy `jobs.semantic_embedding` column was dropped in migration 0235.
 
 
@@ -23,20 +23,6 @@ similarity lists. The legacy `jobs.semantic_embedding` column was dropped in mig
 `cmd/embed` fills the semantic_outbox queue the same way `cmd/enrich` fills enrichment. `ClaimSemanticBatch` is the enrichment claim with one deliberate divergence — it does not filter unindexable jobs out, returning a `closed` flag so the worker branches between embedding open jobs and clearing closed ones' state. The runner lives in `internal/ai/embed` behind `Store` + `Indexer` ports (unit-tested with fakes); `cmd/embed` wires the concrete adapters (`dbStore`, `searchIndexer`). `Indexer` has exactly one method, `IndexOpen` — there is no "remove closed" counterpart, since `Store.CompleteClosed` alone is the whole closed-job side effect now that there is no search index to remove a document from. A change concurrent with the embed is stamped current with the NEW `content_hash` while the vector/chunks still reflect the old content — the enqueue predicate sees a match and does NOT re-enqueue, so the job carries one-revision-stale embeddings until its content changes AGAIN (accepted: the window is one embed-duration and the drift self-corrects on the next real change). Tuning via `EMBED_BATCH_SIZE`/`EMBED_LEASE_SECONDS`/`EMBED_MAX_ATTEMPTS`/`EMBED_CALL_TIMEOUT_SECONDS`/`EMBED_MAX_RUN_SECONDS` (`config.LoadEmbed`; `EMBED_CONCURRENCY` chunks the embed calls inside a batch and belongs to `config.LoadEmbedClient`). For the one-time catalogue backfill (bumping `search.CurrentEmbedderModel()` re-enqueues the whole open catalogue), point `EMBED_URL` at a fast GPU endpoint to shorten the drain — there is no separate PG-only mode anymore (`EMBED_PG_ONLY` was removed alongside the Meili write it used to skip; every run was always Postgres-only in effect once that write was the only one left).
 
 **A scheduled run must end itself, not be ended.** `freehire-embed.service` is a oneshot with `TimeoutStartSec=50min`; on a backlog the drain outlasts it, and systemd's SIGTERM lands mid-wave — the wave is left claimed until its lease expires, its TEI work is thrown away, and the unit goes red every hour (2026-10-22). `EMBED_MAX_RUN_SECONDS` (unset = unbounded, which the catch-up supervisor relies on) makes the runner stop claiming once elapsed time — the enqueue included — plus `EMBED_CALL_TIMEOUT_SECONDS` would pass the budget, so the last wave finishes and the run exits 0 with the rest queued. Set it below the unit's timeout by the enqueue's duration plus some slack; a value no larger than the call timeout is refused at startup, because it would claim nothing and exit green forever. The bound covers a wave's batch path; a wave that falls back to per-item processing is bounded per item, not as a whole.
-
-**A written chunk set reaches the search index through a trigger** (migration 0182): an
-insert into `job_semantic_chunks` queues its open jobs on `search_outbox`, so the vectors reach
-the jobs index's `desc` embedder on the next drain rather than the next rebuild
-(openspec/changes/agent-semantic-search). It is a trigger because this table has two writers:
-`cmd/embed` and the volunteer broker (`freehire-volunteer-embed`'s `promote`, raw SQL from
-another repository).
-
-**`cmd/embed` shares its TEI with the API server's query embeds** (agents' opt-in semantic
-search). Measured 2026-10-18: a query embed takes 0.09s on an idle TEI and 8–10s or times out
-while a bulk drain runs on it. The search survives that — it falls back to keyword search and
-reports `semantic: "unavailable"` — but a long catch-up run (the `freehire-embed-supervisor`
-backfill) is a window in which agents get keyword answers. A dedicated query TEI is the fix if
-that window starts to matter.
 
 `cmd/embed` no longer requires `MEILI_MASTER_KEY` at startup — it never touches Meilisearch. `search.NewClient` still takes `cfg.MeiliURL`/`cfg.MeiliKey` positionally (unused for I/O here) purely to keep one constructor shape across callers.
 

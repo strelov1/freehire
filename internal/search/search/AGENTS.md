@@ -3,13 +3,12 @@
 Meilisearch-backed keyword/faceted search over jobs and companies. The package doc in
 `client.go` explains the index topology; this file covers what the code can't tell you.
 This package also owns the TEI embedding calls (`embed.go`) that feed the pgvector-backed
-`job_semantic_chunks` table — see `internal/ai/embed/AGENTS.md` — and copies those vectors
-into the jobs index's `desc` embedder for an agent's opt-in semantic search (see
-"Description vectors and the agent's semantic search" below).
+`job_semantic_chunks` table — see `internal/ai/embed/AGENTS.md`. Those vectors never reach
+the jobs index: its only embedder is `skills`. The `desc` embedder that carried them (for
+agents' opt-in semantic search and hybrid similar jobs) was removed to speed up index
+writes; `ensure()`'s embedder reset drops it from a live index that still declares it.
 
-Similar jobs use the same live index: the stored source's first description chunk
-is the hybrid query vector, with its title as the text query. Missing vectors, a failed
-hybrid or no visible hybrid results fall back to keyword search under the same filters.
+Similar jobs use the same live index: a keyword search on the source's title.
 Country, city (when known) and specialization are mandatory constraints; when only a
 country is known it remains the location constraint, and region is used only without
 country/city. Unknown location or specialization yields no related postings. Results
@@ -271,56 +270,6 @@ federation pages, deduplicates and merges facets. Two traps:
 The merged sort is global only because the ranking rules put `sort` right after
 `words`. Each hit fully matches its own alternative, so the sort decides.
 Moving `sort` later breaks that, and `TestSearchOperatorsOnRealEngine` catches it.
-
-## Description vectors and the agent's semantic search
-
-The jobs index carries a SECOND `userProvided` embedder, `desc` (768 dims, `descDimensions`),
-holding each posting's `job_semantic_chunks` vectors — one per chunk, so a document is
-multi-vector and Meilisearch scores it by its nearest chunk. The agent search surfaces
-query it when asked for semantic search (openspec/changes/agent-semantic-search).
-Similar-job reads also query it, reusing the source posting's first stored chunk vector
-without calling the query embedder.
-
-- **Every document writer must pass the chunks to `FromJob`.** `desc` follows the same two
-  states as `skills`: vectors, or an explicit `null` that CLEARS what the index holds — and
-  omitting the key rejects the document. So the chunks are a `FromJob` PARAMETER, read in one
-  query per batch through `ChunkVectorsForJobs`; a writer that could forget them would
-  silently erase vectors instead of failing. A failed chunk read SKIPS the push (the drain
-  returns `ErrSkipWave`, link import skips its best-effort push) for the same reason.
-- **What re-queues a job is a trigger, not a writer.** Migration 0182 puts a job on
-  `search_outbox` whenever its chunk set is inserted, because two processes write chunks and
-  the volunteer broker's is raw SQL in another repository.
-- **The query vector is embedded on the request path by `QueryEmbedder`**, which is not a
-  `Client` method on purpose: a `Client` falls back to `embedderURL` when nothing is
-  configured, while the request path must know it has no backend. One call, its own short
-  timeout, no retry. Any failure — including the engine refusing the hybrid with a 400, the
-  shape a binary querying `desc` before the live settings declare it gets — answers
-  keyword-only and reports `semantic: "unavailable"`.
-- **A hybrid query carries `ScoreThreshold`.** Vector search ranks every embedded document,
-  so without a floor the page fills with distant matches and the estimated total approaches
-  the embedded catalogue (`TestIntegration_HybridSearchFindsByMeaning` fails without it). The
-  value is `SEMANTIC_SCORE_THRESHOLD`, set from sampled agent queries, not a constant here.
-  Prod runs `0.925` (2026-10-21, at `semanticRatio` 0.7): e5 scores sit in a narrow band, junk
-  at 0.911–0.927 and relevant hits from 0.930. The junk is structural — only `is_tech` jobs
-  carry `desc` vectors, so a non-tech query's nearest vectors are unrelated tech postings.
-  0.93 was cleaner but cut a Russian Python query to 5 results. Re-sample after changing
-  either number or the embedding model.
-- **A hybrid answer has no total, only a lower bound.** `estimatedTotalHits` under a vector
-  search is the whole index (3.67M for a query 34 postings passed the floor), and no exact
-  count exists to ask for instead — the vector side ranks a candidate pool sized by the
-  request, so one query counted 34 in page mode and 13 with `hitsPerPage: 0`. `Search` asks
-  for `limit+1` and `hybridPage` drops the probe: `Total` is what the pages so far reached,
-  plus one when a next page exists, and `TotalIsLowerBound` says so on every surface.
-- **The query embed needs a TEI nobody else is using.** With the shared TEI that `cmd/embed`
-  drains its backlog through, the 400 ms query deadline was missed by every request — the
-  query queued 15–20 s behind bulk batches — so every `semantic: true` answered
-  `unavailable` while the index itself was fine. Prod points the API's `EMBED_URL` at a
-  dedicated loopback TEI pinned to the bulk TEI's image digest (freehire-ops:
-  `provision/fsn/freehire-query-embed-tei/README.md`). If `semantic` reports `unavailable`,
-  look at the query TEI before the index.
-- **Rollout order is the skill embedder's**: deploy → settings → full rebuild → set
-  `EMBED_URL` on the API server → verify. Until `EMBED_URL` is set the flag answers
-  `unavailable`, which is also the rollback.
 
 ## Limitations
 
