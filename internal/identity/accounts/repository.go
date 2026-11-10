@@ -270,7 +270,7 @@ func (r *QueriesRepository) UserByEmail(ctx context.Context, email string) (User
 	}
 	u := User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
 		EmailVerified: row.EmailVerified, CreatedAt: pgconv.TimePtr(row.CreatedAt),
-		Language: row.Language}
+		Language: row.Language, Banned: row.Banned}
 	return u, row.PasswordHash.String, row.PasswordHash.Valid, nil
 }
 

@@ -1132,6 +1132,8 @@ func Register(app *fiber.App, cfg Config) {
 	votesH.register(api, mw)
 	companyWatchH.register(api, mw)
 	companyFeedbackH.register(api, mw)
+	// The manual account ban (see userModerationHandlers).
+	newUserModerationHandlers(queries).register(api, mw)
 	companyProcessReportH.register(api, mw)
 	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
 	matchH.register(api, mw)

@@ -96,16 +96,16 @@ SELECT n.id, n.user_id, n.job_id, n.kind,
        (a.user_id IS NOT NULL)::bool AS application_exists,
        GREATEST(a.applied_at, mail.newest_mail_at)::timestamptz AS last_activity_at,
        COALESCE(mail.suggestion_pending, false)::boolean AS has_pending_suggestion,
-       mail_recipient(u.email, u.email_verified, u.last_active_at)::text AS account_email,
+       mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS account_email,
        u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,
-       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = n.user_id) AS has_push_device
+       (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = n.user_id))::boolean AS has_push_device
 FROM application_nudges n
 JOIN jobs j ON j.id = n.job_id
 JOIN users u ON u.id = n.user_id
 LEFT JOIN notification_settings ns ON ns.user_id = n.user_id
 LEFT JOIN applications a ON a.user_id = n.user_id AND a.job_id = n.job_id
-LEFT JOIN telegram_links tl ON tl.user_id = n.user_id
+LEFT JOIN telegram_links tl ON tl.user_id = n.user_id AND u.banned_at IS NULL
 LEFT JOIN LATERAL (
     SELECT max(e.received_at) FILTER (WHERE e.job_id = n.job_id)               AS newest_mail_at,
            bool_or(e.suggested_job_id = n.job_id AND e.application_id IS NULL) AS suggestion_pending

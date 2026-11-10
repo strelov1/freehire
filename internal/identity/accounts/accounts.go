@@ -59,6 +59,9 @@ type User struct {
 	// inference from "does this account have a CV", which was the old rule and stopped
 	// being true the moment the wizard grew questions a CV cannot answer.
 	OnboardingCompletedAt *time.Time
+	// Banned is set only by the by-email lookup (Login, password reset): a moderator
+	// banned the account, so it neither signs in nor is mailed a code.
+	Banned bool
 }
 
 // PasswordHasher hashes and verifies passwords (bcrypt in production). Injected
@@ -67,6 +70,10 @@ type PasswordHasher interface {
 	Hash(plain string) (string, error)
 	Check(hash, plain string) error
 }
+
+// ErrAccountSuspended is returned when the credentials were right but a moderator banned
+// the account. It is only ever shown to someone who proved the credential.
+var ErrAccountSuspended = errors.New("accounts: account suspended")
 
 var (
 	// ErrIdentityNotFound is returned by the repository when no identity row
@@ -367,6 +374,9 @@ func (s *Service) Login(ctx context.Context, email, password string) (User, erro
 	// flag — set it so login answers the same shape as /auth/me and a client cannot be
 	// told the account is passwordless right after it signed in with a password.
 	user.HasPassword = true
+	if user.Banned {
+		return User{}, ErrAccountSuspended
+	}
 	return user, nil
 }
 

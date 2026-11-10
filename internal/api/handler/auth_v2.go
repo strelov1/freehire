@@ -48,7 +48,8 @@ func isExpectedOAuthV2Failure(err error) bool {
 		errors.Is(err, mobileauth.ErrIdentity) ||
 		errors.Is(err, accounts.ErrNoVerifiedEmail) ||
 		errors.Is(err, errOAuthV2StateMismatch) ||
-		errors.Is(err, errOAuthV2MissingCode)
+		errors.Is(err, errOAuthV2MissingCode) ||
+		errors.Is(err, errAccountSuspended)
 }
 
 func (h *authHandlers) currentSessionHash(c *fiber.Ctx) ([]byte, error) {
@@ -247,6 +248,11 @@ func (h *authHandlers) OAuthCallbackV2(c *fiber.Ctx) error {
 	if err != nil {
 		return h.oauthV2Fail(c, attempt.CallbackTarget, err)
 	}
+	if attempt.Purpose != "reauth" {
+		if _, err = h.sessionVersion(c.Context(), userID); err != nil {
+			return h.oauthV2Fail(c, attempt.CallbackTarget, err)
+		}
+	}
 	otc, err := h.mobileAuth.MintCode(c.Context(), attempt, userID)
 	if err != nil {
 		return h.oauthV2Fail(c, attempt.CallbackTarget, err)
@@ -262,6 +268,9 @@ func (h *authHandlers) oauthV2Fail(c *fiber.Ctx, target string, cause error) err
 	code := "oauth_failed"
 	if errors.Is(cause, mobileauth.ErrIdentity) {
 		code = "reauth_identity_mismatch"
+	}
+	if errors.Is(cause, errAccountSuspended) {
+		code = "account_suspended"
 	}
 	// This leg always redirects rather than returning through RenderError, so
 	// it has to open its own reporting gate: a routine cause (bad state, expired
@@ -428,6 +437,12 @@ func (h *authHandlers) AppleExchangeV2(c *fiber.Ctx) error {
 	if attempt.Purpose == "reauth" && attempt.ExpectedTokenVersion != nil {
 		if err = h.mobileAuth.VerifyBinding(c.Context(), userID, *attempt.ExpectedTokenVersion); err != nil {
 			return authError(401, "reauth_session_mismatch", "session changed")
+		}
+	}
+	if attempt.Purpose != "reauth" {
+		// Before Apple's grant is exchanged and stored for an account that cannot sign in.
+		if _, err = h.sessionVersion(c.Context(), userID); err != nil {
+			return err
 		}
 	}
 	refreshToken, err := h.appleNative.Exchange(c.Context(), in.AuthorizationCode, clientID, attempt.NonceChallenge, claims.Subject)
