@@ -313,8 +313,13 @@ func avatureDescription(root *html.Node) string {
 }
 
 // avatureInlineLabeled reports whether a field value opens with its own bold label and a
-// colon — the shape avatureLabeledValue reads ("<strong>Locations</strong>: Austin").
+// colon — the shape avatureLabeledValue reads ("<strong>Locations</strong>: Austin"). A value
+// with prose markup is body text even when it opens that way ("<p><strong>Responsibilities
+// </strong>: …</p>"); the metadata values are plain inline text.
 func avatureInlineLabeled(value *html.Node) bool {
+	if hasProseMarkup(value) {
+		return false
+	}
 	var strong string
 	walk(value, func(c *html.Node) bool {
 		if strong == "" && c.Type == html.ElementNode && c.Data == "strong" {

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 // avatureDetailHTML mirrors an Avature JobDetail page: og:title carries the title, and the
@@ -307,5 +309,27 @@ func TestAvatureReadsDutyStationAndJoinsASplitBody(t *testing.T) {
 	}
 	if strings.Contains(j.Description, "font-size") {
 		t.Errorf("Description kept the sections' CSS: %q", j.Description)
+	}
+}
+
+// A body section that opens with a bold heading and a colon is prose, not an inline-labeled
+// metadata value; dropping it lost the main body whenever another section (a disclaimer) kept
+// the joined description non-empty.
+func TestAvatureKeepsABodySectionOpeningWithABoldHeading(t *testing.T) {
+	const page = `<html><body>
+<div class="article__content__view__field"><div class="article__content__view__field__value"><strong>Locations</strong>: Austin, Texas&nbsp;</div></div>
+<div class="article__content__view__field"><div class="article__content__view__field__value"><p><strong>Responsibilities</strong>: design the platform.</p></div></div>
+<div class="article__content__view__field"><div class="article__content__view__field__value"><p>We do not accept unsolicited resumes.</p></div></div>
+</body></html>`
+	root, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := avatureDescription(root)
+	if !strings.Contains(d, "design the platform") || !strings.Contains(d, "unsolicited resumes") {
+		t.Errorf("description lost a body section: %q", d)
+	}
+	if strings.Contains(d, "Austin") {
+		t.Errorf("description kept the Locations value: %q", d)
 	}
 }
