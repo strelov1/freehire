@@ -7,7 +7,6 @@ Incremental facet-search indexing via the `search_outbox` queue, mirroring `inte
 A change that moves a search document without queuing its job waits for a rebuild that no longer comes. The writers that queue, and the trap each one closed:
 - ingest, tg-extract, hydrate-adzuna, employer/moderation writes — `EnqueueSearchOutbox` in the write's transaction;
 - enrichment (`cmd/enrich`'s `Complete`) — the `enrichment.*` facets;
-- description vectors — the `job_semantic_chunks` trigger (migration 0182);
 - view counts (`ApplyDailyView`/`ApplyDailyAgentView`) — `view_count` is sortable;
 - a DUPLICATE's change (joins/leaves a cluster, closes/reopens, geography moves) queues its canonical ROOT — the `jobs_enqueue_duplicate_owner` triggers (migration 0240), since the owner's document carries the closure geography and the cluster counts;
 - a posting re-seen after search withheld it as unseen — `RefreshUnchangedJob`/`TouchJob` (`withheld_if_seen_before`);

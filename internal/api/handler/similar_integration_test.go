@@ -11,8 +11,8 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// Exercise real slug/embedding/visibility reads with a fake search engine. Engine
-// hybrid/filter serialization is covered by the search package's integration tests.
+// Exercise real slug/visibility reads with a fake search engine. Engine filter
+// serialization is covered by the search package's integration tests.
 func TestSimilarJobsEndToEnd(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := t.Context()
@@ -24,10 +24,6 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 		}
 	}
 	q := db.New(pool)
-	row, err := q.GetJobBySlug(ctx, "source")
-	if err != nil {
-		t.Fatal(err)
-	}
 	var hits []search.JobDocument
 	for _, slug := range []string{"private", "closed", "other", "source"} {
 		job, err := q.GetJobBySlug(ctx, slug)
@@ -36,7 +32,7 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 		}
 		hits = append(hits, search.JobDocument{ID: job.ID})
 	}
-	idx := &similarSearch{keyword: search.SearchResult{Hits: hits}, hybrid: search.SearchResult{Hits: hits}}
+	idx := &similarSearch{keyword: search.SearchResult{Hits: hits}}
 	h := &searchHandlers{search: idx, queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/jobs/:slug/similar", h.SimilarJobs)
@@ -47,16 +43,6 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 	data := body["data"].([]any)
 	if len(data) != 1 || data[0].(map[string]any)["public_slug"] != "other" {
 		t.Fatalf("data=%v", data)
-	}
-	// A stored vector enables hybrid ranking without a query-time embedding call.
-	_, err = pool.Exec(ctx, `INSERT INTO job_semantic_chunks (job_id, chunk_index, embedding) VALUES ($1,0,array_fill(0.1::real,ARRAY[768])::vector)`, row.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	idx.calls = nil
-	status, _ = doGet(t, app, "/jobs/source/similar")
-	if status != 200 || len(idx.calls) != 1 || len(idx.calls[0].SemanticVector) != 768 {
-		t.Fatalf("hybrid status=%d calls=%v", status, idx.calls)
 	}
 	status, _ = doGet(t, app, "/jobs/missing/similar")
 	if status != 404 {
@@ -95,7 +81,7 @@ func TestSimilarJobsResolvesTransitiveDuplicateOwner(t *testing.T) {
 		t.Fatalf("owner=%d err=%v want %d", resolved, err, owner.ID)
 	}
 	idx := &similarSearch{keyword: search.SearchResult{Hits: []search.JobDocument{{ID: owner.ID}}}}
-	got, err := similarViews(ctx, idx, q, source, 6, 0, visiblePublic)
+	got, err := similarViews(ctx, idx, q, source, 6, visiblePublic)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("canonical posting recommended: %v %v", got, err)
 	}

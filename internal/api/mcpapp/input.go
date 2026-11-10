@@ -80,7 +80,7 @@ type SearchInput struct {
 
 	// Semantic is a POINTER for the reason VisaSponsorship is: absent and false both mean
 	// the ordinary keyword search, and only true asks for anything.
-	Semantic *bool `json:"semantic,omitempty" jsonschema:"true: also match postings that describe the query in other words. Use it for a need described in words, e.g. 'keep our payment systems secure' or 'help kids learn to read'; leave it off for a job title or a non-technical role, which keywords answer better. Needs query"`
+	Semantic *bool `json:"semantic,omitempty" jsonschema:"currently not available: a request that sets it is answered by keywords and its semantic field says unavailable"`
 
 	Limit  int `json:"limit,omitempty" jsonschema:"results per page"`
 	Offset int `json:"offset,omitempty"`

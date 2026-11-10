@@ -37,12 +37,12 @@ That choice shapes everything downstream. Because workers do not share memory wi
 
 That batching is not a micro-optimisation. Meilisearch re-merges its inverted index across the *whole* live index on every push regardless of batch size — measured at 90–180 seconds per push on a ~2.7M-document index — so the earlier design, where ~169 independent per-board processes each pushed directly, saturated host disk IO. The outbox collapses many small pushes into few fat ones.
 
-**Search.** The `jobs` Meilisearch index holds the public job shape, keyword/facet fields,
-skill vectors and description chunk vectors. Similar jobs query that index at request time:
-hybrid ranking when a stored source vector is available, otherwise keyword search, always
-within the source's known location and specialization. Current visibility is checked in
-Postgres before returning recommendations. `cmd/embed` keeps the reusable description
-vectors in `job_semantic_chunks`; there is no similarity backfill or precomputed list.
+**Search.** The `jobs` Meilisearch index holds the public job shape, keyword/facet fields
+and skill vectors (the match sort). Similar jobs query that index at request time by
+keywords on the source's title, always within the source's known location and
+specialization. Current visibility is checked in Postgres before returning recommendations.
+`cmd/embed` keeps description vectors in `job_semantic_chunks`; they do not reach the
+index, and there is no similarity backfill or precomputed list.
 
 **The API.** One Fiber server, one public wire shape. `internal/job/jobview` owns the single JSON representation of a job used by the list endpoint, the detail endpoint, and the search index alike, so those surfaces cannot drift apart. Responses use `{"data": ...}` for single items, `{"data": ..., "meta": {...}}` for lists, and `{"error": msg}` for failures. The catalogue is public and keyless — `GET https://freehire.me/api/v1/jobs` needs no credential.
 

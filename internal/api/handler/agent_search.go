@@ -27,10 +27,9 @@ type jobDescriptions interface {
 // the other job reads; full descriptions are already public via the detail
 // endpoint.
 //
-// `semantic=true` opts into the same hybrid search OJCP offers (see semanticSearch);
-// meta.semantic then says whether the description vectors answered ("applied") or the
-// request fell back to keywords ("unavailable"). Omitted when not asked. An applied one
-// also carries meta.total_is_lower_bound: its total is "at least", not a count.
+// `semantic=true` is still accepted but never honoured (see semanticOutcome):
+// meta.semantic is then "unavailable", the request having been answered by keywords.
+// Omitted when not asked.
 func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
 	out, err := h.runJobSearch(c, c.QueryBool("semantic"), nil, "", nil)
 	if err != nil {

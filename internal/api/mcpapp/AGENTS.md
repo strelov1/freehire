@@ -79,12 +79,11 @@ shows. Neither is a trade worth making.
 
 ## Semantic search
 
-`search_jobs` takes `semantic: true` and answers it through the same `semanticSearch` value
-(`internal/api/handler/semantic_search.go`) OJCP and `/agent/jobs/search` hold, so the three
-cannot disagree about when a query was matched by meaning. The result's `semantic` says
-`applied` or `unavailable`; the latter is a keyword-only answer, never an error. It is off
-unless asked: description vectors exist only for `is_tech` postings, so for most of the
-catalogue the keyword hits are the answer anyway.
+`search_jobs` still takes `semantic: true`, but it is currently not available: the index
+carries no description vectors, so the request is answered by keywords and the result's
+`semantic` says `unavailable` — never an error. The outcome is decided by
+`semanticOutcomeFor` (`internal/api/handler/semantic_search.go`), shared with OJCP and
+`/agent/jobs/search`, so the three cannot disagree.
 
 ## What the tools must not do
 
@@ -180,7 +179,7 @@ All three read what the website already computes, through functions the website'
 handlers now share, so the two cannot quote different figures:
 
 - **`similar_jobs`** — the website's Meilisearch related-jobs search with mandatory
-  location and specialization filters, stored-vector hybrid ranking and keyword fallback.
+  location and specialization filters, ranked by keywords on the source's title.
   The source and rehydrated results must pass `publishedToAgents`; private and absent
   source slugs answer identically. No offline similarity backfill is needed.
 - **`salary_stats`** — `salaryBands` (handler/insights.go), the `/insights/salary` read,

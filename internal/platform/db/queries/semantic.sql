@@ -202,17 +202,6 @@ FROM unnest(sqlc.arg(job_ids)::bigint[]) WITH ORDINALITY AS ids(job_id, n)
 JOIN unnest(sqlc.arg(chunk_indices)::smallint[]) WITH ORDINALITY AS idx(chunk_index, n) USING (n)
 JOIN unnest(sqlc.arg(embeddings)::text[]) WITH ORDINALITY AS emb(embedding, n) USING (n);
 
--- name: ListSemanticChunksForJobs :many
--- Every chunk vector of a BATCH of jobs, for the search-index writers that copy them into
--- the jobs index's `desc` embedder (openspec/changes/agent-semantic-search, Decision 3).
--- One call per writer batch, never one per document: a full rebuild walks the whole open
--- catalogue, and ~862k of those jobs carry chunks. Ordered so a caller can group rows by
--- job without sorting, and so a job's vectors keep their chunk order.
-SELECT job_id, chunk_index, embedding
-FROM job_semantic_chunks
-WHERE job_id = ANY(sqlc.arg(job_ids)::bigint[])
-ORDER BY job_id, chunk_index;
-
 -- name: SemanticCoverageCounts :one
 -- How much of the catalogue carries a current embedding, for the public
 -- embedding-progress page (openspec/changes/embedding-progress-page). "Eligible" is

@@ -470,14 +470,12 @@ func TestIntegration_DuplicateStatusRetainsContentAndRestoresCanonicalJob(t *tes
 	canon := seedJob(t, pool, "canon", "Canonical Engineer", "acme", "fp-canon", []string{"Berlin"}, nil)
 	dup := seedJob(t, pool, "replica", "Replica Engineer", "acme", "fp-replica", []string{"Paris"}, nil)
 	absent := seedJob(t, pool, "unindexed-replica", "Replica Engineer", "acme", "fp-absent", []string{}, nil)
-	vector := make([]float32, 768)
-	vector[0] = 1
 	for _, id := range []int64{canon, dup} {
 		row, err := q.GetJob(ctx, id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		doc, err := search.FromJob(row, [][]float32{vector}, "")
+		doc, err := search.FromJob(row, "")
 		if err != nil {
 			t.Fatal(err)
 		}
