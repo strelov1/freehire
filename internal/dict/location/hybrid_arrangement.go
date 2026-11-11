@@ -28,11 +28,11 @@ func HybridArrangementStated(desc string) bool {
 	}
 	english := phraseGuards{
 		negations:      []string{"not ", "no ", "never ", "experience ", "previous ", "prior "},
-		refusals:       []string{"not available", "not offered", "preferred", "experience"},
+		refusals:       []string{"not available", "not offered", "not possible", "not an option", "preferred", "experience"},
 		negationWindow: 60,
 	}
 	for _, match := range englishHybridStatements.FindAllStringIndex(text, -1) {
-		if !english.withdraws(text, match[0], match[1]) && !optionalArrangementAt(text, match[0], match[1]) {
+		if !hybridStatementWithdrawn(text, match[0], match[1], english) && !optionalArrangementAt(text, match[0], match[1]) {
 			return true
 		}
 	}
@@ -47,11 +47,20 @@ func HybridArrangementStated(desc string) bool {
 		}
 	}
 	for _, match := range mandatoryOfficeWeek.FindAllStringIndex(text, -1) {
-		if !english.withdraws(text, match[0], match[1]) && !optionalArrangementAt(text, match[0], match[1]) {
+		if !hybridStatementWithdrawn(text, match[0], match[1], english) && !optionalArrangementAt(text, match[0], match[1]) {
 			return true
 		}
 	}
 	return hybridLocationHeader(text, english)
+}
+
+func hybridStatementWithdrawn(text string, start, end int, guards phraseGuards) bool {
+	// A contrasting clause states its own arrangement: "not fully remote, but hybrid".
+	if at := strings.LastIndex(text[:start], " but "); at >= 0 {
+		from := at + len(" but ")
+		text, start, end = text[from:], start-from, end-from
+	}
+	return guards.withdraws(text, start, end)
 }
 
 var englishHybridStatements = regexp.MustCompile(
