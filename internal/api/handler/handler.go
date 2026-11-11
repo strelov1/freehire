@@ -1118,7 +1118,9 @@ func Register(app *fiber.App, cfg Config) {
 		statsHandlers:                statsH,
 		submissionHandlers:           submissionsH,
 		trackingHandlers:             trackingH,
-		experienceHandlers:           experienceH})
+		experienceHandlers:           experienceH,
+		employerHandlers:             employerH,
+		referralHandlers:             referralsH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1196,7 +1198,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Verified-employer accounts: claim, curated profile, own vacancies, and the
 	// moderator/admin review surface (see employerHandlers).
-	employerH.register(api, mw)
+	employerH.register(api, mw, contract)
 	directApplyH.register(api, mw)
 
 	// Link contributions (see contributionHandlers).
@@ -1204,7 +1206,7 @@ func Register(app *fiber.App, cfg Config) {
 	jdResolveH.register(api, mw, contract)
 
 	// Employee referrals (see referralHandlers).
-	referralsH.register(api, mw)
+	referralsH.register(api, mw, contract)
 
 	// Interview buddies (see buddyHandlers).
 	buddyH.register(api, mw, contract)

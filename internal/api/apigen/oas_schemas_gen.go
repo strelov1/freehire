@@ -214,6 +214,21 @@ func (s *ApproveCompanyRelationOK) SetData(val CompanyRelationApproval) {
 }
 
 // A single item: `{"data": ...}`.
+type ApproveEmployerClaimOK struct {
+	Data EmployerAccount `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ApproveEmployerClaimOK) GetData() EmployerAccount {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ApproveEmployerClaimOK) SetData(val EmployerAccount) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ApproveSubmissionOK struct {
 	Data Submission `json:"data"`
 }
@@ -2334,6 +2349,21 @@ func (s *CityMatch) SetCountry(val string) {
 }
 
 // A single item: `{"data": ...}`.
+type ClaimEmployerCompanyCreated struct {
+	Data EmployerAccount `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ClaimEmployerCompanyCreated) GetData() EmployerAccount {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ClaimEmployerCompanyCreated) SetData(val EmployerAccount) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ClearApplicationStageOK struct {
 	Data Interaction `json:"data"`
 }
@@ -2390,6 +2420,21 @@ func (s *ClearStageOK) GetData() Interaction {
 
 // SetData sets the value of Data.
 func (s *ClearStageOK) SetData(val Interaction) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type CloseEmployerVacancyOK struct {
+	Data EmployerClosed `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CloseEmployerVacancyOK) GetData() EmployerClosed {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CloseEmployerVacancyOK) SetData(val EmployerClosed) {
 	s.Data = val
 }
 
@@ -2904,6 +2949,21 @@ func (s *CompleteOnboardingOK) GetData() OnboardingCompleted {
 
 // SetData sets the value of Data.
 func (s *CompleteOnboardingOK) SetData(val OnboardingCompleted) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ConfirmEmployerClaimOK struct {
+	Data EmployerAccount `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ConfirmEmployerClaimOK) GetData() EmployerAccount {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ConfirmEmployerClaimOK) SetData(val EmployerAccount) {
 	s.Data = val
 }
 
@@ -3472,6 +3532,21 @@ func (s *CountThreadsOK) SetData(val ThreadCount) {
 }
 
 // A single item: `{"data": ...}`.
+type CreateEmployerVacancyCreated struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateEmployerVacancyCreated) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateEmployerVacancyCreated) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type CreateGhostReportCreated struct {
 	Data GhostReport `json:"data"`
 }
@@ -3498,6 +3573,21 @@ func (s *CreateJobReportCreated) GetData() JobReport {
 
 // SetData sets the value of Data.
 func (s *CreateJobReportCreated) SetData(val JobReport) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type CreateReferralRequestCreated struct {
+	Data ReferralSeekerRequest `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateReferralRequestCreated) GetData() ReferralSeekerRequest {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateReferralRequestCreated) SetData(val ReferralSeekerRequest) {
 	s.Data = val
 }
 
@@ -3649,6 +3739,21 @@ func (s *CreateThreadRequest) SetTitle(val OptString) {
 // SetBody sets the value of Body.
 func (s *CreateThreadRequest) SetBody(val OptString) {
 	s.Body = val
+}
+
+// A single item: `{"data": ...}`.
+type DecideReferralOfferOK struct {
+	Data ReferralOffer `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DecideReferralOfferOK) GetData() ReferralOffer {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DecideReferralOfferOK) SetData(val ReferralOffer) {
+	s.Data = val
 }
 
 // A single item: `{"data": ...}`.
@@ -4083,6 +4188,780 @@ func (s *EmailPrefsUpdate) SetDeactivateSearches(val []int64) {
 	s.DeactivateSearches = val
 }
 
+// A company account. `user_id` is the address the moderator and admin actions take.
+// Ref: #/components/schemas/EmployerAccount
+type EmployerAccount struct {
+	UserID      int64       `json:"user_id"`
+	CompanySlug string      `json:"company_slug"`
+	CompanyName string      `json:"company_name"`
+	WorkEmail   string      `json:"work_email"`
+	Status      string      `json:"status"`
+	VerifiedAt  OptDateTime `json:"verified_at"`
+	// Whether the claimant still owes the mailed code or is waiting on a moderator.
+	EmailConfirmed bool      `json:"email_confirmed"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// GetUserID returns the value of UserID.
+func (s *EmployerAccount) GetUserID() int64 {
+	return s.UserID
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *EmployerAccount) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// GetCompanyName returns the value of CompanyName.
+func (s *EmployerAccount) GetCompanyName() string {
+	return s.CompanyName
+}
+
+// GetWorkEmail returns the value of WorkEmail.
+func (s *EmployerAccount) GetWorkEmail() string {
+	return s.WorkEmail
+}
+
+// GetStatus returns the value of Status.
+func (s *EmployerAccount) GetStatus() string {
+	return s.Status
+}
+
+// GetVerifiedAt returns the value of VerifiedAt.
+func (s *EmployerAccount) GetVerifiedAt() OptDateTime {
+	return s.VerifiedAt
+}
+
+// GetEmailConfirmed returns the value of EmailConfirmed.
+func (s *EmployerAccount) GetEmailConfirmed() bool {
+	return s.EmailConfirmed
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *EmployerAccount) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// SetUserID sets the value of UserID.
+func (s *EmployerAccount) SetUserID(val int64) {
+	s.UserID = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *EmployerAccount) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
+// SetCompanyName sets the value of CompanyName.
+func (s *EmployerAccount) SetCompanyName(val string) {
+	s.CompanyName = val
+}
+
+// SetWorkEmail sets the value of WorkEmail.
+func (s *EmployerAccount) SetWorkEmail(val string) {
+	s.WorkEmail = val
+}
+
+// SetStatus sets the value of Status.
+func (s *EmployerAccount) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetVerifiedAt sets the value of VerifiedAt.
+func (s *EmployerAccount) SetVerifiedAt(val OptDateTime) {
+	s.VerifiedAt = val
+}
+
+// SetEmailConfirmed sets the value of EmailConfirmed.
+func (s *EmployerAccount) SetEmailConfirmed(val bool) {
+	s.EmailConfirmed = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *EmployerAccount) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/EmployerClaim
+type EmployerClaim struct {
+	CompanyName OptString `json:"company_name"`
+	WorkEmail   OptString `json:"work_email"`
+}
+
+// GetCompanyName returns the value of CompanyName.
+func (s *EmployerClaim) GetCompanyName() OptString {
+	return s.CompanyName
+}
+
+// GetWorkEmail returns the value of WorkEmail.
+func (s *EmployerClaim) GetWorkEmail() OptString {
+	return s.WorkEmail
+}
+
+// SetCompanyName sets the value of CompanyName.
+func (s *EmployerClaim) SetCompanyName(val OptString) {
+	s.CompanyName = val
+}
+
+// SetWorkEmail sets the value of WorkEmail.
+func (s *EmployerClaim) SetWorkEmail(val OptString) {
+	s.WorkEmail = val
+}
+
+// Ref: #/components/schemas/EmployerClosed
+type EmployerClosed struct {
+	Closed bool `json:"closed"`
+}
+
+// GetClosed returns the value of Closed.
+func (s *EmployerClosed) GetClosed() bool {
+	return s.Closed
+}
+
+// SetClosed sets the value of Closed.
+func (s *EmployerClosed) SetClosed(val bool) {
+	s.Closed = val
+}
+
+// The account plus its company's curated profile; an unset profile field is left out.
+// Ref: #/components/schemas/EmployerCompany
+type EmployerCompany struct {
+	UserID      int64       `json:"user_id"`
+	CompanySlug string      `json:"company_slug"`
+	CompanyName string      `json:"company_name"`
+	WorkEmail   string      `json:"work_email"`
+	Status      string      `json:"status"`
+	VerifiedAt  OptDateTime `json:"verified_at"`
+	// Whether the claimant still owes the mailed code or is waiting on a moderator.
+	EmailConfirmed bool      `json:"email_confirmed"`
+	CreatedAt      time.Time `json:"created_at"`
+	Tagline        OptString `json:"tagline"`
+	Description    OptString `json:"description"`
+	Website        OptString `json:"website"`
+	Industries     []string  `json:"industries"`
+	YearFounded    OptInt64  `json:"year_founded"`
+	EmployeeCount  OptInt64  `json:"employee_count"`
+	HqCountry      OptString `json:"hq_country"`
+	Subindustry    OptString `json:"subindustry"`
+}
+
+// GetUserID returns the value of UserID.
+func (s *EmployerCompany) GetUserID() int64 {
+	return s.UserID
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *EmployerCompany) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// GetCompanyName returns the value of CompanyName.
+func (s *EmployerCompany) GetCompanyName() string {
+	return s.CompanyName
+}
+
+// GetWorkEmail returns the value of WorkEmail.
+func (s *EmployerCompany) GetWorkEmail() string {
+	return s.WorkEmail
+}
+
+// GetStatus returns the value of Status.
+func (s *EmployerCompany) GetStatus() string {
+	return s.Status
+}
+
+// GetVerifiedAt returns the value of VerifiedAt.
+func (s *EmployerCompany) GetVerifiedAt() OptDateTime {
+	return s.VerifiedAt
+}
+
+// GetEmailConfirmed returns the value of EmailConfirmed.
+func (s *EmployerCompany) GetEmailConfirmed() bool {
+	return s.EmailConfirmed
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *EmployerCompany) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetTagline returns the value of Tagline.
+func (s *EmployerCompany) GetTagline() OptString {
+	return s.Tagline
+}
+
+// GetDescription returns the value of Description.
+func (s *EmployerCompany) GetDescription() OptString {
+	return s.Description
+}
+
+// GetWebsite returns the value of Website.
+func (s *EmployerCompany) GetWebsite() OptString {
+	return s.Website
+}
+
+// GetIndustries returns the value of Industries.
+func (s *EmployerCompany) GetIndustries() []string {
+	return s.Industries
+}
+
+// GetYearFounded returns the value of YearFounded.
+func (s *EmployerCompany) GetYearFounded() OptInt64 {
+	return s.YearFounded
+}
+
+// GetEmployeeCount returns the value of EmployeeCount.
+func (s *EmployerCompany) GetEmployeeCount() OptInt64 {
+	return s.EmployeeCount
+}
+
+// GetHqCountry returns the value of HqCountry.
+func (s *EmployerCompany) GetHqCountry() OptString {
+	return s.HqCountry
+}
+
+// GetSubindustry returns the value of Subindustry.
+func (s *EmployerCompany) GetSubindustry() OptString {
+	return s.Subindustry
+}
+
+// SetUserID sets the value of UserID.
+func (s *EmployerCompany) SetUserID(val int64) {
+	s.UserID = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *EmployerCompany) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
+// SetCompanyName sets the value of CompanyName.
+func (s *EmployerCompany) SetCompanyName(val string) {
+	s.CompanyName = val
+}
+
+// SetWorkEmail sets the value of WorkEmail.
+func (s *EmployerCompany) SetWorkEmail(val string) {
+	s.WorkEmail = val
+}
+
+// SetStatus sets the value of Status.
+func (s *EmployerCompany) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetVerifiedAt sets the value of VerifiedAt.
+func (s *EmployerCompany) SetVerifiedAt(val OptDateTime) {
+	s.VerifiedAt = val
+}
+
+// SetEmailConfirmed sets the value of EmailConfirmed.
+func (s *EmployerCompany) SetEmailConfirmed(val bool) {
+	s.EmailConfirmed = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *EmployerCompany) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetTagline sets the value of Tagline.
+func (s *EmployerCompany) SetTagline(val OptString) {
+	s.Tagline = val
+}
+
+// SetDescription sets the value of Description.
+func (s *EmployerCompany) SetDescription(val OptString) {
+	s.Description = val
+}
+
+// SetWebsite sets the value of Website.
+func (s *EmployerCompany) SetWebsite(val OptString) {
+	s.Website = val
+}
+
+// SetIndustries sets the value of Industries.
+func (s *EmployerCompany) SetIndustries(val []string) {
+	s.Industries = val
+}
+
+// SetYearFounded sets the value of YearFounded.
+func (s *EmployerCompany) SetYearFounded(val OptInt64) {
+	s.YearFounded = val
+}
+
+// SetEmployeeCount sets the value of EmployeeCount.
+func (s *EmployerCompany) SetEmployeeCount(val OptInt64) {
+	s.EmployeeCount = val
+}
+
+// SetHqCountry sets the value of HqCountry.
+func (s *EmployerCompany) SetHqCountry(val OptString) {
+	s.HqCountry = val
+}
+
+// SetSubindustry sets the value of Subindustry.
+func (s *EmployerCompany) SetSubindustry(val OptString) {
+	s.Subindustry = val
+}
+
+// An absent or null field is kept; `industries` replaces the whole curated set, even as `[]`.
+// Ref: #/components/schemas/EmployerCompanyPatch
+type EmployerCompanyPatch struct {
+	Tagline       OptNilString      `json:"tagline"`
+	Description   OptNilString      `json:"description"`
+	Website       OptNilString      `json:"website"`
+	Industries    OptNilStringArray `json:"industries"`
+	YearFounded   OptNilInt64       `json:"year_founded"`
+	EmployeeCount OptNilInt64       `json:"employee_count"`
+	HqCountry     OptNilString      `json:"hq_country"`
+	Subindustry   OptNilString      `json:"subindustry"`
+}
+
+// GetTagline returns the value of Tagline.
+func (s *EmployerCompanyPatch) GetTagline() OptNilString {
+	return s.Tagline
+}
+
+// GetDescription returns the value of Description.
+func (s *EmployerCompanyPatch) GetDescription() OptNilString {
+	return s.Description
+}
+
+// GetWebsite returns the value of Website.
+func (s *EmployerCompanyPatch) GetWebsite() OptNilString {
+	return s.Website
+}
+
+// GetIndustries returns the value of Industries.
+func (s *EmployerCompanyPatch) GetIndustries() OptNilStringArray {
+	return s.Industries
+}
+
+// GetYearFounded returns the value of YearFounded.
+func (s *EmployerCompanyPatch) GetYearFounded() OptNilInt64 {
+	return s.YearFounded
+}
+
+// GetEmployeeCount returns the value of EmployeeCount.
+func (s *EmployerCompanyPatch) GetEmployeeCount() OptNilInt64 {
+	return s.EmployeeCount
+}
+
+// GetHqCountry returns the value of HqCountry.
+func (s *EmployerCompanyPatch) GetHqCountry() OptNilString {
+	return s.HqCountry
+}
+
+// GetSubindustry returns the value of Subindustry.
+func (s *EmployerCompanyPatch) GetSubindustry() OptNilString {
+	return s.Subindustry
+}
+
+// SetTagline sets the value of Tagline.
+func (s *EmployerCompanyPatch) SetTagline(val OptNilString) {
+	s.Tagline = val
+}
+
+// SetDescription sets the value of Description.
+func (s *EmployerCompanyPatch) SetDescription(val OptNilString) {
+	s.Description = val
+}
+
+// SetWebsite sets the value of Website.
+func (s *EmployerCompanyPatch) SetWebsite(val OptNilString) {
+	s.Website = val
+}
+
+// SetIndustries sets the value of Industries.
+func (s *EmployerCompanyPatch) SetIndustries(val OptNilStringArray) {
+	s.Industries = val
+}
+
+// SetYearFounded sets the value of YearFounded.
+func (s *EmployerCompanyPatch) SetYearFounded(val OptNilInt64) {
+	s.YearFounded = val
+}
+
+// SetEmployeeCount sets the value of EmployeeCount.
+func (s *EmployerCompanyPatch) SetEmployeeCount(val OptNilInt64) {
+	s.EmployeeCount = val
+}
+
+// SetHqCountry sets the value of HqCountry.
+func (s *EmployerCompanyPatch) SetHqCountry(val OptNilString) {
+	s.HqCountry = val
+}
+
+// SetSubindustry sets the value of Subindustry.
+func (s *EmployerCompanyPatch) SetSubindustry(val OptNilString) {
+	s.Subindustry = val
+}
+
+// Ref: #/components/schemas/EmployerConfirm
+type EmployerConfirm struct {
+	Code OptString `json:"code"`
+}
+
+// GetCode returns the value of Code.
+func (s *EmployerConfirm) GetCode() OptString {
+	return s.Code
+}
+
+// SetCode sets the value of Code.
+func (s *EmployerConfirm) SetCode(val OptString) {
+	s.Code = val
+}
+
+// `type` is "text", "boolean" or "select"; `options` are a select's choices.
+// Ref: #/components/schemas/EmployerQuestion
+type EmployerQuestion struct {
+	Label    OptString `json:"label"`
+	Type     OptString `json:"type"`
+	Required OptBool   `json:"required"`
+	Options  []string  `json:"options"`
+}
+
+// GetLabel returns the value of Label.
+func (s *EmployerQuestion) GetLabel() OptString {
+	return s.Label
+}
+
+// GetType returns the value of Type.
+func (s *EmployerQuestion) GetType() OptString {
+	return s.Type
+}
+
+// GetRequired returns the value of Required.
+func (s *EmployerQuestion) GetRequired() OptBool {
+	return s.Required
+}
+
+// GetOptions returns the value of Options.
+func (s *EmployerQuestion) GetOptions() []string {
+	return s.Options
+}
+
+// SetLabel sets the value of Label.
+func (s *EmployerQuestion) SetLabel(val OptString) {
+	s.Label = val
+}
+
+// SetType sets the value of Type.
+func (s *EmployerQuestion) SetType(val OptString) {
+	s.Type = val
+}
+
+// SetRequired sets the value of Required.
+func (s *EmployerQuestion) SetRequired(val OptBool) {
+	s.Required = val
+}
+
+// SetOptions sets the value of Options.
+func (s *EmployerQuestion) SetOptions(val []string) {
+	s.Options = val
+}
+
+// Ref: #/components/schemas/EmployerRejected
+type EmployerRejected struct {
+	Rejected bool `json:"rejected"`
+}
+
+// GetRejected returns the value of Rejected.
+func (s *EmployerRejected) GetRejected() bool {
+	return s.Rejected
+}
+
+// SetRejected sets the value of Rejected.
+func (s *EmployerRejected) SetRejected(val bool) {
+	s.Rejected = val
+}
+
+// `title` is required, and `url` too unless `apply_mode` is "freehire".
+// Ref: #/components/schemas/EmployerVacancyCreate
+type EmployerVacancyCreate struct {
+	ApplyMode      OptString          `json:"apply_mode"`
+	Questions      []EmployerQuestion `json:"questions"`
+	URL            OptString          `json:"url"`
+	Title          OptString          `json:"title"`
+	Location       OptString          `json:"location"`
+	Remote         OptBool            `json:"remote"`
+	Description    OptString          `json:"description"`
+	PostedAt       OptNilDateTime     `json:"posted_at"`
+	Skills         []string           `json:"skills"`
+	Regions        []string           `json:"regions"`
+	Cities         []string           `json:"cities"`
+	WorkMode       OptString          `json:"work_mode"`
+	EmploymentType OptString          `json:"employment_type"`
+	Seniority      OptString          `json:"seniority"`
+	SalaryMin      OptNilInt64        `json:"salary_min"`
+	SalaryMax      OptNilInt64        `json:"salary_max"`
+	SalaryCurrency OptString          `json:"salary_currency"`
+	SalaryPeriod   OptString          `json:"salary_period"`
+}
+
+// GetApplyMode returns the value of ApplyMode.
+func (s *EmployerVacancyCreate) GetApplyMode() OptString {
+	return s.ApplyMode
+}
+
+// GetQuestions returns the value of Questions.
+func (s *EmployerVacancyCreate) GetQuestions() []EmployerQuestion {
+	return s.Questions
+}
+
+// GetURL returns the value of URL.
+func (s *EmployerVacancyCreate) GetURL() OptString {
+	return s.URL
+}
+
+// GetTitle returns the value of Title.
+func (s *EmployerVacancyCreate) GetTitle() OptString {
+	return s.Title
+}
+
+// GetLocation returns the value of Location.
+func (s *EmployerVacancyCreate) GetLocation() OptString {
+	return s.Location
+}
+
+// GetRemote returns the value of Remote.
+func (s *EmployerVacancyCreate) GetRemote() OptBool {
+	return s.Remote
+}
+
+// GetDescription returns the value of Description.
+func (s *EmployerVacancyCreate) GetDescription() OptString {
+	return s.Description
+}
+
+// GetPostedAt returns the value of PostedAt.
+func (s *EmployerVacancyCreate) GetPostedAt() OptNilDateTime {
+	return s.PostedAt
+}
+
+// GetSkills returns the value of Skills.
+func (s *EmployerVacancyCreate) GetSkills() []string {
+	return s.Skills
+}
+
+// GetRegions returns the value of Regions.
+func (s *EmployerVacancyCreate) GetRegions() []string {
+	return s.Regions
+}
+
+// GetCities returns the value of Cities.
+func (s *EmployerVacancyCreate) GetCities() []string {
+	return s.Cities
+}
+
+// GetWorkMode returns the value of WorkMode.
+func (s *EmployerVacancyCreate) GetWorkMode() OptString {
+	return s.WorkMode
+}
+
+// GetEmploymentType returns the value of EmploymentType.
+func (s *EmployerVacancyCreate) GetEmploymentType() OptString {
+	return s.EmploymentType
+}
+
+// GetSeniority returns the value of Seniority.
+func (s *EmployerVacancyCreate) GetSeniority() OptString {
+	return s.Seniority
+}
+
+// GetSalaryMin returns the value of SalaryMin.
+func (s *EmployerVacancyCreate) GetSalaryMin() OptNilInt64 {
+	return s.SalaryMin
+}
+
+// GetSalaryMax returns the value of SalaryMax.
+func (s *EmployerVacancyCreate) GetSalaryMax() OptNilInt64 {
+	return s.SalaryMax
+}
+
+// GetSalaryCurrency returns the value of SalaryCurrency.
+func (s *EmployerVacancyCreate) GetSalaryCurrency() OptString {
+	return s.SalaryCurrency
+}
+
+// GetSalaryPeriod returns the value of SalaryPeriod.
+func (s *EmployerVacancyCreate) GetSalaryPeriod() OptString {
+	return s.SalaryPeriod
+}
+
+// SetApplyMode sets the value of ApplyMode.
+func (s *EmployerVacancyCreate) SetApplyMode(val OptString) {
+	s.ApplyMode = val
+}
+
+// SetQuestions sets the value of Questions.
+func (s *EmployerVacancyCreate) SetQuestions(val []EmployerQuestion) {
+	s.Questions = val
+}
+
+// SetURL sets the value of URL.
+func (s *EmployerVacancyCreate) SetURL(val OptString) {
+	s.URL = val
+}
+
+// SetTitle sets the value of Title.
+func (s *EmployerVacancyCreate) SetTitle(val OptString) {
+	s.Title = val
+}
+
+// SetLocation sets the value of Location.
+func (s *EmployerVacancyCreate) SetLocation(val OptString) {
+	s.Location = val
+}
+
+// SetRemote sets the value of Remote.
+func (s *EmployerVacancyCreate) SetRemote(val OptBool) {
+	s.Remote = val
+}
+
+// SetDescription sets the value of Description.
+func (s *EmployerVacancyCreate) SetDescription(val OptString) {
+	s.Description = val
+}
+
+// SetPostedAt sets the value of PostedAt.
+func (s *EmployerVacancyCreate) SetPostedAt(val OptNilDateTime) {
+	s.PostedAt = val
+}
+
+// SetSkills sets the value of Skills.
+func (s *EmployerVacancyCreate) SetSkills(val []string) {
+	s.Skills = val
+}
+
+// SetRegions sets the value of Regions.
+func (s *EmployerVacancyCreate) SetRegions(val []string) {
+	s.Regions = val
+}
+
+// SetCities sets the value of Cities.
+func (s *EmployerVacancyCreate) SetCities(val []string) {
+	s.Cities = val
+}
+
+// SetWorkMode sets the value of WorkMode.
+func (s *EmployerVacancyCreate) SetWorkMode(val OptString) {
+	s.WorkMode = val
+}
+
+// SetEmploymentType sets the value of EmploymentType.
+func (s *EmployerVacancyCreate) SetEmploymentType(val OptString) {
+	s.EmploymentType = val
+}
+
+// SetSeniority sets the value of Seniority.
+func (s *EmployerVacancyCreate) SetSeniority(val OptString) {
+	s.Seniority = val
+}
+
+// SetSalaryMin sets the value of SalaryMin.
+func (s *EmployerVacancyCreate) SetSalaryMin(val OptNilInt64) {
+	s.SalaryMin = val
+}
+
+// SetSalaryMax sets the value of SalaryMax.
+func (s *EmployerVacancyCreate) SetSalaryMax(val OptNilInt64) {
+	s.SalaryMax = val
+}
+
+// SetSalaryCurrency sets the value of SalaryCurrency.
+func (s *EmployerVacancyCreate) SetSalaryCurrency(val OptString) {
+	s.SalaryCurrency = val
+}
+
+// SetSalaryPeriod sets the value of SalaryPeriod.
+func (s *EmployerVacancyCreate) SetSalaryPeriod(val OptString) {
+	s.SalaryPeriod = val
+}
+
+// An absent or null field is kept.
+// Ref: #/components/schemas/EmployerVacancyPatch
+type EmployerVacancyPatch struct {
+	ApplyMode   OptNilString                `json:"apply_mode"`
+	Questions   OptNilEmployerQuestionArray `json:"questions"`
+	Title       OptNilString                `json:"title"`
+	Location    OptNilString                `json:"location"`
+	Remote      OptNilBool                  `json:"remote"`
+	Description OptNilString                `json:"description"`
+	PostedAt    OptNilDateTime              `json:"posted_at"`
+}
+
+// GetApplyMode returns the value of ApplyMode.
+func (s *EmployerVacancyPatch) GetApplyMode() OptNilString {
+	return s.ApplyMode
+}
+
+// GetQuestions returns the value of Questions.
+func (s *EmployerVacancyPatch) GetQuestions() OptNilEmployerQuestionArray {
+	return s.Questions
+}
+
+// GetTitle returns the value of Title.
+func (s *EmployerVacancyPatch) GetTitle() OptNilString {
+	return s.Title
+}
+
+// GetLocation returns the value of Location.
+func (s *EmployerVacancyPatch) GetLocation() OptNilString {
+	return s.Location
+}
+
+// GetRemote returns the value of Remote.
+func (s *EmployerVacancyPatch) GetRemote() OptNilBool {
+	return s.Remote
+}
+
+// GetDescription returns the value of Description.
+func (s *EmployerVacancyPatch) GetDescription() OptNilString {
+	return s.Description
+}
+
+// GetPostedAt returns the value of PostedAt.
+func (s *EmployerVacancyPatch) GetPostedAt() OptNilDateTime {
+	return s.PostedAt
+}
+
+// SetApplyMode sets the value of ApplyMode.
+func (s *EmployerVacancyPatch) SetApplyMode(val OptNilString) {
+	s.ApplyMode = val
+}
+
+// SetQuestions sets the value of Questions.
+func (s *EmployerVacancyPatch) SetQuestions(val OptNilEmployerQuestionArray) {
+	s.Questions = val
+}
+
+// SetTitle sets the value of Title.
+func (s *EmployerVacancyPatch) SetTitle(val OptNilString) {
+	s.Title = val
+}
+
+// SetLocation sets the value of Location.
+func (s *EmployerVacancyPatch) SetLocation(val OptNilString) {
+	s.Location = val
+}
+
+// SetRemote sets the value of Remote.
+func (s *EmployerVacancyPatch) SetRemote(val OptNilBool) {
+	s.Remote = val
+}
+
+// SetDescription sets the value of Description.
+func (s *EmployerVacancyPatch) SetDescription(val OptNilString) {
+	s.Description = val
+}
+
+// SetPostedAt sets the value of PostedAt.
+func (s *EmployerVacancyPatch) SetPostedAt(val OptNilDateTime) {
+	s.PostedAt = val
+}
+
 // Ref: #/components/schemas/Engagement
 type Engagement struct {
 	Saved   int64 `json:"saved"`
@@ -4329,6 +5208,21 @@ func (s *GetEmailPrefsOK) GetData() EmailPrefs {
 
 // SetData sets the value of Data.
 func (s *GetEmailPrefsOK) SetData(val EmailPrefs) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetEmployerCompanyOK struct {
+	Data EmployerCompany `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetEmployerCompanyOK) GetData() EmployerCompany {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetEmployerCompanyOK) SetData(val EmployerCompany) {
 	s.Data = val
 }
 
@@ -5437,6 +6331,36 @@ func (s *ListDismissedSlugsOK) SetData(val []string) {
 }
 
 // A single item: `{"data": ...}`.
+type ListEmployerPendingClaimsOK struct {
+	Data []EmployerAccount `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListEmployerPendingClaimsOK) GetData() []EmployerAccount {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListEmployerPendingClaimsOK) SetData(val []EmployerAccount) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListEmployerVacanciesOK struct {
+	Data []jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListEmployerVacanciesOK) GetData() []jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListEmployerVacanciesOK) SetData(val []jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ListExperienceOK struct {
 	Data ExperienceBank `json:"data"`
 }
@@ -5448,6 +6372,21 @@ func (s *ListExperienceOK) GetData() ExperienceBank {
 
 // SetData sets the value of Data.
 func (s *ListExperienceOK) SetData(val ExperienceBank) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListIncomingReferralRequestsOK struct {
+	Data []ReferralIncomingRequest `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListIncomingReferralRequestsOK) GetData() []ReferralIncomingRequest {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListIncomingReferralRequestsOK) SetData(val []ReferralIncomingRequest) {
 	s.Data = val
 }
 
@@ -5517,6 +6456,36 @@ func (s *ListMyContributionsOK) SetData(val []Contribution) {
 }
 
 // A single item: `{"data": ...}`.
+type ListMyReferralOffersOK struct {
+	Data []ReferralOffer `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListMyReferralOffersOK) GetData() []ReferralOffer {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListMyReferralOffersOK) SetData(val []ReferralOffer) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListMyReferralRequestsOK struct {
+	Data []ReferralSeekerRequest `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListMyReferralRequestsOK) GetData() []ReferralSeekerRequest {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListMyReferralRequestsOK) SetData(val []ReferralSeekerRequest) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ListMySubmissionsOK struct {
 	Data []Submission `json:"data"`
 }
@@ -5562,6 +6531,21 @@ func (s *ListPendingJobReportsOK) SetData(val []JobReport) {
 }
 
 // A single item: `{"data": ...}`.
+type ListPendingReferralOffersOK struct {
+	Data []ReferralOffer `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListPendingReferralOffersOK) GetData() []ReferralOffer {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListPendingReferralOffersOK) SetData(val []ReferralOffer) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ListPendingSubmissionsOK struct {
 	Data []Submission `json:"data"`
 }
@@ -5573,6 +6557,21 @@ func (s *ListPendingSubmissionsOK) GetData() []Submission {
 
 // SetData sets the value of Data.
 func (s *ListPendingSubmissionsOK) SetData(val []Submission) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListReferralCVOptionsOK struct {
+	Data ReferralCVOptions `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListReferralCVOptionsOK) GetData() ReferralCVOptions {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListReferralCVOptionsOK) SetData(val ReferralCVOptions) {
 	s.Data = val
 }
 
@@ -7206,6 +8205,142 @@ func (o OptNilBool) Or(d bool) bool {
 	return d
 }
 
+// NewOptNilDateTime returns new OptNilDateTime with value set to v.
+func NewOptNilDateTime(v time.Time) OptNilDateTime {
+	return OptNilDateTime{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNilDateTime is optional nullable time.Time.
+type OptNilDateTime struct {
+	Value time.Time
+	Set   bool
+	Null  bool
+}
+
+// IsSet returns true if OptNilDateTime was set.
+func (o OptNilDateTime) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNilDateTime) Reset() {
+	var v time.Time
+	o.Value = v
+	o.Set = false
+	o.Null = false
+}
+
+// SetTo sets value to v.
+func (o *OptNilDateTime) SetTo(v time.Time) {
+	o.Set = true
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o OptNilDateTime) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *OptNilDateTime) SetToNull() {
+	o.Set = true
+	o.Null = true
+	var v time.Time
+	o.Value = v
+}
+
+// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
+func (o OptNilDateTime) IsEmpty() bool {
+	return !o.Set && !o.Null
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNilDateTime) Get() (v time.Time, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNilDateTime) Or(d time.Time) time.Time {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptNilEmployerQuestionArray returns new OptNilEmployerQuestionArray with value set to v.
+func NewOptNilEmployerQuestionArray(v []EmployerQuestion) OptNilEmployerQuestionArray {
+	return OptNilEmployerQuestionArray{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNilEmployerQuestionArray is optional nullable []EmployerQuestion.
+type OptNilEmployerQuestionArray struct {
+	Value []EmployerQuestion
+	Set   bool
+	Null  bool
+}
+
+// IsSet returns true if OptNilEmployerQuestionArray was set.
+func (o OptNilEmployerQuestionArray) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNilEmployerQuestionArray) Reset() {
+	var v []EmployerQuestion
+	o.Value = v
+	o.Set = false
+	o.Null = false
+}
+
+// SetTo sets value to v.
+func (o *OptNilEmployerQuestionArray) SetTo(v []EmployerQuestion) {
+	o.Set = true
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o OptNilEmployerQuestionArray) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *OptNilEmployerQuestionArray) SetToNull() {
+	o.Set = true
+	o.Null = true
+	var v []EmployerQuestion
+	o.Value = v
+}
+
+// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
+func (o OptNilEmployerQuestionArray) IsEmpty() bool {
+	return !o.Set && !o.Null
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNilEmployerQuestionArray) Get() (v []EmployerQuestion, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNilEmployerQuestionArray) Or(d []EmployerQuestion) []EmployerQuestion {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptNilInt64 returns new OptNilInt64 with value set to v.
 func NewOptNilInt64(v int64) OptNilInt64 {
 	return OptNilInt64{
@@ -8729,6 +9864,493 @@ func (s *RedeemPromoCodeOK) SetData(val PromoDiscount) {
 	s.Data = val
 }
 
+// Ref: #/components/schemas/ReferralCVOption
+type ReferralCVOption struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// GetID returns the value of ID.
+func (s *ReferralCVOption) GetID() string {
+	return s.ID
+}
+
+// GetTitle returns the value of Title.
+func (s *ReferralCVOption) GetTitle() string {
+	return s.Title
+}
+
+// SetID sets the value of ID.
+func (s *ReferralCVOption) SetID(val string) {
+	s.ID = val
+}
+
+// SetTitle sets the value of Title.
+func (s *ReferralCVOption) SetTitle(val string) {
+	s.Title = val
+}
+
+// Ref: #/components/schemas/ReferralCVOptions
+type ReferralCVOptions struct {
+	Tailored  []ReferralCVOption `json:"tailored"`
+	HasResume bool               `json:"has_resume"`
+}
+
+// GetTailored returns the value of Tailored.
+func (s *ReferralCVOptions) GetTailored() []ReferralCVOption {
+	return s.Tailored
+}
+
+// GetHasResume returns the value of HasResume.
+func (s *ReferralCVOptions) GetHasResume() bool {
+	return s.HasResume
+}
+
+// SetTailored sets the value of Tailored.
+func (s *ReferralCVOptions) SetTailored(val []ReferralCVOption) {
+	s.Tailored = val
+}
+
+// SetHasResume sets the value of HasResume.
+func (s *ReferralCVOptions) SetHasResume(val bool) {
+	s.HasResume = val
+}
+
+// Ref: #/components/schemas/ReferralDecision
+type ReferralDecision struct {
+	Approve OptBool `json:"approve"`
+}
+
+// GetApprove returns the value of Approve.
+func (s *ReferralDecision) GetApprove() OptBool {
+	return s.Approve
+}
+
+// SetApprove sets the value of Approve.
+func (s *ReferralDecision) SetApprove(val OptBool) {
+	s.Approve = val
+}
+
+// What a referrer sees: the seeker's chosen contact and CV, never their user id.
+// Ref: #/components/schemas/ReferralIncomingRequest
+type ReferralIncomingRequest struct {
+	ID              string      `json:"id"`
+	CompanySlug     string      `json:"company_slug"`
+	CompanyName     string      `json:"company_name"`
+	JobID           NilInt64    `json:"job_id"`
+	CvKind          string      `json:"cv_kind"`
+	LinkedinURL     OptString   `json:"linkedin_url"`
+	ContactTelegram OptString   `json:"contact_telegram"`
+	ContactEmail    OptString   `json:"contact_email"`
+	Note            OptString   `json:"note"`
+	Status          string      `json:"status"`
+	CreatedAt       NilDateTime `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *ReferralIncomingRequest) GetID() string {
+	return s.ID
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *ReferralIncomingRequest) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// GetCompanyName returns the value of CompanyName.
+func (s *ReferralIncomingRequest) GetCompanyName() string {
+	return s.CompanyName
+}
+
+// GetJobID returns the value of JobID.
+func (s *ReferralIncomingRequest) GetJobID() NilInt64 {
+	return s.JobID
+}
+
+// GetCvKind returns the value of CvKind.
+func (s *ReferralIncomingRequest) GetCvKind() string {
+	return s.CvKind
+}
+
+// GetLinkedinURL returns the value of LinkedinURL.
+func (s *ReferralIncomingRequest) GetLinkedinURL() OptString {
+	return s.LinkedinURL
+}
+
+// GetContactTelegram returns the value of ContactTelegram.
+func (s *ReferralIncomingRequest) GetContactTelegram() OptString {
+	return s.ContactTelegram
+}
+
+// GetContactEmail returns the value of ContactEmail.
+func (s *ReferralIncomingRequest) GetContactEmail() OptString {
+	return s.ContactEmail
+}
+
+// GetNote returns the value of Note.
+func (s *ReferralIncomingRequest) GetNote() OptString {
+	return s.Note
+}
+
+// GetStatus returns the value of Status.
+func (s *ReferralIncomingRequest) GetStatus() string {
+	return s.Status
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *ReferralIncomingRequest) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *ReferralIncomingRequest) SetID(val string) {
+	s.ID = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *ReferralIncomingRequest) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
+// SetCompanyName sets the value of CompanyName.
+func (s *ReferralIncomingRequest) SetCompanyName(val string) {
+	s.CompanyName = val
+}
+
+// SetJobID sets the value of JobID.
+func (s *ReferralIncomingRequest) SetJobID(val NilInt64) {
+	s.JobID = val
+}
+
+// SetCvKind sets the value of CvKind.
+func (s *ReferralIncomingRequest) SetCvKind(val string) {
+	s.CvKind = val
+}
+
+// SetLinkedinURL sets the value of LinkedinURL.
+func (s *ReferralIncomingRequest) SetLinkedinURL(val OptString) {
+	s.LinkedinURL = val
+}
+
+// SetContactTelegram sets the value of ContactTelegram.
+func (s *ReferralIncomingRequest) SetContactTelegram(val OptString) {
+	s.ContactTelegram = val
+}
+
+// SetContactEmail sets the value of ContactEmail.
+func (s *ReferralIncomingRequest) SetContactEmail(val OptString) {
+	s.ContactEmail = val
+}
+
+// SetNote sets the value of Note.
+func (s *ReferralIncomingRequest) SetNote(val OptString) {
+	s.Note = val
+}
+
+// SetStatus sets the value of Status.
+func (s *ReferralIncomingRequest) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *ReferralIncomingRequest) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/ReferralOffer
+type ReferralOffer struct {
+	ID          string      `json:"id"`
+	CompanySlug string      `json:"company_slug"`
+	CompanyName string      `json:"company_name"`
+	LinkedinURL string      `json:"linkedin_url"`
+	Status      string      `json:"status"`
+	DecidedAt   NilDateTime `json:"decided_at"`
+	CreatedAt   NilDateTime `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *ReferralOffer) GetID() string {
+	return s.ID
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *ReferralOffer) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// GetCompanyName returns the value of CompanyName.
+func (s *ReferralOffer) GetCompanyName() string {
+	return s.CompanyName
+}
+
+// GetLinkedinURL returns the value of LinkedinURL.
+func (s *ReferralOffer) GetLinkedinURL() string {
+	return s.LinkedinURL
+}
+
+// GetStatus returns the value of Status.
+func (s *ReferralOffer) GetStatus() string {
+	return s.Status
+}
+
+// GetDecidedAt returns the value of DecidedAt.
+func (s *ReferralOffer) GetDecidedAt() NilDateTime {
+	return s.DecidedAt
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *ReferralOffer) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *ReferralOffer) SetID(val string) {
+	s.ID = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *ReferralOffer) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
+// SetCompanyName sets the value of CompanyName.
+func (s *ReferralOffer) SetCompanyName(val string) {
+	s.CompanyName = val
+}
+
+// SetLinkedinURL sets the value of LinkedinURL.
+func (s *ReferralOffer) SetLinkedinURL(val string) {
+	s.LinkedinURL = val
+}
+
+// SetStatus sets the value of Status.
+func (s *ReferralOffer) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetDecidedAt sets the value of DecidedAt.
+func (s *ReferralOffer) SetDecidedAt(val NilDateTime) {
+	s.DecidedAt = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *ReferralOffer) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/ReferralRequestCreate
+type ReferralRequestCreate struct {
+	CompanySlug OptString `json:"company_slug"`
+	// Names the vacancy; an unknown slug is a 404. Wins over `job_id`.
+	JobSlug         OptString    `json:"job_slug"`
+	JobID           OptNilInt64  `json:"job_id"`
+	CvKind          OptString    `json:"cv_kind"`
+	CvID            OptNilString `json:"cv_id"`
+	LinkedinURL     OptString    `json:"linkedin_url"`
+	ContactTelegram OptString    `json:"contact_telegram"`
+	ContactEmail    OptString    `json:"contact_email"`
+	Note            OptString    `json:"note"`
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *ReferralRequestCreate) GetCompanySlug() OptString {
+	return s.CompanySlug
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *ReferralRequestCreate) GetJobSlug() OptString {
+	return s.JobSlug
+}
+
+// GetJobID returns the value of JobID.
+func (s *ReferralRequestCreate) GetJobID() OptNilInt64 {
+	return s.JobID
+}
+
+// GetCvKind returns the value of CvKind.
+func (s *ReferralRequestCreate) GetCvKind() OptString {
+	return s.CvKind
+}
+
+// GetCvID returns the value of CvID.
+func (s *ReferralRequestCreate) GetCvID() OptNilString {
+	return s.CvID
+}
+
+// GetLinkedinURL returns the value of LinkedinURL.
+func (s *ReferralRequestCreate) GetLinkedinURL() OptString {
+	return s.LinkedinURL
+}
+
+// GetContactTelegram returns the value of ContactTelegram.
+func (s *ReferralRequestCreate) GetContactTelegram() OptString {
+	return s.ContactTelegram
+}
+
+// GetContactEmail returns the value of ContactEmail.
+func (s *ReferralRequestCreate) GetContactEmail() OptString {
+	return s.ContactEmail
+}
+
+// GetNote returns the value of Note.
+func (s *ReferralRequestCreate) GetNote() OptString {
+	return s.Note
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *ReferralRequestCreate) SetCompanySlug(val OptString) {
+	s.CompanySlug = val
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *ReferralRequestCreate) SetJobSlug(val OptString) {
+	s.JobSlug = val
+}
+
+// SetJobID sets the value of JobID.
+func (s *ReferralRequestCreate) SetJobID(val OptNilInt64) {
+	s.JobID = val
+}
+
+// SetCvKind sets the value of CvKind.
+func (s *ReferralRequestCreate) SetCvKind(val OptString) {
+	s.CvKind = val
+}
+
+// SetCvID sets the value of CvID.
+func (s *ReferralRequestCreate) SetCvID(val OptNilString) {
+	s.CvID = val
+}
+
+// SetLinkedinURL sets the value of LinkedinURL.
+func (s *ReferralRequestCreate) SetLinkedinURL(val OptString) {
+	s.LinkedinURL = val
+}
+
+// SetContactTelegram sets the value of ContactTelegram.
+func (s *ReferralRequestCreate) SetContactTelegram(val OptString) {
+	s.ContactTelegram = val
+}
+
+// SetContactEmail sets the value of ContactEmail.
+func (s *ReferralRequestCreate) SetContactEmail(val OptString) {
+	s.ContactEmail = val
+}
+
+// SetNote sets the value of Note.
+func (s *ReferralRequestCreate) SetNote(val OptString) {
+	s.Note = val
+}
+
+// `status` is "contacted" or "declined".
+// Ref: #/components/schemas/ReferralResolve
+type ReferralResolve struct {
+	Status OptString `json:"status"`
+}
+
+// GetStatus returns the value of Status.
+func (s *ReferralResolve) GetStatus() OptString {
+	return s.Status
+}
+
+// SetStatus sets the value of Status.
+func (s *ReferralResolve) SetStatus(val OptString) {
+	s.Status = val
+}
+
+// A seeker's own request: the target and status, no referrer identity.
+// Ref: #/components/schemas/ReferralSeekerRequest
+type ReferralSeekerRequest struct {
+	ID          string      `json:"id"`
+	CompanySlug string      `json:"company_slug"`
+	CompanyName string      `json:"company_name"`
+	JobID       NilInt64    `json:"job_id"`
+	CvKind      string      `json:"cv_kind"`
+	CvID        NilString   `json:"cv_id"`
+	Status      string      `json:"status"`
+	CreatedAt   NilDateTime `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *ReferralSeekerRequest) GetID() string {
+	return s.ID
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *ReferralSeekerRequest) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// GetCompanyName returns the value of CompanyName.
+func (s *ReferralSeekerRequest) GetCompanyName() string {
+	return s.CompanyName
+}
+
+// GetJobID returns the value of JobID.
+func (s *ReferralSeekerRequest) GetJobID() NilInt64 {
+	return s.JobID
+}
+
+// GetCvKind returns the value of CvKind.
+func (s *ReferralSeekerRequest) GetCvKind() string {
+	return s.CvKind
+}
+
+// GetCvID returns the value of CvID.
+func (s *ReferralSeekerRequest) GetCvID() NilString {
+	return s.CvID
+}
+
+// GetStatus returns the value of Status.
+func (s *ReferralSeekerRequest) GetStatus() string {
+	return s.Status
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *ReferralSeekerRequest) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *ReferralSeekerRequest) SetID(val string) {
+	s.ID = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *ReferralSeekerRequest) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
+// SetCompanyName sets the value of CompanyName.
+func (s *ReferralSeekerRequest) SetCompanyName(val string) {
+	s.CompanyName = val
+}
+
+// SetJobID sets the value of JobID.
+func (s *ReferralSeekerRequest) SetJobID(val NilInt64) {
+	s.JobID = val
+}
+
+// SetCvKind sets the value of CvKind.
+func (s *ReferralSeekerRequest) SetCvKind(val string) {
+	s.CvKind = val
+}
+
+// SetCvID sets the value of CvID.
+func (s *ReferralSeekerRequest) SetCvID(val NilString) {
+	s.CvID = val
+}
+
+// SetStatus sets the value of Status.
+func (s *ReferralSeekerRequest) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *ReferralSeekerRequest) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
 // A single item: `{"data": ...}`.
 type RejectCompanyRelationOK struct {
 	Data CompanyRelationRejection `json:"data"`
@@ -8741,6 +10363,21 @@ func (s *RejectCompanyRelationOK) GetData() CompanyRelationRejection {
 
 // SetData sets the value of Data.
 func (s *RejectCompanyRelationOK) SetData(val CompanyRelationRejection) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type RejectEmployerClaimOK struct {
+	Data EmployerRejected `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RejectEmployerClaimOK) GetData() EmployerRejected {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RejectEmployerClaimOK) SetData(val EmployerRejected) {
 	s.Data = val
 }
 
@@ -8788,6 +10425,21 @@ func (s *RejectSubmissionRequest) SetBlockDomain(val OptBool) {
 
 // RemoveFromWatchlistNoContent is response for RemoveFromWatchlist operation.
 type RemoveFromWatchlistNoContent struct{}
+
+// A single item: `{"data": ...}`.
+type ReopenEmployerVacancyOK struct {
+	Data EmployerClosed `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ReopenEmployerVacancyOK) GetData() EmployerClosed {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ReopenEmployerVacancyOK) SetData(val EmployerClosed) {
+	s.Data = val
+}
 
 // ReportCompanyFeedbackNoContent is response for ReportCompanyFeedback operation.
 type ReportCompanyFeedbackNoContent struct{}
@@ -8920,6 +10572,21 @@ func (s *ReportedCompanyFeedback) SetReportCount(val int64) {
 // SetReportReasons sets the value of ReportReasons.
 func (s *ReportedCompanyFeedback) SetReportReasons(val []string) {
 	s.ReportReasons = val
+}
+
+// A single item: `{"data": ...}`.
+type ResendEmployerClaimCodeOK struct {
+	Data EmployerAccount `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ResendEmployerClaimCodeOK) GetData() EmployerAccount {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ResendEmployerClaimCodeOK) SetData(val EmployerAccount) {
+	s.Data = val
 }
 
 // ResolveConversationReportNoContent is response for ResolveConversationReport operation.
@@ -9071,6 +10738,21 @@ func (s *ResolveJobRequest) SetSurface(val OptString) {
 	s.Surface = val
 }
 
+// A single item: `{"data": ...}`.
+type ResolveReferralRequestOK struct {
+	Data ReferralIncomingRequest `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ResolveReferralRequestOK) GetData() ReferralIncomingRequest {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ResolveReferralRequestOK) SetData(val ReferralIncomingRequest) {
+	s.Data = val
+}
+
 // Ref: #/components/schemas/ResolvedJob
 type ResolvedJob struct {
 	JobSlug string `json:"job_slug"`
@@ -9141,6 +10823,21 @@ func (s *RetractProcessReportOK) GetData() ProcessReport {
 
 // SetData sets the value of Data.
 func (s *RetractProcessReportOK) SetData(val ProcessReport) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type RevokeEmployerAccountOK struct {
+	Data EmployerAccount `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RevokeEmployerAccountOK) GetData() EmployerAccount {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RevokeEmployerAccountOK) SetData(val EmployerAccount) {
 	s.Data = val
 }
 
@@ -13621,6 +15318,36 @@ func (s *UpdateEmailPrefsOK) SetData(val EmailPrefs) {
 }
 
 // A single item: `{"data": ...}`.
+type UpdateEmployerCompanyOK struct {
+	Data EmployerCompany `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateEmployerCompanyOK) GetData() EmployerCompany {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateEmployerCompanyOK) SetData(val EmployerCompany) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UpdateEmployerVacancyOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateEmployerVacancyOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateEmployerVacancyOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type UpdateEmploymentOK struct {
 	Data jx.Raw `json:"data"`
 }
@@ -14177,3 +15904,6 @@ func (s *WatchlistPageHeaders) SetCacheControl(val string) {
 func (s *WatchlistPageHeaders) SetResponse(val WatchlistPage) {
 	s.Response = val
 }
+
+// WithdrawReferralOfferNoContent is response for WithdrawReferralOffer operation.
+type WithdrawReferralOfferNoContent struct{}
