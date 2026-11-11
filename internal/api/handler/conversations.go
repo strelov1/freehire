@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -62,53 +61,7 @@ func messagingError(err error) error {
 	return err
 }
 
-// conversationCounterpartResponse is the other side of a conversation, as the persona they
-// speak as draws them. detail is that persona's own shape, told apart by persona, and null
-// when reachable is false. Nothing here names the account behind the persona.
-type conversationCounterpartResponse struct {
-	Persona   string `json:"persona"`
-	Reachable bool   `json:"reachable"`
-	Detail    any    `json:"detail"`
-}
-
-type buddyCounterpartResponse struct {
-	Handle      string                   `json:"handle"`
-	CardSummary buddyCardSummaryResponse `json:"card_summary"`
-}
-
-func toConversationCounterpart(cp messaging.Counterpart) conversationCounterpartResponse {
-	out := conversationCounterpartResponse{Persona: cp.Persona, Reachable: cp.Reachable}
-	switch d := cp.Detail.(type) {
-	case buddy.Counterpart:
-		out.Detail = buddyCounterpartResponse{Handle: d.Handle, CardSummary: toBuddyCardSummary(d.Card)}
-	}
-	return out
-}
-
-// conversationResponse carries unread and last_message_at meaningfully on the list only; a
-// single conversation answered by a start or an answer has 0 and null.
-type conversationResponse struct {
-	ID            int64                           `json:"id"`
-	Kind          string                          `json:"kind"`
-	StatusForMe   string                          `json:"status_for_me"`
-	Counterpart   conversationCounterpartResponse `json:"counterpart"`
-	Unread        int                             `json:"unread"`
-	LastMessageAt *time.Time                      `json:"last_message_at"`
-	CreatedAt     time.Time                       `json:"created_at"`
-}
-
-func toConversation(cv messaging.Conversation) conversationResponse {
-	out := conversationResponse{
-		ID: cv.ID, Kind: cv.Kind, StatusForMe: cv.StatusForMe, Counterpart: toConversationCounterpart(cv.Counterpart),
-		Unread: cv.Unread, CreatedAt: cv.CreatedAt,
-	}
-	if !cv.LastMessageAt.IsZero() {
-		out.LastMessageAt = &cv.LastMessageAt
-	}
-	return out
-}
-
-// toContractConversation is toConversation in the contract's types.
+// toContractConversation is a conversation in its wire shape.
 func toContractConversation(cv messaging.Conversation) apigen.Conversation {
 	out := apigen.Conversation{
 		ID: cv.ID, Kind: cv.Kind, StatusForMe: cv.StatusForMe, Unread: int64(cv.Unread), CreatedAt: cv.CreatedAt,
