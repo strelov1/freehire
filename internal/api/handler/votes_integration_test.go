@@ -59,9 +59,9 @@ func TestVoteEndpoints(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	optionalAuth := auth.OptionalAuth(iss, testVersions, apiKeys{queries})
-	app.Post("/api/v1/jobs/:slug/vote", keyAuth, h.VoteJob)
-	app.Delete("/api/v1/jobs/:slug/vote", keyAuth, h.ClearJobVote)
-	app.Post("/api/v1/companies/:slug/vote", keyAuth, h.VoteCompany)
+	app.Post("/api/v1/jobs/:slug/vote", keyAuth, newContract(contractHandlers{voteHandlers: h}))
+	app.Delete("/api/v1/jobs/:slug/vote", keyAuth, newContract(contractHandlers{voteHandlers: h}))
+	app.Post("/api/v1/companies/:slug/vote", keyAuth, newContract(contractHandlers{voteHandlers: h}))
 	app.Get("/api/v1/jobs/:slug", optionalAuth, (&jobsHandlers{queries: queries}).GetJob)
 
 	post := func(t *testing.T, path, body string, authed bool) *http.Response {

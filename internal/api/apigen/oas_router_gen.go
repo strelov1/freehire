@@ -11,28 +11,40 @@ import (
 )
 
 var (
-	rn22AllowedHeaders = map[string]string{
+	rn6AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn7AllowedHeaders = map[string]string{
-		"PATCH": "Content-Type",
-	}
-	rn5AllowedHeaders = map[string]string{
-		"PUT": "Content-Type",
-	}
-	rn8AllowedHeaders = map[string]string{
-		"PATCH": "Content-Type",
-	}
-	rn23AllowedHeaders = map[string]string{
+	rn31AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn11AllowedHeaders = map[string]string{
-		"PUT": "Content-Type",
+	rn15AllowedHeaders = map[string]string{
+		"PATCH": "Content-Type",
 	}
 	rn13AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn9AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn14AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
-	rn18AllowedHeaders = map[string]string{
+	rn16AllowedHeaders = map[string]string{
+		"PATCH": "Content-Type",
+	}
+	rn32AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn19AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn21AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn25AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn27AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 )
@@ -88,6 +100,60 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			switch elem[0] {
+			case 'c': // Prefix: "companies/"
+
+				if l := len("companies/"); len(elem) >= l && elem[0:l] == "companies/" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				// Param: "slug"
+				// Match until "/"
+				idx := strings.IndexByte(elem, '/')
+				if idx < 0 {
+					idx = len(elem)
+				}
+				args[0] = elem[:idx]
+				elem = elem[idx:]
+
+				if len(elem) == 0 {
+					break
+				}
+				switch elem[0] {
+				case '/': // Prefix: "/vote"
+
+					if l := len("/vote"); len(elem) >= l && elem[0:l] == "/vote" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "DELETE":
+							s.handleClearCompanyVoteRequest([1]string{
+								args[0],
+							}, elemIsEscaped, w, r)
+						case "POST":
+							s.handleVoteCompanyRequest([1]string{
+								args[0],
+							}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "DELETE,POST",
+								allowedHeaders: rn6AllowedHeaders,
+								acceptPost:     "application/json",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
+				}
+
 			case 'd': // Prefix: "dictionary/gaps"
 
 				if l := len("dictionary/gaps"); len(elem) >= l && elem[0:l] == "dictionary/gaps" {
@@ -104,7 +170,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "POST",
-							allowedHeaders: rn22AllowedHeaders,
+							allowedHeaders: rn31AllowedHeaders,
 							acceptPost:     "application/json",
 							acceptPatch:    "",
 						})
@@ -130,7 +196,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "GET,PATCH",
-							allowedHeaders: rn7AllowedHeaders,
+							allowedHeaders: rn15AllowedHeaders,
 							acceptPost:     "",
 							acceptPatch:    "application/json",
 						})
@@ -191,6 +257,105 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
+			case 'j': // Prefix: "jobs/"
+
+				if l := len("jobs/"); len(elem) >= l && elem[0:l] == "jobs/" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				// Param: "slug"
+				// Match until "/"
+				idx := strings.IndexByte(elem, '/')
+				if idx < 0 {
+					idx = len(elem)
+				}
+				args[0] = elem[:idx]
+				elem = elem[idx:]
+
+				if len(elem) == 0 {
+					break
+				}
+				switch elem[0] {
+				case '/': // Prefix: "/"
+
+					if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						break
+					}
+					switch elem[0] {
+					case 'g': // Prefix: "ghost-report"
+
+						if l := len("ghost-report"); len(elem) >= l && elem[0:l] == "ghost-report" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "DELETE":
+								s.handleRetractGhostReportRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							case "POST":
+								s.handleCreateGhostReportRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "DELETE,POST",
+									allowedHeaders: rn13AllowedHeaders,
+									acceptPost:     "application/json",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					case 'v': // Prefix: "vote"
+
+						if l := len("vote"); len(elem) >= l && elem[0:l] == "vote" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "DELETE":
+								s.handleClearJobVoteRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							case "POST":
+								s.handleVoteJobRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "DELETE,POST",
+									allowedHeaders: rn9AllowedHeaders,
+									acceptPost:     "application/json",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					}
+
+				}
+
 			case 'm': // Prefix: "me/"
 
 				if l := len("me/"); len(elem) >= l && elem[0:l] == "me/" {
@@ -221,7 +386,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "GET,PUT",
-								allowedHeaders: rn5AllowedHeaders,
+								allowedHeaders: rn14AllowedHeaders,
 								acceptPost:     "",
 								acceptPatch:    "",
 							})
@@ -248,7 +413,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "GET,PATCH",
-								allowedHeaders: rn8AllowedHeaders,
+								allowedHeaders: rn16AllowedHeaders,
 								acceptPost:     "",
 								acceptPatch:    "application/json",
 							})
@@ -273,7 +438,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "POST",
-								allowedHeaders: rn23AllowedHeaders,
+								allowedHeaders: rn32AllowedHeaders,
 								acceptPost:     "application/json",
 								acceptPatch:    "",
 							})
@@ -337,7 +502,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							default:
 								s.notAllowed(w, r, notAllowedParams{
 									allowedMethods: "GET,PUT",
-									allowedHeaders: rn11AllowedHeaders,
+									allowedHeaders: rn19AllowedHeaders,
 									acceptPost:     "",
 									acceptPatch:    "",
 								})
@@ -364,7 +529,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							default:
 								s.notAllowed(w, r, notAllowedParams{
 									allowedMethods: "GET,PUT",
-									allowedHeaders: rn13AllowedHeaders,
+									allowedHeaders: rn21AllowedHeaders,
 									acceptPost:     "",
 									acceptPatch:    "",
 								})
@@ -373,6 +538,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							return
 						}
 
+					}
+
+				case 't': // Prefix: "talent-network"
+
+					if l := len("talent-network"); len(elem) >= l && elem[0:l] == "talent-network" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleGetTalentNetworkMembershipRequest([0]string{}, elemIsEscaped, w, r)
+						case "PUT":
+							s.handleSetTalentNetworkVisibilityRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET,PUT",
+								allowedHeaders: rn25AllowedHeaders,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
 					}
 
 				case 'u': // Prefix: "usage"
@@ -452,7 +644,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								default:
 									s.notAllowed(w, r, notAllowedParams{
 										allowedMethods: "POST",
-										allowedHeaders: rn18AllowedHeaders,
+										allowedHeaders: rn27AllowedHeaders,
 										acceptPost:     "application/json",
 										acceptPatch:    "",
 									})
@@ -774,6 +966,63 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 				break
 			}
 			switch elem[0] {
+			case 'c': // Prefix: "companies/"
+
+				if l := len("companies/"); len(elem) >= l && elem[0:l] == "companies/" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				// Param: "slug"
+				// Match until "/"
+				idx := strings.IndexByte(elem, '/')
+				if idx < 0 {
+					idx = len(elem)
+				}
+				args[0] = elem[:idx]
+				elem = elem[idx:]
+
+				if len(elem) == 0 {
+					break
+				}
+				switch elem[0] {
+				case '/': // Prefix: "/vote"
+
+					if l := len("/vote"); len(elem) >= l && elem[0:l] == "/vote" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "DELETE":
+							r.name = ClearCompanyVoteOperation
+							r.summary = ""
+							r.operationID = "clearCompanyVote"
+							r.operationGroup = ""
+							r.pathPattern = "/companies/{slug}/vote"
+							r.args = args
+							r.count = 1
+							return r, true
+						case "POST":
+							r.name = VoteCompanyOperation
+							r.summary = ""
+							r.operationID = "voteCompany"
+							r.operationGroup = ""
+							r.pathPattern = "/companies/{slug}/vote"
+							r.args = args
+							r.count = 1
+							return r, true
+						default:
+							return
+						}
+					}
+
+				}
+
 			case 'd': // Prefix: "dictionary/gaps"
 
 				if l := len("dictionary/gaps"); len(elem) >= l && elem[0:l] == "dictionary/gaps" {
@@ -882,6 +1131,111 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 					default:
 						return
 					}
+				}
+
+			case 'j': // Prefix: "jobs/"
+
+				if l := len("jobs/"); len(elem) >= l && elem[0:l] == "jobs/" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				// Param: "slug"
+				// Match until "/"
+				idx := strings.IndexByte(elem, '/')
+				if idx < 0 {
+					idx = len(elem)
+				}
+				args[0] = elem[:idx]
+				elem = elem[idx:]
+
+				if len(elem) == 0 {
+					break
+				}
+				switch elem[0] {
+				case '/': // Prefix: "/"
+
+					if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						break
+					}
+					switch elem[0] {
+					case 'g': // Prefix: "ghost-report"
+
+						if l := len("ghost-report"); len(elem) >= l && elem[0:l] == "ghost-report" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "DELETE":
+								r.name = RetractGhostReportOperation
+								r.summary = ""
+								r.operationID = "retractGhostReport"
+								r.operationGroup = ""
+								r.pathPattern = "/jobs/{slug}/ghost-report"
+								r.args = args
+								r.count = 1
+								return r, true
+							case "POST":
+								r.name = CreateGhostReportOperation
+								r.summary = ""
+								r.operationID = "createGhostReport"
+								r.operationGroup = ""
+								r.pathPattern = "/jobs/{slug}/ghost-report"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+
+					case 'v': // Prefix: "vote"
+
+						if l := len("vote"); len(elem) >= l && elem[0:l] == "vote" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "DELETE":
+								r.name = ClearJobVoteOperation
+								r.summary = ""
+								r.operationID = "clearJobVote"
+								r.operationGroup = ""
+								r.pathPattern = "/jobs/{slug}/vote"
+								r.args = args
+								r.count = 1
+								return r, true
+							case "POST":
+								r.name = VoteJobOperation
+								r.summary = ""
+								r.operationID = "voteJob"
+								r.operationGroup = ""
+								r.pathPattern = "/jobs/{slug}/vote"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+
+					}
+
 				}
 
 			case 'm': // Prefix: "me/"
@@ -1094,6 +1448,40 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							}
 						}
 
+					}
+
+				case 't': // Prefix: "talent-network"
+
+					if l := len("talent-network"); len(elem) >= l && elem[0:l] == "talent-network" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = GetTalentNetworkMembershipOperation
+							r.summary = ""
+							r.operationID = "getTalentNetworkMembership"
+							r.operationGroup = ""
+							r.pathPattern = "/me/talent-network"
+							r.args = args
+							r.count = 0
+							return r, true
+						case "PUT":
+							r.name = SetTalentNetworkVisibilityOperation
+							r.summary = ""
+							r.operationID = "setTalentNetworkVisibility"
+							r.operationGroup = ""
+							r.pathPattern = "/me/talent-network"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
 					}
 
 				case 'u': // Prefix: "usage"

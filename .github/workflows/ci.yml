@@ -30,8 +30,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Test CI change selection
-        run: python3 -m unittest discover -s .github/scripts -p test_ci_changes.py
+      - name: Test CI scripts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
 
       - name: Select required checks
         id: scope
@@ -88,17 +88,18 @@ jobs:
 
       # Résumé PDF text extraction shells out to poppler's pdftotext (prod ships it in
       # the image / on the host); install it so the extraction tests run instead of skip.
-      # A stalled mirror must fail over before the outer timeout kills apt and
-      # restarts it on the same first mirror. Keep the runner's independent mirror
-      # list; bound apt's network waits as well as each command and all three attempts.
+      # Keep the runner's mirror+file sources and Ubuntu signing keys, but use an
+      # independent HTTPS mirror before the Ubuntu hosts that failed DNS across
+      # repeated runners on 2026-11-11. Request timeouts allow bounded failover.
+      - name: Configure APT mirror fallback
+        if: matrix.task != 'checks'
+        run: sudo bash .github/scripts/configure-apt-mirrors.sh
+
+      # Bound the entire command too: a mirror trickling data can evade request timeouts.
       - name: Install poppler-utils
         if: matrix.task != 'checks'
         timeout-minutes: 6
         run: |
-          printf '%s\n' 'Acquire::Retries "0";' \
-            'Acquire::http::Timeout "10";' 'Acquire::https::Timeout "10";' \
-            | sudo tee /etc/apt/apt.conf.d/zzz-freehire-ci
-          apt-config dump Acquire::Retries Acquire::http::Timeout Acquire::https::Timeout
           for attempt in 1 2 3; do
             if timeout 100 sudo apt-get update \
               && timeout 60 sudo apt-get install -y --no-install-recommends poppler-utils; then
@@ -1185,15 +1186,12 @@ jobs:
       # required check list names jobs. It runs wherever web-work does, which the `web` job
       # below reports on every PR. Needs no backend, no secrets and no network beyond the
       # Chromium download.
-      # Playwright invokes apt in a subprocess, so configure its network bounds too.
+      - name: Configure APT mirror fallback
+        run: sudo bash ../.github/scripts/configure-apt-mirrors.sh
+
       - name: Install Chromium
-        timeout-minutes: 10
-        run: |
-          printf '%s\n' 'Acquire::Retries "0";' \
-            'Acquire::http::Timeout "10";' 'Acquire::https::Timeout "10";' \
-            | sudo tee /etc/apt/apt.conf.d/zzz-freehire-ci
-          apt-config dump Acquire::Retries Acquire::http::Timeout Acquire::https::Timeout
-          pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 8
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Accessibility check (axe-core)
         run: pnpm run test:a11y

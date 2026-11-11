@@ -59,8 +59,8 @@ func TestGhostReportsEndToEnd(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
-	app.Post("/api/v1/jobs/:slug/ghost-report", keyAuth, h.CreateGhostReport)
-	app.Delete("/api/v1/jobs/:slug/ghost-report", keyAuth, h.RetractGhostReport)
+	app.Post("/api/v1/jobs/:slug/ghost-report", keyAuth, newContract(contractHandlers{ghostReportHandlers: h}))
+	app.Delete("/api/v1/jobs/:slug/ghost-report", keyAuth, newContract(contractHandlers{ghostReportHandlers: h}))
 
 	thirtyDaysAgo := time.Now().UTC().AddDate(0, 0, -30).Format("2006-01-02")
 	body := fmt.Sprintf(`{"applied_on":%q}`, thirtyDaysAgo)

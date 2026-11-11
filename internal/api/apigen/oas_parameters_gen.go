@@ -79,6 +79,201 @@ func decodeAddToWatchlistParams(args [1]string, argsEscaped bool, r *http.Reques
 	return params, nil
 }
 
+// ClearCompanyVoteParams is parameters of clearCompanyVote operation.
+type ClearCompanyVoteParams struct {
+	Slug string
+}
+
+func unpackClearCompanyVoteParams(packed middleware.Parameters) (params ClearCompanyVoteParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "slug",
+			In:   "path",
+		}
+		params.Slug = packed[key].(string)
+	}
+	return params
+}
+
+func decodeClearCompanyVoteParams(args [1]string, argsEscaped bool, r *http.Request) (params ClearCompanyVoteParams, _ error) {
+	// Decode path: slug.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "slug",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Slug = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// ClearJobVoteParams is parameters of clearJobVote operation.
+type ClearJobVoteParams struct {
+	Slug string
+}
+
+func unpackClearJobVoteParams(packed middleware.Parameters) (params ClearJobVoteParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "slug",
+			In:   "path",
+		}
+		params.Slug = packed[key].(string)
+	}
+	return params
+}
+
+func decodeClearJobVoteParams(args [1]string, argsEscaped bool, r *http.Request) (params ClearJobVoteParams, _ error) {
+	// Decode path: slug.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "slug",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Slug = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// CreateGhostReportParams is parameters of createGhostReport operation.
+type CreateGhostReportParams struct {
+	Slug string
+}
+
+func unpackCreateGhostReportParams(packed middleware.Parameters) (params CreateGhostReportParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "slug",
+			In:   "path",
+		}
+		params.Slug = packed[key].(string)
+	}
+	return params
+}
+
+func decodeCreateGhostReportParams(args [1]string, argsEscaped bool, r *http.Request) (params CreateGhostReportParams, _ error) {
+	// Decode path: slug.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "slug",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Slug = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // GetEmailPrefsParams is parameters of getEmailPrefs operation.
 type GetEmailPrefsParams struct {
 	T OptString `json:",omitempty,omitzero"`
@@ -1476,6 +1671,71 @@ func decodeRemoveFromWatchlistParams(args [1]string, argsEscaped bool, r *http.R
 	return params, nil
 }
 
+// RetractGhostReportParams is parameters of retractGhostReport operation.
+type RetractGhostReportParams struct {
+	Slug string
+}
+
+func unpackRetractGhostReportParams(packed middleware.Parameters) (params RetractGhostReportParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "slug",
+			In:   "path",
+		}
+		params.Slug = packed[key].(string)
+	}
+	return params
+}
+
+func decodeRetractGhostReportParams(args [1]string, argsEscaped bool, r *http.Request) (params RetractGhostReportParams, _ error) {
+	// Decode path: slug.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "slug",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Slug = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // SearchCitiesParams is parameters of searchCities operation.
 type SearchCitiesParams struct {
 	Q       OptString `json:",omitempty,omitzero"`
@@ -1701,6 +1961,136 @@ func decodeSuggestParams(args [0]string, argsEscaped bool, r *http.Request) (par
 		return params, &ogenerrors.DecodeParamError{
 			Name: "limit",
 			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// VoteCompanyParams is parameters of voteCompany operation.
+type VoteCompanyParams struct {
+	Slug string
+}
+
+func unpackVoteCompanyParams(packed middleware.Parameters) (params VoteCompanyParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "slug",
+			In:   "path",
+		}
+		params.Slug = packed[key].(string)
+	}
+	return params
+}
+
+func decodeVoteCompanyParams(args [1]string, argsEscaped bool, r *http.Request) (params VoteCompanyParams, _ error) {
+	// Decode path: slug.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "slug",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Slug = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// VoteJobParams is parameters of voteJob operation.
+type VoteJobParams struct {
+	Slug string
+}
+
+func unpackVoteJobParams(packed middleware.Parameters) (params VoteJobParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "slug",
+			In:   "path",
+		}
+		params.Slug = packed[key].(string)
+	}
+	return params
+}
+
+func decodeVoteJobParams(args [1]string, argsEscaped bool, r *http.Request) (params VoteJobParams, _ error) {
+	// Decode path: slug.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "slug",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Slug = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "slug",
+			In:   "path",
 			Err:  err,
 		}
 	}
