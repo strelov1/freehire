@@ -1097,7 +1097,8 @@ func Register(app *fiber.App, cfg Config) {
 		answerBankHandlers: answerBankH, userModerationHandlers: userModerationH,
 		companyProcessReportHandlers: companyProcessReportH,
 		contributionHandlers:         contributionsH, marketPulseHandlers: marketPulseH, promoHandlers: promoH,
-		mentorSuggestionsHandlers: mentorSuggestionsH})
+		mentorSuggestionsHandlers: mentorSuggestionsH,
+		savedSearchHandlers:       savedSearchH, subscriptionHandlers: subscriptionH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1131,7 +1132,7 @@ func Register(app *fiber.App, cfg Config) {
 	geoH.register(api, contract)
 
 	// Saved searches + the public shared-board read (see savedSearchHandlers).
-	savedSearchH.register(api, mw)
+	savedSearchH.register(api, mw, contract)
 
 	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
 	// ingest-status reads (see statsHandlers).
@@ -1245,7 +1246,7 @@ func Register(app *fiber.App, cfg Config) {
 	assistantH.register(api, mw)
 
 	// Filter subscriptions (see subscriptionHandlers).
-	subscriptionH.register(api, mw)
+	subscriptionH.register(api, mw, contract)
 	webhookH.register(api, mw)
 
 	// Telegram linking + the inbound bot webhook (see telegramHandlers).

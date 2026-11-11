@@ -45,6 +45,21 @@ func (s *AgentPermissions) SetAgentsMayApply(val OptBool) {
 	s.AgentsMayApply = val
 }
 
+// Ref: #/components/schemas/AlertListMeta
+type AlertListMeta struct {
+	Total int64 `json:"total"`
+}
+
+// GetTotal returns the value of Total.
+func (s *AlertListMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// SetTotal sets the value of Total.
+func (s *AlertListMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
 // Ref: #/components/schemas/BanRequest
 type BanRequest struct {
 	// 1 to 500 characters.
@@ -319,6 +334,36 @@ func (s *CreateGhostReportCreated) SetData(val GhostReport) {
 }
 
 // A single item: `{"data": ...}`.
+type CreateSavedSearchCreated struct {
+	Data SavedSearch `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateSavedSearchCreated) GetData() SavedSearch {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateSavedSearchCreated) SetData(val SavedSearch) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type CreateSubscriptionCreated struct {
+	Data Subscription `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateSubscriptionCreated) GetData() Subscription {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateSubscriptionCreated) SetData(val Subscription) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type DeleteBankedAnswerOK struct {
 	Data Deleted `json:"data"`
 }
@@ -332,6 +377,12 @@ func (s *DeleteBankedAnswerOK) GetData() Deleted {
 func (s *DeleteBankedAnswerOK) SetData(val Deleted) {
 	s.Data = val
 }
+
+// DeleteSavedSearchNoContent is response for DeleteSavedSearch operation.
+type DeleteSavedSearchNoContent struct{}
+
+// DeleteSubscriptionNoContent is response for DeleteSubscription operation.
+type DeleteSubscriptionNoContent struct{}
 
 // Ref: #/components/schemas/Deleted
 type Deleted struct {
@@ -1965,6 +2016,52 @@ func (o OptInt32) Or(d int32) int32 {
 	return d
 }
 
+// NewOptInt64 returns new OptInt64 with value set to v.
+func NewOptInt64(v int64) OptInt64 {
+	return OptInt64{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptInt64 is optional int64.
+type OptInt64 struct {
+	Value int64
+	Set   bool
+}
+
+// IsSet returns true if OptInt64 was set.
+func (o OptInt64) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptInt64) Reset() {
+	var v int64
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptInt64) SetTo(v int64) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptInt64) Get() (v int64, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptInt64) Or(d int64) int64 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptNilBool returns new OptNilBool with value set to v.
 func NewOptNilBool(v bool) OptNilBool {
 	return OptNilBool{
@@ -2942,6 +3039,170 @@ func (s *Saved) SetSaved(val bool) {
 	s.Saved = val
 }
 
+// A named filter snapshot. `query` is the canonical search query string the SPA replays.
+// Ref: #/components/schemas/SavedSearch
+type SavedSearch struct {
+	ID                 int64       `json:"id"`
+	Name               string      `json:"name"`
+	Query              string      `json:"query"`
+	DerivedFromProfile bool        `json:"derived_from_profile"`
+	CreatedAt          NilDateTime `json:"created_at"`
+	UpdatedAt          NilDateTime `json:"updated_at"`
+}
+
+// GetID returns the value of ID.
+func (s *SavedSearch) GetID() int64 {
+	return s.ID
+}
+
+// GetName returns the value of Name.
+func (s *SavedSearch) GetName() string {
+	return s.Name
+}
+
+// GetQuery returns the value of Query.
+func (s *SavedSearch) GetQuery() string {
+	return s.Query
+}
+
+// GetDerivedFromProfile returns the value of DerivedFromProfile.
+func (s *SavedSearch) GetDerivedFromProfile() bool {
+	return s.DerivedFromProfile
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *SavedSearch) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// GetUpdatedAt returns the value of UpdatedAt.
+func (s *SavedSearch) GetUpdatedAt() NilDateTime {
+	return s.UpdatedAt
+}
+
+// SetID sets the value of ID.
+func (s *SavedSearch) SetID(val int64) {
+	s.ID = val
+}
+
+// SetName sets the value of Name.
+func (s *SavedSearch) SetName(val string) {
+	s.Name = val
+}
+
+// SetQuery sets the value of Query.
+func (s *SavedSearch) SetQuery(val string) {
+	s.Query = val
+}
+
+// SetDerivedFromProfile sets the value of DerivedFromProfile.
+func (s *SavedSearch) SetDerivedFromProfile(val bool) {
+	s.DerivedFromProfile = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *SavedSearch) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
+// SetUpdatedAt sets the value of UpdatedAt.
+func (s *SavedSearch) SetUpdatedAt(val NilDateTime) {
+	s.UpdatedAt = val
+}
+
+// An empty name is refused with a 400, like an out-of-range one.
+// Ref: #/components/schemas/SavedSearchCreate
+type SavedSearchCreate struct {
+	Name OptString `json:"name"`
+	// Empty is the valid "show all" snapshot.
+	Query              OptString `json:"query"`
+	DerivedFromProfile OptBool   `json:"derived_from_profile"`
+}
+
+// GetName returns the value of Name.
+func (s *SavedSearchCreate) GetName() OptString {
+	return s.Name
+}
+
+// GetQuery returns the value of Query.
+func (s *SavedSearchCreate) GetQuery() OptString {
+	return s.Query
+}
+
+// GetDerivedFromProfile returns the value of DerivedFromProfile.
+func (s *SavedSearchCreate) GetDerivedFromProfile() OptBool {
+	return s.DerivedFromProfile
+}
+
+// SetName sets the value of Name.
+func (s *SavedSearchCreate) SetName(val OptString) {
+	s.Name = val
+}
+
+// SetQuery sets the value of Query.
+func (s *SavedSearchCreate) SetQuery(val OptString) {
+	s.Query = val
+}
+
+// SetDerivedFromProfile sets the value of DerivedFromProfile.
+func (s *SavedSearchCreate) SetDerivedFromProfile(val OptBool) {
+	s.DerivedFromProfile = val
+}
+
+// The saved searches, most recently updated first.
+// Ref: #/components/schemas/SavedSearchList
+type SavedSearchList struct {
+	Data []SavedSearch `json:"data"`
+	Meta AlertListMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *SavedSearchList) GetData() []SavedSearch {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *SavedSearchList) GetMeta() AlertListMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *SavedSearchList) SetData(val []SavedSearch) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *SavedSearchList) SetMeta(val AlertListMeta) {
+	s.Meta = val
+}
+
+// A partial update: an absent or null field is kept; an empty query is a real "show all".
+// Ref: #/components/schemas/SavedSearchUpdate
+type SavedSearchUpdate struct {
+	Name  OptNilString `json:"name"`
+	Query OptNilString `json:"query"`
+}
+
+// GetName returns the value of Name.
+func (s *SavedSearchUpdate) GetName() OptNilString {
+	return s.Name
+}
+
+// GetQuery returns the value of Query.
+func (s *SavedSearchUpdate) GetQuery() OptNilString {
+	return s.Query
+}
+
+// SetName sets the value of Name.
+func (s *SavedSearchUpdate) SetName(val OptNilString) {
+	s.Name = val
+}
+
+// SetQuery sets the value of Query.
+func (s *SavedSearchUpdate) SetQuery(val OptNilString) {
+	s.Query = val
+}
+
 // Answers an application form asks for, saved once and reused. Each field is optional.
 // Ref: #/components/schemas/ScreeningAnswers
 type ScreeningAnswers struct {
@@ -3198,6 +3459,21 @@ func (s *SetAgentPermissionsOK) SetData(val AgentPermissions) {
 }
 
 // A single item: `{"data": ...}`.
+type SetSubscriptionActiveOK struct {
+	Data Subscription `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SetSubscriptionActiveOK) GetData() Subscription {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SetSubscriptionActiveOK) SetData(val Subscription) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type SetTalentNetworkVisibilityOK struct {
 	Data TalentNetworkMembership `json:"data"`
 }
@@ -3288,6 +3564,145 @@ func (s *SkillPulsePoint) SetWeekStart(val string) {
 // SetOpenCount sets the value of OpenCount.
 func (s *SkillPulsePoint) SetOpenCount(val int64) {
 	s.OpenCount = val
+}
+
+// One alert on a saved search. `saved_search_name` is sent on the list only.
+// Ref: #/components/schemas/Subscription
+type Subscription struct {
+	ID              int64       `json:"id"`
+	SavedSearchID   int64       `json:"saved_search_id"`
+	SavedSearchName OptString   `json:"saved_search_name"`
+	Channel         string      `json:"channel"`
+	Active          bool        `json:"active"`
+	CreatedAt       NilDateTime `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *Subscription) GetID() int64 {
+	return s.ID
+}
+
+// GetSavedSearchID returns the value of SavedSearchID.
+func (s *Subscription) GetSavedSearchID() int64 {
+	return s.SavedSearchID
+}
+
+// GetSavedSearchName returns the value of SavedSearchName.
+func (s *Subscription) GetSavedSearchName() OptString {
+	return s.SavedSearchName
+}
+
+// GetChannel returns the value of Channel.
+func (s *Subscription) GetChannel() string {
+	return s.Channel
+}
+
+// GetActive returns the value of Active.
+func (s *Subscription) GetActive() bool {
+	return s.Active
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *Subscription) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *Subscription) SetID(val int64) {
+	s.ID = val
+}
+
+// SetSavedSearchID sets the value of SavedSearchID.
+func (s *Subscription) SetSavedSearchID(val int64) {
+	s.SavedSearchID = val
+}
+
+// SetSavedSearchName sets the value of SavedSearchName.
+func (s *Subscription) SetSavedSearchName(val OptString) {
+	s.SavedSearchName = val
+}
+
+// SetChannel sets the value of Channel.
+func (s *Subscription) SetChannel(val string) {
+	s.Channel = val
+}
+
+// SetActive sets the value of Active.
+func (s *Subscription) SetActive(val bool) {
+	s.Active = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *Subscription) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/SubscriptionActive
+type SubscriptionActive struct {
+	Active OptBool `json:"active"`
+}
+
+// GetActive returns the value of Active.
+func (s *SubscriptionActive) GetActive() OptBool {
+	return s.Active
+}
+
+// SetActive sets the value of Active.
+func (s *SubscriptionActive) SetActive(val OptBool) {
+	s.Active = val
+}
+
+// Ref: #/components/schemas/SubscriptionCreate
+type SubscriptionCreate struct {
+	SavedSearchID OptInt64 `json:"saved_search_id"`
+	// Defaults to telegram when empty.
+	Channel OptString `json:"channel"`
+}
+
+// GetSavedSearchID returns the value of SavedSearchID.
+func (s *SubscriptionCreate) GetSavedSearchID() OptInt64 {
+	return s.SavedSearchID
+}
+
+// GetChannel returns the value of Channel.
+func (s *SubscriptionCreate) GetChannel() OptString {
+	return s.Channel
+}
+
+// SetSavedSearchID sets the value of SavedSearchID.
+func (s *SubscriptionCreate) SetSavedSearchID(val OptInt64) {
+	s.SavedSearchID = val
+}
+
+// SetChannel sets the value of Channel.
+func (s *SubscriptionCreate) SetChannel(val OptString) {
+	s.Channel = val
+}
+
+// Ref: #/components/schemas/SubscriptionList
+type SubscriptionList struct {
+	Data []Subscription `json:"data"`
+	Meta AlertListMeta  `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *SubscriptionList) GetData() []Subscription {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *SubscriptionList) GetMeta() AlertListMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *SubscriptionList) SetData(val []Subscription) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *SubscriptionList) SetMeta(val AlertListMeta) {
+	s.Meta = val
 }
 
 // Ref: #/components/schemas/SuggestMeta
@@ -3997,6 +4412,21 @@ func (s *UpdateMyEmailGroupsOK) GetData() EmailPrefs {
 
 // SetData sets the value of Data.
 func (s *UpdateMyEmailGroupsOK) SetData(val EmailPrefs) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UpdateSavedSearchOK struct {
+	Data SavedSearch `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateSavedSearchOK) GetData() SavedSearch {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateSavedSearchOK) SetData(val SavedSearch) {
 	s.Data = val
 }
 

@@ -35,12 +35,32 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/ghost-report
 	CreateGhostReport(ctx context.Context, req *GhostReportRequest, params CreateGhostReportParams) (*CreateGhostReportCreated, error)
+	// CreateSavedSearch implements createSavedSearch operation.
+	//
+	// 400 for a bad name, 409 for a duplicate name or the per-user cap.
+	//
+	// POST /me/searches
+	CreateSavedSearch(ctx context.Context, req *SavedSearchCreate) (*CreateSavedSearchCreated, error)
+	// CreateSubscription implements createSubscription operation.
+	//
+	// A non-owned saved search is a 404, a duplicate a 409.
+	//
+	// POST /me/subscriptions
+	CreateSubscription(ctx context.Context, req *SubscriptionCreate) (*CreateSubscriptionCreated, error)
 	// DeleteBankedAnswer implements deleteBankedAnswer operation.
 	//
 	// 400 for an id that is not a number, 404 for one the caller does not own.
 	//
 	// DELETE /me/answer-bank/{id}
 	DeleteBankedAnswer(ctx context.Context, params DeleteBankedAnswerParams) (*DeleteBankedAnswerOK, error)
+	// DeleteSavedSearch implements deleteSavedSearch operation.
+	//
+	// DELETE /me/searches/{id}
+	DeleteSavedSearch(ctx context.Context, params DeleteSavedSearchParams) error
+	// DeleteSubscription implements deleteSubscription operation.
+	//
+	// DELETE /me/subscriptions/{id}
+	DeleteSubscription(ctx context.Context, params DeleteSubscriptionParams) error
 	// FileProcessReport implements fileProcessReport operation.
 	//
 	// 409 when the caller already reported this kind.
@@ -143,6 +163,14 @@ type Handler interface {
 	//
 	// GET /me/contributions
 	ListMyContributions(ctx context.Context) (*ListMyContributionsOK, error)
+	// ListSavedSearches implements listSavedSearches operation.
+	//
+	// GET /me/searches
+	ListSavedSearches(ctx context.Context) (*SavedSearchList, error)
+	// ListSubscriptions implements listSubscriptions operation.
+	//
+	// GET /me/subscriptions
+	ListSubscriptions(ctx context.Context) (*SubscriptionList, error)
 	// ListTalent implements listTalent operation.
 	//
 	// GET /talent
@@ -231,6 +259,12 @@ type Handler interface {
 	//
 	// PUT /me/agent-permissions
 	SetAgentPermissions(ctx context.Context, req *AgentPermissions) (*SetAgentPermissionsOK, error)
+	// SetSubscriptionActive implements setSubscriptionActive operation.
+	//
+	// Pauses or resumes.
+	//
+	// PATCH /me/subscriptions/{id}
+	SetSubscriptionActive(ctx context.Context, req *SubscriptionActive, params SetSubscriptionActiveParams) (*SetSubscriptionActiveOK, error)
 	// SetTalentNetworkVisibility implements setTalentNetworkVisibility operation.
 	//
 	// Joins or leaves the catalogue. Session cookie only.
@@ -255,6 +289,10 @@ type Handler interface {
 	//
 	// PATCH /me/email-groups
 	UpdateMyEmailGroups(ctx context.Context, req *EmailPrefsUpdate) (*UpdateMyEmailGroupsOK, error)
+	// UpdateSavedSearch implements updateSavedSearch operation.
+	//
+	// PATCH /me/searches/{id}
+	UpdateSavedSearch(ctx context.Context, req *SavedSearchUpdate, params UpdateSavedSearchParams) (*UpdateSavedSearchOK, error)
 	// UpdateScreeningAnswers implements updateScreeningAnswers operation.
 	//
 	// PUT /me/screening-answers
