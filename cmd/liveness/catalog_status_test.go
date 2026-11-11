@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/job/liveness"
 )
@@ -68,3 +70,61 @@ func TestCatalogStatusProbeRefusesCrossHostRedirect(t *testing.T) {
 		t.Errorf("got %+v for redirect to another authority", got)
 	}
 }
+
+func TestCatalogStatusScopedBackstops(t *testing.T) {
+	cases := []struct{ source, id, url string }{
+		{"arbeitsagentur", "10000-1208350819-S", "https://www.arbeitsagentur.de/jobsuche/jobdetail/10000-1208350819-S"},
+		{"xing", "158886509", "https://www.xing.com/jobs/berlin-engineer-158886509"},
+		{"gradcracker", "87479", "https://www.gradcracker.com/hub/1/company/graduate-job/87479/software-engineer"},
+		{"engage", "352500:17322826", "https://en-gage.net/owltech/work_17322826/"},
+		{"betterteam", "surpluscityinc:retail-store-associate-10", "https://surpluscityinc.betterteam.com/retail-store-associate-10"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.source, func(t *testing.T) {
+			calls := 0
+			client := &http.Client{Transport: catalogStatusTransport(func(r *http.Request) (*http.Response, error) {
+				calls++
+				return &http.Response{StatusCode: 410, Body: http.NoBody, Request: r, Header: make(http.Header)}, nil
+			})}
+			found := false
+			for _, pass := range catalogStatusPasses(client) {
+				if pass.source != tc.source {
+					continue
+				}
+				found = true
+				c := candidate{url: tc.url, externalID: tc.id}
+				if got := pass.check(context.Background(), c); got.verdict != liveness.Expired || calls != 1 {
+					t.Fatalf("got %+v calls=%d", got, calls)
+				}
+				for _, bad := range []candidate{
+					{url: strings.Replace(tc.url, "://", "://user@", 1), externalID: tc.id}, {url: tc.url, externalID: "wrong:id"}, {url: tc.url + "/unrelated", externalID: tc.id}, {url: "http" + tc.url[5:], externalID: tc.id}} {
+					if got := pass.check(context.Background(), bad); got.verdict != liveness.Uncertain || calls != 1 {
+						t.Fatalf("accepted %+v: %+v calls=%d", bad, got, calls)
+					}
+				}
+				if tc.source == "betterteam" {
+					wrong := candidate{url: tc.url, externalID: "different:retail-store-associate-10"}
+					if got := pass.check(context.Background(), wrong); got.verdict != liveness.Uncertain || calls != 1 {
+						t.Fatal("accepted different tenant", got)
+					}
+				}
+				if tc.source == "gradcracker" && pass.interval != 10*time.Second {
+					t.Fatal("lost measured pacing")
+				}
+				if tc.source == "engage" && pass.interval != 3500*time.Millisecond {
+					t.Fatal("lost measured pacing")
+				}
+				if pass.maxPerRun != 500 {
+					t.Fatalf("unbounded pass: %+v", pass)
+				}
+			}
+			if !found {
+				t.Fatal("missing scoped pass")
+			}
+		})
+	}
+}
+
+type catalogStatusTransport func(*http.Request) (*http.Response, error)
+
+func (f catalogStatusTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

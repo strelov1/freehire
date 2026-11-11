@@ -106,7 +106,7 @@ const expiryWindow = 45 * 24 * time.Hour
 // week) — none of them fullCatalog, all boardless. jobtech is the one member the sweep never
 // touches at all: it is self-closing, closing from its change feed's removals, and a removal
 // the crawl missed inside the feed's 72h window is never sent again (see jobtech.go).
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed"}
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed", "arbeitsagentur", "xing", "gradcracker", "engage", "betterteam"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the same
 // plain-GET-then-Classify probe as every orphan candidate — their job pages answer a
@@ -184,7 +184,23 @@ func run() int {
 	// Meant for debugging a single adapter's close behaviour on prod without probing
 	// (or age-expiring) the rest of the catalogue in the same run.
 	sourceFilter := flag.String("source", "", "restrict this run to one source, for debugging (empty = every eligible source)")
+	jobIDsFlag := flag.String("job-ids", "", "probe only these comma-separated IDs (max 500); skips all bulk expiry")
 	flag.Parse()
+	explicitJobIDs := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "job-ids" {
+			explicitJobIDs = true
+		}
+	})
+	if explicitJobIDs && *jobIDsFlag == "" {
+		log.Print("liveness: explicit job-ids must not be empty")
+		return 1
+	}
+	jobIDs, err := parseProbeJobIDs(*jobIDsFlag)
+	if err != nil {
+		log.Printf("liveness: %v", err)
+		return 1
+	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
@@ -270,34 +286,13 @@ func run() int {
 	// off atsProviders alone. See unsignalledSources for why these are excluded.
 	excluded := append(atsProviders, unsignalledSources...)
 
-	candidates, err := queries.SelectOrphanLivenessCandidates(ctx, excluded)
+	candidates, staleCandidates, err := selectProbeCandidates(ctx, queries,
+		probeScope{source: *sourceFilter, jobIDs: jobIDs}, excluded, probeDespiteRegistered, time.Now().Add(-staleCutoff))
 	if err != nil {
 		log.Printf("select candidates: %v", err)
 		return 1
 	}
-	if *sourceFilter != "" {
-		// SelectOrphanLivenessCandidates has no source allowlist of its own (it is
-		// "everything not a registered provider"), so -source is applied here rather
-		// than pushed into the query.
-		candidates = slices.DeleteFunc(candidates, func(c db.SelectOrphanLivenessCandidatesRow) bool {
-			return c.Source != *sourceFilter
-		})
-	}
 	orphanCount := len(candidates)
-
-	// probeDespiteRegistered candidates: restricted to jobs already past the sweep's own
-	// staleness window (see staleCutoff) — the sweep's scope leak, not a race with a run
-	// still inside its normal grace period. Split by source below into whichever
-	// evidence path that source actually has (see probeDespiteRegisteredGET and the
-	// per-source apply* functions).
-	staleCandidates, err := queries.SelectStaleRegisteredCandidates(ctx, db.SelectStaleRegisteredCandidatesParams{
-		Sources: filterSources(probeDespiteRegistered, *sourceFilter),
-		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-staleCutoff), Valid: true},
-	})
-	if err != nil {
-		log.Printf("select stale registered candidates: %v", err)
-		return 1
-	}
 	// Probes go out on safehttp: orphan-job URLs come from attacker-influenced sources
 	// (telegram posts), so the probe must refuse internal/metadata targets.
 	client := safehttp.NewClient(probeTimeout)
@@ -336,52 +331,57 @@ func run() int {
 
 	var st stats
 
-	// A source's stated application deadline remains authoritative even when a crawl
-	// keeps listing the posting, or its board is quiet or temporarily unreachable.
-	deadlineExpired, err := queries.CloseJobsPastApplicationDeadline(ctx, *sourceFilter)
-	if err != nil {
-		st.failed.Add(1)
-		log.Printf("liveness: expire application deadlines: %v", err)
-	} else {
-		log.Printf("liveness: expired %d jobs past their application deadline", deadlineExpired)
-	}
+	if len(jobIDs) == 0 {
+		// A source's stated application deadline remains authoritative even when a crawl
+		// keeps listing the posting, or its board is quiet or temporarily unreachable.
+		deadlineExpired, err := queries.CloseJobsPastApplicationDeadline(ctx, *sourceFilter)
+		if err != nil {
+			st.failed.Add(1)
+			log.Printf("liveness: expire application deadlines: %v", err)
+		} else {
+			log.Printf("liveness: expired %d jobs past their application deadline", deadlineExpired)
+		}
 
-	// The other half of the same decision: what the probe cannot judge, age judges.
-	// Run before probing so a run that dies partway through the probe still expires.
-	// filterSources means a -source run that targets neither unsignalledSources member
-	// expires nothing this run, rather than age-closing telegram jobs on a debug probe
-	// of an unrelated source.
-	sourcesToExpire := filterSources(unsignalledSources, *sourceFilter)
-	expired, err := queries.CloseStaleUnsignalledJobs(ctx, db.CloseStaleUnsignalledJobsParams{
-		Sources: sourcesToExpire,
-		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
-	})
-	if err != nil {
-		// Log and carry on rather than return: the guess-half failing must not disable
-		// the evidence-half. A lock wait against a concurrent reindex would otherwise
-		// stop orphan probing on every subsequent cron run, silently and indefinitely.
-		log.Printf("liveness: expire stale unsignalled jobs: %v", err)
-	} else {
-		log.Printf("liveness: expired %d jobs posted more than %d days ago from %d unsignalled sources",
-			expired, int(expiryWindow.Hours()/24), len(sourcesToExpire))
-	}
+		// The other half of the same decision: what the probe cannot judge, age judges.
+		// Run before probing so a run that dies partway through the probe still expires.
+		// filterSources means a -source run that targets neither unsignalledSources member
+		// expires nothing this run, rather than age-closing telegram jobs on a debug probe
+		// of an unrelated source.
+		sourcesToExpire := filterSources(unsignalledSources, *sourceFilter)
+		expired, err := queries.CloseStaleUnsignalledJobs(ctx, db.CloseStaleUnsignalledJobsParams{
+			Sources: sourcesToExpire,
+			Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
+		})
+		if err != nil {
+			// Log and carry on rather than return: the guess-half failing must not disable
+			// the evidence-half. A lock wait against a concurrent reindex would otherwise
+			// stop orphan probing on every subsequent cron run, silently and indefinitely.
+			log.Printf("liveness: expire stale unsignalled jobs: %v", err)
+		} else {
+			log.Printf("liveness: expired %d jobs posted more than %d days ago from %d unsignalled sources",
+				expired, int(expiryWindow.Hours()/24), len(sourcesToExpire))
+		}
 
-	// expireDespiteRegistered's age-based fallback, for the registered providers that need
-	// it (whatjobs today). Same window on the posting's age, but a DIFFERENT statement:
-	// these sources are re-crawled, so age alone says nothing, and the crawl's own reading
-	// has to agree before the guess is allowed to close anything. See unseenWindow.
-	sourcesToExpireDespiteRegistered := filterSources(expireDespiteRegistered, *sourceFilter)
-	unseenFor := unseenWindow(sourcesToExpireDespiteRegistered, registeredSweepGrace)
-	expiredRegistered, err := queries.CloseStaleUnseenUnprobeableJobs(ctx, db.CloseStaleUnseenUnprobeableJobsParams{
-		Sources:    sourcesToExpireDespiteRegistered,
-		Cutoff:     pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
-		SeenCutoff: pgtype.Timestamptz{Time: time.Now().Add(-unseenFor), Valid: true},
-	})
-	if err != nil {
-		log.Printf("liveness: expire stale expireDespiteRegistered jobs: %v", err)
+		// expireDespiteRegistered's age-based fallback, for the registered providers that need
+		// it (whatjobs today). Same window on the posting's age, but a DIFFERENT statement:
+		// these sources are re-crawled, so age alone says nothing, and the crawl's own reading
+		// has to agree before the guess is allowed to close anything. See unseenWindow.
+		sourcesToExpireDespiteRegistered := filterSources(expireDespiteRegistered, *sourceFilter)
+		unseenFor := unseenWindow(sourcesToExpireDespiteRegistered, registeredSweepGrace)
+		expiredRegistered, err := queries.CloseStaleUnseenUnprobeableJobs(ctx, db.CloseStaleUnseenUnprobeableJobsParams{
+			Sources:    sourcesToExpireDespiteRegistered,
+			Cutoff:     pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
+			SeenCutoff: pgtype.Timestamptz{Time: time.Now().Add(-unseenFor), Valid: true},
+		})
+		if err != nil {
+			log.Printf("liveness: expire stale expireDespiteRegistered jobs: %v", err)
+		} else {
+			log.Printf("liveness: expired %d jobs posted more than %d days ago and unseen for %d days, from %d expireDespiteRegistered sources",
+				expiredRegistered, int(expiryWindow.Hours()/24), int(unseenFor.Hours()/24), len(sourcesToExpireDespiteRegistered))
+		}
+
 	} else {
-		log.Printf("liveness: expired %d jobs posted more than %d days ago and unseen for %d days, from %d expireDespiteRegistered sources",
-			expiredRegistered, int(expiryWindow.Hours()/24), int(unseenFor.Hours()/24), len(sourcesToExpireDespiteRegistered))
+		log.Printf("liveness: targeted probe of %d IDs; bulk expiry disabled", len(jobIDs))
 	}
 
 	// Each candidate set is judged by the evidence its source actually has, and every call
