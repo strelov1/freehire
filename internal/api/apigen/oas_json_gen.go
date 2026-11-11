@@ -2043,11 +2043,11 @@ func (s *BuddyConversation) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("last_message_at")
-		s.LastMessageAt.Encode(e, json.EncodeDateTime)
+		s.LastMessageAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
@@ -2131,7 +2131,7 @@ func (s *BuddyConversation) Decode(d *jx.Decoder) error {
 		case "last_message_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				if err := s.LastMessageAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.LastMessageAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -2141,7 +2141,7 @@ func (s *BuddyConversation) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -3408,11 +3408,11 @@ func (s *BuddyMock) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("starts_at")
-		json.EncodeDateTime(e, s.StartsAt)
+		json.EncodeTimeFormat(e, s.StartsAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("ends_at")
-		json.EncodeDateTime(e, s.EndsAt)
+		json.EncodeTimeFormat(e, s.EndsAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("topic")
@@ -3505,7 +3505,7 @@ func (s *BuddyMock) Decode(d *jx.Decoder) error {
 		case "starts_at":
 			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.StartsAt = v
 				if err != nil {
 					return err
@@ -3517,7 +3517,7 @@ func (s *BuddyMock) Decode(d *jx.Decoder) error {
 		case "ends_at":
 			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.EndsAt = v
 				if err != nil {
 					return err
@@ -3779,7 +3779,7 @@ func (s *BuddyMockBook) encodeFields(e *jx.Encoder) {
 	{
 		if s.StartsAt.Set {
 			e.FieldStart("starts_at")
-			s.StartsAt.Encode(e, json.EncodeDateTime)
+			s.StartsAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 		}
 	}
 	{
@@ -3813,7 +3813,7 @@ func (s *BuddyMockBook) Decode(d *jx.Decoder) error {
 		case "starts_at":
 			if err := func() error {
 				s.StartsAt.Reset()
-				if err := s.StartsAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.StartsAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -4647,7 +4647,7 @@ func (s *BuddyMockNextSlot) Encode(e *jx.Encoder) {
 func (s *BuddyMockNextSlot) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("starts_at")
-		json.EncodeDateTime(e, s.StartsAt)
+		json.EncodeTimeFormat(e, s.StartsAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("local_start")
@@ -4677,7 +4677,7 @@ func (s *BuddyMockNextSlot) Decode(d *jx.Decoder) error {
 		case "starts_at":
 			requiredBitSet[0] |= 1 << 0
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.StartsAt = v
 				if err != nil {
 					return err
@@ -5921,11 +5921,11 @@ func (s *BuddyMockSlot) Encode(e *jx.Encoder) {
 func (s *BuddyMockSlot) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("starts_at")
-		json.EncodeDateTime(e, s.StartsAt)
+		json.EncodeTimeFormat(e, s.StartsAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("ends_at")
-		json.EncodeDateTime(e, s.EndsAt)
+		json.EncodeTimeFormat(e, s.EndsAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("local_start")
@@ -5961,7 +5961,7 @@ func (s *BuddyMockSlot) Decode(d *jx.Decoder) error {
 		case "starts_at":
 			requiredBitSet[0] |= 1 << 0
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.StartsAt = v
 				if err != nil {
 					return err
@@ -5973,7 +5973,7 @@ func (s *BuddyMockSlot) Decode(d *jx.Decoder) error {
 		case "ends_at":
 			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.EndsAt = v
 				if err != nil {
 					return err
@@ -10829,11 +10829,11 @@ func (s *Conversation) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("last_message_at")
-		s.LastMessageAt.Encode(e, json.EncodeDateTime)
+		s.LastMessageAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
@@ -10917,7 +10917,7 @@ func (s *Conversation) Decode(d *jx.Decoder) error {
 		case "last_message_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				if err := s.LastMessageAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.LastMessageAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -10927,7 +10927,7 @@ func (s *Conversation) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -11273,7 +11273,7 @@ func (s *ConversationMessage) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
@@ -11332,7 +11332,7 @@ func (s *ConversationMessage) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -11491,11 +11491,11 @@ func (s *ConversationReport) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("resolved_at")
-		s.ResolvedAt.Encode(e, json.EncodeDateTime)
+		s.ResolvedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("reporter")
@@ -11600,7 +11600,7 @@ func (s *ConversationReport) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -11612,7 +11612,7 @@ func (s *ConversationReport) Decode(d *jx.Decoder) error {
 		case "resolved_at":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				if err := s.ResolvedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.ResolvedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -11737,7 +11737,7 @@ func (s *ConversationReportMessage) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
@@ -11783,7 +11783,7 @@ func (s *ConversationReportMessage) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -18322,19 +18322,19 @@ func (s *Interaction) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("viewed_at")
-		s.ViewedAt.Encode(e, json.EncodeDateTime)
+		s.ViewedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("saved_at")
-		s.SavedAt.Encode(e, json.EncodeDateTime)
+		s.SavedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("applied_at")
-		s.AppliedAt.Encode(e, json.EncodeDateTime)
+		s.AppliedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("dismissed_at")
-		s.DismissedAt.Encode(e, json.EncodeDateTime)
+		s.DismissedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("stage")
@@ -18380,7 +18380,7 @@ func (s *Interaction) Decode(d *jx.Decoder) error {
 		case "viewed_at":
 			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
-				if err := s.ViewedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.ViewedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -18390,7 +18390,7 @@ func (s *Interaction) Decode(d *jx.Decoder) error {
 		case "saved_at":
 			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
-				if err := s.SavedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.SavedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -18400,7 +18400,7 @@ func (s *Interaction) Decode(d *jx.Decoder) error {
 		case "applied_at":
 			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
-				if err := s.AppliedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.AppliedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -18410,7 +18410,7 @@ func (s *Interaction) Decode(d *jx.Decoder) error {
 		case "dismissed_at":
 			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				if err := s.DismissedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.DismissedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -27085,7 +27085,7 @@ func (s *RecentThread) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("subject_title")
@@ -27219,7 +27219,7 @@ func (s *RecentThread) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[1] |= 1 << 0
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -38929,7 +38929,7 @@ func (s *Thread) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
@@ -39053,7 +39053,7 @@ func (s *Thread) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[1] |= 1 << 0
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -39652,7 +39652,7 @@ func (s *ThreadReply) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
@@ -39737,7 +39737,7 @@ func (s *ThreadReply) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -40616,7 +40616,7 @@ func (s *TrackedJob) Encode(e *jx.Encoder) {
 func (s *TrackedJob) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("added_to_board_at")
-		s.AddedToBoardAt.Encode(e, json.EncodeDateTime)
+		s.AddedToBoardAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("id")
@@ -40638,15 +40638,15 @@ func (s *TrackedJob) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("viewed_at")
-		s.ViewedAt.Encode(e, json.EncodeDateTime)
+		s.ViewedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("saved_at")
-		s.SavedAt.Encode(e, json.EncodeDateTime)
+		s.SavedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("applied_at")
-		s.AppliedAt.Encode(e, json.EncodeDateTime)
+		s.AppliedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("stage")
@@ -40662,7 +40662,7 @@ func (s *TrackedJob) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("last_activity_at")
-		s.LastActivityAt.Encode(e, json.EncodeDateTime)
+		s.LastActivityAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("days_silent")
@@ -40674,11 +40674,11 @@ func (s *TrackedJob) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("followed_up_at")
-		s.FollowedUpAt.Encode(e, json.EncodeDateTime)
+		s.FollowedUpAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("cv_opened_at")
-		s.CvOpenedAt.Encode(e, json.EncodeDateTime)
+		s.CvOpenedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		if s.AutoApplyStatus.Set {
@@ -40720,7 +40720,7 @@ func (s *TrackedJob) Decode(d *jx.Decoder) error {
 		case "added_to_board_at":
 			requiredBitSet[0] |= 1 << 0
 			if err := func() error {
-				if err := s.AddedToBoardAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.AddedToBoardAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -40778,7 +40778,7 @@ func (s *TrackedJob) Decode(d *jx.Decoder) error {
 		case "viewed_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				if err := s.ViewedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.ViewedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -40788,7 +40788,7 @@ func (s *TrackedJob) Decode(d *jx.Decoder) error {
 		case "saved_at":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				if err := s.SavedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.SavedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -40798,7 +40798,7 @@ func (s *TrackedJob) Decode(d *jx.Decoder) error {
 		case "applied_at":
 			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
-				if err := s.AppliedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.AppliedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -40840,7 +40840,7 @@ func (s *TrackedJob) Decode(d *jx.Decoder) error {
 		case "last_activity_at":
 			requiredBitSet[1] |= 1 << 3
 			if err := func() error {
-				if err := s.LastActivityAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.LastActivityAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -40870,7 +40870,7 @@ func (s *TrackedJob) Decode(d *jx.Decoder) error {
 		case "followed_up_at":
 			requiredBitSet[1] |= 1 << 6
 			if err := func() error {
-				if err := s.FollowedUpAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.FollowedUpAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -40880,7 +40880,7 @@ func (s *TrackedJob) Decode(d *jx.Decoder) error {
 		case "cv_opened_at":
 			requiredBitSet[1] |= 1 << 7
 			if err := func() error {
-				if err := s.CvOpenedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.CvOpenedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil

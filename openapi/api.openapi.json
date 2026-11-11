@@ -8915,7 +8915,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -8924,7 +8925,8 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         }
       },
@@ -9137,11 +9139,13 @@
           },
           "starts_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "ends_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "topic": {
             "type": "string"
@@ -9192,7 +9196,8 @@
         "properties": {
           "starts_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "topic": {
             "type": "string"
@@ -9315,7 +9320,8 @@
         "properties": {
           "starts_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "local_start": {
             "type": "string"
@@ -9508,11 +9514,13 @@
         "properties": {
           "starts_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "ends_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "local_start": {
             "type": "string"
@@ -10187,7 +10195,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -10196,7 +10205,8 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         },
         "description": "`unread` and `last_message_at` mean something on the list only; elsewhere they are 0 and null."
@@ -10269,7 +10279,8 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         }
       },
@@ -10316,13 +10327,15 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "resolved_at": {
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -10360,7 +10373,8 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         }
       },
@@ -10925,7 +10939,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -10936,7 +10951,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -10947,7 +10963,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -10958,7 +10975,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -12289,7 +12307,8 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "subject_title": {
             "type": "string"
@@ -14493,7 +14512,8 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         },
         "description": "The author is the persona handle, \"AI\" for a system reply or \"[deleted]\" once the account is gone."
@@ -14599,7 +14619,8 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         }
       },
@@ -14753,7 +14774,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -14777,7 +14799,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -14788,7 +14811,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -14799,7 +14823,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -14834,7 +14859,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -14867,7 +14893,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -14878,7 +14905,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
