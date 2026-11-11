@@ -114,7 +114,7 @@ real finding means **revoke the credential**.
 (`pnpm check:sql`, `Migration-Edit:` trailer), sqlc drift, knip dead JS incl. unused exports
 (`pnpm check:dead`), Go `deadcode`, actionlint + zizmor (SHA-pinned actions), agnix (32 KiB
 cap per AGENTS.md), rumdl, ast-grep, Markdown links (`pnpm check:links`), oasdiff on
-`web/static/openapi.yaml` (`API-Break:` trailer), changed-line coverage (diff-cover, Go
+`web/static/openapi.yaml` (`API-Break:` trailer), Schemathesis over the TypeSpec contract, changed-line coverage (diff-cover, Go
 ≥ 60%), shellcheck/hadolint, shared JS deps (`pnpm check:deps`), Ruff on Python, gitleaks.
 
 **Before you run, change or add a `cmd/<name>` worker, read its entry in [docs/agents/workers.md](docs/agents/workers.md) when it has one**: what it needs, when it runs, and the trap behind it. Not every worker has an entry yet (`ls cmd/` is the full list); without one, read the worker's own `main.go`. A new worker gets its entry there.

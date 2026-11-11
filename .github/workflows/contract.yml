@@ -1,0 +1,74 @@
+name: Contract
+
+# Schemathesis fuzzes the routes in openapi/api.openapi.json against a real server on an
+# empty database: every answer must have a status, content type and body the contract
+# declares, and no request may make the server fail. Checks the generated code alone
+# cannot: a handler that returns a shape, a status or a 500 the contract does not name.
+on:
+  pull_request:
+    paths:
+      - typespec/**
+      - openapi/**
+      - internal/**
+      - cmd/server/**
+      - go.mod
+      - go.sum
+      - migrations/**
+      - Dockerfile
+      - docker-compose.yml
+      - schemathesis.toml
+      - .github/workflows/contract.yml
+  push:
+    branches: [main]
+    paths:
+      - typespec/**
+      - openapi/**
+      - internal/**
+      - cmd/server/**
+      - go.mod
+      - go.sum
+      - migrations/**
+      - Dockerfile
+      - docker-compose.yml
+      - schemathesis.toml
+      - .github/workflows/contract.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start the API and its database
+        run: docker compose up -d --build app
+
+      - name: Wait for the API
+        run: |
+          for i in $(seq 1 60); do
+            api=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health || true)
+            [ "$api" = "200" ] && exit 0
+            echo "attempt $i: api=$api"
+            sleep 3
+          done
+          docker compose logs app --tail=100
+          exit 1
+
+      - name: Fuzz the contract
+        run: |
+          pipx run schemathesis==4.33.2 run openapi/api.openapi.json \
+            --url http://localhost:8080/api/v1 --max-examples 50 --workers 2
+
+      - name: API logs
+        if: failure()
+        run: docker compose logs app --tail=200
