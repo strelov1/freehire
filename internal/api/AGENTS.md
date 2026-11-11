@@ -47,3 +47,9 @@ A migrated route is still a Fiber route: it keeps its middleware chain and ends 
   ogen's `x-ogen-time-format`. Without it ogen writes whole seconds.
 - A binary answer (an image) works: `@body photo: bytes` with a fixed `contentType`.
 - Streams (SSE), websockets and redirects stay hand-written Fiber.
+- Shared mapping helpers live in `handler/contract.go` and nowhere else; reuse them, and put
+  a new one there rather than in a group's file (groups moved in parallel wrote the same
+  helper twice and broke the build when they met). Present: `optString`, `nilIfEmpty`,
+  `ptrOf`, `intPtrOf`, `optNil`, `optNilInt`, `nilString`, `nilDateTime`, `contractQuery`,
+  `contractIgnoredParams`; in `helpers.go` `requireUserIDFromContext`, `contractPathID`; in
+  `handler.go` `contractPageBounded`, `contractPageWindowed`.

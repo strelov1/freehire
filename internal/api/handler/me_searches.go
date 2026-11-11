@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -52,16 +51,6 @@ func savedSearchOut(s savedsearch.SavedSearch) apigen.SavedSearch {
 	setNilDateTime(&out.CreatedAt, s.CreatedAt)
 	setNilDateTime(&out.UpdatedAt, s.UpdatedAt)
 	return out
-}
-
-// pathIDString parses a numeric path id the contract carries as a string; anything that is
-// not a number keeps the 400 "invalid id".
-func pathIDString(s string) (int64, error) {
-	id, err := strconv.Atoi(s)
-	if err != nil {
-		return 0, fiber.NewError(fiber.StatusBadRequest, "invalid id")
-	}
-	return int64(id), nil
 }
 
 // savedSearchError maps the saved-search sentinels onto HTTP statuses: a bad name is a
@@ -134,7 +123,7 @@ func (h *savedSearchHandlers) UpdateSavedSearch(ctx context.Context, req *apigen
 	if err != nil {
 		return nil, err
 	}
-	id, err := pathIDString(params.ID)
+	id, err := contractPathID(params.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +141,7 @@ func (h *savedSearchHandlers) DeleteSavedSearch(ctx context.Context, params apig
 	if err != nil {
 		return err
 	}
-	id, err := pathIDString(params.ID)
+	id, err := contractPathID(params.ID)
 	if err != nil {
 		return err
 	}

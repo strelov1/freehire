@@ -47,17 +47,13 @@ func (h *contributionHandlers) register(api fiber.Router, mw middleware, contrac
 // toContributionResponse maps a domain contribution to its wire shape.
 func contributionOut(c contribution.Contribution) apigen.Contribution {
 	out := apigen.Contribution{
-		ID:      c.ID,
-		URL:     c.URL,
-		Source:  c.Source,
-		Board:   c.Board,
-		Status:  c.Status,
-		Surface: c.Surface,
-	}
-	if c.CreatedAt != nil {
-		out.CreatedAt = apigen.NewNilDateTime(*c.CreatedAt)
-	} else {
-		out.CreatedAt.SetToNull()
+		ID:        c.ID,
+		URL:       c.URL,
+		Source:    c.Source,
+		Board:     c.Board,
+		Status:    c.Status,
+		Surface:   c.Surface,
+		CreatedAt: nilDateTime(c.CreatedAt),
 	}
 	return out
 }
