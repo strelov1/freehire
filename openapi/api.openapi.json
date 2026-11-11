@@ -10,6 +10,9 @@
     },
     {
       "name": "Talent Network"
+    },
+    {
+      "name": "Watchlist"
     }
   ],
   "paths": {
@@ -248,6 +251,262 @@
             }
           }
         }
+      }
+    },
+    "/me/watchlist": {
+      "get": {
+        "operationId": "listWatchlist",
+        "description": "One page, newest first. A page param that does not read falls back to its default.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "A substring of the company name.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Watchlist"
+        ]
+      }
+    },
+    "/me/watchlist/import": {
+      "post": {
+        "operationId": "importWatchlist",
+        "description": "Adds the companies the names identify and reports what it could not resolve.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WatchlistImportResult"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Watchlist"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchlistImport"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/watchlist/{slug}": {
+      "get": {
+        "operationId": "getWatching",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Watching"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Watchlist"
+        ]
+      },
+      "put": {
+        "operationId": "addToWatchlist",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WatchedCompany"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Watchlist"
+        ]
+      },
+      "delete": {
+        "operationId": "removeFromWatchlist",
+        "description": "A company that was not on the list is not an error.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Watchlist"
+        ]
       }
     },
     "/talent": {
@@ -760,7 +1019,7 @@
             "description": "Absent when every param was read."
           }
         },
-        "description": "A page of a list, with what the filter dropped."
+        "description": "A page of a filtered list, with what the filter dropped."
       },
       "OneClickResult": {
         "type": "object",
@@ -776,6 +1035,29 @@
             "type": "string"
           }
         }
+      },
+      "PageMeta": {
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Where a page sits in the whole list."
       },
       "PeriodDate": {
         "type": "object",
@@ -974,6 +1256,121 @@
           }
         },
         "description": "One role of a work history, with everything nameable removed."
+      },
+      "WatchedCompany": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "added_at"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "added_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Watching": {
+        "type": "object",
+        "required": [
+          "watched"
+        ],
+        "properties": {
+          "watched": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WatchlistImport": {
+        "type": "object",
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Company names or slugs, one per entry. An empty list is refused with a 400."
+          }
+        }
+      },
+      "WatchlistImportResult": {
+        "type": "object",
+        "required": [
+          "added",
+          "already",
+          "unmatched"
+        ],
+        "properties": {
+          "added": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "already": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Already on the list."
+          },
+          "unmatched": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Entries that did not resolve to exactly one company, as typed."
+          }
+        }
+      },
+      "WatchlistMeta": {
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset",
+          "max"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "max": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many companies one list may hold."
+          }
+        }
+      },
+      "WatchlistPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WatchedCompany"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/WatchlistMeta"
+          }
+        }
       }
     }
   },

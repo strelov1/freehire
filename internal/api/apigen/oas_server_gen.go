@@ -8,6 +8,10 @@ import (
 
 // Handler handles operations described by OpenAPI v3 specification.
 type Handler interface {
+	// AddToWatchlist implements addToWatchlist operation.
+	//
+	// PUT /me/watchlist/{slug}
+	AddToWatchlist(ctx context.Context, params AddToWatchlistParams) (*AddToWatchlistOK, error)
 	// GetEmailPrefs implements getEmailPrefs operation.
 	//
 	// GET /email-prefs
@@ -32,16 +36,38 @@ type Handler interface {
 	//
 	// GET /talent/{handle}/photo
 	GetTalentPhoto(ctx context.Context, params GetTalentPhotoParams) (*GetTalentPhotoOKHeaders, error)
+	// GetWatching implements getWatching operation.
+	//
+	// GET /me/watchlist/{slug}
+	GetWatching(ctx context.Context, params GetWatchingParams) (*GetWatchingOKHeaders, error)
+	// ImportWatchlist implements importWatchlist operation.
+	//
+	// Adds the companies the names identify and reports what it could not resolve.
+	//
+	// POST /me/watchlist/import
+	ImportWatchlist(ctx context.Context, req *WatchlistImport) (*ImportWatchlistOK, error)
 	// ListTalent implements listTalent operation.
 	//
 	// GET /talent
 	ListTalent(ctx context.Context, params ListTalentParams) (*ListTalentOK, error)
+	// ListWatchlist implements listWatchlist operation.
+	//
+	// One page, newest first. A page param that does not read falls back to its default.
+	//
+	// GET /me/watchlist
+	ListWatchlist(ctx context.Context, params ListWatchlistParams) (*WatchlistPageHeaders, error)
 	// OneClickUnsubscribe implements oneClickUnsubscribe operation.
 	//
 	// RFC 8058 one-click unsubscribe: turns off only the group the token names.
 	//
 	// POST /email-prefs/one-click
 	OneClickUnsubscribe(ctx context.Context, params OneClickUnsubscribeParams) (*OneClickUnsubscribeOK, error)
+	// RemoveFromWatchlist implements removeFromWatchlist operation.
+	//
+	// A company that was not on the list is not an error.
+	//
+	// DELETE /me/watchlist/{slug}
+	RemoveFromWatchlist(ctx context.Context, params RemoveFromWatchlistParams) error
 	// UpdateEmailPrefs implements updateEmailPrefs operation.
 	//
 	// PATCH /email-prefs

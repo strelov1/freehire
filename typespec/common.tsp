@@ -24,11 +24,16 @@ model IgnoredParam {
   did_you_mean?: string;
 }
 
-/** A page of a list, with what the filter dropped. */
-model ListMeta {
+/** Where a page sits in the whole list. */
+model PageMeta {
   total: int64;
   limit: int64;
   offset: int64;
+}
+
+/** A page of a filtered list, with what the filter dropped. */
+model ListMeta {
+  ...PageMeta;
 
   /** Absent when every param was read. */
   ignored_params?: IgnoredParam[];

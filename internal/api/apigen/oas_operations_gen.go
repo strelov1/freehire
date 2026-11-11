@@ -6,13 +6,18 @@ package apigen
 type OperationName = string
 
 const (
+	AddToWatchlistOperation      OperationName = "AddToWatchlist"
 	GetEmailPrefsOperation       OperationName = "GetEmailPrefs"
 	GetMyEmailGroupsOperation    OperationName = "GetMyEmailGroups"
 	GetTalentFacetsOperation     OperationName = "GetTalentFacets"
 	GetTalentMemberOperation     OperationName = "GetTalentMember"
 	GetTalentPhotoOperation      OperationName = "GetTalentPhoto"
+	GetWatchingOperation         OperationName = "GetWatching"
+	ImportWatchlistOperation     OperationName = "ImportWatchlist"
 	ListTalentOperation          OperationName = "ListTalent"
+	ListWatchlistOperation       OperationName = "ListWatchlist"
 	OneClickUnsubscribeOperation OperationName = "OneClickUnsubscribe"
+	RemoveFromWatchlistOperation OperationName = "RemoveFromWatchlist"
 	UpdateEmailPrefsOperation    OperationName = "UpdateEmailPrefs"
 	UpdateMyEmailGroupsOperation OperationName = "UpdateMyEmailGroups"
 )

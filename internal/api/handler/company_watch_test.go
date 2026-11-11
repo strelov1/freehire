@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"math"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -79,19 +80,19 @@ func (f *watchQueries) ListWatchableCompaniesByFoldedSlug(_ context.Context, arg
 func watchApp(q *watchQueries, userID int64) *fiber.App {
 	h := &companyWatchHandlers{watch: companywatch.New(q)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h.register(app, middleware{cookie: func(c *fiber.Ctx) error {
+	h.register(app.Group("/api/v1"), middleware{cookie: func(c *fiber.Ctx) error {
 		if userID == 0 {
 			return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
 		}
 		c.Locals(auth.LocalsUserID, userID)
 		return c.Next()
-	}})
+	}}, newContract(contractHandlers{companyWatchHandlers: h}))
 	return app
 }
 
 func doWatch(t *testing.T, app *fiber.App, method, target, body string) (int, map[string]any) {
 	t.Helper()
-	req := httptest.NewRequestWithContext(context.Background(), method, target, strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), method, "/api/v1"+target, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -183,5 +184,22 @@ func TestCompanyWatch_NeedsASignedInCaller(t *testing.T) {
 	status, _ := doWatch(t, watchApp(&watchQueries{}, 0), fiber.MethodGet, "/me/watchlist", "")
 	if status != fiber.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", status)
+	}
+}
+
+// The page params are strings in the contract so a bad one falls back, as Fiber's QueryInt
+// did, instead of being refused; the clamp still bounds both.
+func TestCompanyWatch_PageParamsFallBackAndClamp(t *testing.T) {
+	for target, want := range map[string][2]int32{
+		"/me/watchlist?limit=abc&offset=xyz":     {50, 0},
+		"/me/watchlist?limit=1000&offset=-3":     {100, 0},
+		"/me/watchlist?offset=3000000000":        {50, math.MaxInt32},
+		"/me/watchlist?limit=7&limit=9&offset=2": {7, 2},
+	} {
+		q := &watchQueries{}
+		status, _ := doWatch(t, watchApp(q, 7), fiber.MethodGet, target, "")
+		if status != fiber.StatusOK || q.list.PageLimit != want[0] || q.list.PageOffset != want[1] {
+			t.Errorf("%s = %d limit %d offset %d, want %v", target, status, q.list.PageLimit, q.list.PageOffset, want)
+		}
 	}
 }

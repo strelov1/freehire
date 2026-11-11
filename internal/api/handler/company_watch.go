@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"errors"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/companywatch"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -21,15 +23,19 @@ func newCompanyWatchHandlers(queries *db.Queries) *companyWatchHandlers {
 	return &companyWatchHandlers{watch: companywatch.New(queries)}
 }
 
-func (h *companyWatchHandlers) register(api fiber.Router, mw middleware) {
+func (h *companyWatchHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Cookie-only like saved searches and subscriptions: a browser convenience whose answers
-	// are one person's own and never cacheable.
-	api.Get("/me/watchlist", mw.cookie, h.List)
-	api.Post("/me/watchlist/import", mw.cookie, h.Import)
-	api.Get("/me/watchlist/:slug", mw.cookie, h.Watching)
-	api.Put("/me/watchlist/:slug", mw.cookie, h.Add)
-	api.Delete("/me/watchlist/:slug", mw.cookie, h.Remove)
+	// are one person's own and never cacheable. The handlers below implement the contract
+	// (typespec/watchlist.tsp).
+	api.Get("/me/watchlist", mw.cookie, contract)
+	api.Post("/me/watchlist/import", mw.cookie, contract)
+	api.Get("/me/watchlist/:slug", mw.cookie, contract)
+	api.Put("/me/watchlist/:slug", mw.cookie, contract)
+	api.Delete("/me/watchlist/:slug", mw.cookie, contract)
 }
+
+// watchlistNoStore is the caching rule of both reads: one person's own, never cached.
+const watchlistNoStore = "private, no-store"
 
 // companyWatchError maps the watchlist sentinels onto HTTP statuses. Anything else falls
 // through to the central RenderError as a 500.
@@ -48,83 +54,85 @@ func companyWatchError(err error) error {
 	}
 }
 
-// List returns one page of the caller's watchlist, newest first, optionally filtered by a
-// substring of the company name.
-func (h *companyWatchHandlers) List(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// ListWatchlist returns one page of the caller's watchlist, newest first, optionally
+// filtered by a substring of the company name.
+func (h *companyWatchHandlers) ListWatchlist(ctx context.Context, params apigen.ListWatchlistParams) (*apigen.WatchlistPageHeaders, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	limit, offset := contractPageBounded(ctx, 50, 100)
+	entries, total, err := h.watch.List(ctx, userID, params.Q.Value, limit, offset)
+	if err != nil {
+		return nil, companyWatchError(err)
+	}
+	data := make([]apigen.WatchedCompany, len(entries))
+	for i, e := range entries {
+		data[i] = watchedCompanyOut(e)
+	}
+	return &apigen.WatchlistPageHeaders{
+		CacheControl: watchlistNoStore,
+		Response: apigen.WatchlistPage{Data: data, Meta: apigen.WatchlistMeta{
+			Total: int64(total), Limit: int64(limit), Offset: int64(offset), Max: companywatch.MaxEntries,
+		}},
+	}, nil
+}
+
+// GetWatching reports whether the caller watches the company a page's slug names.
+func (h *companyWatchHandlers) GetWatching(ctx context.Context, params apigen.GetWatchingParams) (*apigen.GetWatchingOKHeaders, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	watched, err := h.watch.Watching(ctx, userID, params.Slug)
+	if err != nil {
+		return nil, companyWatchError(err)
+	}
+	return &apigen.GetWatchingOKHeaders{
+		CacheControl: watchlistNoStore,
+		Response:     apigen.GetWatchingOK{Data: apigen.Watching{Watched: watched}},
+	}, nil
+}
+
+// AddToWatchlist puts a company on the caller's watchlist.
+func (h *companyWatchHandlers) AddToWatchlist(ctx context.Context, params apigen.AddToWatchlistParams) (*apigen.AddToWatchlistOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	entry, err := h.watch.Add(ctx, userID, params.Slug)
+	if err != nil {
+		return nil, companyWatchError(err)
+	}
+	return &apigen.AddToWatchlistOK{Data: watchedCompanyOut(entry)}, nil
+}
+
+// RemoveFromWatchlist takes a company off the caller's watchlist; one that was not on it is
+// not an error.
+func (h *companyWatchHandlers) RemoveFromWatchlist(ctx context.Context, params apigen.RemoveFromWatchlistParams) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	limit, offset := pageParamsBounded(c, 50, 100)
-	entries, total, err := h.watch.List(c.Context(), userID, c.Query("q"), limit, offset)
-	if err != nil {
-		return companyWatchError(err)
-	}
-	c.Set(fiber.HeaderCacheControl, "private, no-store")
-	return c.JSON(fiber.Map{
-		"data": entries,
-		"meta": fiber.Map{"total": total, "limit": limit, "offset": offset, "max": companywatch.MaxEntries},
-	})
+	return companyWatchError(h.watch.Remove(ctx, userID, params.Slug))
 }
 
-// Watching reports whether the caller watches the company a page's slug names.
-func (h *companyWatchHandlers) Watching(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// ImportWatchlist adds the companies a list of names or slugs identifies and reports what it
+// could not resolve.
+func (h *companyWatchHandlers) ImportWatchlist(ctx context.Context, req *apigen.WatchlistImport) (*apigen.ImportWatchlistOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	watched, err := h.watch.Watching(c.Context(), userID, c.Params("slug"))
+	res, err := h.watch.Import(ctx, userID, req.Names)
 	if err != nil {
-		return companyWatchError(err)
+		return nil, companyWatchError(err)
 	}
-	c.Set(fiber.HeaderCacheControl, "private, no-store")
-	return c.JSON(fiber.Map{"data": fiber.Map{"watched": watched}})
+	return &apigen.ImportWatchlistOK{Data: apigen.WatchlistImportResult{
+		Added: int64(res.Added), Already: int64(res.Already), Unmatched: res.Unmatched,
+	}}, nil
 }
 
-// Add puts a company on the caller's watchlist.
-func (h *companyWatchHandlers) Add(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	entry, err := h.watch.Add(c.Context(), userID, c.Params("slug"))
-	if err != nil {
-		return companyWatchError(err)
-	}
-	return c.JSON(fiber.Map{"data": entry})
-}
-
-// Remove takes a company off the caller's watchlist; one that was not on it is not an error.
-func (h *companyWatchHandlers) Remove(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	if err := h.watch.Remove(c.Context(), userID, c.Params("slug")); err != nil {
-		return companyWatchError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
-}
-
-// importWatchlistRequest is the bulk-import body: company names or slugs, one per entry.
-type importWatchlistRequest struct {
-	Names []string `json:"names"`
-}
-
-// Import adds the companies a list of names or slugs identifies and reports what it could
-// not resolve.
-func (h *companyWatchHandlers) Import(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	var in importWatchlistRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	res, err := h.watch.Import(c.Context(), userID, in.Names)
-	if err != nil {
-		return companyWatchError(err)
-	}
-	return c.JSON(fiber.Map{"data": res})
+func watchedCompanyOut(e companywatch.Entry) apigen.WatchedCompany {
+	return apigen.WatchedCompany{Slug: e.Slug, Name: e.Name, AddedAt: e.AddedAt}
 }
