@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-faster/errors"
+	"github.com/go-faster/jx"
 )
 
 func (s *ProblemStatusCode) Error() string {
@@ -176,33 +177,6 @@ func (s *BankedAnswer) SetProvenance(val string) {
 // SetUpdatedAt sets the value of UpdatedAt.
 func (s *BankedAnswer) SetUpdatedAt(val time.Time) {
 	s.UpdatedAt = val
-}
-
-// The current single place: an ISO country code and a free-text city.
-// Ref: #/components/schemas/BaseLocation
-type BaseLocation struct {
-	Country OptNilString `json:"country"`
-	City    OptNilString `json:"city"`
-}
-
-// GetCountry returns the value of Country.
-func (s *BaseLocation) GetCountry() OptNilString {
-	return s.Country
-}
-
-// GetCity returns the value of City.
-func (s *BaseLocation) GetCity() OptNilString {
-	return s.City
-}
-
-// SetCountry sets the value of Country.
-func (s *BaseLocation) SetCountry(val OptNilString) {
-	s.Country = val
-}
-
-// SetCity sets the value of City.
-func (s *BaseLocation) SetCity(val OptNilString) {
-	s.City = val
 }
 
 // Ref: #/components/schemas/CityMatch
@@ -1234,33 +1208,6 @@ func (s *FindModeratedUserOK) SetData(val ModeratedUser) {
 	s.Data = val
 }
 
-// A geographic reach: regions and/or ISO country codes. Empty means worldwide.
-// Ref: #/components/schemas/GeoSet
-type GeoSet struct {
-	Regions   OptNilStringArray `json:"regions"`
-	Countries OptNilStringArray `json:"countries"`
-}
-
-// GetRegions returns the value of Regions.
-func (s *GeoSet) GetRegions() OptNilStringArray {
-	return s.Regions
-}
-
-// GetCountries returns the value of Countries.
-func (s *GeoSet) GetCountries() OptNilStringArray {
-	return s.Countries
-}
-
-// SetRegions sets the value of Regions.
-func (s *GeoSet) SetRegions(val OptNilStringArray) {
-	s.Regions = val
-}
-
-// SetCountries sets the value of Countries.
-func (s *GeoSet) SetCountries(val OptNilStringArray) {
-	s.Countries = val
-}
-
 // A single item: `{"data": ...}`.
 type GetAgentPermissionsOK struct {
 	Data AgentPermissions `json:"data"`
@@ -2233,56 +2180,6 @@ func (s *ListTalentOK) SetMeta(val ListMeta) {
 	s.Meta = val
 }
 
-// Where and how the caller wants to work. Every member is optional on a save; an entirely empty block
-// clears it. Echoed back normalised, with `remote`, `base` and `relocation` always present.
-// Ref: #/components/schemas/LocationPreferences
-type LocationPreferences struct {
-	WorkModes  OptNilStringArray  `json:"work_modes"`
-	Remote     OptNilGeoSet       `json:"remote"`
-	Base       OptNilBaseLocation `json:"base"`
-	Relocation OptNilRelocation   `json:"relocation"`
-}
-
-// GetWorkModes returns the value of WorkModes.
-func (s *LocationPreferences) GetWorkModes() OptNilStringArray {
-	return s.WorkModes
-}
-
-// GetRemote returns the value of Remote.
-func (s *LocationPreferences) GetRemote() OptNilGeoSet {
-	return s.Remote
-}
-
-// GetBase returns the value of Base.
-func (s *LocationPreferences) GetBase() OptNilBaseLocation {
-	return s.Base
-}
-
-// GetRelocation returns the value of Relocation.
-func (s *LocationPreferences) GetRelocation() OptNilRelocation {
-	return s.Relocation
-}
-
-// SetWorkModes sets the value of WorkModes.
-func (s *LocationPreferences) SetWorkModes(val OptNilStringArray) {
-	s.WorkModes = val
-}
-
-// SetRemote sets the value of Remote.
-func (s *LocationPreferences) SetRemote(val OptNilGeoSet) {
-	s.Remote = val
-}
-
-// SetBase sets the value of Base.
-func (s *LocationPreferences) SetBase(val OptNilBaseLocation) {
-	s.Base = val
-}
-
-// SetRelocation sets the value of Relocation.
-func (s *LocationPreferences) SetRelocation(val OptNilRelocation) {
-	s.Relocation = val
-}
-
 // Ref: #/components/schemas/MarketPulseMeta
 type MarketPulseMeta struct {
 	// The current ISO week's Monday, YYYY-MM-DD.
@@ -2672,51 +2569,6 @@ func (o NilFloat64) Or(d float64) float64 {
 	return d
 }
 
-// NewNilLocationPreferences returns new NilLocationPreferences with value set to v.
-func NewNilLocationPreferences(v LocationPreferences) NilLocationPreferences {
-	return NilLocationPreferences{
-		Value: v,
-	}
-}
-
-// NilLocationPreferences is nullable LocationPreferences.
-type NilLocationPreferences struct {
-	Value LocationPreferences
-	Null  bool
-}
-
-// SetTo sets value to v.
-func (o *NilLocationPreferences) SetTo(v LocationPreferences) {
-	o.Null = false
-	o.Value = v
-}
-
-// IsNull returns true if value is Null.
-func (o NilLocationPreferences) IsNull() bool { return o.Null }
-
-// SetToNull sets value to null.
-func (o *NilLocationPreferences) SetToNull() {
-	o.Null = true
-	var v LocationPreferences
-	o.Value = v
-}
-
-// Get returns value and boolean that denotes whether value was set.
-func (o NilLocationPreferences) Get() (v LocationPreferences, ok bool) {
-	if o.Null {
-		return v, false
-	}
-	return o.Value, true
-}
-
-// Or returns value if set, or given parameter if does not.
-func (o NilLocationPreferences) Or(d LocationPreferences) LocationPreferences {
-	if v, ok := o.Get(); ok {
-		return v
-	}
-	return d
-}
-
 // NewNilProfile returns new NilProfile with value set to v.
 func NewNilProfile(v Profile) NilProfile {
 	return NilProfile{
@@ -2756,51 +2608,6 @@ func (o NilProfile) Get() (v Profile, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o NilProfile) Or(d Profile) Profile {
-	if v, ok := o.Get(); ok {
-		return v
-	}
-	return d
-}
-
-// NewNilProfileCV returns new NilProfileCV with value set to v.
-func NewNilProfileCV(v ProfileCV) NilProfileCV {
-	return NilProfileCV{
-		Value: v,
-	}
-}
-
-// NilProfileCV is nullable ProfileCV.
-type NilProfileCV struct {
-	Value ProfileCV
-	Null  bool
-}
-
-// SetTo sets value to v.
-func (o *NilProfileCV) SetTo(v ProfileCV) {
-	o.Null = false
-	o.Value = v
-}
-
-// IsNull returns true if value is Null.
-func (o NilProfileCV) IsNull() bool { return o.Null }
-
-// SetToNull sets value to null.
-func (o *NilProfileCV) SetToNull() {
-	o.Null = true
-	var v ProfileCV
-	o.Value = v
-}
-
-// Get returns value and boolean that denotes whether value was set.
-func (o NilProfileCV) Get() (v ProfileCV, ok bool) {
-	if o.Null {
-		return v, false
-	}
-	return o.Value, true
-}
-
-// Or returns value if set, or given parameter if does not.
-func (o NilProfileCV) Or(d ProfileCV) ProfileCV {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -3275,74 +3082,6 @@ func (o OptInt64) Or(d int64) int64 {
 	return d
 }
 
-// NewOptNilBaseLocation returns new OptNilBaseLocation with value set to v.
-func NewOptNilBaseLocation(v BaseLocation) OptNilBaseLocation {
-	return OptNilBaseLocation{
-		Value: v,
-		Set:   true,
-	}
-}
-
-// OptNilBaseLocation is optional nullable BaseLocation.
-type OptNilBaseLocation struct {
-	Value BaseLocation
-	Set   bool
-	Null  bool
-}
-
-// IsSet returns true if OptNilBaseLocation was set.
-func (o OptNilBaseLocation) IsSet() bool { return o.Set }
-
-// Reset unsets value.
-func (o *OptNilBaseLocation) Reset() {
-	var v BaseLocation
-	o.Value = v
-	o.Set = false
-	o.Null = false
-}
-
-// SetTo sets value to v.
-func (o *OptNilBaseLocation) SetTo(v BaseLocation) {
-	o.Set = true
-	o.Null = false
-	o.Value = v
-}
-
-// IsNull returns true if value is Null.
-func (o OptNilBaseLocation) IsNull() bool { return o.Null }
-
-// SetToNull sets value to null.
-func (o *OptNilBaseLocation) SetToNull() {
-	o.Set = true
-	o.Null = true
-	var v BaseLocation
-	o.Value = v
-}
-
-// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
-func (o OptNilBaseLocation) IsEmpty() bool {
-	return !o.Set && !o.Null
-}
-
-// Get returns value and boolean that denotes whether value was set.
-func (o OptNilBaseLocation) Get() (v BaseLocation, ok bool) {
-	if o.Null {
-		return v, false
-	}
-	if !o.Set {
-		return v, false
-	}
-	return o.Value, true
-}
-
-// Or returns value if set, or given parameter if does not.
-func (o OptNilBaseLocation) Or(d BaseLocation) BaseLocation {
-	if v, ok := o.Get(); ok {
-		return v
-	}
-	return d
-}
-
 // NewOptNilBool returns new OptNilBool with value set to v.
 func NewOptNilBool(v bool) OptNilBool {
 	return OptNilBool{
@@ -3411,74 +3150,6 @@ func (o OptNilBool) Or(d bool) bool {
 	return d
 }
 
-// NewOptNilGeoSet returns new OptNilGeoSet with value set to v.
-func NewOptNilGeoSet(v GeoSet) OptNilGeoSet {
-	return OptNilGeoSet{
-		Value: v,
-		Set:   true,
-	}
-}
-
-// OptNilGeoSet is optional nullable GeoSet.
-type OptNilGeoSet struct {
-	Value GeoSet
-	Set   bool
-	Null  bool
-}
-
-// IsSet returns true if OptNilGeoSet was set.
-func (o OptNilGeoSet) IsSet() bool { return o.Set }
-
-// Reset unsets value.
-func (o *OptNilGeoSet) Reset() {
-	var v GeoSet
-	o.Value = v
-	o.Set = false
-	o.Null = false
-}
-
-// SetTo sets value to v.
-func (o *OptNilGeoSet) SetTo(v GeoSet) {
-	o.Set = true
-	o.Null = false
-	o.Value = v
-}
-
-// IsNull returns true if value is Null.
-func (o OptNilGeoSet) IsNull() bool { return o.Null }
-
-// SetToNull sets value to null.
-func (o *OptNilGeoSet) SetToNull() {
-	o.Set = true
-	o.Null = true
-	var v GeoSet
-	o.Value = v
-}
-
-// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
-func (o OptNilGeoSet) IsEmpty() bool {
-	return !o.Set && !o.Null
-}
-
-// Get returns value and boolean that denotes whether value was set.
-func (o OptNilGeoSet) Get() (v GeoSet, ok bool) {
-	if o.Null {
-		return v, false
-	}
-	if !o.Set {
-		return v, false
-	}
-	return o.Value, true
-}
-
-// Or returns value if set, or given parameter if does not.
-func (o OptNilGeoSet) Or(d GeoSet) GeoSet {
-	if v, ok := o.Get(); ok {
-		return v
-	}
-	return d
-}
-
 // NewOptNilInt64 returns new OptNilInt64 with value set to v.
 func NewOptNilInt64(v int64) OptNilInt64 {
 	return OptNilInt64{
@@ -3541,142 +3212,6 @@ func (o OptNilInt64) Get() (v int64, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptNilInt64) Or(d int64) int64 {
-	if v, ok := o.Get(); ok {
-		return v
-	}
-	return d
-}
-
-// NewOptNilLocationPreferences returns new OptNilLocationPreferences with value set to v.
-func NewOptNilLocationPreferences(v LocationPreferences) OptNilLocationPreferences {
-	return OptNilLocationPreferences{
-		Value: v,
-		Set:   true,
-	}
-}
-
-// OptNilLocationPreferences is optional nullable LocationPreferences.
-type OptNilLocationPreferences struct {
-	Value LocationPreferences
-	Set   bool
-	Null  bool
-}
-
-// IsSet returns true if OptNilLocationPreferences was set.
-func (o OptNilLocationPreferences) IsSet() bool { return o.Set }
-
-// Reset unsets value.
-func (o *OptNilLocationPreferences) Reset() {
-	var v LocationPreferences
-	o.Value = v
-	o.Set = false
-	o.Null = false
-}
-
-// SetTo sets value to v.
-func (o *OptNilLocationPreferences) SetTo(v LocationPreferences) {
-	o.Set = true
-	o.Null = false
-	o.Value = v
-}
-
-// IsNull returns true if value is Null.
-func (o OptNilLocationPreferences) IsNull() bool { return o.Null }
-
-// SetToNull sets value to null.
-func (o *OptNilLocationPreferences) SetToNull() {
-	o.Set = true
-	o.Null = true
-	var v LocationPreferences
-	o.Value = v
-}
-
-// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
-func (o OptNilLocationPreferences) IsEmpty() bool {
-	return !o.Set && !o.Null
-}
-
-// Get returns value and boolean that denotes whether value was set.
-func (o OptNilLocationPreferences) Get() (v LocationPreferences, ok bool) {
-	if o.Null {
-		return v, false
-	}
-	if !o.Set {
-		return v, false
-	}
-	return o.Value, true
-}
-
-// Or returns value if set, or given parameter if does not.
-func (o OptNilLocationPreferences) Or(d LocationPreferences) LocationPreferences {
-	if v, ok := o.Get(); ok {
-		return v
-	}
-	return d
-}
-
-// NewOptNilRelocation returns new OptNilRelocation with value set to v.
-func NewOptNilRelocation(v Relocation) OptNilRelocation {
-	return OptNilRelocation{
-		Value: v,
-		Set:   true,
-	}
-}
-
-// OptNilRelocation is optional nullable Relocation.
-type OptNilRelocation struct {
-	Value Relocation
-	Set   bool
-	Null  bool
-}
-
-// IsSet returns true if OptNilRelocation was set.
-func (o OptNilRelocation) IsSet() bool { return o.Set }
-
-// Reset unsets value.
-func (o *OptNilRelocation) Reset() {
-	var v Relocation
-	o.Value = v
-	o.Set = false
-	o.Null = false
-}
-
-// SetTo sets value to v.
-func (o *OptNilRelocation) SetTo(v Relocation) {
-	o.Set = true
-	o.Null = false
-	o.Value = v
-}
-
-// IsNull returns true if value is Null.
-func (o OptNilRelocation) IsNull() bool { return o.Null }
-
-// SetToNull sets value to null.
-func (o *OptNilRelocation) SetToNull() {
-	o.Set = true
-	o.Null = true
-	var v Relocation
-	o.Value = v
-}
-
-// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
-func (o OptNilRelocation) IsEmpty() bool {
-	return !o.Set && !o.Null
-}
-
-// Get returns value and boolean that denotes whether value was set.
-func (o OptNilRelocation) Get() (v Relocation, ok bool) {
-	if o.Null {
-		return v, false
-	}
-	if !o.Set {
-		return v, false
-	}
-	return o.Value, true
-}
-
-// Or returns value if set, or given parameter if does not.
-func (o OptNilRelocation) Or(d Relocation) Relocation {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -4457,14 +3992,16 @@ type Profile struct {
 	ExcludedSources   []string `json:"excluded_sources"`
 	JobLanguages      []string `json:"job_languages"`
 	ExcludedCompanies []string `json:"excluded_companies"`
-	// What the caller asserted; null when they set none.
-	LocationPreferences NilLocationPreferences `json:"location_preferences"`
+	// What the caller asserted, shaped like LocationPreferences, sent exactly as stored; null when they
+	// set none.
+	LocationPreferences jx.Raw `json:"location_preferences"`
 	// What was derived from their CV; null when there is no current structured CV.
 	DerivedLocation NilDerivedLocation `json:"derived_location"`
-	// Null when no current structure exists.
-	Cv        NilProfileCV `json:"cv"`
-	CreatedAt NilDateTime  `json:"created_at"`
-	UpdatedAt NilDateTime  `json:"updated_at"`
+	// The contact-free CV, shaped like ProfileCV, sent exactly as the CV store writes it; null when no
+	// current structure exists.
+	Cv        jx.Raw      `json:"cv"`
+	CreatedAt NilDateTime `json:"created_at"`
+	UpdatedAt NilDateTime `json:"updated_at"`
 }
 
 // GetSpecializations returns the value of Specializations.
@@ -4503,7 +4040,7 @@ func (s *Profile) GetExcludedCompanies() []string {
 }
 
 // GetLocationPreferences returns the value of LocationPreferences.
-func (s *Profile) GetLocationPreferences() NilLocationPreferences {
+func (s *Profile) GetLocationPreferences() jx.Raw {
 	return s.LocationPreferences
 }
 
@@ -4513,7 +4050,7 @@ func (s *Profile) GetDerivedLocation() NilDerivedLocation {
 }
 
 // GetCv returns the value of Cv.
-func (s *Profile) GetCv() NilProfileCV {
+func (s *Profile) GetCv() jx.Raw {
 	return s.Cv
 }
 
@@ -4563,7 +4100,7 @@ func (s *Profile) SetExcludedCompanies(val []string) {
 }
 
 // SetLocationPreferences sets the value of LocationPreferences.
-func (s *Profile) SetLocationPreferences(val NilLocationPreferences) {
+func (s *Profile) SetLocationPreferences(val jx.Raw) {
 	s.LocationPreferences = val
 }
 
@@ -4573,7 +4110,7 @@ func (s *Profile) SetDerivedLocation(val NilDerivedLocation) {
 }
 
 // SetCv sets the value of Cv.
-func (s *Profile) SetCv(val NilProfileCV) {
+func (s *Profile) SetCv(val jx.Raw) {
 	s.Cv = val
 }
 
@@ -4587,310 +4124,18 @@ func (s *Profile) SetUpdatedAt(val NilDateTime) {
 	s.UpdatedAt = val
 }
 
-// The caller's CV without contacts: what they have done.
-// Ref: #/components/schemas/ProfileCV
-type ProfileCV struct {
-	Headline       OptString           `json:"headline"`
-	Location       OptString           `json:"location"`
-	Summary        OptString           `json:"summary"`
-	TotalYears     OptInt64            `json:"total_years"`
-	Experience     []ProfileExperience `json:"experience"`
-	Education      []ProfileEducation  `json:"education"`
-	Languages      []string            `json:"languages"`
-	Skills         []string            `json:"skills"`
-	Certifications []string            `json:"certifications"`
-	Projects       []ProfileProject    `json:"projects"`
-}
-
-// GetHeadline returns the value of Headline.
-func (s *ProfileCV) GetHeadline() OptString {
-	return s.Headline
-}
-
-// GetLocation returns the value of Location.
-func (s *ProfileCV) GetLocation() OptString {
-	return s.Location
-}
-
-// GetSummary returns the value of Summary.
-func (s *ProfileCV) GetSummary() OptString {
-	return s.Summary
-}
-
-// GetTotalYears returns the value of TotalYears.
-func (s *ProfileCV) GetTotalYears() OptInt64 {
-	return s.TotalYears
-}
-
-// GetExperience returns the value of Experience.
-func (s *ProfileCV) GetExperience() []ProfileExperience {
-	return s.Experience
-}
-
-// GetEducation returns the value of Education.
-func (s *ProfileCV) GetEducation() []ProfileEducation {
-	return s.Education
-}
-
-// GetLanguages returns the value of Languages.
-func (s *ProfileCV) GetLanguages() []string {
-	return s.Languages
-}
-
-// GetSkills returns the value of Skills.
-func (s *ProfileCV) GetSkills() []string {
-	return s.Skills
-}
-
-// GetCertifications returns the value of Certifications.
-func (s *ProfileCV) GetCertifications() []string {
-	return s.Certifications
-}
-
-// GetProjects returns the value of Projects.
-func (s *ProfileCV) GetProjects() []ProfileProject {
-	return s.Projects
-}
-
-// SetHeadline sets the value of Headline.
-func (s *ProfileCV) SetHeadline(val OptString) {
-	s.Headline = val
-}
-
-// SetLocation sets the value of Location.
-func (s *ProfileCV) SetLocation(val OptString) {
-	s.Location = val
-}
-
-// SetSummary sets the value of Summary.
-func (s *ProfileCV) SetSummary(val OptString) {
-	s.Summary = val
-}
-
-// SetTotalYears sets the value of TotalYears.
-func (s *ProfileCV) SetTotalYears(val OptInt64) {
-	s.TotalYears = val
-}
-
-// SetExperience sets the value of Experience.
-func (s *ProfileCV) SetExperience(val []ProfileExperience) {
-	s.Experience = val
-}
-
-// SetEducation sets the value of Education.
-func (s *ProfileCV) SetEducation(val []ProfileEducation) {
-	s.Education = val
-}
-
-// SetLanguages sets the value of Languages.
-func (s *ProfileCV) SetLanguages(val []string) {
-	s.Languages = val
-}
-
-// SetSkills sets the value of Skills.
-func (s *ProfileCV) SetSkills(val []string) {
-	s.Skills = val
-}
-
-// SetCertifications sets the value of Certifications.
-func (s *ProfileCV) SetCertifications(val []string) {
-	s.Certifications = val
-}
-
-// SetProjects sets the value of Projects.
-func (s *ProfileCV) SetProjects(val []ProfileProject) {
-	s.Projects = val
-}
-
-// Ref: #/components/schemas/ProfileEducation
-type ProfileEducation struct {
-	Degree      OptString     `json:"degree"`
-	Institution OptString     `json:"institution"`
-	Year        OptPeriodDate `json:"year"`
-}
-
-// GetDegree returns the value of Degree.
-func (s *ProfileEducation) GetDegree() OptString {
-	return s.Degree
-}
-
-// GetInstitution returns the value of Institution.
-func (s *ProfileEducation) GetInstitution() OptString {
-	return s.Institution
-}
-
-// GetYear returns the value of Year.
-func (s *ProfileEducation) GetYear() OptPeriodDate {
-	return s.Year
-}
-
-// SetDegree sets the value of Degree.
-func (s *ProfileEducation) SetDegree(val OptString) {
-	s.Degree = val
-}
-
-// SetInstitution sets the value of Institution.
-func (s *ProfileEducation) SetInstitution(val OptString) {
-	s.Institution = val
-}
-
-// SetYear sets the value of Year.
-func (s *ProfileEducation) SetYear(val OptPeriodDate) {
-	s.Year = val
-}
-
-// One work-history entry of the contact-free CV.
-// Ref: #/components/schemas/ProfileExperience
-type ProfileExperience struct {
-	Title      OptString     `json:"title"`
-	Company    OptString     `json:"company"`
-	Location   OptString     `json:"location"`
-	Start      OptPeriodDate `json:"start"`
-	End        OptPeriodDate `json:"end"`
-	Current    OptBool       `json:"current"`
-	Summary    OptString     `json:"summary"`
-	Highlights []string      `json:"highlights"`
-	Stack      []string      `json:"stack"`
-}
-
-// GetTitle returns the value of Title.
-func (s *ProfileExperience) GetTitle() OptString {
-	return s.Title
-}
-
-// GetCompany returns the value of Company.
-func (s *ProfileExperience) GetCompany() OptString {
-	return s.Company
-}
-
-// GetLocation returns the value of Location.
-func (s *ProfileExperience) GetLocation() OptString {
-	return s.Location
-}
-
-// GetStart returns the value of Start.
-func (s *ProfileExperience) GetStart() OptPeriodDate {
-	return s.Start
-}
-
-// GetEnd returns the value of End.
-func (s *ProfileExperience) GetEnd() OptPeriodDate {
-	return s.End
-}
-
-// GetCurrent returns the value of Current.
-func (s *ProfileExperience) GetCurrent() OptBool {
-	return s.Current
-}
-
-// GetSummary returns the value of Summary.
-func (s *ProfileExperience) GetSummary() OptString {
-	return s.Summary
-}
-
-// GetHighlights returns the value of Highlights.
-func (s *ProfileExperience) GetHighlights() []string {
-	return s.Highlights
-}
-
-// GetStack returns the value of Stack.
-func (s *ProfileExperience) GetStack() []string {
-	return s.Stack
-}
-
-// SetTitle sets the value of Title.
-func (s *ProfileExperience) SetTitle(val OptString) {
-	s.Title = val
-}
-
-// SetCompany sets the value of Company.
-func (s *ProfileExperience) SetCompany(val OptString) {
-	s.Company = val
-}
-
-// SetLocation sets the value of Location.
-func (s *ProfileExperience) SetLocation(val OptString) {
-	s.Location = val
-}
-
-// SetStart sets the value of Start.
-func (s *ProfileExperience) SetStart(val OptPeriodDate) {
-	s.Start = val
-}
-
-// SetEnd sets the value of End.
-func (s *ProfileExperience) SetEnd(val OptPeriodDate) {
-	s.End = val
-}
-
-// SetCurrent sets the value of Current.
-func (s *ProfileExperience) SetCurrent(val OptBool) {
-	s.Current = val
-}
-
-// SetSummary sets the value of Summary.
-func (s *ProfileExperience) SetSummary(val OptString) {
-	s.Summary = val
-}
-
-// SetHighlights sets the value of Highlights.
-func (s *ProfileExperience) SetHighlights(val []string) {
-	s.Highlights = val
-}
-
-// SetStack sets the value of Stack.
-func (s *ProfileExperience) SetStack(val []string) {
-	s.Stack = val
-}
-
-// Ref: #/components/schemas/ProfileProject
-type ProfileProject struct {
-	Name       OptString `json:"name"`
-	Link       OptString `json:"link"`
-	Highlights []string  `json:"highlights"`
-}
-
-// GetName returns the value of Name.
-func (s *ProfileProject) GetName() OptString {
-	return s.Name
-}
-
-// GetLink returns the value of Link.
-func (s *ProfileProject) GetLink() OptString {
-	return s.Link
-}
-
-// GetHighlights returns the value of Highlights.
-func (s *ProfileProject) GetHighlights() []string {
-	return s.Highlights
-}
-
-// SetName sets the value of Name.
-func (s *ProfileProject) SetName(val OptString) {
-	s.Name = val
-}
-
-// SetLink sets the value of Link.
-func (s *ProfileProject) SetLink(val OptString) {
-	s.Link = val
-}
-
-// SetHighlights sets the value of Highlights.
-func (s *ProfileProject) SetHighlights(val []string) {
-	s.Highlights = val
-}
-
 // The profile as saved.
 // Ref: #/components/schemas/ProfileUpdate
 type ProfileUpdate struct {
-	Specializations     OptNilStringArray         `json:"specializations"`
-	Skills              OptNilStringArray         `json:"skills"`
-	Seniorities         OptNilStringArray         `json:"seniorities"`
-	ExcludedSkills      OptNilStringArray         `json:"excluded_skills"`
-	ExcludedSources     OptNilStringArray         `json:"excluded_sources"`
-	JobLanguages        OptNilStringArray         `json:"job_languages"`
-	ExcludedCompanies   OptNilStringArray         `json:"excluded_companies"`
-	LocationPreferences OptNilLocationPreferences `json:"location_preferences"`
+	Specializations   OptNilStringArray `json:"specializations"`
+	Skills            OptNilStringArray `json:"skills"`
+	Seniorities       OptNilStringArray `json:"seniorities"`
+	ExcludedSkills    OptNilStringArray `json:"excluded_skills"`
+	ExcludedSources   OptNilStringArray `json:"excluded_sources"`
+	JobLanguages      OptNilStringArray `json:"job_languages"`
+	ExcludedCompanies OptNilStringArray `json:"excluded_companies"`
+	// Shaped like LocationPreferences; null or absent keeps none.
+	LocationPreferences jx.Raw `json:"location_preferences"`
 }
 
 // GetSpecializations returns the value of Specializations.
@@ -4929,7 +4174,7 @@ func (s *ProfileUpdate) GetExcludedCompanies() OptNilStringArray {
 }
 
 // GetLocationPreferences returns the value of LocationPreferences.
-func (s *ProfileUpdate) GetLocationPreferences() OptNilLocationPreferences {
+func (s *ProfileUpdate) GetLocationPreferences() jx.Raw {
 	return s.LocationPreferences
 }
 
@@ -4969,7 +4214,7 @@ func (s *ProfileUpdate) SetExcludedCompanies(val OptNilStringArray) {
 }
 
 // SetLocationPreferences sets the value of LocationPreferences.
-func (s *ProfileUpdate) SetLocationPreferences(val OptNilLocationPreferences) {
+func (s *ProfileUpdate) SetLocationPreferences(val jx.Raw) {
 	s.LocationPreferences = val
 }
 
@@ -5076,55 +4321,6 @@ func (s *RejectCompanyRelationOK) GetData() CompanyRelationRejection {
 // SetData sets the value of Data.
 func (s *RejectCompanyRelationOK) SetData(val CompanyRelationRejection) {
 	s.Data = val
-}
-
-// The willingness to move. Open with empty targets means anywhere.
-// Ref: #/components/schemas/Relocation
-type Relocation struct {
-	Open      OptNilBool        `json:"open"`
-	Regions   OptNilStringArray `json:"regions"`
-	Countries OptNilStringArray `json:"countries"`
-	Cities    OptNilStringArray `json:"cities"`
-}
-
-// GetOpen returns the value of Open.
-func (s *Relocation) GetOpen() OptNilBool {
-	return s.Open
-}
-
-// GetRegions returns the value of Regions.
-func (s *Relocation) GetRegions() OptNilStringArray {
-	return s.Regions
-}
-
-// GetCountries returns the value of Countries.
-func (s *Relocation) GetCountries() OptNilStringArray {
-	return s.Countries
-}
-
-// GetCities returns the value of Cities.
-func (s *Relocation) GetCities() OptNilStringArray {
-	return s.Cities
-}
-
-// SetOpen sets the value of Open.
-func (s *Relocation) SetOpen(val OptNilBool) {
-	s.Open = val
-}
-
-// SetRegions sets the value of Regions.
-func (s *Relocation) SetRegions(val OptNilStringArray) {
-	s.Regions = val
-}
-
-// SetCountries sets the value of Countries.
-func (s *Relocation) SetCountries(val OptNilStringArray) {
-	s.Countries = val
-}
-
-// SetCities sets the value of Cities.
-func (s *Relocation) SetCities(val OptNilStringArray) {
-	s.Cities = val
 }
 
 // RemoveFromWatchlistNoContent is response for RemoveFromWatchlist operation.

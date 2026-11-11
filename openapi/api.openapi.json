@@ -5457,15 +5457,7 @@
             ]
           },
           "location_preferences": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/LocationPreferences"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "What the caller asserted; null when they set none."
+            "description": "What the caller asserted, shaped like LocationPreferences, sent exactly as stored;\nnull when they set none."
           },
           "derived_location": {
             "anyOf": [
@@ -5479,15 +5471,7 @@
             "description": "What was derived from their CV; null when there is no current structured CV."
           },
           "cv": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ProfileCV"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Null when no current structure exists."
+            "description": "The contact-free CV, shaped like ProfileCV, sent exactly as the CV store writes it;\nnull when no current structure exists."
           },
           "created_at": {
             "anyOf": [
@@ -5733,14 +5717,7 @@
             ]
           },
           "location_preferences": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/LocationPreferences"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "description": "Shaped like LocationPreferences; null or absent keeps none."
           }
         },
         "description": "The profile as saved."

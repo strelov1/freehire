@@ -49,7 +49,8 @@ model ProfileUpdate {
   excluded_sources?: string[] | null;
   job_languages?: string[] | null;
   excluded_companies?: string[] | null;
-  location_preferences?: LocationPreferences | null;
+  /** Shaped like LocationPreferences; null or absent keeps none. */
+  location_preferences?: unknown;
 }
 
 /** One work-history entry of the contact-free CV. */
@@ -107,14 +108,20 @@ model Profile {
   job_languages: string[] | null;
   excluded_companies: string[] | null;
 
-  /** What the caller asserted; null when they set none. */
-  location_preferences: LocationPreferences | null;
+  /**
+   * What the caller asserted, shaped like LocationPreferences, sent exactly as stored;
+   * null when they set none.
+   */
+  location_preferences: unknown;
 
   /** What was derived from their CV; null when there is no current structured CV. */
   derived_location: DerivedLocation | null;
 
-  /** Null when no current structure exists. */
-  cv: ProfileCV | null;
+  /**
+   * The contact-free CV, shaped like ProfileCV, sent exactly as the CV store writes it;
+   * null when no current structure exists.
+   */
+  cv: unknown;
 
   created_at: utcDateTime | null;
   updated_at: utcDateTime | null;

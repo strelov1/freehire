@@ -524,3 +524,28 @@ type profileResponse struct {
 	CreatedAt           *time.Time                  `json:"created_at"`
 	UpdatedAt           *time.Time                  `json:"updated_at"`
 }
+
+// The stored block goes out byte for byte, as it did before the contract: an old shape —
+// a field nothing reads any more, a value of an unexpected type — is passed through, not a
+// 500 and not trimmed to what the contract names.
+func TestGetProfile_PassesAnOldStoredLocationShapeThrough(t *testing.T) {
+	stored := `{"work_modes":"remote","legacy_radius_km":50}`
+	ret := userprofile.Profile{UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"}, LocationPreferences: json.RawMessage(stored)}
+	app, token := profileApp(t, &fakeProfileRepo{getRet: ret})
+	resp := doProfile(t, app, fiber.MethodGet, "", token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var got struct {
+		Data struct {
+			LocationPreferences json.RawMessage `json:"location_preferences"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if string(got.Data.LocationPreferences) != stored {
+		t.Errorf("location_preferences = %s, want %s unchanged", got.Data.LocationPreferences, stored)
+	}
+}

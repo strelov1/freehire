@@ -8,6 +8,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
@@ -102,33 +103,25 @@ func profileOut(p userprofile.Profile, cv *resumeextract.Professional, loc *deri
 		CreatedAt:         nilDateTime(p.CreatedAt),
 		UpdatedAt:         nilDateTime(p.UpdatedAt),
 	}
-	// A NULL column stays null.
-	if len(p.LocationPreferences) == 0 || string(p.LocationPreferences) == "null" {
-		out.LocationPreferences.SetToNull()
-	} else {
-		var prefs apigen.LocationPreferences
-		if err := json.Unmarshal(p.LocationPreferences, &prefs); err != nil {
-			return apigen.Profile{}, fmt.Errorf("stored location preferences: %w", err)
-		}
-		out.LocationPreferences.SetTo(prefs)
+	// Both blocks travel as raw JSON, exactly as before the contract: the stored JSONB as
+	// written, and the CV as its Go type marshals. Decoding them into generated types would
+	// turn an old stored shape into a 500 and drop any field the contract does not name.
+	out.LocationPreferences = jx.Raw("null")
+	if len(p.LocationPreferences) > 0 {
+		out.LocationPreferences = jx.Raw(p.LocationPreferences)
 	}
 	if loc == nil {
 		out.DerivedLocation.SetToNull()
 	} else {
 		out.DerivedLocation.SetTo(apigen.DerivedLocation{Countries: loc.Countries, Regions: loc.Regions, Cities: loc.Cities})
 	}
-	if cv == nil {
-		out.Cv.SetToNull()
-	} else {
+	out.Cv = jx.Raw("null")
+	if cv != nil {
 		raw, err := json.Marshal(cv)
 		if err != nil {
 			return apigen.Profile{}, err
 		}
-		var block apigen.ProfileCV
-		if err := json.Unmarshal(raw, &block); err != nil {
-			return apigen.Profile{}, fmt.Errorf("cv block: %w", err)
-		}
-		out.Cv.SetTo(block)
+		out.Cv = raw
 	}
 	return out, nil
 }
@@ -262,15 +255,12 @@ func (h *profileHandlers) PutProfile(ctx context.Context, req *apigen.ProfileUpd
 	if req.Specializations.Value == nil || req.Skills.Value == nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "specializations and skills must be arrays; use [] for an empty list")
 	}
+	// Decoded straight into the domain type, as the body parser did: absent and null keep none.
 	var loc *userprofile.LocationPreferences
-	if prefs, ok := req.LocationPreferences.Get(); ok {
-		raw, err := json.Marshal(&prefs)
-		if err != nil {
-			return nil, err
-		}
+	if raw := req.LocationPreferences; len(raw) > 0 && string(raw) != "null" {
 		loc = &userprofile.LocationPreferences{}
 		if err := json.Unmarshal(raw, loc); err != nil {
-			return nil, err
+			return nil, fiber.NewError(fiber.StatusBadRequest, "invalid body")
 		}
 	}
 
