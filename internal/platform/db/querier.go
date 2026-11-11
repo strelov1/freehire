@@ -757,6 +757,9 @@ type Querier interface {
 	// that no longer exists). Candidate contacts are intentionally kept: they are
 	// owner-edited identity, not an extract artifact.
 	ClearUserResume(ctx context.Context, id int64) error
+	// Close one board only after repeated explicit disappearance spanning age_window and a recent
+	// successful sibling crawl. Revalidate current health in the UPDATE to close the read/write gap.
+	CloseBoardGoneJobs(ctx context.Context, arg CloseBoardGoneJobsParams) (int64, error)
 	// A leave's first statement: close every pending or open buddy conversation the member is
 	// in. The conversations are the messaging core's (kind 'buddy'); closing them in the
 	// leave's own transaction rather than through the core is what keeps the leave atomic.
@@ -1402,6 +1405,8 @@ type Querier interface {
 	// counts user rows only — an answer, a tool call and its result are all one turn's work,
 	// and counting them would make a turn's price depend on how the model chose to do it.
 	CountAssistantUserTurns(ctx context.Context, sessionID uuid.UUID) (int64, error)
+	// Dry-run twin of CloseBoardGoneJobs with the same current-health predicate.
+	CountBoardGoneJobs(ctx context.Context, arg CountBoardGoneJobsParams) (int64, error)
 	// How many board_health rows exist for one (provider, board) name across every region it has
 	// ever been seen under. More than one means the name is REGION-AMBIGUOUS — the `boards`
 	// catalog allows one board name to repeat under a provider, distinguished only by region (e.g.
@@ -3983,6 +3988,9 @@ type Querier interface {
 	// GetBaseCVByUser would return. Oldest created first, so the list does not reorder when a base
 	// is edited.
 	ListBaseCVsByUser(ctx context.Context, userID int64) ([]ListBaseCVsByUserRow, error)
+	// Boards with repeated explicit disappearance evidence spanning age_window, plus a recent
+	// successful sibling crawl as a guard against provider-wide outages.
+	ListBoardGoneBoards(ctx context.Context, arg ListBoardGoneBoardsParams) ([]ListBoardGoneBoardsRow, error)
 	// When each of a provider's boards was last crawled, for cmd/ingest to start the boards it has
 	// waited longest on (see orderOldestRunFirst). A board absent here has never been crawled at all.
 	// Only the three columns the ordering reads: this runs once per ingest run over a provider that

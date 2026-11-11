@@ -99,17 +99,17 @@ func (r Runner) recordSuccess(ctx context.Context, e sources.CompanyEntry, inges
 	}
 }
 
-func (r Runner) recordFailure(ctx context.Context, e sources.CompanyEntry, msg string) {
+func (r Runner) recordFailure(ctx context.Context, e sources.CompanyEntry, cause error) {
 	if r.BoardHealth == nil || r.recent() {
 		return
 	}
 	if ctx.Err() != nil {
-		log.Printf("ingest: %s board %q: failure not recorded, the crawl stopped first (%v): %s", e.Provider, e.Board, ctx.Err(), msg)
+		log.Printf("ingest: %s board %q: failure not recorded, the crawl stopped first (%v): %v", e.Provider, e.Board, ctx.Err(), cause)
 		return
 	}
 	hctx, cancel := healthContext(ctx)
 	defer cancel()
-	if err := r.BoardHealth.RecordFailure(hctx, e.Provider, e.Board, e.Region, msg); err != nil {
+	if err := r.BoardHealth.RecordFailure(hctx, e.Provider, e.Board, e.Region, cause); err != nil {
 		log.Printf("ingest: record board failure %s/%s: %v", e.Provider, e.Board, err)
 	}
 }

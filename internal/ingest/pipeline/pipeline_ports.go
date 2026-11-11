@@ -185,7 +185,7 @@ type BoardHealth interface {
 	// state untouched (migration 0198).
 	RecordSuccess(ctx context.Context, provider, board, region string, ingested int, reached bool, fingerprint string) error
 	// RecordFailure counts a failed crawl and cools the board down per the backoff policy.
-	RecordFailure(ctx context.Context, provider, board, region, errMsg string) error
+	RecordFailure(ctx context.Context, provider, board, region string, cause error) error
 	// CooledBoards returns up to limit (board, region) pairs of the provider currently in
 	// an active cooldown — the recovery probe's candidates.
 	CooledBoards(ctx context.Context, provider string, limit int) ([]CooledBoard, error)

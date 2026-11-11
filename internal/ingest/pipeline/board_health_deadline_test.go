@@ -22,12 +22,12 @@ func (h *ctxHealth) RecordSuccess(ctx context.Context, provider, board, region s
 	return h.fakeHealth.RecordSuccess(ctx, provider, board, region, ingested, reached, fingerprint)
 }
 
-func (h *ctxHealth) RecordFailure(ctx context.Context, provider, board, region, msg string) error {
+func (h *ctxHealth) RecordFailure(ctx context.Context, provider, board, region string, cause error) error {
 	h.failureAttempts++
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return h.fakeHealth.RecordFailure(ctx, provider, board, region, msg)
+	return h.fakeHealth.RecordFailure(ctx, provider, board, region, cause)
 }
 
 // stoppingSource ends the crawl's context while the board is being fetched, standing in for

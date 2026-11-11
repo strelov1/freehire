@@ -285,6 +285,27 @@ func TestRunStreamsAndPersistsPartialBeforeError(t *testing.T) {
 	}
 }
 
+func TestRunStreamingFailureWithoutProgressRecordsBoardFailure(t *testing.T) {
+	src := fakeStreamingSource{provider: "teamtailor", failAfter: 0, jobs: []sources.Job{
+		{ExternalID: "1", Title: "A", Company: "C", URL: "u"},
+	}}
+	health := &fakeHealth{cooldowns: map[string]time.Time{}}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "C", Provider: "teamtailor", Board: "gone-board"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Total().Failed != 1 || stats.Total().Ingested != 0 {
+		t.Fatalf("stats = %+v, want one failed board with no progress", stats.Total())
+	}
+	if len(health.failures) != 1 || health.failures[0] != "teamtailor/gone-board/" {
+		t.Fatalf("recorded failures = %v, want [teamtailor/gone-board/]", health.failures)
+	}
+}
+
 // TestRunStreamClosesRemovedJobs proves the runner routes a removed posting to the Store's
 // close path (by identity) instead of upserting it: a self-closing stream emits one live ad
 // and one removed ad, and the runner saves the first and closes the second. The closed
@@ -818,6 +839,25 @@ func TestRunIsolatesSourceFailure(t *testing.T) {
 	}
 	if len(store.saved) != 1 || store.saved[0].Fields().Source != "greenhouse" {
 		t.Errorf("only the healthy board's job should be saved, got %+v", store.saved)
+	}
+}
+
+func TestRunClassifiesOnlyExplicitBoardGoneFailures(t *testing.T) {
+	health := &fakeHealth{}
+	r := Runner{
+		Registry:    registry(fakeSource{provider: "greenhouse", err: sources.ErrBoardGone}, fakeSource{provider: "lever", err: errors.New("403 forbidden")}),
+		Store:       &fakeStore{},
+		BoardHealth: health,
+	}
+	_, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Gone", Provider: "greenhouse", Board: "gone"},
+		{Company: "Refused", Provider: "lever", Board: "refused"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !reflect.DeepEqual(health.boardGone, []string{"greenhouse/gone/"}) {
+		t.Fatalf("boardGone evidence = %v, want only the explicit disappearance", health.boardGone)
 	}
 }
 

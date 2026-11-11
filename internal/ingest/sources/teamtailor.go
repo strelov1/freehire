@@ -144,6 +144,9 @@ func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, erro
 				listPath = ""
 				listURL = fmt.Sprintf("https://%s/?page=%d", e.Board, page)
 				root, err = t.http.GetHTML(ctx, listURL)
+				if err != nil && errors.As(err, &se) && se.Code == http.StatusNotFound {
+					return nil, fmt.Errorf("teamtailor: career site %q: %w", e.Board, ErrBoardGone)
+				}
 			}
 		}
 		if err != nil {

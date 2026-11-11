@@ -32,13 +32,16 @@ type closeReport struct {
 // and the only part of a chronic row and an empty-feed row that is common to both. The two list
 // queries return distinct generated row types with no interface between them, so the helpers
 // below take this instead of being written once per row type.
-type boardRef struct{ provider, board string }
+type boardRef struct{ provider, board, region string }
 
 // String renders a health record the way both passes' logs name one: "provider/board", or just
 // the provider for a boardless record, whose empty board would otherwise print a trailing slash.
 func (b boardRef) String() string {
 	if b.board == "" {
 		return b.provider
+	}
+	if b.region != "" {
+		return b.provider + "/" + b.board + " (" + b.region + ")"
 	}
 	return b.provider + "/" + b.board
 }
@@ -69,12 +72,12 @@ func logAmbiguousSkip(kind string, ref boardRef) {
 		"so a board-scoped close could close a healthy region's jobs alongside this one", kind, ref)
 }
 
-func logBoardAction(kind string, ref boardRef, n int64, apply bool) {
+func logBoardAction(kind string, ref boardRef, n int64, apply bool, applyFlag string) {
 	if apply {
 		log.Printf("close-chronic-boards: closed %d job(s) for %s board %s", n, kind, ref)
 		return
 	}
-	log.Printf("close-chronic-boards: would close %d job(s) for %s board %s (--apply to close)", n, kind, ref)
+	log.Printf("close-chronic-boards: would close %d job(s) for %s board %s (%s to close)", n, kind, ref, applyFlag)
 }
 
 // logCapOverflow reports the boards a pass could not reach because maxChronicBoardsPerRun cut
@@ -106,7 +109,7 @@ func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int3
 
 	report := closeReport{boardsProcessed: len(rows)}
 	for _, r := range rows {
-		ref := boardRef{r.Provider, r.Board}
+		ref := boardRef{provider: r.Provider, board: r.Board}
 		ambiguous, err := isRegionAmbiguous(ctx, q, ref)
 		if err != nil {
 			return report, err
@@ -121,10 +124,59 @@ func closeChronicBoards(ctx context.Context, q *db.Queries, closeWindowDays int3
 			return report, err
 		}
 		report.jobsAffected += n
-		logBoardAction("chronic", ref, n, apply)
+		logBoardAction("chronic", ref, n, apply, "--apply")
 	}
 	if len(rows) > 0 {
 		logCapOverflow("chronic", rows[0].Total, len(rows))
+	}
+	return report, nil
+}
+
+// closeBoardGoneBoards handles only boards whose adapter returned ErrBoardGone on three or more
+// consecutive runs spanning closeWindowDays, while another board from the provider succeeded
+// in the last 48 hours. It is separate from the generic unreachable pass so the evidence and
+// close reason remain explicit, and separately armed by --apply-board-gone.
+func closeBoardGoneBoards(ctx context.Context, q *db.Queries, closeWindowDays int32, maxBoards int32, apply bool) (closeReport, error) {
+	ageWindow := pgtype.Interval{Days: closeWindowDays, Valid: true}
+	rows, err := q.ListBoardGoneBoards(ctx, db.ListBoardGoneBoardsParams{
+		AgeWindow: ageWindow,
+		MaxBoards: maxBoards,
+	})
+	if err != nil {
+		return closeReport{}, err
+	}
+
+	report := closeReport{boardsProcessed: len(rows)}
+	for _, r := range rows {
+		ref := boardRef{r.Provider, r.Board, r.Region}
+		ambiguous, err := isRegionAmbiguous(ctx, q, ref)
+		if err != nil {
+			return report, err
+		}
+		if ambiguous {
+			report.boardsSkippedAmbiguous++
+			logAmbiguousSkip("board-gone", ref)
+			continue
+		}
+		pattern := externalid.BoardPattern(ref.board)
+		var n int64
+		if apply {
+			n, err = q.CloseBoardGoneJobs(ctx, db.CloseBoardGoneJobsParams{
+				Source: ref.provider, BoardPattern: pattern, Board: ref.board, Region: ref.region, AgeWindow: ageWindow,
+			})
+		} else {
+			n, err = q.CountBoardGoneJobs(ctx, db.CountBoardGoneJobsParams{
+				Source: ref.provider, BoardPattern: pattern, Board: ref.board, Region: ref.region, AgeWindow: ageWindow,
+			})
+		}
+		if err != nil {
+			return report, err
+		}
+		report.jobsAffected += n
+		logBoardAction("board-gone", ref, n, apply, "--apply-board-gone")
+	}
+	if len(rows) > 0 {
+		logCapOverflow("board-gone", rows[0].Total, len(rows))
 	}
 	return report, nil
 }
