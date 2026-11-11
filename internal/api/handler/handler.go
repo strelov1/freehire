@@ -358,8 +358,8 @@ func addIgnored(meta fiber.Map, ignored []search.UnknownParam, values map[string
 
 // ignoredJobValues is search.IgnoredValues over this request's query, for the
 // endpoints that build a job filter from it.
-func ignoredJobValues(c *fiber.Ctx) map[string][]string {
-	return search.IgnoredValues(queryValues(c))
+func ignoredJobValues(vals url.Values) map[string][]string {
+	return search.IgnoredValues(vals)
 }
 
 // Config is the dependency bundle Register wires onto the app: the DB pool, the

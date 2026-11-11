@@ -52,8 +52,8 @@ func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
 		views[i] = hit.Job
 	}
 
-	ignored := mergedJobSearchIgnored(c, out.own(agentSearchParams), out.dropped)
-	meta := listMeta(res.Total, out.limit, out.offset, ignored, ignoredJobValues(c))
+	ignored := mergedJobSearchIgnored(queryValues(c), out.own(agentSearchParams), out.dropped)
+	meta := listMeta(res.Total, out.limit, out.offset, ignored, ignoredJobValues(queryValues(c)))
 	if out.semantic != "" {
 		meta["semantic"] = out.semantic
 	}

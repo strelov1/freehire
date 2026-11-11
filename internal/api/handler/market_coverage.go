@@ -54,7 +54,7 @@ func (h *resumeHandlers) MarketCoverage(c *fiber.Ctx) error {
 	// coherence is a CV-section metric (declared ∩ body); a flat skill list has no
 	// sections, so it is meaningless here — zero it rather than advertise a score.
 	v.CoherencePercent = 0
-	return dataResponseWithIgnored(c, v, coverageIgnoredParams(c), ignoredJobValues(c))
+	return dataResponseWithIgnored(c, v, coverageIgnoredParams(c), ignoredJobValues(queryValues(c)))
 }
 
 // coverageIgnoredParams reports the query params this endpoint did not filter on.

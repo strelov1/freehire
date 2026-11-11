@@ -199,18 +199,18 @@ var agentSearchParams = slices.Concat(jobSearchParams, []string{"description_for
 // being refused: rejecting them would break saved searches and shared links that
 // still carry retired params, while staying silent is what let a mistyped
 // `country=it` pass for a search of Italy.
-func ignoredParams(c *fiber.Ctx, own []string) []search.UnknownParam {
-	return search.UnknownParams(queryValues(c), own)
+func ignoredParams(vals url.Values, own []string) []search.UnknownParam {
+	return search.UnknownParams(vals, own)
 }
 
 // mergedJobSearchIgnored combines runJobSearch's own value-level ignored-param
 // report — q_fields naming a field outside the searchable vocabulary, and/or any
 // filter params the Meilisearch-rejection degrade dropped — with the ordinary
-// name-level ignoredParams(c, own) report, into one sorted, capped list. The same
+// name-level ignoredParams(vals, own) report, into one sorted, capped list. The same
 // merge both job-search endpoints need, named once so neither can apply it
 // slightly differently.
-func mergedJobSearchIgnored(c *fiber.Ctx, own []string, fromSearch []search.UnknownParam) []search.UnknownParam {
-	return search.SortAndCap(append(fromSearch, ignoredParams(c, own)...))
+func mergedJobSearchIgnored(vals url.Values, own []string, fromSearch []search.UnknownParam) []search.UnknownParam {
+	return search.SortAndCap(append(fromSearch, ignoredParams(vals, own)...))
 }
 
 // searchSortable is the allowlist of sort params mapped to their index attribute;
@@ -300,8 +300,8 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	}
 	h.attachGhost(c, res.Hits, views)
 
-	ignored := mergedJobSearchIgnored(c, out.own(publicJobSearchParams), dropped)
-	meta := listMeta(res.Total, limit, offset, ignored, ignoredJobValues(c))
+	ignored := mergedJobSearchIgnored(queryValues(c), out.own(publicJobSearchParams), dropped)
+	meta := listMeta(res.Total, limit, offset, ignored, ignoredJobValues(queryValues(c)))
 	if res.TotalIsLowerBound {
 		meta["total_is_lower_bound"] = true
 	}
@@ -514,7 +514,7 @@ func personalCompanies(former []string, hasFormer bool, watch []string, hasWatch
 // the caller can return directly; on success `dropped` carries q_fields naming a
 // field outside the searchable vocabulary, plus any filter params dropped by the
 // degrade below (nil in the ordinary case), for the caller to merge into its own
-// ignoredParams(c, own) report.
+// ignoredParams(vals, own) report.
 //
 // wantSemantic is the caller's semantic flag, which is never honoured (see
 // semanticOutcome); one with nothing to apply to is reported as a dropped param.
@@ -744,7 +744,7 @@ func demandKey(raw string) string {
 	return suggest.Title(raw)
 }
 
-// searchSort builds the Meilisearch sort directive from ?sort=<field>&order=<dir>.
+// searchSortValues builds the Meilisearch sort directive from ?sort=<field>&order=<dir>.
 // Without a valid sort param, a no-text browse defaults to the freshest postings
 // first (posted_at desc) — relevance is meaningless for an empty query — while a
 // text query keeps relevance order (nil).
@@ -753,10 +753,6 @@ func demandKey(raw string) string {
 // sort directive take precedence over vector ranking, so returning one here would
 // silently discard the match order the caller asked for — not error, just quietly
 // serve something else.
-func searchSort(c *fiber.Ctx, ranked bool) []string {
-	return searchSortValues(queryValues(c), ranked)
-}
-
 // defaultSort is the order when the caller names none: an empty query has no relevance to
 // rank by, so the freshest first; a text query keeps relevance order (nil).
 func defaultSort(query string) []string {
@@ -785,8 +781,8 @@ func searchSortValues(vals url.Values, ranked bool) []string {
 // filter by delegating to the shared, pure search.FilterFromValues — the same
 // translation the notification matcher applies to a saved search's stored query,
 // so the two cannot drift. Returns nil when no facet is set.
-func buildSearchFilter(c *fiber.Ctx) any {
-	return search.FilterFromValues(queryValues(c))
+func buildSearchFilter(vals url.Values) any {
+	return search.FilterFromValues(vals)
 }
 
 // attachGhost attaches the ghost signal to a page of search hits.

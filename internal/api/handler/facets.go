@@ -394,7 +394,7 @@ func (h *searchHandlers) JobFacets(c *fiber.Ctx) error {
 	} else {
 		res, err = h.cachedFacetCounts(c.Context(), search.FacetParams{
 			Query:  q,
-			Filter: buildSearchFilter(c),
+			Filter: buildSearchFilter(queryValues(c)),
 			Facets: facetAttributes(only...),
 		})
 	}
@@ -404,7 +404,7 @@ func (h *searchHandlers) JobFacets(c *fiber.Ctx) error {
 
 	view := facetView(res)
 	h.nameCompanies(c.Context(), view.TopCompanies)
-	return dataResponseWithIgnored(c, view, ignoredParams(c, facetsParams), ignoredJobValues(c))
+	return dataResponseWithIgnored(c, view, ignoredParams(queryValues(c), facetsParams), ignoredJobValues(queryValues(c)))
 }
 
 // nameCompanies fills each top company's display name from the companies table
