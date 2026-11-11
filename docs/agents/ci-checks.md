@@ -100,6 +100,16 @@ a Go test (the `llmkey` binding, the layering table).
 client — a removed field, a narrowed bound, a weaker response promise. A deliberate break
 passes with an `API-Break: <reason>` commit trailer.
 
+## Contract fuzzing: Schemathesis
+
+`.github/workflows/contract.yml` starts the API on an empty database (`docker compose up
+app`) and runs Schemathesis over `openapi/api.openapi.json`, the TypeSpec contract: every
+answer must carry a status, content type and body the contract declares, and no request
+may make the server fail. `schemathesis.toml` names the refusals a valid request may still
+get (404 for a token or handle that names nothing, 401 without a session). Run it locally
+against a running server: `uvx schemathesis==4.33.2 run openapi/api.openapi.json --url
+http://localhost:<port>/api/v1`. The signed-in routes answer 401 until the run gets a session.
+
 ## Changed-line coverage: diff-cover
 
 Pull requests only. `.github/scripts/diff-cover-gate.sh` runs

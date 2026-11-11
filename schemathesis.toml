@@ -1,0 +1,13 @@
+# Contract fuzzing (.github/workflows/contract.yml): Schemathesis generates requests from
+# openapi/api.openapi.json and checks the running server answers as the contract says.
+
+[checks]
+# A request the schema allows may still be refused for a reason the schema cannot state:
+# a token or handle that names nothing (404), a signed-in route without a session (401),
+# the rate limiter (429). The contract answers those as `Problem`, so they are not a failure.
+positive_data_acceptance.expected-statuses = ["2xx", 400, 401, 402, 403, 404, 409, 422, 429]
+
+# The 405 check also sends QUERY, a draft method fasthttp refuses with a 400 before any
+# route runs. A method Fiber knows (DELETE on a GET route) does get 405; that is Fiber's
+# router, not the contract, so the check would test only the HTTP server.
+unsupported_method.enabled = false
