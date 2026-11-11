@@ -9,24 +9,25 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
-// In a multi-provider run only the providers that ingested at least one job are swept,
-// so a provider whose crawl failed (ingested 0) never has its catalogue mass-closed. The
-// result is sorted for a deterministic sweep order.
+// Provider dispatch includes independently verified board evidence even when no job
+// was ingested. A failed crawl with neither kind of evidence remains excluded.
 func TestSweepableProviders(t *testing.T) {
 	rs := pipeline.RunStats{
-		"vk":   {Ingested: 5},
-		"ozon": {Ingested: 0, Failed: 3}, // crawl failed → excluded
-		"sber": {Ingested: 2},
+		"vk":         {Ingested: 5},
+		"personio":   {EmptyBoards: refs("emptied")},
+		"board-only": {Rejected: 2, QualifyingBoards: refs("read-completely")},
+		"ozon":       {Ingested: 0, Failed: 3}, // crawl failed → excluded
+		"sber":       {Ingested: 2},
 	}
 	got := SweepableProviders(rs)
-	want := []string{"sber", "vk"}
+	want := []string{"board-only", "personio", "sber", "vk"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("SweepableProviders = %v, want %v", got, want)
 	}
 }
 
-// The sweep guard: closing stale jobs is only safe after a run that actually saw
-// postings — a zero-ingest run (total crawl outage) must not trigger the sweep.
+// The company/source guard remains closed for board-only evidence: dispatching such
+// a provider must not grant a whole-source sweep.
 func TestShouldSweep(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -36,6 +37,8 @@ func TestShouldSweep(t *testing.T) {
 		{"normal run", pipeline.Stats{Ingested: 100, Failed: 3}, true},
 		{"zero ingested", pipeline.Stats{Ingested: 0, Failed: 550}, false},
 		{"all boards ok but empty", pipeline.Stats{Ingested: 0, Failed: 0}, false},
+		{"empty-board evidence is board scope only", pipeline.Stats{EmptyBoards: refs("emptied")}, false},
+		{"qualifying-board evidence is board scope only", pipeline.Stats{QualifyingBoards: refs("read-completely")}, false},
 		// Every posting went to an employer crawled first-hand, and the stored ones among them
 		// were refreshed: the crawl worked, so the companies those rows put in scope must sweep.
 		{"covered only, stored rows refreshed", pipeline.Stats{ATSCovered: 40, Refreshed: 12}, true},

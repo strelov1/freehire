@@ -368,7 +368,9 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 		_, hasGrace := grace[provider]
 		window := sweeppolicy.SweepWindowFor(grace, provider)
 		cutoff := pgtype.Timestamptz{Time: now.Add(-window), Valid: true}
-		if !truncated {
+		// Board evidence admits this provider to dispatch without granting the broader
+		// company/source scope: that still requires an ingested or refreshed posting.
+		if !truncated && sweeppolicy.ShouldSweep(runStats[provider]) {
 			bySource := sweeppolicy.SweepBySource(runStats[provider], fullCatalog[provider])
 			companySlugs := sweeppolicy.SweepableCompanies(crawled.slugs(provider), runStats[provider])
 			closed, skipped, err := sweepProvider(ctx, queries, provider, cutoff, companySlugs, runStats[provider].SkippedBoards, bySource)
