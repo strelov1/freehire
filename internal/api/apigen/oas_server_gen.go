@@ -12,6 +12,10 @@ type Handler interface {
 	//
 	// PUT /me/watchlist/{slug}
 	AddToWatchlist(ctx context.Context, params AddToWatchlistParams) (*AddToWatchlistOK, error)
+	// BanUser implements banUser operation.
+	//
+	// POST /moderation/users/{id}/ban
+	BanUser(ctx context.Context, req *BanRequest, params BanUserParams) (*BanUserOK, error)
 	// ClearCompanyVote implements clearCompanyVote operation.
 	//
 	// DELETE /companies/{slug}/vote
@@ -31,6 +35,22 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/ghost-report
 	CreateGhostReport(ctx context.Context, req *GhostReportRequest, params CreateGhostReportParams) (*CreateGhostReportCreated, error)
+	// DeleteBankedAnswer implements deleteBankedAnswer operation.
+	//
+	// 400 for an id that is not a number, 404 for one the caller does not own.
+	//
+	// DELETE /me/answer-bank/{id}
+	DeleteBankedAnswer(ctx context.Context, params DeleteBankedAnswerParams) (*DeleteBankedAnswerOK, error)
+	// FileProcessReport implements fileProcessReport operation.
+	//
+	// 409 when the caller already reported this kind.
+	//
+	// POST /companies/{slug}/process-reports
+	FileProcessReport(ctx context.Context, req *ProcessReportRequest, params FileProcessReportParams) (*FileProcessReportCreated, error)
+	// FindModeratedUser implements findModeratedUser operation.
+	//
+	// GET /moderation/users
+	FindModeratedUser(ctx context.Context, params FindModeratedUserParams) (*FindModeratedUserOK, error)
 	// GetAgentPermissions implements getAgentPermissions operation.
 	//
 	// Readable with a session or an API key.
@@ -99,6 +119,10 @@ type Handler interface {
 	//
 	// POST /me/watchlist/import
 	ImportWatchlist(ctx context.Context, req *WatchlistImport) (*ImportWatchlistOK, error)
+	// ListBankedAnswers implements listBankedAnswers operation.
+	//
+	// GET /me/answer-bank
+	ListBankedAnswers(ctx context.Context) (*ListBankedAnswersOK, error)
 	// ListTalent implements listTalent operation.
 	//
 	// GET /talent
@@ -109,6 +133,12 @@ type Handler interface {
 	//
 	// GET /me/watchlist
 	ListWatchlist(ctx context.Context, params ListWatchlistParams) (*WatchlistPageHeaders, error)
+	// MyProcessReports implements myProcessReports operation.
+	//
+	// The kinds the caller has reported for the company.
+	//
+	// GET /companies/{slug}/process-reports/mine
+	MyProcessReports(ctx context.Context, params MyProcessReportsParams) (*MyProcessReportsOK, error)
 	// OneClickUnsubscribe implements oneClickUnsubscribe operation.
 	//
 	// RFC 8058 one-click unsubscribe: turns off only the group the token names.
@@ -140,6 +170,16 @@ type Handler interface {
 	//
 	// DELETE /jobs/{slug}/ghost-report
 	RetractGhostReport(ctx context.Context, params RetractGhostReportParams) error
+	// RetractProcessReport implements retractProcessReport operation.
+	//
+	// DELETE /companies/{slug}/process-reports
+	RetractProcessReport(ctx context.Context, params RetractProcessReportParams) (*RetractProcessReportOK, error)
+	// SaveBankedAnswer implements saveBankedAnswer operation.
+	//
+	// Saves under the question's topic, replacing the answer already there.
+	//
+	// PUT /me/answer-bank
+	SaveBankedAnswer(ctx context.Context, req *SaveBankedAnswer) (*SaveBankedAnswerOK, error)
 	// SearchCities implements searchCities operation.
 	//
 	// Up to 20 cities whose name matches, optionally within one country.
@@ -164,6 +204,10 @@ type Handler interface {
 	//
 	// GET /suggest
 	Suggest(ctx context.Context, params SuggestParams) (*SuggestOK, error)
+	// UnbanUser implements unbanUser operation.
+	//
+	// POST /moderation/users/{id}/unban
+	UnbanUser(ctx context.Context, params UnbanUserParams) (*UnbanUserOK, error)
 	// UpdateEmailPrefs implements updateEmailPrefs operation.
 	//
 	// PATCH /email-prefs

@@ -27,7 +27,7 @@ func newProcessReportApp(queries *db.Queries, pool *pgxpool.Pool, iss *auth.Issu
 	h := newCompanyProcessReportHandlers(processreport.New(queries, pool))
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	mw := middleware{cookie: auth.RequireAuth(iss, testVersions)}
-	h.register(app.Group("/api/v1"), mw)
+	h.register(app.Group("/api/v1"), mw, newContract(contractHandlers{companyProcessReportHandlers: h}))
 	return app
 }
 
@@ -44,6 +44,12 @@ func processStatus(t *testing.T, app *fiber.App, method, path, cookie, body stri
 	_, _ = io.ReadAll(resp.Body)
 	resp.Body.Close()
 	return resp.StatusCode
+}
+
+// processReportResponse is the write answer's wire shape.
+type processReportResponse struct {
+	Kind  string `json:"kind"`
+	Count int32  `json:"count"`
 }
 
 // processResult performs the request and decodes the write response, failing the test

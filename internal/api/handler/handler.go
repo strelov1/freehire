@@ -1087,12 +1087,15 @@ func Register(app *fiber.App, cfg Config) {
 	// already identified.
 	emailPrefsH := newEmailPrefsHandlers(mailPrefs)
 	agentPermissionsH := &agentPermissionHandlers{queries: queries}
+	userModerationH := newUserModerationHandlers(queries)
 	contract := newContract(contractHandlers{emailPrefsHandlers: emailPrefsH, talentCatalogHandlers: talentCatalogH,
 		companyWatchHandlers: companyWatchH,
 		geoHandlers:          geoH, suggestHandlers: suggestH, agentPermissionHandlers: agentPermissionsH,
 		usageHandlers: usageH, plansHandlers: plansH, dictionaryHandlers: dictionaryH,
 		jdResolveHandlers: jdResolveH, screeningAnswersHandlers: screeningAnswersH, surveyHandlers: surveyH,
-		voteHandlers: votesH, ghostReportHandlers: ghostReportsH, talentNetworkHandlers: talentNetworkH})
+		voteHandlers: votesH, ghostReportHandlers: ghostReportsH, talentNetworkHandlers: talentNetworkH,
+		answerBankHandlers: answerBankH, userModerationHandlers: userModerationH,
+		companyProcessReportHandlers: companyProcessReportH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1150,15 +1153,15 @@ func Register(app *fiber.App, cfg Config) {
 	companyWatchH.register(api, mw, contract)
 	companyFeedbackH.register(api, mw)
 	// The manual account ban (see userModerationHandlers).
-	newUserModerationHandlers(queries).register(api, mw)
-	companyProcessReportH.register(api, mw)
+	userModerationH.register(api, mw, contract)
+	companyProcessReportH.register(api, mw, contract)
 	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
 	matchH.register(api, mw)
 	// The contact block the extension writes into forms, plain and agent-driven (see
 	// autofillHandlers).
 	autofillH.register(api, mw)
 	// The bank's own management surface: list, save, delete (see me_answer_bank.go).
-	answerBankH.register(api, mw)
+	answerBankH.register(api, mw, contract)
 	agentPermissionsH.register(api, mw, contract)
 	// The browser-tool wire: a harness on one end, the caller's browser extension
 	// on the other, exchanging raw tool frames. Both ends authenticate with the
