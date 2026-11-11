@@ -2,7 +2,7 @@ module github.com/strelov1/freehire
 
 go 1.27
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
