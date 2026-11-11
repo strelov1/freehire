@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
 	"github.com/strelov1/freehire/internal/identity/accounts"
@@ -139,7 +140,7 @@ func TestDirectApplyEndToEnd(t *testing.T) {
 	h.register(app.Group("/api/v1"), middleware{
 		optionalCookie: auth.OptionalCookieAuth(iss, testVersions),
 		cookie:         auth.RequireAuth(iss, testVersions),
-	})
+	}, newContract(contractHandlers{directApplyHandlers: h}))
 
 	do := func(t *testing.T, method, cookie, body string) (int, []byte) {
 		t.Helper()
@@ -170,7 +171,7 @@ func TestDirectApplyEndToEnd(t *testing.T) {
 		}
 		status, body = do(t, fiber.MethodGet, candidateCookie, "")
 		var env struct {
-			Data directApplyForm `json:"data"`
+			Data apigen.DirectApplyForm `json:"data"`
 		}
 		if err := json.Unmarshal(body, &env); err != nil || status != fiber.StatusOK {
 			t.Fatalf("candidate status = %d, body %s, err %v", status, body, err)
@@ -182,8 +183,8 @@ func TestDirectApplyEndToEnd(t *testing.T) {
 		if f.Prefill["q1"] != "true" {
 			t.Errorf("prefill = %v, want the banked yes for q1", f.Prefill)
 		}
-		if f.CVs.Tailored == nil || f.CVs.Tailored.ID != cvID || !f.CVs.HasResume {
-			t.Errorf("cvs = %+v, want the CV tailored for this vacancy and the uploaded one", f.CVs)
+		if f.Cvs.Tailored.Null || f.Cvs.Tailored.Value.ID != cvID || !f.Cvs.HasResume {
+			t.Errorf("cvs = %+v, want the CV tailored for this vacancy and the uploaded one", f.Cvs)
 		}
 	})
 

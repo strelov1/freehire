@@ -6,9 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -49,16 +48,21 @@ func usageEntryLabel(kind string, feature plan.Feature, subject string) (label, 
 
 // GetMyPlanHistory returns the caller's usage entries newest first, each labelled for
 // display. Cookie or API key; never calls the LLM.
-func (h *planHandlers) GetMyPlanHistory(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *planHandlers) GetMyPlanHistory(ctx context.Context) (*apigen.GetMyPlanHistoryOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	entries, err := loadPlanHistory(c.Context(), h.queries, userID, usageHistoryLimit)
+	entries, err := loadPlanHistory(ctx, h.queries, userID, usageHistoryLimit)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": entries})
+	data := make([]apigen.PlanHistoryEntry, len(entries))
+	for i, e := range entries {
+		data[i] = apigen.PlanHistoryEntry{Feature: e.Feature, Day: e.Day, Kind: e.Kind, Label: e.Label,
+			Subtitle: optString(e.Subtitle), CreatedAt: e.CreatedAt}
+	}
+	return &apigen.GetMyPlanHistoryOK{Data: data}, nil
 }
 
 // loadPlanHistory reads up to limit ledger entries for one user, newest first, shared by the

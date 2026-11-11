@@ -54,7 +54,8 @@ func billingApp(t *testing.T, pool *pgxpool.Pool, cfg billing.Config, providerUR
 	// nothing — which is also what the disabled case below asserts about Stripe itself.
 	h := newBillingHandlers(billing.NewWithBase(cfg, db.New(pool), providerURL), nil, nil)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)})
+	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)},
+		newContract(contractHandlers{billingHandlers: h}))
 	return app
 }
 

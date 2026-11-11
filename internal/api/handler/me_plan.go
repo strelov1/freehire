@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -27,9 +28,9 @@ func newPlanHandlers(plans *plan.Store, queries *db.Queries) *planHandlers {
 	return &planHandlers{plans: plans, queries: queries}
 }
 
-func (h *planHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/me/plan", mw.key, h.GetMyPlan)
-	api.Get("/me/plan/history", mw.key, h.GetMyPlanHistory)
+func (h *planHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Get("/me/plan", mw.key, contract)
+	api.Get("/me/plan/history", mw.key, contract)
 }
 
 // planResponse is the whole plan surface: which plan, every metered feature's standing
@@ -90,16 +91,31 @@ func planSourceOf(derived, stripe, revenuecat, granted pgtype.Timestamptz) strin
 
 // GetMyPlan returns the caller's plan and today's usage across every metered feature,
 // without consuming anything. Cookie or API key; never calls the LLM.
-func (h *planHandlers) GetMyPlan(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *planHandlers) GetMyPlan(ctx context.Context) (*apigen.GetMyPlanOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out, err := loadPlan(c.Context(), h.plans, h.queries, userID)
+	out, err := loadPlan(ctx, h.plans, h.queries, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": out})
+	data := apigen.PlanStanding{
+		Plan: out.Plan, ResetsAt: out.ResetsAt, ProSource: optString(out.ProSource),
+		Allowances: make([]apigen.PlanAllowance, len(out.Allowances)),
+	}
+	if out.ProUntil != nil {
+		data.ProUntil = apigen.NewOptDateTime(*out.ProUntil)
+	}
+	for i, a := range out.Allowances {
+		data.Allowances[i] = apigen.PlanAllowance{Feature: a.Feature, Used: int64(a.Used),
+			Unlimited: a.Unlimited, Enforced: a.Enforced, ResetsAt: a.ResetsAt}
+		// Omitted when zero, as the Go type's omitempty did.
+		if a.Limit != 0 {
+			data.Allowances[i].Limit = apigen.NewOptInt64(int64(a.Limit))
+		}
+	}
+	return &apigen.GetMyPlanOK{Data: data}, nil
 }
 
 // loadPlan reads the plan surface for one user: the answer GetMyPlan serves and the support

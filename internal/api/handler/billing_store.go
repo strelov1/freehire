@@ -8,6 +8,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/billing"
 )
 
@@ -20,7 +21,7 @@ const storeSyncTimeout = 8 * time.Second
 //
 // Independent of Stripe's block above it: the two providers are configured separately, and a
 // deployment may have either, both or neither.
-func (h *billingHandlers) registerStore(api fiber.Router, mw middleware) {
+func (h *billingHandlers) registerStore(api fiber.Router, mw middleware, contract fiber.Handler) {
 	if h.store == nil || !h.store.Enabled() {
 		return
 	}
@@ -29,8 +30,7 @@ func (h *billingHandlers) registerStore(api fiber.Router, mw middleware) {
 	api.Post("/billing/revenuecat/webhook", webhookFor(h.store))
 	// Cookie only: this is the one route a caller can use to make the
 	// server call a third party on demand.
-	api.Post("/billing/revenuecat/sync", mw.cookie,
-		h.SyncStore)
+	api.Post("/billing/revenuecat/sync", mw.cookie, contract)
 }
 
 // SyncStore re-reads the caller's own store subscription and writes their source column.
@@ -43,18 +43,18 @@ func (h *billingHandlers) registerStore(api fiber.Router, mw middleware) {
 // IT NAMES NOBODY. The account is the session's, and a user id in the body or the query is
 // ignored rather than honoured — a route that accepted one would be a way to ask us to call a
 // third party once per name, and a way to write another account's plan column.
-func (h *billingHandlers) SyncStore(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *billingHandlers) SyncBillingStore(ctx context.Context) (*apigen.SyncBillingStoreOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(c.Context(), storeSyncTimeout)
+	ctx, cancel := context.WithTimeout(ctx, storeSyncTimeout)
 	defer cancel()
 
 	switch err := h.store.SyncCaller(ctx, userID); {
 	case err == nil:
-		return c.JSON(fiber.Map{"data": fiber.Map{"status": "synced"}})
+		return &apigen.SyncBillingStoreOK{Data: apigen.BillingStoreSync{Status: "synced"}}, nil
 
 	case errors.Is(err, billing.ErrNoSubscription):
 		// RevenueCat was ASKED and holds nothing for this account — it has never bought through
@@ -64,12 +64,12 @@ func (h *billingHandlers) SyncStore(c *fiber.Ctx) error {
 		// would have answered this without asking anybody, which for a first-time buyer whose
 		// webhook was lost is the difference between "you are Pro" and "you are not a
 		// subscriber" — and no reconciler pass would ever have found them either.
-		return c.JSON(fiber.Map{"data": fiber.Map{"status": "no_subscription"}})
+		return &apigen.SyncBillingStoreOK{Data: apigen.BillingStoreSync{Status: "no_subscription"}}, nil
 
 	default:
 		// The provider is slow or down. The purchase is not lost — RevenueCat holds it and the
 		// reconciler will find it — so this is a "try again", not a failure of the payment.
 		log.Printf("billing: store sync for user %d failed: %v", userID, err)
-		return fiber.NewError(fiber.StatusServiceUnavailable, "could not reach the store provider")
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "could not reach the store provider")
 	}
 }

@@ -1120,7 +1120,10 @@ func Register(app *fiber.App, cfg Config) {
 		trackingHandlers:             trackingH,
 		experienceHandlers:           experienceH,
 		employerHandlers:             employerH,
-		referralHandlers:             referralsH})
+		referralHandlers:             referralsH,
+		billingHandlers:              billingH,
+		planHandlers:                 planH,
+		directApplyHandlers:          directApplyH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1199,7 +1202,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Verified-employer accounts: claim, curated profile, own vacancies, and the
 	// moderator/admin review surface (see employerHandlers).
 	employerH.register(api, mw, contract)
-	directApplyH.register(api, mw)
+	directApplyH.register(api, mw, contract)
 
 	// Link contributions (see contributionHandlers).
 	contributionsH.register(api, mw, contract)
@@ -1225,9 +1228,9 @@ func Register(app *fiber.App, cfg Config) {
 	// Community discussion threads (see communityHandlers).
 	communityH.register(api, mw, contract)
 
-	planH.register(api, mw)
+	planH.register(api, mw, contract)
 	// Mounts nothing when billing is unconfigured — see billingHandlers.register.
-	billingH.register(api, mw)
+	billingH.register(api, mw, contract)
 	// Mounted whatever billing is doing: sharing an invite link and counting who came is
 	// not a purchase, and a deployment that sells nothing can still have a referral page.
 	promoH.register(api, mw, contract)

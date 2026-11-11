@@ -31,6 +31,9 @@ import "./tracking.tsp";
 import "./experience.tsp";
 import "./employer.tsp";
 import "./referrals.tsp";
+import "./billing.tsp";
+import "./plan.tsp";
+import "./direct-apply.tsp";
 
 using Http;
 

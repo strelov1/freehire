@@ -357,6 +357,31 @@ type Handler interface {
 	//
 	// GET /me/agent-permissions
 	GetAgentPermissions(ctx context.Context) (*GetAgentPermissionsOK, error)
+	// GetBillingCheckout implements getBillingCheckout operation.
+	//
+	// 404 when checkout is unconfigured or the price is not offered. Cookie session only.
+	//
+	// GET /billing/checkout
+	GetBillingCheckout(ctx context.Context, params GetBillingCheckoutParams) (*GetBillingCheckoutOK, error)
+	// GetBillingManage implements getBillingManage operation.
+	//
+	// 404 when there is no subscription to manage. Cookie session only.
+	//
+	// GET /billing/manage
+	GetBillingManage(ctx context.Context) (*GetBillingManageOK, error)
+	// GetBillingSubscription implements getBillingSubscription operation.
+	//
+	// 404 when the account has no subscription. Cookie session only.
+	//
+	// GET /billing/subscription
+	GetBillingSubscription(ctx context.Context) (*GetBillingSubscriptionOK, error)
+	// GetDirectApplyForm implements getDirectApplyForm operation.
+	//
+	// The vacancy's questions and, for a signed-in candidate, their prefill. 501 when the deployment
+	// cannot deliver applications.
+	//
+	// GET /jobs/{slug}/direct-apply
+	GetDirectApplyForm(ctx context.Context, params GetDirectApplyFormParams) (*GetDirectApplyFormOK, error)
 	// GetEmailPrefs implements getEmailPrefs operation.
 	//
 	// GET /email-prefs
@@ -393,6 +418,18 @@ type Handler interface {
 	//
 	// GET /me/email-groups
 	GetMyEmailGroups(ctx context.Context) (*GetMyEmailGroupsOK, error)
+	// GetMyPlan implements getMyPlan operation.
+	//
+	// The caller's plan and today's usage, without consuming anything.
+	//
+	// GET /me/plan
+	GetMyPlan(ctx context.Context) (*GetMyPlanOK, error)
+	// GetMyPlanHistory implements getMyPlanHistory operation.
+	//
+	// Recent usage entries, newest first.
+	//
+	// GET /me/plan/history
+	GetMyPlanHistory(ctx context.Context) (*GetMyPlanHistoryOK, error)
 	// GetMyUsage implements getMyUsage operation.
 	//
 	// With a session or an API key. Zeroes when the gateway cannot be read.
@@ -888,6 +925,12 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/messages
 	SendConversationMessage(ctx context.Context, req *ConversationSendRequest, params SendConversationMessageParams) (*SendConversationMessageCreated, error)
+	// SendDirectApply implements sendDirectApply operation.
+	//
+	// Sends the caller's application. Cookie session only.
+	//
+	// POST /jobs/{slug}/direct-apply
+	SendDirectApply(ctx context.Context, req *DirectApplyRequest, params SendDirectApplyParams) (*SendDirectApplyCreated, error)
 	// SetAgentPermissions implements setAgentPermissions operation.
 	//
 	// Session cookie only: an agent must not grant itself the right to apply.
@@ -924,6 +967,12 @@ type Handler interface {
 	//
 	// GET /suggest
 	Suggest(ctx context.Context, params SuggestParams) (*SuggestOK, error)
+	// SyncBillingStore implements syncBillingStore operation.
+	//
+	// 503 when the store provider cannot be reached. Cookie session only.
+	//
+	// POST /billing/revenuecat/sync
+	SyncBillingStore(ctx context.Context) (*SyncBillingStoreOK, error)
 	// TrackApplication implements trackApplication operation.
 	//
 	// PATCH /me/applications/{id}

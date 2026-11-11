@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/identity/promo"
 )
@@ -54,11 +55,11 @@ type webhookProvider interface {
 // answers 404 from inside the handler is a route an attacker can still probe for timing
 // and shape; a route that was never mounted is indistinguishable from a build without
 // this file. It also means no handler here has to remember the check.
-func (h *billingHandlers) register(api fiber.Router, mw middleware) {
+func (h *billingHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// The two providers mount independently. A deployment that sells only on the web is a
 	// legitimate one, and so is one that sells only in the apps — an `if !stripe { return }`
 	// covering both would make the second impossible and would say so nowhere.
-	h.registerStore(api, mw)
+	h.registerStore(api, mw, contract)
 
 	if !h.billing.Enabled() {
 		return
@@ -69,15 +70,15 @@ func (h *billingHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/billing/stripe/webhook", webhookFor(h.billing))
 	// Cookie only. A checkout link decides who gets charged, so it is minted for a browser
 	// session and never for an API key, in the same spirit as key management itself.
-	api.Get("/billing/checkout", mw.cookie, h.Checkout)
+	api.Get("/billing/checkout", mw.cookie, contract)
 	// Where the caller cancels or changes their card. Cookie-only for the same reason as
 	// checkout, and its own route rather than a field on /me/plan because it is a call to
 	// the provider — the plan surface must stay readable when the provider is not.
-	api.Get("/billing/manage", mw.cookie, h.Manage)
+	api.Get("/billing/manage", mw.cookie, contract)
 	// What the caller is paying and what has been taken. Read through to the provider, so
 	// it is its own route rather than a field on /me/plan — that surface must keep answering
 	// when the provider does not.
-	api.Get("/billing/subscription", mw.cookie, h.Subscription)
+	api.Get("/billing/subscription", mw.cookie, contract)
 }
 
 // applyTimeout bounds the inline attempt to bring the user's plan up to date.
@@ -170,36 +171,36 @@ func applyNow(c *fiber.Ctx, p webhookProvider, rowID int64, event billing.Event)
 // The identifier in the URL is taken from the session, never from the request. It decides
 // who gets charged and who becomes Pro, and a value the browser composes is a value the
 // browser can change.
-func (h *billingHandlers) Checkout(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *billingHandlers) GetBillingCheckout(ctx context.Context, params apigen.GetBillingCheckoutParams) (*apigen.GetBillingCheckoutOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(c.Context(), applyTimeout)
+	ctx, cancel := context.WithTimeout(ctx, applyTimeout)
 	defer cancel()
 
 	discount := h.discountFor(ctx, userID)
 
 	// The price comes from the pricing page's monthly/annual choice. It is validated
 	// against the configured list inside the service — never trusted as sent.
-	url, applied, err := h.billing.CheckoutURL(ctx, userID, c.Query("price"), discount)
+	url, applied, err := h.billing.CheckoutURL(ctx, userID, params.Price.Value, discount)
 	if billingAbsent(err) {
 		// Checkout is unconfigured or the price is not offered: the surface omits the offer.
-		return fiber.NewError(fiber.StatusNotFound, "checkout is not available")
+		return nil, fiber.NewError(fiber.StatusNotFound, "checkout is not available")
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{
-		"url": url,
+	return &apigen.GetBillingCheckoutOK{Data: apigen.BillingCheckout{
+		URL: url,
 		// Which offer was actually APPLIED — not merely offered — so the page can say so
 		// rather than leaving the buyer to work it out from the amount on the provider's
 		// page. Empty when there was none, including when a tier change modified an existing
 		// subscription in place rather than opening a checkout: that path never applies one.
-		"discount_percent": applied.PercentOff,
-		"discount_source":  applied.Label,
-	}})
+		DiscountPercent: int64(applied.PercentOff),
+		DiscountSource:  applied.Label,
+	}}, nil
 }
 
 // discountFor reads the ONE discount this checkout may carry, and writes nothing.
@@ -241,23 +242,38 @@ func (h *billingHandlers) discountFor(ctx context.Context, userID int64) billing
 // surface renders nothing rather than an error. The money is read from the provider on
 // every request rather than mirrored here: a receipt list that has quietly missed a refund
 // is worse than no receipt list.
-func (h *billingHandlers) Subscription(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *billingHandlers) GetBillingSubscription(ctx context.Context) (*apigen.GetBillingSubscriptionOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(c.Context(), applyTimeout)
+	ctx, cancel := context.WithTimeout(ctx, applyTimeout)
 	defer cancel()
 
 	out, err := h.billing.SubscriptionOverview(ctx, userID)
 	if billingAbsent(err) {
-		return fiber.NewError(fiber.StatusNotFound, "no subscription")
+		return nil, fiber.NewError(fiber.StatusNotFound, "no subscription")
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": out})
+	data := apigen.BillingOverview{
+		Status: out.Status, AmountCents: out.AmountCents, Currency: out.Currency, Interval: out.Interval,
+		Invoices:              make([]apigen.BillingInvoice, len(out.Invoices)),
+		MultipleSubscriptions: apigen.OptBool{Value: true, Set: out.MultipleSubscriptions},
+	}
+	if out.RenewsAt != nil {
+		data.RenewsAt = apigen.NewOptDateTime(*out.RenewsAt)
+	}
+	if out.EndsAt != nil {
+		data.EndsAt = apigen.NewOptDateTime(*out.EndsAt)
+	}
+	for i, in := range out.Invoices {
+		data.Invoices[i] = apigen.BillingInvoice{ID: in.ID, Date: in.Date, AmountCents: in.AmountCents,
+			Currency: in.Currency, Status: in.Status, ReceiptURL: optString(in.ReceiptURL)}
+	}
+	return &apigen.GetBillingSubscriptionOK{Data: data}, nil
 }
 
 // Manage returns the provider's own page where this subscriber changes their card or
@@ -267,23 +283,23 @@ func (h *billingHandlers) Subscription(c *fiber.Ctx) error {
 // so and links here. The destination is generated by the provider per visit — we never
 // compose it, because a page we wrote would be one more thing that can disagree with what
 // actually happened to the money.
-func (h *billingHandlers) Manage(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *billingHandlers) GetBillingManage(ctx context.Context) (*apigen.GetBillingManageOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(c.Context(), applyTimeout)
+	ctx, cancel := context.WithTimeout(ctx, applyTimeout)
 	defer cancel()
 
 	url, err := h.billing.ManagementURL(ctx, userID)
 	if billingAbsent(err) {
-		return fiber.NewError(fiber.StatusNotFound, "no subscription to manage")
+		return nil, fiber.NewError(fiber.StatusNotFound, "no subscription to manage")
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"url": url}})
+	return &apigen.GetBillingManageOK{Data: apigen.BillingUrl{URL: url}}, nil
 }
 
 // billingAbsent is the state where there is honestly nothing to show: billing or checkout

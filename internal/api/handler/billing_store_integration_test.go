@@ -58,7 +58,7 @@ func storeApp(t *testing.T, pool *pgxpool.Pool, providerURL string, iss *auth.Is
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{
 		cookie: auth.RequireAuth(iss, testVersions),
-	})
+	}, newContract(contractHandlers{billingHandlers: h}))
 	return app
 }
 
@@ -155,7 +155,8 @@ func TestStoreRoutesAreAbsentWhenUnconfigured(t *testing.T) {
 	h := newBillingHandlers(billing.New(billing.Config{}, db.New(pool)),
 		billing.NewRevenueCat(billing.RevenueCatConfig{}, db.New(pool)), nil)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)})
+	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)},
+		newContract(contractHandlers{billingHandlers: h}))
 
 	for _, path := range []string{"/api/v1/billing/revenuecat/webhook", "/api/v1/billing/revenuecat/sync"} {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, path, strings.NewReader(`{}`))
@@ -180,7 +181,8 @@ func TestPlanNamesWhereProCameFrom(t *testing.T) {
 
 	planH := newPlanHandlers(plan.NewStore(db.New(pool), pool, plan.DefaultConfig()), db.New(pool))
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	planH.register(app.Group("/api/v1"), middleware{key: auth.RequireAuth(iss, testVersions)})
+	planH.register(app.Group("/api/v1"), middleware{key: auth.RequireAuth(iss, testVersions)},
+		newContract(contractHandlers{planHandlers: planH}))
 
 	read := func(t *testing.T, userID int64) (string, bool) {
 		t.Helper()
