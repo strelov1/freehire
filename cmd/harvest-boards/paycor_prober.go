@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"regexp"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -21,6 +22,15 @@ import (
 // internal/ingest/sources/paycor.go for the board format.
 type paycorProber struct{}
 
+// The minimum count avoids rejecting a small board for one or two odd titles; the share
+// threshold avoids rejecting a large employer whose catalogue has a few placeholder posts.
+const (
+	paycorPlaceholderTitleMinimum = 10
+	paycorPlaceholderTitlePercent = 2
+)
+
+var paycorPlaceholderTitle = regexp.MustCompile(`(?i)(?:\b(?:demo|sample|advertise\d*)\b|\b(?:edge|incognito)test\d*\b|\bstandardnewdemo\d*\b|\btest[-_\s]*(?:job|posting|listing|position|role)(?:\b|_)|^test$|[([][^)\]]*\btest\b[^)\]]*[)\]]|\b(?:immediate|maya|revi)\s+test\b|\btest\s+\d)`)
+
 // paycorJobAction is the last path segment of a posting page, the shape enumeration matches
 // on. It mirrors internal/ingest/sources/paycor.go, whose constants are unexported — this
 // tool lives outside that package.
@@ -32,10 +42,14 @@ const paycorJobAction = "JobIntroduction.action"
 func (paycorProber) dedupKey(clientID string) string { return strings.ToLower(clientID) }
 
 func (p paycorProber) probe(ctx context.Context, c httpClient, clientID string) (string, int, error) {
-	ids, err := p.postingIDs(ctx, c, clientID)
+	ids, placeholderTitles, err := p.postingIDsAndPlaceholderTitleCount(ctx, c, clientID)
 	if err != nil {
 		// A missing or closed board 404s and the client surfaces it as an error. For harvest
 		// that just means "not a live paycor board" — skip silently, do not propagate.
+		return "", 0, nil
+	}
+	if len(ids) > 0 && placeholderTitles >= paycorPlaceholderTitleMinimum &&
+		placeholderTitles*100 >= len(ids)*paycorPlaceholderTitlePercent {
 		return "", 0, nil
 	}
 	return "", len(ids), nil
@@ -44,13 +58,23 @@ func (p paycorProber) probe(ctx context.Context, c httpClient, clientID string) 
 // postingIDs lists the board's live posting ids. The listing renders every open posting in
 // one page, so an id it does not carry is genuinely not on the board.
 func (paycorProber) postingIDs(ctx context.Context, c httpClient, clientID string) ([]string, error) {
+	ids, _, err := (paycorProber{}).postingIDsAndPlaceholderTitleCount(ctx, c, clientID)
+	return ids, err
+}
+
+// postingIDsAndPlaceholderTitleCount reads the complete listing and counts unique postings
+// whose title signals a vendor placeholder, even when an earlier link for that posting is an
+// untitled Apply link.
+func (paycorProber) postingIDsAndPlaceholderTitleCount(ctx context.Context, c httpClient, clientID string) ([]string, int, error) {
 	root, err := c.GetHTML(ctx, fmt.Sprintf(
 		"https://recruitingbypaycor.com/career/CareerHome.action?clientId=%s", clientID))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var ids []string
 	seen := map[string]bool{}
+	placeholderSeen := map[string]bool{}
+	placeholderTitles := 0
 	var visit func(*html.Node)
 	visit = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.Data == "a" {
@@ -58,9 +82,17 @@ func (paycorProber) postingIDs(ctx context.Context, c httpClient, clientID strin
 				if a.Key != "href" {
 					continue
 				}
-				if id := paycorPostingID(a.Val, clientID); id != "" && !seen[id] {
+				id := paycorPostingID(a.Val, clientID)
+				if id == "" {
+					continue
+				}
+				if !seen[id] {
 					seen[id] = true
 					ids = append(ids, id)
+				}
+				if !placeholderSeen[id] && paycorPlaceholderTitle.MatchString(paycorListingTitle(n)) {
+					placeholderSeen[id] = true
+					placeholderTitles++
 				}
 			}
 		}
@@ -69,7 +101,28 @@ func (paycorProber) postingIDs(ctx context.Context, c httpClient, clientID strin
 		}
 	}
 	visit(root)
-	return ids, nil
+	return ids, placeholderTitles, nil
+}
+
+// paycorListingTitle prefers Paycor's title-bearing ns-qa attribute, then uses visible link text.
+func paycorListingTitle(n *html.Node) string {
+	for _, a := range n.Attr {
+		if strings.EqualFold(a.Key, "ns-qa") && strings.TrimSpace(a.Val) != "" {
+			return strings.TrimSpace(a.Val)
+		}
+	}
+	var title strings.Builder
+	var visit func(*html.Node)
+	visit = func(node *html.Node) {
+		if node.Type == html.TextNode {
+			title.WriteString(node.Data)
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(n)
+	return strings.TrimSpace(title.String())
 }
 
 // paycorPostingID returns the posting id an href addresses on the given board, or "" when it
