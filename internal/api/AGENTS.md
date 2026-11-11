@@ -26,6 +26,9 @@ A migrated route is still a Fiber route: it keeps its middleware chain and ends 
 `contract` handler, which runs the generated server through the net/http adaptor.
 - The caller's id comes from `auth.UserIDFromContext(ctx)`: Fiber Locals are fasthttp
   user values, and the adaptor passes the RequestCtx on as the request context.
+- Middleware that marks Fiber's user context (`mw.paidAI` → `plan.WithPaidAI`, the trace
+  span) reaches the handler's `ctx`: the wrapper merges `c.UserContext()` into it. Do not
+  re-mark inside a handler.
 - Return errors as before (`fiber.NewError`, domain errors); `NewError` renders them
   through `classify`, and faults are reported with the Fiber route's attributes.
 - Lists are `List<T>` and a single item that reads query params is `DataWithIgnored<T>`
