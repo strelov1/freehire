@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/minio/minio-go/v7"
+	"github.com/valyala/fasthttp"
 
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
@@ -519,7 +520,10 @@ func TestTalentCatalog_AnswersFiberShapedURLsAsBefore(t *testing.T) {
 		catalogRow("backend-aaaa", catalogBackendCV, time.Now()),
 		catalogRow("frontend-bbbb", catalogFrontendCV, time.Now()),
 	}}
-	app := talentCatalogApp(store, nil)
+	// backend-aaaa has a photo, so an encoded slash that escaped its handle would be
+	// answered by the photo route with a JPEG instead of the member route's 404.
+	store.ownerHandle, store.ownerID = "backend-aaaa", 7
+	app := talentCatalogApp(store, photoStoreWithOneMember(t, 7))
 	for target, wantTotal := range map[string]string{
 		"/talent/":        `"total":2`,
 		"/talent/facets/": `"total":2`,
@@ -533,11 +537,17 @@ func TestTalentCatalog_AnswersFiberShapedURLsAsBefore(t *testing.T) {
 			t.Errorf("%s = %d %s, want 200 with %s", target, resp.StatusCode, body, wantTotal)
 		}
 	}
-	// A member route with the slash reaches the member handler: its own 404, not the router's.
-	resp := doTalent(t, app, "/talent/nobody/")
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusNotFound || !strings.Contains(string(body), `"error":"not found"`) {
-		t.Errorf("/talent/nobody/ = %d %s, want the handler's 404", resp.StatusCode, body)
+	// Each of these names no member and must get the handler's own 404, never the router's
+	// plain one or a 500: a trailing slash, an encoded slash that must stay inside the
+	// handle (not reach /photo), and a broken escape the adaptor cannot parse.
+	for _, target := range []string{"/talent/nobody/", "/talent/backend-aaaa%2Fphoto", "/talent/%ZZ"} {
+		// Straight into the handler: net/http and app.Test would rewrite or refuse %ZZ.
+		var fctx fasthttp.RequestCtx
+		fctx.Request.SetRequestURI("/api/v1" + target)
+		app.Handler()(&fctx)
+		status, body := fctx.Response.StatusCode(), fctx.Response.Body()
+		if status != http.StatusNotFound || !strings.Contains(string(body), `"error":"not found"`) {
+			t.Errorf("%s = %d %.80s, want the handler's 404", target, status, body)
+		}
 	}
 }

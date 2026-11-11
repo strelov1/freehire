@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -56,13 +57,18 @@ func newContract(h contractHandlers) fiber.Handler {
 	}
 	serve := adaptor.HTTPHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if target, ok := r.Context().Value(localsContractTarget).(*url.URL); ok {
-			r.URL.Path, r.URL.RawPath, r.URL.RawQuery = target.Path, "", target.RawQuery
+			r.URL.Path, r.URL.RawPath, r.URL.RawQuery = target.Path, target.RawPath, target.RawQuery
 		}
 		srv.ServeHTTP(w, r)
 	}))
 	return func(c *fiber.Ctx) error {
 		fault := &contractFault{}
 		c.Locals(localsContractFault, fault)
+		// The adaptor parses the request line before anything here runs, and answers one it
+		// cannot parse with an unreported 500. A path with a broken escape names nothing.
+		if _, err := url.ParseRequestURI(string(c.Request().RequestURI())); err != nil {
+			return fiber.NewError(fiber.StatusNotFound, "not found")
+		}
 		query := queryValues(c)
 		c.Locals(localsContractQuery, query)
 		c.Locals(localsContractTarget, fiberTarget(c, query))
@@ -139,17 +145,24 @@ const localsContractTarget = "contract.target"
 // shortcut: every repeated param is cut to its first value, which would also cut an
 // exploded array param; declare one only after this keeps the arrays the contract names.
 func fiberTarget(c *fiber.Ctx, query url.Values) *url.URL {
+	// Path holds the param values decoded and RawPath escaped, which the generated router
+	// reads, so an encoded slash in a value stays inside that param.
 	segments := strings.Split(c.Route().Path, "/")
+	escaped := slices.Clone(segments)
 	for i, seg := range segments {
 		if name, ok := strings.CutPrefix(seg, ":"); ok {
 			value, err := url.PathUnescape(c.Params(name))
 			if err != nil {
 				value = c.Params(name)
 			}
-			segments[i] = value
+			segments[i], escaped[i] = value, url.PathEscape(value)
 		}
 	}
-	target := &url.URL{Path: strings.Join(segments, "/"), RawQuery: string(c.Request().URI().QueryString())}
+	target := &url.URL{
+		Path:     strings.Join(segments, "/"),
+		RawPath:  strings.Join(escaped, "/"),
+		RawQuery: string(c.Request().URI().QueryString()),
+	}
 	for _, vals := range query {
 		if len(vals) > 1 {
 			first := make(url.Values, len(query))
