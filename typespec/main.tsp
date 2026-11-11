@@ -39,6 +39,7 @@ import "./companies.tsp";
 import "./search.tsp";
 import "./resume.tsp";
 import "./cv.tsp";
+import "./mentorship.tsp";
 
 using Http;
 

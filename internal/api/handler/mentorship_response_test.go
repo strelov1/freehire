@@ -4,15 +4,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
 )
 
-// No dedicated test exercised profileRequest.toInput's field mapping at all before this
+// No dedicated test exercised profileInput's field mapping at all before this
 // change — this is the one assertion that would have caught Seniority (or any future
 // field) landing in the request struct but never reaching mentorship.ProfileInput.
 func TestProfileRequestToInputCarriesSeniority(t *testing.T) {
-	req := profileRequest{Seniority: "staff"}
-	if got := req.toInput(7).Seniority; got != "staff" {
+	req := &apigen.MentorshipProfileBody{Seniority: apigen.NewOptString("staff")}
+	if got := profileInput(7, req).Seniority; got != "staff" {
 		t.Errorf("toInput(...).Seniority = %q, want staff", got)
 	}
 }
@@ -24,13 +25,13 @@ func TestCreatedAtIsModeratorAndOwnerOnly(t *testing.T) {
 	submitted := time.Date(2026, time.September, 1, 12, 0, 0, 0, time.UTC)
 	p := mentorship.Profile{CreatedAt: submitted}
 
-	if got := toMentorResponse(p).CreatedAt; got != nil {
-		t.Errorf("public response carries created_at = %v, want nil", got)
+	if got := toMentorResponse(p).CreatedAt; got.Set {
+		t.Errorf("public response carries created_at = %v, want unset", got)
 	}
-	if got := toModeratorMentorResponse(p).CreatedAt; got == nil || !got.Equal(submitted) {
+	if got := toModeratorMentorResponse(p).CreatedAt; !got.Set || !got.Value.Equal(submitted) {
 		t.Errorf("moderator response created_at = %v, want %v", got, submitted)
 	}
-	if got := toOwnMentorResponse(p).CreatedAt; got == nil || !got.Equal(submitted) {
+	if got := toOwnMentorResponse(p).CreatedAt; !got.Set || !got.Value.Equal(submitted) {
 		t.Errorf("owner response created_at = %v, want %v", got, submitted)
 	}
 }
@@ -41,14 +42,14 @@ func TestCreatedAtIsModeratorAndOwnerOnly(t *testing.T) {
 func TestSeniorityIsOnEveryView(t *testing.T) {
 	p := mentorship.Profile{Seniority: "senior"}
 
-	if got := toMentorResponse(p).Seniority; got != "senior" {
-		t.Errorf("public response seniority = %q, want senior", got)
+	if got := toMentorResponse(p).Seniority; got.Value != "senior" {
+		t.Errorf("public response seniority = %q, want senior", got.Value)
 	}
-	if got := toModeratorMentorResponse(p).Seniority; got != "senior" {
-		t.Errorf("moderator response seniority = %q, want senior", got)
+	if got := toModeratorMentorResponse(p).Seniority; got.Value != "senior" {
+		t.Errorf("moderator response seniority = %q, want senior", got.Value)
 	}
-	if got := toOwnMentorResponse(p).Seniority; got != "senior" {
-		t.Errorf("owner response seniority = %q, want senior", got)
+	if got := toOwnMentorResponse(p).Seniority; got.Value != "senior" {
+		t.Errorf("owner response seniority = %q, want senior", got.Value)
 	}
 }
 

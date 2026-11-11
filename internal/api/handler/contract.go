@@ -54,6 +54,7 @@ type contractHandlers struct {
 	*marketPulseHandlers
 	*promoHandlers
 	*mentorSuggestionsHandlers
+	*mentorshipHandlers
 	*savedSearchHandlers
 	*subscriptionHandlers
 	*timelineHandlers

@@ -3,11 +3,13 @@ package handler
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
 	"github.com/strelov1/freehire/internal/engage/slots"
@@ -27,126 +29,85 @@ func newMentorshipHandlers(svc *mentorship.Service, photos *headshot.Store) *men
 	return &mentorshipHandlers{mentorship: svc, photos: photos}
 }
 
-func (h *mentorshipHandlers) register(api fiber.Router, mw middleware) {
-	h.registerPublic(api, mw)
+func (h *mentorshipHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	h.registerPublic(api, mw, contract)
 
 	// The seeker's side.
-	api.Post("/mentors/:slug/bookings", mw.key, h.BookSession)
-	api.Get("/me/mentorship/sessions", mw.key, h.ListMySessions)
-	api.Get("/me/mentorship/sessions/:id", mw.key, h.GetSession)
-	api.Post("/me/mentorship/sessions/:id/cancel", mw.key, h.CancelSession)
-	api.Put("/me/mentorship/sessions/:id/review", mw.key, h.ReviewSession)
+	api.Post("/mentors/:slug/bookings", mw.key, contract)
+	api.Get("/me/mentorship/sessions", mw.key, contract)
+	api.Get("/me/mentorship/sessions/:id", mw.key, contract)
+	api.Post("/me/mentorship/sessions/:id/cancel", mw.key, contract)
+	api.Put("/me/mentorship/sessions/:id/review", mw.key, contract)
 
 	// The mentor's own cabinet: their profile, their schedule, their bookings.
-	api.Get("/me/mentorship/profile", mw.key, h.GetMyMentorProfile)
-	api.Post("/me/mentorship/profile", mw.key, h.SubmitMentorProfile)
-	api.Put("/me/mentorship/profile", mw.key, h.UpdateMentorProfile)
-	api.Delete("/me/mentorship/profile", mw.key, h.WithdrawMentorProfile)
-	api.Post("/me/mentorship/profile/pause", mw.key, h.PauseMentorProfile)
-	api.Post("/me/mentorship/profile/reactivate", mw.key, h.ReactivateMentorProfile)
-	api.Get("/me/mentorship/availability", mw.key, h.GetMyAvailability)
-	api.Get("/me/mentorship/availability/calendar", mw.key, h.GetMyCalendar)
-	api.Put("/me/mentorship/availability/weekly", mw.key, h.ReplaceWeeklyAvailability)
-	api.Post("/me/mentorship/availability/overrides", mw.key, h.AddAvailabilityOverride)
-	api.Delete("/me/mentorship/availability/:id", mw.key, h.DeleteAvailabilityRule)
-	api.Get("/me/mentorship/bookings", mw.key, h.ListMentorBookings)
+	api.Get("/me/mentorship/profile", mw.key, contract)
+	api.Post("/me/mentorship/profile", mw.key, contract)
+	api.Put("/me/mentorship/profile", mw.key, contract)
+	api.Delete("/me/mentorship/profile", mw.key, contract)
+	api.Post("/me/mentorship/profile/pause", mw.key, contract)
+	api.Post("/me/mentorship/profile/reactivate", mw.key, contract)
+	api.Get("/me/mentorship/availability", mw.key, contract)
+	api.Get("/me/mentorship/availability/calendar", mw.key, contract)
+	api.Put("/me/mentorship/availability/weekly", mw.key, contract)
+	api.Post("/me/mentorship/availability/overrides", mw.key, contract)
+	api.Delete("/me/mentorship/availability/:id", mw.key, contract)
+	api.Get("/me/mentorship/bookings", mw.key, contract)
 
 	// Moderation, behind the same gate the referral queue uses.
-	api.Get("/mentorship/profiles", mw.key, mw.moderator, h.ListPendingMentorProfiles)
+	api.Get("/mentorship/profiles", mw.key, mw.moderator, contract)
 	api.Get("/mentorship/profiles/:id/photo", mw.key, mw.moderator, h.GetPendingMentorPhoto)
-	api.Post("/mentorship/profiles/:id/decide", mw.key, mw.moderator, h.DecideMentorProfile)
+	api.Post("/mentorship/profiles/:id/decide", mw.key, mw.moderator, contract)
 }
 
 // registerPublic mounts the anonymous mentor catalogue.
-func (h *mentorshipHandlers) registerPublic(api fiber.Router, mw middleware) {
+func (h *mentorshipHandlers) registerPublic(api fiber.Router, mw middleware, contract fiber.Handler) {
 
-	api.Get("/mentors", h.ListMentors)
-	api.Get("/mentors/:slug", h.GetMentor)
-	api.Get("/mentors/:slug/slots", h.GetMentorSlots)
+	api.Get("/mentors", contract)
+	api.Get("/mentors/:slug", contract)
+	api.Get("/mentors/:slug/slots", contract)
 	api.Get("/mentors/:slug/photo", h.GetMentorPhoto)
-}
-
-// mentorResponse is the public shape of a mentor. user_id is not in it: it is ownership,
-// internal, and nothing public needs it.
-type mentorResponse struct {
-	Slug string `json:"slug"`
-	// Name is what makes this a person rather than a role. A directory of headlines is
-	// the anonymous referral pool with extra steps.
-	Name        string   `json:"name"`
-	CompanySlug string   `json:"company_slug"`
-	CompanyName string   `json:"company_name"`
-	Headline    string   `json:"headline"`
-	Bio         string   `json:"bio"`
-	Topics      []string `json:"topics"`
-	Languages   []string `json:"languages"`
-	Timezone    string   `json:"timezone"`
-	// SessionMinutes is what a seeker is booking, so it belongs on the card as well as the
-	// profile: an hour and twenty minutes are different offers.
-	SessionMinutes int     `json:"session_minutes"`
-	RatingCount    int64   `json:"rating_count"`
-	RatingAvg      float64 `json:"rating_avg"`
-	// ShowPhoto is the mentor's own opt-in to serve their account's stored CV headshot
-	// publicly (see GetMentorPhoto). Present in every view — the directory card needs it
-	// to decide whether to render an avatar at all.
-	ShowPhoto bool `json:"show_photo"`
-	// Seniority is the platform's own closed vocabulary (vocab.SeniorityValues) or empty
-	// when the mentor left it unset — present on every view, same reasoning as
-	// ShowPhoto above.
-	Seniority  string `json:"seniority,omitempty"`
-	Status     string `json:"status,omitempty"`
-	Paused     bool   `json:"paused,omitempty"`
-	MeetingURL string `json:"meeting_url,omitempty"`
-	// CreatedAt is when the profile was submitted — moderator and owner views only. A
-	// visitor deciding whether to book has no use for it, and it says nothing the public
-	// card needs to say. A pointer because `omitempty` does not drop a zero-value
-	// time.Time (it is a struct, not one of the types the encoder treats as "empty").
-	CreatedAt *time.Time `json:"created_at,omitempty"`
-
-	// The rest of the session parameters, for the OWNER alone. Pointers rather than plain
-	// ints because a zero buffer is a real setting, and `omitempty` cannot tell "no buffer"
-	// from "not your profile" — it would drop both.
-	//
-	// They are here because the cabinet edits the profile as a whole object: without them
-	// a mentor who corrects their headline re-submits the DEFAULT buffers and notice, and
-	// silently loses whatever they had chosen. Nothing public reads them.
-	BufferBeforeMinutes *int `json:"buffer_before_minutes,omitempty"`
-	BufferAfterMinutes  *int `json:"buffer_after_minutes,omitempty"`
-	NoticeMinutes       *int `json:"notice_minutes,omitempty"`
-	HorizonDays         *int `json:"horizon_days,omitempty"`
 }
 
 // toMentorResponse renders a profile for the PUBLIC. The meeting link is deliberately
 // absent: it is a live room, and publishing it lets anybody who reads the directory walk
 // into somebody else's session. A booked seeker gets it on their booking.
-func toMentorResponse(p mentorship.Profile) mentorResponse {
-	return mentorResponse{
+//
+// user_id is not in it: it is ownership, internal, and nothing public needs it. Name is
+// what makes this a person rather than a role — a directory of headlines is the anonymous
+// referral pool with extra steps.
+func toMentorResponse(p mentorship.Profile) apigen.MentorshipMentor {
+	return apigen.MentorshipMentor{
 		Slug: p.Slug, Name: p.DisplayName,
 		CompanySlug: p.CompanySlug, CompanyName: p.CompanyName,
 		Headline: p.Headline, Bio: p.Bio, Topics: p.Topics, Languages: p.Languages,
-		Timezone:       p.Timezone,
-		SessionMinutes: int(p.Session.Duration / time.Minute),
+		Timezone: p.Timezone,
+		// What a seeker is booking, so it belongs on the card as well as the profile: an
+		// hour and twenty minutes are different offers.
+		SessionMinutes: int64(p.Session.Duration / time.Minute),
 		RatingCount:    p.RatingCount, RatingAvg: p.RatingAvg,
-		ShowPhoto: p.ShowPhoto, Seniority: p.Seniority,
+		// ShowPhoto is the mentor's own opt-in to serve their account's stored CV headshot
+		// publicly (see GetMentorPhoto). Present in every view: the directory card needs it
+		// to decide whether to render an avatar at all. Seniority is the platform's own
+		// closed vocabulary (vocab.SeniorityValues), absent when the mentor left it unset.
+		ShowPhoto: p.ShowPhoto, Seniority: optString(p.Seniority),
 	}
 }
 
 // toOwnMentorResponse is the profile as its OWNER sees it: with the moderation status,
 // the pause switch and the meeting link they configured.
-func toOwnMentorResponse(p mentorship.Profile) mentorResponse {
+func toOwnMentorResponse(p mentorship.Profile) apigen.MentorshipMentor {
 	out := toModeratorMentorResponse(p)
-	out.MeetingURL = p.MeetingURL
-	// The parameters the cabinet edits. Read back so a mentor correcting one field
-	// re-submits what they actually chose rather than this endpoint's defaults.
-	out.BufferBeforeMinutes = minutesOf(p.Session.BufferBefore)
-	out.BufferAfterMinutes = minutesOf(p.Session.BufferAfter)
-	out.NoticeMinutes = minutesOf(p.Session.MinimumNotice)
-	out.HorizonDays = intPtr(int(p.Session.Horizon / (24 * time.Hour)))
+	out.MeetingURL = optString(p.MeetingURL)
+	// The parameters the cabinet edits, for the OWNER alone. Read back so a mentor
+	// correcting one field re-submits what they actually chose rather than this
+	// endpoint's defaults. Optional rather than zero-omitted: a zero buffer is a real
+	// setting.
+	out.BufferBeforeMinutes = apigen.NewOptInt64(int64(p.Session.BufferBefore / time.Minute))
+	out.BufferAfterMinutes = apigen.NewOptInt64(int64(p.Session.BufferAfter / time.Minute))
+	out.NoticeMinutes = apigen.NewOptInt64(int64(p.Session.MinimumNotice / time.Minute))
+	out.HorizonDays = apigen.NewOptInt64(int64(p.Session.Horizon / (24 * time.Hour)))
 	return out
 }
-
-func minutesOf(d time.Duration) *int { return intPtr(int(d / time.Minute)) }
-
-func intPtr(v int) *int { return &v }
 
 // toModeratorMentorResponse is the profile as a MODERATOR sees it: everything the owner
 // sees except the meeting link.
@@ -155,48 +116,60 @@ func intPtr(v int) *int { return &v }
 // address of the room they meet in. A moderator is trusted, which is exactly why this is
 // worth being deliberate about: the reason they hold no link is that they have no use for
 // one, not that they are suspected of anything.
-func toModeratorMentorResponse(p mentorship.Profile) mentorResponse {
+//
+// created_at is when the profile was submitted — moderator and owner views only. A
+// visitor deciding whether to book has no use for it.
+func toModeratorMentorResponse(p mentorship.Profile) apigen.MentorshipMentor {
 	out := toMentorResponse(p)
-	out.Status = p.Status
-	out.Paused = p.Paused
-	out.CreatedAt = &p.CreatedAt
+	out.Status = optString(p.Status)
+	out.Paused = apigen.OptBool{Value: true, Set: p.Paused}
+	out.CreatedAt = apigen.NewOptDateTime(p.CreatedAt)
 	return out
 }
 
 // ListMentors serves the public directory.
-func (h *mentorshipHandlers) ListMentors(c *fiber.Ctx) error {
-	query := queryValues(c)
+func (h *mentorshipHandlers) ListMentors(ctx context.Context, params apigen.ListMentorsParams) (*apigen.MentorshipDirectoryPage, error) {
+	query := contractQuery(ctx)
 	filter := mentorship.DirectoryFilter{
-		CompanySlug:   query.Get("company"),
-		Topic:         query.Get("topic"),
-		Language:      query.Get("language"),
-		Seniority:     query.Get("seniority"),
-		Query:         query.Get("q"),
-		NoReviewsOnly: c.QueryBool("no_reviews"),
+		CompanySlug: params.Company.Value,
+		Topic:       params.Topic.Value,
+		Language:    params.Language.Value,
+		Seniority:   params.Seniority.Value,
+		Query:       params.Q.Value,
 	}
-	if limit := c.QueryInt("limit"); limit > 0 {
-		filter.Limit = int32(limit)
+	filter.NoReviewsOnly, _ = strconv.ParseBool(params.NoReviews.Value)
+	if limit := lenientInt32(params.Limit.Value); limit > 0 {
+		filter.Limit = limit
 	}
 
-	profiles, err := h.mentorship.Directory(c.Context(), filter)
+	profiles, err := h.mentorship.Directory(ctx, filter)
 	if err != nil {
-		return mentorshipError(err)
+		return nil, mentorshipError(err)
 	}
 
-	out := make([]mentorResponse, 0, len(profiles))
+	out := make([]apigen.MentorshipMentor, 0, len(profiles))
 	for _, p := range profiles {
 		out = append(out, toMentorResponse(p))
 	}
 
-	meta := fiber.Map{"count": len(out)}
 	// The dropped-filter rule: an endpoint whose answer WIDENS when it does not understand
 	// a parameter says which ones it did not read. Refusing them instead would break a
 	// shared link carrying a retired facet; staying silent is what let a mistyped filter
 	// pass for a search.
-	if ignored := unknownMentorParams(query); len(ignored) > 0 {
-		meta["ignored_params"] = ignored
+	return &apigen.MentorshipDirectoryPage{
+		Data: out,
+		Meta: apigen.MentorshipDirectoryMeta{Count: int64(len(out)), IgnoredParams: unknownMentorParams(query)},
+	}, nil
+}
+
+// lenientInt32 reads a limit the way Fiber's QueryInt did: a value that does not read is 0,
+// and one past int32 is 0 too rather than wrapping.
+func lenientInt32(raw string) int32 {
+	n, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil {
+		return 0
 	}
-	return c.JSON(fiber.Map{"data": out, "meta": meta})
+	return int32(n)
 }
 
 // knownMentorParams is the directory's whole vocabulary. A filter added to
@@ -220,12 +193,12 @@ func unknownMentorParams(query map[string][]string) []string {
 
 // GetMentor serves one public profile. An unpublished one answers 404 — the service reads
 // through a query whose predicate makes it absent rather than filtered.
-func (h *mentorshipHandlers) GetMentor(c *fiber.Ctx) error {
-	profile, err := h.mentorship.PublicProfile(c.Context(), c.Params("slug"))
+func (h *mentorshipHandlers) GetMentor(ctx context.Context, params apigen.GetMentorParams) (*apigen.GetMentorOK, error) {
+	profile, err := h.mentorship.PublicProfile(ctx, params.Slug)
 	if err != nil {
-		return mentorshipError(err)
+		return nil, mentorshipError(err)
 	}
-	return c.JSON(fiber.Map{"data": toMentorResponse(profile)})
+	return &apigen.GetMentorOK{Data: toMentorResponse(profile)}, nil
 }
 
 // errMentorPhotoNotFound is what every reason a mentor's public photo may not be served
@@ -304,29 +277,33 @@ type slotResponse struct {
 }
 
 // GetMentorSlots serves the bookable hours in a window, expressed in the viewer's zone.
-func (h *mentorshipHandlers) GetMentorSlots(c *fiber.Ctx) error {
-	from, to, err := slotWindow(c)
+func (h *mentorshipHandlers) GetMentorSlots(ctx context.Context, params apigen.GetMentorSlotsParams) (*apigen.MentorshipSlotsPage, error) {
+	from, to, err := slotWindowOf(params.From.Value, params.To.Value)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Through the cache: this is the one public endpoint here that computes per request,
 	// and it faces a crawler-heavy host.
-	result, err := h.mentorship.CachedMentorSlots(c.Context(), c.Params("slug"),
-		from, to, c.Query("timezone"))
+	result, err := h.mentorship.CachedMentorSlots(ctx, params.Slug, from, to, params.Timezone.Value)
 	if err != nil {
-		return mentorshipError(err)
+		return nil, mentorshipError(err)
 	}
 
-	out := slotResponses(result.Slots)
+	out := make([]apigen.BuddyMockSlot, 0, len(result.Slots))
+	for _, s := range slotResponses(result.Slots) {
+		out = append(out, apigen.BuddyMockSlot{
+			StartsAt: s.StartsAt, EndsAt: s.EndsAt, LocalStart: s.LocalStart, LocalEnd: s.LocalEnd, UtcOffset: s.UTCOffset,
+		})
+	}
 
 	// The zone is echoed because it may NOT be the one that was asked for: an
 	// unrecognised name falls back to UTC, and a client that does not know which zone it
 	// was answered in cannot tell a correct time from a wrong one.
-	return c.JSON(fiber.Map{
-		"data": out,
-		"meta": fiber.Map{"timezone": result.Zone, "count": len(out)},
-	})
+	return &apigen.MentorshipSlotsPage{
+		Data: out,
+		Meta: apigen.MentorshipTimezoneMeta{Timezone: result.Zone, Count: int64(len(out))},
+	}, nil
 }
 
 // slotResponses renders engine slots for the wire: the instant, the wall clock and the
@@ -351,12 +328,8 @@ func slotResponses(ivs []slots.Interval) []slotResponse {
 // question on a crawler-heavy public endpoint.
 const maxSlotWindowDays = 62
 
-// slotWindow reads the requested window, defaulting to the next 30 days.
-func slotWindow(c *fiber.Ctx) (from, to time.Time, err error) {
-	return slotWindowOf(c.Query("from"), c.Query("to"))
-}
-
-// slotWindowOf is slotWindow over the raw from and to values.
+// slotWindowOf reads the requested window from the raw from and to values, defaulting
+// to the next 30 days.
 func slotWindowOf(rawFrom, rawTo string) (from, to time.Time, err error) {
 	var fromAt, toAt *time.Time
 	if rawFrom != "" {
@@ -453,8 +426,8 @@ func mentorshipError(err error) error {
 // bookingIDParam reads the session id from the path. A malformed one is 404 rather than
 // 400: an id that cannot exist and one that does not are the same answer, and the
 // distinction would only help somebody probing.
-func bookingIDParam(c *fiber.Ctx) (uuid.UUID, error) {
-	id, err := uuid.Parse(c.Params("id"))
+func bookingIDParam(raw string) (uuid.UUID, error) {
+	id, err := uuid.Parse(raw)
 	if err != nil {
 		return uuid.UUID{}, fiber.NewError(fiber.StatusNotFound, "session not found")
 	}

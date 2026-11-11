@@ -122,6 +122,21 @@ func (s *AddAtomCreated) SetData(val jx.Raw) {
 }
 
 // A single item: `{"data": ...}`.
+type AddAvailabilityOverrideCreated struct {
+	Data BuddyMockRuleOut `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *AddAvailabilityOverrideCreated) GetData() BuddyMockRuleOut {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *AddAvailabilityOverrideCreated) SetData(val BuddyMockRuleOut) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type AddEmploymentCreated struct {
 	Data jx.Raw `json:"data"`
 }
@@ -722,6 +737,21 @@ func (s *BillingUrl) SetURL(val string) {
 
 // BlockConversationNoContent is response for BlockConversation operation.
 type BlockConversationNoContent struct{}
+
+// A single item: `{"data": ...}`.
+type BookSessionCreated struct {
+	Data MentorshipBooking `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BookSessionCreated) GetData() MentorshipBooking {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BookSessionCreated) SetData(val MentorshipBooking) {
+	s.Data = val
+}
 
 // Ref: #/components/schemas/BuddyActivity
 type BuddyActivity struct {
@@ -2566,6 +2596,21 @@ func (s *BuddyUnreactOK) GetData() BuddyReactions {
 
 // SetData sets the value of Data.
 func (s *BuddyUnreactOK) SetData(val BuddyReactions) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type CancelSessionOK struct {
+	Data MentorshipBooking `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CancelSessionOK) GetData() MentorshipBooking {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CancelSessionOK) SetData(val MentorshipBooking) {
 	s.Data = val
 }
 
@@ -5201,6 +5246,21 @@ func (s *CvUpdate) SetDocument(val jx.Raw) {
 }
 
 // A single item: `{"data": ...}`.
+type DecideMentorProfileOK struct {
+	Data MentorshipMentor `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DecideMentorProfileOK) GetData() MentorshipMentor {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DecideMentorProfileOK) SetData(val MentorshipMentor) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type DecideReferralOfferOK struct {
 	Data ReferralOffer `json:"data"`
 }
@@ -5232,6 +5292,9 @@ func (s *DeclineConversationOK) SetData(val Conversation) {
 
 // DeleteAtomNoContent is response for DeleteAtom operation.
 type DeleteAtomNoContent struct{}
+
+// DeleteAvailabilityRuleNoContent is response for DeleteAvailabilityRule operation.
+type DeleteAvailabilityRuleNoContent struct{}
 
 // A single item: `{"data": ...}`.
 type DeleteBankedAnswerOK struct {
@@ -7238,6 +7301,21 @@ func (s *GetMarketPulseOK) SetMeta(val MarketPulseMeta) {
 }
 
 // A single item: `{"data": ...}`.
+type GetMentorOK struct {
+	Data MentorshipMentor `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetMentorOK) GetData() MentorshipMentor {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetMentorOK) SetData(val MentorshipMentor) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type GetMentorProfileSuggestionsOK struct {
 	Data MentorProfileSuggestions `json:"data"`
 }
@@ -7264,6 +7342,21 @@ func (s *GetMyEmailGroupsOK) GetData() EmailPrefs {
 
 // SetData sets the value of Data.
 func (s *GetMyEmailGroupsOK) SetData(val EmailPrefs) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetMyMentorProfileOK struct {
+	Data NilMentorshipMentor `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetMyMentorProfileOK) GetData() NilMentorshipMentor {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetMyMentorProfileOK) SetData(val NilMentorshipMentor) {
 	s.Data = val
 }
 
@@ -7397,6 +7490,21 @@ func (s *GetScreeningAnswersOK) GetData() NilScreeningAnswers {
 
 // SetData sets the value of Data.
 func (s *GetScreeningAnswersOK) SetData(val NilScreeningAnswers) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetSessionOK struct {
+	Data MentorshipBooking `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetSessionOK) GetData() MentorshipBooking {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetSessionOK) SetData(val MentorshipBooking) {
 	s.Data = val
 }
 
@@ -9291,6 +9399,31 @@ func (s *ListPendingJobReportsOK) SetData(val []JobReport) {
 	s.Data = val
 }
 
+type ListPendingMentorProfilesOK struct {
+	Data []MentorshipPendingMentor `json:"data"`
+	Meta MentorshipCountMeta       `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *ListPendingMentorProfilesOK) GetData() []MentorshipPendingMentor {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *ListPendingMentorProfilesOK) GetMeta() MentorshipCountMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *ListPendingMentorProfilesOK) SetData(val []MentorshipPendingMentor) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *ListPendingMentorProfilesOK) SetMeta(val MentorshipCountMeta) {
+	s.Meta = val
+}
+
 // A single item: `{"data": ...}`.
 type ListPendingReferralOffersOK struct {
 	Data []ReferralOffer `json:"data"`
@@ -9562,6 +9695,1237 @@ func (s *MentorProfileSuggestions) SetTimezone(val OptString) {
 // SetCompanySlug sets the value of CompanySlug.
 func (s *MentorProfileSuggestions) SetCompanySlug(val OptString) {
 	s.CompanySlug = val
+}
+
+// One session as a party to it sees it; seeker_email only for the mentor.
+// Ref: #/components/schemas/MentorshipBooking
+type MentorshipBooking struct {
+	ID          string    `json:"id"`
+	MentorSlug  string    `json:"mentor_slug"`
+	Headline    string    `json:"headline"`
+	StartsAt    time.Time `json:"starts_at"`
+	EndsAt      time.Time `json:"ends_at"`
+	Status      string    `json:"status"`
+	Note        string    `json:"note"`
+	MeetingURL  string    `json:"meeting_url"`
+	SeekerEmail OptString `json:"seeker_email"`
+	Completed   bool      `json:"completed"`
+}
+
+// GetID returns the value of ID.
+func (s *MentorshipBooking) GetID() string {
+	return s.ID
+}
+
+// GetMentorSlug returns the value of MentorSlug.
+func (s *MentorshipBooking) GetMentorSlug() string {
+	return s.MentorSlug
+}
+
+// GetHeadline returns the value of Headline.
+func (s *MentorshipBooking) GetHeadline() string {
+	return s.Headline
+}
+
+// GetStartsAt returns the value of StartsAt.
+func (s *MentorshipBooking) GetStartsAt() time.Time {
+	return s.StartsAt
+}
+
+// GetEndsAt returns the value of EndsAt.
+func (s *MentorshipBooking) GetEndsAt() time.Time {
+	return s.EndsAt
+}
+
+// GetStatus returns the value of Status.
+func (s *MentorshipBooking) GetStatus() string {
+	return s.Status
+}
+
+// GetNote returns the value of Note.
+func (s *MentorshipBooking) GetNote() string {
+	return s.Note
+}
+
+// GetMeetingURL returns the value of MeetingURL.
+func (s *MentorshipBooking) GetMeetingURL() string {
+	return s.MeetingURL
+}
+
+// GetSeekerEmail returns the value of SeekerEmail.
+func (s *MentorshipBooking) GetSeekerEmail() OptString {
+	return s.SeekerEmail
+}
+
+// GetCompleted returns the value of Completed.
+func (s *MentorshipBooking) GetCompleted() bool {
+	return s.Completed
+}
+
+// SetID sets the value of ID.
+func (s *MentorshipBooking) SetID(val string) {
+	s.ID = val
+}
+
+// SetMentorSlug sets the value of MentorSlug.
+func (s *MentorshipBooking) SetMentorSlug(val string) {
+	s.MentorSlug = val
+}
+
+// SetHeadline sets the value of Headline.
+func (s *MentorshipBooking) SetHeadline(val string) {
+	s.Headline = val
+}
+
+// SetStartsAt sets the value of StartsAt.
+func (s *MentorshipBooking) SetStartsAt(val time.Time) {
+	s.StartsAt = val
+}
+
+// SetEndsAt sets the value of EndsAt.
+func (s *MentorshipBooking) SetEndsAt(val time.Time) {
+	s.EndsAt = val
+}
+
+// SetStatus sets the value of Status.
+func (s *MentorshipBooking) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetNote sets the value of Note.
+func (s *MentorshipBooking) SetNote(val string) {
+	s.Note = val
+}
+
+// SetMeetingURL sets the value of MeetingURL.
+func (s *MentorshipBooking) SetMeetingURL(val string) {
+	s.MeetingURL = val
+}
+
+// SetSeekerEmail sets the value of SeekerEmail.
+func (s *MentorshipBooking) SetSeekerEmail(val OptString) {
+	s.SeekerEmail = val
+}
+
+// SetCompleted sets the value of Completed.
+func (s *MentorshipBooking) SetCompleted(val bool) {
+	s.Completed = val
+}
+
+// Ref: #/components/schemas/MentorshipBookingBody
+type MentorshipBookingBody struct {
+	// RFC 3339.
+	StartsAt OptString `json:"starts_at"`
+	Timezone OptString `json:"timezone"`
+	Note     OptString `json:"note"`
+	JobID    OptInt64  `json:"job_id"`
+}
+
+// GetStartsAt returns the value of StartsAt.
+func (s *MentorshipBookingBody) GetStartsAt() OptString {
+	return s.StartsAt
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *MentorshipBookingBody) GetTimezone() OptString {
+	return s.Timezone
+}
+
+// GetNote returns the value of Note.
+func (s *MentorshipBookingBody) GetNote() OptString {
+	return s.Note
+}
+
+// GetJobID returns the value of JobID.
+func (s *MentorshipBookingBody) GetJobID() OptInt64 {
+	return s.JobID
+}
+
+// SetStartsAt sets the value of StartsAt.
+func (s *MentorshipBookingBody) SetStartsAt(val OptString) {
+	s.StartsAt = val
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *MentorshipBookingBody) SetTimezone(val OptString) {
+	s.Timezone = val
+}
+
+// SetNote sets the value of Note.
+func (s *MentorshipBookingBody) SetNote(val OptString) {
+	s.Note = val
+}
+
+// SetJobID sets the value of JobID.
+func (s *MentorshipBookingBody) SetJobID(val OptInt64) {
+	s.JobID = val
+}
+
+// Ref: #/components/schemas/MentorshipCalendarInterval
+type MentorshipCalendarInterval struct {
+	StartsAt time.Time `json:"starts_at"`
+	EndsAt   time.Time `json:"ends_at"`
+	// One of booked, busy, free or closed.
+	Status string `json:"status"`
+}
+
+// GetStartsAt returns the value of StartsAt.
+func (s *MentorshipCalendarInterval) GetStartsAt() time.Time {
+	return s.StartsAt
+}
+
+// GetEndsAt returns the value of EndsAt.
+func (s *MentorshipCalendarInterval) GetEndsAt() time.Time {
+	return s.EndsAt
+}
+
+// GetStatus returns the value of Status.
+func (s *MentorshipCalendarInterval) GetStatus() string {
+	return s.Status
+}
+
+// SetStartsAt sets the value of StartsAt.
+func (s *MentorshipCalendarInterval) SetStartsAt(val time.Time) {
+	s.StartsAt = val
+}
+
+// SetEndsAt sets the value of EndsAt.
+func (s *MentorshipCalendarInterval) SetEndsAt(val time.Time) {
+	s.EndsAt = val
+}
+
+// SetStatus sets the value of Status.
+func (s *MentorshipCalendarInterval) SetStatus(val string) {
+	s.Status = val
+}
+
+// Ref: #/components/schemas/MentorshipCalendarPage
+type MentorshipCalendarPage struct {
+	Data []MentorshipCalendarInterval `json:"data"`
+	Meta MentorshipTimezoneMeta       `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *MentorshipCalendarPage) GetData() []MentorshipCalendarInterval {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *MentorshipCalendarPage) GetMeta() MentorshipTimezoneMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *MentorshipCalendarPage) SetData(val []MentorshipCalendarInterval) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *MentorshipCalendarPage) SetMeta(val MentorshipTimezoneMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/MentorshipCancelBody
+type MentorshipCancelBody struct {
+	Reason OptString `json:"reason"`
+}
+
+// GetReason returns the value of Reason.
+func (s *MentorshipCancelBody) GetReason() OptString {
+	return s.Reason
+}
+
+// SetReason sets the value of Reason.
+func (s *MentorshipCancelBody) SetReason(val OptString) {
+	s.Reason = val
+}
+
+// Ref: #/components/schemas/MentorshipCountMeta
+type MentorshipCountMeta struct {
+	Count int64 `json:"count"`
+}
+
+// GetCount returns the value of Count.
+func (s *MentorshipCountMeta) GetCount() int64 {
+	return s.Count
+}
+
+// SetCount sets the value of Count.
+func (s *MentorshipCountMeta) SetCount(val int64) {
+	s.Count = val
+}
+
+// Ref: #/components/schemas/MentorshipDecideBody
+type MentorshipDecideBody struct {
+	Status OptString `json:"status"`
+}
+
+// GetStatus returns the value of Status.
+func (s *MentorshipDecideBody) GetStatus() OptString {
+	return s.Status
+}
+
+// SetStatus sets the value of Status.
+func (s *MentorshipDecideBody) SetStatus(val OptString) {
+	s.Status = val
+}
+
+// `ignored_params` lists the query params the directory did not read.
+// Ref: #/components/schemas/MentorshipDirectoryMeta
+type MentorshipDirectoryMeta struct {
+	Count         int64    `json:"count"`
+	IgnoredParams []string `json:"ignored_params"`
+}
+
+// GetCount returns the value of Count.
+func (s *MentorshipDirectoryMeta) GetCount() int64 {
+	return s.Count
+}
+
+// GetIgnoredParams returns the value of IgnoredParams.
+func (s *MentorshipDirectoryMeta) GetIgnoredParams() []string {
+	return s.IgnoredParams
+}
+
+// SetCount sets the value of Count.
+func (s *MentorshipDirectoryMeta) SetCount(val int64) {
+	s.Count = val
+}
+
+// SetIgnoredParams sets the value of IgnoredParams.
+func (s *MentorshipDirectoryMeta) SetIgnoredParams(val []string) {
+	s.IgnoredParams = val
+}
+
+// Ref: #/components/schemas/MentorshipDirectoryPage
+type MentorshipDirectoryPage struct {
+	Data []MentorshipMentor      `json:"data"`
+	Meta MentorshipDirectoryMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *MentorshipDirectoryPage) GetData() []MentorshipMentor {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *MentorshipDirectoryPage) GetMeta() MentorshipDirectoryMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *MentorshipDirectoryPage) SetData(val []MentorshipMentor) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *MentorshipDirectoryPage) SetMeta(val MentorshipDirectoryMeta) {
+	s.Meta = val
+}
+
+// A mentor as the public, the owner and a moderator see them. The owner and moderator views add
+// status, paused and created_at; the owner alone gets meeting_url and the session parameters.
+// Ref: #/components/schemas/MentorshipMentor
+type MentorshipMentor struct {
+	Slug                string      `json:"slug"`
+	Name                string      `json:"name"`
+	CompanySlug         string      `json:"company_slug"`
+	CompanyName         string      `json:"company_name"`
+	Headline            string      `json:"headline"`
+	Bio                 string      `json:"bio"`
+	Topics              []string    `json:"topics"`
+	Languages           []string    `json:"languages"`
+	Timezone            string      `json:"timezone"`
+	SessionMinutes      int64       `json:"session_minutes"`
+	RatingCount         int64       `json:"rating_count"`
+	RatingAvg           float64     `json:"rating_avg"`
+	ShowPhoto           bool        `json:"show_photo"`
+	Seniority           OptString   `json:"seniority"`
+	Status              OptString   `json:"status"`
+	Paused              OptBool     `json:"paused"`
+	MeetingURL          OptString   `json:"meeting_url"`
+	CreatedAt           OptDateTime `json:"created_at"`
+	BufferBeforeMinutes OptInt64    `json:"buffer_before_minutes"`
+	BufferAfterMinutes  OptInt64    `json:"buffer_after_minutes"`
+	NoticeMinutes       OptInt64    `json:"notice_minutes"`
+	HorizonDays         OptInt64    `json:"horizon_days"`
+}
+
+// GetSlug returns the value of Slug.
+func (s *MentorshipMentor) GetSlug() string {
+	return s.Slug
+}
+
+// GetName returns the value of Name.
+func (s *MentorshipMentor) GetName() string {
+	return s.Name
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *MentorshipMentor) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// GetCompanyName returns the value of CompanyName.
+func (s *MentorshipMentor) GetCompanyName() string {
+	return s.CompanyName
+}
+
+// GetHeadline returns the value of Headline.
+func (s *MentorshipMentor) GetHeadline() string {
+	return s.Headline
+}
+
+// GetBio returns the value of Bio.
+func (s *MentorshipMentor) GetBio() string {
+	return s.Bio
+}
+
+// GetTopics returns the value of Topics.
+func (s *MentorshipMentor) GetTopics() []string {
+	return s.Topics
+}
+
+// GetLanguages returns the value of Languages.
+func (s *MentorshipMentor) GetLanguages() []string {
+	return s.Languages
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *MentorshipMentor) GetTimezone() string {
+	return s.Timezone
+}
+
+// GetSessionMinutes returns the value of SessionMinutes.
+func (s *MentorshipMentor) GetSessionMinutes() int64 {
+	return s.SessionMinutes
+}
+
+// GetRatingCount returns the value of RatingCount.
+func (s *MentorshipMentor) GetRatingCount() int64 {
+	return s.RatingCount
+}
+
+// GetRatingAvg returns the value of RatingAvg.
+func (s *MentorshipMentor) GetRatingAvg() float64 {
+	return s.RatingAvg
+}
+
+// GetShowPhoto returns the value of ShowPhoto.
+func (s *MentorshipMentor) GetShowPhoto() bool {
+	return s.ShowPhoto
+}
+
+// GetSeniority returns the value of Seniority.
+func (s *MentorshipMentor) GetSeniority() OptString {
+	return s.Seniority
+}
+
+// GetStatus returns the value of Status.
+func (s *MentorshipMentor) GetStatus() OptString {
+	return s.Status
+}
+
+// GetPaused returns the value of Paused.
+func (s *MentorshipMentor) GetPaused() OptBool {
+	return s.Paused
+}
+
+// GetMeetingURL returns the value of MeetingURL.
+func (s *MentorshipMentor) GetMeetingURL() OptString {
+	return s.MeetingURL
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *MentorshipMentor) GetCreatedAt() OptDateTime {
+	return s.CreatedAt
+}
+
+// GetBufferBeforeMinutes returns the value of BufferBeforeMinutes.
+func (s *MentorshipMentor) GetBufferBeforeMinutes() OptInt64 {
+	return s.BufferBeforeMinutes
+}
+
+// GetBufferAfterMinutes returns the value of BufferAfterMinutes.
+func (s *MentorshipMentor) GetBufferAfterMinutes() OptInt64 {
+	return s.BufferAfterMinutes
+}
+
+// GetNoticeMinutes returns the value of NoticeMinutes.
+func (s *MentorshipMentor) GetNoticeMinutes() OptInt64 {
+	return s.NoticeMinutes
+}
+
+// GetHorizonDays returns the value of HorizonDays.
+func (s *MentorshipMentor) GetHorizonDays() OptInt64 {
+	return s.HorizonDays
+}
+
+// SetSlug sets the value of Slug.
+func (s *MentorshipMentor) SetSlug(val string) {
+	s.Slug = val
+}
+
+// SetName sets the value of Name.
+func (s *MentorshipMentor) SetName(val string) {
+	s.Name = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *MentorshipMentor) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
+// SetCompanyName sets the value of CompanyName.
+func (s *MentorshipMentor) SetCompanyName(val string) {
+	s.CompanyName = val
+}
+
+// SetHeadline sets the value of Headline.
+func (s *MentorshipMentor) SetHeadline(val string) {
+	s.Headline = val
+}
+
+// SetBio sets the value of Bio.
+func (s *MentorshipMentor) SetBio(val string) {
+	s.Bio = val
+}
+
+// SetTopics sets the value of Topics.
+func (s *MentorshipMentor) SetTopics(val []string) {
+	s.Topics = val
+}
+
+// SetLanguages sets the value of Languages.
+func (s *MentorshipMentor) SetLanguages(val []string) {
+	s.Languages = val
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *MentorshipMentor) SetTimezone(val string) {
+	s.Timezone = val
+}
+
+// SetSessionMinutes sets the value of SessionMinutes.
+func (s *MentorshipMentor) SetSessionMinutes(val int64) {
+	s.SessionMinutes = val
+}
+
+// SetRatingCount sets the value of RatingCount.
+func (s *MentorshipMentor) SetRatingCount(val int64) {
+	s.RatingCount = val
+}
+
+// SetRatingAvg sets the value of RatingAvg.
+func (s *MentorshipMentor) SetRatingAvg(val float64) {
+	s.RatingAvg = val
+}
+
+// SetShowPhoto sets the value of ShowPhoto.
+func (s *MentorshipMentor) SetShowPhoto(val bool) {
+	s.ShowPhoto = val
+}
+
+// SetSeniority sets the value of Seniority.
+func (s *MentorshipMentor) SetSeniority(val OptString) {
+	s.Seniority = val
+}
+
+// SetStatus sets the value of Status.
+func (s *MentorshipMentor) SetStatus(val OptString) {
+	s.Status = val
+}
+
+// SetPaused sets the value of Paused.
+func (s *MentorshipMentor) SetPaused(val OptBool) {
+	s.Paused = val
+}
+
+// SetMeetingURL sets the value of MeetingURL.
+func (s *MentorshipMentor) SetMeetingURL(val OptString) {
+	s.MeetingURL = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *MentorshipMentor) SetCreatedAt(val OptDateTime) {
+	s.CreatedAt = val
+}
+
+// SetBufferBeforeMinutes sets the value of BufferBeforeMinutes.
+func (s *MentorshipMentor) SetBufferBeforeMinutes(val OptInt64) {
+	s.BufferBeforeMinutes = val
+}
+
+// SetBufferAfterMinutes sets the value of BufferAfterMinutes.
+func (s *MentorshipMentor) SetBufferAfterMinutes(val OptInt64) {
+	s.BufferAfterMinutes = val
+}
+
+// SetNoticeMinutes sets the value of NoticeMinutes.
+func (s *MentorshipMentor) SetNoticeMinutes(val OptInt64) {
+	s.NoticeMinutes = val
+}
+
+// SetHorizonDays sets the value of HorizonDays.
+func (s *MentorshipMentor) SetHorizonDays(val OptInt64) {
+	s.HorizonDays = val
+}
+
+// Ref: #/components/schemas/MentorshipPauseBody
+type MentorshipPauseBody struct {
+	Paused OptBool `json:"paused"`
+}
+
+// GetPaused returns the value of Paused.
+func (s *MentorshipPauseBody) GetPaused() OptBool {
+	return s.Paused
+}
+
+// SetPaused sets the value of Paused.
+func (s *MentorshipPauseBody) SetPaused(val OptBool) {
+	s.Paused = val
+}
+
+// A pending profile in the moderation queue.
+// Ref: #/components/schemas/MentorshipPendingMentor
+type MentorshipPendingMentor struct {
+	Slug                     string      `json:"slug"`
+	Name                     string      `json:"name"`
+	CompanySlug              string      `json:"company_slug"`
+	CompanyName              string      `json:"company_name"`
+	Headline                 string      `json:"headline"`
+	Bio                      string      `json:"bio"`
+	Topics                   []string    `json:"topics"`
+	Languages                []string    `json:"languages"`
+	Timezone                 string      `json:"timezone"`
+	SessionMinutes           int64       `json:"session_minutes"`
+	RatingCount              int64       `json:"rating_count"`
+	RatingAvg                float64     `json:"rating_avg"`
+	ShowPhoto                bool        `json:"show_photo"`
+	Seniority                OptString   `json:"seniority"`
+	Status                   OptString   `json:"status"`
+	Paused                   OptBool     `json:"paused"`
+	MeetingURL               OptString   `json:"meeting_url"`
+	CreatedAt                OptDateTime `json:"created_at"`
+	BufferBeforeMinutes      OptInt64    `json:"buffer_before_minutes"`
+	BufferAfterMinutes       OptInt64    `json:"buffer_after_minutes"`
+	NoticeMinutes            OptInt64    `json:"notice_minutes"`
+	HorizonDays              OptInt64    `json:"horizon_days"`
+	ID                       int64       `json:"id"`
+	HasApprovedReferralOffer bool        `json:"has_approved_referral_offer"`
+}
+
+// GetSlug returns the value of Slug.
+func (s *MentorshipPendingMentor) GetSlug() string {
+	return s.Slug
+}
+
+// GetName returns the value of Name.
+func (s *MentorshipPendingMentor) GetName() string {
+	return s.Name
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *MentorshipPendingMentor) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// GetCompanyName returns the value of CompanyName.
+func (s *MentorshipPendingMentor) GetCompanyName() string {
+	return s.CompanyName
+}
+
+// GetHeadline returns the value of Headline.
+func (s *MentorshipPendingMentor) GetHeadline() string {
+	return s.Headline
+}
+
+// GetBio returns the value of Bio.
+func (s *MentorshipPendingMentor) GetBio() string {
+	return s.Bio
+}
+
+// GetTopics returns the value of Topics.
+func (s *MentorshipPendingMentor) GetTopics() []string {
+	return s.Topics
+}
+
+// GetLanguages returns the value of Languages.
+func (s *MentorshipPendingMentor) GetLanguages() []string {
+	return s.Languages
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *MentorshipPendingMentor) GetTimezone() string {
+	return s.Timezone
+}
+
+// GetSessionMinutes returns the value of SessionMinutes.
+func (s *MentorshipPendingMentor) GetSessionMinutes() int64 {
+	return s.SessionMinutes
+}
+
+// GetRatingCount returns the value of RatingCount.
+func (s *MentorshipPendingMentor) GetRatingCount() int64 {
+	return s.RatingCount
+}
+
+// GetRatingAvg returns the value of RatingAvg.
+func (s *MentorshipPendingMentor) GetRatingAvg() float64 {
+	return s.RatingAvg
+}
+
+// GetShowPhoto returns the value of ShowPhoto.
+func (s *MentorshipPendingMentor) GetShowPhoto() bool {
+	return s.ShowPhoto
+}
+
+// GetSeniority returns the value of Seniority.
+func (s *MentorshipPendingMentor) GetSeniority() OptString {
+	return s.Seniority
+}
+
+// GetStatus returns the value of Status.
+func (s *MentorshipPendingMentor) GetStatus() OptString {
+	return s.Status
+}
+
+// GetPaused returns the value of Paused.
+func (s *MentorshipPendingMentor) GetPaused() OptBool {
+	return s.Paused
+}
+
+// GetMeetingURL returns the value of MeetingURL.
+func (s *MentorshipPendingMentor) GetMeetingURL() OptString {
+	return s.MeetingURL
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *MentorshipPendingMentor) GetCreatedAt() OptDateTime {
+	return s.CreatedAt
+}
+
+// GetBufferBeforeMinutes returns the value of BufferBeforeMinutes.
+func (s *MentorshipPendingMentor) GetBufferBeforeMinutes() OptInt64 {
+	return s.BufferBeforeMinutes
+}
+
+// GetBufferAfterMinutes returns the value of BufferAfterMinutes.
+func (s *MentorshipPendingMentor) GetBufferAfterMinutes() OptInt64 {
+	return s.BufferAfterMinutes
+}
+
+// GetNoticeMinutes returns the value of NoticeMinutes.
+func (s *MentorshipPendingMentor) GetNoticeMinutes() OptInt64 {
+	return s.NoticeMinutes
+}
+
+// GetHorizonDays returns the value of HorizonDays.
+func (s *MentorshipPendingMentor) GetHorizonDays() OptInt64 {
+	return s.HorizonDays
+}
+
+// GetID returns the value of ID.
+func (s *MentorshipPendingMentor) GetID() int64 {
+	return s.ID
+}
+
+// GetHasApprovedReferralOffer returns the value of HasApprovedReferralOffer.
+func (s *MentorshipPendingMentor) GetHasApprovedReferralOffer() bool {
+	return s.HasApprovedReferralOffer
+}
+
+// SetSlug sets the value of Slug.
+func (s *MentorshipPendingMentor) SetSlug(val string) {
+	s.Slug = val
+}
+
+// SetName sets the value of Name.
+func (s *MentorshipPendingMentor) SetName(val string) {
+	s.Name = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *MentorshipPendingMentor) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
+// SetCompanyName sets the value of CompanyName.
+func (s *MentorshipPendingMentor) SetCompanyName(val string) {
+	s.CompanyName = val
+}
+
+// SetHeadline sets the value of Headline.
+func (s *MentorshipPendingMentor) SetHeadline(val string) {
+	s.Headline = val
+}
+
+// SetBio sets the value of Bio.
+func (s *MentorshipPendingMentor) SetBio(val string) {
+	s.Bio = val
+}
+
+// SetTopics sets the value of Topics.
+func (s *MentorshipPendingMentor) SetTopics(val []string) {
+	s.Topics = val
+}
+
+// SetLanguages sets the value of Languages.
+func (s *MentorshipPendingMentor) SetLanguages(val []string) {
+	s.Languages = val
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *MentorshipPendingMentor) SetTimezone(val string) {
+	s.Timezone = val
+}
+
+// SetSessionMinutes sets the value of SessionMinutes.
+func (s *MentorshipPendingMentor) SetSessionMinutes(val int64) {
+	s.SessionMinutes = val
+}
+
+// SetRatingCount sets the value of RatingCount.
+func (s *MentorshipPendingMentor) SetRatingCount(val int64) {
+	s.RatingCount = val
+}
+
+// SetRatingAvg sets the value of RatingAvg.
+func (s *MentorshipPendingMentor) SetRatingAvg(val float64) {
+	s.RatingAvg = val
+}
+
+// SetShowPhoto sets the value of ShowPhoto.
+func (s *MentorshipPendingMentor) SetShowPhoto(val bool) {
+	s.ShowPhoto = val
+}
+
+// SetSeniority sets the value of Seniority.
+func (s *MentorshipPendingMentor) SetSeniority(val OptString) {
+	s.Seniority = val
+}
+
+// SetStatus sets the value of Status.
+func (s *MentorshipPendingMentor) SetStatus(val OptString) {
+	s.Status = val
+}
+
+// SetPaused sets the value of Paused.
+func (s *MentorshipPendingMentor) SetPaused(val OptBool) {
+	s.Paused = val
+}
+
+// SetMeetingURL sets the value of MeetingURL.
+func (s *MentorshipPendingMentor) SetMeetingURL(val OptString) {
+	s.MeetingURL = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *MentorshipPendingMentor) SetCreatedAt(val OptDateTime) {
+	s.CreatedAt = val
+}
+
+// SetBufferBeforeMinutes sets the value of BufferBeforeMinutes.
+func (s *MentorshipPendingMentor) SetBufferBeforeMinutes(val OptInt64) {
+	s.BufferBeforeMinutes = val
+}
+
+// SetBufferAfterMinutes sets the value of BufferAfterMinutes.
+func (s *MentorshipPendingMentor) SetBufferAfterMinutes(val OptInt64) {
+	s.BufferAfterMinutes = val
+}
+
+// SetNoticeMinutes sets the value of NoticeMinutes.
+func (s *MentorshipPendingMentor) SetNoticeMinutes(val OptInt64) {
+	s.NoticeMinutes = val
+}
+
+// SetHorizonDays sets the value of HorizonDays.
+func (s *MentorshipPendingMentor) SetHorizonDays(val OptInt64) {
+	s.HorizonDays = val
+}
+
+// SetID sets the value of ID.
+func (s *MentorshipPendingMentor) SetID(val int64) {
+	s.ID = val
+}
+
+// SetHasApprovedReferralOffer sets the value of HasApprovedReferralOffer.
+func (s *MentorshipPendingMentor) SetHasApprovedReferralOffer(val bool) {
+	s.HasApprovedReferralOffer = val
+}
+
+// Ref: #/components/schemas/MentorshipProfileBody
+type MentorshipProfileBody struct {
+	CompanySlug         OptString         `json:"company_slug"`
+	Slug                OptString         `json:"slug"`
+	Name                OptString         `json:"name"`
+	Headline            OptString         `json:"headline"`
+	Bio                 OptString         `json:"bio"`
+	Topics              OptNilStringArray `json:"topics"`
+	Languages           OptNilStringArray `json:"languages"`
+	Timezone            OptString         `json:"timezone"`
+	SessionMinutes      OptInt64          `json:"session_minutes"`
+	BufferBeforeMinutes OptInt64          `json:"buffer_before_minutes"`
+	BufferAfterMinutes  OptInt64          `json:"buffer_after_minutes"`
+	NoticeMinutes       OptInt64          `json:"notice_minutes"`
+	HorizonDays         OptInt64          `json:"horizon_days"`
+	MeetingURL          OptString         `json:"meeting_url"`
+	ShowPhoto           OptBool           `json:"show_photo"`
+	Seniority           OptString         `json:"seniority"`
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *MentorshipProfileBody) GetCompanySlug() OptString {
+	return s.CompanySlug
+}
+
+// GetSlug returns the value of Slug.
+func (s *MentorshipProfileBody) GetSlug() OptString {
+	return s.Slug
+}
+
+// GetName returns the value of Name.
+func (s *MentorshipProfileBody) GetName() OptString {
+	return s.Name
+}
+
+// GetHeadline returns the value of Headline.
+func (s *MentorshipProfileBody) GetHeadline() OptString {
+	return s.Headline
+}
+
+// GetBio returns the value of Bio.
+func (s *MentorshipProfileBody) GetBio() OptString {
+	return s.Bio
+}
+
+// GetTopics returns the value of Topics.
+func (s *MentorshipProfileBody) GetTopics() OptNilStringArray {
+	return s.Topics
+}
+
+// GetLanguages returns the value of Languages.
+func (s *MentorshipProfileBody) GetLanguages() OptNilStringArray {
+	return s.Languages
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *MentorshipProfileBody) GetTimezone() OptString {
+	return s.Timezone
+}
+
+// GetSessionMinutes returns the value of SessionMinutes.
+func (s *MentorshipProfileBody) GetSessionMinutes() OptInt64 {
+	return s.SessionMinutes
+}
+
+// GetBufferBeforeMinutes returns the value of BufferBeforeMinutes.
+func (s *MentorshipProfileBody) GetBufferBeforeMinutes() OptInt64 {
+	return s.BufferBeforeMinutes
+}
+
+// GetBufferAfterMinutes returns the value of BufferAfterMinutes.
+func (s *MentorshipProfileBody) GetBufferAfterMinutes() OptInt64 {
+	return s.BufferAfterMinutes
+}
+
+// GetNoticeMinutes returns the value of NoticeMinutes.
+func (s *MentorshipProfileBody) GetNoticeMinutes() OptInt64 {
+	return s.NoticeMinutes
+}
+
+// GetHorizonDays returns the value of HorizonDays.
+func (s *MentorshipProfileBody) GetHorizonDays() OptInt64 {
+	return s.HorizonDays
+}
+
+// GetMeetingURL returns the value of MeetingURL.
+func (s *MentorshipProfileBody) GetMeetingURL() OptString {
+	return s.MeetingURL
+}
+
+// GetShowPhoto returns the value of ShowPhoto.
+func (s *MentorshipProfileBody) GetShowPhoto() OptBool {
+	return s.ShowPhoto
+}
+
+// GetSeniority returns the value of Seniority.
+func (s *MentorshipProfileBody) GetSeniority() OptString {
+	return s.Seniority
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *MentorshipProfileBody) SetCompanySlug(val OptString) {
+	s.CompanySlug = val
+}
+
+// SetSlug sets the value of Slug.
+func (s *MentorshipProfileBody) SetSlug(val OptString) {
+	s.Slug = val
+}
+
+// SetName sets the value of Name.
+func (s *MentorshipProfileBody) SetName(val OptString) {
+	s.Name = val
+}
+
+// SetHeadline sets the value of Headline.
+func (s *MentorshipProfileBody) SetHeadline(val OptString) {
+	s.Headline = val
+}
+
+// SetBio sets the value of Bio.
+func (s *MentorshipProfileBody) SetBio(val OptString) {
+	s.Bio = val
+}
+
+// SetTopics sets the value of Topics.
+func (s *MentorshipProfileBody) SetTopics(val OptNilStringArray) {
+	s.Topics = val
+}
+
+// SetLanguages sets the value of Languages.
+func (s *MentorshipProfileBody) SetLanguages(val OptNilStringArray) {
+	s.Languages = val
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *MentorshipProfileBody) SetTimezone(val OptString) {
+	s.Timezone = val
+}
+
+// SetSessionMinutes sets the value of SessionMinutes.
+func (s *MentorshipProfileBody) SetSessionMinutes(val OptInt64) {
+	s.SessionMinutes = val
+}
+
+// SetBufferBeforeMinutes sets the value of BufferBeforeMinutes.
+func (s *MentorshipProfileBody) SetBufferBeforeMinutes(val OptInt64) {
+	s.BufferBeforeMinutes = val
+}
+
+// SetBufferAfterMinutes sets the value of BufferAfterMinutes.
+func (s *MentorshipProfileBody) SetBufferAfterMinutes(val OptInt64) {
+	s.BufferAfterMinutes = val
+}
+
+// SetNoticeMinutes sets the value of NoticeMinutes.
+func (s *MentorshipProfileBody) SetNoticeMinutes(val OptInt64) {
+	s.NoticeMinutes = val
+}
+
+// SetHorizonDays sets the value of HorizonDays.
+func (s *MentorshipProfileBody) SetHorizonDays(val OptInt64) {
+	s.HorizonDays = val
+}
+
+// SetMeetingURL sets the value of MeetingURL.
+func (s *MentorshipProfileBody) SetMeetingURL(val OptString) {
+	s.MeetingURL = val
+}
+
+// SetShowPhoto sets the value of ShowPhoto.
+func (s *MentorshipProfileBody) SetShowPhoto(val OptBool) {
+	s.ShowPhoto = val
+}
+
+// SetSeniority sets the value of Seniority.
+func (s *MentorshipProfileBody) SetSeniority(val OptString) {
+	s.Seniority = val
+}
+
+// Ref: #/components/schemas/MentorshipReview
+type MentorshipReview struct {
+	BookingID string `json:"booking_id"`
+	Rating    int64  `json:"rating"`
+	Comment   string `json:"comment"`
+}
+
+// GetBookingID returns the value of BookingID.
+func (s *MentorshipReview) GetBookingID() string {
+	return s.BookingID
+}
+
+// GetRating returns the value of Rating.
+func (s *MentorshipReview) GetRating() int64 {
+	return s.Rating
+}
+
+// GetComment returns the value of Comment.
+func (s *MentorshipReview) GetComment() string {
+	return s.Comment
+}
+
+// SetBookingID sets the value of BookingID.
+func (s *MentorshipReview) SetBookingID(val string) {
+	s.BookingID = val
+}
+
+// SetRating sets the value of Rating.
+func (s *MentorshipReview) SetRating(val int64) {
+	s.Rating = val
+}
+
+// SetComment sets the value of Comment.
+func (s *MentorshipReview) SetComment(val string) {
+	s.Comment = val
+}
+
+// Ref: #/components/schemas/MentorshipReviewBody
+type MentorshipReviewBody struct {
+	Rating  OptInt64  `json:"rating"`
+	Comment OptString `json:"comment"`
+}
+
+// GetRating returns the value of Rating.
+func (s *MentorshipReviewBody) GetRating() OptInt64 {
+	return s.Rating
+}
+
+// GetComment returns the value of Comment.
+func (s *MentorshipReviewBody) GetComment() OptString {
+	return s.Comment
+}
+
+// SetRating sets the value of Rating.
+func (s *MentorshipReviewBody) SetRating(val OptInt64) {
+	s.Rating = val
+}
+
+// SetComment sets the value of Comment.
+func (s *MentorshipReviewBody) SetComment(val OptString) {
+	s.Comment = val
+}
+
+// Ref: #/components/schemas/MentorshipRulesPage
+type MentorshipRulesPage struct {
+	Data []BuddyMockRuleOut  `json:"data"`
+	Meta MentorshipCountMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *MentorshipRulesPage) GetData() []BuddyMockRuleOut {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *MentorshipRulesPage) GetMeta() MentorshipCountMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *MentorshipRulesPage) SetData(val []BuddyMockRuleOut) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *MentorshipRulesPage) SetMeta(val MentorshipCountMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/MentorshipSessions
+type MentorshipSessions struct {
+	Upcoming []MentorshipBooking `json:"upcoming"`
+	Past     []MentorshipBooking `json:"past"`
+}
+
+// GetUpcoming returns the value of Upcoming.
+func (s *MentorshipSessions) GetUpcoming() []MentorshipBooking {
+	return s.Upcoming
+}
+
+// GetPast returns the value of Past.
+func (s *MentorshipSessions) GetPast() []MentorshipBooking {
+	return s.Past
+}
+
+// SetUpcoming sets the value of Upcoming.
+func (s *MentorshipSessions) SetUpcoming(val []MentorshipBooking) {
+	s.Upcoming = val
+}
+
+// SetPast sets the value of Past.
+func (s *MentorshipSessions) SetPast(val []MentorshipBooking) {
+	s.Past = val
+}
+
+// Ref: #/components/schemas/MentorshipSessionsPage
+type MentorshipSessionsPage struct {
+	Data MentorshipSessions  `json:"data"`
+	Meta MentorshipCountMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *MentorshipSessionsPage) GetData() MentorshipSessions {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *MentorshipSessionsPage) GetMeta() MentorshipCountMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *MentorshipSessionsPage) SetData(val MentorshipSessions) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *MentorshipSessionsPage) SetMeta(val MentorshipCountMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/MentorshipSlotsPage
+type MentorshipSlotsPage struct {
+	Data []BuddyMockSlot        `json:"data"`
+	Meta MentorshipTimezoneMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *MentorshipSlotsPage) GetData() []BuddyMockSlot {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *MentorshipSlotsPage) GetMeta() MentorshipTimezoneMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *MentorshipSlotsPage) SetData(val []BuddyMockSlot) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *MentorshipSlotsPage) SetMeta(val MentorshipTimezoneMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/MentorshipTimezoneMeta
+type MentorshipTimezoneMeta struct {
+	Timezone string `json:"timezone"`
+	Count    int64  `json:"count"`
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *MentorshipTimezoneMeta) GetTimezone() string {
+	return s.Timezone
+}
+
+// GetCount returns the value of Count.
+func (s *MentorshipTimezoneMeta) GetCount() int64 {
+	return s.Count
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *MentorshipTimezoneMeta) SetTimezone(val string) {
+	s.Timezone = val
+}
+
+// SetCount sets the value of Count.
+func (s *MentorshipTimezoneMeta) SetCount(val int64) {
+	s.Count = val
 }
 
 // Ref: #/components/schemas/MergeAtoms
@@ -10195,6 +11559,51 @@ func (o NilJobFoundPosting) Get() (v JobFoundPosting, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o NilJobFoundPosting) Or(d JobFoundPosting) JobFoundPosting {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewNilMentorshipMentor returns new NilMentorshipMentor with value set to v.
+func NewNilMentorshipMentor(v MentorshipMentor) NilMentorshipMentor {
+	return NilMentorshipMentor{
+		Value: v,
+	}
+}
+
+// NilMentorshipMentor is nullable MentorshipMentor.
+type NilMentorshipMentor struct {
+	Value MentorshipMentor
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilMentorshipMentor) SetTo(v MentorshipMentor) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilMentorshipMentor) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilMentorshipMentor) SetToNull() {
+	o.Null = true
+	var v MentorshipMentor
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilMentorshipMentor) Get() (v MentorshipMentor, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilMentorshipMentor) Or(d MentorshipMentor) MentorshipMentor {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -11106,6 +12515,52 @@ func (o OptJobFindMeta) Or(d JobFindMeta) JobFindMeta {
 	return d
 }
 
+// NewOptMentorshipCancelBody returns new OptMentorshipCancelBody with value set to v.
+func NewOptMentorshipCancelBody(v MentorshipCancelBody) OptMentorshipCancelBody {
+	return OptMentorshipCancelBody{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptMentorshipCancelBody is optional MentorshipCancelBody.
+type OptMentorshipCancelBody struct {
+	Value MentorshipCancelBody
+	Set   bool
+}
+
+// IsSet returns true if OptMentorshipCancelBody was set.
+func (o OptMentorshipCancelBody) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptMentorshipCancelBody) Reset() {
+	var v MentorshipCancelBody
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptMentorshipCancelBody) SetTo(v MentorshipCancelBody) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptMentorshipCancelBody) Get() (v MentorshipCancelBody, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptMentorshipCancelBody) Or(d MentorshipCancelBody) MentorshipCancelBody {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptNilBool returns new OptNilBool with value set to v.
 func NewOptNilBool(v bool) OptNilBool {
 	return OptNilBool{
@@ -11748,6 +13203,21 @@ func (s *PatchCVOK) GetData() CvMeta {
 
 // SetData sets the value of Data.
 func (s *PatchCVOK) SetData(val CvMeta) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type PauseMentorProfileOK struct {
+	Data MentorshipMentor `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PauseMentorProfileOK) GetData() MentorshipMentor {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PauseMentorProfileOK) SetData(val MentorshipMentor) {
 	s.Data = val
 }
 
@@ -12885,6 +14355,21 @@ func (s *PutResumeContactsOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type ReactivateMentorProfileOK struct {
+	Data MentorshipMentor `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ReactivateMentorProfileOK) GetData() MentorshipMentor {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ReactivateMentorProfileOK) SetData(val MentorshipMentor) {
+	s.Data = val
+}
+
 // A feed row: the thread plus the subject's display names, empty when the subject no longer exists.
 // Ref: #/components/schemas/RecentThread
 type RecentThread struct {
@@ -13674,6 +15159,9 @@ func (s *ReplaceResumeContactsFromCvOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
+// ReplaceWeeklyAvailabilityNoContent is response for ReplaceWeeklyAvailability operation.
+type ReplaceWeeklyAvailabilityNoContent struct{}
+
 // ReportCompanyFeedbackNoContent is response for ReportCompanyFeedback operation.
 type ReportCompanyFeedbackNoContent struct{}
 
@@ -14108,6 +15596,21 @@ func (s *RetractProcessReportOK) SetData(val ProcessReport) {
 
 // RetryResumeExtractAccepted is response for RetryResumeExtract operation.
 type RetryResumeExtractAccepted struct{}
+
+// A single item: `{"data": ...}`.
+type ReviewSessionOK struct {
+	Data MentorshipReview `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ReviewSessionOK) GetData() MentorshipReview {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ReviewSessionOK) SetData(val MentorshipReview) {
+	s.Data = val
+}
 
 // A single item: `{"data": ...}`.
 type RevokeEmployerAccountOK struct {
@@ -16840,6 +18343,21 @@ func (s *SubmissionRequest) SetSalaryPeriod(val OptNilString) {
 	s.SalaryPeriod = val
 }
 
+// A single item: `{"data": ...}`.
+type SubmitMentorProfileCreated struct {
+	Data MentorshipMentor `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SubmitMentorProfileCreated) GetData() MentorshipMentor {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SubmitMentorProfileCreated) SetData(val MentorshipMentor) {
+	s.Data = val
+}
+
 // One alert on a saved search. `saved_search_name` is sent on the list only.
 // Ref: #/components/schemas/Subscription
 type Subscription struct {
@@ -18834,6 +20352,21 @@ func (s *UpdateJobOK) SetData(val jx.Raw) {
 }
 
 // A single item: `{"data": ...}`.
+type UpdateMentorProfileOK struct {
+	Data MentorshipMentor `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateMentorProfileOK) GetData() MentorshipMentor {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateMentorProfileOK) SetData(val MentorshipMentor) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type UpdateMyEmailGroupsOK struct {
 	Data EmailPrefs `json:"data"`
 }
@@ -19375,6 +20908,9 @@ func (s *WatchlistPageHeaders) SetCacheControl(val string) {
 func (s *WatchlistPageHeaders) SetResponse(val WatchlistPage) {
 	s.Response = val
 }
+
+// WithdrawMentorProfileNoContent is response for WithdrawMentorProfile operation.
+type WithdrawMentorProfileNoContent struct{}
 
 // WithdrawReferralOfferNoContent is response for WithdrawReferralOffer operation.
 type WithdrawReferralOfferNoContent struct{}
