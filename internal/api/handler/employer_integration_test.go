@@ -91,7 +91,7 @@ func TestEmployerEndToEnd(t *testing.T) {
 		cookie:    auth.RequireAuth(iss, testVersions),
 		moderator: auth.RequireRole(queries, "moderator"),
 	}
-	h.register(app.Group("/api/v1"), mw)
+	h.register(app.Group("/api/v1"), mw, newContract(contractHandlers{employerHandlers: h}))
 
 	req := func(method, path, cookie, body string) *http.Request {
 		var r *http.Request

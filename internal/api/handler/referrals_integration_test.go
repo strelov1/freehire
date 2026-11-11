@@ -63,17 +63,18 @@ func TestReferralEndpoints(t *testing.T) {
 		referral: referral.New(referral.NewQueriesRepository(queries),
 			referral.NewChannelPinger(nil, "", nil, "", emailprefs.NewLinks("referral-test-secret-padded-to-32b", ""), nil), nil, referral.Config{}),
 	}
+	contract := newContract(contractHandlers{referralHandlers: h})
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	requireMod := auth.RequireRole(queries, "moderator")
-	app.Post("/api/v1/me/referrals/requests", auth.RequireAuth(iss, testVersions), h.CreateReferralRequest)
-	app.Get("/api/v1/me/referrals/cv-options", auth.RequireAuth(iss, testVersions), h.ReferralCVOptions)
-	app.Get("/api/v1/me/referrals/requests", auth.RequireAuth(iss, testVersions), h.ListMyReferralRequests)
-	app.Get("/api/v1/me/referrals/incoming", auth.RequireAuth(iss, testVersions), h.ListIncomingReferralRequests)
+	app.Post("/api/v1/me/referrals/requests", auth.RequireAuth(iss, testVersions), contract)
+	app.Get("/api/v1/me/referrals/cv-options", auth.RequireAuth(iss, testVersions), contract)
+	app.Get("/api/v1/me/referrals/requests", auth.RequireAuth(iss, testVersions), contract)
+	app.Get("/api/v1/me/referrals/incoming", auth.RequireAuth(iss, testVersions), contract)
 	app.Get("/api/v1/me/referrals/incoming/:id/cv", auth.RequireAuth(iss, testVersions), h.ViewReferralRequestCV)
-	app.Post("/api/v1/me/referrals/incoming/:id/resolve", auth.RequireAuth(iss, testVersions), h.ResolveReferralRequest)
-	app.Get("/api/v1/referrals/offers", auth.RequireAuth(iss, testVersions), requireMod, h.ListPendingReferralOffers)
+	app.Post("/api/v1/me/referrals/incoming/:id/resolve", auth.RequireAuth(iss, testVersions), contract)
+	app.Get("/api/v1/referrals/offers", auth.RequireAuth(iss, testVersions), requireMod, contract)
 	app.Get("/api/v1/referrals/offers/:id/proof", auth.RequireAuth(iss, testVersions), requireMod, h.ViewReferralOfferProof)
-	app.Post("/api/v1/referrals/offers/:id/decide", auth.RequireAuth(iss, testVersions), requireMod, h.DecideReferralOffer)
+	app.Post("/api/v1/referrals/offers/:id/decide", auth.RequireAuth(iss, testVersions), requireMod, contract)
 
 	do := func(method, path, tok string, body any) (int, map[string]any) {
 		var buf io.Reader

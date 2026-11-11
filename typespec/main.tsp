@@ -29,6 +29,8 @@ import "./stats.tsp";
 import "./submissions.tsp";
 import "./tracking.tsp";
 import "./experience.tsp";
+import "./employer.tsp";
+import "./referrals.tsp";
 
 using Http;
 

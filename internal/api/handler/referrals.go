@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/engage/referral"
@@ -60,56 +60,69 @@ func (h *referralHandlers) requestJobID(ctx context.Context, slug string, id *in
 	return &jobID, nil
 }
 
-func (h *referralHandlers) register(api fiber.Router, mw middleware) {
+func (h *referralHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Employee referrals: any authenticated user (cookie or API key) offers to refer into a
 	// company (proof CV, moderated) and requests a referral from a company's approved-referrer
 	// pool; referrers manage their own incoming requests. The offer-moderation queue is
 	// moderator-gated, mirroring the submissions queue above.
 	api.Post("/me/referrals/offers", mw.key, h.SubmitReferralOffer)
-	api.Get("/me/referrals/offers", mw.key, h.ListMyReferralOffers)
-	api.Delete("/me/referrals/offers/:id", mw.key, h.WithdrawReferralOffer)
-	api.Post("/me/referrals/requests", mw.key, h.CreateReferralRequest)
-	api.Get("/me/referrals/cv-options", mw.key, h.ReferralCVOptions)
-	api.Get("/me/referrals/requests", mw.key, h.ListMyReferralRequests)
-	api.Get("/me/referrals/incoming", mw.key, h.ListIncomingReferralRequests)
+	api.Get("/me/referrals/offers", mw.key, contract)
+	api.Delete("/me/referrals/offers/:id", mw.key, contract)
+	api.Post("/me/referrals/requests", mw.key, contract)
+	api.Get("/me/referrals/cv-options", mw.key, contract)
+	api.Get("/me/referrals/requests", mw.key, contract)
+	api.Get("/me/referrals/incoming", mw.key, contract)
 	api.Get("/me/referrals/incoming/:id/cv", mw.key, h.ViewReferralRequestCV)
-	api.Post("/me/referrals/incoming/:id/resolve", mw.key, h.ResolveReferralRequest)
-	api.Get("/referrals/offers", mw.key, mw.moderator, h.ListPendingReferralOffers)
+	api.Post("/me/referrals/incoming/:id/resolve", mw.key, contract)
+	api.Get("/referrals/offers", mw.key, mw.moderator, contract)
 	api.Get("/referrals/offers/:id/proof", mw.key, mw.moderator, h.ViewReferralOfferProof)
-	api.Post("/referrals/offers/:id/decide", mw.key, mw.moderator, h.DecideReferralOffer)
+	api.Post("/referrals/offers/:id/decide", mw.key, mw.moderator, contract)
 }
 
-// referralOfferResponse is the public shape of an offer. user_id is omitted (ownership,
+// referralOfferOut is the public shape of an offer. user_id is omitted (ownership,
 // internal); proof_object_key is never exposed (it points at a private S3 object).
-type referralOfferResponse struct {
-	ID          string     `json:"id"`
-	CompanySlug string     `json:"company_slug"`
-	CompanyName string     `json:"company_name"`
-	LinkedInURL string     `json:"linkedin_url"`
-	Status      string     `json:"status"`
-	DecidedAt   *time.Time `json:"decided_at"`
-	CreatedAt   *time.Time `json:"created_at"`
-}
-
-func toReferralOfferResponse(o referral.Offer) referralOfferResponse {
-	return referralOfferResponse{
+func referralOfferOut(o referral.Offer) apigen.ReferralOffer {
+	return apigen.ReferralOffer{
 		ID: o.ID.String(), CompanySlug: o.CompanySlug, CompanyName: o.CompanyName,
-		LinkedInURL: o.LinkedInURL, Status: o.Status,
-		DecidedAt: o.DecidedAt, CreatedAt: o.CreatedAt,
+		LinkedinURL: o.LinkedInURL, Status: o.Status,
+		DecidedAt: nilDateTime(o.DecidedAt), CreatedAt: nilDateTime(o.CreatedAt),
 	}
 }
 
-// seekerRequestResponse is what a seeker sees of their own request: no referrer identity
+func referralOffersOut(rows []referral.Offer) []apigen.ReferralOffer {
+	out := make([]apigen.ReferralOffer, len(rows))
+	for i, o := range rows {
+		out[i] = referralOfferOut(o)
+	}
+	return out
+}
+
+func nilInt64(p *int64) apigen.NilInt64 {
+	if p == nil {
+		return apigen.NilInt64{Null: true}
+	}
+	return apigen.NewNilInt64(*p)
+}
+
+// seekerRequestOut is what a seeker sees of their own request: no referrer identity
 // (there is none to show — the request targets a pool), just the target and status.
-type seekerRequestResponse struct {
-	ID          string     `json:"id"`
-	CompanySlug string     `json:"company_slug"`
-	CompanyName string     `json:"company_name"`
-	JobID       *int64     `json:"job_id"`
-	CVKind      string     `json:"cv_kind"`
-	CVID        *string    `json:"cv_id"`
-	Status      string     `json:"status"`
-	CreatedAt   *time.Time `json:"created_at"`
+func seekerRequestOut(r referral.Request) apigen.ReferralSeekerRequest {
+	return apigen.ReferralSeekerRequest{
+		ID: r.ID.String(), CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: nilInt64(r.JobID),
+		CvKind: r.CVKind, CvID: nilString(cvIDString(r.CVID)), Status: r.Status, CreatedAt: nilDateTime(r.CreatedAt),
+	}
+}
+
+// incomingRequestOut is what a referrer sees of an incoming request: the seeker's contact
+// and CV choice to act on, plus the source vacancy. The seeker's user id stays hidden — the
+// referrer reaches out over the contact the seeker chose to share.
+func incomingRequestOut(r referral.Request) apigen.ReferralIncomingRequest {
+	return apigen.ReferralIncomingRequest{
+		ID: r.ID.String(), CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: nilInt64(r.JobID),
+		CvKind: r.CVKind, LinkedinURL: optString(r.LinkedInURL),
+		ContactTelegram: optString(r.ContactTelegram), ContactEmail: optString(r.ContactEmail), Note: optString(r.Note),
+		Status: r.Status, CreatedAt: nilDateTime(r.CreatedAt),
+	}
 }
 
 // optionalCVID parses an optional CV id from a request body. Absent stays absent;
@@ -123,39 +136,6 @@ func optionalCVID(raw *string) (*uuid.UUID, error) {
 		return nil, fiber.NewError(fiber.StatusUnprocessableEntity, "cv_id is not a valid id")
 	}
 	return &id, nil
-}
-
-func toSeekerRequestResponse(r referral.Request) seekerRequestResponse {
-	return seekerRequestResponse{
-		ID: r.ID.String(), CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: r.JobID,
-		CVKind: r.CVKind, CVID: cvIDString(r.CVID), Status: r.Status, CreatedAt: r.CreatedAt,
-	}
-}
-
-// incomingRequestResponse is what a referrer sees of an incoming request: the seeker's
-// contact and CV choice to act on, plus the source vacancy. The seeker's user id stays
-// hidden — the referrer reaches out over the contact the seeker chose to share.
-type incomingRequestResponse struct {
-	ID              string     `json:"id"`
-	CompanySlug     string     `json:"company_slug"`
-	CompanyName     string     `json:"company_name"`
-	JobID           *int64     `json:"job_id"`
-	CVKind          string     `json:"cv_kind"`
-	LinkedInURL     string     `json:"linkedin_url,omitempty"`
-	ContactTelegram string     `json:"contact_telegram,omitempty"`
-	ContactEmail    string     `json:"contact_email,omitempty"`
-	Note            string     `json:"note,omitempty"`
-	Status          string     `json:"status"`
-	CreatedAt       *time.Time `json:"created_at"`
-}
-
-func toIncomingRequestResponse(r referral.Request) incomingRequestResponse {
-	return incomingRequestResponse{
-		ID: r.ID.String(), CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: r.JobID,
-		CVKind: r.CVKind, LinkedInURL: r.LinkedInURL,
-		ContactTelegram: r.ContactTelegram, ContactEmail: r.ContactEmail, Note: r.Note,
-		Status: r.Status, CreatedAt: r.CreatedAt,
-	}
 }
 
 // referralError maps the referral sentinels to HTTP statuses. Validation failures are 422,
@@ -197,105 +177,84 @@ func referralError(err error) error {
 	}
 }
 
-// createReferralRequestBody is the seeker's submit payload. Exactly one of the CV fields is
-// meaningful per cv_kind (validated in the domain); the contact is Telegram and/or email.
-type createReferralRequestBody struct {
-	CompanySlug     string  `json:"company_slug"`
-	JobSlug         string  `json:"job_slug"`
-	JobID           *int64  `json:"job_id"`
-	CVKind          string  `json:"cv_kind"`
-	CVID            *string `json:"cv_id"`
-	LinkedInURL     string  `json:"linkedin_url"`
-	ContactTelegram string  `json:"contact_telegram"`
-	ContactEmail    string  `json:"contact_email"`
-	Note            string  `json:"note"`
-}
-
 // CreateReferralRequest records a seeker's request into a company's referrer pool and pings
 // the approved referrers. RequireAuth. Validation failures 422, no referrer 409, cap 429.
-func (h *referralHandlers) CreateReferralRequest(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// Exactly one of the CV fields is meaningful per cv_kind (validated in the domain); the
+// contact is Telegram and/or email.
+func (h *referralHandlers) CreateReferralRequest(ctx context.Context, req *apigen.ReferralRequestCreate) (*apigen.CreateReferralRequestCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
-	}
-	var in createReferralRequestBody
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+		return nil, err
 	}
 	// The attached CV is addressed by its opaque id; a malformed one names no CV,
 	// which the service reports as an unusable attachment rather than a 500.
-	cvID, err := optionalCVID(in.CVID)
+	cvID, err := optionalCVID(ptrOf(req.CvID.Get))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	jobID, err := h.requestJobID(c.Context(), in.JobSlug, in.JobID)
+	jobID, err := h.requestJobID(ctx, req.JobSlug.Or(""), ptrOf(req.JobID.Get))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	req, err := h.referral.CreateRequest(c.Context(), referral.RequestInput{
+	created, err := h.referral.CreateRequest(ctx, referral.RequestInput{
 		SeekerUserID:    userID,
-		CompanySlug:     in.CompanySlug,
+		CompanySlug:     req.CompanySlug.Or(""),
 		JobID:           jobID,
-		CVKind:          in.CVKind,
+		CVKind:          req.CvKind.Or(""),
 		CVID:            cvID,
-		LinkedInURL:     in.LinkedInURL,
-		ContactTelegram: in.ContactTelegram,
-		ContactEmail:    in.ContactEmail,
-		Note:            in.Note,
+		LinkedInURL:     req.LinkedinURL.Or(""),
+		ContactTelegram: req.ContactTelegram.Or(""),
+		ContactEmail:    req.ContactEmail.Or(""),
+		Note:            req.Note.Or(""),
 	})
 	if err != nil {
-		return referralError(err)
+		return nil, referralError(err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toSeekerRequestResponse(req)})
+	return &apigen.CreateReferralRequestCreated{Data: seekerRequestOut(created)}, nil
 }
 
-type referralCVOption struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-}
-
-// ReferralCVOptions lists what the caller can attach to a request into ?company_slug=,
+// ListReferralCVOptions lists what the caller can attach to a request into ?company_slug=,
 // about ?job_slug= when asked from a vacancy: the CVs tailored for it (or, with no vacancy,
 // for any vacancy at the company), newest first, and whether they uploaded a CV file.
-func (h *referralHandlers) ReferralCVOptions(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *referralHandlers) ListReferralCVOptions(ctx context.Context, params apigen.ListReferralCVOptionsParams) (*apigen.ListReferralCVOptionsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	company := c.Query("company_slug")
+	company := params.CompanySlug.Or("")
 	if company == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "company_slug is required")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "company_slug is required")
 	}
-	jobID, err := h.requestJobID(c.Context(), c.Query("job_slug"), nil)
+	jobID, err := h.requestJobID(ctx, params.JobSlug.Or(""), nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	opts, err := h.referral.CVOptions(c.Context(), userID, company, jobID)
+	opts, err := h.referral.CVOptions(ctx, userID, company, jobID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	tailored := make([]referralCVOption, len(opts.Tailored))
+	tailored := make([]apigen.ReferralCVOption, len(opts.Tailored))
 	for i, o := range opts.Tailored {
-		tailored[i] = referralCVOption{ID: o.ID.String(), Title: o.Title}
+		tailored[i] = apigen.ReferralCVOption{ID: o.ID.String(), Title: o.Title}
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"tailored": tailored, "has_resume": opts.HasResume}})
+	return &apigen.ListReferralCVOptionsOK{Data: apigen.ReferralCVOptions{Tailored: tailored, HasResume: opts.HasResume}}, nil
 }
 
 // ListMyReferralRequests returns the caller's own referral requests, newest first.
-func (h *referralHandlers) ListMyReferralRequests(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *referralHandlers) ListMyReferralRequests(ctx context.Context) (*apigen.ListMyReferralRequestsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	rows, err := h.referral.ListMyRequests(c.Context(), userID)
+	rows, err := h.referral.ListMyRequests(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]seekerRequestResponse, len(rows))
+	out := make([]apigen.ReferralSeekerRequest, len(rows))
 	for i, r := range rows {
-		out[i] = toSeekerRequestResponse(r)
+		out[i] = seekerRequestOut(r)
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return &apigen.ListMyReferralRequestsOK{Data: out}, nil
 }
 
 // SubmitReferralOffer records a member's offer to refer into a company. The proof CV is a
@@ -327,134 +286,106 @@ func (h *referralHandlers) SubmitReferralOffer(c *fiber.Ctx) error {
 	if err != nil {
 		return referralError(err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toReferralOfferResponse(offer)})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": referralOfferOut(offer)})
 }
 
 // ListMyReferralOffers returns the caller's own offers with moderation status, newest first.
-func (h *referralHandlers) ListMyReferralOffers(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *referralHandlers) ListMyReferralOffers(ctx context.Context) (*apigen.ListMyReferralOffersOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	rows, err := h.referral.ListMyOffers(c.Context(), userID)
+	rows, err := h.referral.ListMyOffers(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]referralOfferResponse, len(rows))
-	for i, o := range rows {
-		out[i] = toReferralOfferResponse(o)
-	}
-	return c.JSON(fiber.Map{"data": out})
+	return &apigen.ListMyReferralOffersOK{Data: referralOffersOut(rows)}, nil
 }
 
 // WithdrawReferralOffer lets a member stop being a referrer by deleting their own offer.
 // RequireAuth; owner-scoped in the service. 404 when the offer is absent or not theirs.
-func (h *referralHandlers) WithdrawReferralOffer(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *referralHandlers) WithdrawReferralOffer(ctx context.Context, params apigen.WithdrawReferralOfferParams) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	id, err := referralPathID(c, "offer not found")
+	id, err := referralUUID(params.ID, "offer not found")
 	if err != nil {
 		return err
 	}
-	if err := h.referral.WithdrawOffer(c.Context(), id, userID); err != nil {
-		return referralError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return referralError(h.referral.WithdrawOffer(ctx, id, userID))
 }
 
 // ListIncomingReferralRequests returns the open requests for every company the caller is an
 // approved referrer of — their inbox.
-func (h *referralHandlers) ListIncomingReferralRequests(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *referralHandlers) ListIncomingReferralRequests(ctx context.Context) (*apigen.ListIncomingReferralRequestsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	rows, err := h.referral.ListIncoming(c.Context(), userID)
+	rows, err := h.referral.ListIncoming(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]incomingRequestResponse, len(rows))
+	out := make([]apigen.ReferralIncomingRequest, len(rows))
 	for i, r := range rows {
-		out[i] = toIncomingRequestResponse(r)
+		out[i] = incomingRequestOut(r)
 	}
-	return c.JSON(fiber.Map{"data": out})
-}
-
-// resolveReferralRequestBody carries the referrer's mark: "contacted" or "declined".
-type resolveReferralRequestBody struct {
-	Status string `json:"status"`
+	return &apigen.ListIncomingReferralRequestsOK{Data: out}, nil
 }
 
 // ResolveReferralRequest marks an incoming request contacted or declined on the caller's
-// behalf, after verifying they are an approved referrer of the request's company.
-func (h *referralHandlers) ResolveReferralRequest(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// behalf, after verifying they are an approved referrer of the request's company. The body's
+// status is "contacted" or "declined".
+func (h *referralHandlers) ResolveReferralRequest(ctx context.Context, req *apigen.ReferralResolve, params apigen.ResolveReferralRequestParams) (*apigen.ResolveReferralRequestOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := referralPathID(c, "referral request not found")
+	id, err := referralUUID(params.ID, "referral request not found")
 	if err != nil {
-		return err
-	}
-	var in resolveReferralRequestBody
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+		return nil, err
 	}
 	var contacted bool
-	switch in.Status {
+	switch req.Status.Or("") {
 	case referral.RequestContacted:
 		contacted = true
 	case referral.RequestDeclined:
 		contacted = false
 	default:
-		return fiber.NewError(fiber.StatusBadRequest, "status must be contacted or declined")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "status must be contacted or declined")
 	}
-	req, err := h.referral.ResolveRequest(c.Context(), id, userID, contacted)
+	resolved, err := h.referral.ResolveRequest(ctx, id, userID, contacted)
 	if err != nil {
-		return referralError(err)
+		return nil, referralError(err)
 	}
-	return c.JSON(fiber.Map{"data": toIncomingRequestResponse(req)})
+	return &apigen.ResolveReferralRequestOK{Data: incomingRequestOut(resolved)}, nil
 }
 
 // ListPendingReferralOffers returns the moderator queue of offers awaiting a decision.
-func (h *referralHandlers) ListPendingReferralOffers(c *fiber.Ctx) error {
-	rows, err := h.referral.ListPendingOffers(c.Context())
+func (h *referralHandlers) ListPendingReferralOffers(ctx context.Context) (*apigen.ListPendingReferralOffersOK, error) {
+	rows, err := h.referral.ListPendingOffers(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]referralOfferResponse, len(rows))
-	for i, o := range rows {
-		out[i] = toReferralOfferResponse(o)
-	}
-	return c.JSON(fiber.Map{"data": out})
-}
-
-// decideReferralOfferBody carries the moderator's verdict.
-type decideReferralOfferBody struct {
-	Approve bool `json:"approve"`
+	return &apigen.ListPendingReferralOffersOK{Data: referralOffersOut(rows)}, nil
 }
 
 // DecideReferralOffer approves or rejects a pending offer. Moderator-gated.
-func (h *referralHandlers) DecideReferralOffer(c *fiber.Ctx) error {
-	moderatorID, err := requireUserID(c)
+func (h *referralHandlers) DecideReferralOffer(ctx context.Context, req *apigen.ReferralDecision, params apigen.DecideReferralOfferParams) (*apigen.DecideReferralOfferOK, error) {
+	moderatorID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := referralPathID(c, "offer not found")
+	id, err := referralUUID(params.ID, "offer not found")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in decideReferralOfferBody
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	offer, err := h.referral.DecideOffer(c.Context(), id, moderatorID, in.Approve)
+	offer, err := h.referral.DecideOffer(ctx, id, moderatorID, req.Approve.Or(false))
 	if err != nil {
-		return referralError(err)
+		return nil, referralError(err)
 	}
-	return c.JSON(fiber.Map{"data": toReferralOfferResponse(offer)})
+	return &apigen.DecideReferralOfferOK{Data: referralOfferOut(offer)}, nil
 }
 
 // ViewReferralRequestCV streams the CV a seeker attached to a request, to an authorized
@@ -564,7 +495,12 @@ func referralProofKey(userID int64, companySlug string) string {
 // owner, so "not visible to you" is a membership answer, and none of the ways to
 // miss should be told apart.
 func referralPathID(c *fiber.Ctx, notFound string) (uuid.UUID, error) {
-	id, err := uuid.Parse(c.Params("id"))
+	return referralUUID(c.Params("id"), notFound)
+}
+
+// referralUUID is referralPathID for an id the contract already read from the path.
+func referralUUID(raw, notFound string) (uuid.UUID, error) {
+	id, err := uuid.Parse(raw)
 	if err != nil {
 		return uuid.Nil, fiber.NewError(fiber.StatusNotFound, notFound)
 	}

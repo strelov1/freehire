@@ -39,6 +39,12 @@ type Handler interface {
 	//
 	// POST /company-relations/{id}/approve
 	ApproveCompanyRelation(ctx context.Context, params ApproveCompanyRelationParams) (*ApproveCompanyRelationOK, error)
+	// ApproveEmployerClaim implements approveEmployerClaim operation.
+	//
+	// Moderators only. The user id travels as a string so a non-number keeps its 400.
+	//
+	// POST /employer/claims/{user_id}/approve
+	ApproveEmployerClaim(ctx context.Context, params ApproveEmployerClaimParams) (*ApproveEmployerClaimOK, error)
 	// ApproveSubmission implements approveSubmission operation.
 	//
 	// Moderators only. 404 for an unknown id, 409 for one already decided.
@@ -168,6 +174,12 @@ type Handler interface {
 	//
 	// GET /stats/catalog
 	CatalogScale(ctx context.Context) (*CatalogScaleOK, error)
+	// ClaimEmployerCompany implements claimEmployerCompany operation.
+	//
+	// Starts a claim: reserves the company and mails a code to the work email.
+	//
+	// POST /employer/claim
+	ClaimEmployerCompany(ctx context.Context, req *EmployerClaim) (*ClaimEmployerCompanyCreated, error)
 	// ClearApplicationStage implements clearApplicationStage operation.
 	//
 	// DELETE /me/applications/{id}/stage
@@ -186,6 +198,10 @@ type Handler interface {
 	//
 	// DELETE /jobs/{slug}/stage
 	ClearStage(ctx context.Context, params ClearStageParams) (*ClearStageOK, error)
+	// CloseEmployerVacancy implements closeEmployerVacancy operation.
+	//
+	// POST /employer/jobs/{slug}/close
+	CloseEmployerVacancy(ctx context.Context, params CloseEmployerVacancyParams) (*CloseEmployerVacancyOK, error)
 	// CloseThread implements closeThread operation.
 	//
 	// Moderators only: closes a thread.
@@ -196,12 +212,24 @@ type Handler interface {
 	//
 	// POST /me/onboarding/complete
 	CompleteOnboarding(ctx context.Context) (*CompleteOnboardingOK, error)
+	// ConfirmEmployerClaim implements confirmEmployerClaim operation.
+	//
+	// Activates at once when the work email matches the company's website, else stays pending.
+	//
+	// POST /employer/claim/confirm
+	ConfirmEmployerClaim(ctx context.Context, req *EmployerConfirm) (*ConfirmEmployerClaimOK, error)
 	// CountThreads implements countThreads operation.
 	//
 	// A subject's open-thread count.
 	//
 	// GET /threads/count
 	CountThreads(ctx context.Context, params CountThreadsParams) (*CountThreadsOK, error)
+	// CreateEmployerVacancy implements createEmployerVacancy operation.
+	//
+	// Publishes, or idempotently updates the caller's own vacancy at the same URL.
+	//
+	// POST /employer/jobs
+	CreateEmployerVacancy(ctx context.Context, req *EmployerVacancyCreate) (*CreateEmployerVacancyCreated, error)
 	// CreateGhostReport implements createGhostReport operation.
 	//
 	// Reports that the job went silent after the caller applied. 403 until the caller's address is
@@ -215,6 +243,12 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/reports
 	CreateJobReport(ctx context.Context, req *JobReportRequest, params CreateJobReportParams) (*CreateJobReportCreated, error)
+	// CreateReferralRequest implements createReferralRequest operation.
+	//
+	// 422 for a bad request, 409 for a duplicate or a company with no referral available.
+	//
+	// POST /me/referrals/requests
+	CreateReferralRequest(ctx context.Context, req *ReferralRequestCreate) (*CreateReferralRequestCreated, error)
 	// CreateReply implements createReply operation.
 	//
 	// Posts a reply to an open thread.
@@ -245,6 +279,12 @@ type Handler interface {
 	//
 	// POST /threads
 	CreateThread(ctx context.Context, req *CreateThreadRequest) (*CreateThreadCreated, error)
+	// DecideReferralOffer implements decideReferralOffer operation.
+	//
+	// Moderators only.
+	//
+	// POST /referrals/offers/{id}/decide
+	DecideReferralOffer(ctx context.Context, req *ReferralDecision, params DecideReferralOfferParams) (*DecideReferralOfferOK, error)
 	// DeclineConversation implements declineConversation operation.
 	//
 	// Refuses a pending conversation.
@@ -321,6 +361,12 @@ type Handler interface {
 	//
 	// GET /email-prefs
 	GetEmailPrefs(ctx context.Context, params GetEmailPrefsParams) (*GetEmailPrefsOK, error)
+	// GetEmployerCompany implements getEmployerCompany operation.
+	//
+	// The caller's own account in any status, with the company profile.
+	//
+	// GET /employer/company
+	GetEmployerCompany(ctx context.Context) (*GetEmployerCompanyOK, error)
 	// GetInterviews implements getInterviews operation.
 	//
 	// The caller's arranged meetings whose start falls in the range.
@@ -523,14 +569,40 @@ type Handler interface {
 	//
 	// GET /me/tracking/dismissed
 	ListDismissedSlugs(ctx context.Context) (*ListDismissedSlugsOK, error)
+	// ListEmployerPendingClaims implements listEmployerPendingClaims operation.
+	//
+	// Moderators only: the claims that could not auto-activate.
+	//
+	// GET /employer/claims
+	ListEmployerPendingClaims(ctx context.Context) (*ListEmployerPendingClaimsOK, error)
+	// ListEmployerVacancies implements listEmployerVacancies operation.
+	//
+	// Every vacancy the caller published, newest first.
+	//
+	// GET /employer/jobs
+	ListEmployerVacancies(ctx context.Context) (*ListEmployerVacanciesOK, error)
 	// ListExperience implements listExperience operation.
 	//
 	// GET /me/experience
 	ListExperience(ctx context.Context) (*ListExperienceOK, error)
+	// ListIncomingReferralRequests implements listIncomingReferralRequests operation.
+	//
+	// The open requests for every company the caller is an approved referrer of.
+	//
+	// GET /me/referrals/incoming
+	ListIncomingReferralRequests(ctx context.Context) (*ListIncomingReferralRequestsOK, error)
 	// ListMyContributions implements listMyContributions operation.
 	//
 	// GET /me/contributions
 	ListMyContributions(ctx context.Context) (*ListMyContributionsOK, error)
+	// ListMyReferralOffers implements listMyReferralOffers operation.
+	//
+	// GET /me/referrals/offers
+	ListMyReferralOffers(ctx context.Context) (*ListMyReferralOffersOK, error)
+	// ListMyReferralRequests implements listMyReferralRequests operation.
+	//
+	// GET /me/referrals/requests
+	ListMyReferralRequests(ctx context.Context) (*ListMyReferralRequestsOK, error)
 	// ListMySubmissions implements listMySubmissions operation.
 	//
 	// GET /me/submissions
@@ -547,6 +619,12 @@ type Handler interface {
 	//
 	// GET /reports
 	ListPendingJobReports(ctx context.Context) (*ListPendingJobReportsOK, error)
+	// ListPendingReferralOffers implements listPendingReferralOffers operation.
+	//
+	// Moderators only: the offers awaiting a decision.
+	//
+	// GET /referrals/offers
+	ListPendingReferralOffers(ctx context.Context) (*ListPendingReferralOffersOK, error)
 	// ListPendingSubmissions implements listPendingSubmissions operation.
 	//
 	// Moderators only.
@@ -559,6 +637,12 @@ type Handler interface {
 	//
 	// GET /threads/recent
 	ListRecentThreads(ctx context.Context, params ListRecentThreadsParams) (*RecentThreadPage, error)
+	// ListReferralCVOptions implements listReferralCVOptions operation.
+	//
+	// The CVs tailored for the vacancy (or any at the company), and whether a CV file is stored.
+	//
+	// GET /me/referrals/cv-options
+	ListReferralCVOptions(ctx context.Context, params ListReferralCVOptionsParams) (*ListReferralCVOptionsOK, error)
 	// ListReportedCompanyFeedback implements listReportedCompanyFeedback operation.
 	//
 	// Moderators only: every review with a report, most reported first.
@@ -695,6 +779,12 @@ type Handler interface {
 	//
 	// POST /company-relations/{id}/reject
 	RejectCompanyRelation(ctx context.Context, params RejectCompanyRelationParams) (*RejectCompanyRelationOK, error)
+	// RejectEmployerClaim implements rejectEmployerClaim operation.
+	//
+	// Moderators only.
+	//
+	// POST /employer/claims/{user_id}/reject
+	RejectEmployerClaim(ctx context.Context, params RejectEmployerClaimParams) (*RejectEmployerClaimOK, error)
 	// RejectSubmission implements rejectSubmission operation.
 	//
 	// Moderators only. The body is optional.
@@ -707,6 +797,10 @@ type Handler interface {
 	//
 	// DELETE /me/watchlist/{slug}
 	RemoveFromWatchlist(ctx context.Context, params RemoveFromWatchlistParams) error
+	// ReopenEmployerVacancy implements reopenEmployerVacancy operation.
+	//
+	// POST /employer/jobs/{slug}/reopen
+	ReopenEmployerVacancy(ctx context.Context, params ReopenEmployerVacancyParams) (*ReopenEmployerVacancyOK, error)
 	// ReportCompanyFeedback implements reportCompanyFeedback operation.
 	//
 	// The id is declared a string and parsed in Go, which keeps the 400 text. A second report by the same
@@ -720,6 +814,12 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/report
 	ReportConversation(ctx context.Context, req *ConversationReportRequest, params ReportConversationParams) error
+	// ResendEmployerClaimCode implements resendEmployerClaimCode operation.
+	//
+	// 409 without a pending claim or when the email is confirmed; 429 inside the cooldown.
+	//
+	// POST /employer/claim/resend
+	ResendEmployerClaimCode(ctx context.Context) (*ResendEmployerClaimCodeOK, error)
 	// ResolveConversationReport implements resolveConversationReport operation.
 	//
 	// Moderators only: marks a report handled. Idempotent; 404 for an unknown id.
@@ -746,6 +846,10 @@ type Handler interface {
 	//
 	// POST /reports/{id}/resolve
 	ResolveJobReport(ctx context.Context, req OptResolveJobReportRequest, params ResolveJobReportParams) (*ResolveJobReportOK, error)
+	// ResolveReferralRequest implements resolveReferralRequest operation.
+	//
+	// POST /me/referrals/incoming/{id}/resolve
+	ResolveReferralRequest(ctx context.Context, req *ReferralResolve, params ResolveReferralRequestParams) (*ResolveReferralRequestOK, error)
 	// RetractGhostReport implements retractGhostReport operation.
 	//
 	// Withdraws the caller's report. 404 when there is none.
@@ -756,6 +860,12 @@ type Handler interface {
 	//
 	// DELETE /companies/{slug}/process-reports
 	RetractProcessReport(ctx context.Context, params RetractProcessReportParams) (*RetractProcessReportOK, error)
+	// RevokeEmployerAccount implements revokeEmployerAccount operation.
+	//
+	// Admins only: deactivates the account but keeps the company reservation.
+	//
+	// POST /employer/claims/{user_id}/revoke
+	RevokeEmployerAccount(ctx context.Context, params RevokeEmployerAccountParams) (*RevokeEmployerAccountOK, error)
 	// SaveBankedAnswer implements saveBankedAnswer operation.
 	//
 	// Saves under the question's topic, replacing the answer already there.
@@ -862,6 +972,14 @@ type Handler interface {
 	//
 	// PATCH /email-prefs
 	UpdateEmailPrefs(ctx context.Context, req *EmailPrefsTokenUpdate) (*UpdateEmailPrefsOK, error)
+	// UpdateEmployerCompany implements updateEmployerCompany operation.
+	//
+	// PATCH /employer/company
+	UpdateEmployerCompany(ctx context.Context, req *EmployerCompanyPatch) (*UpdateEmployerCompanyOK, error)
+	// UpdateEmployerVacancy implements updateEmployerVacancy operation.
+	//
+	// PATCH /employer/jobs/{slug}
+	UpdateEmployerVacancy(ctx context.Context, req *EmployerVacancyPatch, params UpdateEmployerVacancyParams) (*UpdateEmployerVacancyOK, error)
 	// UpdateEmployment implements updateEmployment operation.
 	//
 	// The body is a place; blanks are kept. 404 for an id the caller does not own.
@@ -910,6 +1028,12 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/vote
 	VoteJob(ctx context.Context, req *VoteRequest, params VoteJobParams) (*VoteJobOK, error)
+	// WithdrawReferralOffer implements withdrawReferralOffer operation.
+	//
+	// 404 when the offer is absent or not the caller's.
+	//
+	// DELETE /me/referrals/offers/{id}
+	WithdrawReferralOffer(ctx context.Context, params WithdrawReferralOfferParams) error
 	// NewError creates *ProblemStatusCode from error returned by handler.
 	//
 	// Used for common default response.
