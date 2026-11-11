@@ -4,6 +4,7 @@ package search
 
 import (
 	"context"
+	"maps"
 	"reflect"
 	"testing"
 
@@ -41,9 +42,32 @@ func TestIntegration_VisibilityUpdatesRetainContentAndHideFromAllReaders(t *test
 			if err := c.IndexJobs(ctx, docs); err != nil {
 				t.Fatal(err)
 			}
+			// Retired desc vectors remain in legacy documents after the embedder is
+			// removed. Their nested array total can exceed Rhai's 10,000-item limit.
+			legacyVectors := make([][]float32, 14)
+			for i := range legacyVectors {
+				legacyVectors[i] = make([]float32, 768)
+				legacyVectors[i][i] = 1
+			}
+			task, err := c.facet.UpdateDocumentsWithContext(ctx, []map[string]any{{
+				"id": 1,
+				"_vectors": map[string]any{
+					"skills": docs[0].Vectors.Skills,
+					"desc":   map[string]any{"embeddings": legacyVectors, "regenerate": false},
+				},
+			}}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := c.awaitTask(ctx, c.facet, task.TaskUID); err != nil {
+				t.Fatal(err)
+			}
 			var before map[string]any
 			if err := c.facet.GetDocumentWithContext(ctx, "1", &meilisearch.DocumentQuery{RetrieveVectors: true}, &before); err != nil {
 				t.Fatal(err)
+			}
+			if before["_vectors"].(map[string]any)["desc"] == nil {
+				t.Fatal("legacy desc vectors were not stored")
 			}
 			if err := status.mark(c, ctx, []int64{1, 999}); err != nil {
 				t.Fatal(err)
@@ -55,8 +79,22 @@ func TestIntegration_VisibilityUpdatesRetainContentAndHideFromAllReaders(t *test
 			if raw[status.marker] != true || raw["title"] != "Golang engineer" {
 				t.Fatalf("status update did not preserve the document: %v", raw)
 			}
-			if !reflect.DeepEqual(raw["_vectors"], before["_vectors"]) {
-				t.Fatal("status update changed stored vectors")
+			vectorsBefore := before["_vectors"].(map[string]any)
+			vectorsAfter := raw["_vectors"].(map[string]any)
+			if !reflect.DeepEqual(vectorsAfter["skills"], vectorsBefore["skills"]) {
+				t.Fatal("status update changed active skills vectors")
+			}
+			if _, ok := vectorsAfter["desc"]; ok {
+				t.Fatal("status update retained retired desc vectors")
+			}
+			delete(vectorsBefore, "desc")
+			content := maps.Clone(raw)
+			delete(content, status.marker)
+			if !reflect.DeepEqual(content, before) {
+				t.Fatal("status update changed content beyond its marker and retired vectors")
+			}
+			if err := status.mark(c, ctx, []int64{1, 999}); err != nil {
+				t.Fatalf("repeated status update: %v", err)
 			}
 			stats, err := c.facet.GetStatsWithContext(ctx, nil)
 			if err != nil {
@@ -99,6 +137,13 @@ func TestIntegration_VisibilityUpdatesRetainContentAndHideFromAllReaders(t *test
 			reopened, err := c.Search(ctx, SearchParams{Query: "Golang", Limit: 10})
 			if err != nil || len(reopened.Hits) != 2 {
 				t.Fatalf("reopened document stayed hidden: %+v err=%v", reopened, err)
+			}
+			if err := status.mark(c, ctx, []int64{2}); err != nil {
+				t.Fatalf("status update without retired vectors: %v", err)
+			}
+			modern, err := c.Search(ctx, SearchParams{Query: "Golang", Limit: 10})
+			if err != nil || len(modern.Hits) != 1 || modern.Hits[0].ID != 1 {
+				t.Fatalf("document without retired vectors stayed visible: %+v err=%v", modern, err)
 			}
 		})
 	}

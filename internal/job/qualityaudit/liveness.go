@@ -28,7 +28,7 @@ var statusBlind = map[string]string{
 	"torre":  "a closed posting answers 200 with its state in the page (cmd/liveness/torre.go)",
 }
 
-// Posting is one sampled posting: its stored URL is what gets probed.
+// Posting is one sampled posting, including its stored public URL.
 type Posting struct {
 	ID         int64
 	Source     string
@@ -77,11 +77,15 @@ func (a *Auditor) Run(ctx context.Context, postings []Posting) []Result {
 	results := make([]Result, 0, len(postings))
 	hosts := map[string][]Posting{}
 	for _, p := range postings {
+		if p.Source == "appone" && probeURL(p) == p.URL {
+			results = append(results, Result{Posting: p, Reason: ReasonUncalibrated})
+			continue
+		}
 		if _, blind := statusBlind[p.Source]; blind {
 			results = append(results, Result{Posting: p, Reason: ReasonStatusBlind})
 			continue
 		}
-		u, err := url.Parse(p.URL)
+		u, err := url.Parse(probeURL(p))
 		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 			results = append(results, Result{Posting: p, Reason: ReasonBadURL})
 			continue
@@ -154,7 +158,7 @@ func (a *Auditor) host(ctx context.Context, origin string, postings []Posting, b
 
 	allowed := postings[:0:0]
 	for _, post := range postings {
-		u, _ := url.Parse(post.URL) // Run already parsed it
+		u, _ := url.Parse(probeURL(post)) // Run already parsed it
 		if rules.allowed(u.RequestURI()) {
 			allowed = append(allowed, post)
 		} else {
@@ -166,17 +170,40 @@ func (a *Auditor) host(ctx context.Context, origin string, postings []Posting, b
 		return out
 	}
 
-	if calibrated, stopped := calibrate(ctx, &p, client, rules, postings); !calibrated {
-		return rest(0, cmp.Or(stopped, ReasonUncalibrated))
-	}
-
+	// A host can serve several products with different missing-posting behavior. A canary
+	// for one source cannot certify another source's routes on that host.
+	calibration := map[string]Reason{}
 	for i, post := range postings {
-		status, final, _, ok := p.get(ctx, client, post.URL, false)
+		reason, checked := calibration[post.Source]
+		if !checked {
+			peers := make([]Posting, 0)
+			for _, candidate := range postings {
+				if candidate.Source == post.Source {
+					peers = append(peers, candidate)
+				}
+			}
+			calibrated, stopped := calibrate(ctx, &p, client, rules, peers)
+			if !calibrated {
+				reason = cmp.Or(stopped, ReasonUncalibrated)
+			}
+			calibration[post.Source] = reason
+		}
+		if reason == ReasonRefused || reason == ReasonBudget || reason == ReasonCanceled {
+			return rest(i, reason)
+		}
+		if reason != "" {
+			out = append(out, Result{Posting: post, Reason: reason})
+			continue
+		}
+		status, final, body, ok := p.get(ctx, client, probeURL(post), post.Source == "appone")
 		if !ok {
 			return rest(i, p.stopReason(ctx))
 		}
-		requested, _ := url.Parse(post.URL)
+		requested, _ := url.Parse(probeURL(post))
 		outcome, reason := readStatus(requested, status, final)
+		if post.Source == "appone" && outcome == Live && !appOneDetail(body) {
+			outcome, reason = Unmeasured, ReasonNoAnswer
+		}
 		if reason == ReasonRefused {
 			// The host is metering us. Its answer is not about the posting, and asking again is
 			// how a polite probe becomes a ban for the crawl that shares its IP.
@@ -189,12 +216,12 @@ func (a *Auditor) host(ctx context.Context, origin string, postings []Posting, b
 
 // calibrate asks the host for a posting that cannot exist, built from the first posting whose id
 // can be rewritten, and reports whether the host answered 404/410 — the proof that its 404 means
-// "no such posting" and its 200 means "this posting exists". stopped is set when the budget or
-// the run ended before the canary could be asked.
+// "no such posting" and its 200 means "this posting exists". stopped names a refusal, a spent
+// budget, or a run that ended before the canary could be asked.
 func calibrate(ctx context.Context, p *pacer, client *http.Client, rules robots, postings []Posting) (calibrated bool, stopped Reason) {
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	for _, post := range postings {
-		canary, ok := canaryURL(post.URL, post.ExternalID, rng)
+		canary, ok := canaryURL(probeURL(post), post.ExternalID, rng)
 		if !ok {
 			continue
 		}
@@ -206,7 +233,10 @@ func calibrate(ctx context.Context, p *pacer, client *http.Client, rules robots,
 		if !ok {
 			return false, p.stopReason(ctx)
 		}
-		outcome, _ := readStatus(cu, status, final)
+		outcome, reason := readStatus(cu, status, final)
+		if reason == ReasonRefused {
+			return false, reason
+		}
 		return outcome == Dead, ""
 	}
 	return false, ""
@@ -244,7 +274,7 @@ type pacer struct {
 
 // get waits its turn, takes one request from the budget and fetches rawURL. ok is false when the
 // budget is spent or the run was stopped — not when the fetch failed, which is status 0. withBody
-// returns up to maxRobots of the body as text (robots.txt); otherwise up to maxDrain is drained
+// returns up to maxRobots of the body as text (robots.txt or a source detail); otherwise up to maxDrain is drained
 // and dropped.
 func (p *pacer) get(ctx context.Context, client *http.Client, rawURL string, withBody bool) (status int, final *url.URL, body string, ok bool) {
 	if !p.turn(ctx) {
@@ -256,7 +286,7 @@ func (p *pacer) get(ctx context.Context, client *http.Client, rawURL string, wit
 		return 0, nil, "", true
 	}
 	req.Header.Set("User-Agent", liveness.UserAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	req.Header.Set("Accept", "application/json,text/html,application/xhtml+xml")
 	resp, err := client.Do(req)
 	if errors.Is(err, errStopped) {
 		return 0, nil, "", false
@@ -313,6 +343,7 @@ func (p *pacer) stopReason(ctx context.Context) Reason {
 // source with Live + Dead == 0 was not measurable at all.
 type LivenessCounts struct {
 	Sampled, Live, Dead int64
+	Unmeasured          [len(UnmeasuredReasons)]int64
 }
 
 // TallyLiveness counts results per source.
@@ -326,6 +357,13 @@ func TallyLiveness(results []Result) map[string]LivenessCounts {
 			c.Live++
 		case Dead:
 			c.Dead++
+		case Unmeasured:
+			for i, reason := range UnmeasuredReasons {
+				if r.Reason == reason {
+					c.Unmeasured[i]++
+					break
+				}
+			}
 		}
 		out[r.Posting.Source] = c
 	}

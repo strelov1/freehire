@@ -106,7 +106,7 @@ const expiryWindow = 45 * 24 * time.Hour
 // week) — none of them fullCatalog, all boardless. jobtech is the one member the sweep never
 // touches at all: it is self-closing, closing from its change feed's removals, and a removal
 // the crawl missed inside the feed's 72h window is never sent again (see jobtech.go).
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech"}
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the same
 // plain-GET-then-Classify probe as every orphan candidate — their job pages answer a
@@ -122,14 +122,14 @@ var probeDespiteRegisteredGET = []string{"jobicy", "remoteok", "empregos"}
 // its own evidence — hh's archived flag, djinni's page through the shared Classify, 4dayweek's
 // per-posting API, torre's page state, arbeitnow's status, jobtech's per-ad API.
 func pacedPasses(client *http.Client) []pacedPass {
-	return []pacedPass{
+	return append([]pacedPass{
 		hhPass(client, hhVacancyPage),
 		djinniPass(client),
 		fourDayWeekPass(client, fourDayWeekJobAPI),
 		torrePass(client, torrePostPage),
 		arbeitnowPass(client),
 		jobtechPass(client, jobtechAdAPI),
-	}
+	}, catalogStatusPasses(client)...)
 }
 
 // staleCutoff mirrors cmd/ingest's staleAfter (the sweep's own "unseen" window) via the

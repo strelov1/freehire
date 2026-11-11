@@ -166,7 +166,8 @@ func (s viterbit) detail(ctx context.Context, e CompanyEntry, c viterbitCard) (J
 		EmploymentType: schemaEmploymentType(p.EmploymentType),
 		Countries:      countriesFromCodes(codes),
 	}
-	// TELECOMMUTE is the platform's remote flag; its absence says nothing about hybrid vs onsite.
+	// TELECOMMUTE is the platform's provisional remote flag; explicit hybrid arrangement
+	// prose can contradict it in jobderive. Its absence says nothing about hybrid vs onsite.
 	if strings.EqualFold(p.JobLocationType, "TELECOMMUTE") {
 		j.WorkMode, j.Remote = "remote", true
 	}

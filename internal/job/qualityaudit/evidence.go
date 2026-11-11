@@ -27,8 +27,7 @@ const (
 	Dead
 )
 
-// Reason says why a posting is Unmeasured. It goes to the run log, never to a gauge label: the
-// gauges count only sampled/live/dead and the remainder is the unmeasured share.
+// Reason says why a posting is Unmeasured. The fixed vocabulary bounds metric cardinality.
 type Reason string
 
 const (
@@ -42,6 +41,12 @@ const (
 	ReasonBadURL       Reason = "bad_url"      // the stored URL is not an absolute http(s) URL
 	ReasonCanceled     Reason = "canceled"     // the run was stopped first
 )
+
+// UnmeasuredReasons is the bounded set of coverage failures, in exposition order.
+var UnmeasuredReasons = [...]Reason{
+	ReasonNoAnswer, ReasonMoved, ReasonRefused, ReasonUncalibrated, ReasonRobots,
+	ReasonBudget, ReasonStatusBlind, ReasonBadURL, ReasonCanceled,
+}
 
 // readStatus reads one answer by its status alone. Bodies are never read: the shared body
 // classifier read arbeitnow's live ".ch" pages ("no longer accepting applications from the UK")

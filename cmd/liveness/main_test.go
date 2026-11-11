@@ -24,7 +24,11 @@ var probedButWithheld = map[string]string{
 	// 64 of 100 such rows sampled when the probe landed were dead (~7k of ~11k), and the probe
 	// reads ~5k a day, so the marker would put them back in search for days. Grant it once the
 	// backlog is worked off and only the live tail is left unseen.
-	"arbeitnow": "the probe's backlog is days deep",
+	"arbeitnow":    "the probe's backlog is days deep",
+	"instaffo":     "the probe's backlog is days deep",
+	"remotedotcom": "the probe's backlog is days deep",
+	"thehub":       "the probe's backlog is days deep",
+	"reed":         "the probe's backlog is days deep",
 }
 
 // A source this worker probes is usually one whose crawl cannot re-list every live posting, so

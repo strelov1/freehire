@@ -7173,6 +7173,8 @@ type Querier interface {
 	// One bounded batch of events past retention, moved into the daily counts in a single
 	// statement, so a crash can neither lose a count nor add it twice.
 	RollUpExpiredEmailEvents(ctx context.Context, arg RollUpExpiredEmailEventsParams) (int64, error)
+	// Materialize the narrow source/id scan before fetching any posting columns. The partial
+	// (source, id) open index can supply candidates without reading the catalogue's wide rows.
 	SampleLivenessAuditJobs(ctx context.Context, arg SampleLivenessAuditJobsParams) ([]SampleLivenessAuditJobsRow, error)
 	SampleRemoteAuditJobs(ctx context.Context, arg SampleRemoteAuditJobsParams) ([]SampleRemoteAuditJobsRow, error)
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:

@@ -31,8 +31,15 @@ func (c *Client) markJobs(ctx context.Context, ids []int64, marker string) error
 		return nil
 	}
 	task, err := c.facet.UpdateDocumentsByFunctionWithContext(ctx, &meilisearch.UpdateDocumentByFunctionRequest{
-		Filter:   "(" + In("id", ids) + ") AND NOT " + marker + " = true",
-		Function: "doc." + marker + " = true;",
+		Filter: "(" + In("id", ids) + ") AND NOT " + marker + " = true",
+		// Retired desc vectors remain in legacy documents and can exceed Rhai's
+		// 10,000-item array limit. Clear them before removing the key: remove()
+		// alone returns the oversized value and hits the same interpreter limit.
+		Function: `if "_vectors" in doc {
+			doc._vectors.desc = ();
+			doc._vectors.remove("desc");
+		}
+		doc.` + marker + " = true;",
 	})
 	if err != nil {
 		return fmt.Errorf("search: update %s status: %w", marker, err)

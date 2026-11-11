@@ -35,7 +35,7 @@ func TestJudgeRemoteGrounded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != (Judgement{WorkMode: ModeRemote, Worldwide: WorldwideNo}) {
+	if got != (Judgement{WorkMode: ModeRemote, Worldwide: WorldwideNo, WorkModeQuote: "Fully remote team", WorldwideQuote: "you must live in the EU"}) {
 		t.Errorf("judgement = %+v", got)
 	}
 	// The posting reaches the model as text, and our own tags never do: a judge shown "remote"
