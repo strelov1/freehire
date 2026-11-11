@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -8,26 +9,27 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/buddy"
 	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
 // registerMocks mounts the buddy mock-interview routes (buddy.MockService). Cookie-only,
 // like every buddy route, so a leaked API key cannot book or read a member's mocks.
-func (h *buddyHandlers) registerMocks(api fiber.Router, mw middleware) {
-	api.Get("/me/buddies/mocks", mw.cookie, h.ListMocks)
-	api.Get("/me/buddies/mocks/hosts", mw.cookie, h.MockHosts)
-	api.Get("/me/buddies/mocks/settings", mw.cookie, h.GetMockSettings)
-	api.Put("/me/buddies/mocks/settings", mw.cookie, h.SaveMockSettings)
-	api.Get("/me/buddies/mocks/availability", mw.cookie, h.GetMockAvailability)
-	api.Put("/me/buddies/mocks/availability/weekly", mw.cookie, h.ReplaceMockWeekly)
-	api.Post("/me/buddies/mocks/availability/overrides", mw.cookie, h.AddMockOverride)
-	api.Delete("/me/buddies/mocks/availability/:id", mw.cookie, h.DeleteMockRule)
-	api.Post("/me/buddies/mocks/:id/cancel", mw.cookie, h.CancelMock)
-	api.Post("/me/buddies/mocks/:id/review", mw.cookie, h.ReviewMock)
-	api.Get("/me/buddies/profiles/:handle/mock-slots", mw.cookie, h.MockSlots)
-	api.Post("/me/buddies/profiles/:handle/mocks", mw.cookie, h.BookMock)
-	api.Get("/me/buddies/profiles/:handle/mock-reviews", mw.cookie, h.MockReviews)
+func (h *buddyHandlers) registerMocks(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Get("/me/buddies/mocks", mw.cookie, contract)
+	api.Get("/me/buddies/mocks/hosts", mw.cookie, contract)
+	api.Get("/me/buddies/mocks/settings", mw.cookie, contract)
+	api.Put("/me/buddies/mocks/settings", mw.cookie, contract)
+	api.Get("/me/buddies/mocks/availability", mw.cookie, contract)
+	api.Put("/me/buddies/mocks/availability/weekly", mw.cookie, contract)
+	api.Post("/me/buddies/mocks/availability/overrides", mw.cookie, contract)
+	api.Delete("/me/buddies/mocks/availability/:id", mw.cookie, contract)
+	api.Post("/me/buddies/mocks/:id/cancel", mw.cookie, contract)
+	api.Post("/me/buddies/mocks/:id/review", mw.cookie, contract)
+	api.Get("/me/buddies/profiles/:handle/mock-slots", mw.cookie, contract)
+	api.Post("/me/buddies/profiles/:handle/mocks", mw.cookie, contract)
+	api.Get("/me/buddies/profiles/:handle/mock-reviews", mw.cookie, contract)
 }
 
 // mockError renders a mock sentinel as the status its declaration documents, and anything
@@ -66,122 +68,6 @@ type buddyMockSettingsBody struct {
 
 func toBuddyMockSettingsBody(s buddy.MockSettings) buddyMockSettingsBody {
 	return buddyMockSettingsBody{Timezone: s.Timezone, MeetingURL: s.MeetingURL, Topics: s.Topics, Paused: s.Paused}
-}
-
-// GetMockSettings is the caller's own settings, or null before the first save.
-func (h *buddyHandlers) GetMockSettings(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	s, ok, err := h.mocks.Settings(c.Context(), userID)
-	if err != nil {
-		return mockError(err)
-	}
-	if !ok {
-		return c.JSON(fiber.Map{"data": nil})
-	}
-	return c.JSON(fiber.Map{"data": toBuddyMockSettingsBody(s)})
-}
-
-// SaveMockSettings stores the caller's settings whole.
-func (h *buddyHandlers) SaveMockSettings(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	var in buddyMockSettingsBody
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	s, err := h.mocks.SaveSettings(c.Context(), userID, buddy.MockSettings{
-		Timezone: in.Timezone, MeetingURL: in.MeetingURL, Topics: in.Topics, Paused: in.Paused,
-	})
-	if err != nil {
-		return mockError(err)
-	}
-	return c.JSON(fiber.Map{"data": toBuddyMockSettingsBody(s)})
-}
-
-// GetMockAvailability is the caller's whole schedule, in the mentor schedule's wire shape.
-func (h *buddyHandlers) GetMockAvailability(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	rules, err := h.mocks.Availability(c.Context(), userID)
-	if err != nil {
-		return mockError(err)
-	}
-	return c.JSON(fiber.Map{"data": toAvailabilityResponses(rules)})
-}
-
-// ReplaceMockWeekly swaps the whole recurring week, as the mentor schedule's PUT does.
-func (h *buddyHandlers) ReplaceMockWeekly(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	var req weeklyAvailabilityRequest
-	if err := c.BodyParser(&req); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	rules := make([]slots.Rule, 0, len(req.Rules))
-	for _, raw := range req.Rules {
-		if raw.Date != nil {
-			return fiber.NewError(fiber.StatusUnprocessableEntity,
-				"the weekly schedule takes weekday rules; use the overrides endpoint for a date")
-		}
-		rule, err := raw.toRule()
-		if err != nil {
-			return err
-		}
-		rules = append(rules, rule)
-	}
-	if err := h.mocks.ReplaceWeekly(c.Context(), userID, rules); err != nil {
-		return mockError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
-}
-
-// AddMockOverride adds one dated row and answers it with its id, so it can be removed.
-func (h *buddyHandlers) AddMockOverride(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	var req availabilityRuleRequest
-	if err := c.BodyParser(&req); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	if req.Date == nil {
-		return fiber.NewError(fiber.StatusUnprocessableEntity, "an override needs a date")
-	}
-	rule, err := req.toRule()
-	if err != nil {
-		return err
-	}
-	stored, err := h.mocks.AddOverride(c.Context(), userID, rule)
-	if err != nil {
-		return mockError(err)
-	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toAvailabilityResponse(stored)})
-}
-
-// DeleteMockRule removes one row of the caller's own schedule.
-func (h *buddyHandlers) DeleteMockRule(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	id, err := pathID(c)
-	if err != nil {
-		return err
-	}
-	if err := h.mocks.DeleteRule(c.Context(), userID, id); err != nil {
-		return mockError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
 }
 
 type buddyMockReviewResponse struct {
@@ -235,44 +121,6 @@ func toBuddyMockResponses(entries []buddy.MockEntry) []buddyMockResponse {
 	return out
 }
 
-// ListMocks is the caller's own mocks, upcoming and past.
-func (h *buddyHandlers) ListMocks(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	list, err := h.mocks.List(c.Context(), userID)
-	if err != nil {
-		return mockError(err)
-	}
-	return c.JSON(fiber.Map{"data": fiber.Map{
-		"upcoming": toBuddyMockResponses(list.Upcoming),
-		"past":     toBuddyMockResponses(list.Past),
-	}})
-}
-
-// MockSlots lists a member's open slots in the viewer's zone, with the topics they offer.
-// The meeting link is never part of it.
-func (h *buddyHandlers) MockSlots(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	from, to, err := slotWindow(c)
-	if err != nil {
-		return err
-	}
-	res, err := h.mocks.OpenSlots(c.Context(), userID, c.Params("handle"), from, to, c.Query("timezone"))
-	if err != nil {
-		return mockError(err)
-	}
-	out := slotResponses(res.Slots)
-	return c.JSON(fiber.Map{
-		"data": out,
-		"meta": fiber.Map{"timezone": res.Zone, "count": len(out), "topics": res.Topics},
-	})
-}
-
 // buddyMockHostResponse is one member who runs mocks, as the hosts listing shows them:
 // the handle and card summary every buddy list shows, the topics they offer, their
 // soonest open slot in the viewer's zone, and the member page's review aggregate. No
@@ -291,20 +139,6 @@ type buddyMockNextSlot struct {
 	StartsAt   time.Time `json:"starts_at"`
 	LocalStart string    `json:"local_start"`
 	UTCOffset  string    `json:"utc_offset"`
-}
-
-// MockHosts lists the members the caller could book a mock with now, soonest first.
-func (h *buddyHandlers) MockHosts(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	res, err := h.mocks.Hosts(c.Context(), userID, c.Query("topic"), c.Query("timezone"))
-	if err != nil {
-		return mockError(err)
-	}
-	out := toBuddyMockHostResponses(res)
-	return c.JSON(fiber.Map{"data": out, "meta": fiber.Map{"timezone": res.Zone, "count": len(out)}})
 }
 
 func toBuddyMockHostResponses(res buddy.MockHosts) []buddyMockHostResponse {
@@ -326,107 +160,302 @@ type buddyBookMockBody struct {
 	Timezone string    `json:"timezone"`
 }
 
-// BookMock takes one of a member's slots for the caller, as guest.
-func (h *buddyHandlers) BookMock(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// The routes below implement the contract (typespec/buddies.tsp); the types above stay for
+// the MCP tools, which the SDK validates against the Go type.
+
+func buddyMockSettingsOut(s buddy.MockSettings) apigen.BuddyMockSettingsOut {
+	return apigen.BuddyMockSettingsOut{Timezone: s.Timezone, MeetingURL: s.MeetingURL, Topics: s.Topics, Paused: s.Paused}
+}
+
+// BuddyMockSettingsGet is the caller's own settings, or null before the first save.
+func (h *buddyHandlers) BuddyMockSettingsGet(ctx context.Context) (*apigen.BuddyMockSettingsGetOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s, ok, err := h.mocks.Settings(ctx, userID)
+	if err != nil {
+		return nil, mockError(err)
+	}
+	if !ok {
+		return &apigen.BuddyMockSettingsGetOK{Data: apigen.NilBuddyMockSettingsOut{Null: true}}, nil
+	}
+	return &apigen.BuddyMockSettingsGetOK{Data: apigen.NewNilBuddyMockSettingsOut(buddyMockSettingsOut(s))}, nil
+}
+
+// BuddyMockSettingsSave stores the caller's settings whole.
+func (h *buddyHandlers) BuddyMockSettingsSave(ctx context.Context, req *apigen.BuddyMockSettings) (*apigen.BuddyMockSettingsSaveOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s, err := h.mocks.SaveSettings(ctx, userID, buddy.MockSettings{
+		Timezone: req.Timezone.Value, MeetingURL: req.MeetingURL.Value, Topics: req.Topics.Value, Paused: req.Paused.Value,
+	})
+	if err != nil {
+		return nil, mockError(err)
+	}
+	return &apigen.BuddyMockSettingsSaveOK{Data: buddyMockSettingsOut(s)}, nil
+}
+
+func availabilityRuleOut(rule slots.Rule) apigen.BuddyMockRuleOut {
+	r := toAvailabilityResponse(rule)
+	out := apigen.BuddyMockRuleOut{ID: r.ID, Start: r.Start, End: r.End, Closure: r.Closure}
+	if r.Weekday != nil {
+		out.Weekday = apigen.NewNilInt64(int64(*r.Weekday))
+	} else {
+		out.Weekday.SetToNull()
+	}
+	out.Date = nilString(r.Date)
+	return out
+}
+
+// ruleRequestIn is a contract schedule row as the mentor schedule's request type reads it.
+func ruleRequestIn(r apigen.BuddyMockRule) availabilityRuleRequest {
+	return availabilityRuleRequest{
+		Weekday: intPtrOf(r.Weekday.Get), Date: ptrOf(r.Date.Get), Start: r.Start.Value, End: r.End.Value,
+	}
+}
+
+// BuddyMockAvailabilityGet is the caller's whole schedule, in the mentor schedule's wire shape.
+func (h *buddyHandlers) BuddyMockAvailabilityGet(ctx context.Context) (*apigen.BuddyMockAvailabilityGetOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rules, err := h.mocks.Availability(ctx, userID)
+	if err != nil {
+		return nil, mockError(err)
+	}
+	out := make([]apigen.BuddyMockRuleOut, 0, len(rules))
+	for _, rule := range rules {
+		out = append(out, availabilityRuleOut(rule))
+	}
+	return &apigen.BuddyMockAvailabilityGetOK{Data: out}, nil
+}
+
+// BuddyMockWeeklyReplace swaps the whole recurring week, as the mentor schedule's PUT does.
+func (h *buddyHandlers) BuddyMockWeeklyReplace(ctx context.Context, req *apigen.BuddyMockWeekly) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	var in buddyBookMockBody
-	if err := c.BodyParser(&in); err != nil || in.StartsAt.IsZero() || in.Topic == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "starts_at and topic are required")
+	rules := make([]slots.Rule, 0, len(req.Rules))
+	for _, raw := range req.Rules {
+		in := ruleRequestIn(raw)
+		if in.Date != nil {
+			return fiber.NewError(fiber.StatusUnprocessableEntity,
+				"the weekly schedule takes weekday rules; use the overrides endpoint for a date")
+		}
+		rule, err := in.toRule()
+		if err != nil {
+			return err
+		}
+		rules = append(rules, rule)
 	}
-	m, err := h.mocks.Book(c.Context(), buddy.BookInput{
-		HostHandle: c.Params("handle"), GuestUserID: userID, StartsAt: in.StartsAt,
-		Topic: in.Topic, GuestZone: in.Timezone,
-	})
-	if err != nil {
-		return mockError(err)
-	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toBuddyMockResponse(m.EntryFor(userID, time.Now()))})
+	return mockError(h.mocks.ReplaceWeekly(ctx, userID, rules))
 }
 
-// mockIDParam reads the mock id from the path. A malformed one is 404: an id that cannot
+// BuddyMockOverrideAdd adds one dated row and answers it with its id, so it can be removed.
+func (h *buddyHandlers) BuddyMockOverrideAdd(ctx context.Context, req *apigen.BuddyMockRule) (*apigen.BuddyMockOverrideAddCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	in := ruleRequestIn(*req)
+	if in.Date == nil {
+		return nil, fiber.NewError(fiber.StatusUnprocessableEntity, "an override needs a date")
+	}
+	rule, err := in.toRule()
+	if err != nil {
+		return nil, err
+	}
+	stored, err := h.mocks.AddOverride(ctx, userID, rule)
+	if err != nil {
+		return nil, mockError(err)
+	}
+	return &apigen.BuddyMockOverrideAddCreated{Data: availabilityRuleOut(stored)}, nil
+}
+
+// BuddyMockRuleDelete removes one row of the caller's own schedule.
+func (h *buddyHandlers) BuddyMockRuleDelete(ctx context.Context, params apigen.BuddyMockRuleDeleteParams) error {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	id, err := contractPathID(params.ID)
+	if err != nil {
+		return err
+	}
+	return mockError(h.mocks.DeleteRule(ctx, userID, id))
+}
+
+func buddyMockReviewOut(r *buddy.MockReview) apigen.NilBuddyMockReview {
+	if r == nil {
+		return apigen.NilBuddyMockReview{Null: true}
+	}
+	return apigen.NewNilBuddyMockReview(apigen.BuddyMockReview{Rating: int64(r.Rating), Comment: r.Comment})
+}
+
+func buddyMockOut(e buddy.MockEntry) apigen.BuddyMock {
+	return apigen.BuddyMock{
+		ID: e.ID.String(), Role: e.Role, StartsAt: e.StartsAt.UTC(), EndsAt: e.EndsAt.UTC(),
+		Topic: e.Topic, Status: e.Status, CanCancel: e.CanCancel, CanReview: e.CanReview,
+		Counterpart: nilString(nilIfEmptyPtr(e.Counterpart)), MeetingURL: nilString(nilIfEmptyPtr(e.MeetingURL)),
+		MyReview: buddyMockReviewOut(e.MyReview), TheirReview: buddyMockReviewOut(e.TheirReview),
+	}
+}
+
+func buddyMocksOut(entries []buddy.MockEntry) []apigen.BuddyMock {
+	out := make([]apigen.BuddyMock, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, buddyMockOut(e))
+	}
+	return out
+}
+
+func nilIfEmptyPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// BuddyMockList is the caller's own mocks, upcoming and past.
+func (h *buddyHandlers) BuddyMockList(ctx context.Context) (*apigen.BuddyMockListOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	list, err := h.mocks.List(ctx, userID)
+	if err != nil {
+		return nil, mockError(err)
+	}
+	return &apigen.BuddyMockListOK{Data: apigen.BuddyMockList{
+		Upcoming: buddyMocksOut(list.Upcoming), Past: buddyMocksOut(list.Past),
+	}}, nil
+}
+
+// BuddyMockSlots lists a member's open slots in the viewer's zone, with the topics they offer.
+// The meeting link is never part of it.
+func (h *buddyHandlers) BuddyMockSlots(ctx context.Context, params apigen.BuddyMockSlotsParams) (*apigen.BuddyMockSlotsPage, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	from, to, err := slotWindowOf(params.From.Value, params.To.Value)
+	if err != nil {
+		return nil, err
+	}
+	res, err := h.mocks.OpenSlots(ctx, userID, params.Handle, from, to, params.Timezone.Value)
+	if err != nil {
+		return nil, mockError(err)
+	}
+	out := make([]apigen.BuddyMockSlot, 0, len(res.Slots))
+	for _, s := range slotResponses(res.Slots) {
+		out = append(out, apigen.BuddyMockSlot{
+			StartsAt: s.StartsAt, EndsAt: s.EndsAt, LocalStart: s.LocalStart, LocalEnd: s.LocalEnd, UtcOffset: s.UTCOffset,
+		})
+	}
+	return &apigen.BuddyMockSlotsPage{
+		Data: out,
+		Meta: apigen.BuddyMockSlotsMeta{Timezone: res.Zone, Count: int64(len(out)), Topics: res.Topics},
+	}, nil
+}
+
+// BuddyMockHosts lists the members the caller could book a mock with now, soonest first.
+func (h *buddyHandlers) BuddyMockHosts(ctx context.Context, params apigen.BuddyMockHostsParams) (*apigen.BuddyMockHostsPage, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := h.mocks.Hosts(ctx, userID, params.Topic.Value, params.Timezone.Value)
+	if err != nil {
+		return nil, mockError(err)
+	}
+	out := make([]apigen.BuddyMockHost, 0, len(res.Hosts))
+	for _, host := range res.Hosts {
+		slot := slotResponses([]slots.Interval{host.NextSlot})[0]
+		out = append(out, apigen.BuddyMockHost{
+			Handle: host.Handle, CardSummary: buddyCardSummaryOut(host.Card), Topics: host.Topics,
+			NextSlot:  apigen.BuddyMockNextSlot{StartsAt: slot.StartsAt, LocalStart: slot.LocalStart, UtcOffset: slot.UTCOffset},
+			RatingAvg: host.Summary.RatingAvg, RatingCount: int64(host.Summary.RatingCount), Completed: int64(host.Summary.Completed),
+		})
+	}
+	return &apigen.BuddyMockHostsPage{Data: out, Meta: apigen.BuddyMockHostsMeta{Timezone: res.Zone, Count: int64(len(out))}}, nil
+}
+
+// BuddyMockBook takes one of a member's slots for the caller, as guest.
+func (h *buddyHandlers) BuddyMockBook(ctx context.Context, req *apigen.BuddyMockBook, params apigen.BuddyMockBookParams) (*apigen.BuddyMockBookCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.StartsAt.Value.IsZero() || req.Topic.Value == "" {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "starts_at and topic are required")
+	}
+	m, err := h.mocks.Book(ctx, buddy.BookInput{
+		HostHandle: params.Handle, GuestUserID: userID, StartsAt: req.StartsAt.Value,
+		Topic: req.Topic.Value, GuestZone: req.Timezone.Value,
+	})
+	if err != nil {
+		return nil, mockError(err)
+	}
+	return &apigen.BuddyMockBookCreated{Data: buddyMockOut(m.EntryFor(userID, time.Now()))}, nil
+}
+
+// mockIDOf reads the mock id from the path. A malformed one is 404: an id that cannot
 // exist and one that does not are the same answer.
-func mockIDParam(c *fiber.Ctx) (uuid.UUID, error) {
-	id, err := uuid.Parse(c.Params("id"))
+func mockIDOf(raw string) (uuid.UUID, error) {
+	id, err := uuid.Parse(raw)
 	if err != nil {
 		return uuid.UUID{}, fiber.NewError(fiber.StatusNotFound, "mock interview not found")
 	}
 	return id, nil
 }
 
-// CancelMock cancels one of the caller's mocks before it starts.
-func (h *buddyHandlers) CancelMock(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// BuddyMockCancel cancels one of the caller's mocks before it starts.
+func (h *buddyHandlers) BuddyMockCancel(ctx context.Context, params apigen.BuddyMockCancelParams) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	id, err := mockIDParam(c)
+	id, err := mockIDOf(params.ID)
 	if err != nil {
 		return err
 	}
-	if err := h.mocks.Cancel(c.Context(), userID, id); err != nil {
-		return mockError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return mockError(h.mocks.Cancel(ctx, userID, id))
 }
 
-type buddyMockReviewBody struct {
-	Rating  int    `json:"rating"`
-	Comment string `json:"comment"`
-}
-
-// ReviewMock rates the other participant of one of the caller's mocks.
-func (h *buddyHandlers) ReviewMock(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// BuddyMockReview rates the other participant of one of the caller's mocks.
+func (h *buddyHandlers) BuddyMockReview(ctx context.Context, req *apigen.BuddyMockReviewBody, params apigen.BuddyMockReviewParams) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	id, err := mockIDParam(c)
+	id, err := mockIDOf(params.ID)
 	if err != nil {
 		return err
 	}
-	var in buddyMockReviewBody
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	if err := h.mocks.Review(c.Context(), userID, id, in.Rating, in.Comment); err != nil {
-		return mockError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return mockError(h.mocks.Review(ctx, userID, id, int(req.Rating.Value), req.Comment.Value))
 }
 
-type buddyRevealedReviewResponse struct {
-	Rating  int    `json:"rating"`
-	Comment string `json:"comment"`
-	Topic   string `json:"topic"`
-	Day     string `json:"day"`
-}
-
-type buddyMockSummaryResponse struct {
-	Completed   int                           `json:"completed"`
-	RatingCount int                           `json:"rating_count"`
-	RatingAvg   float64                       `json:"rating_avg"`
-	Recent      []buddyRevealedReviewResponse `json:"recent"`
-}
-
-// MockReviews is what a member page shows about that member's mocks.
-func (h *buddyHandlers) MockReviews(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// BuddyMockReviews is what a member page shows about that member's mocks.
+func (h *buddyHandlers) BuddyMockReviews(ctx context.Context, params apigen.BuddyMockReviewsParams) (*apigen.BuddyMockReviewsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	sum, err := h.mocks.MemberSummary(c.Context(), userID, c.Params("handle"))
+	sum, err := h.mocks.MemberSummary(ctx, userID, params.Handle)
 	if err != nil {
-		return mockError(err)
+		return nil, mockError(err)
 	}
-	out := buddyMockSummaryResponse{
-		Completed: sum.Completed, RatingCount: sum.RatingCount, RatingAvg: sum.RatingAvg,
-		Recent: make([]buddyRevealedReviewResponse, 0, len(sum.Recent)),
+	out := apigen.BuddyMockSummary{
+		Completed: int64(sum.Completed), RatingCount: int64(sum.RatingCount), RatingAvg: sum.RatingAvg,
+		Recent: make([]apigen.BuddyRevealedReview, 0, len(sum.Recent)),
 	}
 	for _, r := range sum.Recent {
-		out.Recent = append(out.Recent, buddyRevealedReviewResponse{Rating: r.Rating, Comment: r.Comment, Topic: r.Topic, Day: r.Day})
+		out.Recent = append(out.Recent, apigen.BuddyRevealedReview{Rating: int64(r.Rating), Comment: r.Comment, Topic: r.Topic, Day: r.Day})
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return &apigen.BuddyMockReviewsOK{Data: out}, nil
 }

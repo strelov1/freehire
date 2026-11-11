@@ -353,16 +353,21 @@ const maxSlotWindowDays = 62
 
 // slotWindow reads the requested window, defaulting to the next 30 days.
 func slotWindow(c *fiber.Ctx) (from, to time.Time, err error) {
+	return slotWindowOf(c.Query("from"), c.Query("to"))
+}
+
+// slotWindowOf is slotWindow over the raw from and to values.
+func slotWindowOf(rawFrom, rawTo string) (from, to time.Time, err error) {
 	var fromAt, toAt *time.Time
-	if raw := c.Query("from"); raw != "" {
-		parsed, parseErr := time.Parse(time.RFC3339, raw)
+	if rawFrom != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, rawFrom)
 		if parseErr != nil {
 			return from, to, fiber.NewError(fiber.StatusBadRequest, "from must be an RFC 3339 timestamp")
 		}
 		fromAt = &parsed
 	}
-	if raw := c.Query("to"); raw != "" {
-		parsed, parseErr := time.Parse(time.RFC3339, raw)
+	if rawTo != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, rawTo)
 		if parseErr != nil {
 			return from, to, fiber.NewError(fiber.StatusBadRequest, "to must be an RFC 3339 timestamp")
 		}

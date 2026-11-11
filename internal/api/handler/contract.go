@@ -58,6 +58,7 @@ type contractHandlers struct {
 	*profileHandlers
 	*conversationHandlers
 	*communityHandlers
+	*buddyHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}
