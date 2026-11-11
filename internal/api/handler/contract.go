@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
@@ -57,7 +58,9 @@ func newContract(h contractHandlers) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		fault := &contractFault{}
 		c.Locals(localsContractFault, fault)
-		c.Locals(localsContractQuery, queryValues(c))
+		query := queryValues(c)
+		c.Locals(localsContractQuery, query)
+		defer servedAsFiberWould(c, query)()
 		// Fiber routes HEAD to every Get, but the generated router knows only the
 		// methods the contract names. Serve it as GET and put HEAD back, so fasthttp,
 		// which decides after the handler, still drops the body.
@@ -117,6 +120,40 @@ func recordContractFault(ctx context.Context, err error) {
 	if fault, ok := ctx.Value(localsContractFault).(*contractFault); ok {
 		fault.err = err
 	}
+}
+
+// servedAsFiberWould hands the generated router the request the way Fiber already
+// accepted it, and returns what puts the original back: Fiber matches a route with one
+// trailing slash and reads the first of repeated params, while the generated router
+// 404s the slash and refuses a repeated scalar param with a 400.
+//
+// shortcut: every repeated param is cut to its first value, which would also cut an
+// exploded array param; declare one only after this keeps the arrays the contract names.
+func servedAsFiberWould(c *fiber.Ctx, query url.Values) (restore func()) {
+	uri := c.Request().URI()
+	path, rawQuery := string(uri.Path()), string(uri.QueryString())
+	changed := false
+	if len(path) > 1 && strings.HasSuffix(path, "/") {
+		path, changed = strings.TrimSuffix(path, "/"), true
+	}
+	for _, vals := range query {
+		if len(vals) > 1 {
+			first := make(url.Values, len(query))
+			for k, v := range query {
+				first[k] = v[:1]
+			}
+			rawQuery, changed = first.Encode(), true
+			break
+		}
+	}
+	if !changed {
+		return func() {}
+	}
+	// The net/http adaptor reads the request line, not the parsed URI.
+	original := string(c.Request().RequestURI())
+	target := (&url.URL{Path: path, RawQuery: rawQuery}).RequestURI()
+	c.Request().SetRequestURI(target)
+	return func() { c.Request().SetRequestURI(original) }
 }
 
 // contractQuery is the request's whole query, for an operation that reports what it did

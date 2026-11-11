@@ -511,3 +511,33 @@ func TestTalentFacets_ReportsParamsItDidNotRead(t *testing.T) {
 		t.Errorf("ignored_params = %+v, want [countries]", out.Meta.IgnoredParams)
 	}
 }
+
+// The generated router refuses what Fiber has always accepted: a trailing slash and a
+// repeated param (Fiber reads the first). Both must keep answering as before.
+func TestTalentCatalog_AnswersFiberShapedURLsAsBefore(t *testing.T) {
+	store := &fakeTalentCatalogStore{rows: []db.ListTalentNetworkMembersRow{
+		catalogRow("backend-aaaa", catalogBackendCV, time.Now()),
+		catalogRow("frontend-bbbb", catalogFrontendCV, time.Now()),
+	}}
+	app := talentCatalogApp(store, nil)
+	for target, wantTotal := range map[string]string{
+		"/talent/":        `"total":2`,
+		"/talent/facets/": `"total":2`,
+		"/talent?categories=backend&categories=frontend":        `"total":1`,
+		"/talent/facets?categories=backend&categories=frontend": `"total":1`,
+	} {
+		resp := doTalent(t, app, target)
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), wantTotal) {
+			t.Errorf("%s = %d %s, want 200 with %s", target, resp.StatusCode, body, wantTotal)
+		}
+	}
+	// A member route with the slash reaches the member handler: its own 404, not the router's.
+	resp := doTalent(t, app, "/talent/nobody/")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusNotFound || !strings.Contains(string(body), `"error":"not found"`) {
+		t.Errorf("/talent/nobody/ = %d %s, want the handler's 404", resp.StatusCode, body)
+	}
+}
