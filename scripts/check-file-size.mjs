@@ -18,6 +18,8 @@ const IGNORED = [
   /(^|\/)(pnpm-lock\.yaml|package-lock\.json|go\.sum)$/,
   /(^|\/)(testdata|fixtures|generated)\//,
   /^internal\/platform\/db\/[^/]+\.go$/, // sqlc output
+  /^internal\/api\/apigen\/oas_[a-z_]+_gen\.go$/, // ogen output (make api-contract)
+  /^openapi\/api\.openapi\.json$/, // compiled from typespec/
   /^openspec\/changes\/archive\//,
   /^docs\/(superpowers|reviews)\//,
   /^docs\/API(\.internal)?\.md$/,

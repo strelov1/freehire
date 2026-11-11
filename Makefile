@@ -1,4 +1,4 @@
-.PHONY: help run reindex build tidy sqlc mail-preview gen-contracts gen-cities gen-metros gen-skill-descriptions cv-previews up down logs migrate psql cover cover-html cover-integration
+.PHONY: help run reindex build tidy sqlc api-contract mail-preview gen-contracts gen-cities gen-metros gen-skill-descriptions cv-previews up down logs migrate psql cover cover-html cover-integration
 
 # Prefer Docker; fall back to Podman when `docker` is missing. Override with
 # `make DOCKER=podman up` (or COMPOSE=…) when both are installed.
@@ -42,6 +42,10 @@ mail-preview: ## Render every outgoing email and open the contact sheet in a bro
 	@go run ./cmd/mail-preview
 	@(open $(MAIL_PREVIEW_DIR)/index.html 2>/dev/null || xdg-open $(MAIL_PREVIEW_DIR)/index.html 2>/dev/null) || \
 		echo "open $(MAIL_PREVIEW_DIR)/index.html"
+
+api-contract: ## Compile typespec/ to openapi/api.openapi.json, then generate internal/api/apigen from it
+	pnpm exec tsp compile typespec
+	go tool ogen --config ogen.yml --target internal/api/apigen --package apigen --clean openapi/api.openapi.json
 
 gen-contracts: ## Regenerate web/src/lib/generated/contracts.ts from Go contracts
 	go run ./cmd/gen-contracts

@@ -41,8 +41,9 @@ export default {
       project: ['scripts/**'],
       // check-migrations.mjs builds a path to node_modules/.bin/squawk, which knip reads as
       // an import of a package called `squawk`. The package is `squawk-cli`, and it is used
-      // through that path rather than through an import.
-      ignoreDependencies: ['squawk-cli', 'squawk'],
+      // through that path rather than through an import. The @typespec packages are
+      // imported from typespec/*.tsp and run by `make api-contract`; knip reads neither.
+      ignoreDependencies: ['squawk-cli', 'squawk', /^@typespec\//],
     },
 
     'design-system': {

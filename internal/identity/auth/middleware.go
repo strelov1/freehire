@@ -196,6 +196,15 @@ func UserID(c *fiber.Ctx) (int64, bool) {
 	return id, ok
 }
 
+// UserIDFromContext is UserID for a net/http handler mounted through Fiber's adaptor
+// (the generated contract server, internal/api/apigen). Fiber keeps Locals in the
+// fasthttp RequestCtx user values, and the adaptor hands that RequestCtx on as the
+// request's context, so the value set by RequireAuth is visible here.
+func UserIDFromContext(ctx context.Context) (int64, bool) {
+	id, ok := ctx.Value(LocalsUserID).(int64)
+	return id, ok
+}
+
 // APIKeyIdentity is what a live API key resolves to: its owner and the scope it was
 // minted with. It is a plain struct so this package needs no database import.
 type APIKeyIdentity struct {

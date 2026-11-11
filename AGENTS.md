@@ -55,6 +55,7 @@ public submission queue are `ingest` (manual job intake, not applications).
 Non-obvious:
 
 - `migrations/` — the source for **both** sqlc codegen and Postgres initdb. **Never edit an applied migration; add a new file** (`pnpm check:sql` enforces it).
+- `typespec/` — **the HTTP contract**, moving in one route group at a time: `make api-contract` compiles it to `openapi/api.openapi.json` and generates `internal/api/apigen` (both committed, never edited by hand). See [internal/api/AGENTS.md](internal/api/AGENTS.md#the-http-contract-typespec--openapi--ogen).
 - `internal/platform/db/` — **generated**; edit `internal/platform/db/queries/*.sql` and run `make sqlc` (the hook and CI regenerate and diff).
 - **Files have a size limit.** `scripts/check-file-size.mjs` (a pre-commit hook on staged files, the `file-size` CI job and `pnpm check:size` over all files) fails on a file over its `MAX_TOKENS` (tokens = bytes / 4), and its error says how to split one. Lockfiles, generated code, data assets, applied migrations and frozen history are ignored. The limit goes down step by step to 5000 as big files are split: lower it in the change that splits the files above the new value, never raise it.
 - **There is no `sources/` directory.** The board catalog is the `boards` table (`internal/ingest/boardcatalog`) and the Telegram channel list is `telegram_channels`; nothing parses a board file any more. `internal/ingest/sources` is the *adapters*, not the catalog.
