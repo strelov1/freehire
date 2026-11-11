@@ -45,6 +45,7 @@ mail-preview: ## Render every outgoing email and open the contact sheet in a bro
 
 api-contract: ## Compile typespec/ to openapi/api.openapi.json, then generate internal/api/apigen from it
 	pnpm exec tsp compile typespec
+	node scripts/openapi-time-format.mjs openapi/api.openapi.json
 	go tool ogen --config ogen.yml --target internal/api/apigen --package apigen --clean openapi/api.openapi.json
 
 gen-contracts: ## Regenerate web/src/lib/generated/contracts.ts from Go contracts

@@ -1255,7 +1255,7 @@ func (s *BankedAnswer) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("updated_at")
-		json.EncodeDateTime(e, s.UpdatedAt)
+		json.EncodeTimeFormat(e, s.UpdatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
@@ -1340,7 +1340,7 @@ func (s *BankedAnswer) Decode(d *jx.Decoder) error {
 		case "updated_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.UpdatedAt = v
 				if err != nil {
 					return err
@@ -9264,11 +9264,11 @@ func (s *CompanyFeedback) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("updated_at")
-		json.EncodeDateTime(e, s.UpdatedAt)
+		json.EncodeTimeFormat(e, s.UpdatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		if s.Company.Set {
@@ -9361,7 +9361,7 @@ func (s *CompanyFeedback) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -9373,7 +9373,7 @@ func (s *CompanyFeedback) Decode(d *jx.Decoder) error {
 		case "updated_at":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.UpdatedAt = v
 				if err != nil {
 					return err
@@ -10152,7 +10152,7 @@ func (s *CompanyRelationProposal) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
@@ -10250,7 +10250,7 @@ func (s *CompanyRelationProposal) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -10637,7 +10637,7 @@ func (s *Contribution) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		s.CreatedAt.Encode(e, json.EncodeDateTime)
+		s.CreatedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 }
 
@@ -10735,7 +10735,7 @@ func (s *Contribution) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				if err := s.CreatedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.CreatedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -17459,7 +17459,7 @@ func (s *GhostReport) encodeFields(e *jx.Encoder) {
 	{
 		if s.CreatedAt.Set {
 			e.FieldStart("created_at")
-			s.CreatedAt.Encode(e, json.EncodeDateTime)
+			s.CreatedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 		}
 	}
 }
@@ -17506,7 +17506,7 @@ func (s *GhostReport) Decode(d *jx.Decoder) error {
 		case "created_at":
 			if err := func() error {
 				s.CreatedAt.Reset()
-				if err := s.CreatedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.CreatedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -18828,12 +18828,12 @@ func (s *JobReport) encodeFields(e *jx.Encoder) {
 	{
 		if s.ReviewedAt.Set {
 			e.FieldStart("reviewed_at")
-			s.ReviewedAt.Encode(e, json.EncodeDateTime)
+			s.ReviewedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 		}
 	}
 	{
 		e.FieldStart("created_at")
-		s.CreatedAt.Encode(e, json.EncodeDateTime)
+		s.CreatedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		if s.ReporterEmail.Set {
@@ -18956,7 +18956,7 @@ func (s *JobReport) Decode(d *jx.Decoder) error {
 		case "reviewed_at":
 			if err := func() error {
 				s.ReviewedAt.Reset()
-				if err := s.ReviewedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.ReviewedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -18966,7 +18966,7 @@ func (s *JobReport) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
-				if err := s.CreatedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.CreatedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -21726,7 +21726,7 @@ func (s *ModeratedUser) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("banned_at")
-		s.BannedAt.Encode(e, json.EncodeDateTime)
+		s.BannedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("ban_reason")
@@ -21814,7 +21814,7 @@ func (s *ModeratedUser) Decode(d *jx.Decoder) error {
 		case "banned_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				if err := s.BannedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.BannedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -22313,14 +22313,14 @@ func (o *NilDateTime) Decode(d *jx.Decoder, format func(*jx.Decoder) (time.Time,
 // MarshalJSON implements stdjson.Marshaler.
 func (s NilDateTime) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
-	s.Encode(&e, json.EncodeDateTime)
+	s.Encode(&e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *NilDateTime) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
-	return s.Decode(d, json.DecodeDateTime)
+	return s.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00"))
 }
 
 // Encode encodes DerivedLocation as json.
@@ -23525,14 +23525,14 @@ func (o *OptDateTime) Decode(d *jx.Decoder, format func(*jx.Decoder) (time.Time,
 // MarshalJSON implements stdjson.Marshaler.
 func (s OptDateTime) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
-	s.Encode(&e, json.EncodeDateTime)
+	s.Encode(&e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *OptDateTime) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
-	return s.Decode(d, json.DecodeDateTime)
+	return s.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00"))
 }
 
 // Encode encodes DismissJobReportRequest as json.
@@ -24198,7 +24198,7 @@ func (s *PendingCompanyRelation) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("status")
@@ -24340,7 +24340,7 @@ func (s *PendingCompanyRelation) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -25779,11 +25779,11 @@ func (s *Profile) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		s.CreatedAt.Encode(e, json.EncodeDateTime)
+		s.CreatedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("updated_at")
-		s.UpdatedAt.Encode(e, json.EncodeDateTime)
+		s.UpdatedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 }
 
@@ -26037,7 +26037,7 @@ func (s *Profile) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
-				if err := s.CreatedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.CreatedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -26047,7 +26047,7 @@ func (s *Profile) Decode(d *jx.Decoder) error {
 		case "updated_at":
 			requiredBitSet[1] |= 1 << 3
 			if err := func() error {
-				if err := s.UpdatedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.UpdatedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -28011,11 +28011,11 @@ func (s *ReportedCompanyFeedback) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		json.EncodeDateTime(e, s.CreatedAt)
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("updated_at")
-		json.EncodeDateTime(e, s.UpdatedAt)
+		json.EncodeTimeFormat(e, s.UpdatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		if s.Company.Set {
@@ -28127,7 +28127,7 @@ func (s *ReportedCompanyFeedback) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.CreatedAt = v
 				if err != nil {
 					return err
@@ -28139,7 +28139,7 @@ func (s *ReportedCompanyFeedback) Decode(d *jx.Decoder) error {
 		case "updated_at":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.UpdatedAt = v
 				if err != nil {
 					return err
@@ -31685,11 +31685,11 @@ func (s *SavedSearch) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		s.CreatedAt.Encode(e, json.EncodeDateTime)
+		s.CreatedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 	{
 		e.FieldStart("updated_at")
-		s.UpdatedAt.Encode(e, json.EncodeDateTime)
+		s.UpdatedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 }
 
@@ -31762,7 +31762,7 @@ func (s *SavedSearch) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				if err := s.CreatedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.CreatedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -31772,7 +31772,7 @@ func (s *SavedSearch) Decode(d *jx.Decoder) error {
 		case "updated_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				if err := s.UpdatedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.UpdatedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -32152,12 +32152,12 @@ func (s *ScheduledInterview) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("starts_at")
-		json.EncodeDateTime(e, s.StartsAt)
+		json.EncodeTimeFormat(e, s.StartsAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		if s.EndsAt.Set {
 			e.FieldStart("ends_at")
-			s.EndsAt.Encode(e, json.EncodeDateTime)
+			s.EndsAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 		}
 	}
 	{
@@ -32243,7 +32243,7 @@ func (s *ScheduledInterview) Decode(d *jx.Decoder) error {
 		case "starts_at":
 			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.StartsAt = v
 				if err != nil {
 					return err
@@ -32255,7 +32255,7 @@ func (s *ScheduledInterview) Decode(d *jx.Decoder) error {
 		case "ends_at":
 			if err := func() error {
 				s.EndsAt.Reset()
-				if err := s.EndsAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.EndsAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -36577,7 +36577,7 @@ func (s *Subscription) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("created_at")
-		s.CreatedAt.Encode(e, json.EncodeDateTime)
+		s.CreatedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
 	}
 }
 
@@ -36660,7 +36660,7 @@ func (s *Subscription) Decode(d *jx.Decoder) error {
 		case "created_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				if err := s.CreatedAt.Decode(d, json.DecodeDateTime); err != nil {
+				if err := s.CreatedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 					return err
 				}
 				return nil
@@ -38325,7 +38325,7 @@ func (s *TalentMember) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("updated_at")
-		json.EncodeDateTime(e, s.UpdatedAt)
+		json.EncodeTimeFormat(e, s.UpdatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("has_photo")
@@ -38438,7 +38438,7 @@ func (s *TalentMember) Decode(d *jx.Decoder) error {
 		case "updated_at":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.UpdatedAt = v
 				if err != nil {
 					return err
@@ -39956,7 +39956,7 @@ func (s *TimelineEvent) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("occurred_at")
-		json.EncodeDateTime(e, s.OccurredAt)
+		json.EncodeTimeFormat(e, s.OccurredAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("company_slug")
@@ -40079,7 +40079,7 @@ func (s *TimelineEvent) Decode(d *jx.Decoder) error {
 		case "occurred_at":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.OccurredAt = v
 				if err != nil {
 					return err
@@ -40218,11 +40218,11 @@ func (s *TimelineMeta) Encode(e *jx.Encoder) {
 func (s *TimelineMeta) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("from")
-		json.EncodeDateTime(e, s.From)
+		json.EncodeTimeFormat(e, s.From, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("to")
-		json.EncodeDateTime(e, s.To)
+		json.EncodeTimeFormat(e, s.To, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("count")
@@ -40248,7 +40248,7 @@ func (s *TimelineMeta) Decode(d *jx.Decoder) error {
 		case "from":
 			requiredBitSet[0] |= 1 << 0
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.From = v
 				if err != nil {
 					return err
@@ -40260,7 +40260,7 @@ func (s *TimelineMeta) Decode(d *jx.Decoder) error {
 		case "to":
 			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.To = v
 				if err != nil {
 					return err
@@ -43032,7 +43032,7 @@ func (s *Usage) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("resets_at")
-		json.EncodeDateTime(e, s.ResetsAt)
+		json.EncodeTimeFormat(e, s.ResetsAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
@@ -43104,7 +43104,7 @@ func (s *Usage) Decode(d *jx.Decoder) error {
 		case "resets_at":
 			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.ResetsAt = v
 				if err != nil {
 					return err
@@ -43960,7 +43960,7 @@ func (s *WatchedCompany) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("added_at")
-		json.EncodeDateTime(e, s.AddedAt)
+		json.EncodeTimeFormat(e, s.AddedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
@@ -44006,7 +44006,7 @@ func (s *WatchedCompany) Decode(d *jx.Decoder) error {
 		case "added_at":
 			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
-				v, err := json.DecodeDateTime(d)
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.AddedAt = v
 				if err != nil {
 					return err

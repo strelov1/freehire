@@ -8771,7 +8771,8 @@
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         },
         "description": "An answer to a free-text screening question, saved for the next form that asks it."
@@ -9913,11 +9914,13 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "company": {
             "$ref": "#/components/schemas/CompanyFeedbackSummary",
@@ -10074,7 +10077,8 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         }
       },
@@ -10139,7 +10143,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -10798,7 +10803,8 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         }
       },
@@ -11067,13 +11073,15 @@
           },
           "reviewed_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "created_at": {
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -11311,7 +11319,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -11568,7 +11577,8 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "status": {
             "type": "string",
@@ -11877,7 +11887,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -11888,7 +11899,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -12407,11 +12419,13 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "company": {
             "$ref": "#/components/schemas/CompanyFeedbackSummary",
@@ -12899,7 +12913,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -12910,7 +12925,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -13001,12 +13017,14 @@
           },
           "starts_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "ends_at": {
             "type": "string",
             "format": "date-time",
-            "description": "Absent for an all-day entry."
+            "description": "Absent for an all-day entry.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "title": {
             "type": "string"
@@ -14049,7 +14067,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
               },
               {
                 "type": "null"
@@ -14362,7 +14381,8 @@
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "has_photo": {
             "type": "boolean",
@@ -14632,7 +14652,8 @@
           "occurred_at": {
             "type": "string",
             "format": "date-time",
-            "description": "An instant, not a day: which day it falls on depends on the reader's clock."
+            "description": "An instant, not a day: which day it falls on depends on the reader's clock.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "company_slug": {
             "type": "string"
@@ -14667,11 +14688,13 @@
         "properties": {
           "from": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "to": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "count": {
             "type": "integer",
@@ -15002,7 +15025,8 @@
           },
           "resets_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         },
         "description": "Today's AI use on the account's own model credential. No money: the plan bounds use."
@@ -15100,7 +15124,8 @@
           },
           "added_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         }
       },

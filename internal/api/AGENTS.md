@@ -42,5 +42,8 @@ A migrated route is still a Fiber route: it keeps its middleware chain and ends 
 - A patch field that was a Go pointer is `field?: T | null` in TypeSpec: absent and `null`
   both keep the stored value, as `json.Unmarshal` into a pointer did. `ptrOf` / `optNil`
   in `contract.go` convert between the generated `OptNil*` and the domain pointer.
+- Timestamps keep their fraction (RFC3339Nano, as `encoding/json` wrote them):
+  `make api-contract` runs `scripts/openapi-time-format.mjs`, which gives every date-time
+  ogen's `x-ogen-time-format`. Without it ogen writes whole seconds.
 - A binary answer (an image) works: `@body photo: bytes` with a fixed `contentType`.
 - Streams (SSE), websockets and redirects stay hand-written Fiber.
