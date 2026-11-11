@@ -315,3 +315,32 @@ func TestPersonioDoesNotFallBackOnATransientXMLFailure(t *testing.T) {
 		t.Fatal("Fetch succeeded on a 503 from the XML feed")
 	}
 }
+
+func TestPersonioRejectsNonNativeListing(t *testing.T) {
+	for _, body := range []string{`<html></html>`, `<workzag-jobs><position><name>Missing ID</name></position></workzag-jobs>`} {
+		_, err := NewPersonio(&fakeHTTP{body: body}).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+		if err == nil {
+			t.Fatalf("invalid native listing succeeded: %s", body)
+		}
+	}
+}
+func TestPersonioEmptyListingMarker(t *testing.T) {
+	if _, ok := NewPersonio(nil).(emptyBoardListing); !ok {
+		t.Fatal("missing explicit empty contract")
+	}
+}
+
+func TestPersonioSearchRequiresNativeArray(t *testing.T) {
+	for _, body := range []string{`null`, `{}`, `[{"id":0,"name":"Broken"}]`, `[{"id":1,"name":"One"},{"id":1,"name":"Again"}]`} {
+		fake := (&routedHTTP{}).routeErr("/xml", &StatusError{Code: 404}).route("search.json", body)
+		jobs, err := NewPersonio(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+		if err == nil || len(jobs) != 0 {
+			t.Fatalf("invalid fallback succeeded: %s: %v %v", body, jobs, err)
+		}
+	}
+	fake := (&routedHTTP{}).routeErr("/xml", &StatusError{Code: 404}).route("search.json", `[]`)
+	jobs, err := NewPersonio(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	if err != nil || len(jobs) != 0 {
+		t.Fatalf("native empty fallback failed: %v %v", jobs, err)
+	}
+}

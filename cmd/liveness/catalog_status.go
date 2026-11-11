@@ -5,32 +5,63 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/job/liveness"
 )
 
-// These boardless aggregators do not claim fullCatalog: a company leaving their
-// listing falls outside the company-scoped unseen sweep. Reed reads a bounded
-// keyword union and may skip failed keywords, so it has the same scope gap. The November 2026 audit
-// confirmed removed postings return 404/410 on their own stored URLs. Keep search's
-// unseen withholding until the existing backlog has been worked off.
+var catalogTenant = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
+// A successful company-scoped listing can lose a company's last posting, while
+// partial, capped, or currently blocked listings cannot close unseen jobs safely.
+// These sources have verified own-posting 404/410 controls. Keep search's unseen
+// withholding until their existing backlogs have been worked off. Gradcracker
+// and Engage retain the adapters' measured request intervals.
 func catalogStatusPasses(client *http.Client) []pacedPass {
 	var passes []pacedPass
-	for _, site := range []struct{ source, host, path string }{
-		{"instaffo", "jobs.instaffo.com", "/de/job/"},
-		{"remotedotcom", "remote.com", "/jobs/"},
-		{"thehub", "thehub.io", "/jobs/"},
-		{"reed", "www.reed.co.uk", "/jobs/"},
+	for _, site := range []struct {
+		source, host, path string
+		resource           *regexp.Regexp
+		interval           time.Duration
+	}{
+		{"instaffo", "jobs.instaffo.com", "/de/job/", nil, 2 * time.Second},
+		{"remotedotcom", "remote.com", "/jobs/", nil, 2 * time.Second},
+		{"thehub", "thehub.io", "/jobs/", nil, 2 * time.Second},
+		{"reed", "www.reed.co.uk", "/jobs/", nil, 2 * time.Second},
+		{"arbeitsagentur", "www.arbeitsagentur.de", "", regexp.MustCompile(`^/jobsuche/jobdetail/([0-9]+-[A-Za-z0-9_]+-[A-Z])/?$`), 2 * time.Second},
+		{"xing", "www.xing.com", "", regexp.MustCompile(`^/jobs/[a-z0-9-]+-([0-9]+)/?$`), 2 * time.Second},
+		{"gradcracker", "www.gradcracker.com", "", regexp.MustCompile(`^/hub/[0-9]+/[a-z0-9-]+/(?:graduate-job|work-placement-internship|degree-apprenticeship)/([0-9]+)/[a-z0-9-]+/?$`), 10 * time.Second},
+		{"engage", "en-gage.net", "", regexp.MustCompile(`^/[A-Za-z0-9_-]+/work_([0-9]+)/$`), 3500 * time.Millisecond},
+		{"betterteam", "", "", regexp.MustCompile(`^/([^/]+)/?$`), 2 * time.Second},
 	} {
 		passes = append(passes, pacedPass{
-			source: site.source, interval: 2 * time.Second, maxPerRun: 500,
+			source: site.source, interval: site.interval, maxPerRun: 500,
 			check: func(ctx context.Context, c candidate) pacedVerdict {
 				u, err := url.Parse(c.url)
-				if err != nil || u.Host != site.host || u.Scheme != "https" || !strings.HasPrefix(u.Path, site.path) || u.Path == site.path {
+				if err != nil || u.Scheme != "https" || u.User != nil || u.Fragment != "" {
 					return pacedVerdict{verdict: liveness.Uncertain}
 				}
+				if site.source == "betterteam" {
+					board, _, namespaced := strings.Cut(c.externalID, ":")
+					tenant := strings.TrimSuffix(u.Host, ".betterteam.com")
+					if tenant == u.Host || !catalogTenant.MatchString(tenant) || (namespaced && board != tenant) {
+						return pacedVerdict{verdict: liveness.Uncertain}
+					}
+				} else if u.Host != site.host {
+					return pacedVerdict{verdict: liveness.Uncertain}
+				}
+				if site.resource != nil {
+					native := c.externalID[strings.LastIndex(c.externalID, ":")+1:]
+					match := site.resource.FindStringSubmatch(u.Path)
+					if len(match) != 2 || native == "" || match[1] != native {
+						return pacedVerdict{verdict: liveness.Uncertain}
+					}
+				} else if !strings.HasPrefix(u.Path, site.path) || u.Path == site.path {
+					return pacedVerdict{verdict: liveness.Uncertain}
+				}
+
 				return checkCatalogStatus(ctx, client, c)
 			},
 		})
