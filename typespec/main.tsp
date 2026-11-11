@@ -22,6 +22,8 @@ import "./company-relations.tsp";
 import "./reports.tsp";
 import "./timeline.tsp";
 import "./profile.tsp";
+import "./conversations.tsp";
+import "./community.tsp";
 
 using Http;
 

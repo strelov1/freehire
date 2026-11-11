@@ -3,10 +3,12 @@ package handler
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/buddy"
 	"github.com/strelov1/freehire/internal/engage/messaging"
 )
@@ -25,17 +27,17 @@ func newConversationHandlers(msg *messaging.Service, mocks *buddy.MockService) *
 	return &conversationHandlers{msg: msg, mocks: mocks}
 }
 
-func (h *conversationHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/me/conversations", mw.cookie, h.List)
-	api.Post("/me/conversations/:id/accept", mw.cookie, h.Accept)
-	api.Post("/me/conversations/:id/decline", mw.cookie, h.Decline)
-	api.Post("/me/conversations/:id/block", mw.cookie, h.Block)
-	api.Post("/me/conversations/:id/report", mw.cookie, h.Report)
-	api.Get("/me/conversations/:id/messages", mw.cookie, h.Messages)
-	api.Post("/me/conversations/:id/messages", mw.cookie, h.Send)
-	api.Post("/me/conversations/:id/read", mw.cookie, h.MarkRead)
-	api.Get("/moderation/conversation-reports", mw.cookie, mw.moderator, h.ListReports)
-	api.Post("/moderation/conversation-reports/:id/resolve", mw.cookie, mw.moderator, h.ResolveReport)
+func (h *conversationHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Get("/me/conversations", mw.cookie, contract)
+	api.Post("/me/conversations/:id/accept", mw.cookie, contract)
+	api.Post("/me/conversations/:id/decline", mw.cookie, contract)
+	api.Post("/me/conversations/:id/block", mw.cookie, contract)
+	api.Post("/me/conversations/:id/report", mw.cookie, contract)
+	api.Get("/me/conversations/:id/messages", mw.cookie, contract)
+	api.Post("/me/conversations/:id/messages", mw.cookie, contract)
+	api.Post("/me/conversations/:id/read", mw.cookie, contract)
+	api.Get("/moderation/conversation-reports", mw.cookie, mw.moderator, contract)
+	api.Post("/moderation/conversation-reports/:id/resolve", mw.cookie, mw.moderator, contract)
 }
 
 // messagingError renders a messaging sentinel as the status its declaration documents.
@@ -106,57 +108,84 @@ func toConversation(cv messaging.Conversation) conversationResponse {
 	return out
 }
 
-// List lists the caller's conversations of every kind, newest message first.
-func (h *conversationHandlers) List(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
+// toContractConversation is toConversation in the contract's types.
+func toContractConversation(cv messaging.Conversation) apigen.Conversation {
+	out := apigen.Conversation{
+		ID: cv.ID, Kind: cv.Kind, StatusForMe: cv.StatusForMe, Unread: int64(cv.Unread), CreatedAt: cv.CreatedAt,
+		Counterpart: apigen.ConversationCounterpart{Persona: cv.Counterpart.Persona, Reachable: cv.Counterpart.Reachable},
 	}
-	convs, err := h.msg.List(c.Context(), userID)
-	if err != nil {
-		return messagingError(err)
+	out.Counterpart.Detail.SetToNull()
+	if d, ok := cv.Counterpart.Detail.(buddy.Counterpart); ok {
+		out.Counterpart.Detail.SetTo(apigen.BuddyCounterpart{Handle: d.Handle, CardSummary: apigen.ConversationCardSummary{
+			Category: d.Card.Category, Seniority: d.Card.Seniority, Country: d.Card.Country}})
 	}
-	out := make([]conversationResponse, len(convs))
+	if cv.LastMessageAt.IsZero() {
+		out.LastMessageAt.SetToNull()
+	} else {
+		out.LastMessageAt.SetTo(cv.LastMessageAt)
+	}
+	return out
+}
+
+// ListConversations lists the caller's conversations of every kind, newest message first.
+func (h *conversationHandlers) ListConversations(ctx context.Context) (*apigen.ListConversationsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	convs, err := h.msg.List(ctx, userID)
+	if err != nil {
+		return nil, messagingError(err)
+	}
+	out := make([]apigen.Conversation, len(convs))
 	for i, cv := range convs {
-		out[i] = toConversation(cv)
+		out[i] = toContractConversation(cv)
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return &apigen.ListConversationsOK{Data: out}, nil
 }
 
-// Accept opens a pending conversation the caller did not start.
-func (h *conversationHandlers) Accept(c *fiber.Ctx) error {
-	return h.answer(c, h.msg.Accept)
-}
-
-// Decline refuses a pending conversation.
-func (h *conversationHandlers) Decline(c *fiber.Ctx) error {
-	return h.answer(c, h.msg.Decline)
-}
-
-func (h *conversationHandlers) answer(c *fiber.Ctx, do func(ctx context.Context, userID, id int64) (messaging.Conversation, error)) error {
-	userID, err := requireUserID(c)
+// AcceptConversation opens a pending conversation the caller did not start.
+func (h *conversationHandlers) AcceptConversation(ctx context.Context, params apigen.AcceptConversationParams) (*apigen.AcceptConversationOK, error) {
+	conv, err := h.answer(ctx, params.ID, h.msg.Accept)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := pathID(c)
-	if err != nil {
-		return err
-	}
-	conv, err := do(c.Context(), userID, id)
-	if err != nil {
-		return messagingError(err)
-	}
-	return c.JSON(fiber.Map{"data": toConversation(conv)})
+	return &apigen.AcceptConversationOK{Data: conv}, nil
 }
 
-// Block closes every conversation with the other participant and stops either from
-// starting another, of any kind.
+// DeclineConversation refuses a pending conversation.
+func (h *conversationHandlers) DeclineConversation(ctx context.Context, params apigen.DeclineConversationParams) (*apigen.DeclineConversationOK, error) {
+	conv, err := h.answer(ctx, params.ID, h.msg.Decline)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.DeclineConversationOK{Data: conv}, nil
+}
+
+func (h *conversationHandlers) answer(ctx context.Context, rawID string, do func(ctx context.Context, userID, id int64) (messaging.Conversation, error)) (apigen.Conversation, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return apigen.Conversation{}, err
+	}
+	id, err := contractPathID(rawID)
+	if err != nil {
+		return apigen.Conversation{}, err
+	}
+	conv, err := do(ctx, userID, id)
+	if err != nil {
+		return apigen.Conversation{}, messagingError(err)
+	}
+	return toContractConversation(conv), nil
+}
+
+// BlockConversation closes every conversation with the other participant and stops either
+// from starting another, of any kind.
 //
 // A block also cancels every future buddy mock between the two, inside the block's own
 // statement (a trigger the buddy migration puts on user_blocks, because the core never
 // imports a feature). This layer, the only one that sees both, tells the other side.
-func (h *conversationHandlers) Block(c *fiber.Ctx) error {
-	return h.byID(c, func(ctx context.Context, userID, id int64) error {
+func (h *conversationHandlers) BlockConversation(ctx context.Context, params apigen.BlockConversationParams) error {
+	return h.byID(ctx, params.ID, func(ctx context.Context, userID, id int64) error {
 		if err := h.msg.Block(ctx, userID, id); err != nil {
 			return err
 		}
@@ -165,157 +194,110 @@ func (h *conversationHandlers) Block(c *fiber.Ctx) error {
 	})
 }
 
-// byID runs an action on the caller and the ":id" path param and answers 204.
-func (h *conversationHandlers) byID(c *fiber.Ctx, do func(ctx context.Context, userID, id int64) error) error {
-	userID, err := requireUserID(c)
+// byID runs an action on the caller and the ":id" path param.
+func (h *conversationHandlers) byID(ctx context.Context, rawID string, do func(ctx context.Context, userID, id int64) error) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	id, err := pathID(c)
+	id, err := contractPathID(rawID)
 	if err != nil {
 		return err
 	}
-	if err := do(c.Context(), userID, id); err != nil {
+	if err := do(ctx, userID, id); err != nil {
 		return messagingError(err)
 	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return nil
 }
 
-type conversationReportBody struct {
-	Reason string `json:"reason"`
-	Note   string `json:"note"`
-}
-
-// Report files a complaint about a conversation the caller takes part in.
-func (h *conversationHandlers) Report(c *fiber.Ctx) error {
-	var in conversationReportBody
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	return h.byID(c, func(ctx context.Context, userID, id int64) error {
-		return h.msg.Report(ctx, userID, id, in.Reason, in.Note)
+// ReportConversation files a complaint about a conversation the caller takes part in.
+func (h *conversationHandlers) ReportConversation(ctx context.Context, req *apigen.ConversationReportRequest, params apigen.ReportConversationParams) error {
+	return h.byID(ctx, params.ID, func(ctx context.Context, userID, id int64) error {
+		return h.msg.Report(ctx, userID, id, req.Reason.Value, req.Note.Value)
 	})
 }
 
-type conversationMessageResponse struct {
-	ID        int64     `json:"id"`
-	Mine      bool      `json:"mine"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"created_at"`
+func toContractMessage(m messaging.Message) apigen.ConversationMessage {
+	return apigen.ConversationMessage{ID: m.ID, Mine: m.Mine, Body: m.Body, CreatedAt: m.CreatedAt}
 }
 
-func toConversationMessage(m messaging.Message) conversationMessageResponse {
-	return conversationMessageResponse{ID: m.ID, Mine: m.Mine, Body: m.Body, CreatedAt: m.CreatedAt}
-}
-
-// Messages reads a conversation's messages after the given id, oldest first.
-func (h *conversationHandlers) Messages(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// ListConversationMessages reads a conversation's messages after the given id, oldest first.
+func (h *conversationHandlers) ListConversationMessages(ctx context.Context, params apigen.ListConversationMessagesParams) (*apigen.ListConversationMessagesOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := pathID(c)
+	id, err := contractPathID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	msgs, err := h.msg.Messages(c.Context(), userID, id, int64(c.QueryInt("after")), c.QueryInt("limit"))
+	query := contractQuery(ctx)
+	msgs, err := h.msg.Messages(ctx, userID, id, int64(queryIntOr(query, "after", 0)), queryIntOr(query, "limit", 0))
 	if err != nil {
-		return messagingError(err)
+		return nil, messagingError(err)
 	}
-	out := make([]conversationMessageResponse, len(msgs))
+	out := make([]apigen.ConversationMessage, len(msgs))
 	for i, m := range msgs {
-		out[i] = toConversationMessage(m)
+		out[i] = toContractMessage(m)
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return &apigen.ListConversationMessagesOK{Data: out}, nil
 }
 
-type conversationSendBody struct {
-	Body string `json:"body"`
-}
-
-// Send posts a message into an open conversation.
-func (h *conversationHandlers) Send(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// SendConversationMessage posts a message into an open conversation.
+func (h *conversationHandlers) SendConversationMessage(ctx context.Context, req *apigen.ConversationSendRequest, params apigen.SendConversationMessageParams) (*apigen.SendConversationMessageCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := pathID(c)
+	id, err := contractPathID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in conversationSendBody
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	msg, err := h.msg.Send(c.Context(), userID, id, in.Body)
+	msg, err := h.msg.Send(ctx, userID, id, req.Body.Value)
 	if err != nil {
-		return messagingError(err)
+		return nil, messagingError(err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toConversationMessage(msg)})
+	return &apigen.SendConversationMessageCreated{Data: toContractMessage(msg)}, nil
 }
 
-type conversationReadBody struct {
-	UpTo int64 `json:"up_to"`
-}
-
-// MarkRead records that the caller has read up to a message.
-func (h *conversationHandlers) MarkRead(c *fiber.Ctx) error {
-	var in conversationReadBody
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	return h.byID(c, func(ctx context.Context, userID, id int64) error {
-		return h.msg.MarkRead(ctx, userID, id, in.UpTo)
+// MarkConversationRead records that the caller has read up to a message.
+func (h *conversationHandlers) MarkConversationRead(ctx context.Context, req *apigen.ConversationReadRequest, params apigen.MarkConversationReadParams) error {
+	return h.byID(ctx, params.ID, func(ctx context.Context, userID, id int64) error {
+		return h.msg.MarkRead(ctx, userID, id, req.UpTo.Value)
 	})
 }
 
-type conversationReportMessageResponse struct {
-	Sender    string    `json:"sender"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// conversationReportResponse names each account the way the conversation's kind draws it
-// (for buddy, by handle): a moderator reads what the participants saw.
-type conversationReportResponse struct {
-	ID             int64                               `json:"id"`
-	ConversationID int64                               `json:"conversation_id"`
-	Kind           string                              `json:"kind"`
-	Reason         string                              `json:"reason"`
-	Note           string                              `json:"note"`
-	CreatedAt      time.Time                           `json:"created_at"`
-	ResolvedAt     *time.Time                          `json:"resolved_at"`
-	Reporter       string                              `json:"reporter"`
-	Reported       string                              `json:"reported"`
-	Messages       []conversationReportMessageResponse `json:"messages"`
-}
-
-// ListReports is the moderator queue of reported conversations. Role-gated.
-func (h *conversationHandlers) ListReports(c *fiber.Ctx) error {
-	limit, offset, err := pageParamsWindowed(c, messaging.DefaultReportsLimit, messaging.MaxReportsLimit)
+// ListConversationReports is the moderator queue of reported conversations. Role-gated.
+func (h *conversationHandlers) ListConversationReports(ctx context.Context, _ apigen.ListConversationReportsParams) (*apigen.ConversationReportsPage, error) {
+	limit, offset, err := contractPageWindowed(ctx, messaging.DefaultReportsLimit, messaging.MaxReportsLimit)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	reports, err := h.msg.ListReports(c.Context(), limit, offset, c.QueryBool("include_resolved"))
+	resolved, _ := strconv.ParseBool(contractQuery(ctx).Get("include_resolved"))
+	reports, err := h.msg.ListReports(ctx, limit, offset, resolved)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]conversationReportResponse, len(reports))
+	out := make([]apigen.ConversationReport, len(reports))
 	for i, r := range reports {
-		msgs := make([]conversationReportMessageResponse, len(r.Messages))
+		msgs := make([]apigen.ConversationReportMessage, len(r.Messages))
 		for j, m := range r.Messages {
-			msgs[j] = conversationReportMessageResponse{Sender: m.Sender, Body: m.Body, CreatedAt: m.CreatedAt}
+			msgs[j] = apigen.ConversationReportMessage{Sender: m.Sender, Body: m.Body, CreatedAt: m.CreatedAt}
 		}
-		out[i] = conversationReportResponse{
+		out[i] = apigen.ConversationReport{
 			ID: r.ID, ConversationID: r.ConversationID, Kind: r.Kind, Reason: r.Reason, Note: r.Note,
-			CreatedAt: r.CreatedAt, ResolvedAt: r.ResolvedAt,
-			Reporter: r.Reporter, Reported: r.Reported, Messages: msgs,
+			CreatedAt: r.CreatedAt, Reporter: r.Reporter, Reported: r.Reported, Messages: msgs,
+		}
+		if r.ResolvedAt != nil {
+			out[i].ResolvedAt.SetTo(*r.ResolvedAt)
+		} else {
+			out[i].ResolvedAt.SetToNull()
 		}
 	}
-	return c.JSON(fiber.Map{"data": out, "meta": fiber.Map{"limit": limit, "offset": offset}})
+	return &apigen.ConversationReportsPage{Data: out, Meta: apigen.ConversationReportsMeta{Limit: int64(limit), Offset: int64(offset)}}, nil
 }
 
-// ResolveReport marks a report handled. Role-gated; idempotent; 404 for an unknown id.
-func (h *conversationHandlers) ResolveReport(c *fiber.Ctx) error {
-	return h.byID(c, h.msg.ResolveReport)
+// ResolveConversationReport marks a report handled. Role-gated; idempotent; 404 for an unknown id.
+func (h *conversationHandlers) ResolveConversationReport(ctx context.Context, params apigen.ResolveConversationReportParams) error {
+	return h.byID(ctx, params.ID, h.msg.ResolveReport)
 }

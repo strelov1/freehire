@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/community"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -27,20 +29,20 @@ func newCommunityHandlers(queries *db.Queries) *communityHandlers {
 	return &communityHandlers{community: community.New(repo, repo, community.Config{})}
 }
 
-func (h *communityHandlers) register(api fiber.Router, mw middleware) {
+func (h *communityHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Community discussion threads: anonymous topics attached to a company or vacancy.
 	// Reads are public — only pseudonymous persona handles are ever exposed, never a
 	// user id — so discussions are browsable without signing in. Writing a thread or
 	// reply requires a signed-in session (cookie); closing a thread is moderator-gated.
-	api.Get("/threads", h.ListThreads)
+	api.Get("/threads", contract)
 	// Registered before "/threads/:id" so "count" and "recent" are not parsed as a
 	// thread id.
-	api.Get("/threads/count", h.CountThreads)
-	api.Get("/threads/recent", h.ListRecentThreads)
-	api.Get("/threads/:id", h.GetThread)
-	api.Post("/threads", mw.cookie, h.CreateThread)
-	api.Post("/threads/:id/replies", mw.cookie, h.CreateReply)
-	api.Post("/threads/:id/close", mw.cookie, mw.moderator, h.CloseThread)
+	api.Get("/threads/count", contract)
+	api.Get("/threads/recent", contract)
+	api.Get("/threads/:id", contract)
+	api.Post("/threads", mw.cookie, contract)
+	api.Post("/threads/:id/replies", mw.cookie, contract)
+	api.Post("/threads/:id/close", mw.cookie, mw.moderator, contract)
 }
 
 // aiAuthor is the display name used for a reply flagged is_ai (a future AI-authored
@@ -53,32 +55,6 @@ const aiAuthor = "AI"
 // brackets keep it out of the handle namespace, which is "adjective-noun-NN".
 const deletedAuthor = "[deleted]"
 
-// threadResponse is the public shape of a thread: the persona handle is the only
-// author identity — the author's user_id is never projected here. A thread whose
-// author deleted their account carries the deleted-member marker instead.
-type threadResponse struct {
-	ID          int64     `json:"id"`
-	SubjectType string    `json:"subject_type"`
-	SubjectSlug string    `json:"subject_slug"`
-	Title       string    `json:"title"`
-	Body        string    `json:"body"`
-	Author      string    `json:"author"`
-	ReplyCount  int32     `json:"reply_count"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-// replyResponse is the public shape of a reply: the persona handle, the AI persona for
-// a system reply, or the deleted-member marker once the author's account is gone.
-type replyResponse struct {
-	ID        int64     `json:"id"`
-	ThreadID  int64     `json:"thread_id"`
-	ParentID  int64     `json:"parent_id"`
-	Author    string    `json:"author"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 // personaOrDeleted is the author display name for a handle: an empty one means the
 // persona is gone with its account, leaving the content de-authored.
 func personaOrDeleted(handle string) string {
@@ -88,35 +64,22 @@ func personaOrDeleted(handle string) string {
 	return handle
 }
 
-func toThreadResponse(t community.Thread) threadResponse {
-	return threadResponse{
+func toThread(t community.Thread) apigen.Thread {
+	return apigen.Thread{
 		ID: t.ID, SubjectType: t.SubjectType, SubjectSlug: t.SubjectRef, Title: t.Title,
-		Body: t.Body, Author: personaOrDeleted(t.AuthorHandle), ReplyCount: t.ReplyCount,
+		Body: t.Body, Author: personaOrDeleted(t.AuthorHandle), ReplyCount: int64(t.ReplyCount),
 		Status: t.Status, CreatedAt: t.CreatedAt,
 	}
 }
 
-func toReplyResponse(r community.Reply) replyResponse {
+func toReply(r community.Reply) apigen.ThreadReply {
 	author := personaOrDeleted(r.AuthorHandle)
 	if r.IsAI {
 		author = aiAuthor
 	}
-	return replyResponse{
+	return apigen.ThreadReply{
 		ID: r.ID, ThreadID: r.ThreadID, ParentID: r.ParentID, Author: author, Body: r.Body, CreatedAt: r.CreatedAt,
 	}
-}
-
-type createThreadBody struct {
-	SubjectType string `json:"subject_type"`
-	SubjectSlug string `json:"subject_slug"`
-	Title       string `json:"title"`
-	Body        string `json:"body"`
-}
-
-type createReplyBody struct {
-	Body string `json:"body"`
-	// ParentReplyID nests this reply under another reply; 0/omitted = top-level.
-	ParentReplyID int64 `json:"parent_reply_id"`
 }
 
 // encodeCursor packs a (created_at, id) keyset position into an opaque token.
@@ -150,21 +113,20 @@ func decodeCursor(s string) (community.Cursor, error) {
 
 // ListThreads returns a subject's open threads, newest first, keyset-paged. Public:
 // discussions are browsable without signing in (only handles are exposed).
-func (h *communityHandlers) ListThreads(c *fiber.Ctx) error {
-	q := queryValues(c)
-	cur, err := decodeCursor(q.Get("cursor"))
+func (h *communityHandlers) ListThreads(ctx context.Context, params apigen.ListThreadsParams) (*apigen.ThreadPage, error) {
+	cur, err := decodeCursor(params.Cursor.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 	}
-	threads, err := h.community.ListThreads(c.Context(), q.Get("subject_type"), q.Get("subject_slug"), cur)
+	threads, err := h.community.ListThreads(ctx, params.SubjectType.Value, params.SubjectSlug.Value, cur)
 	if err != nil {
-		return communityError(err)
+		return nil, communityError(err)
 	}
-	out := make([]threadResponse, len(threads))
+	out := make([]apigen.Thread, len(threads))
 	for i, t := range threads {
-		out[i] = toThreadResponse(t)
+		out[i] = toThread(t)
 	}
-	return c.JSON(fiber.Map{"data": out, "meta": pageMeta(threads, h.community.PageSize())})
+	return &apigen.ThreadPage{Data: out, Meta: pageMeta(threads, h.community.PageSize())}, nil
 }
 
 // pageMeta carries a listing's continuation cursor, and only when the page came back
@@ -176,137 +138,123 @@ func (h *communityHandlers) ListThreads(c *fiber.Ctx) error {
 // the rule is one rule, and each row type reports its own keyset position. The page
 // size is a parameter rather than read off the handler because a method cannot carry a
 // type parameter in Go.
-func pageMeta[T interface{ Position() community.Cursor }](items []T, pageSize int32) fiber.Map {
-	meta := fiber.Map{}
+func pageMeta[T interface{ Position() community.Cursor }](items []T, pageSize int32) apigen.ThreadCursorMeta {
+	var meta apigen.ThreadCursorMeta
 	// >= not ==: a page longer than asked for is still a full one, and equality would
 	// drop the cursor on it — the same silence, from the other side.
 	if n := len(items); n > 0 && int32(n) >= pageSize {
 		pos := items[n-1].Position()
-		meta["next_cursor"] = encodeCursor(pos.CreatedAt, pos.ID)
+		meta.NextCursor = apigen.NewOptString(encodeCursor(pos.CreatedAt, pos.ID))
 	}
 	return meta
 }
 
-// recentThreadResponse is a feed row: a thread plus the display name of the subject it
-// hangs off, which the cross-subject listing must carry because a reader has no other
-// way to know what the thread is about. Both name fields are empty when the subject no
-// longer exists (there is no FK to it) — the client renders the slug instead.
-type recentThreadResponse struct {
-	threadResponse
-	SubjectTitle   string `json:"subject_title"`
-	SubjectCompany string `json:"subject_company"`
-}
-
 // ListRecentThreads returns open threads across every subject, newest first,
-// keyset-paged — the /discussions feed. Public, like the other thread reads.
-func (h *communityHandlers) ListRecentThreads(c *fiber.Ctx) error {
-	cur, err := decodeCursor(queryValues(c).Get("cursor"))
+// keyset-paged — the /discussions feed. Public, like the other thread reads. Each row
+// carries the display name of its subject, which the cross-subject listing needs because
+// a reader has no other way to know what the thread is about; both are empty when the
+// subject no longer exists (there is no FK to it).
+func (h *communityHandlers) ListRecentThreads(ctx context.Context, params apigen.ListRecentThreadsParams) (*apigen.RecentThreadPage, error) {
+	cur, err := decodeCursor(params.Cursor.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 	}
-	threads, err := h.community.ListRecentThreads(c.Context(), cur)
+	threads, err := h.community.ListRecentThreads(ctx, cur)
 	if err != nil {
-		return communityError(err)
+		return nil, communityError(err)
 	}
-	out := make([]recentThreadResponse, len(threads))
+	out := make([]apigen.RecentThread, len(threads))
 	for i, t := range threads {
-		out[i] = recentThreadResponse{
-			threadResponse: toThreadResponse(t.Thread),
-			SubjectTitle:   t.SubjectTitle,
-			SubjectCompany: t.SubjectCompany,
+		th := toThread(t.Thread)
+		out[i] = apigen.RecentThread{
+			ID: th.ID, SubjectType: th.SubjectType, SubjectSlug: th.SubjectSlug, Title: th.Title, Body: th.Body,
+			Author: th.Author, ReplyCount: th.ReplyCount, Status: th.Status, CreatedAt: th.CreatedAt,
+			SubjectTitle: t.SubjectTitle, SubjectCompany: t.SubjectCompany,
 		}
 	}
-	return c.JSON(fiber.Map{"data": out, "meta": pageMeta(threads, h.community.PageSize())})
+	return &apigen.RecentThreadPage{Data: out, Meta: pageMeta(threads, h.community.PageSize())}, nil
 }
 
 // CountThreads returns a subject's open-thread count — the detail-page badge. Public.
-func (h *communityHandlers) CountThreads(c *fiber.Ctx) error {
-	q := queryValues(c)
-	n, err := h.community.CountThreads(c.Context(), q.Get("subject_type"), q.Get("subject_slug"))
+func (h *communityHandlers) CountThreads(ctx context.Context, params apigen.CountThreadsParams) (*apigen.CountThreadsOK, error) {
+	n, err := h.community.CountThreads(ctx, params.SubjectType.Value, params.SubjectSlug.Value)
 	if err != nil {
-		return communityError(err)
+		return nil, communityError(err)
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"count": n}})
+	return &apigen.CountThreadsOK{Data: apigen.ThreadCount{Count: n}}, nil
 }
 
 // GetThread returns a single thread with its first page of replies. Public.
-func (h *communityHandlers) GetThread(c *fiber.Ctx) error {
-	id, err := pathID(c)
+func (h *communityHandlers) GetThread(ctx context.Context, params apigen.GetThreadParams) (*apigen.ThreadDetailPage, error) {
+	id, err := contractPathID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	thread, err := h.community.GetThread(c.Context(), id)
+	thread, err := h.community.GetThread(ctx, id)
 	if err != nil {
-		return communityError(err)
+		return nil, communityError(err)
 	}
-	cur, err := decodeCursor(queryValues(c).Get("cursor"))
+	cur, err := decodeCursor(params.Cursor.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 	}
-	replies, err := h.community.ListReplies(c.Context(), id, cur)
+	replies, err := h.community.ListReplies(ctx, id, cur)
 	if err != nil {
-		return communityError(err)
+		return nil, communityError(err)
 	}
-	out := make([]replyResponse, len(replies))
+	out := make([]apigen.ThreadReply, len(replies))
 	for i, r := range replies {
-		out[i] = toReplyResponse(r)
+		out[i] = toReply(r)
 	}
-	return c.JSON(fiber.Map{
-		"data": fiber.Map{"thread": toThreadResponse(thread), "replies": out},
-		"meta": pageMeta(replies, h.community.PageSize()),
-	})
+	return &apigen.ThreadDetailPage{
+		Data: apigen.ThreadWithReplies{Thread: toThread(thread), Replies: out},
+		Meta: pageMeta(replies, h.community.PageSize()),
+	}, nil
 }
 
 // CreateThread opens a thread on a company or job. RequireAuth; 400/404/422/429.
-func (h *communityHandlers) CreateThread(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *communityHandlers) CreateThread(ctx context.Context, req *apigen.CreateThreadRequest) (*apigen.CreateThreadCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in createThreadBody
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	thread, err := h.community.CreateThread(c.Context(), community.CreateThreadInput{
-		UserID: userID, SubjectType: in.SubjectType, SubjectSlug: in.SubjectSlug, Title: in.Title, Body: in.Body,
+	thread, err := h.community.CreateThread(ctx, community.CreateThreadInput{
+		UserID: userID, SubjectType: req.SubjectType.Value, SubjectSlug: req.SubjectSlug.Value,
+		Title: req.Title.Value, Body: req.Body.Value,
 	})
 	if err != nil {
-		return communityError(err)
+		return nil, communityError(err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toThreadResponse(thread)})
+	return &apigen.CreateThreadCreated{Data: toThread(thread)}, nil
 }
 
 // CreateReply posts a reply to an open thread. RequireAuth; 404/409/422/429.
-func (h *communityHandlers) CreateReply(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *communityHandlers) CreateReply(ctx context.Context, req *apigen.CreateReplyRequest, params apigen.CreateReplyParams) (*apigen.CreateReplyCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := pathID(c)
+	id, err := contractPathID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in createReplyBody
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	reply, err := h.community.Reply(c.Context(), id, in.ParentReplyID, userID, in.Body)
+	reply, err := h.community.Reply(ctx, id, req.ParentReplyID.Value, userID, req.Body.Value)
 	if err != nil {
-		return communityError(err)
+		return nil, communityError(err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toReplyResponse(reply)})
+	return &apigen.CreateReplyCreated{Data: toReply(reply)}, nil
 }
 
 // CloseThread closes a thread (moderator-gated at the route).
-func (h *communityHandlers) CloseThread(c *fiber.Ctx) error {
-	id, err := pathID(c)
+func (h *communityHandlers) CloseThread(ctx context.Context, params apigen.CloseThreadParams) (*apigen.CloseThreadOK, error) {
+	id, err := contractPathID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := h.community.Close(c.Context(), id); err != nil {
-		return communityError(err)
+	if err := h.community.Close(ctx, id); err != nil {
+		return nil, communityError(err)
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"id": id, "status": community.StatusClosed}})
+	return &apigen.CloseThreadOK{Data: apigen.ThreadClosed{ID: id, Status: community.StatusClosed}}, nil
 }
 
 // communityError maps community sentinel errors to HTTP statuses; anything else falls

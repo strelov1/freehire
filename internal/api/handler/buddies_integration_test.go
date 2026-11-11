@@ -81,7 +81,8 @@ func newBuddyEnv(t *testing.T, names ...string) *buddyEnv {
 	mocks := buddy.NewMockService(svc, repo, buddy.NewMockMailNotifier(queries, nil, "", ""))
 	env.buddies = newBuddyHandlers(svc, mocks)
 	env.buddies.register(env.app.Group("/api/v1"), mw)
-	newConversationHandlers(msg, mocks).register(env.app.Group("/api/v1"), mw)
+	conversations := newConversationHandlers(msg, mocks)
+	conversations.register(env.app.Group("/api/v1"), mw, newContract(contractHandlers{conversationHandlers: conversations}))
 	return env
 }
 

@@ -8,6 +8,13 @@ import (
 
 // Handler handles operations described by OpenAPI v3 specification.
 type Handler interface {
+	// AcceptConversation implements acceptConversation operation.
+	//
+	// Opens a pending conversation the caller did not start. The id is declared a string and parsed in Go,
+	// which keeps the 400 text.
+	//
+	// POST /me/conversations/{id}/accept
+	AcceptConversation(ctx context.Context, params AcceptConversationParams) (*AcceptConversationOK, error)
 	// AddToWatchlist implements addToWatchlist operation.
 	//
 	// PUT /me/watchlist/{slug}
@@ -22,6 +29,13 @@ type Handler interface {
 	//
 	// POST /moderation/users/{id}/ban
 	BanUser(ctx context.Context, req *BanRequest, params BanUserParams) (*BanUserOK, error)
+	// BlockConversation implements blockConversation operation.
+	//
+	// Closes every conversation with the other participant and stops either from starting another, of any
+	// kind.
+	//
+	// POST /me/conversations/{id}/block
+	BlockConversation(ctx context.Context, params BlockConversationParams) error
 	// ClearCompanyVote implements clearCompanyVote operation.
 	//
 	// DELETE /companies/{slug}/vote
@@ -30,10 +44,22 @@ type Handler interface {
 	//
 	// DELETE /jobs/{slug}/vote
 	ClearJobVote(ctx context.Context, params ClearJobVoteParams) (*ClearJobVoteOK, error)
+	// CloseThread implements closeThread operation.
+	//
+	// Moderators only: closes a thread.
+	//
+	// POST /threads/{id}/close
+	CloseThread(ctx context.Context, params CloseThreadParams) (*CloseThreadOK, error)
 	// CompleteOnboarding implements completeOnboarding operation.
 	//
 	// POST /me/onboarding/complete
 	CompleteOnboarding(ctx context.Context) (*CompleteOnboardingOK, error)
+	// CountThreads implements countThreads operation.
+	//
+	// A subject's open-thread count.
+	//
+	// GET /threads/count
+	CountThreads(ctx context.Context, params CountThreadsParams) (*CountThreadsOK, error)
 	// CreateGhostReport implements createGhostReport operation.
 	//
 	// Reports that the job went silent after the caller applied. 403 until the caller's address is
@@ -47,6 +73,12 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/reports
 	CreateJobReport(ctx context.Context, req *JobReportRequest, params CreateJobReportParams) (*CreateJobReportCreated, error)
+	// CreateReply implements createReply operation.
+	//
+	// Posts a reply to an open thread.
+	//
+	// POST /threads/{id}/replies
+	CreateReply(ctx context.Context, req *CreateReplyRequest, params CreateReplyParams) (*CreateReplyCreated, error)
 	// CreateSavedSearch implements createSavedSearch operation.
 	//
 	// 400 for a bad name, 409 for a duplicate name or the per-user cap.
@@ -59,6 +91,18 @@ type Handler interface {
 	//
 	// POST /me/subscriptions
 	CreateSubscription(ctx context.Context, req *SubscriptionCreate) (*CreateSubscriptionCreated, error)
+	// CreateThread implements createThread operation.
+	//
+	// Opens a thread on a company or job.
+	//
+	// POST /threads
+	CreateThread(ctx context.Context, req *CreateThreadRequest) (*CreateThreadCreated, error)
+	// DeclineConversation implements declineConversation operation.
+	//
+	// Refuses a pending conversation.
+	//
+	// POST /me/conversations/{id}/decline
+	DeclineConversation(ctx context.Context, params DeclineConversationParams) (*DeclineConversationOK, error)
 	// DeleteBankedAnswer implements deleteBankedAnswer operation.
 	//
 	// 400 for an id that is not a number, 404 for one the caller does not own.
@@ -187,6 +231,13 @@ type Handler interface {
 	//
 	// GET /talent/{handle}/photo
 	GetTalentPhoto(ctx context.Context, params GetTalentPhotoParams) (*GetTalentPhotoOKHeaders, error)
+	// GetThread implements getThread operation.
+	//
+	// A thread with its first page of replies. The id is declared a string and parsed in Go, which keeps
+	// the 400 text.
+	//
+	// GET /threads/{id}
+	GetThread(ctx context.Context, params GetThreadParams) (*ThreadDetailPage, error)
 	// GetTimeline implements getTimeline operation.
 	//
 	// The caller's events between `from` and `to` inclusive, oldest first.
@@ -219,6 +270,25 @@ type Handler interface {
 	//
 	// GET /companies/{slug}/feedback
 	ListCompanyFeedback(ctx context.Context, params ListCompanyFeedbackParams) (*CompanyFeedbackPage, error)
+	// ListConversationMessages implements listConversationMessages operation.
+	//
+	// The messages after the given id, oldest first. Params that do not read fall back to their defaults.
+	//
+	// GET /me/conversations/{id}/messages
+	ListConversationMessages(ctx context.Context, params ListConversationMessagesParams) (*ListConversationMessagesOK, error)
+	// ListConversationReports implements listConversationReports operation.
+	//
+	// Moderators only: the reported conversations. Page params that do not read fall back to their
+	// defaults.
+	//
+	// GET /moderation/conversation-reports
+	ListConversationReports(ctx context.Context, params ListConversationReportsParams) (*ConversationReportsPage, error)
+	// ListConversations implements listConversations operation.
+	//
+	// The caller's conversations of every kind, newest message first.
+	//
+	// GET /me/conversations
+	ListConversations(ctx context.Context) (*ListConversationsOK, error)
 	// ListMyContributions implements listMyContributions operation.
 	//
 	// GET /me/contributions
@@ -235,6 +305,12 @@ type Handler interface {
 	//
 	// GET /reports
 	ListPendingJobReports(ctx context.Context) (*ListPendingJobReportsOK, error)
+	// ListRecentThreads implements listRecentThreads operation.
+	//
+	// Open threads across every subject, newest first, keyset-paged: the discussions feed.
+	//
+	// GET /threads/recent
+	ListRecentThreads(ctx context.Context, params ListRecentThreadsParams) (*RecentThreadPage, error)
 	// ListReportedCompanyFeedback implements listReportedCompanyFeedback operation.
 	//
 	// Moderators only: every review with a report, most reported first.
@@ -253,12 +329,24 @@ type Handler interface {
 	//
 	// GET /talent
 	ListTalent(ctx context.Context, params ListTalentParams) (*ListTalentOK, error)
+	// ListThreads implements listThreads operation.
+	//
+	// A subject's open threads, newest first, keyset-paged.
+	//
+	// GET /threads
+	ListThreads(ctx context.Context, params ListThreadsParams) (*ThreadPage, error)
 	// ListWatchlist implements listWatchlist operation.
 	//
 	// One page, newest first. A page param that does not read falls back to its default.
 	//
 	// GET /me/watchlist
 	ListWatchlist(ctx context.Context, params ListWatchlistParams) (*WatchlistPageHeaders, error)
+	// MarkConversationRead implements markConversationRead operation.
+	//
+	// Records that the caller has read up to a message.
+	//
+	// POST /me/conversations/{id}/read
+	MarkConversationRead(ctx context.Context, req *ConversationReadRequest, params MarkConversationReadParams) error
 	// MyCompanyFeedback implements myCompanyFeedback operation.
 	//
 	// All of the caller's own reviews of the company, one per category; empty when none.
@@ -326,6 +414,18 @@ type Handler interface {
 	//
 	// POST /company-feedback/{id}/report
 	ReportCompanyFeedback(ctx context.Context, req *CompanyFeedbackReportRequest, params ReportCompanyFeedbackParams) error
+	// ReportConversation implements reportConversation operation.
+	//
+	// Files a complaint about a conversation the caller takes part in.
+	//
+	// POST /me/conversations/{id}/report
+	ReportConversation(ctx context.Context, req *ConversationReportRequest, params ReportConversationParams) error
+	// ResolveConversationReport implements resolveConversationReport operation.
+	//
+	// Moderators only: marks a report handled. Idempotent; 404 for an unknown id.
+	//
+	// POST /moderation/conversation-reports/{id}/resolve
+	ResolveConversationReport(ctx context.Context, params ResolveConversationReportParams) error
 	// ResolveJob implements resolveJob operation.
 	//
 	// Finds the catalogue job behind a page, or imports it. 200 when it was already there, 201 when this
@@ -368,6 +468,12 @@ type Handler interface {
 	//
 	// GET /geo/cities
 	SearchCities(ctx context.Context, params SearchCitiesParams) (*SearchCitiesOK, error)
+	// SendConversationMessage implements sendConversationMessage operation.
+	//
+	// Posts a message into an open conversation.
+	//
+	// POST /me/conversations/{id}/messages
+	SendConversationMessage(ctx context.Context, req *ConversationSendRequest, params SendConversationMessageParams) (*SendConversationMessageCreated, error)
 	// SetAgentPermissions implements setAgentPermissions operation.
 	//
 	// Session cookie only: an agent must not grant itself the right to apply.
