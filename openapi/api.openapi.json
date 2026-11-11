@@ -67,6 +67,9 @@
     },
     {
       "name": "Community"
+    },
+    {
+      "name": "Buddies"
     }
   ],
   "paths": {
@@ -1737,6 +1740,1183 @@
         },
         "tags": [
           "Answer bank"
+        ]
+      }
+    },
+    "/me/buddies": {
+      "get": {
+        "operationId": "buddyStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyStatus"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      },
+      "post": {
+        "operationId": "buddyJoin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyStatus"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      },
+      "delete": {
+        "operationId": "buddyLeave",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/feed": {
+      "get": {
+        "operationId": "buddyFeed",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuddyFeedPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/feed/{id}/reaction": {
+      "put": {
+        "operationId": "buddyReact",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyReactions"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuddyReactBody"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "buddyUnreact",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyReactions"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/hidden-applications": {
+      "get": {
+        "operationId": "buddyHiddenApplications",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "format": "int64"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/hidden-applications/{id}": {
+      "put": {
+        "operationId": "buddyHideApplication",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      },
+      "delete": {
+        "operationId": "buddyShowApplication",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/invite": {
+      "post": {
+        "operationId": "buddyInvite",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyConversation"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuddyInviteBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/buddies/mocks": {
+      "get": {
+        "operationId": "buddyMockList",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyMockList"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/mocks/availability": {
+      "get": {
+        "operationId": "buddyMockAvailabilityGet",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BuddyMockRuleOut"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/mocks/availability/overrides": {
+      "post": {
+        "operationId": "buddyMockOverrideAdd",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyMockRuleOut"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuddyMockRule"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/buddies/mocks/availability/weekly": {
+      "put": {
+        "operationId": "buddyMockWeeklyReplace",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuddyMockWeekly"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/buddies/mocks/availability/{id}": {
+      "delete": {
+        "operationId": "buddyMockRuleDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/mocks/hosts": {
+      "get": {
+        "operationId": "buddyMockHosts",
+        "parameters": [
+          {
+            "name": "topic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuddyMockHostsPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/mocks/settings": {
+      "get": {
+        "operationId": "buddyMockSettingsGet",
+        "description": "The caller's own settings, or null before the first save.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/BuddyMockSettingsOut"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      },
+      "put": {
+        "operationId": "buddyMockSettingsSave",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyMockSettingsOut"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuddyMockSettings"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/buddies/mocks/{id}/cancel": {
+      "post": {
+        "operationId": "buddyMockCancel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/mocks/{id}/review": {
+      "post": {
+        "operationId": "buddyMockReview",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuddyMockReviewBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/buddies/profiles/{handle}": {
+      "get": {
+        "operationId": "buddyProfile",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyProfile"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/profiles/{handle}/activity": {
+      "get": {
+        "operationId": "buddyActivity",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyActivity"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/profiles/{handle}/mock-reviews": {
+      "get": {
+        "operationId": "buddyMockReviews",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyMockSummary"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/profiles/{handle}/mock-slots": {
+      "get": {
+        "operationId": "buddyMockSlots",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuddyMockSlotsPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ]
+      }
+    },
+    "/me/buddies/profiles/{handle}/mocks": {
+      "post": {
+        "operationId": "buddyMockBook",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyMock"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuddyMockBook"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/buddies/similar": {
+      "get": {
+        "operationId": "buddySimilar",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuddySimilarPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Buddies"
         ]
       }
     },
@@ -5074,6 +6254,157 @@
         },
         "description": "The current single place: an ISO country code and a free-text city."
       },
+      "BuddyActivity": {
+        "type": "object",
+        "required": [
+          "days"
+        ],
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyActivityDay"
+            }
+          }
+        }
+      },
+      "BuddyActivityDay": {
+        "type": "object",
+        "required": [
+          "day",
+          "count",
+          "applied",
+          "interview",
+          "offer"
+        ],
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "applied": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "interview": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offer": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BuddyCardSummary": {
+        "type": "object",
+        "required": [
+          "category",
+          "seniority",
+          "country"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          }
+        }
+      },
+      "BuddyCompany": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "BuddyConversation": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status_for_me",
+          "counterpart",
+          "unread",
+          "last_message_at",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status_for_me": {
+            "type": "string"
+          },
+          "counterpart": {
+            "$ref": "#/components/schemas/BuddyConversationCounterpart"
+          },
+          "unread": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_message_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BuddyConversationCounterpart": {
+        "type": "object",
+        "required": [
+          "persona",
+          "reachable",
+          "detail"
+        ],
+        "properties": {
+          "persona": {
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuddyCounterpartDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
       "BuddyCounterpart": {
         "type": "object",
         "required": [
@@ -5089,6 +6420,804 @@
           }
         },
         "description": "The buddy persona's own shape. Nothing here names the account behind it."
+      },
+      "BuddyCounterpartDetail": {
+        "type": "object",
+        "required": [
+          "handle",
+          "card_summary"
+        ],
+        "properties": {
+          "handle": {
+            "type": "string"
+          },
+          "card_summary": {
+            "$ref": "#/components/schemas/BuddyCardSummary"
+          }
+        },
+        "description": "The persona's own detail; null when the other side is not reachable."
+      },
+      "BuddyFeedEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "handle",
+          "card_summary",
+          "company",
+          "job_title",
+          "job_slug",
+          "job_location",
+          "reactions",
+          "type",
+          "day"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "card_summary": {
+            "$ref": "#/components/schemas/BuddyCardSummary"
+          },
+          "company": {
+            "$ref": "#/components/schemas/BuddyCompany"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "job_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "job_location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reactions": {
+            "$ref": "#/components/schemas/BuddyReactions"
+          },
+          "type": {
+            "type": "string"
+          },
+          "day": {
+            "type": "string"
+          }
+        }
+      },
+      "BuddyFeedMeta": {
+        "type": "object",
+        "required": [
+          "next_cursor"
+        ],
+        "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BuddyFeedPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyFeedEntry"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/BuddyFeedMeta"
+          }
+        }
+      },
+      "BuddyInviteBody": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          }
+        }
+      },
+      "BuddyMock": {
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "counterpart",
+          "starts_at",
+          "ends_at",
+          "topic",
+          "status",
+          "meeting_url",
+          "can_cancel",
+          "can_review",
+          "my_review",
+          "their_review"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "counterpart": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "meeting_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_cancel": {
+            "type": "boolean"
+          },
+          "can_review": {
+            "type": "boolean"
+          },
+          "my_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuddyMockReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "their_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuddyMockReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BuddyMockBook": {
+        "type": "object",
+        "properties": {
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        }
+      },
+      "BuddyMockHost": {
+        "type": "object",
+        "required": [
+          "handle",
+          "card_summary",
+          "topics",
+          "next_slot",
+          "rating_avg",
+          "rating_count",
+          "completed"
+        ],
+        "properties": {
+          "handle": {
+            "type": "string"
+          },
+          "card_summary": {
+            "$ref": "#/components/schemas/BuddyCardSummary"
+          },
+          "topics": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_slot": {
+            "$ref": "#/components/schemas/BuddyMockNextSlot"
+          },
+          "rating_avg": {
+            "type": "number",
+            "format": "double"
+          },
+          "rating_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completed": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BuddyMockHostsMeta": {
+        "type": "object",
+        "required": [
+          "timezone",
+          "count"
+        ],
+        "properties": {
+          "timezone": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BuddyMockHostsPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMockHost"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/BuddyMockHostsMeta"
+          }
+        }
+      },
+      "BuddyMockList": {
+        "type": "object",
+        "required": [
+          "upcoming",
+          "past"
+        ],
+        "properties": {
+          "upcoming": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMock"
+            }
+          },
+          "past": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMock"
+            }
+          }
+        }
+      },
+      "BuddyMockNextSlot": {
+        "type": "object",
+        "required": [
+          "starts_at",
+          "local_start",
+          "utc_offset"
+        ],
+        "properties": {
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "local_start": {
+            "type": "string"
+          },
+          "utc_offset": {
+            "type": "string"
+          }
+        }
+      },
+      "BuddyMockReview": {
+        "type": "object",
+        "required": [
+          "rating",
+          "comment"
+        ],
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "comment": {
+            "type": "string"
+          }
+        }
+      },
+      "BuddyMockReviewBody": {
+        "type": "object",
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "comment": {
+            "type": "string"
+          }
+        }
+      },
+      "BuddyMockRule": {
+        "type": "object",
+        "properties": {
+          "weekday": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "0 (Sunday) through 6; null for a dated override."
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "YYYY-MM-DD; null for a weekly rule."
+          },
+          "start": {
+            "type": "string",
+            "description": "HH:MM."
+          },
+          "end": {
+            "type": "string",
+            "description": "HH:MM; 24:00 means until midnight."
+          }
+        }
+      },
+      "BuddyMockRuleOut": {
+        "type": "object",
+        "required": [
+          "id",
+          "weekday",
+          "date",
+          "start",
+          "end",
+          "closure"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "closure": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BuddyMockSettings": {
+        "type": "object",
+        "properties": {
+          "timezone": {
+            "type": "string"
+          },
+          "meeting_url": {
+            "type": "string"
+          },
+          "topics": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "paused": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BuddyMockSettingsOut": {
+        "type": "object",
+        "required": [
+          "timezone",
+          "meeting_url",
+          "topics",
+          "paused"
+        ],
+        "properties": {
+          "timezone": {
+            "type": "string"
+          },
+          "meeting_url": {
+            "type": "string"
+          },
+          "topics": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "paused": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BuddyMockSlot": {
+        "type": "object",
+        "required": [
+          "starts_at",
+          "ends_at",
+          "local_start",
+          "local_end",
+          "utc_offset"
+        ],
+        "properties": {
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "local_start": {
+            "type": "string"
+          },
+          "local_end": {
+            "type": "string"
+          },
+          "utc_offset": {
+            "type": "string"
+          }
+        }
+      },
+      "BuddyMockSlotsMeta": {
+        "type": "object",
+        "required": [
+          "timezone",
+          "count",
+          "topics"
+        ],
+        "properties": {
+          "timezone": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "topics": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BuddyMockSlotsPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMockSlot"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/BuddyMockSlotsMeta"
+          }
+        }
+      },
+      "BuddyMockSummary": {
+        "type": "object",
+        "required": [
+          "completed",
+          "rating_count",
+          "rating_avg",
+          "recent"
+        ],
+        "properties": {
+          "completed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_avg": {
+            "type": "number",
+            "format": "double"
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyRevealedReview"
+            }
+          }
+        }
+      },
+      "BuddyMockWeekly": {
+        "type": "object",
+        "properties": {
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMockRule"
+            }
+          }
+        }
+      },
+      "BuddyProfile": {
+        "type": "object",
+        "required": [
+          "handle",
+          "card_summary",
+          "card",
+          "card_empty"
+        ],
+        "properties": {
+          "handle": {
+            "type": "string"
+          },
+          "card_summary": {
+            "$ref": "#/components/schemas/BuddyCardSummary"
+          },
+          "card": {
+            "$ref": "#/components/schemas/TalentCard"
+          },
+          "card_empty": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BuddyReactBody": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          }
+        }
+      },
+      "BuddyReactions": {
+        "type": "object",
+        "required": [
+          "counts",
+          "mine"
+        ],
+        "properties": {
+          "counts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "mine": {
+            "type": "string"
+          }
+        },
+        "description": "Count per kind (no key for a kind nobody chose) and the viewer's own choice, \"\" for none."
+      },
+      "BuddyRevealedReview": {
+        "type": "object",
+        "required": [
+          "rating",
+          "comment",
+          "topic",
+          "day"
+        ],
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "day": {
+            "type": "string"
+          }
+        }
+      },
+      "BuddySimilar": {
+        "type": "object",
+        "required": [
+          "handle",
+          "card_summary",
+          "score",
+          "shared_companies"
+        ],
+        "properties": {
+          "handle": {
+            "type": "string"
+          },
+          "card_summary": {
+            "$ref": "#/components/schemas/BuddyCardSummary"
+          },
+          "score": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "shared_companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyCompany"
+            }
+          }
+        }
+      },
+      "BuddySimilarMeta": {
+        "type": "object",
+        "required": [
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BuddySimilarPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddySimilar"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/BuddySimilarMeta"
+          }
+        }
+      },
+      "BuddyStatus": {
+        "type": "object",
+        "required": [
+          "member",
+          "card_empty"
+        ],
+        "properties": {
+          "member": {
+            "type": "boolean"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "card_empty": {
+            "type": "boolean"
+          }
+        }
       },
       "CityMatch": {
         "type": "object",

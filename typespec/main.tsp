@@ -24,6 +24,7 @@ import "./timeline.tsp";
 import "./profile.tsp";
 import "./conversations.tsp";
 import "./community.tsp";
+import "./buddies.tsp";
 
 using Http;
 

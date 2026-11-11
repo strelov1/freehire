@@ -197,6 +197,276 @@ func (s *BankedAnswer) SetUpdatedAt(val time.Time) {
 // BlockConversationNoContent is response for BlockConversation operation.
 type BlockConversationNoContent struct{}
 
+// Ref: #/components/schemas/BuddyActivity
+type BuddyActivity struct {
+	Days []BuddyActivityDay `json:"days"`
+}
+
+// GetDays returns the value of Days.
+func (s *BuddyActivity) GetDays() []BuddyActivityDay {
+	return s.Days
+}
+
+// SetDays sets the value of Days.
+func (s *BuddyActivity) SetDays(val []BuddyActivityDay) {
+	s.Days = val
+}
+
+// Ref: #/components/schemas/BuddyActivityDay
+type BuddyActivityDay struct {
+	Day       string `json:"day"`
+	Count     int64  `json:"count"`
+	Applied   int64  `json:"applied"`
+	Interview int64  `json:"interview"`
+	Offer     int64  `json:"offer"`
+}
+
+// GetDay returns the value of Day.
+func (s *BuddyActivityDay) GetDay() string {
+	return s.Day
+}
+
+// GetCount returns the value of Count.
+func (s *BuddyActivityDay) GetCount() int64 {
+	return s.Count
+}
+
+// GetApplied returns the value of Applied.
+func (s *BuddyActivityDay) GetApplied() int64 {
+	return s.Applied
+}
+
+// GetInterview returns the value of Interview.
+func (s *BuddyActivityDay) GetInterview() int64 {
+	return s.Interview
+}
+
+// GetOffer returns the value of Offer.
+func (s *BuddyActivityDay) GetOffer() int64 {
+	return s.Offer
+}
+
+// SetDay sets the value of Day.
+func (s *BuddyActivityDay) SetDay(val string) {
+	s.Day = val
+}
+
+// SetCount sets the value of Count.
+func (s *BuddyActivityDay) SetCount(val int64) {
+	s.Count = val
+}
+
+// SetApplied sets the value of Applied.
+func (s *BuddyActivityDay) SetApplied(val int64) {
+	s.Applied = val
+}
+
+// SetInterview sets the value of Interview.
+func (s *BuddyActivityDay) SetInterview(val int64) {
+	s.Interview = val
+}
+
+// SetOffer sets the value of Offer.
+func (s *BuddyActivityDay) SetOffer(val int64) {
+	s.Offer = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyActivityOK struct {
+	Data BuddyActivity `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyActivityOK) GetData() BuddyActivity {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyActivityOK) SetData(val BuddyActivity) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/BuddyCardSummary
+type BuddyCardSummary struct {
+	Category  string `json:"category"`
+	Seniority string `json:"seniority"`
+	Country   string `json:"country"`
+}
+
+// GetCategory returns the value of Category.
+func (s *BuddyCardSummary) GetCategory() string {
+	return s.Category
+}
+
+// GetSeniority returns the value of Seniority.
+func (s *BuddyCardSummary) GetSeniority() string {
+	return s.Seniority
+}
+
+// GetCountry returns the value of Country.
+func (s *BuddyCardSummary) GetCountry() string {
+	return s.Country
+}
+
+// SetCategory sets the value of Category.
+func (s *BuddyCardSummary) SetCategory(val string) {
+	s.Category = val
+}
+
+// SetSeniority sets the value of Seniority.
+func (s *BuddyCardSummary) SetSeniority(val string) {
+	s.Seniority = val
+}
+
+// SetCountry sets the value of Country.
+func (s *BuddyCardSummary) SetCountry(val string) {
+	s.Country = val
+}
+
+// Ref: #/components/schemas/BuddyCompany
+type BuddyCompany struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+// GetSlug returns the value of Slug.
+func (s *BuddyCompany) GetSlug() string {
+	return s.Slug
+}
+
+// GetName returns the value of Name.
+func (s *BuddyCompany) GetName() string {
+	return s.Name
+}
+
+// SetSlug sets the value of Slug.
+func (s *BuddyCompany) SetSlug(val string) {
+	s.Slug = val
+}
+
+// SetName sets the value of Name.
+func (s *BuddyCompany) SetName(val string) {
+	s.Name = val
+}
+
+// Ref: #/components/schemas/BuddyConversation
+type BuddyConversation struct {
+	ID            int64                        `json:"id"`
+	Kind          string                       `json:"kind"`
+	StatusForMe   string                       `json:"status_for_me"`
+	Counterpart   BuddyConversationCounterpart `json:"counterpart"`
+	Unread        int64                        `json:"unread"`
+	LastMessageAt NilDateTime                  `json:"last_message_at"`
+	CreatedAt     time.Time                    `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *BuddyConversation) GetID() int64 {
+	return s.ID
+}
+
+// GetKind returns the value of Kind.
+func (s *BuddyConversation) GetKind() string {
+	return s.Kind
+}
+
+// GetStatusForMe returns the value of StatusForMe.
+func (s *BuddyConversation) GetStatusForMe() string {
+	return s.StatusForMe
+}
+
+// GetCounterpart returns the value of Counterpart.
+func (s *BuddyConversation) GetCounterpart() BuddyConversationCounterpart {
+	return s.Counterpart
+}
+
+// GetUnread returns the value of Unread.
+func (s *BuddyConversation) GetUnread() int64 {
+	return s.Unread
+}
+
+// GetLastMessageAt returns the value of LastMessageAt.
+func (s *BuddyConversation) GetLastMessageAt() NilDateTime {
+	return s.LastMessageAt
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *BuddyConversation) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *BuddyConversation) SetID(val int64) {
+	s.ID = val
+}
+
+// SetKind sets the value of Kind.
+func (s *BuddyConversation) SetKind(val string) {
+	s.Kind = val
+}
+
+// SetStatusForMe sets the value of StatusForMe.
+func (s *BuddyConversation) SetStatusForMe(val string) {
+	s.StatusForMe = val
+}
+
+// SetCounterpart sets the value of Counterpart.
+func (s *BuddyConversation) SetCounterpart(val BuddyConversationCounterpart) {
+	s.Counterpart = val
+}
+
+// SetUnread sets the value of Unread.
+func (s *BuddyConversation) SetUnread(val int64) {
+	s.Unread = val
+}
+
+// SetLastMessageAt sets the value of LastMessageAt.
+func (s *BuddyConversation) SetLastMessageAt(val NilDateTime) {
+	s.LastMessageAt = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *BuddyConversation) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/BuddyConversationCounterpart
+type BuddyConversationCounterpart struct {
+	Persona   string                    `json:"persona"`
+	Reachable bool                      `json:"reachable"`
+	Detail    NilBuddyCounterpartDetail `json:"detail"`
+}
+
+// GetPersona returns the value of Persona.
+func (s *BuddyConversationCounterpart) GetPersona() string {
+	return s.Persona
+}
+
+// GetReachable returns the value of Reachable.
+func (s *BuddyConversationCounterpart) GetReachable() bool {
+	return s.Reachable
+}
+
+// GetDetail returns the value of Detail.
+func (s *BuddyConversationCounterpart) GetDetail() NilBuddyCounterpartDetail {
+	return s.Detail
+}
+
+// SetPersona sets the value of Persona.
+func (s *BuddyConversationCounterpart) SetPersona(val string) {
+	s.Persona = val
+}
+
+// SetReachable sets the value of Reachable.
+func (s *BuddyConversationCounterpart) SetReachable(val bool) {
+	s.Reachable = val
+}
+
+// SetDetail sets the value of Detail.
+func (s *BuddyConversationCounterpart) SetDetail(val NilBuddyCounterpartDetail) {
+	s.Detail = val
+}
+
 // The buddy persona's own shape. Nothing here names the account behind it.
 // Ref: #/components/schemas/BuddyCounterpart
 type BuddyCounterpart struct {
@@ -222,6 +492,1555 @@ func (s *BuddyCounterpart) SetHandle(val string) {
 // SetCardSummary sets the value of CardSummary.
 func (s *BuddyCounterpart) SetCardSummary(val ConversationCardSummary) {
 	s.CardSummary = val
+}
+
+// The persona's own detail; null when the other side is not reachable.
+// Ref: #/components/schemas/BuddyCounterpartDetail
+type BuddyCounterpartDetail struct {
+	Handle      string           `json:"handle"`
+	CardSummary BuddyCardSummary `json:"card_summary"`
+}
+
+// GetHandle returns the value of Handle.
+func (s *BuddyCounterpartDetail) GetHandle() string {
+	return s.Handle
+}
+
+// GetCardSummary returns the value of CardSummary.
+func (s *BuddyCounterpartDetail) GetCardSummary() BuddyCardSummary {
+	return s.CardSummary
+}
+
+// SetHandle sets the value of Handle.
+func (s *BuddyCounterpartDetail) SetHandle(val string) {
+	s.Handle = val
+}
+
+// SetCardSummary sets the value of CardSummary.
+func (s *BuddyCounterpartDetail) SetCardSummary(val BuddyCardSummary) {
+	s.CardSummary = val
+}
+
+// Ref: #/components/schemas/BuddyFeedEntry
+type BuddyFeedEntry struct {
+	ID          int64            `json:"id"`
+	Handle      string           `json:"handle"`
+	CardSummary BuddyCardSummary `json:"card_summary"`
+	Company     BuddyCompany     `json:"company"`
+	JobTitle    NilString        `json:"job_title"`
+	JobSlug     NilString        `json:"job_slug"`
+	JobLocation NilString        `json:"job_location"`
+	Reactions   BuddyReactions   `json:"reactions"`
+	Type        string           `json:"type"`
+	Day         string           `json:"day"`
+}
+
+// GetID returns the value of ID.
+func (s *BuddyFeedEntry) GetID() int64 {
+	return s.ID
+}
+
+// GetHandle returns the value of Handle.
+func (s *BuddyFeedEntry) GetHandle() string {
+	return s.Handle
+}
+
+// GetCardSummary returns the value of CardSummary.
+func (s *BuddyFeedEntry) GetCardSummary() BuddyCardSummary {
+	return s.CardSummary
+}
+
+// GetCompany returns the value of Company.
+func (s *BuddyFeedEntry) GetCompany() BuddyCompany {
+	return s.Company
+}
+
+// GetJobTitle returns the value of JobTitle.
+func (s *BuddyFeedEntry) GetJobTitle() NilString {
+	return s.JobTitle
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *BuddyFeedEntry) GetJobSlug() NilString {
+	return s.JobSlug
+}
+
+// GetJobLocation returns the value of JobLocation.
+func (s *BuddyFeedEntry) GetJobLocation() NilString {
+	return s.JobLocation
+}
+
+// GetReactions returns the value of Reactions.
+func (s *BuddyFeedEntry) GetReactions() BuddyReactions {
+	return s.Reactions
+}
+
+// GetType returns the value of Type.
+func (s *BuddyFeedEntry) GetType() string {
+	return s.Type
+}
+
+// GetDay returns the value of Day.
+func (s *BuddyFeedEntry) GetDay() string {
+	return s.Day
+}
+
+// SetID sets the value of ID.
+func (s *BuddyFeedEntry) SetID(val int64) {
+	s.ID = val
+}
+
+// SetHandle sets the value of Handle.
+func (s *BuddyFeedEntry) SetHandle(val string) {
+	s.Handle = val
+}
+
+// SetCardSummary sets the value of CardSummary.
+func (s *BuddyFeedEntry) SetCardSummary(val BuddyCardSummary) {
+	s.CardSummary = val
+}
+
+// SetCompany sets the value of Company.
+func (s *BuddyFeedEntry) SetCompany(val BuddyCompany) {
+	s.Company = val
+}
+
+// SetJobTitle sets the value of JobTitle.
+func (s *BuddyFeedEntry) SetJobTitle(val NilString) {
+	s.JobTitle = val
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *BuddyFeedEntry) SetJobSlug(val NilString) {
+	s.JobSlug = val
+}
+
+// SetJobLocation sets the value of JobLocation.
+func (s *BuddyFeedEntry) SetJobLocation(val NilString) {
+	s.JobLocation = val
+}
+
+// SetReactions sets the value of Reactions.
+func (s *BuddyFeedEntry) SetReactions(val BuddyReactions) {
+	s.Reactions = val
+}
+
+// SetType sets the value of Type.
+func (s *BuddyFeedEntry) SetType(val string) {
+	s.Type = val
+}
+
+// SetDay sets the value of Day.
+func (s *BuddyFeedEntry) SetDay(val string) {
+	s.Day = val
+}
+
+// Ref: #/components/schemas/BuddyFeedMeta
+type BuddyFeedMeta struct {
+	NextCursor NilString `json:"next_cursor"`
+}
+
+// GetNextCursor returns the value of NextCursor.
+func (s *BuddyFeedMeta) GetNextCursor() NilString {
+	return s.NextCursor
+}
+
+// SetNextCursor sets the value of NextCursor.
+func (s *BuddyFeedMeta) SetNextCursor(val NilString) {
+	s.NextCursor = val
+}
+
+// Ref: #/components/schemas/BuddyFeedPage
+type BuddyFeedPage struct {
+	Data []BuddyFeedEntry `json:"data"`
+	Meta BuddyFeedMeta    `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyFeedPage) GetData() []BuddyFeedEntry {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *BuddyFeedPage) GetMeta() BuddyFeedMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *BuddyFeedPage) SetData(val []BuddyFeedEntry) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *BuddyFeedPage) SetMeta(val BuddyFeedMeta) {
+	s.Meta = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyHiddenApplicationsOK struct {
+	Data []int64 `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyHiddenApplicationsOK) GetData() []int64 {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyHiddenApplicationsOK) SetData(val []int64) {
+	s.Data = val
+}
+
+// BuddyHideApplicationNoContent is response for BuddyHideApplication operation.
+type BuddyHideApplicationNoContent struct{}
+
+// Ref: #/components/schemas/BuddyInviteBody
+type BuddyInviteBody struct {
+	Handle OptString `json:"handle"`
+	Body   OptString `json:"body"`
+}
+
+// GetHandle returns the value of Handle.
+func (s *BuddyInviteBody) GetHandle() OptString {
+	return s.Handle
+}
+
+// GetBody returns the value of Body.
+func (s *BuddyInviteBody) GetBody() OptString {
+	return s.Body
+}
+
+// SetHandle sets the value of Handle.
+func (s *BuddyInviteBody) SetHandle(val OptString) {
+	s.Handle = val
+}
+
+// SetBody sets the value of Body.
+func (s *BuddyInviteBody) SetBody(val OptString) {
+	s.Body = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyInviteCreated struct {
+	Data BuddyConversation `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyInviteCreated) GetData() BuddyConversation {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyInviteCreated) SetData(val BuddyConversation) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyJoinOK struct {
+	Data BuddyStatus `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyJoinOK) GetData() BuddyStatus {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyJoinOK) SetData(val BuddyStatus) {
+	s.Data = val
+}
+
+// BuddyLeaveNoContent is response for BuddyLeave operation.
+type BuddyLeaveNoContent struct{}
+
+// Ref: #/components/schemas/BuddyMock
+type BuddyMock struct {
+	ID          string             `json:"id"`
+	Role        string             `json:"role"`
+	Counterpart NilString          `json:"counterpart"`
+	StartsAt    time.Time          `json:"starts_at"`
+	EndsAt      time.Time          `json:"ends_at"`
+	Topic       string             `json:"topic"`
+	Status      string             `json:"status"`
+	MeetingURL  NilString          `json:"meeting_url"`
+	CanCancel   bool               `json:"can_cancel"`
+	CanReview   bool               `json:"can_review"`
+	MyReview    NilBuddyMockReview `json:"my_review"`
+	TheirReview NilBuddyMockReview `json:"their_review"`
+}
+
+// GetID returns the value of ID.
+func (s *BuddyMock) GetID() string {
+	return s.ID
+}
+
+// GetRole returns the value of Role.
+func (s *BuddyMock) GetRole() string {
+	return s.Role
+}
+
+// GetCounterpart returns the value of Counterpart.
+func (s *BuddyMock) GetCounterpart() NilString {
+	return s.Counterpart
+}
+
+// GetStartsAt returns the value of StartsAt.
+func (s *BuddyMock) GetStartsAt() time.Time {
+	return s.StartsAt
+}
+
+// GetEndsAt returns the value of EndsAt.
+func (s *BuddyMock) GetEndsAt() time.Time {
+	return s.EndsAt
+}
+
+// GetTopic returns the value of Topic.
+func (s *BuddyMock) GetTopic() string {
+	return s.Topic
+}
+
+// GetStatus returns the value of Status.
+func (s *BuddyMock) GetStatus() string {
+	return s.Status
+}
+
+// GetMeetingURL returns the value of MeetingURL.
+func (s *BuddyMock) GetMeetingURL() NilString {
+	return s.MeetingURL
+}
+
+// GetCanCancel returns the value of CanCancel.
+func (s *BuddyMock) GetCanCancel() bool {
+	return s.CanCancel
+}
+
+// GetCanReview returns the value of CanReview.
+func (s *BuddyMock) GetCanReview() bool {
+	return s.CanReview
+}
+
+// GetMyReview returns the value of MyReview.
+func (s *BuddyMock) GetMyReview() NilBuddyMockReview {
+	return s.MyReview
+}
+
+// GetTheirReview returns the value of TheirReview.
+func (s *BuddyMock) GetTheirReview() NilBuddyMockReview {
+	return s.TheirReview
+}
+
+// SetID sets the value of ID.
+func (s *BuddyMock) SetID(val string) {
+	s.ID = val
+}
+
+// SetRole sets the value of Role.
+func (s *BuddyMock) SetRole(val string) {
+	s.Role = val
+}
+
+// SetCounterpart sets the value of Counterpart.
+func (s *BuddyMock) SetCounterpart(val NilString) {
+	s.Counterpart = val
+}
+
+// SetStartsAt sets the value of StartsAt.
+func (s *BuddyMock) SetStartsAt(val time.Time) {
+	s.StartsAt = val
+}
+
+// SetEndsAt sets the value of EndsAt.
+func (s *BuddyMock) SetEndsAt(val time.Time) {
+	s.EndsAt = val
+}
+
+// SetTopic sets the value of Topic.
+func (s *BuddyMock) SetTopic(val string) {
+	s.Topic = val
+}
+
+// SetStatus sets the value of Status.
+func (s *BuddyMock) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetMeetingURL sets the value of MeetingURL.
+func (s *BuddyMock) SetMeetingURL(val NilString) {
+	s.MeetingURL = val
+}
+
+// SetCanCancel sets the value of CanCancel.
+func (s *BuddyMock) SetCanCancel(val bool) {
+	s.CanCancel = val
+}
+
+// SetCanReview sets the value of CanReview.
+func (s *BuddyMock) SetCanReview(val bool) {
+	s.CanReview = val
+}
+
+// SetMyReview sets the value of MyReview.
+func (s *BuddyMock) SetMyReview(val NilBuddyMockReview) {
+	s.MyReview = val
+}
+
+// SetTheirReview sets the value of TheirReview.
+func (s *BuddyMock) SetTheirReview(val NilBuddyMockReview) {
+	s.TheirReview = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyMockAvailabilityGetOK struct {
+	Data []BuddyMockRuleOut `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyMockAvailabilityGetOK) GetData() []BuddyMockRuleOut {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyMockAvailabilityGetOK) SetData(val []BuddyMockRuleOut) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/BuddyMockBook
+type BuddyMockBook struct {
+	StartsAt OptDateTime `json:"starts_at"`
+	Topic    OptString   `json:"topic"`
+	Timezone OptString   `json:"timezone"`
+}
+
+// GetStartsAt returns the value of StartsAt.
+func (s *BuddyMockBook) GetStartsAt() OptDateTime {
+	return s.StartsAt
+}
+
+// GetTopic returns the value of Topic.
+func (s *BuddyMockBook) GetTopic() OptString {
+	return s.Topic
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *BuddyMockBook) GetTimezone() OptString {
+	return s.Timezone
+}
+
+// SetStartsAt sets the value of StartsAt.
+func (s *BuddyMockBook) SetStartsAt(val OptDateTime) {
+	s.StartsAt = val
+}
+
+// SetTopic sets the value of Topic.
+func (s *BuddyMockBook) SetTopic(val OptString) {
+	s.Topic = val
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *BuddyMockBook) SetTimezone(val OptString) {
+	s.Timezone = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyMockBookCreated struct {
+	Data BuddyMock `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyMockBookCreated) GetData() BuddyMock {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyMockBookCreated) SetData(val BuddyMock) {
+	s.Data = val
+}
+
+// BuddyMockCancelNoContent is response for BuddyMockCancel operation.
+type BuddyMockCancelNoContent struct{}
+
+// Ref: #/components/schemas/BuddyMockHost
+type BuddyMockHost struct {
+	Handle      string            `json:"handle"`
+	CardSummary BuddyCardSummary  `json:"card_summary"`
+	Topics      []string          `json:"topics"`
+	NextSlot    BuddyMockNextSlot `json:"next_slot"`
+	RatingAvg   float64           `json:"rating_avg"`
+	RatingCount int64             `json:"rating_count"`
+	Completed   int64             `json:"completed"`
+}
+
+// GetHandle returns the value of Handle.
+func (s *BuddyMockHost) GetHandle() string {
+	return s.Handle
+}
+
+// GetCardSummary returns the value of CardSummary.
+func (s *BuddyMockHost) GetCardSummary() BuddyCardSummary {
+	return s.CardSummary
+}
+
+// GetTopics returns the value of Topics.
+func (s *BuddyMockHost) GetTopics() []string {
+	return s.Topics
+}
+
+// GetNextSlot returns the value of NextSlot.
+func (s *BuddyMockHost) GetNextSlot() BuddyMockNextSlot {
+	return s.NextSlot
+}
+
+// GetRatingAvg returns the value of RatingAvg.
+func (s *BuddyMockHost) GetRatingAvg() float64 {
+	return s.RatingAvg
+}
+
+// GetRatingCount returns the value of RatingCount.
+func (s *BuddyMockHost) GetRatingCount() int64 {
+	return s.RatingCount
+}
+
+// GetCompleted returns the value of Completed.
+func (s *BuddyMockHost) GetCompleted() int64 {
+	return s.Completed
+}
+
+// SetHandle sets the value of Handle.
+func (s *BuddyMockHost) SetHandle(val string) {
+	s.Handle = val
+}
+
+// SetCardSummary sets the value of CardSummary.
+func (s *BuddyMockHost) SetCardSummary(val BuddyCardSummary) {
+	s.CardSummary = val
+}
+
+// SetTopics sets the value of Topics.
+func (s *BuddyMockHost) SetTopics(val []string) {
+	s.Topics = val
+}
+
+// SetNextSlot sets the value of NextSlot.
+func (s *BuddyMockHost) SetNextSlot(val BuddyMockNextSlot) {
+	s.NextSlot = val
+}
+
+// SetRatingAvg sets the value of RatingAvg.
+func (s *BuddyMockHost) SetRatingAvg(val float64) {
+	s.RatingAvg = val
+}
+
+// SetRatingCount sets the value of RatingCount.
+func (s *BuddyMockHost) SetRatingCount(val int64) {
+	s.RatingCount = val
+}
+
+// SetCompleted sets the value of Completed.
+func (s *BuddyMockHost) SetCompleted(val int64) {
+	s.Completed = val
+}
+
+// Ref: #/components/schemas/BuddyMockHostsMeta
+type BuddyMockHostsMeta struct {
+	Timezone string `json:"timezone"`
+	Count    int64  `json:"count"`
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *BuddyMockHostsMeta) GetTimezone() string {
+	return s.Timezone
+}
+
+// GetCount returns the value of Count.
+func (s *BuddyMockHostsMeta) GetCount() int64 {
+	return s.Count
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *BuddyMockHostsMeta) SetTimezone(val string) {
+	s.Timezone = val
+}
+
+// SetCount sets the value of Count.
+func (s *BuddyMockHostsMeta) SetCount(val int64) {
+	s.Count = val
+}
+
+// Ref: #/components/schemas/BuddyMockHostsPage
+type BuddyMockHostsPage struct {
+	Data []BuddyMockHost    `json:"data"`
+	Meta BuddyMockHostsMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyMockHostsPage) GetData() []BuddyMockHost {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *BuddyMockHostsPage) GetMeta() BuddyMockHostsMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *BuddyMockHostsPage) SetData(val []BuddyMockHost) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *BuddyMockHostsPage) SetMeta(val BuddyMockHostsMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/BuddyMockList
+type BuddyMockList struct {
+	Upcoming []BuddyMock `json:"upcoming"`
+	Past     []BuddyMock `json:"past"`
+}
+
+// GetUpcoming returns the value of Upcoming.
+func (s *BuddyMockList) GetUpcoming() []BuddyMock {
+	return s.Upcoming
+}
+
+// GetPast returns the value of Past.
+func (s *BuddyMockList) GetPast() []BuddyMock {
+	return s.Past
+}
+
+// SetUpcoming sets the value of Upcoming.
+func (s *BuddyMockList) SetUpcoming(val []BuddyMock) {
+	s.Upcoming = val
+}
+
+// SetPast sets the value of Past.
+func (s *BuddyMockList) SetPast(val []BuddyMock) {
+	s.Past = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyMockListOK struct {
+	Data BuddyMockList `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyMockListOK) GetData() BuddyMockList {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyMockListOK) SetData(val BuddyMockList) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/BuddyMockNextSlot
+type BuddyMockNextSlot struct {
+	StartsAt   time.Time `json:"starts_at"`
+	LocalStart string    `json:"local_start"`
+	UtcOffset  string    `json:"utc_offset"`
+}
+
+// GetStartsAt returns the value of StartsAt.
+func (s *BuddyMockNextSlot) GetStartsAt() time.Time {
+	return s.StartsAt
+}
+
+// GetLocalStart returns the value of LocalStart.
+func (s *BuddyMockNextSlot) GetLocalStart() string {
+	return s.LocalStart
+}
+
+// GetUtcOffset returns the value of UtcOffset.
+func (s *BuddyMockNextSlot) GetUtcOffset() string {
+	return s.UtcOffset
+}
+
+// SetStartsAt sets the value of StartsAt.
+func (s *BuddyMockNextSlot) SetStartsAt(val time.Time) {
+	s.StartsAt = val
+}
+
+// SetLocalStart sets the value of LocalStart.
+func (s *BuddyMockNextSlot) SetLocalStart(val string) {
+	s.LocalStart = val
+}
+
+// SetUtcOffset sets the value of UtcOffset.
+func (s *BuddyMockNextSlot) SetUtcOffset(val string) {
+	s.UtcOffset = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyMockOverrideAddCreated struct {
+	Data BuddyMockRuleOut `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyMockOverrideAddCreated) GetData() BuddyMockRuleOut {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyMockOverrideAddCreated) SetData(val BuddyMockRuleOut) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/BuddyMockReview
+type BuddyMockReview struct {
+	Rating  int64  `json:"rating"`
+	Comment string `json:"comment"`
+}
+
+// GetRating returns the value of Rating.
+func (s *BuddyMockReview) GetRating() int64 {
+	return s.Rating
+}
+
+// GetComment returns the value of Comment.
+func (s *BuddyMockReview) GetComment() string {
+	return s.Comment
+}
+
+// SetRating sets the value of Rating.
+func (s *BuddyMockReview) SetRating(val int64) {
+	s.Rating = val
+}
+
+// SetComment sets the value of Comment.
+func (s *BuddyMockReview) SetComment(val string) {
+	s.Comment = val
+}
+
+// Ref: #/components/schemas/BuddyMockReviewBody
+type BuddyMockReviewBody struct {
+	Rating  OptInt64  `json:"rating"`
+	Comment OptString `json:"comment"`
+}
+
+// GetRating returns the value of Rating.
+func (s *BuddyMockReviewBody) GetRating() OptInt64 {
+	return s.Rating
+}
+
+// GetComment returns the value of Comment.
+func (s *BuddyMockReviewBody) GetComment() OptString {
+	return s.Comment
+}
+
+// SetRating sets the value of Rating.
+func (s *BuddyMockReviewBody) SetRating(val OptInt64) {
+	s.Rating = val
+}
+
+// SetComment sets the value of Comment.
+func (s *BuddyMockReviewBody) SetComment(val OptString) {
+	s.Comment = val
+}
+
+// BuddyMockReviewNoContent is response for BuddyMockReview operation.
+type BuddyMockReviewNoContent struct{}
+
+// A single item: `{"data": ...}`.
+type BuddyMockReviewsOK struct {
+	Data BuddyMockSummary `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyMockReviewsOK) GetData() BuddyMockSummary {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyMockReviewsOK) SetData(val BuddyMockSummary) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/BuddyMockRule
+type BuddyMockRule struct {
+	// 0 (Sunday) through 6; null for a dated override.
+	Weekday OptNilInt64 `json:"weekday"`
+	// YYYY-MM-DD; null for a weekly rule.
+	Date OptNilString `json:"date"`
+	// HH:MM.
+	Start OptString `json:"start"`
+	// HH:MM; 24:00 means until midnight.
+	End OptString `json:"end"`
+}
+
+// GetWeekday returns the value of Weekday.
+func (s *BuddyMockRule) GetWeekday() OptNilInt64 {
+	return s.Weekday
+}
+
+// GetDate returns the value of Date.
+func (s *BuddyMockRule) GetDate() OptNilString {
+	return s.Date
+}
+
+// GetStart returns the value of Start.
+func (s *BuddyMockRule) GetStart() OptString {
+	return s.Start
+}
+
+// GetEnd returns the value of End.
+func (s *BuddyMockRule) GetEnd() OptString {
+	return s.End
+}
+
+// SetWeekday sets the value of Weekday.
+func (s *BuddyMockRule) SetWeekday(val OptNilInt64) {
+	s.Weekday = val
+}
+
+// SetDate sets the value of Date.
+func (s *BuddyMockRule) SetDate(val OptNilString) {
+	s.Date = val
+}
+
+// SetStart sets the value of Start.
+func (s *BuddyMockRule) SetStart(val OptString) {
+	s.Start = val
+}
+
+// SetEnd sets the value of End.
+func (s *BuddyMockRule) SetEnd(val OptString) {
+	s.End = val
+}
+
+// BuddyMockRuleDeleteNoContent is response for BuddyMockRuleDelete operation.
+type BuddyMockRuleDeleteNoContent struct{}
+
+// Ref: #/components/schemas/BuddyMockRuleOut
+type BuddyMockRuleOut struct {
+	ID      int64     `json:"id"`
+	Weekday NilInt64  `json:"weekday"`
+	Date    NilString `json:"date"`
+	Start   string    `json:"start"`
+	End     string    `json:"end"`
+	Closure bool      `json:"closure"`
+}
+
+// GetID returns the value of ID.
+func (s *BuddyMockRuleOut) GetID() int64 {
+	return s.ID
+}
+
+// GetWeekday returns the value of Weekday.
+func (s *BuddyMockRuleOut) GetWeekday() NilInt64 {
+	return s.Weekday
+}
+
+// GetDate returns the value of Date.
+func (s *BuddyMockRuleOut) GetDate() NilString {
+	return s.Date
+}
+
+// GetStart returns the value of Start.
+func (s *BuddyMockRuleOut) GetStart() string {
+	return s.Start
+}
+
+// GetEnd returns the value of End.
+func (s *BuddyMockRuleOut) GetEnd() string {
+	return s.End
+}
+
+// GetClosure returns the value of Closure.
+func (s *BuddyMockRuleOut) GetClosure() bool {
+	return s.Closure
+}
+
+// SetID sets the value of ID.
+func (s *BuddyMockRuleOut) SetID(val int64) {
+	s.ID = val
+}
+
+// SetWeekday sets the value of Weekday.
+func (s *BuddyMockRuleOut) SetWeekday(val NilInt64) {
+	s.Weekday = val
+}
+
+// SetDate sets the value of Date.
+func (s *BuddyMockRuleOut) SetDate(val NilString) {
+	s.Date = val
+}
+
+// SetStart sets the value of Start.
+func (s *BuddyMockRuleOut) SetStart(val string) {
+	s.Start = val
+}
+
+// SetEnd sets the value of End.
+func (s *BuddyMockRuleOut) SetEnd(val string) {
+	s.End = val
+}
+
+// SetClosure sets the value of Closure.
+func (s *BuddyMockRuleOut) SetClosure(val bool) {
+	s.Closure = val
+}
+
+// Ref: #/components/schemas/BuddyMockSettings
+type BuddyMockSettings struct {
+	Timezone   OptString         `json:"timezone"`
+	MeetingURL OptString         `json:"meeting_url"`
+	Topics     OptNilStringArray `json:"topics"`
+	Paused     OptBool           `json:"paused"`
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *BuddyMockSettings) GetTimezone() OptString {
+	return s.Timezone
+}
+
+// GetMeetingURL returns the value of MeetingURL.
+func (s *BuddyMockSettings) GetMeetingURL() OptString {
+	return s.MeetingURL
+}
+
+// GetTopics returns the value of Topics.
+func (s *BuddyMockSettings) GetTopics() OptNilStringArray {
+	return s.Topics
+}
+
+// GetPaused returns the value of Paused.
+func (s *BuddyMockSettings) GetPaused() OptBool {
+	return s.Paused
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *BuddyMockSettings) SetTimezone(val OptString) {
+	s.Timezone = val
+}
+
+// SetMeetingURL sets the value of MeetingURL.
+func (s *BuddyMockSettings) SetMeetingURL(val OptString) {
+	s.MeetingURL = val
+}
+
+// SetTopics sets the value of Topics.
+func (s *BuddyMockSettings) SetTopics(val OptNilStringArray) {
+	s.Topics = val
+}
+
+// SetPaused sets the value of Paused.
+func (s *BuddyMockSettings) SetPaused(val OptBool) {
+	s.Paused = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyMockSettingsGetOK struct {
+	Data NilBuddyMockSettingsOut `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyMockSettingsGetOK) GetData() NilBuddyMockSettingsOut {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyMockSettingsGetOK) SetData(val NilBuddyMockSettingsOut) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/BuddyMockSettingsOut
+type BuddyMockSettingsOut struct {
+	Timezone   string   `json:"timezone"`
+	MeetingURL string   `json:"meeting_url"`
+	Topics     []string `json:"topics"`
+	Paused     bool     `json:"paused"`
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *BuddyMockSettingsOut) GetTimezone() string {
+	return s.Timezone
+}
+
+// GetMeetingURL returns the value of MeetingURL.
+func (s *BuddyMockSettingsOut) GetMeetingURL() string {
+	return s.MeetingURL
+}
+
+// GetTopics returns the value of Topics.
+func (s *BuddyMockSettingsOut) GetTopics() []string {
+	return s.Topics
+}
+
+// GetPaused returns the value of Paused.
+func (s *BuddyMockSettingsOut) GetPaused() bool {
+	return s.Paused
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *BuddyMockSettingsOut) SetTimezone(val string) {
+	s.Timezone = val
+}
+
+// SetMeetingURL sets the value of MeetingURL.
+func (s *BuddyMockSettingsOut) SetMeetingURL(val string) {
+	s.MeetingURL = val
+}
+
+// SetTopics sets the value of Topics.
+func (s *BuddyMockSettingsOut) SetTopics(val []string) {
+	s.Topics = val
+}
+
+// SetPaused sets the value of Paused.
+func (s *BuddyMockSettingsOut) SetPaused(val bool) {
+	s.Paused = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyMockSettingsSaveOK struct {
+	Data BuddyMockSettingsOut `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyMockSettingsSaveOK) GetData() BuddyMockSettingsOut {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyMockSettingsSaveOK) SetData(val BuddyMockSettingsOut) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/BuddyMockSlot
+type BuddyMockSlot struct {
+	StartsAt   time.Time `json:"starts_at"`
+	EndsAt     time.Time `json:"ends_at"`
+	LocalStart string    `json:"local_start"`
+	LocalEnd   string    `json:"local_end"`
+	UtcOffset  string    `json:"utc_offset"`
+}
+
+// GetStartsAt returns the value of StartsAt.
+func (s *BuddyMockSlot) GetStartsAt() time.Time {
+	return s.StartsAt
+}
+
+// GetEndsAt returns the value of EndsAt.
+func (s *BuddyMockSlot) GetEndsAt() time.Time {
+	return s.EndsAt
+}
+
+// GetLocalStart returns the value of LocalStart.
+func (s *BuddyMockSlot) GetLocalStart() string {
+	return s.LocalStart
+}
+
+// GetLocalEnd returns the value of LocalEnd.
+func (s *BuddyMockSlot) GetLocalEnd() string {
+	return s.LocalEnd
+}
+
+// GetUtcOffset returns the value of UtcOffset.
+func (s *BuddyMockSlot) GetUtcOffset() string {
+	return s.UtcOffset
+}
+
+// SetStartsAt sets the value of StartsAt.
+func (s *BuddyMockSlot) SetStartsAt(val time.Time) {
+	s.StartsAt = val
+}
+
+// SetEndsAt sets the value of EndsAt.
+func (s *BuddyMockSlot) SetEndsAt(val time.Time) {
+	s.EndsAt = val
+}
+
+// SetLocalStart sets the value of LocalStart.
+func (s *BuddyMockSlot) SetLocalStart(val string) {
+	s.LocalStart = val
+}
+
+// SetLocalEnd sets the value of LocalEnd.
+func (s *BuddyMockSlot) SetLocalEnd(val string) {
+	s.LocalEnd = val
+}
+
+// SetUtcOffset sets the value of UtcOffset.
+func (s *BuddyMockSlot) SetUtcOffset(val string) {
+	s.UtcOffset = val
+}
+
+// Ref: #/components/schemas/BuddyMockSlotsMeta
+type BuddyMockSlotsMeta struct {
+	Timezone string   `json:"timezone"`
+	Count    int64    `json:"count"`
+	Topics   []string `json:"topics"`
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *BuddyMockSlotsMeta) GetTimezone() string {
+	return s.Timezone
+}
+
+// GetCount returns the value of Count.
+func (s *BuddyMockSlotsMeta) GetCount() int64 {
+	return s.Count
+}
+
+// GetTopics returns the value of Topics.
+func (s *BuddyMockSlotsMeta) GetTopics() []string {
+	return s.Topics
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *BuddyMockSlotsMeta) SetTimezone(val string) {
+	s.Timezone = val
+}
+
+// SetCount sets the value of Count.
+func (s *BuddyMockSlotsMeta) SetCount(val int64) {
+	s.Count = val
+}
+
+// SetTopics sets the value of Topics.
+func (s *BuddyMockSlotsMeta) SetTopics(val []string) {
+	s.Topics = val
+}
+
+// Ref: #/components/schemas/BuddyMockSlotsPage
+type BuddyMockSlotsPage struct {
+	Data []BuddyMockSlot    `json:"data"`
+	Meta BuddyMockSlotsMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyMockSlotsPage) GetData() []BuddyMockSlot {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *BuddyMockSlotsPage) GetMeta() BuddyMockSlotsMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *BuddyMockSlotsPage) SetData(val []BuddyMockSlot) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *BuddyMockSlotsPage) SetMeta(val BuddyMockSlotsMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/BuddyMockSummary
+type BuddyMockSummary struct {
+	Completed   int64                 `json:"completed"`
+	RatingCount int64                 `json:"rating_count"`
+	RatingAvg   float64               `json:"rating_avg"`
+	Recent      []BuddyRevealedReview `json:"recent"`
+}
+
+// GetCompleted returns the value of Completed.
+func (s *BuddyMockSummary) GetCompleted() int64 {
+	return s.Completed
+}
+
+// GetRatingCount returns the value of RatingCount.
+func (s *BuddyMockSummary) GetRatingCount() int64 {
+	return s.RatingCount
+}
+
+// GetRatingAvg returns the value of RatingAvg.
+func (s *BuddyMockSummary) GetRatingAvg() float64 {
+	return s.RatingAvg
+}
+
+// GetRecent returns the value of Recent.
+func (s *BuddyMockSummary) GetRecent() []BuddyRevealedReview {
+	return s.Recent
+}
+
+// SetCompleted sets the value of Completed.
+func (s *BuddyMockSummary) SetCompleted(val int64) {
+	s.Completed = val
+}
+
+// SetRatingCount sets the value of RatingCount.
+func (s *BuddyMockSummary) SetRatingCount(val int64) {
+	s.RatingCount = val
+}
+
+// SetRatingAvg sets the value of RatingAvg.
+func (s *BuddyMockSummary) SetRatingAvg(val float64) {
+	s.RatingAvg = val
+}
+
+// SetRecent sets the value of Recent.
+func (s *BuddyMockSummary) SetRecent(val []BuddyRevealedReview) {
+	s.Recent = val
+}
+
+// Ref: #/components/schemas/BuddyMockWeekly
+type BuddyMockWeekly struct {
+	Rules []BuddyMockRule `json:"rules"`
+}
+
+// GetRules returns the value of Rules.
+func (s *BuddyMockWeekly) GetRules() []BuddyMockRule {
+	return s.Rules
+}
+
+// SetRules sets the value of Rules.
+func (s *BuddyMockWeekly) SetRules(val []BuddyMockRule) {
+	s.Rules = val
+}
+
+// BuddyMockWeeklyReplaceNoContent is response for BuddyMockWeeklyReplace operation.
+type BuddyMockWeeklyReplaceNoContent struct{}
+
+// Ref: #/components/schemas/BuddyProfile
+type BuddyProfile struct {
+	Handle      string           `json:"handle"`
+	CardSummary BuddyCardSummary `json:"card_summary"`
+	Card        TalentCard       `json:"card"`
+	CardEmpty   bool             `json:"card_empty"`
+}
+
+// GetHandle returns the value of Handle.
+func (s *BuddyProfile) GetHandle() string {
+	return s.Handle
+}
+
+// GetCardSummary returns the value of CardSummary.
+func (s *BuddyProfile) GetCardSummary() BuddyCardSummary {
+	return s.CardSummary
+}
+
+// GetCard returns the value of Card.
+func (s *BuddyProfile) GetCard() TalentCard {
+	return s.Card
+}
+
+// GetCardEmpty returns the value of CardEmpty.
+func (s *BuddyProfile) GetCardEmpty() bool {
+	return s.CardEmpty
+}
+
+// SetHandle sets the value of Handle.
+func (s *BuddyProfile) SetHandle(val string) {
+	s.Handle = val
+}
+
+// SetCardSummary sets the value of CardSummary.
+func (s *BuddyProfile) SetCardSummary(val BuddyCardSummary) {
+	s.CardSummary = val
+}
+
+// SetCard sets the value of Card.
+func (s *BuddyProfile) SetCard(val TalentCard) {
+	s.Card = val
+}
+
+// SetCardEmpty sets the value of CardEmpty.
+func (s *BuddyProfile) SetCardEmpty(val bool) {
+	s.CardEmpty = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyProfileOK struct {
+	Data BuddyProfile `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyProfileOK) GetData() BuddyProfile {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyProfileOK) SetData(val BuddyProfile) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/BuddyReactBody
+type BuddyReactBody struct {
+	Kind OptString `json:"kind"`
+}
+
+// GetKind returns the value of Kind.
+func (s *BuddyReactBody) GetKind() OptString {
+	return s.Kind
+}
+
+// SetKind sets the value of Kind.
+func (s *BuddyReactBody) SetKind(val OptString) {
+	s.Kind = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyReactOK struct {
+	Data BuddyReactions `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyReactOK) GetData() BuddyReactions {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyReactOK) SetData(val BuddyReactions) {
+	s.Data = val
+}
+
+// Count per kind (no key for a kind nobody chose) and the viewer's own choice, "" for none.
+// Ref: #/components/schemas/BuddyReactions
+type BuddyReactions struct {
+	Counts BuddyReactionsCounts `json:"counts"`
+	Mine   string               `json:"mine"`
+}
+
+// GetCounts returns the value of Counts.
+func (s *BuddyReactions) GetCounts() BuddyReactionsCounts {
+	return s.Counts
+}
+
+// GetMine returns the value of Mine.
+func (s *BuddyReactions) GetMine() string {
+	return s.Mine
+}
+
+// SetCounts sets the value of Counts.
+func (s *BuddyReactions) SetCounts(val BuddyReactionsCounts) {
+	s.Counts = val
+}
+
+// SetMine sets the value of Mine.
+func (s *BuddyReactions) SetMine(val string) {
+	s.Mine = val
+}
+
+type BuddyReactionsCounts map[string]int64
+
+func (s *BuddyReactionsCounts) init() BuddyReactionsCounts {
+	m := *s
+	if m == nil {
+		m = map[string]int64{}
+		*s = m
+	}
+	return m
+}
+
+// Ref: #/components/schemas/BuddyRevealedReview
+type BuddyRevealedReview struct {
+	Rating  int64  `json:"rating"`
+	Comment string `json:"comment"`
+	Topic   string `json:"topic"`
+	Day     string `json:"day"`
+}
+
+// GetRating returns the value of Rating.
+func (s *BuddyRevealedReview) GetRating() int64 {
+	return s.Rating
+}
+
+// GetComment returns the value of Comment.
+func (s *BuddyRevealedReview) GetComment() string {
+	return s.Comment
+}
+
+// GetTopic returns the value of Topic.
+func (s *BuddyRevealedReview) GetTopic() string {
+	return s.Topic
+}
+
+// GetDay returns the value of Day.
+func (s *BuddyRevealedReview) GetDay() string {
+	return s.Day
+}
+
+// SetRating sets the value of Rating.
+func (s *BuddyRevealedReview) SetRating(val int64) {
+	s.Rating = val
+}
+
+// SetComment sets the value of Comment.
+func (s *BuddyRevealedReview) SetComment(val string) {
+	s.Comment = val
+}
+
+// SetTopic sets the value of Topic.
+func (s *BuddyRevealedReview) SetTopic(val string) {
+	s.Topic = val
+}
+
+// SetDay sets the value of Day.
+func (s *BuddyRevealedReview) SetDay(val string) {
+	s.Day = val
+}
+
+// BuddyShowApplicationNoContent is response for BuddyShowApplication operation.
+type BuddyShowApplicationNoContent struct{}
+
+// Ref: #/components/schemas/BuddySimilar
+type BuddySimilar struct {
+	Handle          string           `json:"handle"`
+	CardSummary     BuddyCardSummary `json:"card_summary"`
+	Score           int64            `json:"score"`
+	SharedCompanies []BuddyCompany   `json:"shared_companies"`
+}
+
+// GetHandle returns the value of Handle.
+func (s *BuddySimilar) GetHandle() string {
+	return s.Handle
+}
+
+// GetCardSummary returns the value of CardSummary.
+func (s *BuddySimilar) GetCardSummary() BuddyCardSummary {
+	return s.CardSummary
+}
+
+// GetScore returns the value of Score.
+func (s *BuddySimilar) GetScore() int64 {
+	return s.Score
+}
+
+// GetSharedCompanies returns the value of SharedCompanies.
+func (s *BuddySimilar) GetSharedCompanies() []BuddyCompany {
+	return s.SharedCompanies
+}
+
+// SetHandle sets the value of Handle.
+func (s *BuddySimilar) SetHandle(val string) {
+	s.Handle = val
+}
+
+// SetCardSummary sets the value of CardSummary.
+func (s *BuddySimilar) SetCardSummary(val BuddyCardSummary) {
+	s.CardSummary = val
+}
+
+// SetScore sets the value of Score.
+func (s *BuddySimilar) SetScore(val int64) {
+	s.Score = val
+}
+
+// SetSharedCompanies sets the value of SharedCompanies.
+func (s *BuddySimilar) SetSharedCompanies(val []BuddyCompany) {
+	s.SharedCompanies = val
+}
+
+// Ref: #/components/schemas/BuddySimilarMeta
+type BuddySimilarMeta struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+// GetLimit returns the value of Limit.
+func (s *BuddySimilarMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetOffset returns the value of Offset.
+func (s *BuddySimilarMeta) GetOffset() int64 {
+	return s.Offset
+}
+
+// SetLimit sets the value of Limit.
+func (s *BuddySimilarMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetOffset sets the value of Offset.
+func (s *BuddySimilarMeta) SetOffset(val int64) {
+	s.Offset = val
+}
+
+// Ref: #/components/schemas/BuddySimilarPage
+type BuddySimilarPage struct {
+	Data []BuddySimilar   `json:"data"`
+	Meta BuddySimilarMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddySimilarPage) GetData() []BuddySimilar {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *BuddySimilarPage) GetMeta() BuddySimilarMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *BuddySimilarPage) SetData(val []BuddySimilar) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *BuddySimilarPage) SetMeta(val BuddySimilarMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/BuddyStatus
+type BuddyStatus struct {
+	Member    bool      `json:"member"`
+	Handle    OptString `json:"handle"`
+	CardEmpty bool      `json:"card_empty"`
+}
+
+// GetMember returns the value of Member.
+func (s *BuddyStatus) GetMember() bool {
+	return s.Member
+}
+
+// GetHandle returns the value of Handle.
+func (s *BuddyStatus) GetHandle() OptString {
+	return s.Handle
+}
+
+// GetCardEmpty returns the value of CardEmpty.
+func (s *BuddyStatus) GetCardEmpty() bool {
+	return s.CardEmpty
+}
+
+// SetMember sets the value of Member.
+func (s *BuddyStatus) SetMember(val bool) {
+	s.Member = val
+}
+
+// SetHandle sets the value of Handle.
+func (s *BuddyStatus) SetHandle(val OptString) {
+	s.Handle = val
+}
+
+// SetCardEmpty sets the value of CardEmpty.
+func (s *BuddyStatus) SetCardEmpty(val bool) {
+	s.CardEmpty = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyStatusOK struct {
+	Data BuddyStatus `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyStatusOK) GetData() BuddyStatus {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyStatusOK) SetData(val BuddyStatus) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type BuddyUnreactOK struct {
+	Data BuddyReactions `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BuddyUnreactOK) GetData() BuddyReactions {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BuddyUnreactOK) SetData(val BuddyReactions) {
+	s.Data = val
 }
 
 // Ref: #/components/schemas/CityMatch
@@ -3129,6 +4948,141 @@ func (o NilBuddyCounterpart) Or(d BuddyCounterpart) BuddyCounterpart {
 	return d
 }
 
+// NewNilBuddyCounterpartDetail returns new NilBuddyCounterpartDetail with value set to v.
+func NewNilBuddyCounterpartDetail(v BuddyCounterpartDetail) NilBuddyCounterpartDetail {
+	return NilBuddyCounterpartDetail{
+		Value: v,
+	}
+}
+
+// NilBuddyCounterpartDetail is nullable BuddyCounterpartDetail.
+type NilBuddyCounterpartDetail struct {
+	Value BuddyCounterpartDetail
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilBuddyCounterpartDetail) SetTo(v BuddyCounterpartDetail) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilBuddyCounterpartDetail) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilBuddyCounterpartDetail) SetToNull() {
+	o.Null = true
+	var v BuddyCounterpartDetail
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilBuddyCounterpartDetail) Get() (v BuddyCounterpartDetail, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilBuddyCounterpartDetail) Or(d BuddyCounterpartDetail) BuddyCounterpartDetail {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewNilBuddyMockReview returns new NilBuddyMockReview with value set to v.
+func NewNilBuddyMockReview(v BuddyMockReview) NilBuddyMockReview {
+	return NilBuddyMockReview{
+		Value: v,
+	}
+}
+
+// NilBuddyMockReview is nullable BuddyMockReview.
+type NilBuddyMockReview struct {
+	Value BuddyMockReview
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilBuddyMockReview) SetTo(v BuddyMockReview) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilBuddyMockReview) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilBuddyMockReview) SetToNull() {
+	o.Null = true
+	var v BuddyMockReview
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilBuddyMockReview) Get() (v BuddyMockReview, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilBuddyMockReview) Or(d BuddyMockReview) BuddyMockReview {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewNilBuddyMockSettingsOut returns new NilBuddyMockSettingsOut with value set to v.
+func NewNilBuddyMockSettingsOut(v BuddyMockSettingsOut) NilBuddyMockSettingsOut {
+	return NilBuddyMockSettingsOut{
+		Value: v,
+	}
+}
+
+// NilBuddyMockSettingsOut is nullable BuddyMockSettingsOut.
+type NilBuddyMockSettingsOut struct {
+	Value BuddyMockSettingsOut
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilBuddyMockSettingsOut) SetTo(v BuddyMockSettingsOut) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilBuddyMockSettingsOut) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilBuddyMockSettingsOut) SetToNull() {
+	o.Null = true
+	var v BuddyMockSettingsOut
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilBuddyMockSettingsOut) Get() (v BuddyMockSettingsOut, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilBuddyMockSettingsOut) Or(d BuddyMockSettingsOut) BuddyMockSettingsOut {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewNilDateTime returns new NilDateTime with value set to v.
 func NewNilDateTime(v time.Time) NilDateTime {
 	return NilDateTime{
@@ -3303,6 +5257,51 @@ func (o NilFloat64) Get() (v float64, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o NilFloat64) Or(d float64) float64 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewNilInt64 returns new NilInt64 with value set to v.
+func NewNilInt64(v int64) NilInt64 {
+	return NilInt64{
+		Value: v,
+	}
+}
+
+// NilInt64 is nullable int64.
+type NilInt64 struct {
+	Value int64
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilInt64) SetTo(v int64) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilInt64) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilInt64) SetToNull() {
+	o.Null = true
+	var v int64
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilInt64) Get() (v int64, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilInt64) Or(d int64) int64 {
 	if v, ok := o.Get(); ok {
 		return v
 	}

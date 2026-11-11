@@ -36,6 +36,112 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/block
 	BlockConversation(ctx context.Context, params BlockConversationParams) error
+	// BuddyActivity implements buddyActivity operation.
+	//
+	// GET /me/buddies/profiles/{handle}/activity
+	BuddyActivity(ctx context.Context, params BuddyActivityParams) (*BuddyActivityOK, error)
+	// BuddyFeed implements buddyFeed operation.
+	//
+	// GET /me/buddies/feed
+	BuddyFeed(ctx context.Context, params BuddyFeedParams) (*BuddyFeedPage, error)
+	// BuddyHiddenApplications implements buddyHiddenApplications operation.
+	//
+	// GET /me/buddies/hidden-applications
+	BuddyHiddenApplications(ctx context.Context) (*BuddyHiddenApplicationsOK, error)
+	// BuddyHideApplication implements buddyHideApplication operation.
+	//
+	// PUT /me/buddies/hidden-applications/{id}
+	BuddyHideApplication(ctx context.Context, params BuddyHideApplicationParams) error
+	// BuddyInvite implements buddyInvite operation.
+	//
+	// POST /me/buddies/invite
+	BuddyInvite(ctx context.Context, req *BuddyInviteBody) (*BuddyInviteCreated, error)
+	// BuddyJoin implements buddyJoin operation.
+	//
+	// POST /me/buddies
+	BuddyJoin(ctx context.Context) (*BuddyJoinOK, error)
+	// BuddyLeave implements buddyLeave operation.
+	//
+	// DELETE /me/buddies
+	BuddyLeave(ctx context.Context) error
+	// BuddyMockAvailabilityGet implements buddyMockAvailabilityGet operation.
+	//
+	// GET /me/buddies/mocks/availability
+	BuddyMockAvailabilityGet(ctx context.Context) (*BuddyMockAvailabilityGetOK, error)
+	// BuddyMockBook implements buddyMockBook operation.
+	//
+	// POST /me/buddies/profiles/{handle}/mocks
+	BuddyMockBook(ctx context.Context, req *BuddyMockBook, params BuddyMockBookParams) (*BuddyMockBookCreated, error)
+	// BuddyMockCancel implements buddyMockCancel operation.
+	//
+	// POST /me/buddies/mocks/{id}/cancel
+	BuddyMockCancel(ctx context.Context, params BuddyMockCancelParams) error
+	// BuddyMockHosts implements buddyMockHosts operation.
+	//
+	// GET /me/buddies/mocks/hosts
+	BuddyMockHosts(ctx context.Context, params BuddyMockHostsParams) (*BuddyMockHostsPage, error)
+	// BuddyMockList implements buddyMockList operation.
+	//
+	// GET /me/buddies/mocks
+	BuddyMockList(ctx context.Context) (*BuddyMockListOK, error)
+	// BuddyMockOverrideAdd implements buddyMockOverrideAdd operation.
+	//
+	// POST /me/buddies/mocks/availability/overrides
+	BuddyMockOverrideAdd(ctx context.Context, req *BuddyMockRule) (*BuddyMockOverrideAddCreated, error)
+	// BuddyMockReview implements buddyMockReview operation.
+	//
+	// POST /me/buddies/mocks/{id}/review
+	BuddyMockReview(ctx context.Context, req *BuddyMockReviewBody, params BuddyMockReviewParams) error
+	// BuddyMockReviews implements buddyMockReviews operation.
+	//
+	// GET /me/buddies/profiles/{handle}/mock-reviews
+	BuddyMockReviews(ctx context.Context, params BuddyMockReviewsParams) (*BuddyMockReviewsOK, error)
+	// BuddyMockRuleDelete implements buddyMockRuleDelete operation.
+	//
+	// DELETE /me/buddies/mocks/availability/{id}
+	BuddyMockRuleDelete(ctx context.Context, params BuddyMockRuleDeleteParams) error
+	// BuddyMockSettingsGet implements buddyMockSettingsGet operation.
+	//
+	// The caller's own settings, or null before the first save.
+	//
+	// GET /me/buddies/mocks/settings
+	BuddyMockSettingsGet(ctx context.Context) (*BuddyMockSettingsGetOK, error)
+	// BuddyMockSettingsSave implements buddyMockSettingsSave operation.
+	//
+	// PUT /me/buddies/mocks/settings
+	BuddyMockSettingsSave(ctx context.Context, req *BuddyMockSettings) (*BuddyMockSettingsSaveOK, error)
+	// BuddyMockSlots implements buddyMockSlots operation.
+	//
+	// GET /me/buddies/profiles/{handle}/mock-slots
+	BuddyMockSlots(ctx context.Context, params BuddyMockSlotsParams) (*BuddyMockSlotsPage, error)
+	// BuddyMockWeeklyReplace implements buddyMockWeeklyReplace operation.
+	//
+	// PUT /me/buddies/mocks/availability/weekly
+	BuddyMockWeeklyReplace(ctx context.Context, req *BuddyMockWeekly) error
+	// BuddyProfile implements buddyProfile operation.
+	//
+	// GET /me/buddies/profiles/{handle}
+	BuddyProfile(ctx context.Context, params BuddyProfileParams) (*BuddyProfileOK, error)
+	// BuddyReact implements buddyReact operation.
+	//
+	// PUT /me/buddies/feed/{id}/reaction
+	BuddyReact(ctx context.Context, req *BuddyReactBody, params BuddyReactParams) (*BuddyReactOK, error)
+	// BuddyShowApplication implements buddyShowApplication operation.
+	//
+	// DELETE /me/buddies/hidden-applications/{id}
+	BuddyShowApplication(ctx context.Context, params BuddyShowApplicationParams) error
+	// BuddySimilar implements buddySimilar operation.
+	//
+	// GET /me/buddies/similar
+	BuddySimilar(ctx context.Context, params BuddySimilarParams) (*BuddySimilarPage, error)
+	// BuddyStatus implements buddyStatus operation.
+	//
+	// GET /me/buddies
+	BuddyStatus(ctx context.Context) (*BuddyStatusOK, error)
+	// BuddyUnreact implements buddyUnreact operation.
+	//
+	// DELETE /me/buddies/feed/{id}/reaction
+	BuddyUnreact(ctx context.Context, params BuddyUnreactParams) (*BuddyUnreactOK, error)
 	// ClearCompanyVote implements clearCompanyVote operation.
 	//
 	// DELETE /companies/{slug}/vote

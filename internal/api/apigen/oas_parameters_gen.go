@@ -339,6 +339,1387 @@ func decodeBlockConversationParams(args [1]string, argsEscaped bool, r *http.Req
 	return params, nil
 }
 
+// BuddyActivityParams is parameters of buddyActivity operation.
+type BuddyActivityParams struct {
+	Handle string
+}
+
+func unpackBuddyActivityParams(packed middleware.Parameters) (params BuddyActivityParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "handle",
+			In:   "path",
+		}
+		params.Handle = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBuddyActivityParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyActivityParams, _ error) {
+	// Decode path: handle.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "handle",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Handle = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "handle",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyFeedParams is parameters of buddyFeed operation.
+type BuddyFeedParams struct {
+	Handle OptString `json:",omitempty,omitzero"`
+	Mode   OptString `json:",omitempty,omitzero"`
+	Cursor OptString `json:",omitempty,omitzero"`
+	Limit  OptString `json:",omitempty,omitzero"`
+}
+
+func unpackBuddyFeedParams(packed middleware.Parameters) (params BuddyFeedParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "handle",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Handle = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "mode",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Mode = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "cursor",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Cursor = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "limit",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Limit = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeBuddyFeedParams(args [0]string, argsEscaped bool, r *http.Request) (params BuddyFeedParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: handle.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "handle",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotHandleVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotHandleVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Handle.SetTo(paramsDotHandleVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "handle",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: mode.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "mode",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotModeVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotModeVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Mode.SetTo(paramsDotModeVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "mode",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: cursor.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "cursor",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotCursorVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotCursorVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Cursor.SetTo(paramsDotCursorVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "cursor",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: limit.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "limit",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotLimitVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotLimitVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Limit.SetTo(paramsDotLimitVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "limit",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyHideApplicationParams is parameters of buddyHideApplication operation.
+type BuddyHideApplicationParams struct {
+	ID string
+}
+
+func unpackBuddyHideApplicationParams(packed middleware.Parameters) (params BuddyHideApplicationParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBuddyHideApplicationParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyHideApplicationParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyMockBookParams is parameters of buddyMockBook operation.
+type BuddyMockBookParams struct {
+	Handle string
+}
+
+func unpackBuddyMockBookParams(packed middleware.Parameters) (params BuddyMockBookParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "handle",
+			In:   "path",
+		}
+		params.Handle = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBuddyMockBookParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyMockBookParams, _ error) {
+	// Decode path: handle.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "handle",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Handle = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "handle",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyMockCancelParams is parameters of buddyMockCancel operation.
+type BuddyMockCancelParams struct {
+	ID string
+}
+
+func unpackBuddyMockCancelParams(packed middleware.Parameters) (params BuddyMockCancelParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBuddyMockCancelParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyMockCancelParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyMockHostsParams is parameters of buddyMockHosts operation.
+type BuddyMockHostsParams struct {
+	Topic    OptString `json:",omitempty,omitzero"`
+	Timezone OptString `json:",omitempty,omitzero"`
+}
+
+func unpackBuddyMockHostsParams(packed middleware.Parameters) (params BuddyMockHostsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "topic",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Topic = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "timezone",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Timezone = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeBuddyMockHostsParams(args [0]string, argsEscaped bool, r *http.Request) (params BuddyMockHostsParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: topic.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "topic",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotTopicVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotTopicVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Topic.SetTo(paramsDotTopicVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "topic",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: timezone.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "timezone",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotTimezoneVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotTimezoneVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Timezone.SetTo(paramsDotTimezoneVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "timezone",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyMockReviewParams is parameters of buddyMockReview operation.
+type BuddyMockReviewParams struct {
+	ID string
+}
+
+func unpackBuddyMockReviewParams(packed middleware.Parameters) (params BuddyMockReviewParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBuddyMockReviewParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyMockReviewParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyMockReviewsParams is parameters of buddyMockReviews operation.
+type BuddyMockReviewsParams struct {
+	Handle string
+}
+
+func unpackBuddyMockReviewsParams(packed middleware.Parameters) (params BuddyMockReviewsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "handle",
+			In:   "path",
+		}
+		params.Handle = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBuddyMockReviewsParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyMockReviewsParams, _ error) {
+	// Decode path: handle.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "handle",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Handle = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "handle",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyMockRuleDeleteParams is parameters of buddyMockRuleDelete operation.
+type BuddyMockRuleDeleteParams struct {
+	ID string
+}
+
+func unpackBuddyMockRuleDeleteParams(packed middleware.Parameters) (params BuddyMockRuleDeleteParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBuddyMockRuleDeleteParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyMockRuleDeleteParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyMockSlotsParams is parameters of buddyMockSlots operation.
+type BuddyMockSlotsParams struct {
+	Handle   string
+	From     OptString `json:",omitempty,omitzero"`
+	To       OptString `json:",omitempty,omitzero"`
+	Timezone OptString `json:",omitempty,omitzero"`
+}
+
+func unpackBuddyMockSlotsParams(packed middleware.Parameters) (params BuddyMockSlotsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "handle",
+			In:   "path",
+		}
+		params.Handle = packed[key].(string)
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "from",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.From = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "to",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.To = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "timezone",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Timezone = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeBuddyMockSlotsParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyMockSlotsParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode path: handle.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "handle",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Handle = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "handle",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	// Decode query: from.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "from",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotFromVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotFromVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.From.SetTo(paramsDotFromVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "from",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: to.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "to",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotToVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotToVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.To.SetTo(paramsDotToVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "to",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: timezone.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "timezone",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotTimezoneVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotTimezoneVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Timezone.SetTo(paramsDotTimezoneVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "timezone",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyProfileParams is parameters of buddyProfile operation.
+type BuddyProfileParams struct {
+	Handle string
+}
+
+func unpackBuddyProfileParams(packed middleware.Parameters) (params BuddyProfileParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "handle",
+			In:   "path",
+		}
+		params.Handle = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBuddyProfileParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyProfileParams, _ error) {
+	// Decode path: handle.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "handle",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Handle = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "handle",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyReactParams is parameters of buddyReact operation.
+type BuddyReactParams struct {
+	ID string
+}
+
+func unpackBuddyReactParams(packed middleware.Parameters) (params BuddyReactParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBuddyReactParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyReactParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyShowApplicationParams is parameters of buddyShowApplication operation.
+type BuddyShowApplicationParams struct {
+	ID string
+}
+
+func unpackBuddyShowApplicationParams(packed middleware.Parameters) (params BuddyShowApplicationParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBuddyShowApplicationParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyShowApplicationParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddySimilarParams is parameters of buddySimilar operation.
+type BuddySimilarParams struct {
+	Limit  OptString `json:",omitempty,omitzero"`
+	Offset OptString `json:",omitempty,omitzero"`
+}
+
+func unpackBuddySimilarParams(packed middleware.Parameters) (params BuddySimilarParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "limit",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Limit = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "offset",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Offset = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeBuddySimilarParams(args [0]string, argsEscaped bool, r *http.Request) (params BuddySimilarParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: limit.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "limit",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotLimitVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotLimitVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Limit.SetTo(paramsDotLimitVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "limit",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: offset.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "offset",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotOffsetVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotOffsetVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Offset.SetTo(paramsDotOffsetVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "offset",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// BuddyUnreactParams is parameters of buddyUnreact operation.
+type BuddyUnreactParams struct {
+	ID string
+}
+
+func unpackBuddyUnreactParams(packed middleware.Parameters) (params BuddyUnreactParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeBuddyUnreactParams(args [1]string, argsEscaped bool, r *http.Request) (params BuddyUnreactParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // ClearCompanyVoteParams is parameters of clearCompanyVote operation.
 type ClearCompanyVoteParams struct {
 	Slug string

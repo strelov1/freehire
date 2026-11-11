@@ -1083,20 +1083,38 @@ func Register(app *fiber.App, cfg Config) {
 	agentPermissionsH := &agentPermissionHandlers{queries: queries}
 	userModerationH := newUserModerationHandlers(queries)
 	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
-	contract := newContract(contractHandlers{conversationHandlers: conversationH, communityHandlers: communityH,
-		companyFeedbackHandlers: companyFeedbackH, companyRelationHandlers: companyRelationH, reportHandlers: reportsH,
-		emailPrefsHandlers: emailPrefsH, talentCatalogHandlers: talentCatalogH,
-		companyWatchHandlers: companyWatchH,
-		geoHandlers:          geoH, suggestHandlers: suggestH, agentPermissionHandlers: agentPermissionsH,
-		usageHandlers: usageH, plansHandlers: plansH, dictionaryHandlers: dictionaryH,
-		jdResolveHandlers: jdResolveH, screeningAnswersHandlers: screeningAnswersH, surveyHandlers: surveyH,
-		voteHandlers: votesH, ghostReportHandlers: ghostReportsH, talentNetworkHandlers: talentNetworkH,
-		answerBankHandlers: answerBankH, userModerationHandlers: userModerationH,
+	contract := newContract(contractHandlers{conversationHandlers: conversationH,
+		communityHandlers:            communityH,
+		companyFeedbackHandlers:      companyFeedbackH,
+		companyRelationHandlers:      companyRelationH,
+		reportHandlers:               reportsH,
+		emailPrefsHandlers:           emailPrefsH,
+		talentCatalogHandlers:        talentCatalogH,
+		buddyHandlers:                buddyH,
+		companyWatchHandlers:         companyWatchH,
+		geoHandlers:                  geoH,
+		suggestHandlers:              suggestH,
+		agentPermissionHandlers:      agentPermissionsH,
+		usageHandlers:                usageH,
+		plansHandlers:                plansH,
+		dictionaryHandlers:           dictionaryH,
+		jdResolveHandlers:            jdResolveH,
+		screeningAnswersHandlers:     screeningAnswersH,
+		surveyHandlers:               surveyH,
+		voteHandlers:                 votesH,
+		ghostReportHandlers:          ghostReportsH,
+		talentNetworkHandlers:        talentNetworkH,
+		answerBankHandlers:           answerBankH,
+		userModerationHandlers:       userModerationH,
 		companyProcessReportHandlers: companyProcessReportH,
-		contributionHandlers:         contributionsH, marketPulseHandlers: marketPulseH, promoHandlers: promoH,
-		mentorSuggestionsHandlers: mentorSuggestionsH,
-		savedSearchHandlers:       savedSearchH, subscriptionHandlers: subscriptionH,
-		timelineHandlers: timelineH, profileHandlers: profileH})
+		contributionHandlers:         contributionsH,
+		marketPulseHandlers:          marketPulseH,
+		promoHandlers:                promoH,
+		mentorSuggestionsHandlers:    mentorSuggestionsH,
+		savedSearchHandlers:          savedSearchH,
+		subscriptionHandlers:         subscriptionH,
+		timelineHandlers:             timelineH,
+		profileHandlers:              profileH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1185,7 +1203,7 @@ func Register(app *fiber.App, cfg Config) {
 	referralsH.register(api, mw)
 
 	// Interview buddies (see buddyHandlers).
-	buddyH.register(api, mw)
+	buddyH.register(api, mw, contract)
 
 	// Conversations of every kind (see conversationHandlers).
 	conversationH.register(api, mw, contract)
