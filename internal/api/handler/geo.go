@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"context"
+
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -20,27 +23,18 @@ func newGeoHandlers() *geoHandlers {
 	return &geoHandlers{}
 }
 
-func (h *geoHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/geo/cities", h.SearchCities)
-}
-
-// cityMatch is the wire shape of one city-search result. country is a raw ISO
-// 3166-1 alpha-2 code, not a composed display label — the caller already has
-// countryLabel() (web/src/lib/facets.ts, Intl.DisplayNames-backed) to render it,
-// so the backend doesn't need a second, hand-maintained country-name table.
-type cityMatch struct {
-	Value   string `json:"value"`
-	Country string `json:"country"`
+func (h *geoHandlers) register(api fiber.Router, contract fiber.Handler) {
+	api.Get("/geo/cities", contract)
 }
 
 // SearchCities backs GET /geo/cities?q=&country=: a population-ranked prefix search
 // over the embedded GeoNames city dictionary (location.SearchCities), optionally
 // narrowed to one country. A blank q yields an empty (not null) list.
-func (h *geoHandlers) SearchCities(c *fiber.Ctx) error {
-	matches := location.SearchCities(c.Query("q"), c.Query("country"), citySearchLimit)
-	out := make([]cityMatch, len(matches))
+func (h *geoHandlers) SearchCities(_ context.Context, params apigen.SearchCitiesParams) (*apigen.SearchCitiesOK, error) {
+	matches := location.SearchCities(params.Q.Value, params.Country.Value, citySearchLimit)
+	out := make([]apigen.CityMatch, len(matches))
 	for i, m := range matches {
-		out[i] = cityMatch{Value: m.Name, Country: m.Country}
+		out[i] = apigen.CityMatch{Value: m.Name, Country: m.Country}
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return &apigen.SearchCitiesOK{Data: out}, nil
 }

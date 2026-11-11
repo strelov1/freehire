@@ -11,13 +11,16 @@ import (
 )
 
 var (
-	rn4AllowedHeaders = map[string]string{
-		"PATCH": "Content-Type",
-	}
 	rn6AllowedHeaders = map[string]string{
 		"PATCH": "Content-Type",
 	}
-	rn11AllowedHeaders = map[string]string{
+	rn4AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn7AllowedHeaders = map[string]string{
+		"PATCH": "Content-Type",
+	}
+	rn13AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 )
@@ -90,7 +93,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "GET,PATCH",
-							allowedHeaders: rn4AllowedHeaders,
+							allowedHeaders: rn6AllowedHeaders,
 							acceptPost:     "",
 							acceptPatch:    "application/json",
 						})
@@ -126,6 +129,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 				}
 
+			case 'g': // Prefix: "geo/cities"
+
+				if l := len("geo/cities"); len(elem) >= l && elem[0:l] == "geo/cities" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleSearchCitiesRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
 			case 'm': // Prefix: "me/"
 
 				if l := len("me/"); len(elem) >= l && elem[0:l] == "me/" {
@@ -138,6 +166,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 				switch elem[0] {
+				case 'a': // Prefix: "agent-permissions"
+
+					if l := len("agent-permissions"); len(elem) >= l && elem[0:l] == "agent-permissions" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleGetAgentPermissionsRequest([0]string{}, elemIsEscaped, w, r)
+						case "PUT":
+							s.handleSetAgentPermissionsRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET,PUT",
+								allowedHeaders: rn4AllowedHeaders,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
 				case 'e': // Prefix: "email-groups"
 
 					if l := len("email-groups"); len(elem) >= l && elem[0:l] == "email-groups" {
@@ -156,9 +211,34 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "GET,PATCH",
-								allowedHeaders: rn6AllowedHeaders,
+								allowedHeaders: rn7AllowedHeaders,
 								acceptPost:     "",
 								acceptPatch:    "application/json",
+							})
+						}
+
+						return
+					}
+
+				case 'u': // Prefix: "usage"
+
+					if l := len("usage"); len(elem) >= l && elem[0:l] == "usage" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleGetMyUsageRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
 							})
 						}
 
@@ -217,7 +297,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								default:
 									s.notAllowed(w, r, notAllowedParams{
 										allowedMethods: "POST",
-										allowedHeaders: rn11AllowedHeaders,
+										allowedHeaders: rn13AllowedHeaders,
 										acceptPost:     "application/json",
 										acceptPatch:    "",
 									})
@@ -266,6 +346,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 					}
 
+				}
+
+			case 's': // Prefix: "suggest"
+
+				if l := len("suggest"); len(elem) >= l && elem[0:l] == "suggest" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleSuggestRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
 				}
 
 			case 't': // Prefix: "talent"
@@ -549,6 +654,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 
 				}
 
+			case 'g': // Prefix: "geo/cities"
+
+				if l := len("geo/cities"); len(elem) >= l && elem[0:l] == "geo/cities" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = SearchCitiesOperation
+						r.summary = ""
+						r.operationID = "searchCities"
+						r.operationGroup = ""
+						r.pathPattern = "/geo/cities"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
 			case 'm': // Prefix: "me/"
 
 				if l := len("me/"); len(elem) >= l && elem[0:l] == "me/" {
@@ -561,6 +691,40 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 					break
 				}
 				switch elem[0] {
+				case 'a': // Prefix: "agent-permissions"
+
+					if l := len("agent-permissions"); len(elem) >= l && elem[0:l] == "agent-permissions" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = GetAgentPermissionsOperation
+							r.summary = ""
+							r.operationID = "getAgentPermissions"
+							r.operationGroup = ""
+							r.pathPattern = "/me/agent-permissions"
+							r.args = args
+							r.count = 0
+							return r, true
+						case "PUT":
+							r.name = SetAgentPermissionsOperation
+							r.summary = ""
+							r.operationID = "setAgentPermissions"
+							r.operationGroup = ""
+							r.pathPattern = "/me/agent-permissions"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
 				case 'e': // Prefix: "email-groups"
 
 					if l := len("email-groups"); len(elem) >= l && elem[0:l] == "email-groups" {
@@ -587,6 +751,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.operationID = "updateMyEmailGroups"
 							r.operationGroup = ""
 							r.pathPattern = "/me/email-groups"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+				case 'u': // Prefix: "usage"
+
+					if l := len("usage"); len(elem) >= l && elem[0:l] == "usage" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = GetMyUsageOperation
+							r.summary = ""
+							r.operationID = "getMyUsage"
+							r.operationGroup = ""
+							r.pathPattern = "/me/usage"
 							r.args = args
 							r.count = 0
 							return r, true
@@ -704,6 +893,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 
 					}
 
+				}
+
+			case 's': // Prefix: "suggest"
+
+				if l := len("suggest"); len(elem) >= l && elem[0:l] == "suggest" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = SuggestOperation
+						r.summary = ""
+						r.operationID = "suggest"
+						r.operationGroup = ""
+						r.pathPattern = "/suggest"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
 				}
 
 			case 't': // Prefix: "talent"

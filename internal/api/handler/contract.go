@@ -30,6 +30,10 @@ type contractHandlers struct {
 	*emailPrefsHandlers
 	*talentCatalogHandlers
 	*companyWatchHandlers
+	*geoHandlers
+	*suggestHandlers
+	*agentPermissionHandlers
+	*usageHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}

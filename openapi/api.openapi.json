@@ -13,6 +13,12 @@
     },
     {
       "name": "Watchlist"
+    },
+    {
+      "name": "Search"
+    },
+    {
+      "name": "Account"
     }
   ],
   "paths": {
@@ -165,6 +171,159 @@
         ]
       }
     },
+    "/geo/cities": {
+      "get": {
+        "operationId": "searchCities",
+        "description": "Up to 20 cities whose name matches, optionally within one country.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CityMatch"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/me/agent-permissions": {
+      "get": {
+        "operationId": "getAgentPermissions",
+        "description": "Readable with a session or an API key.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AgentPermissions"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      },
+      "put": {
+        "operationId": "setAgentPermissions",
+        "description": "Session cookie only: an agent must not grant itself the right to apply.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AgentPermissions"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentPermissions"
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/email-groups": {
       "get": {
         "operationId": "getMyEmailGroups",
@@ -251,6 +410,47 @@
             }
           }
         }
+      }
+    },
+    "/me/usage": {
+      "get": {
+        "operationId": "getMyUsage",
+        "description": "With a session or an API key. Zeroes when the gateway cannot be read.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Usage"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ]
       }
     },
     "/me/watchlist": {
@@ -506,6 +706,73 @@
         },
         "tags": [
           "Watchlist"
+        ]
+      }
+    },
+    "/suggest": {
+      "get": {
+        "operationId": "suggest",
+        "description": "Search-box suggestions. 503 when search is not configured.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "1 to 20, default 5. A value that does not read falls back to the default.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Suggestion"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/SuggestMeta"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Search"
         ]
       }
     },
@@ -848,6 +1115,32 @@
       }
     },
     "schemas": {
+      "AgentPermissions": {
+        "type": "object",
+        "properties": {
+          "agents_may_apply": {
+            "type": "boolean",
+            "description": "Whether an agent acting for the account may submit applications. Absent reads as false."
+          }
+        }
+      },
+      "CityMatch": {
+        "type": "object",
+        "required": [
+          "value",
+          "country"
+        ],
+        "properties": {
+          "value": {
+            "type": "string",
+            "description": "The city's canonical name, the value the filters take."
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO 3166-1 alpha-2, lower case."
+          }
+        }
+      },
       "EmailPrefs": {
         "type": "object",
         "required": [
@@ -1091,6 +1384,71 @@
         },
         "description": "Every refusal, whatever its status: `{\"error\": msg}`. `code` is set only where a\nclient branches on the reason (the auth flows)."
       },
+      "SuggestMeta": {
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Suggestion": {
+        "type": "object",
+        "required": [
+          "text",
+          "parts",
+          "jobs"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuggestionPart"
+            }
+          },
+          "jobs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many open jobs the suggestion finds."
+          }
+        }
+      },
+      "SuggestionKind": {
+        "type": "string",
+        "enum": [
+          "title",
+          "skill",
+          "category",
+          "company"
+        ]
+      },
+      "SuggestionPart": {
+        "type": "object",
+        "required": [
+          "kind",
+          "text"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SuggestionKind"
+          },
+          "slug": {
+            "type": "string",
+            "description": "The dictionary slug, when the part is one."
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "description": "One recognised piece of the query: a dictionary term, or text still being typed."
+      },
       "TalentCard": {
         "type": "object",
         "required": [
@@ -1168,7 +1526,7 @@
                 "format": "int32"
               }
             },
-            "description": "Facet name → value → member count."
+            "description": "Facet name → value → member count. A count of -1 means the value is present but\nheld by too few members to say how many; 0 means nobody holds it."
           },
           "stats": {
             "type": "object",
@@ -1256,6 +1614,39 @@
           }
         },
         "description": "One role of a work history, with everything nameable removed."
+      },
+      "Usage": {
+        "type": "object",
+        "required": [
+          "requests",
+          "failed",
+          "tokens",
+          "period",
+          "resets_at"
+        ],
+        "properties": {
+          "requests": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "period": {
+            "type": "string",
+            "description": "The plan day the figures cover, YYYY-MM-DD in UTC."
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "Today's AI use on the account's own model credential. No money: the plan bounds use."
       },
       "WatchedCompany": {
         "type": "object",

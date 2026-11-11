@@ -6,6 +6,8 @@ import "./common.tsp";
 import "./email-prefs.tsp";
 import "./talent.tsp";
 import "./watchlist.tsp";
+import "./lookups.tsp";
+import "./me.tsp";
 
 using Http;
 

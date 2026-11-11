@@ -225,7 +225,8 @@ func TestAgentPermissions_OnlyTheBrowserMayTurnItOn(t *testing.T) {
 	userID, cookie := autoApplyTailorUser(t, pool, iss, "perm@example.test")
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	(&agentPermissionHandlers{queries: queries}).register(app.Group("/api/v1"), mw)
+	perms := &agentPermissionHandlers{queries: queries}
+	perms.register(app.Group("/api/v1"), mw, newContract(contractHandlers{agentPermissionHandlers: perms}))
 
 	put := func(withCookie bool, bearer string) int {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/me/agent-permissions",
