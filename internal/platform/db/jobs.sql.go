@@ -751,42 +751,6 @@ func (q *Queries) ListJobIDsAfter(ctx context.Context, arg ListJobIDsAfterParams
 	return items, nil
 }
 
-const listJobIDsUpdatedAfter = `-- name: ListJobIDsUpdatedAfter :many
-SELECT id
-FROM jobs
-WHERE id > $1 AND updated_at >= $2
-ORDER BY id
-LIMIT $3
-`
-
-type ListJobIDsUpdatedAfterParams struct {
-	AfterID   int64              `json:"after_id"`
-	Since     pgtype.Timestamptz `json:"since"`
-	BatchSize int32              `json:"batch_size"`
-}
-
-// Id-only projection of ListJobsUpdatedAfter — the corruption-degrade path for the
-// incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.
-func (q *Queries) ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpdatedAfterParams) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listJobIDsUpdatedAfter, arg.AfterID, arg.Since, arg.BatchSize)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listJobLivenessBySlugs = `-- name: ListJobLivenessBySlugs :many
 SELECT public_slug, is_private, duplicate_of, closed_at, last_seen_at
 FROM jobs

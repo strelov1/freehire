@@ -50,6 +50,7 @@ type feedRepo struct {
 	rows    []FeedRow
 	authors []string
 	similar bool
+	limit   int
 }
 
 func (f *feedRepo) Member(context.Context, int64) (Member, bool, error) {
@@ -68,8 +69,8 @@ func (f *feedRepo) ReactionCounts(context.Context, int64, []int64) (map[int64]Re
 	return nil, nil
 }
 
-func (f *feedRepo) Feed(_ context.Context, _ int64, authors []string, similarOnly bool, _ int64, _ int) ([]FeedRow, error) {
-	f.authors, f.similar = authors, similarOnly
+func (f *feedRepo) Feed(_ context.Context, _ int64, authors []string, similarOnly bool, _ int64, limit int) ([]FeedRow, error) {
+	f.authors, f.similar, f.limit = authors, similarOnly, limit
 	return f.rows, nil
 }
 
@@ -99,5 +100,22 @@ func TestFeedContinuationMustStartAtTheCursorEvent(t *testing.T) {
 	page, err := New(r, nil).Feed(context.Background(), 1, FeedAll, "9", 10)
 	if err != nil || len(page.Entries) != 2 || page.Entries[0].ID != 7 || page.NextCursor != "" {
 		t.Fatalf("page = %+v, %v", page, err)
+	}
+}
+
+func TestFeedLimitIsClamped(t *testing.T) {
+	for _, tc := range []struct{ limit, want int }{
+		{0, DefaultFeedLimit + 1}, {-5, DefaultFeedLimit + 1},
+		{500, MaxFeedLimit + 1}, {1_000_000, MaxFeedLimit + 1},
+	} {
+		t.Run(strconv.Itoa(tc.limit), func(t *testing.T) {
+			r := &feedRepo{}
+			if _, err := New(r, nil).Feed(context.Background(), 1, FeedAll, "", tc.limit); err != nil {
+				t.Fatal(err)
+			}
+			if r.limit != tc.want {
+				t.Fatalf("limit %d read %d rows, want %d", tc.limit, r.limit, tc.want)
+			}
+		})
 	}
 }

@@ -77,10 +77,9 @@ var closedFacets = map[string]func(string) bool{
 	AutoApplyAvailableParam: oneOf(boolValues),
 }
 
-// checkedScalars are the scalar filters whose value IgnoredValues checks: a value the
-// filter declines imposes no bound, so the answer WIDENS — the case a dropped filter must
-// say so about. Only the newest scalar is here; the older numeric bounds drop a bad value
-// just as silently, and joining them is a change of its own.
+// checkedScalars are the scalar filters and modifiers whose values IgnoredValues
+// checks. The older numeric bounds also drop bad values silently; joining them
+// is a change of its own.
 var checkedScalars = map[string]func(string) bool{
 	ApplyQuestionsMaxParam: func(val string) bool {
 		_, ok := applyQuestionsMax(val)
@@ -89,7 +88,11 @@ var checkedScalars = map[string]func(string) bool{
 	// The remote-anywhere modifier is read whole as a boolean; anything but true
 	// (case-insensitively, like every other bool scalar) leaves it unset, which
 	// widens the answer — so a mis-spelled value is named rather than dropped.
-	WorkModeRemoteAnywhereParam: oneOf(boolValues),
+	WorkModeRemoteAnywhereParam:             oneOf(boolValues),
+	"visa_sponsorship":                      oneOf(boolValues),
+	SeniorityIncludeUnspecifiedParam:        oneOf(boolValues),
+	ExperienceIncludeUnspecifiedParam:       oneOf(boolValues),
+	ExperienceOnlySeniorityUnspecifiedParam: oneOf(boolValues),
 }
 
 // UnknownFacetValue reports whether value falls outside the closed vocabulary of a facet

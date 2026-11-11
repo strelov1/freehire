@@ -22,17 +22,10 @@ RETURNING *;
 -- Remove the caller's own feedback in one category on a company (no-op when absent).
 DELETE FROM company_feedback WHERE user_id = $1 AND company_slug = $2 AND feedback_type = $3;
 
--- name: GetMyCompanyFeedback :one
--- The caller's own feedback in one category on a company, for the edit form's
--- prefill and for Upsert to tell an edit from a genuinely new review. No row
--- when they have not left one in that category yet. Not filtered by status:
--- the owner can still see and edit their own review after a moderator hides it.
-SELECT * FROM company_feedback WHERE user_id = $1 AND company_slug = $2 AND feedback_type = $3;
-
 -- name: ListMyCompanyFeedback :many
 -- All of the caller's own feedback on a company, across every category they've
 -- reviewed it under — the write dialog's "which categories have I already
--- used" read. Not filtered by status, same reasoning as GetMyCompanyFeedback.
+-- used" read. Not filtered by status: the owner can still see and edit a hidden review.
 SELECT * FROM company_feedback WHERE user_id = $1 AND company_slug = $2
 ORDER BY created_at DESC, id DESC;
 

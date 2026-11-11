@@ -178,3 +178,31 @@ func TestReactNotifiesTheAuthorOncePerMember(t *testing.T) {
 		t.Errorf("second body = %q", got[1].body)
 	}
 }
+
+func TestReactRefusesAHiddenEventBehindAVisibleOne(t *testing.T) {
+	pool, svc := setup(t)
+	ctx := context.Background()
+	author, viewer := seedUser(t, pool, "author@example.test"), seedUser(t, pool, "viewer@example.test")
+	joinWith(t, pool, svc, author, "", nil, nil)
+	joinWith(t, pool, svc, viewer, "", nil, nil)
+	visible := event(t, pool, author, newApp(t, pool, author, "acme"), "acme", "applied", "", 5)
+	app := newApp(t, pool, author, "other")
+	hidden := event(t, pool, author, app, "other", "applied", "", 1)
+	if err := svc.HideApplication(ctx, author, app); err != nil {
+		t.Fatal(err)
+	}
+	page, err := svc.Feed(ctx, viewer, buddy.FeedAll, "", buddy.MaxFeedLimit)
+	if err != nil || len(page.Entries) != 1 || page.Entries[0].ID != visible {
+		t.Fatalf("visible feed = %+v, %v", page, err)
+	}
+	if _, err := svc.React(ctx, viewer, hidden, buddy.ReactionCongrats); !errors.Is(err, buddy.ErrNotFound) {
+		t.Errorf("reacting to a hidden event: err = %v, want ErrNotFound", err)
+	}
+	var notices int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_notifications WHERE user_id = $1 AND kind = 'buddy_reaction'`, author).Scan(&notices); err != nil {
+		t.Fatal(err)
+	}
+	if notices != 0 {
+		t.Errorf("hidden event generated %d reaction notices, want none", notices)
+	}
+}

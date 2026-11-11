@@ -85,6 +85,26 @@ func TestRestrictionFromTitle(t *testing.T) {
 			nil, nil,
 		},
 		{
+			"and joined countries",
+			"Engineer (Remote - US and Canada)",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"qualified and joined countries",
+			"Engineer (Remote - US and Canada only)",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"ampersand joined countries",
+			"Engineer (Remote - US & Canada)",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"and within country name",
+			"Engineer (Remote - Bosnia and Herzegovina)",
+			[]string{"ba"}, []string{"eu"},
+		},
+		{
 			"empty title yields nothing",
 			"",
 			nil, nil,

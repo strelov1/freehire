@@ -56,6 +56,71 @@ func TestRegionScopeFromDescription(t *testing.T) {
 			nil, nil,
 		},
 		{
+			"HTML paragraph boundary",
+			"<p>We are hiring in Canada</p><p>Benefits</p>",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"HTML list boundary",
+			"<li>Candidates based in Canada</li><li>5 years Go</li>",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"HTML inline emphasis",
+			"<p>We are hiring in <strong>Canada</strong>.</p>",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"dotted US abbreviation",
+			"We are hiring in the U.S. only.",
+			[]string{"us"}, []string{"north_america"},
+		},
+		{
+			"dotted US in list",
+			"Candidates based in the U.S. or Canada.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"dotted USA abbreviation",
+			"We are hiring in the U.S.A. only.",
+			[]string{"us"}, []string{"north_america"},
+		},
+		{
+			"dotted UK abbreviation",
+			"Candidates based in the U.K. only.",
+			[]string{"gb"}, []string{"uk"},
+		},
+		{
+			"unresolved anchor before hiring restriction",
+			"Access to production data is restricted to the security team. We are hiring in Canada.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"unresolved repeated anchor",
+			"We are hiring in our growing team. We are hiring in Canada.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"first resolving clause wins",
+			"Candidates based in Canada. We are hiring in the US.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"and joined countries",
+			"We are hiring in Canada and the US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"ampersand joined countries",
+			"We are hiring in Canada & the US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"and within country name",
+			"Candidates based in Bosnia and Herzegovina.",
+			[]string{"ba"}, []string{"eu"},
+		},
+		{
 			"empty description",
 			"",
 			nil, nil,

@@ -196,3 +196,37 @@ func TestMockHostsRefuseANonMemberAndNameTheZone(t *testing.T) {
 		t.Fatalf("empty listing = %+v", res)
 	}
 }
+
+func TestMockHostsSummariesBelongToEachHost(t *testing.T) {
+	pool, svc, mocks, _ := mockSetup(t)
+	ctx := context.Background()
+	viewer, _ := joined(t, pool, svc, "viewer@example.test")
+	rated, ratedHandle := joined(t, pool, svc, "rated@example.test")
+	unrated, unratedHandle := joined(t, pool, svc, "unrated@example.test")
+	guest, _ := joined(t, pool, svc, "guest@example.test")
+	openAllWeek(t, mocks, rated, "UTC")
+	openAllWeek(t, mocks, unrated, "UTC")
+	id := seedMock(t, pool, rated, guest, time.Now().Add(-9*24*time.Hour))
+	if _, err := pool.Exec(ctx, `INSERT INTO buddy_mock_reviews (mock_id, author_user_id, subject_user_id, rating, comment)
+ VALUES ($1::uuid, $2, $3, 4, 'Good')`, id.String(), guest, rated); err != nil {
+		t.Fatal(err)
+	}
+	hosts := listHosts(t, mocks, viewer, "")
+	if len(hosts) != 2 {
+		t.Fatalf("hosts = %+v, want two", hosts)
+	}
+	for _, h := range hosts {
+		switch h.Handle {
+		case ratedHandle:
+			if h.Summary.RatingCount != 1 || h.Summary.RatingAvg != 4 {
+				t.Errorf("rated host summary = %+v", h.Summary)
+			}
+		case unratedHandle:
+			if h.Summary.RatingCount != 0 || h.Summary.RatingAvg != 0 {
+				t.Errorf("unrated host summary = %+v", h.Summary)
+			}
+		default:
+			t.Errorf("unexpected host %s", h.Handle)
+		}
+	}
+}

@@ -114,3 +114,14 @@ func TestAMockCancelledMidRunIsNotReminded(t *testing.T) {
 		t.Fatalf("stats = %+v, %v, reminded %v; a cancelled mock must not be reminded", stats, err, n.reminded)
 	}
 }
+
+func TestMockReminderWindowExcludesMocksBeforeItsFloor(t *testing.T) {
+	pool, svc, mocks, _ := mockSetup(t)
+	host, _ := joined(t, pool, svc, "host@example.test")
+	guest, _ := joined(t, pool, svc, "guest@example.test")
+	seedMock(t, pool, host, guest, time.Now().Add(22*time.Hour))
+	stats, err := mocks.SendDueMockReminders(context.Background(), 100)
+	if err != nil || stats.Sent != 0 {
+		t.Fatalf("22 hours ahead: %+v, %v, want no reminder", stats, err)
+	}
+}

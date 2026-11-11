@@ -5,6 +5,7 @@ package buddy_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -178,5 +179,79 @@ func TestABlockWithdrawsTheReviewsAcrossIt(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestUpcomingMocksDoNotCountAsCompleted(t *testing.T) {
+	pool, svc, mocks, _ := mockSetup(t)
+	host, handle := joined(t, pool, svc, "host@example.test")
+	guest, _ := joined(t, pool, svc, "guest@example.test")
+	viewer, _ := joined(t, pool, svc, "viewer@example.test")
+	openAllWeek(t, mocks, host, "UTC")
+	if _, err := book(mocks, guest, handle, firstSlot(t, mocks, guest, handle), buddy.TopicCoding); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := mocks.MemberSummary(context.Background(), viewer, handle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Completed != 0 {
+		t.Fatalf("completed = %d with only an upcoming mock, want 0", summary.Completed)
+	}
+}
+
+func TestReviewValidationRefusesStrangersCancelledMocksAndInvalidContent(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		stranger, cancelled bool
+		rating              int
+		comment             string
+		want                error
+	}{
+		{name: "stranger", stranger: true, rating: 4, want: buddy.ErrMockNotFound},
+		{name: "cancelled", cancelled: true, rating: 4, want: buddy.ErrInvalidReview},
+		{name: "rating above five", rating: 6, want: buddy.ErrInvalidReview},
+		{name: "comment too long", rating: 4, comment: strings.Repeat("界", buddy.MaxReviewCommentRunes+1), want: buddy.ErrInvalidReview},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pool, svc, mocks, _ := mockSetup(t)
+			ctx := context.Background()
+			host, _ := joined(t, pool, svc, "host@example.test")
+			guest, _ := joined(t, pool, svc, "guest@example.test")
+			reviewer := guest
+			if tc.stranger {
+				reviewer, _ = joined(t, pool, svc, "stranger@example.test")
+			}
+			id := seedMock(t, pool, host, guest, time.Now().Add(-2*time.Hour))
+			if tc.cancelled {
+				if _, err := pool.Exec(ctx, `UPDATE buddy_mocks SET status = 'cancelled', cancelled_at = now(), cancel_reason = 'participant', cancelled_by = $2 WHERE id = $1::uuid`, id.String(), host); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := mocks.Review(ctx, reviewer, id, tc.rating, tc.comment); !errors.Is(err, tc.want) {
+				t.Fatalf("review: %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestMockListKeepsInProgressMocksUpcomingAndSortsSoonestFirst(t *testing.T) {
+	pool, svc, mocks, _ := mockSetup(t)
+	host, _ := joined(t, pool, svc, "host@example.test")
+	guest, _ := joined(t, pool, svc, "guest@example.test")
+	now := time.Now()
+	past := seedMock(t, pool, host, guest, now.Add(-3*time.Hour))
+	inProgress := seedMock(t, pool, host, guest, now.Add(-30*time.Minute))
+	soon := seedMock(t, pool, host, guest, now.Add(3*time.Hour))
+	later := seedMock(t, pool, host, guest, now.Add(6*time.Hour))
+	list, err := mocks.List(context.Background(), guest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Upcoming) != 3 || list.Upcoming[0].ID != inProgress || list.Upcoming[1].ID != soon || list.Upcoming[2].ID != later {
+		t.Fatalf("upcoming = %+v, want in-progress, soon, later", list.Upcoming)
+	}
+	if len(list.Past) != 1 || list.Past[0].ID != past {
+		t.Fatalf("past = %+v", list.Past)
 	}
 }
