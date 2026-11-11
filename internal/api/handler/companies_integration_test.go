@@ -45,7 +45,7 @@ func TestListCompaniesSearchEndpoint(t *testing.T) {
 
 	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/companies", h.ListCompanies)
+	mountCompaniesContract(app, h)
 
 	doList := func(t *testing.T, url string) (names []string, total float64) {
 		t.Helper()
@@ -119,7 +119,7 @@ func TestListCompaniesMeiliFallback(t *testing.T) {
 	// A searcher that always errors forces the fallback on every search request.
 	h := &companiesHandlers{queries: db.New(pool), companySearch: &fakeCompanySearcher{err: errors.New("meili down")}}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/companies", h.ListCompanies)
+	mountCompaniesContract(app, h)
 
 	resp, err := app.Test(httptest.NewRequest("GET", "/api/v1/companies?q=acme", nil))
 	if err != nil {
@@ -160,7 +160,7 @@ func TestListCompaniesUnfilteredSkipsMeili(t *testing.T) {
 	fake := &fakeCompanySearcher{}
 	h := &companiesHandlers{queries: db.New(pool), companySearch: fake}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/companies", h.ListCompanies)
+	mountCompaniesContract(app, h)
 
 	resp, err := app.Test(httptest.NewRequest("GET", "/api/v1/companies", nil))
 	if err != nil {
@@ -197,7 +197,7 @@ func TestListCompaniesFacetFilterEndpoint(t *testing.T) {
 
 	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/companies", h.ListCompanies)
+	mountCompaniesContract(app, h)
 
 	doList := func(t *testing.T, url string) (slugs []string, total float64) {
 		t.Helper()
@@ -317,7 +317,7 @@ func TestListCompaniesSubindustryFacet(t *testing.T) {
 
 	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/companies", h.ListCompanies)
+	mountCompaniesContract(app, h)
 
 	query := func(t *testing.T, url string) (slugs []string, total float64) {
 		t.Helper()
@@ -402,7 +402,7 @@ func TestCompanySubindustriesEndpoint(t *testing.T) {
 
 	h := newCompaniesHandlers(db.New(pool), nil)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/companies/subindustries", h.CompanySubindustries)
+	mountCompaniesContract(app, h)
 
 	resp, err := app.Test(httptest.NewRequest("GET", "/api/v1/companies/subindustries", nil))
 	if err != nil {
@@ -457,7 +457,7 @@ func TestListCompaniesRemoteRegionsFacet(t *testing.T) {
 
 	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/companies", h.ListCompanies)
+	mountCompaniesContract(app, h)
 
 	list := func(url string) (slugs []string, total float64) {
 		resp, err := app.Test(httptest.NewRequest("GET", url, nil))
@@ -523,7 +523,7 @@ func TestListCompaniesYCFacets(t *testing.T) {
 
 	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/companies", h.ListCompanies)
+	mountCompaniesContract(app, h)
 
 	list := func(url string) (slugs []string, total float64) {
 		resp, err := app.Test(httptest.NewRequest("GET", url, nil))
@@ -588,7 +588,7 @@ func TestListCompaniesYCStageFlags(t *testing.T) {
 
 	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/companies", h.ListCompanies)
+	mountCompaniesContract(app, h)
 
 	list := func(url string) (slugs []string, total float64) {
 		resp, err := app.Test(httptest.NewRequest("GET", url, nil))

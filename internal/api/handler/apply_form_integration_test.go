@@ -49,7 +49,7 @@ func seedApplyForm(t *testing.T, q *db.Queries, jobID int64, form applyform.Form
 func applyFormApp(q *db.Queries) *fiber.App {
 	h := &jobsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs/:slug/apply-form", h.JobApplyForm)
+	mountJobsContract(app, h, middleware{})
 	return app
 }
 

@@ -107,7 +107,7 @@ func TestFindJobResolvesByIdentityAndByURL(t *testing.T) {
 		}),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs/find", h.FindJob)
+	mountJobsContract(app, h, middleware{})
 
 	t.Run("greenhouse URL resolves by identity", func(t *testing.T) {
 		if slug := findSlug(t, app, "https%3A%2F%2Fjob-boards.greenhouse.io%2Fvgw-eu%2Fjobs%2F8617539002"); slug != "engineer-vgw-eu" {

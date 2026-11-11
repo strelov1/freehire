@@ -62,7 +62,7 @@ func TestVoteEndpoints(t *testing.T) {
 	app.Post("/api/v1/jobs/:slug/vote", keyAuth, newContract(contractHandlers{voteHandlers: h}))
 	app.Delete("/api/v1/jobs/:slug/vote", keyAuth, newContract(contractHandlers{voteHandlers: h}))
 	app.Post("/api/v1/companies/:slug/vote", keyAuth, newContract(contractHandlers{voteHandlers: h}))
-	app.Get("/api/v1/jobs/:slug", optionalAuth, (&jobsHandlers{queries: queries}).GetJob)
+	mountJobsContract(app, &jobsHandlers{queries: queries}, middleware{optional: optionalAuth})
 
 	post := func(t *testing.T, path, body string, authed bool) *http.Response {
 		t.Helper()

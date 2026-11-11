@@ -2,14 +2,18 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
@@ -45,24 +49,24 @@ func newJobsHandlers(queries *db.Queries, moderation *moderation.Service, postin
 	return &jobsHandlers{queries: queries, moderation: moderation, postings: postings, cache: c, estimator: queries}
 }
 
-func (h *jobsHandlers) register(api fiber.Router, mw middleware) {
+func (h *jobsHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// The literal /jobs/* routes (search, facets, sitemap) are registered before
 	// this param route (see Register) so they are not read as slugs. optionalAuth
 	// attaches the caller when signed in but never rejects, so the detail read can
 	// overlay the caller's own vote (my_vote) while staying open to anonymous
 	// visitors.
-	api.Get("/jobs", h.ListJobs)
+	api.Get("/jobs", contract)
 	// Static route registered before /jobs/:slug so it isn't captured as a slug.
-	api.Get("/jobs/find", h.FindJob)
-	api.Get("/jobs/:slug", mw.optional, h.GetJob)
-	api.Get("/jobs/:slug/copies", h.JobCopies)
-	api.Get("/jobs/:slug/apply-form", h.JobApplyForm)
+	api.Get("/jobs/find", contract)
+	api.Get("/jobs/:slug", mw.optional, contract)
+	api.Get("/jobs/:slug/copies", contract)
+	api.Get("/jobs/:slug/apply-form", contract)
 
 	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
 	// by cookie or API key (the CLI uses a key), then gated on the moderator role. The
 	// public job reads above stay unauthenticated; a non-moderator gets 403.
-	api.Post("/jobs", mw.key, mw.moderator, h.CreateJob)
-	api.Patch("/jobs/:slug", mw.key, mw.moderator, h.UpdateJob)
+	api.Post("/jobs", mw.key, mw.moderator, contract)
+	api.Patch("/jobs/:slug", mw.key, mw.moderator, contract)
 }
 
 // ListJobs returns a page of jobs using limit/offset pagination. Jobs are
@@ -75,29 +79,36 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware) {
 // It reads no filter at all, which is exactly why it reports: a caller who sends
 // `?countries=de` here gets the whole catalogue back, and without meta.ignored_params
 // that reads as a real answer about Germany (see ignoredListJobsParams).
-func (h *jobsHandlers) ListJobs(c *fiber.Ctx) error {
-	limit, offset, err := pageParams(c)
+func (h *jobsHandlers) ListJobs(ctx context.Context, _ apigen.ListJobsParams) (*apigen.ListJobsOK, error) {
+	limit, offset, err := contractPageWindowed(ctx, defaultLimit, maxLimit)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	jobs, err := h.queries.ListJobs(c.Context(), db.ListJobsParams{
+	jobs, err := h.queries.ListJobs(ctx, db.ListJobsParams{
 		Limit:  int32(limit),
 		Offset: int32(offset),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	total := h.openJobTotal(c.Context())
+	total := h.openJobTotal(ctx)
 
 	views, err := jobview.FromRows(jobs)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	h.attachGhostToRows(c, jobs, views)
+	h.attachGhostToRows(ctx, jobs, views)
 
-	return listResponseWithIgnored(c, views, total, limit, offset, ignoredListJobsParams(c), nil)
+	data, err := marshalRaws(views)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.ListJobsOK{Data: data, Meta: apigen.ListMeta{
+		Total: total, Limit: int64(limit), Offset: int64(offset),
+		IgnoredParams: contractIgnoredParams(ignoredListJobsParams(contractQuery(ctx))),
+	}}, nil
 }
 
 // listJobsParams are the only query params GET /jobs reads. Its siblings declare
@@ -114,9 +125,9 @@ var listJobsParams = []string{"limit", "offset"}
 // same reason: a near miss to a facet name is no help when every facet name is equally
 // ignored here. Reported rather than refused, like everywhere else — an old link
 // carrying a retired param must keep working.
-func ignoredListJobsParams(c *fiber.Ctx) []search.UnknownParam {
+func ignoredListJobsParams(query url.Values) []search.UnknownParam {
 	var out []search.UnknownParam
-	for param := range queryValues(c) {
+	for param := range query {
 		// "?=value" parses to an empty name: nothing to report, nothing to correct.
 		if param == "" || slices.Contains(listJobsParams, param) {
 			continue
@@ -139,26 +150,26 @@ func (h *jobsHandlers) openJobTotal(ctx context.Context) int64 {
 // GetJob returns a single job addressed by its public slug. A slug that no longer
 // exists still answers with its posting when its shortcode names exactly one, so the
 // response's public_slug may differ from the one asked for — the page redirects on that.
-func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
-	job, err := jobBySlugOrCode(c.Context(), h.queries, c.Params("slug"))
+func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (*apigen.GetJobOK, error) {
+	job, err := jobBySlugOrCode(ctx, h.queries, params.Slug)
 	if err != nil {
 		// RenderError maps pgx.ErrNoRows to 404, anything else to 500.
-		return err
+		return nil, err
 	}
-	callerID, signedIn := auth.UserID(c)
+	callerID, signedIn := auth.UserIDFromContext(ctx)
 	if err := jobVisibleToCaller(job, callerID, signedIn); err != nil {
-		return err
+		return nil, err
 	}
 
 	view, err := jobview.FromRow(job)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Widen the geography with the reposts this posting stands for, the same union its
 	// search document carries — otherwise a role found under 129 countries names one on
 	// its own page (#3646). Best-effort: a failed lookup leaves the row's own geography.
-	if rows, err := h.queries.DuplicateClosureGeoFor(c.Context(), []int64{job.ID}); err == nil {
+	if rows, err := h.queries.DuplicateClosureGeoFor(ctx, []int64{job.ID}); err == nil {
 		for _, g := range rows {
 			view.MergeClosureGeography(jobview.ClosureGeo{Countries: g.Countries, Regions: g.Regions, Cities: g.Cities, Metros: g.Metros})
 		}
@@ -168,7 +179,7 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 	// page. A count-query failure degrades to a unique role (counts 1) rather than
 	// dropping the whole response.
 	repost, mass := int64(1), int64(1)
-	if cnt, err := h.queries.RoleClusterCount(c.Context(), db.RoleClusterCountParams{
+	if cnt, err := h.queries.RoleClusterCount(ctx, db.RoleClusterCountParams{
 		CompanySlug:     job.CompanySlug,
 		RoleFingerprint: job.RoleFingerprint,
 	}); err == nil {
@@ -188,13 +199,13 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 		RealityClass: reality.Class,
 		ATSAbsentAt:  job.AtsAbsentAt.Time,
 		HasATSAbsent: job.AtsAbsentAt.Valid,
-		Evidence:     h.ghostEvidence(c, job.ID),
+		Evidence:     h.ghostEvidence(ctx, job.ID),
 	})
 
 	// The application form's required-question count, the same figure the posting's search
 	// document carries. Best-effort: a failed read leaves the key absent, which says "not
 	// known" — never a count of zero.
-	if counts, err := applyform.QuestionCounts(c.Context(), h.queries, []int64{job.ID}); err == nil {
+	if counts, err := applyform.QuestionCounts(ctx, h.queries, []int64{job.ID}); err == nil {
 		if n, ok := counts[job.ID]; ok {
 			view.ApplyQuestions = &n
 		}
@@ -203,14 +214,14 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 	// Referral availability: true when the company has an approved referrer, so the detail
 	// page can show the "ask for a referral" block. Best-effort — a lookup error degrades
 	// to false (block hidden), never failing the job read.
-	if avail, err := h.queries.CompanyHasApprovedReferrer(c.Context(), job.CompanySlug); err == nil {
+	if avail, err := h.queries.CompanyHasApprovedReferrer(ctx, job.CompanySlug); err == nil {
 		view.ReferralAvailable = avail
 	}
 
 	// Caller's own thumbs vote, overlaid only when signed in (OptionalAuth attaches
 	// the id on this public read). Best-effort: a lookup error leaves my_vote 0.
-	if userID, ok := auth.UserID(c); ok {
-		if mv, err := h.queries.GetJobVote(c.Context(), db.GetJobVoteParams{UserID: userID, JobID: job.ID}); err == nil {
+	if userID, ok := auth.UserIDFromContext(ctx); ok {
+		if mv, err := h.queries.GetJobVote(ctx, db.GetJobVoteParams{UserID: userID, JobID: job.ID}); err == nil {
 			view.MyVote = int32(mv)
 		}
 	}
@@ -221,8 +232,8 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 	// degrades to nil rather than failing the whole job read. Scoped to the same sources
 	// the enqueue endpoint accepts (autoApplyEnqueueSources) — so every other job's read
 	// skips a query that could only ever come back empty.
-	if userID, ok := auth.UserID(c); ok && autoApplyEnqueueSources[job.Source] {
-		if entry, err := h.queries.GetAutoApplyQueueEntryForJob(c.Context(), db.GetAutoApplyQueueEntryForJobParams{
+	if userID, ok := auth.UserIDFromContext(ctx); ok && autoApplyEnqueueSources[job.Source] {
+		if entry, err := h.queries.GetAutoApplyQueueEntryForJob(ctx, db.GetAutoApplyQueueEntryForJobParams{
 			UserID: userID, JobID: job.ID,
 		}); err == nil {
 			status := autoApplyEntryStatus(entry.ReviewDecision, entry.FailedAt, entry.BlockedAt)
@@ -230,12 +241,16 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.JSON(fiber.Map{"data": view})
+	raw, err := json.Marshal(view)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetJobOK{Data: jx.Raw(raw)}, nil
 }
 
 // ghostEvidence gathers the outcome evidence for one job.
-func (h *jobsHandlers) ghostEvidence(c *fiber.Ctx, jobID int64) ghost.Evidence {
-	return ghostEvidenceFor(c.Context(), h.queries, []int64{jobID})[jobID]
+func (h *jobsHandlers) ghostEvidence(ctx context.Context, jobID int64) ghost.Evidence {
+	return ghostEvidenceFor(ctx, h.queries, []int64{jobID})[jobID]
 }
 
 // attachGhostToRows attaches the ghost signal to a page served from Postgres, where
@@ -244,7 +259,7 @@ func (h *jobsHandlers) ghostEvidence(c *fiber.Ctx, jobID int64) ghost.Evidence {
 //
 // Best-effort throughout: a failed lookup leaves the signal off those cards. A list
 // must not fail because an optional badge could not be computed.
-func (h *jobsHandlers) attachGhostToRows(c *fiber.Ctx, rows []db.Job, views []jobview.Job) {
+func (h *jobsHandlers) attachGhostToRows(ctx context.Context, rows []db.Job, views []jobview.Job) {
 	if len(rows) == 0 {
 		return
 	}
@@ -252,8 +267,8 @@ func (h *jobsHandlers) attachGhostToRows(c *fiber.Ctx, rows []db.Job, views []jo
 	for i, r := range rows {
 		ids[i] = r.ID
 	}
-	evidence := ghostEvidenceFor(c.Context(), h.queries, ids)
-	clusters := h.roleClusterCounts(c, rows)
+	evidence := ghostEvidenceFor(ctx, h.queries, ids)
+	clusters := h.roleClusterCounts(ctx, rows)
 
 	now := time.Now()
 	for i, r := range rows {
@@ -288,7 +303,7 @@ type clusterCount struct{ repost, mass int }
 // roleClusterCounts resolves the repost/mass-posting counts for a page of rows in one
 // query. The per-card alternative would issue a query per card on a public list
 // endpoint; this is the same lookup the reindex builds, scoped to the page.
-func (h *jobsHandlers) roleClusterCounts(c *fiber.Ctx, rows []db.Job) map[clusterKey]clusterCount {
+func (h *jobsHandlers) roleClusterCounts(ctx context.Context, rows []db.Job) map[clusterKey]clusterCount {
 	slugs := make([]string, 0, len(rows))
 	prints := make([]string, 0, len(rows))
 	seen := map[clusterKey]struct{}{}
@@ -308,7 +323,7 @@ func (h *jobsHandlers) roleClusterCounts(c *fiber.Ctx, rows []db.Job) map[cluste
 		return nil
 	}
 
-	rowsOut, err := h.queries.RoleClusterCountsFor(c.Context(), db.RoleClusterCountsForParams{
+	rowsOut, err := h.queries.RoleClusterCountsFor(ctx, db.RoleClusterCountsForParams{
 		CompanySlugs:     slugs,
 		RoleFingerprints: prints,
 	})

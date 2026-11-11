@@ -57,8 +57,7 @@ func TestModeratorJobsEndToEnd(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
-	app.Post("/api/v1/jobs", keyAuth, requireMod, h.CreateJob)
-	app.Patch("/api/v1/jobs/:slug", keyAuth, requireMod, h.UpdateJob)
+	mountJobsContract(app, h, middleware{key: keyAuth, moderator: requireMod})
 
 	req := func(method, path, cookie string, body string) *http.Request {
 		var r *http.Request

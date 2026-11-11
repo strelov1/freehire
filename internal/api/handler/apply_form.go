@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/go-faster/jx"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 )
 
@@ -22,27 +24,31 @@ import (
 // A form is captured for a minority of postings (the platforms whose forms can be read
 // at all are roughly a sixth of technical ones), so the 404 is the ordinary case rather
 // than an error worth logging.
-func (h *jobsHandlers) JobApplyForm(c *fiber.Ctx) error {
-	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
+func (h *jobsHandlers) JobApplyForm(ctx context.Context, params apigen.JobApplyFormParams) (*apigen.JobApplyFormOK, error) {
+	job, err := h.queries.GetJobBySlug(ctx, params.Slug)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := jobVisibleToCaller(job, 0, false); err != nil {
-		return err
+		return nil, err
 	}
 
-	row, err := h.queries.GetApplyFormByJobID(c.Context(), job.ID)
+	row, err := h.queries.GetApplyFormByJobID(ctx, job.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var form applyform.Form
 	if err := json.Unmarshal(row.Payload, &form); err != nil {
-		return fmt.Errorf("decode apply form for job %d: %w", job.ID, err)
+		return nil, fmt.Errorf("decode apply form for job %d: %w", job.ID, err)
 	}
 	// The provider is authoritative on the row rather than inside the payload: the row
 	// is what a re-capture rewrites and what a per-provider purge would select on.
 	form.Provider = row.Provider
 
-	return c.JSON(fiber.Map{"data": form.ForDisplay()})
+	raw, err := json.Marshal(form.ForDisplay())
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.JobApplyFormOK{Data: jx.Raw(raw)}, nil
 }

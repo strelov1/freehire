@@ -208,6 +208,12 @@ type Handler interface {
 	//
 	// POST /threads/{id}/close
 	CloseThread(ctx context.Context, params CloseThreadParams) (*CloseThreadOK, error)
+	// CompanySubindustries implements companySubindustries operation.
+	//
+	// The subindustry vocabulary with company counts, most common first.
+	//
+	// GET /companies/subindustries
+	CompanySubindustries(ctx context.Context) (*CompanySubindustriesOK, error)
 	// CompleteOnboarding implements completeOnboarding operation.
 	//
 	// POST /me/onboarding/complete
@@ -237,6 +243,12 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/ghost-report
 	CreateGhostReport(ctx context.Context, req *GhostReportRequest, params CreateGhostReportParams) (*CreateGhostReportCreated, error)
+	// CreateJob implements createJob operation.
+	//
+	// Moderators only. Creates a hand-curated vacancy.
+	//
+	// POST /jobs
+	CreateJob(ctx context.Context, req *JobCreate) (*CreateJobCreated, error)
 	// CreateJobReport implements createJobReport operation.
 	//
 	// 404 for an unknown job, 409 for a second open report by the same person.
@@ -347,6 +359,12 @@ type Handler interface {
 	//
 	// POST /companies/{slug}/process-reports
 	FileProcessReport(ctx context.Context, req *ProcessReportRequest, params FileProcessReportParams) (*FileProcessReportCreated, error)
+	// FindJob implements findJob operation.
+	//
+	// Resolves the URL of a posting in the wild to a catalogue slug.
+	//
+	// GET /jobs/find
+	FindJob(ctx context.Context, params FindJobParams) (*JobFindResult, error)
 	// FindModeratedUser implements findModeratedUser operation.
 	//
 	// GET /moderation/users
@@ -404,6 +422,13 @@ type Handler interface {
 	//
 	// GET /me/invite
 	GetInvite(ctx context.Context) (*GetInviteOK, error)
+	// GetJob implements getJob operation.
+	//
+	// One job by public slug. A signed-in caller also gets their own vote and auto-apply status. A slug
+	// that no longer exists still answers with its posting when its shortcode names exactly one.
+	//
+	// GET /jobs/{slug}
+	GetJob(ctx context.Context, params GetJobParams) (*GetJobOK, error)
 	// GetMarketPulse implements getMarketPulse operation.
 	//
 	// Demand for the caller's profile skills, week by week. Session cookie only.
@@ -560,6 +585,18 @@ type Handler interface {
 	//
 	// GET /insights/velocity
 	InsightsVelocity(ctx context.Context, params InsightsVelocityParams) (*VelocityAnswer, error)
+	// JobApplyForm implements jobApplyForm operation.
+	//
+	// The application form captured for the job. 404 when none was captured.
+	//
+	// GET /jobs/{slug}/apply-form
+	JobApplyForm(ctx context.Context, params JobApplyFormParams) (*JobApplyFormOK, error)
+	// JobCopies implements jobCopies operation.
+	//
+	// The open postings a collapsed job stands for, one per city.
+	//
+	// GET /jobs/{slug}/copies
+	JobCopies(ctx context.Context, params JobCopiesParams) (*JobCopiesPage, error)
 	// JobsActivity implements jobsActivity operation.
 	//
 	// Added and removed vacancies per period. A bad granularity or date, or a range over 4000 days, is a
@@ -577,6 +614,15 @@ type Handler interface {
 	//
 	// GET /me/answer-bank
 	ListBankedAnswers(ctx context.Context) (*ListBankedAnswersOK, error)
+	// ListCompanies implements listCompanies operation.
+	//
+	// Ranked companies. `q` and the facet params (collections, regions, countries, domains, industries,
+	// company_type, company_size, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity,
+	// subindustries) are read from the raw query, comma-joined or repeated; a param the listing does not
+	// read is reported in `meta.ignored_params`.
+	//
+	// GET /companies
+	ListCompanies(ctx context.Context, params ListCompaniesParams) (*ListCompaniesOK, error)
 	// ListCompanyFeedback implements listCompanyFeedback operation.
 	//
 	// Newest first. A page param that does not read falls back to its default.
@@ -628,6 +674,13 @@ type Handler interface {
 	//
 	// GET /me/referrals/incoming
 	ListIncomingReferralRequests(ctx context.Context) (*ListIncomingReferralRequestsOK, error)
+	// ListJobs implements listJobs operation.
+	//
+	// The newest open jobs. It reads no filter: a param other than the page ones is reported in
+	// `meta.ignored_params`.
+	//
+	// GET /jobs
+	ListJobs(ctx context.Context, params ListJobsParams) (*ListJobsOK, error)
 	// ListMyContributions implements listMyContributions operation.
 	//
 	// GET /me/contributions
@@ -1035,6 +1088,12 @@ type Handler interface {
 	//
 	// PUT /me/experience/employments/{id}
 	UpdateEmployment(ctx context.Context, req jx.Raw, params UpdateEmploymentParams) (*UpdateEmploymentOK, error)
+	// UpdateJob implements updateJob operation.
+	//
+	// Moderators only. Edits a manual vacancy by public slug.
+	//
+	// PATCH /jobs/{slug}
+	UpdateJob(ctx context.Context, req *JobUpdate, params UpdateJobParams) (*UpdateJobOK, error)
 	// UpdateMyEmailGroups implements updateMyEmailGroups operation.
 	//
 	// PATCH /me/email-groups

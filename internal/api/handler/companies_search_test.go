@@ -28,7 +28,7 @@ func (f *fakeCompanySearcher) SearchCompanies(_ context.Context, p search.Compan
 func companyApp(cs companySearcher) *fiber.App {
 	h := &companiesHandlers{companySearch: cs}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/companies", h.ListCompanies)
+	mountCompaniesContract(app, h)
 	return app
 }
 
@@ -58,7 +58,7 @@ func TestListCompanies_QueryRoutesToMeiliPreservingRankOrder(t *testing.T) {
 	}}
 	app := companyApp(fake)
 
-	status, body := doGet(t, app, "/companies?q=arb")
+	status, body := doGet(t, app, "/api/v1/companies?q=arb")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -89,7 +89,7 @@ func TestListCompanies_FacetsBuildMeiliFilterAndRoute(t *testing.T) {
 	fake := &fakeCompanySearcher{}
 	app := companyApp(fake)
 
-	status, _ := doGet(t, app, "/companies?regions=europe&company_type=startup")
+	status, _ := doGet(t, app, "/api/v1/companies?regions=europe&company_type=startup")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -114,7 +114,7 @@ func TestListCompanies_ReportsIgnoredParams(t *testing.T) {
 
 	// `collections` is a real company facet, so the request routes to Meili
 	// rather than falling through to the Postgres path this harness lacks.
-	_, body := doGet(t, app, "/companies?collections=yc&seniority=senior")
+	_, body := doGet(t, app, "/api/v1/companies?collections=yc&seniority=senior")
 
 	meta, _ := body["meta"].(map[string]any)
 	ignored, _ := meta["ignored_params"].([]any)

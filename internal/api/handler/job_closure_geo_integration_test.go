@@ -52,7 +52,7 @@ func TestGetJob_ShowsDuplicateClosureGeography(t *testing.T) {
 
 	h := &jobsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs/:slug", h.GetJob)
+	mountJobsContract(app, h, middleware{})
 	resp, err := app.Test(httptest.NewRequestWithContext(ctx, "GET", "/api/v1/jobs/d365-black-pen-aaaaaaaa", nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)

@@ -1,10 +1,9 @@
 package handler
 
 import (
-	"time"
+	"context"
 
-	"github.com/gofiber/fiber/v2"
-
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -16,15 +15,6 @@ const (
 	maxCopiesLimit     = 200
 )
 
-// jobCopy is one posting a collapsed job represents — a single city's opening. Each keeps
-// its own location and apply URL so a seeker picks their city.
-type jobCopy struct {
-	PublicSlug string     `json:"public_slug"`
-	Location   string     `json:"location"`
-	ApplyURL   string     `json:"apply_url"`
-	PostedAt   *time.Time `json:"posted_at"`
-}
-
 // JobCopies lists the open postings represented by the job addressed by :slug — the per-city
 // openings folded under one canonical card by the content-dedup collapse. Public
 // (unauthenticated) like the other job reads.
@@ -34,37 +24,36 @@ type jobCopy struct {
 // may itself be a suppressed posting (those stay readable by slug); the query resolves it to
 // its owner and lists that owner's whole group rather than a fragment. Response:
 // {"data": [copy...]}.
-func (h *jobsHandlers) JobCopies(c *fiber.Ctx) error {
+func (h *jobsHandlers) JobCopies(ctx context.Context, params apigen.JobCopiesParams) (*apigen.JobCopiesPage, error) {
 	// Before the slug lookup: a refused page must cost no database work at all. See
 	// GetCompany, which orders its own two reads the same way.
-	limit, offset, err := pageParamsWindowed(c, defaultCopiesLimit, maxCopiesLimit)
+	limit, offset, err := contractPageWindowed(ctx, defaultCopiesLimit, maxCopiesLimit)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
+	job, err := h.queries.GetJobBySlug(ctx, params.Slug)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := jobVisibleToCaller(job, 0, false); err != nil {
-		return err
+		return nil, err
 	}
 
-	rows, err := h.queries.ListJobCopies(c.Context(), db.ListJobCopiesParams{
+	rows, err := h.queries.ListJobCopies(ctx, db.ListJobCopiesParams{
 		JobID:     job.ID,
 		RowLimit:  int32(limit),
 		RowOffset: int32(offset),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	copies := make([]jobCopy, len(rows))
+	copies := make([]apigen.JobCopy, len(rows))
 	for i, r := range rows {
-		cp := jobCopy{PublicSlug: r.PublicSlug, Location: r.Location, ApplyURL: outboundurl.Tag(r.URL)}
+		cp := apigen.JobCopy{PublicSlug: r.PublicSlug, Location: r.Location, ApplyURL: outboundurl.Tag(r.URL), PostedAt: apigen.NilDateTime{Null: true}}
 		if r.PostedAt.Valid {
-			t := r.PostedAt.Time
-			cp.PostedAt = &t
+			cp.PostedAt = apigen.NewNilDateTime(r.PostedAt.Time)
 		}
 		copies[i] = cp
 	}
@@ -75,5 +64,5 @@ func (h *jobsHandlers) JobCopies(c *fiber.Ctx) error {
 	if len(rows) > 0 {
 		total = rows[0].Total
 	}
-	return c.JSON(fiber.Map{"data": copies, "meta": fiber.Map{"total": total}})
+	return &apigen.JobCopiesPage{Data: copies, Meta: apigen.JobCopiesMeta{Total: total}}, nil
 }

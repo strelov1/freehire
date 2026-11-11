@@ -33,7 +33,7 @@ func TestListJobsReportsIgnoredParams(t *testing.T) {
 	h := &jobsHandlers{queries: queries, cache: cache.NewMemory(), estimator: queries}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs", h.ListJobs)
+	mountJobsContract(app, h, middleware{})
 
 	get := func(target string) (int, map[string]any) {
 		t.Helper()

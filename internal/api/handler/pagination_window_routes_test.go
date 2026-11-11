@@ -27,17 +27,27 @@ var windowedListRoutes = []struct {
 	path   string
 	window int
 }{
-	{"GET /jobs", func() *fiber.App { return mountWindowed((&jobsHandlers{}).register) }, "/api/v1/jobs", maxPageWindow},
-	{"GET /companies", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies", maxPageWindow},
-	{"GET /companies/:slug", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies/acme", maxPageWindow},
-	{"GET /companies/:slug/closed-jobs", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies/acme/closed-jobs", closedJobsWindow},
-	{"GET /jobs/:slug/copies", func() *fiber.App { return mountWindowed((&jobsHandlers{}).register) }, "/api/v1/jobs/a-job/copies", maxPageWindow},
+	{"GET /jobs", func() *fiber.App { return mountWindowed(jobsRegister) }, "/api/v1/jobs", maxPageWindow},
+	{"GET /companies", func() *fiber.App { return mountWindowed(companiesRegister) }, "/api/v1/companies", maxPageWindow},
+	{"GET /companies/:slug", func() *fiber.App { return mountWindowed(companiesRegister) }, "/api/v1/companies/acme", maxPageWindow},
+	{"GET /companies/:slug/closed-jobs", func() *fiber.App { return mountWindowed(companiesRegister) }, "/api/v1/companies/acme/closed-jobs", closedJobsWindow},
+	{"GET /jobs/:slug/copies", func() *fiber.App { return mountWindowed(jobsRegister) }, "/api/v1/jobs/a-job/copies", maxPageWindow},
 	{"GET /companies/:slug/feedback", func() *fiber.App {
 		h := &companyFeedbackHandlers{}
 		return mountWindowed(func(api fiber.Router, _ middleware) {
 			h.registerPublic(api, newContract(contractHandlers{companyFeedbackHandlers: h}))
 		})
 	}, "/api/v1/companies/acme/feedback", maxPageWindow},
+}
+
+func jobsRegister(api fiber.Router, mw middleware) {
+	h := &jobsHandlers{}
+	h.register(api, mw, newContract(contractHandlers{jobsHandlers: h}))
+}
+
+func companiesRegister(api fiber.Router, mw middleware) {
+	h := &companiesHandlers{}
+	h.register(api, mw, newContract(contractHandlers{companiesHandlers: h}))
 }
 
 // mountWindowed exercises pagination bounds through the real route registration.

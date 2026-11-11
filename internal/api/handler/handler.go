@@ -1123,7 +1123,9 @@ func Register(app *fiber.App, cfg Config) {
 		referralHandlers:             referralsH,
 		billingHandlers:              billingH,
 		planHandlers:                 planH,
-		directApplyHandlers:          directApplyH})
+		directApplyHandlers:          directApplyH,
+		jobsHandlers:                 jobsH,
+		companiesHandlers:            companiesH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1149,8 +1151,8 @@ func Register(app *fiber.App, cfg Config) {
 		assistantH,
 		mcpappH,
 	)
-	jobsH.register(api, mw)
-	companiesH.register(api, mw)
+	jobsH.register(api, mw, contract)
+	companiesH.register(api, mw, contract)
 	companyRelationH.register(api, mw, contract)
 	geoH.register(api, contract)
 

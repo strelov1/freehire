@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -44,17 +45,13 @@ func TestPrivateSlugIs404ExceptForItsCreator(t *testing.T) {
 
 	h := &jobsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs/:slug", h.GetJob)
-	app.Get("/api/v1/jobs/:slug/copies", h.JobCopies)
-	app.Get("/api/v1/jobs/:slug/apply-form", h.JobApplyForm)
-	app.Get("/api/v1/jobs/:slug/as/:user", func(c *fiber.Ctx) error {
-		id, err := c.ParamsInt("user")
-		if err != nil {
-			return err
+	// ?as=<id> stands in for the signed-in caller the optional-auth middleware attaches.
+	mountJobsContract(app, h, middleware{optional: func(c *fiber.Ctx) error {
+		if id, err := strconv.Atoi(c.Query("as")); err == nil {
+			c.Locals(auth.LocalsUserID, int64(id))
 		}
-		c.Locals(auth.LocalsUserID, int64(id))
-		return h.GetJob(c)
-	})
+		return c.Next()
+	}})
 
 	get := func(path string) int {
 		t.Helper()
@@ -76,11 +73,11 @@ func TestPrivateSlugIs404ExceptForItsCreator(t *testing.T) {
 	if code := get("/api/v1/jobs/" + slug + "/apply-form"); code != fiber.StatusNotFound {
 		t.Errorf("apply-form status = %d, want 404", code)
 	}
-	if code := get("/api/v1/jobs/" + slug + "/as/999"); code != fiber.StatusNotFound {
+	if code := get("/api/v1/jobs/" + slug + "?as=999"); code != fiber.StatusNotFound {
 		t.Errorf("stranger GetJob status = %d, want 404", code)
 	}
 
-	resp, err := app.Test(httptest.NewRequestWithContext(ctx, fiber.MethodGet, fmt.Sprintf("/api/v1/jobs/%s/as/%d", slug, ownerID), nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(ctx, fiber.MethodGet, fmt.Sprintf("/api/v1/jobs/%s?as=%d", slug, ownerID), nil))
 	if err != nil {
 		t.Fatalf("owner request: %v", err)
 	}

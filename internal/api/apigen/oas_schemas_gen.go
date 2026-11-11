@@ -3176,6 +3176,48 @@ func (s *CompanyRelationRequest) SetNote(val OptString) {
 }
 
 // A single item: `{"data": ...}`.
+type CompanySubindustriesOK struct {
+	Data []CompanySubindustry `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CompanySubindustriesOK) GetData() []CompanySubindustry {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CompanySubindustriesOK) SetData(val []CompanySubindustry) {
+	s.Data = val
+}
+
+// One option of the subindustry vocabulary.
+// Ref: #/components/schemas/CompanySubindustry
+type CompanySubindustry struct {
+	Value string `json:"value"`
+	Count int64  `json:"count"`
+}
+
+// GetValue returns the value of Value.
+func (s *CompanySubindustry) GetValue() string {
+	return s.Value
+}
+
+// GetCount returns the value of Count.
+func (s *CompanySubindustry) GetCount() int64 {
+	return s.Count
+}
+
+// SetValue sets the value of Value.
+func (s *CompanySubindustry) SetValue(val string) {
+	s.Value = val
+}
+
+// SetCount sets the value of Count.
+func (s *CompanySubindustry) SetCount(val int64) {
+	s.Count = val
+}
+
+// A single item: `{"data": ...}`.
 type CompleteOnboardingOK struct {
 	Data OnboardingCompleted `json:"data"`
 }
@@ -3796,6 +3838,21 @@ func (s *CreateGhostReportCreated) GetData() GhostReport {
 
 // SetData sets the value of Data.
 func (s *CreateGhostReportCreated) SetData(val GhostReport) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type CreateJobCreated struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateJobCreated) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateJobCreated) SetData(val jx.Raw) {
 	s.Data = val
 }
 
@@ -5833,6 +5890,21 @@ func (s *GetInviteOK) SetData(val Invite) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type GetJobOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetJobOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetJobOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
 type GetMarketPulseOK struct {
 	Data []SkillPulse    `json:"data"`
 	Meta MarketPulseMeta `json:"meta"`
@@ -6589,6 +6661,316 @@ func (s *Invite) SetPercentOff(val int64) {
 	s.PercentOff = val
 }
 
+// A single item: `{"data": ...}`.
+type JobApplyFormOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *JobApplyFormOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *JobApplyFormOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/JobCopiesMeta
+type JobCopiesMeta struct {
+	// The whole closure's open size, even when the list is a capped page.
+	Total int64 `json:"total"`
+}
+
+// GetTotal returns the value of Total.
+func (s *JobCopiesMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// SetTotal sets the value of Total.
+func (s *JobCopiesMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
+// Ref: #/components/schemas/JobCopiesPage
+type JobCopiesPage struct {
+	Data []JobCopy     `json:"data"`
+	Meta JobCopiesMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *JobCopiesPage) GetData() []JobCopy {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *JobCopiesPage) GetMeta() JobCopiesMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *JobCopiesPage) SetData(val []JobCopy) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *JobCopiesPage) SetMeta(val JobCopiesMeta) {
+	s.Meta = val
+}
+
+// One per-city opening folded under a canonical job.
+// Ref: #/components/schemas/JobCopy
+type JobCopy struct {
+	PublicSlug string      `json:"public_slug"`
+	Location   string      `json:"location"`
+	ApplyURL   string      `json:"apply_url"`
+	PostedAt   NilDateTime `json:"posted_at"`
+}
+
+// GetPublicSlug returns the value of PublicSlug.
+func (s *JobCopy) GetPublicSlug() string {
+	return s.PublicSlug
+}
+
+// GetLocation returns the value of Location.
+func (s *JobCopy) GetLocation() string {
+	return s.Location
+}
+
+// GetApplyURL returns the value of ApplyURL.
+func (s *JobCopy) GetApplyURL() string {
+	return s.ApplyURL
+}
+
+// GetPostedAt returns the value of PostedAt.
+func (s *JobCopy) GetPostedAt() NilDateTime {
+	return s.PostedAt
+}
+
+// SetPublicSlug sets the value of PublicSlug.
+func (s *JobCopy) SetPublicSlug(val string) {
+	s.PublicSlug = val
+}
+
+// SetLocation sets the value of Location.
+func (s *JobCopy) SetLocation(val string) {
+	s.Location = val
+}
+
+// SetApplyURL sets the value of ApplyURL.
+func (s *JobCopy) SetApplyURL(val string) {
+	s.ApplyURL = val
+}
+
+// SetPostedAt sets the value of PostedAt.
+func (s *JobCopy) SetPostedAt(val NilDateTime) {
+	s.PostedAt = val
+}
+
+// The moderator create body. url, title and company are required, and the service refuses a request
+// without them.
+// Ref: #/components/schemas/JobCreate
+type JobCreate struct {
+	URL            OptString      `json:"url"`
+	Source         OptString      `json:"source"`
+	Title          OptString      `json:"title"`
+	Company        OptString      `json:"company"`
+	Location       OptString      `json:"location"`
+	Remote         OptBool        `json:"remote"`
+	Description    OptString      `json:"description"`
+	PostedAt       OptNilDateTime `json:"posted_at"`
+	Skills         []string       `json:"skills"`
+	Regions        []string       `json:"regions"`
+	Cities         []string       `json:"cities"`
+	WorkMode       OptString      `json:"work_mode"`
+	EmploymentType OptString      `json:"employment_type"`
+	Seniority      OptString      `json:"seniority"`
+	SalaryMin      OptNilInt64    `json:"salary_min"`
+	SalaryMax      OptNilInt64    `json:"salary_max"`
+	SalaryCurrency OptString      `json:"salary_currency"`
+	SalaryPeriod   OptString      `json:"salary_period"`
+}
+
+// GetURL returns the value of URL.
+func (s *JobCreate) GetURL() OptString {
+	return s.URL
+}
+
+// GetSource returns the value of Source.
+func (s *JobCreate) GetSource() OptString {
+	return s.Source
+}
+
+// GetTitle returns the value of Title.
+func (s *JobCreate) GetTitle() OptString {
+	return s.Title
+}
+
+// GetCompany returns the value of Company.
+func (s *JobCreate) GetCompany() OptString {
+	return s.Company
+}
+
+// GetLocation returns the value of Location.
+func (s *JobCreate) GetLocation() OptString {
+	return s.Location
+}
+
+// GetRemote returns the value of Remote.
+func (s *JobCreate) GetRemote() OptBool {
+	return s.Remote
+}
+
+// GetDescription returns the value of Description.
+func (s *JobCreate) GetDescription() OptString {
+	return s.Description
+}
+
+// GetPostedAt returns the value of PostedAt.
+func (s *JobCreate) GetPostedAt() OptNilDateTime {
+	return s.PostedAt
+}
+
+// GetSkills returns the value of Skills.
+func (s *JobCreate) GetSkills() []string {
+	return s.Skills
+}
+
+// GetRegions returns the value of Regions.
+func (s *JobCreate) GetRegions() []string {
+	return s.Regions
+}
+
+// GetCities returns the value of Cities.
+func (s *JobCreate) GetCities() []string {
+	return s.Cities
+}
+
+// GetWorkMode returns the value of WorkMode.
+func (s *JobCreate) GetWorkMode() OptString {
+	return s.WorkMode
+}
+
+// GetEmploymentType returns the value of EmploymentType.
+func (s *JobCreate) GetEmploymentType() OptString {
+	return s.EmploymentType
+}
+
+// GetSeniority returns the value of Seniority.
+func (s *JobCreate) GetSeniority() OptString {
+	return s.Seniority
+}
+
+// GetSalaryMin returns the value of SalaryMin.
+func (s *JobCreate) GetSalaryMin() OptNilInt64 {
+	return s.SalaryMin
+}
+
+// GetSalaryMax returns the value of SalaryMax.
+func (s *JobCreate) GetSalaryMax() OptNilInt64 {
+	return s.SalaryMax
+}
+
+// GetSalaryCurrency returns the value of SalaryCurrency.
+func (s *JobCreate) GetSalaryCurrency() OptString {
+	return s.SalaryCurrency
+}
+
+// GetSalaryPeriod returns the value of SalaryPeriod.
+func (s *JobCreate) GetSalaryPeriod() OptString {
+	return s.SalaryPeriod
+}
+
+// SetURL sets the value of URL.
+func (s *JobCreate) SetURL(val OptString) {
+	s.URL = val
+}
+
+// SetSource sets the value of Source.
+func (s *JobCreate) SetSource(val OptString) {
+	s.Source = val
+}
+
+// SetTitle sets the value of Title.
+func (s *JobCreate) SetTitle(val OptString) {
+	s.Title = val
+}
+
+// SetCompany sets the value of Company.
+func (s *JobCreate) SetCompany(val OptString) {
+	s.Company = val
+}
+
+// SetLocation sets the value of Location.
+func (s *JobCreate) SetLocation(val OptString) {
+	s.Location = val
+}
+
+// SetRemote sets the value of Remote.
+func (s *JobCreate) SetRemote(val OptBool) {
+	s.Remote = val
+}
+
+// SetDescription sets the value of Description.
+func (s *JobCreate) SetDescription(val OptString) {
+	s.Description = val
+}
+
+// SetPostedAt sets the value of PostedAt.
+func (s *JobCreate) SetPostedAt(val OptNilDateTime) {
+	s.PostedAt = val
+}
+
+// SetSkills sets the value of Skills.
+func (s *JobCreate) SetSkills(val []string) {
+	s.Skills = val
+}
+
+// SetRegions sets the value of Regions.
+func (s *JobCreate) SetRegions(val []string) {
+	s.Regions = val
+}
+
+// SetCities sets the value of Cities.
+func (s *JobCreate) SetCities(val []string) {
+	s.Cities = val
+}
+
+// SetWorkMode sets the value of WorkMode.
+func (s *JobCreate) SetWorkMode(val OptString) {
+	s.WorkMode = val
+}
+
+// SetEmploymentType sets the value of EmploymentType.
+func (s *JobCreate) SetEmploymentType(val OptString) {
+	s.EmploymentType = val
+}
+
+// SetSeniority sets the value of Seniority.
+func (s *JobCreate) SetSeniority(val OptString) {
+	s.Seniority = val
+}
+
+// SetSalaryMin sets the value of SalaryMin.
+func (s *JobCreate) SetSalaryMin(val OptNilInt64) {
+	s.SalaryMin = val
+}
+
+// SetSalaryMax sets the value of SalaryMax.
+func (s *JobCreate) SetSalaryMax(val OptNilInt64) {
+	s.SalaryMax = val
+}
+
+// SetSalaryCurrency sets the value of SalaryCurrency.
+func (s *JobCreate) SetSalaryCurrency(val OptString) {
+	s.SalaryCurrency = val
+}
+
+// SetSalaryPeriod sets the value of SalaryPeriod.
+func (s *JobCreate) SetSalaryPeriod(val OptString) {
+	s.SalaryPeriod = val
+}
+
 // Exactly one of `job_slug`, `url` and `text`; anything else is a 400.
 // Ref: #/components/schemas/JobDescriptionSource
 type JobDescriptionSource struct {
@@ -6648,6 +7030,66 @@ func (s *JobDescriptionSource) SetTitle(val OptString) {
 // SetCompany sets the value of Company.
 func (s *JobDescriptionSource) SetCompany(val OptString) {
 	s.Company = val
+}
+
+// Ref: #/components/schemas/JobFindMeta
+type JobFindMeta struct {
+	// Whether the URL sits on an ATS board freehire knows how to crawl.
+	AtsBoard bool `json:"ats_board"`
+}
+
+// GetAtsBoard returns the value of AtsBoard.
+func (s *JobFindMeta) GetAtsBoard() bool {
+	return s.AtsBoard
+}
+
+// SetAtsBoard sets the value of AtsBoard.
+func (s *JobFindMeta) SetAtsBoard(val bool) {
+	s.AtsBoard = val
+}
+
+// `data` is null when the posting cannot be identified, and then `meta` says whether the board is
+// crawlable.
+// Ref: #/components/schemas/JobFindResult
+type JobFindResult struct {
+	Data NilJobFoundPosting `json:"data"`
+	Meta OptJobFindMeta     `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *JobFindResult) GetData() NilJobFoundPosting {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *JobFindResult) GetMeta() OptJobFindMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *JobFindResult) SetData(val NilJobFoundPosting) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *JobFindResult) SetMeta(val OptJobFindMeta) {
+	s.Meta = val
+}
+
+// The posting a page URL is, when the catalogue carries it.
+// Ref: #/components/schemas/JobFoundPosting
+type JobFoundPosting struct {
+	PublicSlug string `json:"public_slug"`
+}
+
+// GetPublicSlug returns the value of PublicSlug.
+func (s *JobFoundPosting) GetPublicSlug() string {
+	return s.PublicSlug
+}
+
+// SetPublicSlug sets the value of PublicSlug.
+func (s *JobFoundPosting) SetPublicSlug(val string) {
+	s.PublicSlug = val
 }
 
 // Ref: #/components/schemas/JobReport
@@ -6826,6 +7268,77 @@ func (s *JobReportRequest) SetContactTelegram(val OptString) {
 	s.ContactTelegram = val
 }
 
+// The moderator edit body: a field left out or null is unchanged.
+// Ref: #/components/schemas/JobUpdate
+type JobUpdate struct {
+	Title       OptNilString   `json:"title"`
+	Company     OptNilString   `json:"company"`
+	Location    OptNilString   `json:"location"`
+	Remote      OptNilBool     `json:"remote"`
+	Description OptNilString   `json:"description"`
+	PostedAt    OptNilDateTime `json:"posted_at"`
+}
+
+// GetTitle returns the value of Title.
+func (s *JobUpdate) GetTitle() OptNilString {
+	return s.Title
+}
+
+// GetCompany returns the value of Company.
+func (s *JobUpdate) GetCompany() OptNilString {
+	return s.Company
+}
+
+// GetLocation returns the value of Location.
+func (s *JobUpdate) GetLocation() OptNilString {
+	return s.Location
+}
+
+// GetRemote returns the value of Remote.
+func (s *JobUpdate) GetRemote() OptNilBool {
+	return s.Remote
+}
+
+// GetDescription returns the value of Description.
+func (s *JobUpdate) GetDescription() OptNilString {
+	return s.Description
+}
+
+// GetPostedAt returns the value of PostedAt.
+func (s *JobUpdate) GetPostedAt() OptNilDateTime {
+	return s.PostedAt
+}
+
+// SetTitle sets the value of Title.
+func (s *JobUpdate) SetTitle(val OptNilString) {
+	s.Title = val
+}
+
+// SetCompany sets the value of Company.
+func (s *JobUpdate) SetCompany(val OptNilString) {
+	s.Company = val
+}
+
+// SetLocation sets the value of Location.
+func (s *JobUpdate) SetLocation(val OptNilString) {
+	s.Location = val
+}
+
+// SetRemote sets the value of Remote.
+func (s *JobUpdate) SetRemote(val OptNilBool) {
+	s.Remote = val
+}
+
+// SetDescription sets the value of Description.
+func (s *JobUpdate) SetDescription(val OptNilString) {
+	s.Description = val
+}
+
+// SetPostedAt sets the value of PostedAt.
+func (s *JobUpdate) SetPostedAt(val OptNilDateTime) {
+	s.PostedAt = val
+}
+
 // Ref: #/components/schemas/JobsActivity
 type JobsActivity struct {
 	Data []ActivityPoint `json:"data"`
@@ -6880,6 +7393,32 @@ func (s *ListBankedAnswersOK) GetData() []BankedAnswer {
 // SetData sets the value of Data.
 func (s *ListBankedAnswersOK) SetData(val []BankedAnswer) {
 	s.Data = val
+}
+
+// A list: `{"data": [...], "meta": {...}}`.
+type ListCompaniesOK struct {
+	Data []jx.Raw `json:"data"`
+	Meta ListMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *ListCompaniesOK) GetData() []jx.Raw {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *ListCompaniesOK) GetMeta() ListMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *ListCompaniesOK) SetData(val []jx.Raw) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *ListCompaniesOK) SetMeta(val ListMeta) {
+	s.Meta = val
 }
 
 // A single item: `{"data": ...}`.
@@ -6985,6 +7524,32 @@ func (s *ListIncomingReferralRequestsOK) GetData() []ReferralIncomingRequest {
 // SetData sets the value of Data.
 func (s *ListIncomingReferralRequestsOK) SetData(val []ReferralIncomingRequest) {
 	s.Data = val
+}
+
+// A list: `{"data": [...], "meta": {...}}`.
+type ListJobsOK struct {
+	Data []jx.Raw `json:"data"`
+	Meta ListMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *ListJobsOK) GetData() []jx.Raw {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *ListJobsOK) GetMeta() ListMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *ListJobsOK) SetData(val []jx.Raw) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *ListJobsOK) SetMeta(val ListMeta) {
+	s.Meta = val
 }
 
 // A page of a filtered list, with what the filter dropped.
@@ -7966,6 +8531,51 @@ func (o NilInt64) Or(d int64) int64 {
 	return d
 }
 
+// NewNilJobFoundPosting returns new NilJobFoundPosting with value set to v.
+func NewNilJobFoundPosting(v JobFoundPosting) NilJobFoundPosting {
+	return NilJobFoundPosting{
+		Value: v,
+	}
+}
+
+// NilJobFoundPosting is nullable JobFoundPosting.
+type NilJobFoundPosting struct {
+	Value JobFoundPosting
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilJobFoundPosting) SetTo(v JobFoundPosting) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilJobFoundPosting) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilJobFoundPosting) SetToNull() {
+	o.Null = true
+	var v JobFoundPosting
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilJobFoundPosting) Get() (v JobFoundPosting, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilJobFoundPosting) Or(d JobFoundPosting) JobFoundPosting {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewNilProfile returns new NilProfile with value set to v.
 func NewNilProfile(v Profile) NilProfile {
 	return NilProfile{
@@ -8819,6 +9429,52 @@ func (o OptInt64) Get() (v int64, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptInt64) Or(d int64) int64 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptJobFindMeta returns new OptJobFindMeta with value set to v.
+func NewOptJobFindMeta(v JobFindMeta) OptJobFindMeta {
+	return OptJobFindMeta{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptJobFindMeta is optional JobFindMeta.
+type OptJobFindMeta struct {
+	Value JobFindMeta
+	Set   bool
+}
+
+// IsSet returns true if OptJobFindMeta was set.
+func (o OptJobFindMeta) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptJobFindMeta) Reset() {
+	var v JobFindMeta
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptJobFindMeta) SetTo(v JobFindMeta) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptJobFindMeta) Get() (v JobFindMeta, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptJobFindMeta) Or(d JobFindMeta) JobFindMeta {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -16281,6 +16937,21 @@ func (s *UpdateEmploymentOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *UpdateEmploymentOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UpdateJobOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateJobOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateJobOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
