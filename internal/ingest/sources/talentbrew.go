@@ -110,35 +110,35 @@ type tbPosting struct {
 	url string
 }
 
-// listing pages the results endpoint until the board's declared page count or an empty page,
-// returning the postings de-duplicated by id in first-seen order.
+// listing returns postings only after every declared page was read. A partial listing
+// cannot authorize the caller's stale-job sweep, even when earlier pages were positive.
 func (s talentbrew) listing(ctx context.Context, base *url.URL) ([]tbPosting, error) {
 	var out []tbPosting
 	seen := map[string]bool{}
 	totalPages := 1
-	for page := 1; page <= totalPages && page <= tbMaxPages; page++ {
+	for page := 1; page <= totalPages; page++ {
 		var resp struct {
 			Results string `json:"results"`
 		}
 		u := fmt.Sprintf("%s/search-jobs/results?CurrentPage=%d&RecordsPerPage=%d&%s", base, page, tbPageSize, tbResultsQuery)
 		if err := s.http.GetJSON(ctx, u, &resp); err != nil {
-			if page == 1 {
-				return nil, err
-			}
-			break // a later page failing ends the walk with the postings gathered so far
+			return nil, fmt.Errorf("page %d: %w", page, err)
 		}
 		root, err := html.Parse(strings.NewReader(resp.Results))
 		if err != nil {
-			if page == 1 {
-				return nil, err
-			}
-			break
+			return nil, fmt.Errorf("page %d: %w", page, err)
+		}
+		section, declared, err := tbResults(root)
+		if err != nil {
+			return nil, fmt.Errorf("page %d: %w", page, err)
 		}
 		if page == 1 {
-			totalPages = tbTotalPages(root)
+			totalPages = declared
+		} else if declared != totalPages {
+			return nil, fmt.Errorf("page %d: page count changed from %d to %d", page, totalPages, declared)
 		}
 		added := 0
-		walk(root, func(n *html.Node) bool {
+		walk(section, func(n *html.Node) bool {
 			if n.Type != html.ElementNode || n.Data != "a" {
 				return true
 			}
@@ -160,26 +160,33 @@ func (s talentbrew) listing(ctx context.Context, base *url.URL) ([]tbPosting, er
 			added++
 			return true
 		})
-		if added == 0 {
-			break // an empty page ends the walk whatever the declared count says
+		if added == 0 && totalPages > 1 {
+			return nil, fmt.Errorf("page %d of %d: no new postings", page, totalPages)
 		}
 	}
 	return out, nil
 }
 
-// tbTotalPages reads data-total-pages off the results section, defaulting to 1 when absent.
-func tbTotalPages(root *html.Node) int {
-	pages := 1
+// tbResults requires the listing's pagination declaration. An arbitrary HTML response
+// or missing metadata is not a successfully completed one-page board.
+func tbResults(root *html.Node) (*html.Node, int, error) {
+	var section *html.Node
+	count := 0
 	walk(root, func(n *html.Node) bool {
 		if n.Type == html.ElementNode && n.Data == "section" && Attr(n, "id") == "search-results" {
-			if v, err := strconv.Atoi(Attr(n, "data-total-pages")); err == nil && v > 0 {
-				pages = v
-			}
-			return false
+			section = n
+			count++
 		}
 		return true
 	})
-	return pages
+	if count != 1 {
+		return nil, 0, fmt.Errorf("want one search-results section, got %d", count)
+	}
+	pages, err := strconv.Atoi(Attr(section, "data-total-pages"))
+	if err != nil || pages < 1 || pages > tbMaxPages {
+		return nil, 0, fmt.Errorf("invalid data-total-pages %q (want 1..%d)", Attr(section, "data-total-pages"), tbMaxPages)
+	}
+	return section, pages, nil
 }
 
 // tbLD is the JobPosting ld+json a TalentBrew posting page carries. jobLocation is an array.
