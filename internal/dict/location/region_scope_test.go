@@ -292,6 +292,41 @@ func TestRegionScopeFromDescription(t *testing.T) {
 			[]string{"ca"}, []string{"north_america"},
 		},
 		{
+			"inline emphasis after source newline",
+			"<p>We are hiring in Canada\n<strong>and</strong> the US.</p>",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"inline emphasis before source newline",
+			"<p>We are hiring in Canada <strong>and</strong>\nthe US.</p>",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"inline connector after paragraph boundary",
+			"<p>We are hiring in Canada</p>\n<p><strong>and</strong> the US.</p>",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"inline connector after nested block boundary",
+			"<div>We are hiring in Canada\n<div><strong>and</strong> the US.</div></div>",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"standalone list connector",
+			"We are hiring in Canada\nand\nthe US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"standalone inline list connector",
+			"<p>We are hiring in Canada\n<strong>and</strong>\nthe US.</p>",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"blank line before standalone connector ends restriction",
+			"We are hiring in Canada\n\nand\nthe US.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
 			"empty description",
 			"",
 			nil, nil,

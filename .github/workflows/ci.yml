@@ -88,20 +88,17 @@ jobs:
 
       # Résumé PDF text extraction shells out to poppler's pdftotext (prod ships it in
       # the image / on the host); install it so the extraction tests run instead of skip.
-      # Use Ubuntu's official HTTPS archive: Azure's HTTP mirror stalled across
-      # every test shard on 2026-11-11. Cover both direct/deb822 sources and the
-      # runner's mirror lists, keeping suites, components and signing keys intact.
-      # Each apt command remains bounded, with three attempts for transient faults.
+      # A stalled mirror must fail over before the outer timeout kills apt and
+      # restarts it on the same first mirror. Keep the runner's independent mirror
+      # list; bound apt's network waits as well as each command and all three attempts.
       - name: Install poppler-utils
         if: matrix.task != 'checks'
         timeout-minutes: 6
         run: |
-          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources /etc/apt/apt-mirrors*.txt; do
-            [ -f "$source" ] || continue
-            sudo sed -i -E \
-              -e 's@https?://azure\.archive\.ubuntu\.com/ubuntu/?@https://archive.ubuntu.com/ubuntu/@g' \
-              -e 's@http://((archive|security)\.ubuntu\.com/ubuntu/?)@https://\1@g' "$source"
-          done
+          printf '%s\n' 'Acquire::Retries "0";' \
+            'Acquire::http::Timeout "10";' 'Acquire::https::Timeout "10";' \
+            | sudo tee /etc/apt/apt.conf.d/zzz-freehire-ci
+          apt-config dump Acquire::Retries Acquire::http::Timeout Acquire::https::Timeout
           for attempt in 1 2 3; do
             if timeout 100 sudo apt-get update \
               && timeout 60 sudo apt-get install -y --no-install-recommends poppler-utils; then
@@ -1188,16 +1185,14 @@ jobs:
       # required check list names jobs. It runs wherever web-work does, which the `web` job
       # below reports on every PR. Needs no backend, no secrets and no network beyond the
       # Chromium download.
-      # Playwright's system dependencies use apt too; apply the same HTTPS mirror fix.
+      # Playwright invokes apt in a subprocess, so configure its network bounds too.
       - name: Install Chromium
         timeout-minutes: 10
         run: |
-          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources /etc/apt/apt-mirrors*.txt; do
-            [ -f "$source" ] || continue
-            sudo sed -i -E \
-              -e 's@https?://azure\.archive\.ubuntu\.com/ubuntu/?@https://archive.ubuntu.com/ubuntu/@g' \
-              -e 's@http://((archive|security)\.ubuntu\.com/ubuntu/?)@https://\1@g' "$source"
-          done
+          printf '%s\n' 'Acquire::Retries "0";' \
+            'Acquire::http::Timeout "10";' 'Acquire::https::Timeout "10";' \
+            | sudo tee /etc/apt/apt.conf.d/zzz-freehire-ci
+          apt-config dump Acquire::Retries Acquire::http::Timeout Acquire::https::Timeout
           pnpm exec playwright install --with-deps chromium
 
       - name: Accessibility check (axe-core)

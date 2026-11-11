@@ -97,11 +97,12 @@ func joinWrappedRegionLists(desc string) string {
 	previousNonblank := false
 	previousContinues := false
 	for i, line := range lines {
-		fields := strings.Fields(line)
+		// Inspect visible connector words, but keep the source markup in the output.
+		fields := strings.Fields(htmltext.ToTextFull(line))
 		nonblank := len(fields) > 0
 		if i > 0 {
 			continuation := previousNonblank && nonblank &&
-				(previousContinues || len(fields) > 1 && isRegionListConnector(fields[0]))
+				(previousContinues || isRegionListConnector(fields[0]))
 			if continuation {
 				joined.WriteByte(' ')
 			} else {
