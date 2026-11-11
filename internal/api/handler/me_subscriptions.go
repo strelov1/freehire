@@ -115,7 +115,7 @@ func (h *subscriptionHandlers) SetSubscriptionActive(ctx context.Context, req *a
 	if err != nil {
 		return nil, err
 	}
-	id, err := pathIDString(params.ID)
+	id, err := contractPathID(params.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (h *subscriptionHandlers) DeleteSubscription(ctx context.Context, params ap
 	if err != nil {
 		return err
 	}
-	id, err := pathIDString(params.ID)
+	id, err := contractPathID(params.ID)
 	if err != nil {
 		return err
 	}

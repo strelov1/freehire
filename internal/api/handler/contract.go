@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
@@ -285,4 +286,12 @@ func nilString(p *string) apigen.NilString {
 		return apigen.NilString{Null: true}
 	}
 	return apigen.NewNilString(*p)
+}
+
+// nilDateTime is an always-present nullable timestamp set from a domain pointer: null for nil.
+func nilDateTime(t *time.Time) apigen.NilDateTime {
+	if t == nil {
+		return apigen.NilDateTime{Null: true}
+	}
+	return apigen.NewNilDateTime(*t)
 }

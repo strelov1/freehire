@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
@@ -124,13 +123,6 @@ func profileOut(p userprofile.Profile, cv *resumeextract.Professional, loc *deri
 		out.Cv = raw
 	}
 	return out, nil
-}
-
-func nilDateTime(t *time.Time) apigen.NilDateTime {
-	if t == nil {
-		return apigen.NilDateTime{Null: true}
-	}
-	return apigen.NewNilDateTime(*t)
 }
 
 // structuredCV reads the caller's structured résumé as its contact-free projection, or
