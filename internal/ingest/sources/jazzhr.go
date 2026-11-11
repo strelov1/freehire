@@ -66,6 +66,7 @@ func (s jazzhr) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job,
 	var location string
 	if ldJobPosting(root, &p) {
 		location = p.JobLocation.Address.Location()
+		p.Description = sanitizeHTML(html.UnescapeString(p.Description))
 	} else {
 		title, place, description, ok := jazzhrDOMPosting(root, id)
 		if !ok {
@@ -80,7 +81,7 @@ func (s jazzhr) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job,
 		Title:       p.Title,
 		Company:     firstNonEmpty(p.HiringOrganization.Name, e.Company),
 		Location:    location,
-		Description: sanitizeHTML(html.UnescapeString(p.Description)),
+		Description: p.Description,
 		// JazzHR exposes no structured remote flag, so isRemote(location) is the only
 		// signal (never the title, which false-positives on "Remote …" role names).
 		Remote:   isRemote(location),

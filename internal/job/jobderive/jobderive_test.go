@@ -1067,6 +1067,13 @@ func TestDerive_HybridArrangementContradictsStructuredRemote(t *testing.T) {
 		"Title: Senior Software Developer. Charlotte/ Phoenix (Hybrid)",
 		"Job Location: Mumbai (Hybrid)",
 		"Location: Houston, TX (Hybrid)",
+		"Location: California (Hybrid)",
+		"This is hybrid work with two days in the office.",
+		"You must work in the office three days per week.",
+		"This remote role requires a hybrid schedule with two mandatory office days per week.",
+		"This position is remote, with a mandatory hybrid schedule.",
+		"Hybrid role with optional dental insurance.",
+		"Prior experience required\nLocation: Mumbai (Hybrid)",
 	} {
 		for _, signal := range []string{"remote", ""} {
 			got := Derive(Input{Title: "Developer", WorkMode: signal, Description: description})
@@ -1088,6 +1095,10 @@ func TestDerive_RemotePreservedForIncidentalHybridMentions(t *testing.T) {
 		"Hybrid working is optional.",
 		"Optional hybrid work arrangement is available.",
 		"Location: Mumbai (Hybrid) is optional.",
+		"You are not required to work in the office three days per week.",
+		"You must work in the office three days per week if you choose the optional hybrid arrangement.",
+		"Hybrid work with two days in the office is optional.",
+		"A hybrid role is optional.",
 		"Experience working in a hybrid working environment is preferred. This role is fully remote.",
 		"We support teams with a hybrid model. This role is fully remote.",
 		"Modalidad 100% remota; ayuda al teletrabajo.",

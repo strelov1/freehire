@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"errors"
+	"html"
 	"strings"
 	"testing"
 	"time"
@@ -233,5 +234,46 @@ func TestJazzHRDOMFallbackRefusesAnotherPostingAndIncompleteShell(t *testing.T) 
 				t.Errorf("got %+v, want unreadable marker", jobs)
 			}
 		})
+	}
+}
+
+func TestJazzHRDOMFallbackRequiresVisibleDescription(t *testing.T) {
+	for name, description := range map[string]string{
+		"markup only":       "<p></p><br>",
+		"nonbreaking space": "<p>&nbsp;</p>",
+		"whitespace only":   "<p> \t\n </p>",
+		"removed script":    "<p>&nbsp;</p><script>alert(1)</script>",
+	} {
+		t.Run(name, func(t *testing.T) {
+			body := `<body class="job-native123"><div class="job-header"><h2>Role</h2></div><div id="job-description">` + description + `</div></body>`
+			fake := (&routedHTTP{}).
+				route("/apply/native123/Role", body).
+				route("/apply", `<a href="/apply/native123/Role">Role</a>`)
+			jobs, err := NewJazzHR(fake).Fetch(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(readPostings(jobs)) != 0 || len(unreadableMarkers(jobs)) != 1 {
+				t.Fatalf("got %+v, want an unreadable marker for an empty visible description", jobs)
+			}
+		})
+	}
+}
+
+func TestJazzHRDOMFallbackPreservesEncodedLiteralAngleBrackets(t *testing.T) {
+	body := strings.Replace(jazzhrDOMDetail, "Serve food and support the dining team.", "Use &lt;T&gt; and &lt;script&gt; as literal text.", 1)
+	fake := (&routedHTTP{}).
+		route("/apply/native123/Role", body).
+		route("/apply", `<a href="/apply/native123/Role">Role</a>`)
+	jobs, err := NewJazzHR(fake).Fetch(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := readPostings(jobs)
+	if len(read) != 1 {
+		t.Fatalf("got %+v, want one readable posting", jobs)
+	}
+	if !strings.Contains(html.UnescapeString(read[0].Description), "Use <T> and <script> as literal text.") {
+		t.Fatalf("literal angle-bracket text was lost: %q", read[0].Description)
 	}
 }

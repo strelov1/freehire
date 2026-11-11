@@ -220,10 +220,11 @@ func run() int {
 	}()
 
 	// The candidate set is "every open job whose source is not a registered ATS
-	// provider" — the registry keys are the exclusion list, so a new adapter never
+	// provider" — the taxonomy keys are the exclusion list, so a new adapter never
 	// silently becomes a probe target.
 	registry := sources.All(sources.NewClient())
-	atsProviders := providerKeys(registry)
+	crawlProviders := providerKeys(registry)
+	atsProviders := classifiedProviderKeys()
 	// Guard: `source <> ALL('{}')` is vacuously TRUE in Postgres, so an empty
 	// exclusion list would select EVERY open job — including board jobs the ingest
 	// sweep owns. Refuse to run rather than risk URL-closing the whole catalogue.
@@ -260,12 +261,12 @@ func run() int {
 	// run without being named anywhere. That construction is why the list holds prefixes,
 	// and it is a complete answer for a member being ADDED — but not for one being ABSENT,
 	// which is what a missing crawl credential produces. Guard that case explicitly.
-	if missing := unmatchedPrefixes(atsProviders, expireDespiteRegisteredPrefixes); len(missing) > 0 {
+	if missing := unmatchedPrefixes(crawlProviders, expireDespiteRegisteredPrefixes); len(missing) > 0 {
 		log.Printf("liveness: %q matches no registered ATS provider — refusing to run (a source that cannot be age-expired would silently fall to the URL probe instead)",
 			strings.Join(missing, ", "))
 		return 1
 	}
-	expireDespiteRegistered := matchingProviders(atsProviders, expireDespiteRegisteredPrefixes)
+	expireDespiteRegistered := matchingProviders(crawlProviders, expireDespiteRegisteredPrefixes)
 
 	// Appended AFTER the guard above so the empty-ATS-registry safeguard still keys
 	// off atsProviders alone. See unsignalledSources for why these are excluded.
@@ -556,8 +557,12 @@ func applyHimalayasVerdicts(ctx context.Context, client *http.Client, queries *d
 	})
 }
 
-// providerKeys returns the registered ATS provider keys — the sources the ingest
-// sweep owns and the liveness probe must exclude.
+// Classification must not depend on whether this host can authenticate a crawl.
+func classifiedProviderKeys() []string {
+	return providerKeys(sources.Taxonomy())
+}
+
+// providerKeys returns the keys of a crawl or classification registry.
 func providerKeys(registry map[string]sources.Source) []string {
 	keys := make([]string, 0, len(registry))
 	for k := range registry {

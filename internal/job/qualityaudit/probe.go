@@ -15,7 +15,8 @@ func probeURL(p Posting) string {
 		return p.URL
 	}
 	id := strings.TrimPrefix(u.Path, "/job/")
-	if id == "" || id != p.ExternalID || strings.Contains(id, "/") {
+	nativeID := p.ExternalID[strings.LastIndex(p.ExternalID, ":")+1:]
+	if id == "" || id != nativeID || strings.Contains(id, "/") {
 		return p.URL
 	}
 	u.Path = "/api/apply/v2/jobposting/" + id

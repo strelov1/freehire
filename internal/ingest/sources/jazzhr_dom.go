@@ -1,6 +1,10 @@
 package sources
 
-import "golang.org/x/net/html"
+import (
+	"strings"
+
+	"golang.org/x/net/html"
+)
 
 // JazzHR omits JobPosting JSON-LD on some live pages while retaining the full
 // server-rendered posting. Bind the fallback to the requested native identity;
@@ -21,7 +25,8 @@ func jazzhrDOMPosting(root *html.Node, id string) (title, location, description 
 	}
 	title = textContent(heading)
 	description = sanitizeHTML(innerHTML(desc))
-	if title == "" || description == "" {
+	visible, err := html.Parse(strings.NewReader(description))
+	if title == "" || err != nil || textContent(visible) == "" {
 		return "", "", "", false
 	}
 	walk(header, func(n *html.Node) bool {

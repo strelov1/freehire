@@ -194,3 +194,32 @@ func TestMatchingProvidersEmptyOnNoMatch(t *testing.T) {
 		t.Fatalf("matchingProviders() = %v, want empty", got)
 	}
 }
+
+func TestProviderClassificationDoesNotRequireReedCredential(t *testing.T) {
+	t.Setenv("REED_API_KEY", "")
+	// Keep the independent age-expiration startup guards satisfied.
+	t.Setenv("WHATJOBS_PUBLISHER_IDS", "us:test-publisher")
+	t.Setenv("ADZUNA_APP_ID", "test-app")
+	t.Setenv("ADZUNA_APP_KEY", "test-key")
+	live := providerKeys(sources.All(sources.NewClient()))
+	if slices.Contains(live, "reed") {
+		t.Fatal("test setup unexpectedly registers Reed for crawling")
+	}
+	if missing := unmatchedPrefixes(live, expireDespiteRegisteredPrefixes); len(missing) > 0 {
+		t.Fatalf("independent age guard fails: %v", missing)
+	}
+	classified := classifiedProviderKeys()
+	for _, source := range unsignalledSources {
+		if slices.Contains(classified, source) {
+			t.Fatalf("unsignalled age source %s is registered", source)
+		}
+	}
+	for _, source := range probeDespiteRegistered {
+		if !slices.Contains(classified, source) {
+			t.Errorf("startup probe guard rejects %s without a crawl credential", source)
+		}
+	}
+	if !slices.Equal(filterSources(probeDespiteRegistered, "instaffo"), []string{"instaffo"}) {
+		t.Fatal("unrelated source filter was lost")
+	}
+}

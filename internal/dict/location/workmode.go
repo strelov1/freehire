@@ -2,6 +2,7 @@ package location
 
 import (
 	"html"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -190,7 +191,7 @@ func phraseMatches(text, p string) bool {
 		perk := (guarded && travelPerkQualified(text, start, end)) ||
 			(allowancePhrases[p] && opensWithNoun(text[end:], allowanceUnits)) ||
 			((p == "work from home" || p == "work-from-home") &&
-				(strings.HasPrefix(text[end:], " options available") || strings.HasPrefix(text[end:], " up to 2 days/week")))
+				(strings.HasPrefix(text[end:], " options available") || boundedHomeWeek.MatchString(text[end:])))
 		if !perk && !opensWithNoun(text[end:], collectiveNouns) {
 			return true
 		}
@@ -198,6 +199,8 @@ func phraseMatches(text, p string) bool {
 		rest = text[offset:]
 	}
 }
+
+var boundedHomeWeek = regexp.MustCompile(`^ up to (?:[1-4]|one|two|three|four) days?(?:\s*/\s*| per | a )week\b`)
 
 // travelPerkPhrases are the remote-family phrases that are ALSO a common idiom for a
 // bounded travel/PTO allowance ("the freedom to work from anywhere in the world for up
