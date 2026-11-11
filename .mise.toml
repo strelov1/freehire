@@ -6,7 +6,7 @@
 # database: see scripts/dev-env.sh for why each worktree gets its own database and port.
 
 [tools]
-go = "1.27.3"
+go = "1.27.4"
 node = "24"
 pnpm = "11.7.0"
 golangci-lint = "2.15.0"
