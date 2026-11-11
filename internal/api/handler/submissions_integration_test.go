@@ -67,11 +67,11 @@ func TestSubmissionsEndToEnd(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
-	app.Post("/api/v1/submissions", keyAuth, sh.CreateSubmission)
-	app.Get("/api/v1/me/submissions", keyAuth, sh.ListMySubmissions)
-	app.Get("/api/v1/submissions", keyAuth, requireMod, sh.ListPendingSubmissions)
-	app.Post("/api/v1/submissions/:id/approve", keyAuth, requireMod, sh.ApproveSubmission)
-	app.Post("/api/v1/submissions/:id/reject", keyAuth, requireMod, sh.RejectSubmission)
+	app.Post("/api/v1/submissions", keyAuth, submissionsContract(sh))
+	app.Get("/api/v1/me/submissions", keyAuth, submissionsContract(sh))
+	app.Get("/api/v1/submissions", keyAuth, requireMod, submissionsContract(sh))
+	app.Post("/api/v1/submissions/:id/approve", keyAuth, requireMod, submissionsContract(sh))
+	app.Post("/api/v1/submissions/:id/reject", keyAuth, requireMod, submissionsContract(sh))
 	app.Get("/api/v1/auth/me", keyAuth, h.Me)
 
 	req := func(method, path, cookie, body string) *http.Request {
@@ -396,8 +396,8 @@ func TestSubmissionStructuredFacetsEndToEnd(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
-	app.Post("/api/v1/submissions", keyAuth, sh.CreateSubmission)
-	app.Post("/api/v1/submissions/:id/approve", keyAuth, requireMod, sh.ApproveSubmission)
+	app.Post("/api/v1/submissions", keyAuth, submissionsContract(sh))
+	app.Post("/api/v1/submissions/:id/approve", keyAuth, requireMod, submissionsContract(sh))
 
 	req := func(method, path, cookie, body string) *http.Request {
 		var r *http.Request
@@ -528,8 +528,8 @@ func TestSubmissionDomainBlocklistEndToEnd(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
-	app.Post("/api/v1/submissions", keyAuth, sh.CreateSubmission)
-	app.Post("/api/v1/submissions/:id/reject", keyAuth, requireMod, sh.RejectSubmission)
+	app.Post("/api/v1/submissions", keyAuth, submissionsContract(sh))
+	app.Post("/api/v1/submissions/:id/reject", keyAuth, requireMod, submissionsContract(sh))
 
 	req := func(method, path, cookie, body string) *http.Request {
 		var r *http.Request
@@ -745,7 +745,7 @@ func TestSubmissionsPrefillEndToEnd(t *testing.T) {
 	sh := newSubmissionHandlers(queries, pool, mod, importer, sources.PostingURLResolver{})
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
-	app.Post("/api/v1/submissions/prefill", keyAuth, sh.PrefillSubmission)
+	app.Post("/api/v1/submissions/prefill", keyAuth, submissionsContract(sh))
 
 	req := func(cookie, body string) *http.Request {
 		r := httptest.NewRequest(fiber.MethodPost, "/api/v1/submissions/prefill", bytes.NewReader([]byte(body)))

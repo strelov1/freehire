@@ -129,10 +129,10 @@ func TestInsightsEndpoints(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/roles", h.InsightsRoles)
-	app.Get("/api/v1/insights/skills", h.InsightsSkills)
-	app.Get("/api/v1/insights/velocity", h.InsightsVelocity)
-	app.Get("/api/v1/insights/salary", h.InsightsSalary)
+	app.Get("/api/v1/insights/roles", statsContract(h))
+	app.Get("/api/v1/insights/skills", statsContract(h))
+	app.Get("/api/v1/insights/velocity", statsContract(h))
+	app.Get("/api/v1/insights/salary", statsContract(h))
 
 	get := func(t *testing.T, path string) (map[string]any, string, int) {
 		t.Helper()
@@ -315,7 +315,7 @@ func TestInsightsRoleSkillsEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/roles", h.InsightsRoles)
+	app.Get("/api/v1/insights/roles", statsContract(h))
 
 	get := func(t *testing.T, path string) (map[string]any, string, int) {
 		t.Helper()
@@ -474,7 +474,7 @@ func TestInsightsRoleCoverage(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/roles", auth.OptionalAuth(iss, testVersions, apiKeys{q}), h.InsightsRoles)
+	app.Get("/api/v1/insights/roles", auth.OptionalAuth(iss, testVersions, apiKeys{q}), statsContract(h))
 
 	const path = "/api/v1/insights/roles?category=backend&seniority=senior"
 	// as issues the request with an optional session cookie; an empty token is the

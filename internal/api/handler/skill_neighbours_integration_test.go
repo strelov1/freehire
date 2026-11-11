@@ -25,8 +25,12 @@ func TestSkillNeighboursEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/stats/skills/:slug/neighbours", h.SkillNeighbours)
+	app.Get("/api/v1/stats/skills/:slug/neighbours", statsContract(h))
 
+	type skillNeighbour struct {
+		Skill string `json:"skill"`
+		Count int64  `json:"count"`
+	}
 	type envelope struct {
 		Data []skillNeighbour `json:"data"`
 		Meta struct {

@@ -88,7 +88,7 @@ func TestJobActivityRollupAndEndpoint(t *testing.T) {
 	// --- Endpoint: dense daily series -----------------------------------------
 	h := &statsHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/stats/jobs-activity", h.JobsActivity)
+	app.Get("/api/v1/stats/jobs-activity", statsContract(h))
 
 	type point struct {
 		Period  string `json:"period"`

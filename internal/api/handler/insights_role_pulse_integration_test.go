@@ -63,7 +63,7 @@ func TestInsightsRolePulseEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/role-pulse", h.InsightsRolePulse)
+	app.Get("/api/v1/insights/role-pulse", statsContract(h))
 
 	t.Run("known category", func(t *testing.T) {
 		out, raw, code := getInsights(t, ctx, app, "/api/v1/insights/role-pulse?category=backend")

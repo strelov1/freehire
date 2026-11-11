@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/jobmatch"
 	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -42,57 +44,6 @@ const (
 	// not dominate the ranking. Callers can override with min_open.
 	companiesDefaultMinOpen = 5
 )
-
-// companyInsight is one ranked company on the hiring-signal leaderboard.
-type companyInsight struct {
-	CompanySlug string `json:"company_slug"`
-	CompanyName string `json:"company_name"`
-	OpenNow     int32  `json:"open_now"`
-	OpenPrev30d int32  `json:"open_prev_30d"`
-	Growth30d   int32  `json:"growth_30d"`
-}
-
-// roleInsight is one ranked role on the wire. The last two fields are populated only
-// when the caller named a SINGLE role (both category and seniority); in the ranked-list
-// answer they are absent rather than empty, so a client can tell "this answer does not
-// carry a distribution" apart from "this role's distribution is empty".
-//
-// Both are pointers for that reason. `omitempty` alone could not express it: it omits an
-// empty slice as readily as a nil one, and a role whose every skill fell below the floor
-// must still answer with an empty `skills` array rather than with no array at all.
-type roleInsight struct {
-	Category   string              `json:"category"`
-	Seniority  string              `json:"seniority"`
-	OpenCount  int32               `json:"open_count"`
-	Growth     int32               `json:"growth"`
-	SampleSize *int32              `json:"sample_size,omitempty"`
-	Skills     *[]roleSkillInsight `json:"skills,omitempty"`
-	// Coverage is the signed-in caller's own standing against those skills. Absent for
-	// an anonymous caller; present and reporting zero held for a signed-in one with no
-	// skills, so the two cases are distinguishable.
-	Coverage *jobmatch.JobMatch `json:"coverage,omitempty"`
-}
-
-// roleSkillInsight is one skill inside a single role's distribution.
-//
-// Share divides by the role's sample_size — its open postings carrying at least one
-// tagged skill — NEVER by its open_count. Measured 2026-09-18, 11% of the eligible
-// postings carry no tagged skill, so dividing by the open count would fold our own
-// tagging gap into every published share; and because that gap differs per role, two
-// roles' shares would stop being comparable, which is the one comparison the figure
-// exists to support.
-type roleSkillInsight struct {
-	Skill     string  `json:"skill"`
-	OpenCount int32   `json:"open_count"`
-	Share     float64 `json:"share"`
-}
-
-// skillInsight is one ranked skill on the wire.
-type skillInsight struct {
-	Skill     string `json:"skill"`
-	OpenCount int32  `json:"open_count"`
-	Growth    int32  `json:"growth"`
-}
 
 // salaryBand is one (currency, period) salary distribution on the wire.
 type salaryBand struct {
@@ -240,56 +191,59 @@ func isAlpha(s string) bool {
 
 // InsightsRoles serves GET /api/v1/insights/roles: roles (category × seniority) ranked
 // by open-count or growth within an optional country slice. Aggregate-only.
-func (h *statsHandlers) InsightsRoles(c *fiber.Ctx) error {
-	country, err := parseCountry(c.Query("country"))
+func (h *statsHandlers) InsightsRoles(ctx context.Context, params apigen.InsightsRolesParams) (*apigen.RolesAnswerHeaders, error) {
+	country, err := parseCountry(params.Country.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	sort, err := parseInsightsSort(c.Query("sort"))
+	sort, err := parseInsightsSort(params.Sort.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	limit, err := parseInsightsLimit(c.Query("limit"))
+	limit, err := parseInsightsLimit(params.Limit.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	category, err := parseCategory(c.Query("category"))
+	category, err := parseCategory(params.Category.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	seniority, err := parseSeniority(c.Query("seniority"))
+	seniority, err := parseSeniority(params.Seniority.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	// A seniority spanning every category is not a role — "senior" alone names no
 	// population whose skill distribution means anything — so it is refused rather
 	// than silently answered with a ranking.
 	if seniority != "" && category == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "seniority requires category")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "seniority requires category")
 	}
 
-	rows, err := h.queries.ListInsightsRoles(c.Context(), db.ListInsightsRolesParams{
+	rows, err := h.queries.ListInsightsRoles(ctx, db.ListInsightsRolesParams{
 		Country: country, Category: category, Seniority: seniority, Sort: sort, Lim: limit,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	data := make([]roleInsight, len(rows))
+	data := make([]apigen.RoleInsight, len(rows))
 	for i, r := range rows {
-		data[i] = roleInsight{Category: r.Category, Seniority: r.Seniority, OpenCount: r.OpenCount, Growth: r.Growth}
+		data[i] = apigen.RoleInsight{Category: r.Category, Seniority: r.Seniority, OpenCount: int64(r.OpenCount), Growth: int64(r.Growth)}
 	}
 
-	meta := fiber.Map{"country": country, "category": category, "seniority": seniority, "sort": sort, "limit": limit}
+	out := &apigen.RolesAnswerHeaders{Response: apigen.RolesAnswer{
+		Data: data,
+		Meta: apigen.RolesMeta{Country: country, Category: category, Seniority: seniority, Sort: sort, Limit: int64(limit)},
+	}}
 	if seniority != "" {
 		// insights_role_stats is keyed by (category, seniority, country), so a named role
 		// matches at most one row. The loop is over "however many came back" rather than
 		// an assumption about that being one.
 		var carriesCoverage bool
 		for i := range data {
-			if err := h.attachRoleSkills(c, &data[i]); err != nil {
-				return err
+			if err := h.attachRoleSkills(ctx, &data[i]); err != nil {
+				return nil, err
 			}
-			if h.attachRoleCoverage(c, &data[i]) {
+			if h.attachRoleCoverage(ctx, &data[i]) {
 				carriesCoverage = true
 			}
 		}
@@ -303,22 +257,22 @@ func (h *statsHandlers) InsightsRoles(c *fiber.Ctx) error {
 		// skipped (a failed profile read), where re-deriving from the session would mark
 		// a response private that holds nothing private.
 		if carriesCoverage {
-			c.Set(fiber.HeaderCacheControl, "private, no-store")
+			out.CacheControl = apigen.NewOptString("private, no-store")
 		}
 		// The distribution is country-agnostic by design (the rollup does not cross a
 		// third axis), while open_count and growth above ARE country-scoped. Saying so
 		// is the difference between a caller reading a national figure and assuming one.
-		meta["skills_geography_scoped"] = false
+		out.Response.Meta.SkillsGeographyScoped = apigen.NewOptBool(false)
 	}
-	return c.JSON(fiber.Map{"data": data, "meta": meta})
+	return out, nil
 }
 
 // attachRoleSkills fills one role's distribution and the denominator its shares divide
 // by. A role with no sample row has no skill-bearing postings, which is a real answer —
 // an empty distribution over a sample of zero — not an error, so the missing row is read
 // as zero rather than propagated.
-func (h *statsHandlers) attachRoleSkills(c *fiber.Ctx, role *roleInsight) error {
-	sample, err := h.queries.GetInsightsRoleSkillSample(c.Context(), db.GetInsightsRoleSkillSampleParams{
+func (h *statsHandlers) attachRoleSkills(ctx context.Context, role *apigen.RoleInsight) error {
+	sample, err := h.queries.GetInsightsRoleSkillSample(ctx, db.GetInsightsRoleSkillSampleParams{
 		Category: role.Category, Seniority: role.Seniority,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -327,18 +281,18 @@ func (h *statsHandlers) attachRoleSkills(c *fiber.Ctx, role *roleInsight) error 
 		return err
 	}
 
-	rows, err := h.queries.ListInsightsRoleSkills(c.Context(), db.ListInsightsRoleSkillsParams{
+	rows, err := h.queries.ListInsightsRoleSkills(ctx, db.ListInsightsRoleSkillsParams{
 		Category: role.Category, Seniority: role.Seniority, Lim: roleSkillTopN,
 	})
 	if err != nil {
 		return err
 	}
-	skills := make([]roleSkillInsight, len(rows))
+	skills := make([]apigen.RoleSkill, len(rows))
 	for i, r := range rows {
-		skills[i] = roleSkillInsight{Skill: r.Skill, OpenCount: r.OpenCount, Share: skillShare(r.OpenCount, sample)}
+		skills[i] = apigen.RoleSkill{Skill: r.Skill, OpenCount: int64(r.OpenCount), Share: skillShare(r.OpenCount, sample)}
 	}
-	role.SampleSize = &sample
-	role.Skills = &skills
+	role.SampleSize = apigen.NewOptInt64(int64(sample))
+	role.Skills = skills
 	return nil
 }
 
@@ -373,12 +327,12 @@ func skillShare(count, sample int32) float64 {
 // Returns whether a section was attached, which is what the caller's Cache-Control
 // decision reads — so the header describes the body rather than re-deriving the same
 // answer from the session and disagreeing with it on the skipped path.
-func (h *statsHandlers) attachRoleCoverage(c *fiber.Ctx, role *roleInsight) bool {
-	userID, ok := auth.UserID(c)
+func (h *statsHandlers) attachRoleCoverage(ctx context.Context, role *apigen.RoleInsight) bool {
+	userID, ok := auth.UserIDFromContext(ctx)
 	if !ok || role.Skills == nil {
 		return false
 	}
-	profile, err := h.queries.GetUserProfile(c.Context(), userID)
+	profile, err := h.queries.GetUserProfile(ctx, userID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return false
 	}
@@ -386,50 +340,50 @@ func (h *statsHandlers) attachRoleCoverage(c *fiber.Ctx, role *roleInsight) bool
 	// section — reporting zero held. An ABSENT section means "not signed in", and a
 	// client cannot tell that apart from "signed in and holding nothing" if the two
 	// share a representation.
-	ranked := make([]string, len(*role.Skills))
-	for i, s := range *role.Skills {
+	ranked := make([]string, len(role.Skills))
+	for i, s := range role.Skills {
 		ranked[i] = s.Skill
 	}
-	m := jobmatch.Compute(ranked, profile.Skills)
-	role.Coverage = &m
+	raw, err := json.Marshal(jobmatch.Compute(ranked, profile.Skills))
+	if err != nil {
+		return false
+	}
+	role.Coverage = raw
 	return true
 }
 
 // InsightsCompanies serves GET /api/v1/insights/companies: the hiring-signal
 // leaderboard — companies ranked by 30-day growth (ramping/freezing) or open-count,
 // from the precomputed insights_company_growth scalar. Aggregate-only.
-func (h *statsHandlers) InsightsCompanies(c *fiber.Ctx) error {
-	sort, err := parseCompaniesSort(c.Query("sort"))
+func (h *statsHandlers) InsightsCompanies(ctx context.Context, params apigen.InsightsCompaniesParams) (*apigen.CompaniesAnswer, error) {
+	sort, err := parseCompaniesSort(params.Sort.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	minOpen, err := parseMinOpen(c.Query("min_open"))
+	minOpen, err := parseMinOpen(params.MinOpen.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	limit, err := parseInsightsLimit(c.Query("limit"))
+	limit, err := parseInsightsLimit(params.Limit.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	rows, err := h.queries.ListInsightsCompanies(c.Context(), db.ListInsightsCompaniesParams{MinOpen: minOpen, Sort: sort, Lim: limit})
+	rows, err := h.queries.ListInsightsCompanies(ctx, db.ListInsightsCompaniesParams{MinOpen: minOpen, Sort: sort, Lim: limit})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	data := make([]companyInsight, len(rows))
+	data := make([]apigen.CompanyInsight, len(rows))
 	for i, r := range rows {
-		data[i] = companyInsight{
+		data[i] = apigen.CompanyInsight{
 			CompanySlug: r.CompanySlug,
 			CompanyName: r.CompanyName,
-			OpenNow:     r.OpenCount,
-			OpenPrev30d: r.OpenCountPrev,
-			Growth30d:   r.Growth,
+			OpenNow:     int64(r.OpenCount),
+			OpenPrev30d: int64(r.OpenCountPrev),
+			Growth30d:   int64(r.Growth),
 		}
 	}
-	return c.JSON(fiber.Map{
-		"data": data,
-		"meta": fiber.Map{"sort": sort, "min_open": minOpen, "limit": limit},
-	})
+	return &apigen.CompaniesAnswer{Data: data, Meta: apigen.CompaniesMeta{Sort: sort, MinOpen: int64(minOpen), Limit: int64(limit)}}, nil
 }
 
 // roleCountriesDefaultColumns / roleCountriesMaxColumns bound how many countries the
@@ -439,16 +393,6 @@ const (
 	roleCountriesDefaultColumns = 10
 	roleCountriesMaxColumns     = 25
 )
-
-// roleCountryCell is one cell of the role × country grid. Country is "" for the
-// all-countries column. Raw counts, not a percentage: the floor below which growth is
-// noise is a presentation choice, so each consumer applies its own.
-type roleCountryCell struct {
-	Category      string `json:"category"`
-	Country       string `json:"country"`
-	OpenCount     int32  `json:"open_count"`
-	OpenCountPrev int32  `json:"open_count_prev"`
-}
 
 // parseRoleCountriesColumns resolves the grid's column count: empty → the default,
 // else a positive integer at most roleCountriesMaxColumns.
@@ -467,172 +411,143 @@ func parseRoleCountriesColumns(s string) (int32, error) {
 // grid on /insights, from insights_role_country_stats. The endpoint, not the caller,
 // picks the columns — the countries with the most open postings — and returns their
 // cells plus the all-countries column. Aggregate-only.
-func (h *statsHandlers) InsightsRoleCountries(c *fiber.Ctx) error {
-	columns, err := parseRoleCountriesColumns(c.Query("countries"))
+func (h *statsHandlers) InsightsRoleCountries(ctx context.Context, params apigen.InsightsRoleCountriesParams) (*apigen.RoleCountriesAnswer, error) {
+	columns, err := parseRoleCountriesColumns(params.Countries.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	countries, err := h.queries.ListInsightsRoleCountryColumns(c.Context(), columns)
+	countries, err := h.queries.ListInsightsRoleCountryColumns(ctx, columns)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	rows, err := h.queries.ListInsightsRoleCountryCells(c.Context(), countries)
+	rows, err := h.queries.ListInsightsRoleCountryCells(ctx, countries)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	data := make([]roleCountryCell, len(rows))
+	data := make([]apigen.RoleCountryCell, len(rows))
 	for i, r := range rows {
-		data[i] = roleCountryCell{Category: r.Category, Country: r.Country, OpenCount: r.OpenCount, OpenCountPrev: r.OpenCountPrev}
+		data[i] = apigen.RoleCountryCell{Category: r.Category, Country: r.Country, OpenCount: int64(r.OpenCount), OpenCountPrev: int64(r.OpenCountPrev)}
 	}
 	if countries == nil {
 		countries = []string{} // an empty rollup answers [], not null
 	}
-	return c.JSON(fiber.Map{"data": data, "meta": fiber.Map{"countries": countries}})
-}
-
-// rolePulse is one category's market pulse on the wire: raw figures for the last 30 days
-// and (except inflow) the 30 before, never a ratio or a verdict. Like the role × country
-// cells, the floor below which a figure is noise is a presentation choice, so the page
-// applies its own.
-type rolePulse struct {
-	Category    string `json:"category"`
-	OpenCount   int32  `json:"open_count"`
-	Competition struct {
-		Views            int64   `json:"views"`
-		ViewsPrev        int64   `json:"views_prev"`
-		ExposureDays     float64 `json:"exposure_days"`
-		ExposureDaysPrev float64 `json:"exposure_days_prev"`
-		// The last day the views cover; both view windows end on it. Null when the
-		// rollup holds no row for the category.
-		ViewsThrough *string `json:"views_through"`
-	} `json:"competition"`
-	TimeToClose struct {
-		Closed     int64 `json:"closed"`
-		ClosedPrev int64 `json:"closed_prev"`
-		// Null, not zero, when the window holds no qualifying close.
-		MedianDays     *float32 `json:"median_days"`
-		MedianDaysPrev *float32 `json:"median_days_prev"`
-	} `json:"time_to_close"`
-	// Inflow has no earlier window: the comparison measured our coverage growth more
-	// than the market (see RebuildInsightsRolePulse).
-	Inflow struct {
-		Count int64 `json:"count"`
-	} `json:"inflow"`
+	return &apigen.RoleCountriesAnswer{Data: data, Meta: apigen.RoleCountriesMeta{Countries: countries}}, nil
 }
 
 // InsightsRolePulse serves GET /api/v1/insights/role-pulse: one category's competition
 // (page views over the posting-days it was open), time to close and inflow, plus its
 // open count across every seniority. category is required — the pulse is per category.
 // Aggregate-only.
-func (h *statsHandlers) InsightsRolePulse(c *fiber.Ctx) error {
-	category, err := parseCategory(c.Query("category"))
+func (h *statsHandlers) InsightsRolePulse(ctx context.Context, params apigen.InsightsRolePulseParams) (*apigen.RolePulseAnswer, error) {
+	category, err := parseCategory(params.Category.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	if category == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "category is required")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "category is required")
 	}
 
-	out := rolePulse{Category: category}
-	open, err := h.queries.GetInsightsRoleOpenCount(c.Context(), category)
+	// The two nullable medians and the views date answer null until the rollup has a row.
+	out := apigen.RolePulse{
+		Category:    category,
+		Competition: apigen.PulseCompetition{ViewsThrough: apigen.NilString{Null: true}},
+		TimeToClose: apigen.PulseTimeToClose{MedianDays: apigen.NilFloat32{Null: true}, MedianDaysPrev: apigen.NilFloat32{Null: true}},
+	}
+	open, err := h.queries.GetInsightsRoleOpenCount(ctx, category)
 	switch {
 	case err == nil:
-		out.OpenCount = open
+		out.OpenCount = int64(open)
 	case !errors.Is(err, pgx.ErrNoRows):
-		return err
+		return nil, err
 	}
 
-	p, err := h.queries.GetInsightsRolePulse(c.Context(), category)
+	p, err := h.queries.GetInsightsRolePulse(ctx, category)
 	switch {
 	case err == nil:
 		out.Competition.Views, out.Competition.ViewsPrev = p.Views, p.ViewsPrev
 		out.Competition.ExposureDays, out.Competition.ExposureDaysPrev = p.ExposureDays, p.ExposureDaysPrev
 		if p.ViewsThrough.Valid {
-			d := p.ViewsThrough.Time.Format(time.DateOnly)
-			out.Competition.ViewsThrough = &d
+			out.Competition.ViewsThrough = apigen.NewNilString(p.ViewsThrough.Time.Format(time.DateOnly))
 		}
 		out.TimeToClose.Closed, out.TimeToClose.ClosedPrev = p.Closed, p.ClosedPrev
-		out.TimeToClose.MedianDays = float4Ptr(p.MedianCloseDays)
-		out.TimeToClose.MedianDaysPrev = float4Ptr(p.MedianCloseDaysPrev)
+		out.TimeToClose.MedianDays = nilFloat32(p.MedianCloseDays)
+		out.TimeToClose.MedianDaysPrev = nilFloat32(p.MedianCloseDaysPrev)
 		out.Inflow.Count = p.Inflow
 	case !errors.Is(err, pgx.ErrNoRows):
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": out, "meta": fiber.Map{"category": category}})
+	return &apigen.RolePulseAnswer{Data: out, Meta: apigen.CategoryMeta{Category: category}}, nil
 }
 
-// float4Ptr maps a nullable real to a JSON number or null.
-func float4Ptr(v pgtype.Float4) *float32 {
+// nilFloat32 maps a nullable real to a JSON number or null.
+func nilFloat32(v pgtype.Float4) apigen.NilFloat32 {
 	if !v.Valid {
-		return nil
+		return apigen.NilFloat32{Null: true}
 	}
-	return &v.Float32
+	return apigen.NewNilFloat32(v.Float32)
 }
 
 // InsightsSkills serves GET /api/v1/insights/skills: skills ranked by open-count or
 // growth, optionally scoped by category or country (not both — the rollup is
 // single-dimensional). Aggregate-only.
-func (h *statsHandlers) InsightsSkills(c *fiber.Ctx) error {
-	category, err := parseCategory(c.Query("category"))
+func (h *statsHandlers) InsightsSkills(ctx context.Context, params apigen.InsightsSkillsParams) (*apigen.SkillsAnswer, error) {
+	category, err := parseCategory(params.Category.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	country, err := parseCountry(c.Query("country"))
+	country, err := parseCountry(params.Country.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	if category != "" && country != "" {
-		return fiber.NewError(fiber.StatusBadRequest, "skill insights accept either category or country, not both")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "skill insights accept either category or country, not both")
 	}
-	sort, err := parseInsightsSort(c.Query("sort"))
+	sort, err := parseInsightsSort(params.Sort.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	limit, err := parseInsightsLimit(c.Query("limit"))
+	limit, err := parseInsightsLimit(params.Limit.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	rows, err := h.queries.ListInsightsSkills(c.Context(), db.ListInsightsSkillsParams{Category: category, Country: country, Sort: sort, Lim: limit})
+	rows, err := h.queries.ListInsightsSkills(ctx, db.ListInsightsSkillsParams{Category: category, Country: country, Sort: sort, Lim: limit})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	data := make([]skillInsight, len(rows))
+	data := make([]apigen.SkillInsight, len(rows))
 	for i, r := range rows {
-		data[i] = skillInsight{Skill: r.Skill, OpenCount: r.OpenCount, Growth: r.Growth}
+		data[i] = apigen.SkillInsight{Skill: r.Skill, OpenCount: int64(r.OpenCount), Growth: int64(r.Growth)}
 	}
-	return c.JSON(fiber.Map{
-		"data": data,
-		"meta": fiber.Map{"category": category, "country": country, "sort": sort, "limit": limit},
-	})
+	return &apigen.SkillsAnswer{Data: data, Meta: apigen.SkillsMeta{Category: category, Country: country, Sort: sort, Limit: int64(limit)}}, nil
 }
 
 // InsightsVelocity serves GET /api/v1/insights/velocity: a dense added/removed series
 // over a validated window and granularity, optionally scoped to one facet. Reuses the
 // stats window parser so defaulting and range bounds match /stats/jobs-activity.
-func (h *statsHandlers) InsightsVelocity(c *fiber.Ctx) error {
-	q, err := parseActivityQuery(c.Query("granularity"), c.Query("from"), c.Query("to"), time.Now().UTC())
+func (h *statsHandlers) InsightsVelocity(ctx context.Context, params apigen.InsightsVelocityParams) (*apigen.VelocityAnswer, error) {
+	q, err := parseActivityQuery(params.Granularity.Value, params.From.Value, params.To.Value, time.Now().UTC())
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	category, err := parseCategory(c.Query("category"))
+	category, err := parseCategory(params.Category.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	seniority, err := parseSeniority(c.Query("seniority"))
+	seniority, err := parseSeniority(params.Seniority.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	country, err := parseCountry(c.Query("country"))
+	country, err := parseCountry(params.Country.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	facetKind, facetValue, err := resolveVelocityFacet(category, seniority, country)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	rows, err := h.queries.ListInsightsVelocity(c.Context(), db.ListInsightsVelocityParams{
+	rows, err := h.queries.ListInsightsVelocity(ctx, db.ListInsightsVelocityParams{
 		Unit:       q.Granularity,
 		FromTs:     pgtype.Timestamp{Time: q.From, Valid: true},
 		ToTs:       pgtype.Timestamp{Time: q.To, Valid: true},
@@ -640,86 +555,80 @@ func (h *statsHandlers) InsightsVelocity(c *fiber.Ctx) error {
 		FacetValue: facetValue,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	points := make([]activityPoint, len(rows))
+	points := make([]apigen.ActivityPoint, len(rows))
 	for i, r := range rows {
-		points[i] = activityPoint{Period: r.Period.Time.Format(dateLayout), Added: r.Added, Removed: r.Removed}
+		points[i] = apigen.ActivityPoint{Period: r.Period.Time.Format(dateLayout), Added: int64(r.Added), Removed: int64(r.Removed)}
 	}
-	return c.JSON(fiber.Map{
-		"data": points,
-		"meta": fiber.Map{
-			"granularity": q.Granularity,
-			"from":        q.From.Format(dateLayout),
-			"to":          q.To.Format(dateLayout),
-			"facet_kind":  facetKind,
-			"facet_value": facetValue,
+	return &apigen.VelocityAnswer{
+		Data: points,
+		Meta: apigen.VelocityMeta{
+			Granularity: q.Granularity,
+			From:        q.From.Format(dateLayout),
+			To:          q.To.Format(dateLayout),
+			FacetKind:   facetKind,
+			FacetValue:  facetValue,
 		},
-	})
-}
-
-// salaryMonth is one month of a category's salary history on the wire.
-type salaryMonth struct {
-	Currency   string `json:"currency"`
-	Period     string `json:"period"`
-	Month      string `json:"month"` // YYYY-MM
-	SampleSize int32  `json:"sample_size"`
-	P25        int32  `json:"p25"`
-	P50        int32  `json:"p50"`
-	P75        int32  `json:"p75"`
+	}, nil
 }
 
 // InsightsSalaryHistory serves GET /api/v1/insights/salary/history: one category's
 // monthly salary percentiles per (currency, period), from insights_salary_monthly.
 // The category is required — the history is per role by design. Aggregate-only.
-func (h *statsHandlers) InsightsSalaryHistory(c *fiber.Ctx) error {
-	category, err := parseCategory(c.Query("category"))
+func (h *statsHandlers) InsightsSalaryHistory(ctx context.Context, params apigen.InsightsSalaryHistoryParams) (*apigen.SalaryHistoryAnswer, error) {
+	category, err := parseCategory(params.Category.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	if category == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "category is required")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "category is required")
 	}
-	rows, err := h.queries.ListInsightsSalaryHistory(c.Context(), category)
+	rows, err := h.queries.ListInsightsSalaryHistory(ctx, category)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	data := make([]salaryMonth, len(rows))
+	data := make([]apigen.SalaryMonth, len(rows))
 	for i, r := range rows {
-		data[i] = salaryMonth{
+		data[i] = apigen.SalaryMonth{
 			Currency: r.Currency, Period: r.Period, Month: r.Month.Time.Format("2006-01"),
-			SampleSize: r.SampleSize, P25: r.P25, P50: r.P50, P75: r.P75,
+			SampleSize: int64(r.SampleSize), P25: int64(r.P25), P50: int64(r.P50), P75: int64(r.P75),
 		}
 	}
-	return c.JSON(fiber.Map{"data": data, "meta": fiber.Map{"category": category}})
+	return &apigen.SalaryHistoryAnswer{Data: data, Meta: apigen.CategoryMeta{Category: category}}, nil
 }
 
 // InsightsSalary serves GET /api/v1/insights/salary: salary bands for a role × country
 // scope, one entry per (currency, period). Currencies are never combined and bands
 // below the recompute's minimum sample size are absent. Aggregate-only.
-func (h *statsHandlers) InsightsSalary(c *fiber.Ctx) error {
-	category, err := parseCategory(c.Query("category"))
+func (h *statsHandlers) InsightsSalary(ctx context.Context, params apigen.InsightsSalaryParams) (*apigen.SalaryAnswer, error) {
+	category, err := parseCategory(params.Category.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	seniority, err := parseSeniority(c.Query("seniority"))
+	seniority, err := parseSeniority(params.Seniority.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	country, err := parseCountry(c.Query("country"))
+	country, err := parseCountry(params.Country.Value)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	bands, bySeniority, err := salaryBands(c.Context(), h.queries, category, seniority, country)
+	bands, bySeniority, err := salaryBands(ctx, h.queries, category, seniority, country)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	meta := fiber.Map{"category": category, "seniority": seniority, "country": country}
+	data := make([]apigen.SalaryBand, len(bands))
+	for i, b := range bands {
+		data[i] = apigen.SalaryBand{Seniority: b.Seniority, Currency: b.Currency, Period: b.Period,
+			SampleSize: int64(b.SampleSize), P25: int64(b.P25), P50: int64(b.P50), P75: int64(b.P75)}
+	}
+	meta := apigen.SalaryMeta{Category: category, Seniority: seniority, Country: country}
 	if bySeniority {
-		meta["breakdown"] = "seniority"
+		meta.Breakdown = apigen.NewOptString("seniority")
 	}
-	return c.JSON(fiber.Map{"data": bands, "meta": meta})
+	return &apigen.SalaryAnswer{Data: data, Meta: meta}, nil
 }
 
 // salaryReader is the two salary rollup reads. *db.Queries satisfies it.

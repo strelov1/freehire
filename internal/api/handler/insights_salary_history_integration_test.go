@@ -34,7 +34,7 @@ func TestInsightsSalaryHistoryEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/salary/history", h.InsightsSalaryHistory)
+	app.Get("/api/v1/insights/salary/history", statsContract(h))
 
 	out, raw, code := getInsights(t, ctx, app, "/api/v1/insights/salary/history?category=backend")
 	if code != fiber.StatusOK {

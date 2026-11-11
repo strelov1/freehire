@@ -26,7 +26,7 @@ func TestUserGrowthEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/stats/user-growth", h.UserGrowth)
+	app.Get("/api/v1/stats/user-growth", statsContract(h))
 
 	type point struct {
 		Date  string `json:"date"`

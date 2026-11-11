@@ -9,6 +9,18 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// statsContract is the generated server a test mounts its stats routes on.
+func statsContract(h *statsHandlers) fiber.Handler {
+	return newContract(contractHandlers{statsHandlers: h})
+}
+
+// statsTestApp mounts the stats routes the way the API does, without its middleware.
+func statsTestApp(h *statsHandlers) *fiber.App {
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	h.register(app.Group("/api/v1"), func(c *fiber.Ctx) error { return c.Next() }, statsContract(h))
+	return app
+}
+
 // fixedNow is a mid-day UTC instant; the parser must truncate `to` to the calendar
 // date, so every default-`to` assertion below expects 2026-07-10 00:00 UTC.
 var fixedNow = time.Date(2026, 7, 10, 15, 30, 0, 0, time.UTC)
@@ -109,9 +121,7 @@ func TestParseActivityQuery(t *testing.T) {
 // with 400 before any query runs. The envelope shape and aggregation are covered
 // by the integration test against a real Postgres.
 func TestJobsActivityValidation(t *testing.T) {
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h := &statsHandlers{}
-	app.Get("/api/v1/stats/jobs-activity", h.JobsActivity)
+	app := statsTestApp(&statsHandlers{})
 
 	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/stats/jobs-activity?granularity=hour", nil)
 	resp, err := app.Test(req)

@@ -56,7 +56,7 @@ func TestInsightsCompaniesEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/companies", h.InsightsCompanies)
+	app.Get("/api/v1/insights/companies", statsContract(h))
 
 	get := func(path string) (map[string]any, int) {
 		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, path, nil))
