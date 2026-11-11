@@ -31,9 +31,11 @@ func HybridArrangementStated(desc string) bool {
 		refusals:       []string{"not available", "not offered", "not possible", "not an option", "preferred", "experience"},
 		negationWindow: 60,
 	}
-	for _, match := range englishHybridStatements.FindAllStringIndex(text, -1) {
-		if !hybridStatementWithdrawn(text, match[0], match[1], english) && !optionalArrangementAt(text, match[0], match[1]) {
-			return true
+	for _, pattern := range []*regexp.Regexp{englishHybridStatements, roleHybridContrast} {
+		for _, match := range pattern.FindAllStringIndex(text, -1) {
+			if !english.withdraws(text, match[0], match[1]) && !optionalArrangementAt(text, match[0], match[1]) {
+				return true
+			}
 		}
 	}
 	for _, p := range []string{
@@ -47,26 +49,22 @@ func HybridArrangementStated(desc string) bool {
 		}
 	}
 	for _, match := range mandatoryOfficeWeek.FindAllStringIndex(text, -1) {
-		if !hybridStatementWithdrawn(text, match[0], match[1], english) && !optionalArrangementAt(text, match[0], match[1]) {
+		if !english.withdraws(text, match[0], match[1]) && !optionalArrangementAt(text, match[0], match[1]) {
 			return true
 		}
 	}
 	return hybridLocationHeader(text, english)
 }
 
-func hybridStatementWithdrawn(text string, start, end int, guards phraseGuards) bool {
-	// A contrasting clause states its own arrangement: "not fully remote, but hybrid".
-	if at := strings.LastIndex(text[:start], " but "); at >= 0 {
-		from := at + len(" but ")
-		text, start, end = text[from:], start-from, end-from
-	}
-	return guards.withdraws(text, start, end)
-}
-
 var englishHybridStatements = regexp.MustCompile(
 	`\b(?:hybrid role|hybrid working|hybrid work arrangement|hybrid work model|hybrid schedule|hybrid position` +
 		`|hybrid session environment|hybrid opportunity combines in-person` +
 		`|work from home regularly but must be able to commute)\b`)
+
+// This is an explicit statement about the role, rather than a contrast inside
+// an experience requirement such as "managing office-based but hybrid working teams".
+var roleHybridContrast = regexp.MustCompile(
+	`\b(?:this|the) (?:role|position|job) is not (?:fully|100%|100 %) remote,? but (?:is )?(?:a )?hybrid (?:role|position|job)\b`)
 
 var (
 	optionalArrangementBefore = regexp.MustCompile(`\boptional(?:ly)?\s*$`)

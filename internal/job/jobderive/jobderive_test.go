@@ -1101,6 +1101,7 @@ func TestDerive_RemotePreservedForIncidentalHybridMentions(t *testing.T) {
 		"Hybrid work with two days in the office is optional.",
 		"A hybrid role is optional.",
 		"We never offer hybrid working.",
+		"Prior experience managing office-based but hybrid working teams is required.",
 		"Hybrid working is not possible; this position is remote.",
 		"Hybrid working is not an option; this position is remote.",
 		"Hybrid working is entirely optional.",
