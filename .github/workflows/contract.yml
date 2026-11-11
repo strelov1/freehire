@@ -50,8 +50,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Start the API and its database
-        run: docker compose up -d --build app
+      # Meilisearch too: the API is configured for search, and without it every search
+      # read is a 500. Its indexes may stay empty; an absent index answers "no results".
+      - name: Start the API, its database and search
+        run: docker compose up -d --build app meilisearch
 
       - name: Wait for the API
         run: |

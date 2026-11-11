@@ -1086,15 +1086,19 @@ func Register(app *fiber.App, cfg Config) {
 	// The two /me routes beside them are the same switches for a caller the cookie
 	// already identified.
 	emailPrefsH := newEmailPrefsHandlers(mailPrefs)
+	agentPermissionsH := &agentPermissionHandlers{queries: queries}
 	contract := newContract(contractHandlers{emailPrefsHandlers: emailPrefsH, talentCatalogHandlers: talentCatalogH,
-		companyWatchHandlers: companyWatchH})
+		companyWatchHandlers: companyWatchH,
+		geoHandlers:          geoH, suggestHandlers: suggestH, agentPermissionHandlers: agentPermissionsH,
+		usageHandlers: usageH, plansHandlers: plansH, dictionaryHandlers: dictionaryH,
+		jdResolveHandlers: jdResolveH, screeningAnswersHandlers: screeningAnswersH, surveyHandlers: surveyH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
 	searchH.register(api, mw)
-	suggestH.register(api, mw)
-	dictionaryH.register(api, mw)
+	suggestH.register(api, contract)
+	dictionaryH.register(api, mw, contract)
 	// Beside the search it builds a filter for, though it shares none of its
 	// dependencies: interpretation needs a model and the caller's profile, not the
 	// index.
@@ -1118,7 +1122,7 @@ func Register(app *fiber.App, cfg Config) {
 	(&companyRelationHandlers{
 		relations: companyrelation.New(cfg.Pool),
 	}).register(api, mw)
-	geoH.register(api, mw)
+	geoH.register(api, contract)
 
 	// Saved searches + the public shared-board read (see savedSearchHandlers).
 	savedSearchH.register(api, mw)
@@ -1154,7 +1158,7 @@ func Register(app *fiber.App, cfg Config) {
 	autofillH.register(api, mw)
 	// The bank's own management surface: list, save, delete (see me_answer_bank.go).
 	answerBankH.register(api, mw)
-	(&agentPermissionHandlers{queries: queries}).register(api, mw)
+	agentPermissionsH.register(api, mw, contract)
 	// The browser-tool wire: a harness on one end, the caller's browser extension
 	// on the other, exchanging raw tool frames. Both ends authenticate with the
 	// session JWT (Bearer for a server-side harness, the subprotocol for the
@@ -1172,7 +1176,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Link contributions (see contributionHandlers).
 	contributionsH.register(api, mw)
-	jdResolveH.register(api, mw)
+	jdResolveH.register(api, mw, contract)
 
 	// Employee referrals (see referralHandlers).
 	referralsH.register(api, mw)
@@ -1200,8 +1204,8 @@ func Register(app *fiber.App, cfg Config) {
 	// Mounted whatever billing is doing: sharing an invite link and counting who came is
 	// not a purchase, and a deployment that sells nothing can still have a referral page.
 	promoH.register(api, mw)
-	plansH.register(api)
-	usageH.register(api, mw)
+	plansH.register(api, contract)
+	usageH.register(api, mw, contract)
 
 	// API-key management and the auth surface (see authHandlers).
 	authH.register(api, mw)
@@ -1210,8 +1214,8 @@ func Register(app *fiber.App, cfg Config) {
 	// The per-user profile singleton (see profileHandlers).
 	profileH.register(api, mw)
 	// The candidate's own screening answers (see screeningAnswersHandlers).
-	screeningAnswersH.register(api, mw)
-	surveyH.register(api, mw)
+	screeningAnswersH.register(api, mw, contract)
+	surveyH.register(api, mw, contract)
 	marketPulseH.register(api, mw)
 	experienceH.register(api, mw)
 	talentNetworkH.register(api, mw)

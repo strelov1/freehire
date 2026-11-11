@@ -22,7 +22,7 @@ func dictionaryApp(t *testing.T, write gapWrite) *fiber.App {
 	h := &dictionaryHandlers{write: write}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	h.register(api, middleware{cookie: auth.RequireAuth(iss, testVersions)})
+	h.register(api, middleware{cookie: auth.RequireAuth(iss, testVersions)}, newContract(contractHandlers{dictionaryHandlers: h}))
 	return app
 }
 

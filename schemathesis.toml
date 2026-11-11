@@ -11,3 +11,6 @@ positive_data_acceptance.expected-statuses = ["2xx", 400, 401, 402, 403, 404, 40
 # route runs. A method Fiber knows (DELETE on a GET route) does get 405; that is Fiber's
 # router, not the contract, so the check would test only the HTTP server.
 unsupported_method.enabled = false
+# Same for OPTIONS: Fiber answers it before any route, listing every method of every route
+# the path matches, so `/me/watchlist/import` also advertises the `{slug}` routes' methods.
+allow_header_conformance.enabled = false

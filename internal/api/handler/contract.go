@@ -30,6 +30,15 @@ type contractHandlers struct {
 	*emailPrefsHandlers
 	*talentCatalogHandlers
 	*companyWatchHandlers
+	*geoHandlers
+	*suggestHandlers
+	*agentPermissionHandlers
+	*usageHandlers
+	*plansHandlers
+	*dictionaryHandlers
+	*jdResolveHandlers
+	*screeningAnswersHandlers
+	*surveyHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}
@@ -213,37 +222,35 @@ func nilIfEmpty[T any](s []T) []T {
 	return s
 }
 
-// contractAllow keeps a 405's Allow header on the contract's matching resource.
-// Fiber combines methods from literal and parameter routes, so /watchlist/import
-// otherwise advertises the methods of /watchlist/:slug too.
-func contractAllow(c *fiber.Ctx) {
-	target, err := url.ParseRequestURI(string(c.Request().RequestURI()))
-	if err != nil {
-		return
+// ptrOf is a nullable optional field as the pointer a domain patch reads: nil when the
+// field was absent or null. Pass the field's Get method.
+func ptrOf[T any](get func() (T, bool)) *T {
+	if v, ok := get(); ok {
+		return &v
 	}
-	path, ok := strings.CutPrefix(strings.ToLower(target.Path), "/api/v1")
-	if !ok {
-		return
+	return nil
+}
+
+// intPtrOf is ptrOf for an integer the domain holds as int.
+func intPtrOf(get func() (int64, bool)) *int {
+	if v, ok := get(); ok {
+		n := int(v)
+		return &n
 	}
-	target.Path = strings.TrimSuffix(path, "/")
-	if target.RawPath != "" {
-		target.RawPath = strings.TrimSuffix(strings.TrimPrefix(strings.ToLower(target.RawPath), "/api/v1"), "/")
+	return nil
+}
+
+// optNil is the generated nullable optional field set from a domain pointer: left unset
+// for nil, so it is omitted from the answer as `omitempty` did. Pass the field's SetTo.
+func optNil[T any](p *T, setTo func(T)) {
+	if p != nil {
+		setTo(*p)
 	}
-	// FindPath only reads the generated routing table and prefix, so it needs no
-	// handler or server initialization. The stripped prefix matches its zero value.
-	var routes apigen.Server
-	var allowed []string
-	for _, value := range strings.Split(c.GetRespHeader(fiber.HeaderAllow), ",") {
-		method := strings.TrimSpace(value)
-		lookup := method
-		if lookup == fiber.MethodHead {
-			lookup = fiber.MethodGet
-		}
-		if _, ok := routes.FindPath(lookup, target); ok {
-			allowed = append(allowed, method)
-		}
-	}
-	if len(allowed) > 0 {
-		c.Set(fiber.HeaderAllow, strings.Join(allowed, ", "))
+}
+
+// optNilInt is optNil for a domain int carried as int64.
+func optNilInt(p *int, setTo func(int64)) {
+	if p != nil {
+		setTo(int64(*p))
 	}
 }

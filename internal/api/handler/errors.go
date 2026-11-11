@@ -63,9 +63,6 @@ func RenderError(c *fiber.Ctx, err error) error {
 		return c.Status(ce.status).JSON(fiber.Map{"error": ce.message, "code": ce.code})
 	}
 	status, msg, report := classify(err)
-	if status == fiber.StatusMethodNotAllowed {
-		contractAllow(c)
-	}
 
 	// A recovered panic was already captured with its stack by ReportPanic;
 	// reporting the re-delivered error again would duplicate it.

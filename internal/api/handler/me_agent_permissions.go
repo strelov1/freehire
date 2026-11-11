@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"context"
+
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -14,38 +17,33 @@ type agentPermissionHandlers struct{ queries *db.Queries }
 // register mounts the read with mw.key and the write with mw.cookie ONLY. The switch gates
 // what a credential other than the browser session may do, so no such credential may turn it
 // on — an agent granting itself the permission it is gated by would make the gate decoration.
-func (h *agentPermissionHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/me/agent-permissions", mw.key, h.Get)
-	api.Put("/me/agent-permissions", mw.cookie, h.Put)
+func (h *agentPermissionHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Get("/me/agent-permissions", mw.key, contract)
+	api.Put("/me/agent-permissions", mw.cookie, contract)
 }
 
-type agentPermissions struct {
-	AgentsMayApply bool `json:"agents_may_apply"`
+// GetAgentPermissions reports the caller's switch.
+func (h *agentPermissionHandlers) GetAgentPermissions(ctx context.Context) (*apigen.GetAgentPermissionsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	allowed, err := h.queries.GetAgentsMayApply(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetAgentPermissionsOK{Data: apigen.AgentPermissions{AgentsMayApply: apigen.NewOptBool(allowed)}}, nil
 }
 
-func (h *agentPermissionHandlers) Get(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// SetAgentPermissions stores the switch. An absent field turns it off, as it always did.
+func (h *agentPermissionHandlers) SetAgentPermissions(ctx context.Context, req *apigen.AgentPermissions) (*apigen.SetAgentPermissionsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	allowed, err := h.queries.GetAgentsMayApply(c.Context(), userID)
-	if err != nil {
-		return err
+	allowed := req.AgentsMayApply.Value
+	if err := h.queries.SetAgentsMayApply(ctx, db.SetAgentsMayApplyParams{ID: userID, AgentsMayApply: allowed}); err != nil {
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": agentPermissions{AgentsMayApply: allowed}})
-}
-
-func (h *agentPermissionHandlers) Put(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	var in agentPermissions
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	if err := h.queries.SetAgentsMayApply(c.Context(), db.SetAgentsMayApplyParams{ID: userID, AgentsMayApply: in.AgentsMayApply}); err != nil {
-		return err
-	}
-	return c.JSON(fiber.Map{"data": in})
+	return &apigen.SetAgentPermissionsOK{Data: apigen.AgentPermissions{AgentsMayApply: apigen.NewOptBool(allowed)}}, nil
 }

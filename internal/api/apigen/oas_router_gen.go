@@ -11,13 +11,28 @@ import (
 )
 
 var (
-	rn4AllowedHeaders = map[string]string{
+	rn22AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn7AllowedHeaders = map[string]string{
 		"PATCH": "Content-Type",
 	}
-	rn6AllowedHeaders = map[string]string{
+	rn5AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn8AllowedHeaders = map[string]string{
 		"PATCH": "Content-Type",
+	}
+	rn23AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
 	}
 	rn11AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn13AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn18AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 )
@@ -73,6 +88,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			switch elem[0] {
+			case 'd': // Prefix: "dictionary/gaps"
+
+				if l := len("dictionary/gaps"); len(elem) >= l && elem[0:l] == "dictionary/gaps" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "POST":
+						s.handleRecordDictionaryGapRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "POST",
+							allowedHeaders: rn22AllowedHeaders,
+							acceptPost:     "application/json",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
 			case 'e': // Prefix: "email-prefs"
 
 				if l := len("email-prefs"); len(elem) >= l && elem[0:l] == "email-prefs" {
@@ -90,7 +130,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "GET,PATCH",
-							allowedHeaders: rn4AllowedHeaders,
+							allowedHeaders: rn7AllowedHeaders,
 							acceptPost:     "",
 							acceptPatch:    "application/json",
 						})
@@ -126,6 +166,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 				}
 
+			case 'g': // Prefix: "geo/cities"
+
+				if l := len("geo/cities"); len(elem) >= l && elem[0:l] == "geo/cities" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleSearchCitiesRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
 			case 'm': // Prefix: "me/"
 
 				if l := len("me/"); len(elem) >= l && elem[0:l] == "me/" {
@@ -138,6 +203,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 				switch elem[0] {
+				case 'a': // Prefix: "agent-permissions"
+
+					if l := len("agent-permissions"); len(elem) >= l && elem[0:l] == "agent-permissions" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleGetAgentPermissionsRequest([0]string{}, elemIsEscaped, w, r)
+						case "PUT":
+							s.handleSetAgentPermissionsRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET,PUT",
+								allowedHeaders: rn5AllowedHeaders,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
 				case 'e': // Prefix: "email-groups"
 
 					if l := len("email-groups"); len(elem) >= l && elem[0:l] == "email-groups" {
@@ -156,9 +248,152 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "GET,PATCH",
-								allowedHeaders: rn6AllowedHeaders,
+								allowedHeaders: rn8AllowedHeaders,
 								acceptPost:     "",
 								acceptPatch:    "application/json",
+							})
+						}
+
+						return
+					}
+
+				case 'j': // Prefix: "jd/resolve"
+
+					if l := len("jd/resolve"); len(elem) >= l && elem[0:l] == "jd/resolve" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "POST":
+							s.handleResolveJobDescriptionRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "POST",
+								allowedHeaders: rn23AllowedHeaders,
+								acceptPost:     "application/json",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
+				case 'o': // Prefix: "onboarding/complete"
+
+					if l := len("onboarding/complete"); len(elem) >= l && elem[0:l] == "onboarding/complete" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "POST":
+							s.handleCompleteOnboardingRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "POST",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
+				case 's': // Prefix: "s"
+
+					if l := len("s"); len(elem) >= l && elem[0:l] == "s" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						break
+					}
+					switch elem[0] {
+					case 'c': // Prefix: "creening-answers"
+
+						if l := len("creening-answers"); len(elem) >= l && elem[0:l] == "creening-answers" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "GET":
+								s.handleGetScreeningAnswersRequest([0]string{}, elemIsEscaped, w, r)
+							case "PUT":
+								s.handleUpdateScreeningAnswersRequest([0]string{}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "GET,PUT",
+									allowedHeaders: rn11AllowedHeaders,
+									acceptPost:     "",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					case 'u': // Prefix: "urvey"
+
+						if l := len("urvey"); len(elem) >= l && elem[0:l] == "urvey" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "GET":
+								s.handleGetSurveyRequest([0]string{}, elemIsEscaped, w, r)
+							case "PUT":
+								s.handleUpdateSurveyRequest([0]string{}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "GET,PUT",
+									allowedHeaders: rn13AllowedHeaders,
+									acceptPost:     "",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					}
+
+				case 'u': // Prefix: "usage"
+
+					if l := len("usage"); len(elem) >= l && elem[0:l] == "usage" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleGetMyUsageRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
 							})
 						}
 
@@ -217,7 +452,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								default:
 									s.notAllowed(w, r, notAllowedParams{
 										allowedMethods: "POST",
-										allowedHeaders: rn11AllowedHeaders,
+										allowedHeaders: rn18AllowedHeaders,
 										acceptPost:     "application/json",
 										acceptPatch:    "",
 									})
@@ -266,6 +501,56 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 					}
 
+				}
+
+			case 'p': // Prefix: "plans"
+
+				if l := len("plans"); len(elem) >= l && elem[0:l] == "plans" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleGetPlansRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
+			case 's': // Prefix: "suggest"
+
+				if l := len("suggest"); len(elem) >= l && elem[0:l] == "suggest" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleSuggestRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
 				}
 
 			case 't': // Prefix: "talent"
@@ -489,6 +774,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 				break
 			}
 			switch elem[0] {
+			case 'd': // Prefix: "dictionary/gaps"
+
+				if l := len("dictionary/gaps"); len(elem) >= l && elem[0:l] == "dictionary/gaps" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "POST":
+						r.name = RecordDictionaryGapOperation
+						r.summary = ""
+						r.operationID = "recordDictionaryGap"
+						r.operationGroup = ""
+						r.pathPattern = "/dictionary/gaps"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
 			case 'e': // Prefix: "email-prefs"
 
 				if l := len("email-prefs"); len(elem) >= l && elem[0:l] == "email-prefs" {
@@ -549,6 +859,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 
 				}
 
+			case 'g': // Prefix: "geo/cities"
+
+				if l := len("geo/cities"); len(elem) >= l && elem[0:l] == "geo/cities" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = SearchCitiesOperation
+						r.summary = ""
+						r.operationID = "searchCities"
+						r.operationGroup = ""
+						r.pathPattern = "/geo/cities"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
 			case 'm': // Prefix: "me/"
 
 				if l := len("me/"); len(elem) >= l && elem[0:l] == "me/" {
@@ -561,6 +896,40 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 					break
 				}
 				switch elem[0] {
+				case 'a': // Prefix: "agent-permissions"
+
+					if l := len("agent-permissions"); len(elem) >= l && elem[0:l] == "agent-permissions" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = GetAgentPermissionsOperation
+							r.summary = ""
+							r.operationID = "getAgentPermissions"
+							r.operationGroup = ""
+							r.pathPattern = "/me/agent-permissions"
+							r.args = args
+							r.count = 0
+							return r, true
+						case "PUT":
+							r.name = SetAgentPermissionsOperation
+							r.summary = ""
+							r.operationID = "setAgentPermissions"
+							r.operationGroup = ""
+							r.pathPattern = "/me/agent-permissions"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
 				case 'e': // Prefix: "email-groups"
 
 					if l := len("email-groups"); len(elem) >= l && elem[0:l] == "email-groups" {
@@ -587,6 +956,163 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.operationID = "updateMyEmailGroups"
 							r.operationGroup = ""
 							r.pathPattern = "/me/email-groups"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+				case 'j': // Prefix: "jd/resolve"
+
+					if l := len("jd/resolve"); len(elem) >= l && elem[0:l] == "jd/resolve" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "POST":
+							r.name = ResolveJobDescriptionOperation
+							r.summary = ""
+							r.operationID = "resolveJobDescription"
+							r.operationGroup = ""
+							r.pathPattern = "/me/jd/resolve"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+				case 'o': // Prefix: "onboarding/complete"
+
+					if l := len("onboarding/complete"); len(elem) >= l && elem[0:l] == "onboarding/complete" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "POST":
+							r.name = CompleteOnboardingOperation
+							r.summary = ""
+							r.operationID = "completeOnboarding"
+							r.operationGroup = ""
+							r.pathPattern = "/me/onboarding/complete"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+				case 's': // Prefix: "s"
+
+					if l := len("s"); len(elem) >= l && elem[0:l] == "s" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						break
+					}
+					switch elem[0] {
+					case 'c': // Prefix: "creening-answers"
+
+						if l := len("creening-answers"); len(elem) >= l && elem[0:l] == "creening-answers" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "GET":
+								r.name = GetScreeningAnswersOperation
+								r.summary = ""
+								r.operationID = "getScreeningAnswers"
+								r.operationGroup = ""
+								r.pathPattern = "/me/screening-answers"
+								r.args = args
+								r.count = 0
+								return r, true
+							case "PUT":
+								r.name = UpdateScreeningAnswersOperation
+								r.summary = ""
+								r.operationID = "updateScreeningAnswers"
+								r.operationGroup = ""
+								r.pathPattern = "/me/screening-answers"
+								r.args = args
+								r.count = 0
+								return r, true
+							default:
+								return
+							}
+						}
+
+					case 'u': // Prefix: "urvey"
+
+						if l := len("urvey"); len(elem) >= l && elem[0:l] == "urvey" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "GET":
+								r.name = GetSurveyOperation
+								r.summary = ""
+								r.operationID = "getSurvey"
+								r.operationGroup = ""
+								r.pathPattern = "/me/survey"
+								r.args = args
+								r.count = 0
+								return r, true
+							case "PUT":
+								r.name = UpdateSurveyOperation
+								r.summary = ""
+								r.operationID = "updateSurvey"
+								r.operationGroup = ""
+								r.pathPattern = "/me/survey"
+								r.args = args
+								r.count = 0
+								return r, true
+							default:
+								return
+							}
+						}
+
+					}
+
+				case 'u': // Prefix: "usage"
+
+					if l := len("usage"); len(elem) >= l && elem[0:l] == "usage" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = GetMyUsageOperation
+							r.summary = ""
+							r.operationID = "getMyUsage"
+							r.operationGroup = ""
+							r.pathPattern = "/me/usage"
 							r.args = args
 							r.count = 0
 							return r, true
@@ -704,6 +1230,56 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 
 					}
 
+				}
+
+			case 'p': // Prefix: "plans"
+
+				if l := len("plans"); len(elem) >= l && elem[0:l] == "plans" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = GetPlansOperation
+						r.summary = ""
+						r.operationID = "getPlans"
+						r.operationGroup = ""
+						r.pathPattern = "/plans"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
+			case 's': // Prefix: "suggest"
+
+				if l := len("suggest"); len(elem) >= l && elem[0:l] == "suggest" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = SuggestOperation
+						r.summary = ""
+						r.operationID = "suggest"
+						r.operationGroup = ""
+						r.pathPattern = "/suggest"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
 				}
 
 			case 't': // Prefix: "talent"

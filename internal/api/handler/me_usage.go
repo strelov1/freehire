@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 )
 
 // usageHandlers serves the caller's own AI spend, read from the gateway rather than from
@@ -30,25 +32,15 @@ func newUsageHandlers(gateway *llmkey.Client, keys *llmkey.Resolver) *usageHandl
 	return &usageHandlers{gateway: gateway, keys: keys}
 }
 
-func (h *usageHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/me/usage", mw.key, h.GetMyUsage)
+func (h *usageHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Get("/me/usage", mw.key, contract)
 }
 
-// usageResponse is the wire shape of what one account did this period.
-//
-// It carries NO money, deliberately. The gateway's cost figure is a list price against a
+// The wire shape (apigen.Usage) carries NO money, deliberately. The gateway's cost figure is a list price against a
 // mixed upstream pool: it is not what we pay, and it is certainly not what the caller
 // pays — what they spend is a plan allowance, reported by /me/plan over this same calendar.
 // A second number in dollars beside that would read as a second currency for one thing, and
 // one of the two would be fiction.
-type usageResponse struct {
-	Requests int       `json:"requests"`
-	Failed   int       `json:"failed"`
-	Tokens   int       `json:"tokens"`
-	Period   string    `json:"period"`
-	ResetsAt time.Time `json:"resets_at"`
-}
-
 // GetMyUsage reports what the caller's account did this period.
 //
 // It cannot fail for any reason the caller could act on. An account that has never used
@@ -57,12 +49,12 @@ type usageResponse struct {
 // unrelated fault look to the reader like a problem with their account.
 //
 // It never mints. Looking at what you used is not using anything.
-func (h *usageHandlers) GetMyUsage(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *usageHandlers) GetMyUsage(ctx context.Context) (*apigen.GetMyUsageOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": h.usage(c, userID)})
+	return &apigen.GetMyUsageOK{Data: h.usage(ctx, userID)}, nil
 }
 
 // usage reads the gateway, or reports zeroes and says why in the log.
@@ -71,9 +63,9 @@ func (h *usageHandlers) GetMyUsage(c *fiber.Ctx) error {
 // so the two cannot drift: an allowance and a usage count over different periods would both
 // look correct and disagree. It narrowed from a month when the balance it used to follow
 // was withdrawn.
-func (h *usageHandlers) usage(c *fiber.Ctx, userID int64) usageResponse {
+func (h *usageHandlers) usage(ctx context.Context, userID int64) apigen.Usage {
 	now := time.Now().UTC()
-	out := usageResponse{Period: plan.Day(now).Format(time.DateOnly), ResetsAt: plan.ResetsAt(now)}
+	out := apigen.Usage{Period: plan.Day(now).Format(time.DateOnly), ResetsAt: plan.ResetsAt(now)}
 	if h.gateway == nil {
 		return out
 	}
@@ -83,11 +75,11 @@ func (h *usageHandlers) usage(c *fiber.Ctx, userID int64) usageResponse {
 	// the gateway refuses a stored key, which is rare, and the alternative — remembering
 	// retired ids so the read could sum them — would keep a growing list of dead
 	// credentials alive to make a usage counter slightly more complete.
-	act, err := h.gateway.Activity(c.Context(), h.keys.Stored(c.Context(), userID).ID, plan.Day(now), now)
+	act, err := h.gateway.Activity(ctx, h.keys.Stored(ctx, userID).ID, plan.Day(now), now)
 	if err != nil {
 		log.Printf("usage: read activity for user %d: %v", userID, err)
 		return out
 	}
-	out.Requests, out.Failed, out.Tokens = act.Requests, act.Failed, act.Tokens
+	out.Requests, out.Failed, out.Tokens = int64(act.Requests), int64(act.Failed), int64(act.Tokens)
 	return out
 }

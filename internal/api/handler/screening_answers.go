@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"errors"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 )
 
@@ -21,69 +23,92 @@ func newScreeningAnswersHandlers(store *screeninganswers.Store) *screeningAnswer
 	return &screeningAnswersHandlers{store: store}
 }
 
-func (h *screeningAnswersHandlers) register(api fiber.Router, mw middleware) {
+func (h *screeningAnswersHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// The screening-answers record is a singleton — one per user, keyed by the
 	// authenticated caller, no id in the path. GET returns the record or null; PUT
 	// partially updates it (a field the body omits keeps its stored value). Same auth
 	// split as /me/profile: the read takes a key, the write is cookie-only.
-	api.Get("/me/screening-answers", mw.key, h.GetScreeningAnswers)
-	api.Put("/me/screening-answers", mw.cookie, h.PutScreeningAnswers)
+	api.Get("/me/screening-answers", mw.key, contract)
+	api.Put("/me/screening-answers", mw.cookie, contract)
 }
 
 // GetScreeningAnswers returns the authenticated user's screening answers, or
 // {"data": null} when they have stated none yet.
-func (h *screeningAnswersHandlers) GetScreeningAnswers(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *screeningAnswersHandlers) GetScreeningAnswers(ctx context.Context) (*apigen.GetScreeningAnswersOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	answers, err := h.store.Get(c.Context(), userID)
+	answers, err := h.store.Get(ctx, userID)
 	if errors.Is(err, screeninganswers.ErrNotFound) {
-		return c.JSON(fiber.Map{"data": nil})
+		return &apigen.GetScreeningAnswersOK{Data: apigen.NilScreeningAnswers{Null: true}}, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": answers})
+	return &apigen.GetScreeningAnswersOK{Data: apigen.NewNilScreeningAnswers(screeningAnswersOut(answers))}, nil
 }
 
-// PutScreeningAnswers partially updates the authenticated user's screening answers: a
+// UpdateScreeningAnswers partially updates the authenticated user's screening answers: a
 // field the request body carries is validated and stored; a field it omits keeps its
 // stored value; a field named in "clear" is withdrawn back to unstated. A malformed field
 // (an unrecognized country code, a currency that is not a three-letter ISO 4217 code, a
 // period outside the vocabulary, a non-positive salary, a negative notice period), an
 // unknown name in "clear", or a field both stated and cleared is a 400 naming it.
 // Cookie-only.
-func (h *screeningAnswersHandlers) PutScreeningAnswers(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *screeningAnswersHandlers) UpdateScreeningAnswers(ctx context.Context, req *apigen.ScreeningAnswersUpdate) (*apigen.UpdateScreeningAnswersOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var in struct {
-		screeninganswers.Answers
-		Clear []string `json:"clear"`
-	}
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	cleared := make([]screeninganswers.Field, 0, len(in.Clear))
-	for _, name := range in.Clear {
+	toClear, _ := req.Clear.Get()
+	cleared := make([]screeninganswers.Field, 0, len(toClear))
+	for _, name := range toClear {
 		f, err := screeninganswers.ParseField(name)
 		if err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+			return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 		}
 		cleared = append(cleared, f)
 	}
 
-	answers, err := h.store.Update(c.Context(), userID, in.Answers, cleared...)
+	countries, _ := req.AuthorizedCountries.Get()
+	answers, err := h.store.Update(ctx, userID, screeninganswers.Answers{
+		AuthorizedCountries:   countries,
+		VisaSponsorshipNeeded: ptrOf(req.VisaSponsorshipNeeded.Get),
+		DesiredSalaryAmount:   intPtrOf(req.DesiredSalaryAmount.Get),
+		DesiredSalaryCurrency: ptrOf(req.DesiredSalaryCurrency.Get),
+		DesiredSalaryPeriod:   ptrOf(req.DesiredSalaryPeriod.Get),
+		NoticePeriodDays:      intPtrOf(req.NoticePeriodDays.Get),
+		WillingToRelocate:     ptrOf(req.WillingToRelocate.Get),
+		Age18OrOlder:          ptrOf(req.Age18OrOlder.Get),
+		PrivacyConsent:        ptrOf(req.PrivacyConsent.Get),
+	}, cleared...)
 	if err != nil {
 		var ve *screeninganswers.ValidationError
 		if errors.As(err, &ve) {
-			return fiber.NewError(fiber.StatusBadRequest, ve.Error())
+			return nil, fiber.NewError(fiber.StatusBadRequest, ve.Error())
 		}
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": answers})
+	return &apigen.UpdateScreeningAnswersOK{Data: screeningAnswersOut(answers)}, nil
+}
+
+// screeningAnswersOut is the stored answers in their wire shape, each unset field left
+// out as the record's `omitempty` tags did.
+func screeningAnswersOut(a screeninganswers.Answers) apigen.ScreeningAnswers {
+	var out apigen.ScreeningAnswers
+	if len(a.AuthorizedCountries) > 0 {
+		out.AuthorizedCountries.SetTo(a.AuthorizedCountries)
+	}
+	optNil(a.VisaSponsorshipNeeded, out.VisaSponsorshipNeeded.SetTo)
+	optNilInt(a.DesiredSalaryAmount, out.DesiredSalaryAmount.SetTo)
+	optNil(a.DesiredSalaryCurrency, out.DesiredSalaryCurrency.SetTo)
+	optNil(a.DesiredSalaryPeriod, out.DesiredSalaryPeriod.SetTo)
+	optNilInt(a.NoticePeriodDays, out.NoticePeriodDays.SetTo)
+	optNil(a.WillingToRelocate, out.WillingToRelocate.SetTo)
+	optNil(a.Age18OrOlder, out.Age18OrOlder.SetTo)
+	optNil(a.PrivacyConsent, out.PrivacyConsent.SetTo)
+	return out
 }

@@ -13,9 +13,75 @@
     },
     {
       "name": "Watchlist"
+    },
+    {
+      "name": "Search"
+    },
+    {
+      "name": "Account"
+    },
+    {
+      "name": "Plans"
+    },
+    {
+      "name": "Dictionary"
+    },
+    {
+      "name": "Tailoring"
     }
   ],
   "paths": {
+    "/dictionary/gaps": {
+      "post": {
+        "operationId": "recordDictionaryGap",
+        "description": "Asks for a term the dictionary does not resolve. 409 when it already does. Session\ncookie only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DictionaryGapRecorded"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Dictionary"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DictionaryGap"
+              }
+            }
+          }
+        }
+      }
+    },
     "/email-prefs": {
       "get": {
         "operationId": "getEmailPrefs",
@@ -165,6 +231,159 @@
         ]
       }
     },
+    "/geo/cities": {
+      "get": {
+        "operationId": "searchCities",
+        "description": "Up to 20 cities whose name matches, optionally within one country.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CityMatch"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/me/agent-permissions": {
+      "get": {
+        "operationId": "getAgentPermissions",
+        "description": "Readable with a session or an API key.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AgentPermissions"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      },
+      "put": {
+        "operationId": "setAgentPermissions",
+        "description": "Session cookie only: an agent must not grant itself the right to apply.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AgentPermissions"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentPermissions"
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/email-groups": {
       "get": {
         "operationId": "getMyEmailGroups",
@@ -251,6 +470,321 @@
             }
           }
         }
+      }
+    },
+    "/me/jd/resolve": {
+      "post": {
+        "operationId": "resolveJobDescription",
+        "description": "Turns a catalogue job, a vacancy URL or pasted text into a job the tailoring workspace\ncan open. 404 for an unknown slug, 422 for a URL with no readable vacancy. Session\ncookie only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ResolvedJob"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Tailoring"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobDescriptionSource"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/onboarding/complete": {
+      "post": {
+        "operationId": "completeOnboarding",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OnboardingCompleted"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/me/screening-answers": {
+      "get": {
+        "operationId": "getScreeningAnswers",
+        "description": "`data` is null before the first save.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/ScreeningAnswers"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      },
+      "put": {
+        "operationId": "updateScreeningAnswers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ScreeningAnswers"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreeningAnswersUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/survey": {
+      "get": {
+        "operationId": "getSurvey",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SurveyResponses"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      },
+      "put": {
+        "operationId": "updateSurvey",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SurveyResponses"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurveyResponses"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/usage": {
+      "get": {
+        "operationId": "getMyUsage",
+        "description": "With a session or an API key. Zeroes when the gateway cannot be read.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Usage"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ]
       }
     },
     "/me/watchlist": {
@@ -506,6 +1040,114 @@
         },
         "tags": [
           "Watchlist"
+        ]
+      }
+    },
+    "/plans": {
+      "get": {
+        "operationId": "getPlans",
+        "description": "What each plan allows and what it costs, read from the configuration metering uses.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Plans"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Plans"
+        ]
+      }
+    },
+    "/suggest": {
+      "get": {
+        "operationId": "suggest",
+        "description": "Search-box suggestions. 503 when search is not configured.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "1 to 20, default 5. A value that does not read falls back to the default.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Suggestion"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/SuggestMeta"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Search"
         ]
       }
     },
@@ -848,6 +1490,61 @@
       }
     },
     "schemas": {
+      "AgentPermissions": {
+        "type": "object",
+        "properties": {
+          "agents_may_apply": {
+            "type": "boolean",
+            "description": "Whether an agent acting for the account may submit applications. Absent reads as false."
+          }
+        }
+      },
+      "CityMatch": {
+        "type": "object",
+        "required": [
+          "value",
+          "country"
+        ],
+        "properties": {
+          "value": {
+            "type": "string",
+            "description": "The city's canonical name, the value the filters take."
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO 3166-1 alpha-2, lower case."
+          }
+        }
+      },
+      "DictionaryGap": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "`specialization`, `skill` or `industry`; anything else is a 400."
+          },
+          "term": {
+            "type": "string"
+          }
+        }
+      },
+      "DictionaryGapRecorded": {
+        "type": "object",
+        "required": [
+          "request_count",
+          "status"
+        ],
+        "properties": {
+          "request_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many people have asked for this term."
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
       "EmailPrefs": {
         "type": "object",
         "required": [
@@ -991,6 +1688,28 @@
         },
         "description": "A query param the endpoint did not read: unknown, or known but unreadable\n(`min_years=lots`). Either way the answer is wider than the caller asked for."
       },
+      "JobDescriptionSource": {
+        "type": "object",
+        "properties": {
+          "job_slug": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "description": "Hints used only with `text`."
+          },
+          "company": {
+            "type": "string"
+          }
+        },
+        "description": "Exactly one of `job_slug`, `url` and `text`; anything else is a 400."
+      },
       "ListMeta": {
         "type": "object",
         "required": [
@@ -1020,6 +1739,17 @@
           }
         },
         "description": "A page of a filtered list, with what the filter dropped."
+      },
+      "OnboardingCompleted": {
+        "type": "object",
+        "required": [
+          "onboarding_complete"
+        ],
+        "properties": {
+          "onboarding_complete": {
+            "type": "boolean"
+          }
+        }
       },
       "OneClickResult": {
         "type": "object",
@@ -1076,6 +1806,112 @@
         },
         "description": "A year, with a month when the CV gives one."
       },
+      "PlanFeature": {
+        "type": "object",
+        "required": [
+          "feature",
+          "free",
+          "pro",
+          "ultra"
+        ],
+        "properties": {
+          "feature": {
+            "type": "string"
+          },
+          "free": {
+            "$ref": "#/components/schemas/PlanTierAllowance"
+          },
+          "pro": {
+            "$ref": "#/components/schemas/PlanTierAllowance"
+          },
+          "ultra": {
+            "$ref": "#/components/schemas/PlanTierAllowance"
+          }
+        }
+      },
+      "PlanPrice": {
+        "type": "object",
+        "required": [
+          "id",
+          "amount_cents",
+          "currency",
+          "interval",
+          "default",
+          "tier"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "amount_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The smallest currency unit, as the payment provider stores it."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "interval": {
+            "type": "string",
+            "description": "`month` or `year`."
+          },
+          "default": {
+            "type": "boolean",
+            "description": "The price a new subscriber is sold unless they choose another."
+          },
+          "tier": {
+            "type": "string",
+            "description": "The plan the price buys: `pro`, `ultra`, `api` or `api_data`."
+          }
+        }
+      },
+      "PlanTierAllowance": {
+        "type": "object",
+        "required": [
+          "limit",
+          "unlimited"
+        ],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The daily ceiling; with `unlimited`, the fair-use guard behind it."
+          },
+          "unlimited": {
+            "type": "boolean"
+          }
+        },
+        "description": "What one tier allows for one feature in a UTC day."
+      },
+      "Plans": {
+        "type": "object",
+        "required": [
+          "features",
+          "prices",
+          "enforced"
+        ],
+        "properties": {
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanFeature"
+            }
+          },
+          "prices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanPrice"
+            }
+          },
+          "enforced": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The features whose ceiling refuses today."
+          }
+        }
+      },
       "Problem": {
         "type": "object",
         "required": [
@@ -1090,6 +1926,374 @@
           }
         },
         "description": "Every refusal, whatever its status: `{\"error\": msg}`. `code` is set only where a\nclient branches on the reason (the auth flows)."
+      },
+      "ResolvedJob": {
+        "type": "object",
+        "required": [
+          "job_slug"
+        ],
+        "properties": {
+          "job_slug": {
+            "type": "string"
+          }
+        }
+      },
+      "ScreeningAnswers": {
+        "type": "object",
+        "properties": {
+          "authorized_countries": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO 3166-1 alpha-2 codes the candidate may work in."
+          },
+          "visa_sponsorship_needed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "desired_salary_amount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "desired_salary_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO 4217, upper case."
+          },
+          "desired_salary_period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notice_period_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "willing_to_relocate": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "age_18_or_older": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "privacy_consent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A standing agreement to an employer form's privacy terms; false asks each time."
+          }
+        },
+        "description": "Answers an application form asks for, saved once and reused. Each field is optional."
+      },
+      "ScreeningAnswersUpdate": {
+        "type": "object",
+        "properties": {
+          "authorized_countries": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO 3166-1 alpha-2 codes the candidate may work in."
+          },
+          "visa_sponsorship_needed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "desired_salary_amount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "desired_salary_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO 4217, upper case."
+          },
+          "desired_salary_period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notice_period_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "willing_to_relocate": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "age_18_or_older": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "privacy_consent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A standing agreement to an employer form's privacy terms; false asks each time."
+          },
+          "clear": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Field names to clear. An unknown name is a 400."
+          }
+        }
+      },
+      "SuggestMeta": {
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Suggestion": {
+        "type": "object",
+        "required": [
+          "text",
+          "parts",
+          "jobs"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuggestionPart"
+            }
+          },
+          "jobs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many open jobs the suggestion finds."
+          }
+        }
+      },
+      "SuggestionKind": {
+        "type": "string",
+        "enum": [
+          "title",
+          "skill",
+          "category",
+          "company"
+        ]
+      },
+      "SuggestionPart": {
+        "type": "object",
+        "required": [
+          "kind",
+          "text"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SuggestionKind"
+          },
+          "slug": {
+            "type": "string",
+            "description": "The dictionary slug, when the part is one."
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "description": "One recognised piece of the query: a dictionary term, or text still being typed."
+      },
+      "SurveyResponses": {
+        "type": "object",
+        "properties": {
+          "job_search_stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "biggest_challenges": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "biggest_challenge_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Kept only while `other` is among the challenges."
+          },
+          "current_income_amount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_income_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_income_period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "The onboarding survey. Each field is optional."
       },
       "TalentCard": {
         "type": "object",
@@ -1168,7 +2372,7 @@
                 "format": "int32"
               }
             },
-            "description": "Facet name → value → member count."
+            "description": "Facet name → value → member count. A count of -1 means the value is present but\nheld by too few members to say how many; 0 means nobody holds it."
           },
           "stats": {
             "type": "object",
@@ -1256,6 +2460,39 @@
           }
         },
         "description": "One role of a work history, with everything nameable removed."
+      },
+      "Usage": {
+        "type": "object",
+        "required": [
+          "requests",
+          "failed",
+          "tokens",
+          "period",
+          "resets_at"
+        ],
+        "properties": {
+          "requests": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "period": {
+            "type": "string",
+            "description": "The plan day the figures cover, YYYY-MM-DD in UTC."
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "Today's AI use on the account's own model credential. No money: the plan bounds use."
       },
       "WatchedCompany": {
         "type": "object",

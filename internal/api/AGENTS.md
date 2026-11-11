@@ -39,5 +39,8 @@ A migrated route is still a Fiber route: it keeps its middleware chain and ends 
   matched route's own path (any letter case, one trailing slash) and repeated params cut to
   the first value (`fiberTarget`). An exploded array
   param would be cut too, so that function changes before one is declared.
+- A patch field that was a Go pointer is `field?: T | null` in TypeSpec: absent and `null`
+  both keep the stored value, as `json.Unmarshal` into a pointer did. `ptrOf` / `optNil`
+  in `contract.go` convert between the generated `OptNil*` and the domain pointer.
 - A binary answer (an image) works: `@body photo: bytes` with a fixed `contentType`.
 - Streams (SSE), websockets and redirects stay hand-written Fiber.

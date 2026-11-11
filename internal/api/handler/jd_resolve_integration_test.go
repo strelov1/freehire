@@ -93,7 +93,7 @@ func TestJDResolveEndpoint(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	cookieAuth := auth.RequireAuth(iss, testVersions)
-	app.Post("/api/v1/me/jd/resolve", cookieAuth, h.Resolve)
+	app.Post("/api/v1/me/jd/resolve", cookieAuth, newContract(contractHandlers{jdResolveHandlers: h}))
 
 	post := func(t *testing.T, body map[string]string, withCookie bool) (*http.Response, map[string]any) {
 		t.Helper()
@@ -186,7 +186,7 @@ func TestJDResolveEndpoint(t *testing.T) {
 		unreadableResolver := jdresolve.New(queries, unreadableIM, privatejob.NewWriter(queries))
 		unreadableH := newJDResolveHandlers(unreadableResolver)
 		unreadableApp := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		unreadableApp.Post("/api/v1/me/jd/resolve", cookieAuth, unreadableH.Resolve)
+		unreadableApp.Post("/api/v1/me/jd/resolve", cookieAuth, newContract(contractHandlers{jdResolveHandlers: unreadableH}))
 
 		raw, _ := json.Marshal(map[string]string{"url": "https://careers.mindera.test/about-us"})
 		r := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/jd/resolve", bytes.NewReader(raw))
@@ -207,7 +207,7 @@ func TestJDResolveEndpoint(t *testing.T) {
 		failingResolver := jdresolve.New(queries, failingIM, privatejob.NewWriter(queries))
 		failingH := newJDResolveHandlers(failingResolver)
 		failingApp := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		failingApp.Post("/api/v1/me/jd/resolve", cookieAuth, failingH.Resolve)
+		failingApp.Post("/api/v1/me/jd/resolve", cookieAuth, newContract(contractHandlers{jdResolveHandlers: failingH}))
 
 		raw, _ := json.Marshal(map[string]string{"url": "https://careers.mindera.test/unreachable"})
 		r := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/jd/resolve", bytes.NewReader(raw))
