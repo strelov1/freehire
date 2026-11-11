@@ -852,7 +852,7 @@
       <span class="sr-only">Discussion</span>{threadCount ? ` · ${threadCount}` : ''}
     </a>
     {@render reportButton()}
-    {@render saveButton('', iconOnly)}
+    {@render saveButton(iconOnly ? 'size-11 px-0' : '', iconOnly)}
     <!-- The link out, phone only. Below lg the sticky bottom bar belongs to auto-apply
          whenever auto-apply can be started, so the posting's own page needs a door
          somewhere else — and this strip is where the quiet things already are. On lg the
@@ -1373,7 +1373,7 @@
               type="button"
               disabled={loadingReferralMessage}
               onclick={() => void openReferralMessage()}
-              aria-label="Draft a referral message"
+              aria-label="Draft referral message"
               title="Draft a referral message"
               class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50 lg:min-w-0"
             >

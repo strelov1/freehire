@@ -226,7 +226,7 @@ it('offers a LinkedIn people search when no in-product referrer is available', (
 
 it('clears a referral draft when navigating to another job', async () => {
   const view = render(JobView, { job });
-  await fireEvent.click(screen.getByRole('button', { name: 'Draft a referral message' }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Draft referral message' }));
   const profile = await screen.findByLabelText<HTMLTextAreaElement>("Contact's public profile text");
   await fireEvent.input(profile, { target: { value: 'Sam, engineer at Acme' } });
 
