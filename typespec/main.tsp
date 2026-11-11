@@ -34,6 +34,8 @@ import "./referrals.tsp";
 import "./billing.tsp";
 import "./plan.tsp";
 import "./direct-apply.tsp";
+import "./jobs.tsp";
+import "./companies.tsp";
 
 using Http;
 

@@ -97,6 +97,12 @@
     },
     {
       "name": "DirectApply"
+    },
+    {
+      "name": "Jobs"
+    },
+    {
+      "name": "Companies"
     }
   ],
   "paths": {
@@ -271,6 +277,133 @@
         },
         "tags": [
           "Billing"
+        ]
+      }
+    },
+    "/companies": {
+      "get": {
+        "operationId": "listCompanies",
+        "description": "Ranked companies. `q` and the facet params (collections, regions, countries, domains,\nindustries, company_type, company_size, remote_regions, yc_batch, yc_status, yc_stage,\nyc_flags, maturity, subindustries) are read from the raw query, comma-joined or repeated;\na param the listing does not read is reported in `meta.ignored_params`.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  },
+                  "description": "A list: `{\"data\": [...], \"meta\": {...}}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/subindustries": {
+      "get": {
+        "operationId": "companySubindustries",
+        "description": "The subindustry vocabulary with company counts, most common first.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CompanySubindustry"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Companies"
         ]
       }
     },
@@ -2518,6 +2651,160 @@
         ]
       }
     },
+    "/jobs": {
+      "get": {
+        "operationId": "listJobs",
+        "description": "The newest open jobs. It reads no filter: a param other than the page ones is reported in `meta.ignored_params`.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  },
+                  "description": "A list: `{\"data\": [...], \"meta\": {...}}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ]
+      },
+      "post": {
+        "operationId": "createJob",
+        "description": "Moderators only. Creates a hand-curated vacancy.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/find": {
+      "get": {
+        "operationId": "findJob",
+        "description": "Resolves the URL of a posting in the wild to a catalogue slug.",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobFindResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ]
+      }
+    },
     "/jobs/resolve": {
       "post": {
         "operationId": "resolveJob",
@@ -2607,6 +2894,110 @@
         }
       }
     },
+    "/jobs/{slug}": {
+      "get": {
+        "operationId": "getJob",
+        "description": "One job by public slug. A signed-in caller also gets their own vote and auto-apply\nstatus. A slug that no longer exists still answers with its posting when its shortcode\nnames exactly one.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ]
+      },
+      "patch": {
+        "operationId": "updateJob",
+        "description": "Moderators only. Edits a manual vacancy by public slug.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
     "/jobs/{slug}/apply": {
       "post": {
         "operationId": "markApplied",
@@ -2665,6 +3056,113 @@
             }
           }
         }
+      }
+    },
+    "/jobs/{slug}/apply-form": {
+      "get": {
+        "operationId": "jobApplyForm",
+        "description": "The application form captured for the job. 404 when none was captured.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ]
+      }
+    },
+    "/jobs/{slug}/copies": {
+      "get": {
+        "operationId": "jobCopies",
+        "description": "The open postings a collapsed job stands for, one per city.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCopiesPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ]
       }
     },
     "/jobs/{slug}/direct-apply": {
@@ -11732,6 +12230,23 @@
           }
         }
       },
+      "CompanySubindustry": {
+        "type": "object",
+        "required": [
+          "value",
+          "count"
+        ],
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "One option of the subindustry vocabulary."
+      },
       "Contribution": {
         "type": "object",
         "required": [
@@ -13241,6 +13756,164 @@
           }
         }
       },
+      "JobCopiesMeta": {
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The whole closure's open size, even when the list is a capped page."
+          }
+        }
+      },
+      "JobCopiesPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JobCopy"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/JobCopiesMeta"
+          }
+        }
+      },
+      "JobCopy": {
+        "type": "object",
+        "required": [
+          "public_slug",
+          "location",
+          "apply_url",
+          "posted_at"
+        ],
+        "properties": {
+          "public_slug": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "apply_url": {
+            "type": "string"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "One per-city opening folded under a canonical job."
+      },
+      "JobCreate": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "remote": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "work_mode": {
+            "type": "string"
+          },
+          "employment_type": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "salary_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "salary_max": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "salary_currency": {
+            "type": "string"
+          },
+          "salary_period": {
+            "type": "string"
+          }
+        },
+        "description": "The moderator create body. url, title and company are required, and the service refuses a request without them."
+      },
       "JobDescriptionSource": {
         "type": "object",
         "properties": {
@@ -13262,6 +13935,52 @@
           }
         },
         "description": "Exactly one of `job_slug`, `url` and `text`; anything else is a 400."
+      },
+      "JobFindMeta": {
+        "type": "object",
+        "required": [
+          "ats_board"
+        ],
+        "properties": {
+          "ats_board": {
+            "type": "boolean",
+            "description": "Whether the URL sits on an ATS board freehire knows how to crawl."
+          }
+        }
+      },
+      "JobFindResult": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobFoundPosting"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/JobFindMeta"
+          }
+        },
+        "description": "`data` is null when the posting cannot be identified, and then `meta` says whether the board is crawlable."
+      },
+      "JobFoundPosting": {
+        "type": "object",
+        "required": [
+          "public_slug"
+        ],
+        "properties": {
+          "public_slug": {
+            "type": "string"
+          }
+        },
+        "description": "The posting a page URL is, when the catalogue carries it."
       },
       "JobReport": {
         "type": "object",
@@ -13339,6 +14058,74 @@
             "type": "string"
           }
         }
+      },
+      "JobUpdate": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "remote": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "The moderator edit body: a field left out or null is unchanged."
       },
       "JobsActivity": {
         "type": "object",

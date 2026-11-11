@@ -5,9 +5,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/atsboard"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -75,15 +75,18 @@ func catalogSlugForURL(ctx context.Context, queries *db.Queries, postings source
 // extension does not keep a second copy. The panel offers "add this job" only where that is
 // true or where the page marks itself up as a JobPosting: offered on every page, it filled
 // the triage queue with LinkedIn feeds, chat apps and localhost.
-func (h *jobsHandlers) FindJob(c *fiber.Ctx) error {
-	pageURL := strings.TrimSpace(c.Query("url"))
-	slug, err := catalogSlugForURL(c.Context(), h.queries, h.postings, pageURL)
+func (h *jobsHandlers) FindJob(ctx context.Context, params apigen.FindJobParams) (*apigen.JobFindResult, error) {
+	pageURL := strings.TrimSpace(params.URL.Or(""))
+	slug, err := catalogSlugForURL(ctx, h.queries, h.postings, pageURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if slug == "" {
 		_, _, _, atsBoard := atsboard.Recognize(pageURL)
-		return c.JSON(fiber.Map{"data": nil, "meta": fiber.Map{"ats_board": atsBoard}})
+		return &apigen.JobFindResult{
+			Data: apigen.NilJobFoundPosting{Null: true},
+			Meta: apigen.NewOptJobFindMeta(apigen.JobFindMeta{AtsBoard: atsBoard}),
+		}, nil
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"public_slug": slug}})
+	return &apigen.JobFindResult{Data: apigen.NewNilJobFoundPosting(apigen.JobFoundPosting{PublicSlug: slug})}, nil
 }

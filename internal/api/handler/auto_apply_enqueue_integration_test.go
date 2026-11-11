@@ -46,7 +46,7 @@ func newAutoApplyEnqueueApp(pool *pgxpool.Pool, iss *auth.Issuer, events autoApp
 	api := app.Group("/api/v1")
 	optionalAuth := auth.OptionalAuth(iss, testVersions, apiKeys{queries})
 	cookieAuth := auth.RequireAuth(iss, testVersions)
-	api.Get("/jobs/:slug", optionalAuth, (&jobsHandlers{queries: queries}).GetJob)
+	mountJobsContract(app, &jobsHandlers{queries: queries}, middleware{optional: optionalAuth})
 	api.Post("/jobs/:slug/auto-apply", cookieAuth, h.PostJobAutoApply)
 	return app, h
 }

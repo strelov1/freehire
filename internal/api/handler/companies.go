@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -43,9 +44,11 @@ func newCompaniesHandlers(queries *db.Queries, companySearch companySearcher) *c
 	}
 }
 
-func (h *companiesHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/companies", h.ListCompanies)
-	api.Get("/companies/subindustries", h.CompanySubindustries)
+// The detail, hiring and closed-jobs reads stay Fiber routes: a slug a merge retired answers
+// with a 301 to the canonical one, which the contract does not model.
+func (h *companiesHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Get("/companies", contract)
+	api.Get("/companies/subindustries", contract)
 	api.Get("/companies/:slug", mw.optional, h.GetCompany)
 	api.Get("/companies/:slug/hiring", h.CompanyHiring)
 	api.Get("/companies/:slug/closed-jobs", h.CompanyClosedJobs)
@@ -202,19 +205,19 @@ func companyViewFrom(c db.Company) companyView {
 // job-derived remote-hiring facet; `yc_batch`/`yc_status` are the curated YC
 // directory facets. meta.total reports the count matching the full filter so
 // pagination is correct.
-func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
-	limit, offset, err := pageParams(c)
+func (h *companiesHandlers) ListCompanies(ctx context.Context, params apigen.ListCompaniesParams) (*apigen.ListCompaniesOK, error) {
+	limit, offset, err := contractPageWindowed(ctx, defaultLimit, maxLimit)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	search := c.Query("q")
+	search := params.Q.Or("")
 	// sort=rating orders by feedback_rating_avg (see ListCompanies in
 	// internal/platform/db/queries/companies.sql); any other value (including absent)
 	// is the existing job_count DESC, name ordering. Forces the Postgres path
 	// below regardless of any filter present — rating isn't a Meili-sortable
 	// attribute yet (see companySettings' doc comment).
-	sort := c.Query("sort")
-	vals := queryValues(c)
+	sort := params.Sort.Or("")
+	vals := contractQuery(ctx)
 
 	// Parse each facet once and feed both queries, so their WHERE clauses can't
 	// drift. The query param names (company_type/company_size singular) differ from
@@ -254,14 +257,14 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	// Meili-sortable attribute yet (see companySettings), so routing there would
 	// silently ignore the caller's requested order instead of honouring it.
 	if h.companySearch != nil && sort != "rating" && isCompanyFilter(search, facets...) {
-		items, total, err := h.companyHitsViaMeili(c.Context(), search, vals, limit, offset)
+		items, total, err := h.companyHitsViaMeili(ctx, search, vals, limit, offset)
 		if err == nil {
-			return listResponseWithIgnored(c, items, total, limit, offset, ignoredCompanyParams(c), nil)
+			return companyListPage(items, total, limit, offset, vals)
 		}
 		log.Printf("companies: meili search fell back to postgres (q=%q): %v", search, err)
 	}
 
-	companies, err := h.queries.ListCompanies(c.Context(), db.ListCompaniesParams{
+	companies, err := h.queries.ListCompanies(ctx, db.ListCompaniesParams{
 		Search:        search,
 		Collections:   collections,
 		Regions:       regions,
@@ -282,7 +285,7 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 		Offset:        int32(offset),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// The unfiltered catalogue count(*) is a cold-cache heap scan (~17s on prod — see
@@ -291,7 +294,7 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	// and the pathological unfiltered case gets the O(1) planner estimate, as /jobs does.
 	var total int64
 	if isCompanyFilter(search, facets...) {
-		total, err = h.queries.CountCompanies(c.Context(), db.CountCompaniesParams{
+		total, err = h.queries.CountCompanies(ctx, db.CountCompaniesParams{
 			Search:        search,
 			Collections:   collections,
 			Regions:       regions,
@@ -309,17 +312,17 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 			Subindustries: subindustries,
 		})
 	} else {
-		total, err = h.queries.EstimateHiringCompanies(c.Context())
+		total, err = h.queries.EstimateHiringCompanies(ctx)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	items := make([]companyListItem, len(companies))
 	for i, row := range companies {
 		items[i] = companyListItemFromRow(row)
 	}
-	return listResponseWithIgnored(c, items, total, limit, offset, ignoredCompanyParams(c), nil)
+	return companyListPage(items, total, limit, offset, vals)
 }
 
 // isCompanyFilter reports whether a /companies request carries any name search or facet
@@ -347,12 +350,16 @@ type subindustryFacet struct {
 // CompanySubindustries serves the distinct subindustry vocabulary with company counts,
 // most common first, backing the searchable "Industry" facet's option list. Counts are
 // unconditional (they do not reflect other active list filters).
-func (h *companiesHandlers) CompanySubindustries(c *fiber.Ctx) error {
-	out, err := h.subindustries.get(c.Context())
+func (h *companiesHandlers) CompanySubindustries(ctx context.Context) (*apigen.CompanySubindustriesOK, error) {
+	facets, err := h.subindustries.get(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": out})
+	out := make([]apigen.CompanySubindustry, len(facets))
+	for i, f := range facets {
+		out[i] = apigen.CompanySubindustry{Value: f.Value, Count: f.Count}
+	}
+	return &apigen.CompanySubindustriesOK{Data: out}, nil
 }
 
 // subindustryCacheTTL is how long one count of the vocabulary is served. The query is a
@@ -705,8 +712,21 @@ var companiesParams = []string{"q", "sort", "limit", "offset"}
 // separate: a company search reads its own facet list and none of the
 // `_exclude` / `_mode` conventions, so a jobs facet sent here is ignored and has
 // to be named as such.
-func ignoredCompanyParams(c *fiber.Ctx) []search.UnknownParam {
-	return search.UnknownCompanyParams(queryValues(c), companiesParams)
+func ignoredCompanyParams(query url.Values) []search.UnknownParam {
+	return search.UnknownCompanyParams(query, companiesParams)
+}
+
+// companyListPage is the list envelope: each item as the JSON its projection marshals to,
+// and the params the filter did not read.
+func companyListPage(items []companyListItem, total int64, limit, offset int, query url.Values) (*apigen.ListCompaniesOK, error) {
+	data, err := marshalRaws(items)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.ListCompaniesOK{Data: data, Meta: apigen.ListMeta{
+		Total: total, Limit: int64(limit), Offset: int64(offset),
+		IgnoredParams: contractIgnoredParams(ignoredCompanyParams(query)),
+	}}, nil
 }
 
 // companyPath is the request's own path with its :slug segment swapped for the canonical
