@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/search/suggest"
 )
 
@@ -26,8 +27,8 @@ const (
 
 type suggestHandlers struct{ suggest suggester }
 
-func (h *suggestHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/suggest", h.Suggest)
+func (h *suggestHandlers) register(api fiber.Router, contract fiber.Handler) {
+	api.Get("/suggest", contract)
 }
 
 // Suggest completes what the visitor is typing.
@@ -36,31 +37,33 @@ func (h *suggestHandlers) register(api fiber.Router, mw middleware) {
 // box should offer is the filter modal's own category grouping, which lives in the web
 // and is checked there against the category vocabulary at compile time; serving it from
 // here would be a second copy of that order — see suggest.Service.Suggest.
-func (h *suggestHandlers) Suggest(c *fiber.Ctx) error {
+func (h *suggestHandlers) Suggest(ctx context.Context, params apigen.SuggestParams) (*apigen.SuggestOK, error) {
 	if h.suggest == nil {
-		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not configured")
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not configured")
 	}
 
-	items, err := h.suggest.Suggest(c.Context(), c.Query("q"), suggestLimit(c))
+	items, err := h.suggest.Suggest(ctx, params.Q.Value, suggestLimit(params.Limit.Value))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	// Always an array, never null: a client that renders `data.map(...)` should not
-	// have to distinguish "no matches" from "no field".
-	if items == nil {
-		items = []suggest.Suggestion{}
+	// Always an array, never null (the generated encoder writes a nil slice as []): a
+	// client that renders `data.map(...)` should not have to tell "no matches" from "no field".
+	out := make([]apigen.Suggestion, len(items))
+	for i, item := range items {
+		parts := make([]apigen.SuggestionPart, len(item.Parts))
+		for j, p := range item.Parts {
+			parts[j] = apigen.SuggestionPart{Kind: apigen.SuggestionKind(p.Kind), Slug: optString(p.Slug), Text: p.Text}
+		}
+		out[i] = apigen.Suggestion{Text: item.Text, Parts: parts, Jobs: int64(item.Jobs)}
 	}
-	return c.JSON(fiber.Map{
-		"data": items,
-		"meta": fiber.Map{"count": len(items)},
-	})
+	return &apigen.SuggestOK{Data: out, Meta: apigen.SuggestMeta{Count: int64(len(out))}}, nil
 }
 
 // suggestLimit reads the row cap, clamped. An unparseable or out-of-range value falls
 // back to the default rather than failing the request: this endpoint is typed into, and
 // a 400 in the middle of a dropdown is worse than a sensible number of rows.
-func suggestLimit(c *fiber.Ctx) int {
-	n, err := strconv.Atoi(c.Query("limit"))
+func suggestLimit(raw string) int {
+	n, err := strconv.Atoi(raw)
 	if err != nil || n < 1 {
 		return suggestDefaultLimit
 	}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/go-faster/errors"
 )
 
 func (s *ProblemStatusCode) Error() string {
@@ -25,6 +27,50 @@ func (s *AddToWatchlistOK) GetData() WatchedCompany {
 // SetData sets the value of Data.
 func (s *AddToWatchlistOK) SetData(val WatchedCompany) {
 	s.Data = val
+}
+
+// Ref: #/components/schemas/AgentPermissions
+type AgentPermissions struct {
+	// Whether an agent acting for the account may submit applications. Absent reads as false.
+	AgentsMayApply OptBool `json:"agents_may_apply"`
+}
+
+// GetAgentsMayApply returns the value of AgentsMayApply.
+func (s *AgentPermissions) GetAgentsMayApply() OptBool {
+	return s.AgentsMayApply
+}
+
+// SetAgentsMayApply sets the value of AgentsMayApply.
+func (s *AgentPermissions) SetAgentsMayApply(val OptBool) {
+	s.AgentsMayApply = val
+}
+
+// Ref: #/components/schemas/CityMatch
+type CityMatch struct {
+	// The city's canonical name, the value the filters take.
+	Value string `json:"value"`
+	// ISO 3166-1 alpha-2, lower case.
+	Country string `json:"country"`
+}
+
+// GetValue returns the value of Value.
+func (s *CityMatch) GetValue() string {
+	return s.Value
+}
+
+// GetCountry returns the value of Country.
+func (s *CityMatch) GetCountry() string {
+	return s.Country
+}
+
+// SetValue sets the value of Value.
+func (s *CityMatch) SetValue(val string) {
+	s.Value = val
+}
+
+// SetCountry sets the value of Country.
+func (s *CityMatch) SetCountry(val string) {
+	s.Country = val
 }
 
 // The preference page's state: the address mail goes to and the three switches.
@@ -263,6 +309,21 @@ func (s *FacetRange) SetMax(val int32) {
 }
 
 // A single item: `{"data": ...}`.
+type GetAgentPermissionsOK struct {
+	Data AgentPermissions `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetAgentPermissionsOK) GetData() AgentPermissions {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetAgentPermissionsOK) SetData(val AgentPermissions) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type GetEmailPrefsOK struct {
 	Data EmailPrefs `json:"data"`
 }
@@ -289,6 +350,21 @@ func (s *GetMyEmailGroupsOK) GetData() EmailPrefs {
 
 // SetData sets the value of Data.
 func (s *GetMyEmailGroupsOK) SetData(val EmailPrefs) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetMyUsageOK struct {
+	Data Usage `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetMyUsageOK) GetData() Usage {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetMyUsageOK) SetData(val Usage) {
 	s.Data = val
 }
 
@@ -952,6 +1028,209 @@ func (s *ProblemStatusCode) SetResponse(val Problem) {
 // RemoveFromWatchlistNoContent is response for RemoveFromWatchlist operation.
 type RemoveFromWatchlistNoContent struct{}
 
+// A single item: `{"data": ...}`.
+type SearchCitiesOK struct {
+	Data []CityMatch `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SearchCitiesOK) GetData() []CityMatch {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SearchCitiesOK) SetData(val []CityMatch) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type SetAgentPermissionsOK struct {
+	Data AgentPermissions `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SetAgentPermissionsOK) GetData() AgentPermissions {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SetAgentPermissionsOK) SetData(val AgentPermissions) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/SuggestMeta
+type SuggestMeta struct {
+	Count int64 `json:"count"`
+}
+
+// GetCount returns the value of Count.
+func (s *SuggestMeta) GetCount() int64 {
+	return s.Count
+}
+
+// SetCount sets the value of Count.
+func (s *SuggestMeta) SetCount(val int64) {
+	s.Count = val
+}
+
+type SuggestOK struct {
+	Data []Suggestion `json:"data"`
+	Meta SuggestMeta  `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *SuggestOK) GetData() []Suggestion {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *SuggestOK) GetMeta() SuggestMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *SuggestOK) SetData(val []Suggestion) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *SuggestOK) SetMeta(val SuggestMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/Suggestion
+type Suggestion struct {
+	Text  string           `json:"text"`
+	Parts []SuggestionPart `json:"parts"`
+	// How many open jobs the suggestion finds.
+	Jobs int64 `json:"jobs"`
+}
+
+// GetText returns the value of Text.
+func (s *Suggestion) GetText() string {
+	return s.Text
+}
+
+// GetParts returns the value of Parts.
+func (s *Suggestion) GetParts() []SuggestionPart {
+	return s.Parts
+}
+
+// GetJobs returns the value of Jobs.
+func (s *Suggestion) GetJobs() int64 {
+	return s.Jobs
+}
+
+// SetText sets the value of Text.
+func (s *Suggestion) SetText(val string) {
+	s.Text = val
+}
+
+// SetParts sets the value of Parts.
+func (s *Suggestion) SetParts(val []SuggestionPart) {
+	s.Parts = val
+}
+
+// SetJobs sets the value of Jobs.
+func (s *Suggestion) SetJobs(val int64) {
+	s.Jobs = val
+}
+
+// Ref: #/components/schemas/SuggestionKind
+type SuggestionKind string
+
+const (
+	SuggestionKindTitle    SuggestionKind = "title"
+	SuggestionKindSkill    SuggestionKind = "skill"
+	SuggestionKindCategory SuggestionKind = "category"
+	SuggestionKindCompany  SuggestionKind = "company"
+)
+
+// AllValues returns all SuggestionKind values.
+func (SuggestionKind) AllValues() []SuggestionKind {
+	return []SuggestionKind{
+		SuggestionKindTitle,
+		SuggestionKindSkill,
+		SuggestionKindCategory,
+		SuggestionKindCompany,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s SuggestionKind) MarshalText() ([]byte, error) {
+	switch s {
+	case SuggestionKindTitle:
+		return []byte(s), nil
+	case SuggestionKindSkill:
+		return []byte(s), nil
+	case SuggestionKindCategory:
+		return []byte(s), nil
+	case SuggestionKindCompany:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *SuggestionKind) UnmarshalText(data []byte) error {
+	switch SuggestionKind(data) {
+	case SuggestionKindTitle:
+		*s = SuggestionKindTitle
+		return nil
+	case SuggestionKindSkill:
+		*s = SuggestionKindSkill
+		return nil
+	case SuggestionKindCategory:
+		*s = SuggestionKindCategory
+		return nil
+	case SuggestionKindCompany:
+		*s = SuggestionKindCompany
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// One recognised piece of the query: a dictionary term, or text still being typed.
+// Ref: #/components/schemas/SuggestionPart
+type SuggestionPart struct {
+	Kind SuggestionKind `json:"kind"`
+	// The dictionary slug, when the part is one.
+	Slug OptString `json:"slug"`
+	Text string    `json:"text"`
+}
+
+// GetKind returns the value of Kind.
+func (s *SuggestionPart) GetKind() SuggestionKind {
+	return s.Kind
+}
+
+// GetSlug returns the value of Slug.
+func (s *SuggestionPart) GetSlug() OptString {
+	return s.Slug
+}
+
+// GetText returns the value of Text.
+func (s *SuggestionPart) GetText() string {
+	return s.Text
+}
+
+// SetKind sets the value of Kind.
+func (s *SuggestionPart) SetKind(val SuggestionKind) {
+	s.Kind = val
+}
+
+// SetSlug sets the value of Slug.
+func (s *SuggestionPart) SetSlug(val OptString) {
+	s.Slug = val
+}
+
+// SetText sets the value of Text.
+func (s *SuggestionPart) SetText(val string) {
+	s.Text = val
+}
+
 // The anonymised card: only what a dictionary can vouch for.
 // Ref: #/components/schemas/TalentCard
 type TalentCard struct {
@@ -1341,6 +1620,67 @@ func (s *UpdateMyEmailGroupsOK) GetData() EmailPrefs {
 // SetData sets the value of Data.
 func (s *UpdateMyEmailGroupsOK) SetData(val EmailPrefs) {
 	s.Data = val
+}
+
+// Today's AI use on the account's own model credential. No money: the plan bounds use.
+// Ref: #/components/schemas/Usage
+type Usage struct {
+	Requests int64 `json:"requests"`
+	Failed   int64 `json:"failed"`
+	Tokens   int64 `json:"tokens"`
+	// The plan day the figures cover, YYYY-MM-DD in UTC.
+	Period   string    `json:"period"`
+	ResetsAt time.Time `json:"resets_at"`
+}
+
+// GetRequests returns the value of Requests.
+func (s *Usage) GetRequests() int64 {
+	return s.Requests
+}
+
+// GetFailed returns the value of Failed.
+func (s *Usage) GetFailed() int64 {
+	return s.Failed
+}
+
+// GetTokens returns the value of Tokens.
+func (s *Usage) GetTokens() int64 {
+	return s.Tokens
+}
+
+// GetPeriod returns the value of Period.
+func (s *Usage) GetPeriod() string {
+	return s.Period
+}
+
+// GetResetsAt returns the value of ResetsAt.
+func (s *Usage) GetResetsAt() time.Time {
+	return s.ResetsAt
+}
+
+// SetRequests sets the value of Requests.
+func (s *Usage) SetRequests(val int64) {
+	s.Requests = val
+}
+
+// SetFailed sets the value of Failed.
+func (s *Usage) SetFailed(val int64) {
+	s.Failed = val
+}
+
+// SetTokens sets the value of Tokens.
+func (s *Usage) SetTokens(val int64) {
+	s.Tokens = val
+}
+
+// SetPeriod sets the value of Period.
+func (s *Usage) SetPeriod(val string) {
+	s.Period = val
+}
+
+// SetResetsAt sets the value of ResetsAt.
+func (s *Usage) SetResetsAt(val time.Time) {
+	s.ResetsAt = val
 }
 
 // Ref: #/components/schemas/WatchedCompany

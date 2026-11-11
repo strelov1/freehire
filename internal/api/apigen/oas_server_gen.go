@@ -12,6 +12,12 @@ type Handler interface {
 	//
 	// PUT /me/watchlist/{slug}
 	AddToWatchlist(ctx context.Context, params AddToWatchlistParams) (*AddToWatchlistOK, error)
+	// GetAgentPermissions implements getAgentPermissions operation.
+	//
+	// Readable with a session or an API key.
+	//
+	// GET /me/agent-permissions
+	GetAgentPermissions(ctx context.Context) (*GetAgentPermissionsOK, error)
 	// GetEmailPrefs implements getEmailPrefs operation.
 	//
 	// GET /email-prefs
@@ -20,6 +26,12 @@ type Handler interface {
 	//
 	// GET /me/email-groups
 	GetMyEmailGroups(ctx context.Context) (*GetMyEmailGroupsOK, error)
+	// GetMyUsage implements getMyUsage operation.
+	//
+	// With a session or an API key. Zeroes when the gateway cannot be read.
+	//
+	// GET /me/usage
+	GetMyUsage(ctx context.Context) (*GetMyUsageOK, error)
 	// GetTalentFacets implements getTalentFacets operation.
 	//
 	// GET /talent/facets
@@ -68,6 +80,24 @@ type Handler interface {
 	//
 	// DELETE /me/watchlist/{slug}
 	RemoveFromWatchlist(ctx context.Context, params RemoveFromWatchlistParams) error
+	// SearchCities implements searchCities operation.
+	//
+	// Up to 20 cities whose name matches, optionally within one country.
+	//
+	// GET /geo/cities
+	SearchCities(ctx context.Context, params SearchCitiesParams) (*SearchCitiesOK, error)
+	// SetAgentPermissions implements setAgentPermissions operation.
+	//
+	// Session cookie only: an agent must not grant itself the right to apply.
+	//
+	// PUT /me/agent-permissions
+	SetAgentPermissions(ctx context.Context, req *AgentPermissions) (*SetAgentPermissionsOK, error)
+	// Suggest implements suggest operation.
+	//
+	// Search-box suggestions. 503 when search is not configured.
+	//
+	// GET /suggest
+	Suggest(ctx context.Context, params SuggestParams) (*SuggestOK, error)
 	// UpdateEmailPrefs implements updateEmailPrefs operation.
 	//
 	// PATCH /email-prefs

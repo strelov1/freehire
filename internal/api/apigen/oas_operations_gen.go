@@ -7,8 +7,10 @@ type OperationName = string
 
 const (
 	AddToWatchlistOperation      OperationName = "AddToWatchlist"
+	GetAgentPermissionsOperation OperationName = "GetAgentPermissions"
 	GetEmailPrefsOperation       OperationName = "GetEmailPrefs"
 	GetMyEmailGroupsOperation    OperationName = "GetMyEmailGroups"
+	GetMyUsageOperation          OperationName = "GetMyUsage"
 	GetTalentFacetsOperation     OperationName = "GetTalentFacets"
 	GetTalentMemberOperation     OperationName = "GetTalentMember"
 	GetTalentPhotoOperation      OperationName = "GetTalentPhoto"
@@ -18,6 +20,9 @@ const (
 	ListWatchlistOperation       OperationName = "ListWatchlist"
 	OneClickUnsubscribeOperation OperationName = "OneClickUnsubscribe"
 	RemoveFromWatchlistOperation OperationName = "RemoveFromWatchlist"
+	SearchCitiesOperation        OperationName = "SearchCities"
+	SetAgentPermissionsOperation OperationName = "SetAgentPermissions"
+	SuggestOperation             OperationName = "Suggest"
 	UpdateEmailPrefsOperation    OperationName = "UpdateEmailPrefs"
 	UpdateMyEmailGroupsOperation OperationName = "UpdateMyEmailGroups"
 )
