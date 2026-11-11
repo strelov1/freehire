@@ -27,8 +27,8 @@ model IgnoredParam {
 /** A page of a list, with what the filter dropped. */
 model ListMeta {
   total: int64;
-  limit: int32;
-  offset: int32;
+  limit: int64;
+  offset: int64;
 
   /** Absent when every param was read. */
   ignored_params?: IgnoredParam[];

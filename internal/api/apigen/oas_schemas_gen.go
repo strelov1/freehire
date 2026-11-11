@@ -454,8 +454,8 @@ func (s *IgnoredParam) SetDidYouMean(val OptString) {
 // Ref: #/components/schemas/ListMeta
 type ListMeta struct {
 	Total  int64 `json:"total"`
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
 	// Absent when every param was read.
 	IgnoredParams []IgnoredParam `json:"ignored_params"`
 }
@@ -466,12 +466,12 @@ func (s *ListMeta) GetTotal() int64 {
 }
 
 // GetLimit returns the value of Limit.
-func (s *ListMeta) GetLimit() int32 {
+func (s *ListMeta) GetLimit() int64 {
 	return s.Limit
 }
 
 // GetOffset returns the value of Offset.
-func (s *ListMeta) GetOffset() int32 {
+func (s *ListMeta) GetOffset() int64 {
 	return s.Offset
 }
 
@@ -486,12 +486,12 @@ func (s *ListMeta) SetTotal(val int64) {
 }
 
 // SetLimit sets the value of Limit.
-func (s *ListMeta) SetLimit(val int32) {
+func (s *ListMeta) SetLimit(val int64) {
 	s.Limit = val
 }
 
 // SetOffset sets the value of Offset.
-func (s *ListMeta) SetOffset(val int32) {
+func (s *ListMeta) SetOffset(val int64) {
 	s.Offset = val
 }
 

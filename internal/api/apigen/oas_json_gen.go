@@ -1295,11 +1295,11 @@ func (s *ListMeta) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("limit")
-		e.Int32(s.Limit)
+		e.Int64(s.Limit)
 	}
 	{
 		e.FieldStart("offset")
-		e.Int32(s.Offset)
+		e.Int64(s.Offset)
 	}
 	{
 		if s.IgnoredParams != nil {
@@ -1344,8 +1344,8 @@ func (s *ListMeta) Decode(d *jx.Decoder) error {
 		case "limit":
 			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
-				v, err := d.Int32()
-				s.Limit = int32(v)
+				v, err := d.Int64()
+				s.Limit = int64(v)
 				if err != nil {
 					return err
 				}
@@ -1356,8 +1356,8 @@ func (s *ListMeta) Decode(d *jx.Decoder) error {
 		case "offset":
 			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
-				v, err := d.Int32()
-				s.Offset = int32(v)
+				v, err := d.Int64()
+				s.Offset = int64(v)
 				if err != nil {
 					return err
 				}

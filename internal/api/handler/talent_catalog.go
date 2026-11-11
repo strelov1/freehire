@@ -76,8 +76,8 @@ func (h *talentCatalogHandlers) ListTalent(ctx context.Context, _ apigen.ListTal
 	}
 	return &apigen.ListTalentOK{Data: members, Meta: apigen.ListMeta{
 		Total:         int64(page.Total),
-		Limit:         int32(q.Limit),  //nolint:gosec // bounded by talentnetwork's maxLimit
-		Offset:        int32(q.Offset), //nolint:gosec // bounded to MaxInt32 by QueryFromValues
+		Limit:         int64(q.Limit),
+		Offset:        int64(q.Offset),
 		IgnoredParams: contractIgnoredParams(ignoredTalentParams(vals, unreadable)),
 	}}, nil
 }
