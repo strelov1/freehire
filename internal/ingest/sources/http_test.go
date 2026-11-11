@@ -646,3 +646,40 @@ func TestClientGetJSONOrNoContentTreats204AsEmptySuccess(t *testing.T) {
 		t.Errorf("hits = %d, want 1 — a 204 is final, not retried", got)
 	}
 }
+
+func TestClientGetXMLRequiresDocumentEnd(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		trailer string
+		valid   bool
+	}{
+		{name: "document end", valid: true},
+		{name: "whitespace", trailer: " \t\r\n", valid: true},
+		{name: "comment and processing instruction", trailer: "\n<!-- complete --> <?audit checked?>\n", valid: true},
+		{name: "extra root", trailer: `<error/>`},
+		{name: "trailing text", trailer: `temporarily unavailable`},
+		{name: "malformed trailing element", trailer: `<broken`},
+		{name: "malformed trailing comment", trailer: `<!-- broken`},
+		{name: "trailing XML declaration", trailer: `<?xml version="1.0"?>`},
+		{name: "trailing directive", trailer: `<!DOCTYPE error>`},
+		{name: "non XML whitespace", trailer: "\u00a0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(`<root><name>acme</name></root>` + tc.trailer))
+			}))
+			defer srv.Close()
+			var out struct {
+				Name string `xml:"name"`
+			}
+			c := &Client{httpClient: srv.Client()}
+			err := c.GetXML(context.Background(), srv.URL, &out)
+			if (err == nil) != tc.valid {
+				t.Fatalf("GetXML error = %v, valid document = %v", err, tc.valid)
+			}
+			if tc.valid && out.Name != "acme" {
+				t.Fatalf("decoded name = %q, want acme", out.Name)
+			}
+		})
+	}
+}

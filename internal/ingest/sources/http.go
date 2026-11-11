@@ -588,7 +588,34 @@ func (c *Client) GetXML(ctx context.Context, url string, v any) error {
 		url:    url,
 		accept: xmlAccept,
 		decode: func(resp *http.Response) error {
-			return newXMLDecoder(resp.Body).Decode(v)
+			dec := newXMLDecoder(resp.Body)
+			if err := dec.Decode(v); err != nil {
+				return err
+			}
+			// Decode stops after one root. A successful listing must consume the
+			// document, permitting only XML's trailing whitespace, comments and PIs.
+			for {
+				token, err := dec.Token()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				switch t := token.(type) {
+				case xml.CharData:
+					if len(bytes.Trim(t, " \t\r\n")) == 0 {
+						continue
+					}
+				case xml.Comment:
+					continue
+				case xml.ProcInst:
+					if !strings.EqualFold(t.Target, "xml") {
+						continue
+					}
+				}
+				return errors.New("XML response contains content after the root element")
+			}
 		},
 	})
 }

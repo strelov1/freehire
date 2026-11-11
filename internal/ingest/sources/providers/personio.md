@@ -2,7 +2,9 @@
 
 The default XML feed is a complete listing without pagination. Require its
 native `workzag-jobs` root and valid, unique position IDs and names: another XML
-root must never become an empty board. Verified on 2026-11-11: `ifunds` returns
+root must never become an empty board. Direct children must be positions, with
+only formatting whitespace at the root: native-root error envelopes and unknown
+children fail the listing instead of silently becoming empty or partial boards. Verified on 2026-11-11: `ifunds` returns
 HTTP 200 with an empty `<workzag-jobs>` document while its expired posting
 2335254 returns HTTP 404. Its German `search.json` independently returns `[]`. An unknown tenant
 `freehire-nonexistent-20261111` returns HTTP 404 on both XML and search endpoints.

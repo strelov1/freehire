@@ -16,10 +16,12 @@ func HybridArrangementStated(desc string) bool {
 		refusals:       []string{"not offered", "not available", "not possible", "not an option"},
 		negationWindow: 60,
 	}
+	// A later contrast or transition can state the permanent remote arrangement.
+	remoteText := remoteArrangementClauses.Replace(text)
 	for _, p := range []string{
 		"fully remote", "fully-remote", "100% remote", "100 % remote",
 	} {
-		if phraseMatches(text, p) && guardedPhraseMatches(text, p, "remote", remoteGuards) {
+		if phraseMatches(remoteText, p) && guardedPhraseMatches(remoteText, p, "remote", remoteGuards) {
 			return false
 		}
 	}
@@ -55,6 +57,8 @@ func HybridArrangementStated(desc string) bool {
 	}
 	return hybridLocationHeader(text, english)
 }
+
+var remoteArrangementClauses = strings.NewReplacer(" but ", "; ", " then ", "; ")
 
 var englishHybridStatements = regexp.MustCompile(
 	`\b(?:hybrid role|hybrid working|hybrid work arrangement|hybrid work model|hybrid schedule|hybrid position` +

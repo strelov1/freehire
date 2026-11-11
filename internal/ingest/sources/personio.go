@@ -132,9 +132,18 @@ func (p personio) feed(ctx context.Context, host, lang string) ([]personioPositi
 	var resp struct {
 		XMLName   xml.Name           `xml:"workzag-jobs"`
 		Positions []personioPosition `xml:"position"`
+		Text      string             `xml:",chardata"`
+		Unknown   []struct {
+			XMLName xml.Name
+		} `xml:",any"`
 	}
 	if err := p.http.GetXML(ctx, url, &resp); err != nil {
 		return nil, err
+	}
+	// A native root can also wrap an error. Only positions and formatting whitespace
+	// are listing evidence; silently ignoring other content could close the board.
+	if strings.TrimSpace(resp.Text) != "" || len(resp.Unknown) != 0 {
+		return nil, fmt.Errorf("personio: unexpected XML listing content")
 	}
 	seen := make(map[string]bool)
 	for _, pos := range resp.Positions {

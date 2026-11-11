@@ -14,7 +14,7 @@ var emptyBoardListingAdapters = map[string]struct {
 	notEmpty  []string // decodable answers that carry no posting collection
 }{
 	"join":           {func(f *fakeHTTP) Source { return NewJoin(f) }, `{"items":[],"pagination":{"pageCount":0,"rowCount":0}}`, []string{`{}`, `{"items":null,"pagination":{"pageCount":0,"rowCount":0}}`, `{"items":[],"pagination":{"pageCount":0}}`}},
-	"personio":       {func(f *fakeHTTP) Source { return NewPersonio(f) }, `<workzag-jobs></workzag-jobs>`, []string{`<html></html>`, `<error></error>`}},
+	"personio":       {func(f *fakeHTTP) Source { return NewPersonio(f) }, `<workzag-jobs/>`, []string{`<html></html>`, `<error></error>`, `<workzag-jobs><error>temporarily unavailable</error></workzag-jobs>`, `<workzag-jobs>temporarily unavailable</workzag-jobs>`}},
 	"hiringthing":    {func(f *fakeHTTP) Source { return NewHiringThing(f) }, htListingHTML(), []string{`<html></html>`, `<div data-react-class="HiringThing.Components.JobFiltersContainer" data-react-props="{}"></div>`}},
 	"idealtraits":    {func(f *fakeHTTP) Source { return NewIdealTraits(f) }, `{"joblist":"","jobcount":0}`, []string{`{}`, `{"joblist":""}`, `{"jobcount":0}`, `{"joblist":null,"jobcount":0}`}},
 	"greenhouse":     {func(f *fakeHTTP) Source { return NewGreenhouse(f) }, `{"jobs":[],"meta":{"total":0}}`, []string{`{}`, `{"jobs":null}`, `{"status":404}`}},

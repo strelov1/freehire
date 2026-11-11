@@ -1087,6 +1087,7 @@ func TestDerive_HybridArrangementContradictsStructuredRemote(t *testing.T) {
 
 func TestDerive_RemotePreservedForIncidentalHybridMentions(t *testing.T) {
 	for _, description := range []string{
+		"This role is not fully remote, but is a hybrid role for 30 days, then fully remote.",
 		"Experience with hybrid cloud infrastructure.",
 		"Based in Berlin, maintain infrastructure (Hybrid).",
 		"Location: Berlin, maintain infrastructure (hybrid).",
