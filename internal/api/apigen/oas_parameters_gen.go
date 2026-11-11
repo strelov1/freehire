@@ -3381,6 +3381,135 @@ func decodeFindModeratedUserParams(args [0]string, argsEscaped bool, r *http.Req
 	return params, nil
 }
 
+// GetBillingCheckoutParams is parameters of getBillingCheckout operation.
+type GetBillingCheckoutParams struct {
+	Price OptString `json:",omitempty,omitzero"`
+}
+
+func unpackGetBillingCheckoutParams(packed middleware.Parameters) (params GetBillingCheckoutParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "price",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Price = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeGetBillingCheckoutParams(args [0]string, argsEscaped bool, r *http.Request) (params GetBillingCheckoutParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: price.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "price",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotPriceVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotPriceVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Price.SetTo(paramsDotPriceVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "price",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// GetDirectApplyFormParams is parameters of getDirectApplyForm operation.
+type GetDirectApplyFormParams struct {
+	Slug string
+}
+
+func unpackGetDirectApplyFormParams(packed middleware.Parameters) (params GetDirectApplyFormParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "slug",
+			In:   "path",
+		}
+		params.Slug = packed[key].(string)
+	}
+	return params
+}
+
+func decodeGetDirectApplyFormParams(args [1]string, argsEscaped bool, r *http.Request) (params GetDirectApplyFormParams, _ error) {
+	// Decode path: slug.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "slug",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Slug = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // GetEmailPrefsParams is parameters of getEmailPrefs operation.
 type GetEmailPrefsParams struct {
 	T OptString `json:",omitempty,omitzero"`
@@ -9208,6 +9337,71 @@ func decodeSendConversationMessageParams(args [1]string, argsEscaped bool, r *ht
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// SendDirectApplyParams is parameters of sendDirectApply operation.
+type SendDirectApplyParams struct {
+	Slug string
+}
+
+func unpackSendDirectApplyParams(packed middleware.Parameters) (params SendDirectApplyParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "slug",
+			In:   "path",
+		}
+		params.Slug = packed[key].(string)
+	}
+	return params
+}
+
+func decodeSendDirectApplyParams(args [1]string, argsEscaped bool, r *http.Request) (params SendDirectApplyParams, _ error) {
+	// Decode path: slug.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "slug",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Slug = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "slug",
 			In:   "path",
 			Err:  err,
 		}

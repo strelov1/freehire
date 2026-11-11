@@ -88,9 +88,192 @@
     },
     {
       "name": "Referrals"
+    },
+    {
+      "name": "Billing"
+    },
+    {
+      "name": "Plan"
+    },
+    {
+      "name": "DirectApply"
     }
   ],
   "paths": {
+    "/billing/checkout": {
+      "get": {
+        "operationId": "getBillingCheckout",
+        "description": "404 when checkout is unconfigured or the price is not offered. Cookie session only.",
+        "parameters": [
+          {
+            "name": "price",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BillingCheckout"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/billing/manage": {
+      "get": {
+        "operationId": "getBillingManage",
+        "description": "404 when there is no subscription to manage. Cookie session only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BillingUrl"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/billing/revenuecat/sync": {
+      "post": {
+        "operationId": "syncBillingStore",
+        "description": "503 when the store provider cannot be reached. Cookie session only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BillingStoreSync"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/billing/subscription": {
+      "get": {
+        "operationId": "getBillingSubscription",
+        "description": "404 when the account has no subscription. Cookie session only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BillingOverview"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
     "/companies/{slug}/feedback": {
       "get": {
         "operationId": "listCompanyFeedback",
@@ -2478,6 +2661,114 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ApplyJob"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{slug}/direct-apply": {
+      "get": {
+        "operationId": "getDirectApplyForm",
+        "description": "The vacancy's questions and, for a signed-in candidate, their prefill. 501 when the deployment cannot deliver applications.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DirectApplyForm"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "DirectApply"
+        ]
+      },
+      "post": {
+        "operationId": "sendDirectApply",
+        "description": "Sends the caller's application. Cookie session only.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DirectApplySent"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "DirectApply"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectApplyRequest"
               }
             }
           }
@@ -5962,6 +6253,91 @@
         },
         "tags": [
           "Account"
+        ]
+      }
+    },
+    "/me/plan": {
+      "get": {
+        "operationId": "getMyPlan",
+        "description": "The caller's plan and today's usage, without consuming anything.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PlanStanding"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Plan"
+        ]
+      }
+    },
+    "/me/plan/history": {
+      "get": {
+        "operationId": "getMyPlanHistory",
+        "description": "Recent usage entries, newest first.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PlanHistoryEntry"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Plan"
         ]
       }
     },
@@ -9915,6 +10291,134 @@
         },
         "description": "The current single place: an ISO country code and a free-text city."
       },
+      "BillingCheckout": {
+        "type": "object",
+        "required": [
+          "url",
+          "discount_percent",
+          "discount_source"
+        ],
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "discount_percent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The discount actually applied, 0 when none."
+          },
+          "discount_source": {
+            "type": "string",
+            "description": "The label of the applied discount, empty when none."
+          }
+        },
+        "description": "The checkout link and which offer was applied to it."
+      },
+      "BillingInvoice": {
+        "type": "object",
+        "required": [
+          "id",
+          "date",
+          "amount_cents",
+          "currency",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "amount_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The smallest currency unit, as the payment provider stores it."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "receipt_url": {
+            "type": "string",
+            "description": "The provider's hosted invoice, absent for a draft."
+          }
+        }
+      },
+      "BillingOverview": {
+        "type": "object",
+        "required": [
+          "status",
+          "amount_cents",
+          "currency",
+          "interval",
+          "invoices"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "amount_cents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "interval": {
+            "type": "string"
+          },
+          "renews_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Absent when the subscription is ending.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Set when the subscriber has cancelled.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "invoices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BillingInvoice"
+            }
+          },
+          "multiple_subscriptions": {
+            "type": "boolean"
+          }
+        },
+        "description": "What the account is paying and what has been charged, read from the provider."
+      },
+      "BillingStoreSync": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "`synced` or `no_subscription`."
+          }
+        }
+      },
+      "BillingUrl": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        }
+      },
       "BuddyActivity": {
         "type": "object",
         "required": [
@@ -11664,6 +12168,143 @@
           }
         }
       },
+      "DirectApplyCVOptions": {
+        "type": "object",
+        "required": [
+          "tailored",
+          "has_resume"
+        ],
+        "properties": {
+          "tailored": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DirectApplyTailoredCV"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The CV tailored for this vacancy, null when none."
+          },
+          "has_resume": {
+            "type": "boolean"
+          }
+        },
+        "description": "What the signed-in candidate can send."
+      },
+      "DirectApplyForm": {
+        "type": "object",
+        "required": [
+          "company_name",
+          "questions",
+          "open",
+          "applied",
+          "prefill",
+          "cvs"
+        ],
+        "properties": {
+          "company_name": {
+            "type": "string"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectApplyQuestion"
+            }
+          },
+          "open": {
+            "type": "boolean"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "prefill": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "cvs": {
+            "$ref": "#/components/schemas/DirectApplyCVOptions"
+          }
+        }
+      },
+      "DirectApplyQuestion": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "type",
+          "required"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DirectApplyRequest": {
+        "type": "object",
+        "properties": {
+          "resume": {
+            "type": "boolean"
+          },
+          "cv_id": {
+            "type": "string"
+          },
+          "answers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "description": "Names the CV to send: `resume: true` for the uploaded one, or `cv_id`, exactly one."
+      },
+      "DirectApplySent": {
+        "type": "object",
+        "required": [
+          "sent"
+        ],
+        "properties": {
+          "sent": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DirectApplyTailoredCV": {
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
       "DismissJobReportRequest": {
         "type": "object",
         "properties": {
@@ -13183,6 +13824,42 @@
         },
         "description": "A year, with a month when the CV gives one."
       },
+      "PlanAllowance": {
+        "type": "object",
+        "required": [
+          "feature",
+          "used",
+          "unlimited",
+          "enforced",
+          "resets_at"
+        ],
+        "properties": {
+          "feature": {
+            "type": "string"
+          },
+          "used": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Absent for an unlimited caller."
+          },
+          "unlimited": {
+            "type": "boolean"
+          },
+          "enforced": {
+            "type": "boolean"
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        },
+        "description": "Usage against a limit for one metered feature today."
+      },
       "PlanFeature": {
         "type": "object",
         "required": [
@@ -13203,6 +13880,38 @@
           },
           "ultra": {
             "$ref": "#/components/schemas/PlanTierAllowance"
+          }
+        }
+      },
+      "PlanHistoryEntry": {
+        "type": "object",
+        "required": [
+          "feature",
+          "day",
+          "kind",
+          "label",
+          "created_at"
+        ],
+        "properties": {
+          "feature": {
+            "type": "string"
+          },
+          "day": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         }
       },
@@ -13239,6 +13948,41 @@
           "tier": {
             "type": "string",
             "description": "The plan the price buys: `pro`, `ultra`, `api` or `api_data`."
+          }
+        }
+      },
+      "PlanStanding": {
+        "type": "object",
+        "required": [
+          "plan",
+          "resets_at",
+          "allowances"
+        ],
+        "properties": {
+          "plan": {
+            "type": "string",
+            "description": "The tier name: `free`, `pro`, `ultra`."
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "pro_until": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the paid plan lapses, absent on the free plan.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "pro_source": {
+            "type": "string",
+            "description": "Where the plan was bought: `stripe`, `revenuecat` or `granted`. Absent on the free plan."
+          },
+          "allowances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanAllowance"
+            }
           }
         }
       },

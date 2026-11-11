@@ -346,6 +346,244 @@ func (s *BankedAnswer) SetUpdatedAt(val time.Time) {
 	s.UpdatedAt = val
 }
 
+// The checkout link and which offer was applied to it.
+// Ref: #/components/schemas/BillingCheckout
+type BillingCheckout struct {
+	URL string `json:"url"`
+	// The discount actually applied, 0 when none.
+	DiscountPercent int64 `json:"discount_percent"`
+	// The label of the applied discount, empty when none.
+	DiscountSource string `json:"discount_source"`
+}
+
+// GetURL returns the value of URL.
+func (s *BillingCheckout) GetURL() string {
+	return s.URL
+}
+
+// GetDiscountPercent returns the value of DiscountPercent.
+func (s *BillingCheckout) GetDiscountPercent() int64 {
+	return s.DiscountPercent
+}
+
+// GetDiscountSource returns the value of DiscountSource.
+func (s *BillingCheckout) GetDiscountSource() string {
+	return s.DiscountSource
+}
+
+// SetURL sets the value of URL.
+func (s *BillingCheckout) SetURL(val string) {
+	s.URL = val
+}
+
+// SetDiscountPercent sets the value of DiscountPercent.
+func (s *BillingCheckout) SetDiscountPercent(val int64) {
+	s.DiscountPercent = val
+}
+
+// SetDiscountSource sets the value of DiscountSource.
+func (s *BillingCheckout) SetDiscountSource(val string) {
+	s.DiscountSource = val
+}
+
+// Ref: #/components/schemas/BillingInvoice
+type BillingInvoice struct {
+	ID   string    `json:"id"`
+	Date time.Time `json:"date"`
+	// The smallest currency unit, as the payment provider stores it.
+	AmountCents int64  `json:"amount_cents"`
+	Currency    string `json:"currency"`
+	Status      string `json:"status"`
+	// The provider's hosted invoice, absent for a draft.
+	ReceiptURL OptString `json:"receipt_url"`
+}
+
+// GetID returns the value of ID.
+func (s *BillingInvoice) GetID() string {
+	return s.ID
+}
+
+// GetDate returns the value of Date.
+func (s *BillingInvoice) GetDate() time.Time {
+	return s.Date
+}
+
+// GetAmountCents returns the value of AmountCents.
+func (s *BillingInvoice) GetAmountCents() int64 {
+	return s.AmountCents
+}
+
+// GetCurrency returns the value of Currency.
+func (s *BillingInvoice) GetCurrency() string {
+	return s.Currency
+}
+
+// GetStatus returns the value of Status.
+func (s *BillingInvoice) GetStatus() string {
+	return s.Status
+}
+
+// GetReceiptURL returns the value of ReceiptURL.
+func (s *BillingInvoice) GetReceiptURL() OptString {
+	return s.ReceiptURL
+}
+
+// SetID sets the value of ID.
+func (s *BillingInvoice) SetID(val string) {
+	s.ID = val
+}
+
+// SetDate sets the value of Date.
+func (s *BillingInvoice) SetDate(val time.Time) {
+	s.Date = val
+}
+
+// SetAmountCents sets the value of AmountCents.
+func (s *BillingInvoice) SetAmountCents(val int64) {
+	s.AmountCents = val
+}
+
+// SetCurrency sets the value of Currency.
+func (s *BillingInvoice) SetCurrency(val string) {
+	s.Currency = val
+}
+
+// SetStatus sets the value of Status.
+func (s *BillingInvoice) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetReceiptURL sets the value of ReceiptURL.
+func (s *BillingInvoice) SetReceiptURL(val OptString) {
+	s.ReceiptURL = val
+}
+
+// What the account is paying and what has been charged, read from the provider.
+// Ref: #/components/schemas/BillingOverview
+type BillingOverview struct {
+	Status      string `json:"status"`
+	AmountCents int64  `json:"amount_cents"`
+	Currency    string `json:"currency"`
+	Interval    string `json:"interval"`
+	// Absent when the subscription is ending.
+	RenewsAt OptDateTime `json:"renews_at"`
+	// Set when the subscriber has cancelled.
+	EndsAt                OptDateTime      `json:"ends_at"`
+	Invoices              []BillingInvoice `json:"invoices"`
+	MultipleSubscriptions OptBool          `json:"multiple_subscriptions"`
+}
+
+// GetStatus returns the value of Status.
+func (s *BillingOverview) GetStatus() string {
+	return s.Status
+}
+
+// GetAmountCents returns the value of AmountCents.
+func (s *BillingOverview) GetAmountCents() int64 {
+	return s.AmountCents
+}
+
+// GetCurrency returns the value of Currency.
+func (s *BillingOverview) GetCurrency() string {
+	return s.Currency
+}
+
+// GetInterval returns the value of Interval.
+func (s *BillingOverview) GetInterval() string {
+	return s.Interval
+}
+
+// GetRenewsAt returns the value of RenewsAt.
+func (s *BillingOverview) GetRenewsAt() OptDateTime {
+	return s.RenewsAt
+}
+
+// GetEndsAt returns the value of EndsAt.
+func (s *BillingOverview) GetEndsAt() OptDateTime {
+	return s.EndsAt
+}
+
+// GetInvoices returns the value of Invoices.
+func (s *BillingOverview) GetInvoices() []BillingInvoice {
+	return s.Invoices
+}
+
+// GetMultipleSubscriptions returns the value of MultipleSubscriptions.
+func (s *BillingOverview) GetMultipleSubscriptions() OptBool {
+	return s.MultipleSubscriptions
+}
+
+// SetStatus sets the value of Status.
+func (s *BillingOverview) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetAmountCents sets the value of AmountCents.
+func (s *BillingOverview) SetAmountCents(val int64) {
+	s.AmountCents = val
+}
+
+// SetCurrency sets the value of Currency.
+func (s *BillingOverview) SetCurrency(val string) {
+	s.Currency = val
+}
+
+// SetInterval sets the value of Interval.
+func (s *BillingOverview) SetInterval(val string) {
+	s.Interval = val
+}
+
+// SetRenewsAt sets the value of RenewsAt.
+func (s *BillingOverview) SetRenewsAt(val OptDateTime) {
+	s.RenewsAt = val
+}
+
+// SetEndsAt sets the value of EndsAt.
+func (s *BillingOverview) SetEndsAt(val OptDateTime) {
+	s.EndsAt = val
+}
+
+// SetInvoices sets the value of Invoices.
+func (s *BillingOverview) SetInvoices(val []BillingInvoice) {
+	s.Invoices = val
+}
+
+// SetMultipleSubscriptions sets the value of MultipleSubscriptions.
+func (s *BillingOverview) SetMultipleSubscriptions(val OptBool) {
+	s.MultipleSubscriptions = val
+}
+
+// Ref: #/components/schemas/BillingStoreSync
+type BillingStoreSync struct {
+	// `synced` or `no_subscription`.
+	Status string `json:"status"`
+}
+
+// GetStatus returns the value of Status.
+func (s *BillingStoreSync) GetStatus() string {
+	return s.Status
+}
+
+// SetStatus sets the value of Status.
+func (s *BillingStoreSync) SetStatus(val string) {
+	s.Status = val
+}
+
+// Ref: #/components/schemas/BillingUrl
+type BillingUrl struct {
+	URL string `json:"url"`
+}
+
+// GetURL returns the value of URL.
+func (s *BillingUrl) GetURL() string {
+	return s.URL
+}
+
+// SetURL sets the value of URL.
+func (s *BillingUrl) SetURL(val string) {
+	s.URL = val
+}
+
 // BlockConversationNoContent is response for BlockConversation operation.
 type BlockConversationNoContent struct{}
 
@@ -3923,6 +4161,275 @@ func (s *DictionaryGapRecorded) SetStatus(val string) {
 	s.Status = val
 }
 
+// What the signed-in candidate can send.
+// Ref: #/components/schemas/DirectApplyCVOptions
+type DirectApplyCVOptions struct {
+	// The CV tailored for this vacancy, null when none.
+	Tailored  NilDirectApplyTailoredCV `json:"tailored"`
+	HasResume bool                     `json:"has_resume"`
+}
+
+// GetTailored returns the value of Tailored.
+func (s *DirectApplyCVOptions) GetTailored() NilDirectApplyTailoredCV {
+	return s.Tailored
+}
+
+// GetHasResume returns the value of HasResume.
+func (s *DirectApplyCVOptions) GetHasResume() bool {
+	return s.HasResume
+}
+
+// SetTailored sets the value of Tailored.
+func (s *DirectApplyCVOptions) SetTailored(val NilDirectApplyTailoredCV) {
+	s.Tailored = val
+}
+
+// SetHasResume sets the value of HasResume.
+func (s *DirectApplyCVOptions) SetHasResume(val bool) {
+	s.HasResume = val
+}
+
+// Ref: #/components/schemas/DirectApplyForm
+type DirectApplyForm struct {
+	CompanyName string                 `json:"company_name"`
+	Questions   []DirectApplyQuestion  `json:"questions"`
+	Open        bool                   `json:"open"`
+	Applied     bool                   `json:"applied"`
+	Prefill     DirectApplyFormPrefill `json:"prefill"`
+	Cvs         DirectApplyCVOptions   `json:"cvs"`
+}
+
+// GetCompanyName returns the value of CompanyName.
+func (s *DirectApplyForm) GetCompanyName() string {
+	return s.CompanyName
+}
+
+// GetQuestions returns the value of Questions.
+func (s *DirectApplyForm) GetQuestions() []DirectApplyQuestion {
+	return s.Questions
+}
+
+// GetOpen returns the value of Open.
+func (s *DirectApplyForm) GetOpen() bool {
+	return s.Open
+}
+
+// GetApplied returns the value of Applied.
+func (s *DirectApplyForm) GetApplied() bool {
+	return s.Applied
+}
+
+// GetPrefill returns the value of Prefill.
+func (s *DirectApplyForm) GetPrefill() DirectApplyFormPrefill {
+	return s.Prefill
+}
+
+// GetCvs returns the value of Cvs.
+func (s *DirectApplyForm) GetCvs() DirectApplyCVOptions {
+	return s.Cvs
+}
+
+// SetCompanyName sets the value of CompanyName.
+func (s *DirectApplyForm) SetCompanyName(val string) {
+	s.CompanyName = val
+}
+
+// SetQuestions sets the value of Questions.
+func (s *DirectApplyForm) SetQuestions(val []DirectApplyQuestion) {
+	s.Questions = val
+}
+
+// SetOpen sets the value of Open.
+func (s *DirectApplyForm) SetOpen(val bool) {
+	s.Open = val
+}
+
+// SetApplied sets the value of Applied.
+func (s *DirectApplyForm) SetApplied(val bool) {
+	s.Applied = val
+}
+
+// SetPrefill sets the value of Prefill.
+func (s *DirectApplyForm) SetPrefill(val DirectApplyFormPrefill) {
+	s.Prefill = val
+}
+
+// SetCvs sets the value of Cvs.
+func (s *DirectApplyForm) SetCvs(val DirectApplyCVOptions) {
+	s.Cvs = val
+}
+
+type DirectApplyFormPrefill map[string]string
+
+func (s *DirectApplyFormPrefill) init() DirectApplyFormPrefill {
+	m := *s
+	if m == nil {
+		m = map[string]string{}
+		*s = m
+	}
+	return m
+}
+
+// Ref: #/components/schemas/DirectApplyQuestion
+type DirectApplyQuestion struct {
+	ID       string   `json:"id"`
+	Label    string   `json:"label"`
+	Type     string   `json:"type"`
+	Required bool     `json:"required"`
+	Options  []string `json:"options"`
+}
+
+// GetID returns the value of ID.
+func (s *DirectApplyQuestion) GetID() string {
+	return s.ID
+}
+
+// GetLabel returns the value of Label.
+func (s *DirectApplyQuestion) GetLabel() string {
+	return s.Label
+}
+
+// GetType returns the value of Type.
+func (s *DirectApplyQuestion) GetType() string {
+	return s.Type
+}
+
+// GetRequired returns the value of Required.
+func (s *DirectApplyQuestion) GetRequired() bool {
+	return s.Required
+}
+
+// GetOptions returns the value of Options.
+func (s *DirectApplyQuestion) GetOptions() []string {
+	return s.Options
+}
+
+// SetID sets the value of ID.
+func (s *DirectApplyQuestion) SetID(val string) {
+	s.ID = val
+}
+
+// SetLabel sets the value of Label.
+func (s *DirectApplyQuestion) SetLabel(val string) {
+	s.Label = val
+}
+
+// SetType sets the value of Type.
+func (s *DirectApplyQuestion) SetType(val string) {
+	s.Type = val
+}
+
+// SetRequired sets the value of Required.
+func (s *DirectApplyQuestion) SetRequired(val bool) {
+	s.Required = val
+}
+
+// SetOptions sets the value of Options.
+func (s *DirectApplyQuestion) SetOptions(val []string) {
+	s.Options = val
+}
+
+// Names the CV to send: `resume: true` for the uploaded one, or `cv_id`, exactly one.
+// Ref: #/components/schemas/DirectApplyRequest
+type DirectApplyRequest struct {
+	Resume  OptBool                      `json:"resume"`
+	CvID    OptString                    `json:"cv_id"`
+	Answers OptDirectApplyRequestAnswers `json:"answers"`
+	Note    OptString                    `json:"note"`
+}
+
+// GetResume returns the value of Resume.
+func (s *DirectApplyRequest) GetResume() OptBool {
+	return s.Resume
+}
+
+// GetCvID returns the value of CvID.
+func (s *DirectApplyRequest) GetCvID() OptString {
+	return s.CvID
+}
+
+// GetAnswers returns the value of Answers.
+func (s *DirectApplyRequest) GetAnswers() OptDirectApplyRequestAnswers {
+	return s.Answers
+}
+
+// GetNote returns the value of Note.
+func (s *DirectApplyRequest) GetNote() OptString {
+	return s.Note
+}
+
+// SetResume sets the value of Resume.
+func (s *DirectApplyRequest) SetResume(val OptBool) {
+	s.Resume = val
+}
+
+// SetCvID sets the value of CvID.
+func (s *DirectApplyRequest) SetCvID(val OptString) {
+	s.CvID = val
+}
+
+// SetAnswers sets the value of Answers.
+func (s *DirectApplyRequest) SetAnswers(val OptDirectApplyRequestAnswers) {
+	s.Answers = val
+}
+
+// SetNote sets the value of Note.
+func (s *DirectApplyRequest) SetNote(val OptString) {
+	s.Note = val
+}
+
+type DirectApplyRequestAnswers map[string]string
+
+func (s *DirectApplyRequestAnswers) init() DirectApplyRequestAnswers {
+	m := *s
+	if m == nil {
+		m = map[string]string{}
+		*s = m
+	}
+	return m
+}
+
+// Ref: #/components/schemas/DirectApplySent
+type DirectApplySent struct {
+	Sent bool `json:"sent"`
+}
+
+// GetSent returns the value of Sent.
+func (s *DirectApplySent) GetSent() bool {
+	return s.Sent
+}
+
+// SetSent sets the value of Sent.
+func (s *DirectApplySent) SetSent(val bool) {
+	s.Sent = val
+}
+
+// Ref: #/components/schemas/DirectApplyTailoredCV
+type DirectApplyTailoredCV struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// GetID returns the value of ID.
+func (s *DirectApplyTailoredCV) GetID() string {
+	return s.ID
+}
+
+// GetTitle returns the value of Title.
+func (s *DirectApplyTailoredCV) GetTitle() string {
+	return s.Title
+}
+
+// SetID sets the value of ID.
+func (s *DirectApplyTailoredCV) SetID(val string) {
+	s.ID = val
+}
+
+// SetTitle sets the value of Title.
+func (s *DirectApplyTailoredCV) SetTitle(val string) {
+	s.Title = val
+}
+
 // A single item: `{"data": ...}`.
 type DismissJobOK struct {
 	Data Interaction `json:"data"`
@@ -5197,6 +5704,66 @@ func (s *GetAgentPermissionsOK) SetData(val AgentPermissions) {
 }
 
 // A single item: `{"data": ...}`.
+type GetBillingCheckoutOK struct {
+	Data BillingCheckout `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetBillingCheckoutOK) GetData() BillingCheckout {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetBillingCheckoutOK) SetData(val BillingCheckout) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetBillingManageOK struct {
+	Data BillingUrl `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetBillingManageOK) GetData() BillingUrl {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetBillingManageOK) SetData(val BillingUrl) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetBillingSubscriptionOK struct {
+	Data BillingOverview `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetBillingSubscriptionOK) GetData() BillingOverview {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetBillingSubscriptionOK) SetData(val BillingOverview) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetDirectApplyFormOK struct {
+	Data DirectApplyForm `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetDirectApplyFormOK) GetData() DirectApplyForm {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetDirectApplyFormOK) SetData(val DirectApplyForm) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type GetEmailPrefsOK struct {
 	Data EmailPrefs `json:"data"`
 }
@@ -5318,6 +5885,36 @@ func (s *GetMyEmailGroupsOK) GetData() EmailPrefs {
 
 // SetData sets the value of Data.
 func (s *GetMyEmailGroupsOK) SetData(val EmailPrefs) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetMyPlanHistoryOK struct {
+	Data []PlanHistoryEntry `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetMyPlanHistoryOK) GetData() []PlanHistoryEntry {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetMyPlanHistoryOK) SetData(val []PlanHistoryEntry) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetMyPlanOK struct {
+	Data PlanStanding `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetMyPlanOK) GetData() PlanStanding {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetMyPlanOK) SetData(val PlanStanding) {
 	s.Data = val
 }
 
@@ -7189,6 +7786,51 @@ func (o NilDerivedLocation) Or(d DerivedLocation) DerivedLocation {
 	return d
 }
 
+// NewNilDirectApplyTailoredCV returns new NilDirectApplyTailoredCV with value set to v.
+func NewNilDirectApplyTailoredCV(v DirectApplyTailoredCV) NilDirectApplyTailoredCV {
+	return NilDirectApplyTailoredCV{
+		Value: v,
+	}
+}
+
+// NilDirectApplyTailoredCV is nullable DirectApplyTailoredCV.
+type NilDirectApplyTailoredCV struct {
+	Value DirectApplyTailoredCV
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilDirectApplyTailoredCV) SetTo(v DirectApplyTailoredCV) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilDirectApplyTailoredCV) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilDirectApplyTailoredCV) SetToNull() {
+	o.Null = true
+	var v DirectApplyTailoredCV
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilDirectApplyTailoredCV) Get() (v DirectApplyTailoredCV, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilDirectApplyTailoredCV) Or(d DirectApplyTailoredCV) DirectApplyTailoredCV {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewNilFloat32 returns new NilFloat32 with value set to v.
 func NewNilFloat32(v float32) NilFloat32 {
 	return NilFloat32{
@@ -7947,6 +8589,52 @@ func (o OptDateTime) Get() (v time.Time, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptDateTime) Or(d time.Time) time.Time {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptDirectApplyRequestAnswers returns new OptDirectApplyRequestAnswers with value set to v.
+func NewOptDirectApplyRequestAnswers(v DirectApplyRequestAnswers) OptDirectApplyRequestAnswers {
+	return OptDirectApplyRequestAnswers{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptDirectApplyRequestAnswers is optional DirectApplyRequestAnswers.
+type OptDirectApplyRequestAnswers struct {
+	Value DirectApplyRequestAnswers
+	Set   bool
+}
+
+// IsSet returns true if OptDirectApplyRequestAnswers was set.
+func (o OptDirectApplyRequestAnswers) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptDirectApplyRequestAnswers) Reset() {
+	var v DirectApplyRequestAnswers
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptDirectApplyRequestAnswers) SetTo(v DirectApplyRequestAnswers) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptDirectApplyRequestAnswers) Get() (v DirectApplyRequestAnswers, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptDirectApplyRequestAnswers) Or(d DirectApplyRequestAnswers) DirectApplyRequestAnswers {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -8920,6 +9608,78 @@ func (s *PeriodDate) SetMonth(val OptInt32) {
 	s.Month = val
 }
 
+// Usage against a limit for one metered feature today.
+// Ref: #/components/schemas/PlanAllowance
+type PlanAllowance struct {
+	Feature string `json:"feature"`
+	Used    int64  `json:"used"`
+	// Absent for an unlimited caller.
+	Limit     OptInt64  `json:"limit"`
+	Unlimited bool      `json:"unlimited"`
+	Enforced  bool      `json:"enforced"`
+	ResetsAt  time.Time `json:"resets_at"`
+}
+
+// GetFeature returns the value of Feature.
+func (s *PlanAllowance) GetFeature() string {
+	return s.Feature
+}
+
+// GetUsed returns the value of Used.
+func (s *PlanAllowance) GetUsed() int64 {
+	return s.Used
+}
+
+// GetLimit returns the value of Limit.
+func (s *PlanAllowance) GetLimit() OptInt64 {
+	return s.Limit
+}
+
+// GetUnlimited returns the value of Unlimited.
+func (s *PlanAllowance) GetUnlimited() bool {
+	return s.Unlimited
+}
+
+// GetEnforced returns the value of Enforced.
+func (s *PlanAllowance) GetEnforced() bool {
+	return s.Enforced
+}
+
+// GetResetsAt returns the value of ResetsAt.
+func (s *PlanAllowance) GetResetsAt() time.Time {
+	return s.ResetsAt
+}
+
+// SetFeature sets the value of Feature.
+func (s *PlanAllowance) SetFeature(val string) {
+	s.Feature = val
+}
+
+// SetUsed sets the value of Used.
+func (s *PlanAllowance) SetUsed(val int64) {
+	s.Used = val
+}
+
+// SetLimit sets the value of Limit.
+func (s *PlanAllowance) SetLimit(val OptInt64) {
+	s.Limit = val
+}
+
+// SetUnlimited sets the value of Unlimited.
+func (s *PlanAllowance) SetUnlimited(val bool) {
+	s.Unlimited = val
+}
+
+// SetEnforced sets the value of Enforced.
+func (s *PlanAllowance) SetEnforced(val bool) {
+	s.Enforced = val
+}
+
+// SetResetsAt sets the value of ResetsAt.
+func (s *PlanAllowance) SetResetsAt(val time.Time) {
+	s.ResetsAt = val
+}
+
 // Ref: #/components/schemas/PlanFeature
 type PlanFeature struct {
 	Feature string            `json:"feature"`
@@ -8966,6 +9726,76 @@ func (s *PlanFeature) SetPro(val PlanTierAllowance) {
 // SetUltra sets the value of Ultra.
 func (s *PlanFeature) SetUltra(val PlanTierAllowance) {
 	s.Ultra = val
+}
+
+// Ref: #/components/schemas/PlanHistoryEntry
+type PlanHistoryEntry struct {
+	Feature   string    `json:"feature"`
+	Day       string    `json:"day"`
+	Kind      string    `json:"kind"`
+	Label     string    `json:"label"`
+	Subtitle  OptString `json:"subtitle"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// GetFeature returns the value of Feature.
+func (s *PlanHistoryEntry) GetFeature() string {
+	return s.Feature
+}
+
+// GetDay returns the value of Day.
+func (s *PlanHistoryEntry) GetDay() string {
+	return s.Day
+}
+
+// GetKind returns the value of Kind.
+func (s *PlanHistoryEntry) GetKind() string {
+	return s.Kind
+}
+
+// GetLabel returns the value of Label.
+func (s *PlanHistoryEntry) GetLabel() string {
+	return s.Label
+}
+
+// GetSubtitle returns the value of Subtitle.
+func (s *PlanHistoryEntry) GetSubtitle() OptString {
+	return s.Subtitle
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *PlanHistoryEntry) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// SetFeature sets the value of Feature.
+func (s *PlanHistoryEntry) SetFeature(val string) {
+	s.Feature = val
+}
+
+// SetDay sets the value of Day.
+func (s *PlanHistoryEntry) SetDay(val string) {
+	s.Day = val
+}
+
+// SetKind sets the value of Kind.
+func (s *PlanHistoryEntry) SetKind(val string) {
+	s.Kind = val
+}
+
+// SetLabel sets the value of Label.
+func (s *PlanHistoryEntry) SetLabel(val string) {
+	s.Label = val
+}
+
+// SetSubtitle sets the value of Subtitle.
+func (s *PlanHistoryEntry) SetSubtitle(val OptString) {
+	s.Subtitle = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *PlanHistoryEntry) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
 }
 
 // Ref: #/components/schemas/PlanPrice
@@ -9040,6 +9870,68 @@ func (s *PlanPrice) SetDefault(val bool) {
 // SetTier sets the value of Tier.
 func (s *PlanPrice) SetTier(val string) {
 	s.Tier = val
+}
+
+// Ref: #/components/schemas/PlanStanding
+type PlanStanding struct {
+	// The tier name: `free`, `pro`, `ultra`.
+	Plan     string    `json:"plan"`
+	ResetsAt time.Time `json:"resets_at"`
+	// When the paid plan lapses, absent on the free plan.
+	ProUntil OptDateTime `json:"pro_until"`
+	// Where the plan was bought: `stripe`, `revenuecat` or `granted`. Absent on the free plan.
+	ProSource  OptString       `json:"pro_source"`
+	Allowances []PlanAllowance `json:"allowances"`
+}
+
+// GetPlan returns the value of Plan.
+func (s *PlanStanding) GetPlan() string {
+	return s.Plan
+}
+
+// GetResetsAt returns the value of ResetsAt.
+func (s *PlanStanding) GetResetsAt() time.Time {
+	return s.ResetsAt
+}
+
+// GetProUntil returns the value of ProUntil.
+func (s *PlanStanding) GetProUntil() OptDateTime {
+	return s.ProUntil
+}
+
+// GetProSource returns the value of ProSource.
+func (s *PlanStanding) GetProSource() OptString {
+	return s.ProSource
+}
+
+// GetAllowances returns the value of Allowances.
+func (s *PlanStanding) GetAllowances() []PlanAllowance {
+	return s.Allowances
+}
+
+// SetPlan sets the value of Plan.
+func (s *PlanStanding) SetPlan(val string) {
+	s.Plan = val
+}
+
+// SetResetsAt sets the value of ResetsAt.
+func (s *PlanStanding) SetResetsAt(val time.Time) {
+	s.ResetsAt = val
+}
+
+// SetProUntil sets the value of ProUntil.
+func (s *PlanStanding) SetProUntil(val OptDateTime) {
+	s.ProUntil = val
+}
+
+// SetProSource sets the value of ProSource.
+func (s *PlanStanding) SetProSource(val OptString) {
+	s.ProSource = val
+}
+
+// SetAllowances sets the value of Allowances.
+func (s *PlanStanding) SetAllowances(val []PlanAllowance) {
+	s.Allowances = val
 }
 
 // What one tier allows for one feature in a UTC day.
@@ -12132,6 +13024,21 @@ func (s *SendConversationMessageCreated) SetData(val ConversationMessage) {
 }
 
 // A single item: `{"data": ...}`.
+type SendDirectApplyCreated struct {
+	Data DirectApplySent `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SendDirectApplyCreated) GetData() DirectApplySent {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SendDirectApplyCreated) SetData(val DirectApplySent) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type SetAgentPermissionsOK struct {
 	Data AgentPermissions `json:"data"`
 }
@@ -13843,6 +14750,21 @@ func (s *SurveyResponses) SetCurrentIncomeCurrency(val OptNilString) {
 // SetCurrentIncomePeriod sets the value of CurrentIncomePeriod.
 func (s *SurveyResponses) SetCurrentIncomePeriod(val OptNilString) {
 	s.CurrentIncomePeriod = val
+}
+
+// A single item: `{"data": ...}`.
+type SyncBillingStoreOK struct {
+	Data BillingStoreSync `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SyncBillingStoreOK) GetData() BillingStoreSync {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SyncBillingStoreOK) SetData(val BillingStoreSync) {
+	s.Data = val
 }
 
 // The anonymised card: only what a dictionary can vouch for.
