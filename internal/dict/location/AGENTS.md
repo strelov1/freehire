@@ -350,7 +350,7 @@ perk/refusal guards after).
 
 ## How it works
 
-`jobderive.Derive` calls `ParseIn` with the adapter's countries; output reaches users through Meilisearch facets, so a dictionary change needs `cmd/backfill-derive` then `cmd/reindex`. The backfill keeps a stored `work_mode` (`internal/ingest/rederive` passes it back to `Derive`, which keeps a set mode; only a `remote` the description contradicts turns `onsite`), so a work-mode rule change reaches only rows with none: correcting a stored mode needs a targeted repair of those rows before the reindex.
+`jobderive.Derive` calls `ParseIn` with the adapter's countries; output reaches users through Meilisearch facets, so a dictionary change needs `cmd/backfill-derive` then `cmd/reindex`. The backfill keeps a stored `work_mode` (`internal/ingest/rederive` passes it back to `Derive`, which keeps a set mode; a `remote` explicitly contradicted by arrangement prose becomes `hybrid` (`HybridArrangementStated`, explicit work-model phrases and known-city hybrid headers, with negation, refusal and experience guards) or `onsite` (the existing remote-denial matcher)), so ordinary work-mode rule changes reach only rows with none. The contradiction tier also repairs existing remote rows on that pass; other corrections need a targeted repair before the reindex.
 
 ## Limitations
 

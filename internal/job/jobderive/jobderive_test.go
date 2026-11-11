@@ -200,17 +200,17 @@ func TestDerive_DescriptionFillsWorkModeWhenLocationSilent(t *testing.T) {
 	}
 }
 
-func TestDerive_LocationWorkModeBeatsDescription(t *testing.T) {
+func TestDerive_DescriptionContradictsLocationRemoteWithHybrid(t *testing.T) {
 	got := Derive(Input{
 		Title:       "Dev",
 		Company:     "Acme",
 		Source:      "greenhouse",
 		ExternalID:  "board:1",
 		Location:    "Remote - Germany",       // location marker → remote
-		Description: "This is a hybrid role.", // description → hybrid, but loses
+		Description: "This is a hybrid role.", // explicit arrangement contradicts the location bucket
 	})
-	if got.WorkMode != "remote" {
-		t.Errorf("WorkMode = %q, want remote (location beats description)", got.WorkMode)
+	if got.WorkMode != "hybrid" {
+		t.Errorf("WorkMode = %q, want hybrid (explicit arrangement contradicts remote)", got.WorkMode)
 	}
 }
 
@@ -1051,5 +1051,76 @@ func TestDerive_AdapterCountryResolvesABarePlace(t *testing.T) {
 		Location: "Palermo", FallbackCountries: []string{"ar"}})
 	if !reflect.DeepEqual(got.Countries, []string{"us"}) || len(got.Metros) != 0 || reflect.DeepEqual(got.Cities, []string{"Buenos Aires"}) {
 		t.Errorf("countries %v cities %v metros %v, want [us], no Buenos Aires", got.Countries, got.Cities, got.Metros)
+	}
+}
+
+func TestDerive_HybridArrangementContradictsStructuredRemote(t *testing.T) {
+	for _, description := range []string{
+		"Ubicación: Barcelona (<strong>Modelo Híbrido</strong>)",
+		"Full time or Part time with hybrid working",
+		"This is not a fully remote role; this is a hybrid position",
+		"This role is not fully remote, but is a hybrid role.",
+		"Fully remote work is not offered. This is a hybrid role.",
+		"Hybrid session environment (in-person and telehealth). Flexible work from home options available.",
+		"This hybrid opportunity combines in-person relationship building with work from your home office.",
+		"This role offers work from home regularly but must be able to commute to Emory University on a flexible weekly schedule.",
+		"Location: Dallas, TX / Charlotte, NC/ Iselin, NJ, / Chandler, AZ / Ohio, Delaware (Hybrid)",
+		"Title: Senior Software Developer. Charlotte/ Phoenix (Hybrid)",
+		"Job Location: Mumbai (Hybrid)",
+		"Location: Houston, TX (Hybrid)",
+		"Location: California (Hybrid)",
+		"This is hybrid work with two days in the office.",
+		"You must work in the office three days per week.",
+		"This remote role requires a hybrid schedule with two mandatory office days per week.",
+		"This position is remote, with a mandatory hybrid schedule.",
+		"Hybrid role with optional dental insurance.",
+		"Prior experience required\nLocation: Mumbai (Hybrid)",
+	} {
+		for _, signal := range []string{"remote", ""} {
+			got := Derive(Input{Title: "Developer", WorkMode: signal, Description: description})
+			if got.WorkMode != "hybrid" {
+				t.Errorf("WorkMode = %q for %q with signal %q, want hybrid", got.WorkMode, description, signal)
+			}
+		}
+	}
+}
+
+func TestDerive_RemotePreservedForIncidentalHybridMentions(t *testing.T) {
+	for _, description := range []string{
+		"This role is not fully remote, but is a hybrid role for 30 days, then fully remote.",
+		"Experience with hybrid cloud infrastructure.",
+		"Based in Berlin, maintain infrastructure (Hybrid).",
+		"Location: Berlin, maintain infrastructure (hybrid).",
+		"Location: Berlin / prior experience in infrastructure (hybrid).",
+		"We do not offer hybrid working; this position is fully remote.",
+		"This is a remote position. Hybrid working is optional.",
+		"Hybrid working is optional.",
+		"Optional hybrid work arrangement is available.",
+		"Location: Mumbai (Hybrid) is optional.",
+		"You are not required to work in the office three days per week.",
+		"You must work in the office three days per week if you choose the optional hybrid arrangement.",
+		"Hybrid work with two days in the office is optional.",
+		"A hybrid role is optional.",
+		"We never offer hybrid working.",
+		"Prior experience managing office-based but hybrid working teams is required.",
+		"Hybrid working is not possible; this position is remote.",
+		"Hybrid working is not an option; this position is remote.",
+		"Hybrid working is entirely optional.",
+		"Hybrid working is completely optional.",
+		"Experience working in a hybrid working environment is preferred. This role is fully remote.",
+		"We support teams with a hybrid model. This role is fully remote.",
+		"Modalidad 100% remota; ayuda al teletrabajo.",
+	} {
+		got := Derive(Input{Title: "Developer", WorkMode: "remote", Description: description})
+		if got.WorkMode != "remote" {
+			t.Errorf("WorkMode = %q for %q, want remote", got.WorkMode, description)
+		}
+	}
+}
+
+func TestDerive_ExplicitRemoteWorkFromHomeDenial(t *testing.T) {
+	got := Derive(Input{Title: "Outside Sales", WorkMode: "remote", Description: "This is not a remote work-from-home role, and a reliable vehicle is required."})
+	if got.WorkMode != "onsite" {
+		t.Errorf("WorkMode = %q, want onsite", got.WorkMode)
 	}
 }

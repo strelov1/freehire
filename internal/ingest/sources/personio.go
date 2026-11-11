@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"net/http"
@@ -44,6 +45,9 @@ func (personio) Provider() string { return "personio" }
 // affect body richness, never whether a position is counted. See the fullBoardListing
 // interface for the bar.
 func (personio) fullBoardListing() {}
+
+// Native XML roots and JSON arrays distinguish empty feeds from missing listings.
+func (personio) emptyBoardListing() {}
 
 // personioPosition is one open position in a board's XML feed (search() builds the same
 // shape from search.json). Personio splits the body across one or more jobDescription HTML
@@ -126,10 +130,27 @@ func (p personio) feed(ctx context.Context, host, lang string) ([]personioPositi
 		url += "?language=" + lang
 	}
 	var resp struct {
+		XMLName   xml.Name           `xml:"workzag-jobs"`
 		Positions []personioPosition `xml:"position"`
+		Text      string             `xml:",chardata"`
+		Unknown   []struct {
+			XMLName xml.Name
+		} `xml:",any"`
 	}
 	if err := p.http.GetXML(ctx, url, &resp); err != nil {
 		return nil, err
+	}
+	// A native root can also wrap an error. Only positions and formatting whitespace
+	// are listing evidence; silently ignoring other content could close the board.
+	if strings.TrimSpace(resp.Text) != "" || len(resp.Unknown) != 0 {
+		return nil, fmt.Errorf("personio: unexpected XML listing content")
+	}
+	seen := make(map[string]bool)
+	for _, pos := range resp.Positions {
+		if strings.TrimSpace(pos.ID) == "" || strings.TrimSpace(pos.Name) == "" || seen[pos.ID] {
+			return nil, fmt.Errorf("personio: invalid or repeated XML position")
+		}
+		seen[pos.ID] = true
 	}
 	return resp.Positions, nil
 }
@@ -232,6 +253,16 @@ func (p personio) searchLocale(ctx context.Context, host, lang string) ([]person
 	var jobs []personioSearchJob
 	if err := p.http.GetJSON(ctx, host+"/search.json?language="+lang, &jobs); err != nil {
 		return nil, err
+	}
+	if jobs == nil {
+		return nil, errListingAbsent("personio", host, "search.json")
+	}
+	seen := make(map[int64]bool)
+	for _, job := range jobs {
+		if job.ID <= 0 || strings.TrimSpace(job.Name) == "" || seen[job.ID] {
+			return nil, fmt.Errorf("personio: invalid or repeated search position")
+		}
+		seen[job.ID] = true
 	}
 	return jobs, nil
 }

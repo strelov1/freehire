@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 // jazzhrDetailHTML is a JazzHR job page: server-rendered HTML whose only payload we read is
@@ -189,5 +191,94 @@ func TestJazzHRGoneDetailDropsThePosting(t *testing.T) {
 	}
 	if len(jobs) != 1 || jobs[0].ExternalID != "keptKept11" {
 		t.Fatalf("got %v, want only the kept posting — a 404 is evidence, not a hole", jobs)
+	}
+}
+
+const jazzhrDOMDetail = `<html><body class="resumator-jobboard-page jobboard job-native123">
+<div class="job-header"><div class="container"><h2>Food Service Worker II</h2>
+<div class="job-attributes-container"><div title="Location"><i></i>Durham, NC</div></div></div></div>
+<div class="job-details"><div id="job-description"><h1>Food Service Worker II</h1><p>Serve food and support the dining team.</p><script>alert(1)</script></div></div>
+<form id="resumator-resume-form"></form></body></html>`
+
+func TestJazzHRReadsLiveDOMPostingWithoutJobPostingJSONLD(t *testing.T) {
+	fake := (&routedHTTP{}).route("/apply/native123/Food-Service-Worker-II", jazzhrDOMDetail).route("/apply", `<a href="/apply/native123/Food-Service-Worker-II">Food Service Worker II</a>`)
+	jobs, err := NewJazzHR(fake).Fetch(context.Background(), CompanyEntry{Board: "gracefederalsolutionsllc", Company: "Grace Federal Solutions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := readPostings(jobs)
+	if len(read) != 1 {
+		t.Fatalf("read %d postings, want1; jobs=%+v", len(read), jobs)
+	}
+	j := read[0]
+	if j.Title != "Food Service Worker II" || j.Location != "Durham, NC" || j.Company != "Grace Federal Solutions" || !strings.Contains(j.Description, "Serve food") {
+		t.Errorf("unexpected posting: %+v", j)
+	}
+	if strings.Contains(j.Description, "script") {
+		t.Errorf("unsafe description: %s", j.Description)
+	}
+}
+
+func TestJazzHRDOMFallbackRefusesAnotherPostingAndIncompleteShell(t *testing.T) {
+	for name, body := range map[string]string{
+		"another posting": strings.ReplaceAll(jazzhrDOMDetail, "job-native123", "job-another123"),
+		"missing body":    strings.ReplaceAll(jazzhrDOMDetail, `id="job-description"`, `id="other-description"`),
+		"missing title":   strings.ReplaceAll(jazzhrDOMDetail, "<h2>Food Service Worker II</h2>", ""),
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := (&routedHTTP{}).route("/apply/native123/Food-Service-Worker-II", body).route("/apply", `<a href="/apply/native123/Food-Service-Worker-II">Food Service Worker II</a>`)
+			jobs, err := NewJazzHR(fake).Fetch(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(readPostings(jobs)) != 0 || len(unreadableMarkers(jobs)) != 1 {
+				t.Errorf("got %+v, want unreadable marker", jobs)
+			}
+		})
+	}
+}
+
+func TestJazzHRDOMFallbackRequiresVisibleDescription(t *testing.T) {
+	for name, description := range map[string]string{
+		"markup only":       "<p></p><br>",
+		"nonbreaking space": "<p>&nbsp;</p>",
+		"whitespace only":   "<p> \t\n </p>",
+		"removed script":    "<p>&nbsp;</p><script>alert(1)</script>",
+	} {
+		t.Run(name, func(t *testing.T) {
+			body := `<body class="job-native123"><div class="job-header"><h2>Role</h2></div><div id="job-description">` + description + `</div></body>`
+			fake := (&routedHTTP{}).
+				route("/apply/native123/Role", body).
+				route("/apply", `<a href="/apply/native123/Role">Role</a>`)
+			jobs, err := NewJazzHR(fake).Fetch(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(readPostings(jobs)) != 0 || len(unreadableMarkers(jobs)) != 1 {
+				t.Fatalf("got %+v, want an unreadable marker for an empty visible description", jobs)
+			}
+		})
+	}
+}
+
+func TestJazzHRDOMFallbackPreservesEncodedLiteralAngleBrackets(t *testing.T) {
+	body := strings.Replace(jazzhrDOMDetail, "Serve food and support the dining team.", "Use &lt;T&gt; and &lt;script&gt; as literal text.", 1)
+	fake := (&routedHTTP{}).
+		route("/apply/native123/Role", body).
+		route("/apply", `<a href="/apply/native123/Role">Role</a>`)
+	jobs, err := NewJazzHR(fake).Fetch(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := readPostings(jobs)
+	if len(read) != 1 {
+		t.Fatalf("got %+v, want one readable posting", jobs)
+	}
+	description, err := html.Parse(strings.NewReader(read[0].Description))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(textContent(description), "Use <T> and <script> as literal text.") {
+		t.Fatalf("literal angle-bracket text was lost: %q", read[0].Description)
 	}
 }

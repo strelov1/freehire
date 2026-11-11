@@ -10,6 +10,7 @@ extend-exclude = [
   "*.tsv",
   # Captured provider responses, verbatim and in the provider's language.
   "internal/ingest/**/testdata/**",
+  "internal/job/jobderive/testdata/workmode/**",
   "extension/lib/fixtures/**",
   # Machine output: fixed by editing the dictionary or the generator, never by hand.
   "web/src/lib/generated/**",

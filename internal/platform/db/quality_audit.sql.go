@@ -12,19 +12,22 @@ import (
 )
 
 const countOpenRemoteJobsBySource = `-- name: CountOpenRemoteJobsBySource :many
-SELECT source, count(*)::bigint AS remote_jobs
+SELECT source, count(*)::bigint AS remote_jobs,
+       count(*) FILTER (WHERE 'global' = ANY(regions))::bigint AS global_jobs
 FROM jobs
 WHERE closed_at IS NULL
   AND NOT is_private
   AND work_mode = 'remote'
 GROUP BY source
 HAVING count(*) >= $1::bigint
+    OR count(*) FILTER (WHERE 'global' = ANY(regions)) > 0
 ORDER BY source
 `
 
 type CountOpenRemoteJobsBySourceRow struct {
 	Source     string `json:"source"`
 	RemoteJobs int64  `json:"remote_jobs"`
+	GlobalJobs int64  `json:"global_jobs"`
 }
 
 // How many open public postings each source tags remote — the weights the week's sources are
@@ -38,7 +41,7 @@ func (q *Queries) CountOpenRemoteJobsBySource(ctx context.Context, minRemote int
 	items := []CountOpenRemoteJobsBySourceRow{}
 	for rows.Next() {
 		var i CountOpenRemoteJobsBySourceRow
-		if err := rows.Scan(&i.Source, &i.RemoteJobs); err != nil {
+		if err := rows.Scan(&i.Source, &i.RemoteJobs, &i.GlobalJobs); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -130,20 +133,23 @@ func (q *Queries) ListLivenessAuditSources(ctx context.Context, minOpen int64) (
 }
 
 const sampleLivenessAuditJobs = `-- name: SampleLivenessAuditJobs :many
-SELECT id, source, external_id, url, public_slug
-FROM jobs
-WHERE source = $1
-  AND closed_at IS NULL
-  AND NOT is_private
-  AND random() < $2::float8
+WITH candidates AS MATERIALIZED (
+    SELECT candidate.id FROM jobs candidate
+    WHERE candidate.source = $2
+      AND candidate.closed_at IS NULL
+      AND random() < $3::float8
+)
+SELECT j.id, j.source, j.external_id, j.url, j.public_slug
+FROM candidates c JOIN jobs j ON j.id = c.id
+WHERE NOT j.is_private
 ORDER BY random()
-LIMIT $3::int
+LIMIT $1::int
 `
 
 type SampleLivenessAuditJobsParams struct {
+	MaxRows  int32   `json:"max_rows"`
 	Source   string  `json:"source"`
 	Fraction float64 `json:"fraction"`
-	MaxRows  int32   `json:"max_rows"`
 }
 
 type SampleLivenessAuditJobsRow struct {
@@ -154,8 +160,10 @@ type SampleLivenessAuditJobsRow struct {
 	PublicSlug string `json:"public_slug"`
 }
 
+// Materialize the narrow source/id scan before fetching any posting columns. The partial
+// (source, id) open index can supply candidates without reading the catalogue's wide rows.
 func (q *Queries) SampleLivenessAuditJobs(ctx context.Context, arg SampleLivenessAuditJobsParams) ([]SampleLivenessAuditJobsRow, error) {
-	rows, err := q.db.Query(ctx, sampleLivenessAuditJobs, arg.Source, arg.Fraction, arg.MaxRows)
+	rows, err := q.db.Query(ctx, sampleLivenessAuditJobs, arg.MaxRows, arg.Source, arg.Fraction)
 	if err != nil {
 		return nil, err
 	}
@@ -188,15 +196,17 @@ WHERE source = $1
   AND closed_at IS NULL
   AND NOT is_private
   AND work_mode = 'remote'
-  AND random() < $2::float8
+  AND ('global' = ANY(regions)) = $2::boolean
+  AND random() < $3::float8
 ORDER BY random()
-LIMIT $3::int
+LIMIT $4::int
 `
 
 type SampleRemoteAuditJobsParams struct {
-	Source   string  `json:"source"`
-	Fraction float64 `json:"fraction"`
-	MaxRows  int32   `json:"max_rows"`
+	Source     string  `json:"source"`
+	OnlyGlobal bool    `json:"only_global"`
+	Fraction   float64 `json:"fraction"`
+	MaxRows    int32   `json:"max_rows"`
 }
 
 type SampleRemoteAuditJobsRow struct {
@@ -210,7 +220,12 @@ type SampleRemoteAuditJobsRow struct {
 }
 
 func (q *Queries) SampleRemoteAuditJobs(ctx context.Context, arg SampleRemoteAuditJobsParams) ([]SampleRemoteAuditJobsRow, error) {
-	rows, err := q.db.Query(ctx, sampleRemoteAuditJobs, arg.Source, arg.Fraction, arg.MaxRows)
+	rows, err := q.db.Query(ctx, sampleRemoteAuditJobs,
+		arg.Source,
+		arg.OnlyGlobal,
+		arg.Fraction,
+		arg.MaxRows,
+	)
 	if err != nil {
 		return nil, err
 	}

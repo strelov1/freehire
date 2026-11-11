@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math"
 	"regexp"
@@ -58,6 +59,8 @@ func (idealtraits) Provider() string { return "idealtraits" }
 // reports, and fails the crawl on any page error or shortfall. See the fullBoardListing
 // interface for the bar.
 func (idealtraits) fullBoardListing() {}
+
+func (idealtraits) emptyBoardListing() {}
 
 const idealtraitsOrigin = "https://app.idealtraits.com"
 
@@ -117,6 +120,24 @@ type idealtraitsPage struct {
 	JobCount int    `json:"jobcount"`
 }
 
+func (p *idealtraitsPage) UnmarshalJSON(raw []byte) error {
+	var v struct {
+		JobList  *string `json:"joblist"`
+		JobCount *int    `json:"jobcount"`
+	}
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return err
+	}
+	if v.JobList == nil || v.JobCount == nil || *v.JobCount < 0 {
+		return fmt.Errorf("idealtraits: listing requires joblist and a nonnegative jobcount")
+	}
+	if *v.JobCount == 0 && strings.TrimSpace(*v.JobList) != "" {
+		return fmt.Errorf("idealtraits: empty listing carries unexpected card markup")
+	}
+	p.JobList, p.JobCount = *v.JobList, *v.JobCount
+	return nil
+}
+
 // idealtraitsPosting is one listing card: the posting's id, its page, and the title it states.
 type idealtraitsPosting struct {
 	id, url, title string
@@ -152,6 +173,8 @@ func (s idealtraits) list(ctx context.Context, board string) ([]idealtraitsPosti
 		}
 		if total < 0 {
 			total = p.JobCount
+		} else if p.JobCount != total {
+			return nil, fmt.Errorf("idealtraits: listing %s changed jobcount during pagination", board)
 		}
 		cards, err := idealtraitsCards(p.JobList)
 		if err != nil {

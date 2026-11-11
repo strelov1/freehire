@@ -49,6 +49,10 @@ func NewHiringThing(c HTMLGetter) Source { return hiringthing{http: c} }
 
 func (hiringthing) Provider() string { return "hiringthing" }
 
+func (hiringthing) fullBoardListing() {}
+
+func (hiringthing) emptyBoardListing() {}
+
 // Fetch is the list-only fallback HydratingSource specifies for a caller that cannot supply a
 // seen set; it hydrates every posting. FetchNew is the path cmd/ingest drives.
 func (s hiringthing) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -70,8 +74,12 @@ func (s hiringthing) FetchNew(ctx context.Context, e CompanyEntry, seen func(ext
 	if err != nil {
 		return nil, fmt.Errorf("hiringthing: listing %s: %w", e.Board, err)
 	}
+	links, err := htValidatedListing(base, root)
+	if err != nil {
+		return nil, fmt.Errorf("hiringthing: listing %s: %w", e.Board, err)
+	}
 	// Each unseen posting's record comes from its own page fetch, fanned out under a bounded pool.
-	return fetchDetails(htJobLinks(base, root), defaultDetailWorkers, func(l htLink) (Job, bool) {
+	return fetchDetails(links, defaultDetailWorkers, func(l htLink) (Job, bool) {
 		// Already ingested: refresh liveness by identity only. Re-upserting it content-less
 		// would wipe the description and the facets derived from it, so the pipeline routes a
 		// SeenRefresh to a liveness touch instead of a write.
@@ -114,16 +122,86 @@ func htJobLinks(base *url.URL, root *html.Node) []htLink {
 	return links
 }
 
-// detail fetches one posting page and maps its job record to a Job, returning ok=false when the
-// page fetch fails or carries no record, so the caller skips just that posting.
+// The site's own unfiltered state lists every native ID. Matching that set
+// against the rendered links proves the root was not filtered or truncated.
+// Empty arrays need the platform's separate positive empty-state message too.
+func htValidatedListing(base *url.URL, root *html.Node) ([]htLink, error) {
+	var props string
+	components := 0
+	empty := false
+	walk(root, func(n *html.Node) bool {
+		if n.Type != html.ElementNode {
+			return true
+		}
+		if Attr(n, "data-react-class") == "HiringThing.Components.JobFiltersContainer" {
+			components++
+			props = Attr(n, "data-react-props")
+		}
+		if Attr(n, "data-testid") == "careers-no-open-positions" && textContent(n) == "No open positions at this time" {
+			empty = true
+		}
+		return true
+	})
+	var state struct {
+		ShowAll *bool `json:"showAll"`
+		Titles  *[]struct {
+			ID int64 `json:"id"`
+		} `json:"titles"`
+		Remote    *[]int64 `json:"remotePositions"`
+		NonRemote *[]int64 `json:"nonRemotePositions"`
+	}
+	if components != 1 || json.Unmarshal([]byte(props), &state) != nil || state.ShowAll == nil || !*state.ShowAll ||
+		state.Titles == nil || state.Remote == nil || state.NonRemote == nil {
+		return nil, fmt.Errorf("missing complete unfiltered listing state")
+	}
+	ids := map[string]bool{}
+	for _, title := range *state.Titles {
+		id := strconv.FormatInt(title.ID, 10)
+		if title.ID <= 0 || ids[id] {
+			return nil, fmt.Errorf("invalid or repeated listing ID")
+		}
+		ids[id] = true
+	}
+	partition := map[string]bool{}
+	for _, group := range [][]int64{*state.Remote, *state.NonRemote} {
+		for _, native := range group {
+			id := strconv.FormatInt(native, 10)
+			if !ids[id] || partition[id] {
+				return nil, fmt.Errorf("inconsistent listing ID partitions")
+			}
+			partition[id] = true
+		}
+	}
+	links := htJobLinks(base, root)
+	if len(partition) != len(ids) || len(links) != len(ids) || empty != (len(ids) == 0) {
+		return nil, fmt.Errorf("rendered listing differs from its native state")
+	}
+	for _, link := range links {
+		if !ids[link.id] {
+			return nil, fmt.Errorf("rendered posting is absent from native listing state")
+		}
+	}
+	return links, nil
+}
+
+// detail maps a readable posting or preserves an unreadable marker. Only a
+// platform-confirmed 404/410 drops the posting from the listing's evidence.
 func (s hiringthing) detail(ctx context.Context, e CompanyEntry, l htLink) (Job, bool) {
 	root, err := s.http.GetHTML(ctx, l.url)
 	if err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(l.id, l.url, e.Company), true
+		}
 		return Job{}, false
 	}
 	rec, ok := htJobRecord(root)
 	if !ok {
-		return Job{}, false
+		return unreadableDetail(l.id, l.url, e.Company), true
+	}
+	description := sanitizeHTML(rec.HTMLDescription)
+	visible, err := html.Parse(strings.NewReader(description))
+	if strings.TrimSpace(rec.Title) == "" || err != nil || textContent(visible) == "" {
+		return unreadableDetail(l.id, l.url, e.Company), true
 	}
 
 	salaryMin, salaryMax, currency, period := rec.salary()
@@ -135,7 +213,7 @@ func (s hiringthing) detail(ctx context.Context, e CompanyEntry, l htLink) (Job,
 		// The record's location already reads "Remote - Windsor Locks, CT" for a remote
 		// posting, so it is carried verbatim rather than rebuilt from location_info.
 		Location:    rec.Location,
-		Description: sanitizeHTML(rec.HTMLDescription),
+		Description: description,
 		// remote is the platform's own structured flag (null on records predating it, which
 		// decodes to false — the same "not stated" the flag itself means). The location text is
 		// not consulted: the platform derives its "Remote - " prefix from this very flag, so

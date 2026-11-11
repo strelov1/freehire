@@ -13,6 +13,10 @@ var emptyBoardListingAdapters = map[string]struct {
 	empty     string   // the source's own answer for a board with no postings
 	notEmpty  []string // decodable answers that carry no posting collection
 }{
+	"join":           {func(f *fakeHTTP) Source { return NewJoin(f) }, `{"items":[],"pagination":{"pageCount":0,"rowCount":0}}`, []string{`{}`, `{"items":null,"pagination":{"pageCount":0,"rowCount":0}}`, `{"items":[],"pagination":{"pageCount":0}}`}},
+	"personio":       {func(f *fakeHTTP) Source { return NewPersonio(f) }, `<workzag-jobs/>`, []string{`<html></html>`, `<error></error>`, `<workzag-jobs><error>temporarily unavailable</error></workzag-jobs>`, `<workzag-jobs>temporarily unavailable</workzag-jobs>`}},
+	"hiringthing":    {func(f *fakeHTTP) Source { return NewHiringThing(f) }, htListingHTML(), []string{`<html></html>`, `<div data-react-class="HiringThing.Components.JobFiltersContainer" data-react-props="{}"></div>`}},
+	"idealtraits":    {func(f *fakeHTTP) Source { return NewIdealTraits(f) }, `{"joblist":"","jobcount":0}`, []string{`{}`, `{"joblist":""}`, `{"jobcount":0}`, `{"joblist":null,"jobcount":0}`}},
 	"greenhouse":     {func(f *fakeHTTP) Source { return NewGreenhouse(f) }, `{"jobs":[],"meta":{"total":0}}`, []string{`{}`, `{"jobs":null}`, `{"status":404}`}},
 	"ashby":          {func(f *fakeHTTP) Source { return NewAshby(f) }, `{"jobs":[],"apiVersion":"1"}`, []string{`{}`, `{"jobs":null}`, `{"apiVersion":"1"}`}},
 	"lever":          {func(f *fakeHTTP) Source { return NewLever(f) }, `[]`, []string{`null`}},
@@ -89,6 +93,9 @@ func TestEmptyBoardListingProvidersAreCheckedCompleteListings(t *testing.T) {
 
 // emptyBoardEntry names a board in the shape the provider's own parser accepts.
 func emptyBoardEntry(provider string) CompanyEntry {
+	if provider == "idealtraits" {
+		return CompanyEntry{Company: "Acme", Board: "8739"}
+	}
 	if provider == "workday" {
 		return CompanyEntry{Company: "Acme", Board: "acme.wd1.myworkdayjobs.com/Careers"}
 	}

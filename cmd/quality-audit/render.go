@@ -54,6 +54,16 @@ func render(s snapshot) string {
 		}
 	}
 
+	if len(sources) > 0 {
+		const name = "freehire_audit_liveness_unmeasured"
+		header(&b, name, "Sampled postings without a liveness verdict, per source and reason.")
+		for _, src := range sources {
+			for i, reason := range qualityaudit.UnmeasuredReasons {
+				fmt.Fprintf(&b, "%s{source=%q,reason=%q} %d\n", name, src, reason, s.liveness[src].Unmeasured[i])
+			}
+		}
+	}
+
 	// A source with no judgement in the window is absent, not zero: zero confirmed out of zero
 	// sampled is no measurement, and a zero series would read as one.
 	remote := []struct {

@@ -156,3 +156,19 @@ func TestRemoteContradictedReadsPastAQualifiedDenial(t *testing.T) {
 		t.Error("RemoteContradicted stopped at the qualified match instead of scanning on")
 	}
 }
+
+func TestWorkModeFromDescriptionHomeWorkingOptionsAndWeekLimit(t *testing.T) {
+	for _, tc := range []struct{ desc, want string }{
+		{"Flexible work from home options available.", ""},
+		{"Flex Week: Work from home up to 2 days/week (depending on your team's needs)", ""},
+		{"Work from home up to 3 days/week", ""},
+		{"Work-from-home up to three days per week", ""},
+		{"Work from home up to 1 day a week", ""},
+		{"Work from home up to 4 days/week. Separately, this is a fully remote position.", "remote"},
+		{"This is a work from home position.", "remote"},
+	} {
+		if got := WorkModeFromDescription(tc.desc); got != tc.want {
+			t.Errorf("WorkModeFromDescription(%q) = %q, want %q", tc.desc, got, tc.want)
+		}
+	}
+}

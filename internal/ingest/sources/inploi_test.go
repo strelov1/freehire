@@ -34,7 +34,7 @@ func TestInploiRegisteredAsFullBoardListing(t *testing.T) {
 func TestInploiFetchListsPostings(t *testing.T) {
 	fake := &inploiFake{
 		pages: map[string]string{
-			"https://www.inploi.com/company/compass/search": `<html><body><script>pk_live_example_key_1 "segment_ids","Segment","248"</script></body></html>`,
+			"https://www.inploi.com/company/compass/search": inploiSearchFixture(t, "pk_live_example_key_1", "248"),
 		},
 		final: map[string]string{
 			"https://www.inploi.com/company/compass/search": "https://jobs.compass-group.co.uk/search",
@@ -119,7 +119,7 @@ func TestInploiFetchListsPostings(t *testing.T) {
 }
 
 func TestInploiFetchNewSkipsASeenBody(t *testing.T) {
-	fake := inploiOne(`{"data":[{"id":7,"title":"Chef","company_name":"Haven"}],"pagination":{"total":1,"current_page":1,"last_page":1}}`)
+	fake := inploiOne(t, `{"data":[{"id":7,"title":"Chef","company_name":"Haven"}],"pagination":{"total":1,"current_page":1,"last_page":1}}`)
 	fake.html["https://jobs.example.test/job/7"] = `<html><head><script type="application/ld+json">{"@type":"JobPosting","description":"<p>Cook.</p>"}</script></head></html>`
 	src := NewInploi(fake).(inploi)
 	jobs, err := src.FetchNew(context.Background(), CompanyEntry{Board: "haven"}, func(id string) bool { return id == "7" })
@@ -134,7 +134,7 @@ func TestInploiFetchNewSkipsASeenBody(t *testing.T) {
 func TestInploiFetchNewCapsUnseenDetail(t *testing.T) {
 	fake := &inploiFake{
 		pages: map[string]string{
-			"https://www.inploi.com/company/haven/search": `<html><script>pk_live_example_key_1 "segment_ids","segment","497"</script></html>`,
+			"https://www.inploi.com/company/haven/search": inploiSearchFixture(t, "pk_live_example_key_1", "497"),
 		},
 		final: map[string]string{
 			"https://www.inploi.com/company/haven/search": "https://jobs.haven.com/search",
@@ -161,7 +161,7 @@ func TestInploiFetchNewCapsUnseenDetail(t *testing.T) {
 }
 
 func TestInploiFetchNewBacklogWindowWrapsWithoutDuplicates(t *testing.T) {
-	fake := inploiOne(`{"data":[{"id":1,"title":"One"},{"id":2,"title":"Two"},{"id":3,"title":"Three"},{"id":4,"title":"Four"},{"id":5,"title":"Five"}],"pagination":{"total":5,"current_page":1,"last_page":1}}`)
+	fake := inploiOne(t, `{"data":[{"id":1,"title":"One"},{"id":2,"title":"Two"},{"id":3,"title":"Three"},{"id":4,"title":"Four"},{"id":5,"title":"Five"}],"pagination":{"total":5,"current_page":1,"last_page":1}}`)
 	src := NewInploi(fake).(inploi)
 	src.maxNew = 4
 	src.pick = func(n int) int { return n - 1 }
@@ -180,7 +180,7 @@ func TestInploiFetchNewBacklogWindowWrapsWithoutDuplicates(t *testing.T) {
 
 func TestInploiFetchNewReachesBacklogAtTwoHourCadence(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		fake := inploiOne(`{"data":[{"id":1,"title":"One"},{"id":2,"title":"Two"},{"id":3,"title":"Engineer"},{"id":4,"title":"Seen"}],"pagination":{"total":4,"current_page":1,"last_page":1}}`)
+		fake := inploiOne(t, `{"data":[{"id":1,"title":"One"},{"id":2,"title":"Two"},{"id":3,"title":"Engineer"},{"id":4,"title":"Seen"}],"pagination":{"total":4,"current_page":1,"last_page":1}}`)
 		fake.html["https://jobs.example.test/job/3"] = `<html><script type="application/ld+json">{"@type":"JobPosting","description":"<p>Build software.</p>"}</script></html>`
 		src := NewInploi(fake).(inploi)
 		src.maxNew = 2
@@ -243,7 +243,7 @@ func TestInploiFetchNewCanSelectEveryBacklogOffsetAtTwoHourCadence(t *testing.T)
 		// Enumerate picker offsets; random production picks do not guarantee coverage
 		// within four crawls. Every backlog position must remain reachable at this cadence.
 		for offset := range 4 {
-			fake := inploiOne(body)
+			fake := inploiOne(t, body)
 			fake.html = htmls
 			src := NewInploi(fake).(inploi)
 			src.maxNew = 2
@@ -285,7 +285,7 @@ func TestInploiFetchReadsTheHostSearchWhenTheRedirectDropsIt(t *testing.T) {
 			"https://www.inploi.com/company/puregym/search": "https://careers.puregym.com/",
 		},
 		html: map[string]string{
-			"https://careers.puregym.com/search": `<html><script>pk_live_example_key_1 "segment_ids","segment","9"</script></html>`,
+			"https://careers.puregym.com/search": inploiSearchFixture(t, "pk_live_example_key_1", "9"),
 			"https://careers.puregym.com/job/3":  `<html><script type="application/ld+json">{"@type":"JobPosting","description":"<p>Lift.</p>"}</script></html>`,
 		},
 		json: map[string]string{
@@ -302,7 +302,7 @@ func TestInploiFetchReadsTheHostSearchWhenTheRedirectDropsIt(t *testing.T) {
 }
 
 func TestInploiFetchEmptySegment(t *testing.T) {
-	fake := inploiOne(`{"data":[],"pagination":{"total":0,"current_page":1,"last_page":1}}`)
+	fake := inploiOne(t, `{"data":[],"pagination":{"total":0,"current_page":1,"last_page":1}}`)
 	jobs, err := NewInploi(fake).Fetch(context.Background(), CompanyEntry{Board: "haven"})
 	if err != nil || len(jobs) != 0 {
 		t.Fatalf("jobs=%v err=%v, want an empty read", jobs, err)
@@ -310,21 +310,21 @@ func TestInploiFetchEmptySegment(t *testing.T) {
 }
 
 func TestInploiFetchRejectsAMissingCollection(t *testing.T) {
-	fake := inploiOne(`{"pagination":{"total":0,"current_page":1,"last_page":1}}`)
+	fake := inploiOne(t, `{"pagination":{"total":0,"current_page":1,"last_page":1}}`)
 	if _, err := NewInploi(fake).Fetch(context.Background(), CompanyEntry{Board: "compass"}); err == nil {
 		t.Fatal("Fetch succeeded without a data collection")
 	}
 }
 
 func TestInploiFetchRejectsAShortPage(t *testing.T) {
-	fake := inploiOne(`{"data":[{"id":1,"title":"One"}],"pagination":{"total":2,"current_page":1,"last_page":1}}`)
+	fake := inploiOne(t, `{"data":[{"id":1,"title":"One"}],"pagination":{"total":2,"current_page":1,"last_page":1}}`)
 	if _, err := NewInploi(fake).Fetch(context.Background(), CompanyEntry{Board: "compass"}); err == nil {
 		t.Fatal("Fetch succeeded with fewer rows than the source listed")
 	}
 }
 
 func TestInploiFetchRejectsADuplicateID(t *testing.T) {
-	fake := inploiOne(`{"data":[{"id":1,"title":"One"},{"id":1,"title":"One"}],"pagination":{"total":2,"current_page":1,"last_page":1}}`)
+	fake := inploiOne(t, `{"data":[{"id":1,"title":"One"},{"id":1,"title":"One"}],"pagination":{"total":2,"current_page":1,"last_page":1}}`)
 	if _, err := NewInploi(fake).Fetch(context.Background(), CompanyEntry{Board: "compass"}); err == nil {
 		t.Fatal("Fetch succeeded with fewer distinct postings than the source listed")
 	}
@@ -360,11 +360,11 @@ func TestInploiFetchRejectsAPageWithoutASegment(t *testing.T) {
 	}
 }
 
-func inploiOne(body string) *inploiFake {
+func inploiOne(t *testing.T, body string) *inploiFake {
 	return &inploiFake{
 		pages: map[string]string{
-			"https://www.inploi.com/company/compass/search": `<html><script>pk_live_example_key_1 "segment_ids","segment","248"</script></html>`,
-			"https://www.inploi.com/company/haven/search":   `<html><script>pk_live_example_key_1 "segment_ids","segment","497"</script></html>`,
+			"https://www.inploi.com/company/compass/search": inploiSearchFixture(t, "pk_live_example_key_1", "248"),
+			"https://www.inploi.com/company/haven/search":   inploiSearchFixture(t, "pk_live_example_key_1", "497"),
 		},
 		final: map[string]string{
 			"https://www.inploi.com/company/compass/search": "https://jobs.example.test/search",

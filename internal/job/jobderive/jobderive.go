@@ -263,16 +263,16 @@ func Derive(in Input) Derived {
 	if workMode == "" {
 		workMode = location.WorkModeFromDescription(in.Description)
 	}
-	// A description may CONTRADICT the result of that chain, not merely fill its gaps. It is
-	// the one place prose outranks a structured signal, and only for this one question: an ATS
-	// "remote" is routinely a requisition's location bucket rather than a work arrangement —
-	// NVIDIA publishes a whole "US, TX, Remote" location with remoteType unset, for a role its
-	// body calls 100% on-site (freehire#2555) — while a sentence denying remote work is the
-	// employer writing about the arrangement itself. Only "remote" is ever overruled, and only
-	// to "onsite": a denial of remote says nothing against hybrid, and location.RemoteContradicted
-	// deliberately answers that one question rather than proposing a mode of its own.
-	if workMode == "remote" && location.RemoteContradicted(in.Description) {
-		workMode = "onsite"
+	// Explicit arrangement prose fills a gap or contradicts a remote location bucket or ATS flag.
+	// Hybrid is checked before a remote denial: "not remote" alone does not distinguish
+	// an office-only role from one split between office and home.
+	if workMode == "remote" || workMode == "" {
+		switch {
+		case location.HybridArrangementStated(in.Description):
+			workMode = "hybrid"
+		case workMode == "remote" && location.RemoteContradicted(in.Description):
+			workMode = "onsite"
+		}
 	}
 	class := classify.Parse(title)
 	// Seniority precedence: structured source signal → title dictionary → description

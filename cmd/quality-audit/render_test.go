@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -57,7 +58,7 @@ freehire_audit_global_contradicted{source="manatal"} 3
 freehire_audit_measured_timestamp_seconds{check="liveness"} 1761900000
 freehire_audit_measured_timestamp_seconds{check="remote"} 1761903600
 `
-	if got := render(s); got != want {
+	if got := withoutCoverage(render(s)); got != want {
 		t.Errorf("render mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }
@@ -82,7 +83,27 @@ freehire_audit_liveness_dead{source="lever"} 0
 # TYPE freehire_audit_measured_timestamp_seconds gauge
 freehire_audit_measured_timestamp_seconds{check="liveness"} 10
 `
-	if got := render(s); got != want {
+	if got := withoutCoverage(render(s)); got != want {
 		t.Errorf("render mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
+}
+
+func TestRenderUnmeasuredReasons(t *testing.T) {
+	counts := qualityaudit.TallyLiveness([]qualityaudit.Result{{Posting: qualityaudit.Posting{Source: "appone"}, Reason: qualityaudit.ReasonRefused}})
+	got := render(snapshot{liveness: counts})
+	if !strings.Contains(got, `freehire_audit_liveness_unmeasured{source="appone",reason="refused"} 1`) {
+		t.Fatalf("missing source coverage reason: %s", got)
+	}
+}
+
+// Existing metric names and labels stay stable; the additive coverage family is tested above.
+func withoutCoverage(s string) string {
+	lines := strings.Split(s, "\n")
+	out := lines[:0]
+	for _, line := range lines {
+		if !strings.Contains(line, "freehire_audit_liveness_unmeasured") {
+			out = append(out, line)
+		}
+	}
+	return strings.Join(out, "\n")
 }

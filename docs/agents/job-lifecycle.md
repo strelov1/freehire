@@ -108,3 +108,24 @@ So `board_health.last_yield_at` records when a board last YIELDED a posting. **B
 - The age rule is a guess: a Telegram vacancy still open at 46 days is closed and nothing reopens it. `closed_reason = 'expired'` makes the set findable and restorable.
 - Every mechanism queues the closed row's removal from the facet index in its own statement (`search_delete_outbox`), so close and de-indexing commit together. `TestEveryClosingQueryQueuesTheRemoval` enumerates them by a hand-written list; both `cmd/liveness` closes were missing from it, and from the queue, until 2026-09-06.
 - The unseen safety net reads `last_seen_at` by SOURCE, so a row stored under a crawled provider's name that no crawl of it will list (a Telegram post linking to an uncrawled ATS board, a moderator import filed under its origin) is hidden 14 days after it was written, live or not. Its page still serves it.
+
+### Boardless catalogue status backstops
+
+The November 2026 audit found dead postings from `instaffo`, `remotedotcom` and
+`thehub` outside the company-scoped sweep. Reed's bounded keyword union has the
+same scope gap and is covered for its own stored Reed posting URLs; employer
+redirect URLs are deliberately excluded. None claims `fullCatalog`, so when an
+employer leaves the listing its last postings never re-enter that sweep's scope.
+`cmd/liveness` includes their open postings unseen for more than 48 hours. Each
+source is paced at two seconds per request, capped at 500 postings per run, and
+stops on 403/429. Only a 404/410 on the same host and posting path adds a strike;
+a redirect to a listing or another host is uncertain. The ordinary two-run close
+threshold, crawl-race cutoff and transactional search-delete enqueue apply.
+Search's unseen safety net stays enabled while the backlog is worked off.
+
+For a scoped cleanup after deploying the worker, run `liveness -source=instaffo`,
+`liveness -source=remotedotcom`, `liveness -source=thehub` or
+`liveness -source=reed`. Repeat in a later
+run rather than stacking invocations: two independent expired reads close a
+posting with `closed_reason = 'probe_expired'`. Never treat an audit sample or
+its canary alone as closure evidence.

@@ -24,7 +24,16 @@ var probedButWithheld = map[string]string{
 	// 64 of 100 such rows sampled when the probe landed were dead (~7k of ~11k), and the probe
 	// reads ~5k a day, so the marker would put them back in search for days. Grant it once the
 	// backlog is worked off and only the live tail is left unseen.
-	"arbeitnow": "the probe's backlog is days deep",
+	"arbeitnow":      "the probe's backlog is days deep",
+	"instaffo":       "the probe's backlog is days deep",
+	"remotedotcom":   "the probe's backlog is days deep",
+	"thehub":         "the probe's backlog is days deep",
+	"reed":           "the probe's backlog is days deep",
+	"arbeitsagentur": "the probe's backlog is days deep",
+	"xing":           "the probe's backlog is days deep",
+	"gradcracker":    "the probe's backlog is days deep",
+	"engage":         "the probe's backlog is days deep",
+	"betterteam":     "the probe's backlog is days deep",
 }
 
 // A source this worker probes is usually one whose crawl cannot re-list every live posting, so
@@ -188,5 +197,63 @@ func TestMatchingProvidersEmptyOnNoMatch(t *testing.T) {
 	got := matchingProviders([]string{"himalayas", "jobicy"}, []string{"whatjobs"})
 	if len(got) != 0 {
 		t.Fatalf("matchingProviders() = %v, want empty", got)
+	}
+}
+
+func TestProviderClassificationDoesNotRequireReedCredential(t *testing.T) {
+	t.Setenv("REED_API_KEY", "")
+	// Keep the independent age-expiration startup guards satisfied.
+	t.Setenv("WHATJOBS_PUBLISHER_IDS", "us:test-publisher")
+	t.Setenv("ADZUNA_APP_ID", "test-app")
+	t.Setenv("ADZUNA_APP_KEY", "test-key")
+	live := providerKeys(sources.All(sources.NewClient()))
+	if slices.Contains(live, "reed") {
+		t.Fatal("test setup unexpectedly registers Reed for crawling")
+	}
+	if missing := unmatchedPrefixes(live, expireDespiteRegisteredPrefixes); len(missing) > 0 {
+		t.Fatalf("independent age guard fails: %v", missing)
+	}
+	classified := classifiedProviderKeys()
+	for _, source := range unsignalledSources {
+		if slices.Contains(classified, source) {
+			t.Fatalf("unsignalled age source %s is registered", source)
+		}
+	}
+	for _, source := range probeDespiteRegistered {
+		if !slices.Contains(classified, source) {
+			t.Errorf("startup probe guard rejects %s without a crawl credential", source)
+		}
+	}
+	if !slices.Equal(filterSources(probeDespiteRegistered, "instaffo"), []string{"instaffo"}) {
+		t.Fatal("unrelated source filter was lost")
+	}
+}
+
+func TestUnconfiguredWhatJobsMarketRetainsAgeFallback(t *testing.T) {
+	t.Setenv("WHATJOBS_PUBLISHER_IDS", "us:test-publisher")
+	t.Setenv("ADZUNA_APP_ID", "test-app")
+	t.Setenv("ADZUNA_APP_KEY", "test-key")
+	crawlProviders := providerKeys(sources.All(sources.NewClient()))
+	if slices.Contains(crawlProviders, "whatjobs-uk") {
+		t.Fatal("test setup unexpectedly configures UK crawl")
+	}
+	if missing := unmatchedPrefixes(crawlProviders, expireDespiteRegisteredPrefixes); len(missing) > 0 {
+		t.Fatalf("live-prefix guard fails: %v", missing)
+	}
+	if !slices.Contains(classifiedProviderKeys(), "whatjobs-uk") {
+		t.Fatal("UK must remain excluded from orphan URL probes")
+	}
+	fallback, grace := registeredAgeFallback()
+	selected := filterSources(fallback, "whatjobs-uk")
+	if !slices.Equal(selected, []string{"whatjobs-uk"}) {
+		t.Fatalf("UK has no age fallback: %v", selected)
+	}
+	if got := unseenWindow(selected, grace); got != 14*24*time.Hour {
+		t.Fatalf("UK unseen grace=%v, want 14 days", got)
+	}
+	t.Setenv("WHATJOBS_PUBLISHER_IDS", "")
+	noMarkets := providerKeys(sources.All(sources.NewClient()))
+	if missing := unmatchedPrefixes(noMarkets, expireDespiteRegisteredPrefixes); !slices.Contains(missing, "whatjobs") {
+		t.Fatal("live-prefix guard no longer detects missing publisher configuration")
 	}
 }

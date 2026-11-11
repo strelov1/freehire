@@ -2,6 +2,7 @@ package location
 
 import (
 	"html"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -188,7 +189,9 @@ func phraseMatches(text, p string) bool {
 		}
 		start, end := offset+i, offset+i+len(p)
 		perk := (guarded && travelPerkQualified(text, start, end)) ||
-			(allowancePhrases[p] && opensWithNoun(text[end:], allowanceUnits))
+			(allowancePhrases[p] && opensWithNoun(text[end:], allowanceUnits)) ||
+			((p == "work from home" || p == "work-from-home") &&
+				(strings.HasPrefix(text[end:], " options available") || boundedHomeWeek.MatchString(text[end:])))
 		if !perk && !opensWithNoun(text[end:], collectiveNouns) {
 			return true
 		}
@@ -196,6 +199,8 @@ func phraseMatches(text, p string) bool {
 		rest = text[offset:]
 	}
 }
+
+var boundedHomeWeek = regexp.MustCompile(`^ up to (?:[1-4]|one|two|three|four) days?(?:\s*/\s*| per | a )week\b`)
 
 // travelPerkPhrases are the remote-family phrases that are ALSO a common idiom for a
 // bounded travel/PTO allowance ("the freedom to work from anywhere in the world for up
@@ -306,6 +311,7 @@ var remoteDenialPhrases = []string{
 	"100% on-site", "100% onsite", "100 % on-site", "100 % onsite",
 	"100 percent on-site", "100 percent onsite",
 	"not a remote position", "not a remote role", "not a remote job", "not a remote opportunity",
+	"not a remote work-from-home role",
 	"position is not remote", "role is not remote", "job is not remote",
 	"does not offer remote", "does not offer a remote",
 	"do not offer remote", "do not offer a remote",

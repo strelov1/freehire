@@ -24,7 +24,7 @@ func joinListJSON(pageCount int, items ...[7]string) string {
 		b.WriteString(`{"id":` + it[0] + `,"idParam":"` + it[1] + `","title":"` + it[2] +
 			`","createdAt":"` + it[3] + `","workplaceType":"` + it[4] + `","city":` + city + `}`)
 	}
-	b.WriteString(`],"pagination":{"pageCount":` + strconv.Itoa(pageCount) + `}}`)
+	b.WriteString(`],"pagination":{"rowCount":` + strconv.Itoa(pageCount*len(items)) + `,"pageCount":` + strconv.Itoa(pageCount) + `}}`)
 	return b.String()
 }
 
@@ -147,9 +147,9 @@ func TestJoinRemoteIgnoresTitleUsesWorkplaceAndLocation(t *testing.T) {
 	}
 }
 
-func TestJoinFailedDetailDropsOnlyThatPosting(t *testing.T) {
+func TestJoinFailedDetailPreservesListedPosting(t *testing.T) {
 	d := joinDetailJSON("acme", "Body.")
-	// No route for /jobs/222 → GetJSON errors → that posting drops.
+	// No route for /jobs/222: a transient detail failure must preserve its listed identity.
 	fake := (&routedHTTP{}).
 		route("/companies/9/jobs", joinListJSON(1,
 			[7]string{"111", "111-kept", "Kept", "2026-06-01T00:00:00Z", "REMOTE", "", ""},
@@ -159,13 +159,18 @@ func TestJoinFailedDetailDropsOnlyThatPosting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 1 || jobs[0].ExternalID != "111" {
-		t.Fatalf("got %v, want only the kept posting", jobs)
+	if len(jobs) != 2 {
+		t.Fatalf("got %v, want both listed postings", jobs)
+	}
+	for _, job := range jobs {
+		if job.ExternalID == "222" && !job.Unreadable {
+			t.Fatal("failed detail lost its unreadable marker")
+		}
 	}
 }
 
 func TestJoinEmptyBoardYieldsNoJobsNoError(t *testing.T) {
-	fake := (&routedHTTP{}).route("/companies/9/jobs", `{"items":[],"pagination":{"pageCount":0}}`)
+	fake := (&routedHTTP{}).route("/companies/9/jobs", `{"items":[],"pagination":{"pageCount":0,"rowCount":0}}`)
 	jobs, err := NewJoin(fake).Fetch(context.Background(), CompanyEntry{Board: "9"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
@@ -196,5 +201,59 @@ func TestMarkdownToHTML(t *testing.T) {
 	}
 	if s := strings.TrimSpace(markdownToHTML("")); s != "" {
 		t.Errorf("empty input should yield empty output, got %q", s)
+	}
+}
+
+func TestJoinRejectsIncompleteListings(t *testing.T) {
+	for _, body := range []string{`{}`, `{"items":null,"pagination":{"pageCount":0,"rowCount":0}}`, `{"items":[],"pagination":{"pageCount":1,"rowCount":1}}`, `{"items":[],"pagination":{"pageCount":0}}`} {
+		t.Run(body, func(t *testing.T) {
+			_, err := NewJoin((&routedHTTP{}).route("/companies/9/jobs", body)).Fetch(context.Background(), CompanyEntry{Board: "9"})
+			if err == nil {
+				t.Fatal("malformed or incomplete listing succeeded")
+			}
+		})
+	}
+}
+func TestJoinListingMarkers(t *testing.T) {
+	s := NewJoin(nil)
+	if _, ok := s.(fullBoardListing); !ok {
+		t.Fatal("missing full listing contract")
+	}
+	if _, ok := s.(emptyBoardListing); !ok {
+		t.Fatal("missing explicit empty contract")
+	}
+}
+
+func TestJoinIncompletePaginationFailsWholeBoard(t *testing.T) {
+	item := [7]string{"1", "1-a", "Engineer", "", "REMOTE", "", ""}
+	for name, fake := range map[string]*routedHTTP{
+		"late failure":  (&routedHTTP{}).route("jobs?page=1", joinListJSON(2, item)),
+		"repeated page": (&routedHTTP{}).route("jobs?page=1", joinListJSON(2, item)).route("jobs?page=2", joinListJSON(2, item)),
+		"short count":   (&routedHTTP{}).route("jobs?page=1", strings.Replace(joinListJSON(1, item), `"rowCount":1`, `"rowCount":2`, 1)),
+		"changed count": (&routedHTTP{}).route("jobs?page=1", joinListJSON(2, item)).route("jobs?page=2", joinListJSON(1, [7]string{"2", "2-b", "Other", "", "REMOTE", "", ""})),
+	} {
+		t.Run(name, func(t *testing.T) {
+			jobs, err := NewJoin(fake).Fetch(context.Background(), CompanyEntry{Board: "9"})
+			if err == nil || len(jobs) != 0 {
+				t.Fatalf("partial listing returned: %v, %v", jobs, err)
+			}
+		})
+	}
+}
+
+func TestJoinDetailGoneAndUnreadableAreDistinct(t *testing.T) {
+	for _, code := range []int{404, 410, 500} {
+		fake := (&routedHTTP{}).route("/companies/9/jobs", joinListJSON(1, [7]string{"1", "1-a", "Engineer", "", "REMOTE", "", ""})).routeErr("/jobs/1", &StatusError{Code: code})
+		jobs, err := NewJoin(fake).Fetch(context.Background(), CompanyEntry{Board: "9"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if code == 500 {
+			if len(jobs) != 1 || !jobs[0].Unreadable {
+				t.Fatalf("transient detail failure lost listed identity: %v", jobs)
+			}
+		} else if len(jobs) != 0 {
+			t.Fatalf("gone detail retained: %v", jobs)
+		}
 	}
 }
