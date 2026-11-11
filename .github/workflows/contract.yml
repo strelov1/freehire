@@ -11,6 +11,8 @@ on:
       - openapi/**
       - internal/**
       - cmd/server/**
+      - go.mod
+      - go.sum
       - migrations/**
       - Dockerfile
       - docker-compose.yml
@@ -23,6 +25,8 @@ on:
       - openapi/**
       - internal/**
       - cmd/server/**
+      - go.mod
+      - go.sum
       - migrations/**
       - Dockerfile
       - docker-compose.yml
