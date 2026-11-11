@@ -188,7 +188,9 @@ func phraseMatches(text, p string) bool {
 		}
 		start, end := offset+i, offset+i+len(p)
 		perk := (guarded && travelPerkQualified(text, start, end)) ||
-			(allowancePhrases[p] && opensWithNoun(text[end:], allowanceUnits))
+			(allowancePhrases[p] && opensWithNoun(text[end:], allowanceUnits)) ||
+			((p == "work from home" || p == "work-from-home") &&
+				(strings.HasPrefix(text[end:], " options available") || strings.HasPrefix(text[end:], " up to 2 days/week")))
 		if !perk && !opensWithNoun(text[end:], collectiveNouns) {
 			return true
 		}
@@ -306,6 +308,7 @@ var remoteDenialPhrases = []string{
 	"100% on-site", "100% onsite", "100 % on-site", "100 % onsite",
 	"100 percent on-site", "100 percent onsite",
 	"not a remote position", "not a remote role", "not a remote job", "not a remote opportunity",
+	"not a remote work-from-home role",
 	"position is not remote", "role is not remote", "job is not remote",
 	"does not offer remote", "does not offer a remote",
 	"do not offer remote", "do not offer a remote",

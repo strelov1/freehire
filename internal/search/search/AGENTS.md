@@ -25,7 +25,9 @@ HNSW index were dropped by `0228_drop_precomputed_similar_jobs.sql` and
   without markers remain eligible. Full replacement from a canonical open row clears
   both markers. Status updates use the experimental edit-documents-by-function API:
   enable it and await both live filterable-attribute settings before deploying readers
-  or the drain. Updates touch existing documents only, preserving text/vectors without
+  or the drain. Legacy documents can still carry retired `desc` vectors after
+  their embedder was removed. Marker updates clear and remove that retired field before
+  assignment to stay under Rhai's aggregate array limit, preserving active skill vectors. Updates touch existing documents only, preserving text/vectors without
   creating skeletons. Private/missing rows still require physical removal; a full rebuild
   omits closed/duplicate rows to reclaim retained storage. Before rolling back readers,
   physically remove marked documents and await completion or the old filter exposes them.
