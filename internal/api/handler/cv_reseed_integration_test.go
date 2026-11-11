@@ -25,9 +25,9 @@ func buildResetApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	saved := auth.RequireAuth(iss, testVersions)
 	keyAuth := auth.RequireAuthOrScopedKey(iss, testVersions, apiKeys{h.queries}, auth.ScopeCV)
-	app.Get("/api/v1/me/cvs/:id", keyAuth, h.GetCV)
-	app.Post("/api/v1/me/cvs/base/reseed", saved, h.ReseedBaseCV)
-	app.Post("/api/v1/me/cvs/:id/reseed", saved, h.ReseedCV)
+	app.Get("/api/v1/me/cvs/:id", keyAuth, cvContract(h))
+	app.Post("/api/v1/me/cvs/base/reseed", saved, cvContract(h))
+	app.Post("/api/v1/me/cvs/:id/reseed", saved, cvContract(h))
 	return app
 }
 

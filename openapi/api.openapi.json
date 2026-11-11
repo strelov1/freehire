@@ -106,6 +106,9 @@
     },
     {
       "name": "Résumé"
+    },
+    {
+      "name": "CV"
     }
   ],
   "paths": {
@@ -1349,6 +1352,84 @@
         },
         "tags": [
           "Company relations"
+        ]
+      }
+    },
+    "/cv-fonts": {
+      "get": {
+        "operationId": "listCVFonts",
+        "description": "The registered typefaces a CV may choose.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/cv-templates": {
+      "get": {
+        "operationId": "listCVTemplates",
+        "description": "The registered CV templates and their display metadata.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
         ]
       }
     },
@@ -6353,6 +6434,1346 @@
             }
           }
         }
+      }
+    },
+    "/me/cv-appearance-defaults": {
+      "get": {
+        "operationId": "getCVAppearanceDefaults",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvAppearanceDefaultsResult"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      },
+      "put": {
+        "operationId": "setCVAppearanceDefaults",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvAppearanceDefaultsResult"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CvAppearanceDefaults"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/cvs": {
+      "get": {
+        "operationId": "listCVs",
+        "description": "The caller's TAILORED CVs, newest edit first. With a session or an API key.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CvTailored"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      },
+      "post": {
+        "operationId": "createCV",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvRecord"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CvCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/cvs/base/reseed": {
+      "post": {
+        "operationId": "reseedBaseCV",
+        "description": "Rebuilds the default base CV from the current seed.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvRecord"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/bases": {
+      "get": {
+        "operationId": "listBaseCVs",
+        "description": "The base CVs, oldest first, with the default flagged. With a session or an API key.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CvBase"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/tailor": {
+      "post": {
+        "operationId": "tailorCV",
+        "description": "Starts the tailoring session for a vacancy (the paid gate runs before this). 201 with\nthe ids and the cached analysis; 402 when the allowance is spent and the vacancy is new.\nWith a session or an API key.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvTailorResult"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvPlanRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CvTailorRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/cvs/{id}": {
+      "get": {
+        "operationId": "getCV",
+        "description": "The document without its contact block to an API key.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvRecord"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      },
+      "put": {
+        "operationId": "updateCV",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvMeta"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CvUpdate"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteCV",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      },
+      "patch": {
+        "operationId": "patchCV",
+        "description": "Applies a batch of path operations (`{\"ops\": [...], \"note\": \"\"}`), decoded strictly in\nGo: an unknown field or bad addressing is a 422. With a session or an API key.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvMeta"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          }
+        }
+      }
+    },
+    "/me/cvs/{id}/ats-delta": {
+      "get": {
+        "operationId": "getCVATSDelta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvAtsDelta"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/{id}/base-session": {
+      "post": {
+        "operationId": "startBaseSession",
+        "description": "The assistant conversation for a base CV; not behind the paid gate.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvBaseSession"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/{id}/cover-letter": {
+      "get": {
+        "operationId": "getCVCoverLetter",
+        "description": "Never calls a model. With a session or an API key.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvCoverLetter"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      },
+      "post": {
+        "operationId": "draftCVCoverLetter",
+        "description": "Drafts the letter (the paid gate runs before this); 402 when the allowance is spent.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvCoverLetter"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvPlanRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/{id}/duplicate": {
+      "post": {
+        "operationId": "duplicateCV",
+        "description": "Copies a base CV as \"<title> (copy)\"; 409 for a tailored one.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvRecord"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/{id}/job-match": {
+      "get": {
+        "operationId": "getCVJobMatch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvJobMatch"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/{id}/reseed": {
+      "post": {
+        "operationId": "reseedCV",
+        "description": "Rebuilds one CV from the current seed; destructive.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvRecord"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/{id}/revisions": {
+      "get": {
+        "operationId": "listCVRevisions",
+        "description": "What changed the CV, newest first.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/{id}/revisions/batch/{bid}/undo": {
+      "post": {
+        "operationId": "undoCVRevisionBatch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvMeta"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/{id}/revisions/{rid}/undo": {
+      "post": {
+        "operationId": "undoCVRevision",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvRevisionUndo"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/{id}/session": {
+      "put": {
+        "operationId": "setCVSession",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CvSessionBinding"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/cvs/{id}/tailor-context": {
+      "get": {
+        "operationId": "getCVTailorContext",
+        "description": "The cached fit analysis of a tailored CV, projected for the tailoring agent.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/{id}/tailor-session": {
+      "post": {
+        "operationId": "startTailorSession",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvTailorSession"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/cvs/{id}/template": {
+      "put": {
+        "operationId": "setCVTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CvTemplateChoice"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/cvs/{id}/tracer-links": {
+      "put": {
+        "operationId": "setCVTracerLinks",
+        "description": "409 when enabling on a deployment with no visitor salt.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CvTracerLinksState"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CvTracerLinksSetting"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listCVTracerLinks",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CvTracerLink"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ]
       }
     },
     "/me/email-groups": {
@@ -13355,6 +14776,463 @@
           "body": {
             "type": "string"
           }
+        }
+      },
+      "CvAppearanceDefaults": {
+        "type": "object",
+        "properties": {
+          "template_id": {
+            "type": "string"
+          },
+          "style": {},
+          "margins": {}
+        },
+        "description": "Template, typography and margins a new CV starts with; a save replaces the whole set."
+      },
+      "CvAppearanceDefaultsResult": {
+        "type": "object",
+        "required": [
+          "template_id",
+          "style",
+          "margins"
+        ],
+        "properties": {
+          "template_id": {
+            "type": "string"
+          },
+          "style": {},
+          "margins": {}
+        }
+      },
+      "CvAtsDelta": {
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "base_cv_id": {
+            "type": "string"
+          },
+          "delta": {}
+        }
+      },
+      "CvBase": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "template_id",
+          "created_at",
+          "updated_at",
+          "is_default",
+          "hand_edited"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "is_default": {
+            "type": "boolean",
+            "description": "The base used wherever a single one is needed without asking."
+          },
+          "hand_edited": {
+            "type": "boolean",
+            "description": "The candidate changed it by hand; an upload refresh leaves it alone."
+          }
+        },
+        "description": "A base CV in the bases list and the tailoring picker."
+      },
+      "CvBaseSession": {
+        "type": "object",
+        "required": [
+          "base_cv_id",
+          "session_id"
+        ],
+        "properties": {
+          "base_cv_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        }
+      },
+      "CvCoverLetter": {
+        "type": "object",
+        "required": [
+          "present"
+        ],
+        "properties": {
+          "present": {
+            "type": "boolean"
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "letter": {},
+          "cited": {},
+          "model": {
+            "type": "string"
+          }
+        },
+        "description": "A stored cover letter; `present` is false, with no letter, when none was drafted."
+      },
+      "CvCreate": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "template_id": {
+            "type": "string",
+            "description": "Empty falls back to the caller's saved default, then to the system one."
+          },
+          "seed": {
+            "type": "boolean",
+            "description": "Pre-fills the CV from the stored résumé structure."
+          }
+        }
+      },
+      "CvJobMatch": {
+        "type": "object",
+        "required": [
+          "available"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "score": {}
+        }
+      },
+      "CvMeta": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "template_id",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        },
+        "description": "A CV without its document."
+      },
+      "CvPlanRefusal": {
+        "type": "object",
+        "required": [
+          "error",
+          "allowance"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "allowance": {},
+          "upgrade_url": {
+            "type": "string"
+          }
+        },
+        "description": "A plan refusal: the sentence, the allowance it does not include and the upgrade link."
+      },
+      "CvRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "template_id",
+          "created_at",
+          "updated_at",
+          "agent_session_id",
+          "document",
+          "tracer_links_enabled"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "agent_session_id": {
+            "type": "string",
+            "description": "The assistant conversation bound to a tailored CV; empty when none."
+          },
+          "document": {
+            "description": "The structured CV document."
+          },
+          "autopilot_report": {
+            "description": "The last unattended run's account of itself; absent when no run has happened."
+          },
+          "tracer_links_enabled": {
+            "type": "boolean",
+            "description": "The candidate's consent for this CV's links to be traced."
+          }
+        },
+        "description": "One CV: its document and the state around it."
+      },
+      "CvRevisionUndo": {
+        "type": "object",
+        "required": [
+          "cv",
+          "revision"
+        ],
+        "properties": {
+          "cv": {
+            "$ref": "#/components/schemas/CvMeta"
+          },
+          "revision": {}
+        }
+      },
+      "CvSessionBinding": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        }
+      },
+      "CvTailorRequest": {
+        "type": "object",
+        "properties": {
+          "job_slug": {
+            "type": "string"
+          },
+          "base_cv_id": {
+            "type": "string",
+            "description": "The base to copy; absent means the default base."
+          }
+        }
+      },
+      "CvTailorResult": {
+        "type": "object",
+        "required": [
+          "tailor_cv_id",
+          "base_cv_id",
+          "analysis",
+          "session_id",
+          "cold_start_running"
+        ],
+        "properties": {
+          "tailor_cv_id": {
+            "type": "string"
+          },
+          "base_cv_id": {
+            "type": "string"
+          },
+          "analysis": {
+            "description": "The cached fit analysis, or null."
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "cold_start_running": {
+            "type": "boolean",
+            "description": "True exactly when this call created the tailored CV."
+          }
+        }
+      },
+      "CvTailorSession": {
+        "type": "object",
+        "required": [
+          "tailor_cv_id",
+          "base_cv_id",
+          "session_id"
+        ],
+        "properties": {
+          "tailor_cv_id": {
+            "type": "string"
+          },
+          "base_cv_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        }
+      },
+      "CvTailored": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "template_id",
+          "created_at",
+          "updated_at",
+          "job_slug",
+          "job_title",
+          "job_company",
+          "agent_session_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "job_slug": {
+            "type": "string"
+          },
+          "job_title": {
+            "type": "string"
+          },
+          "job_company": {
+            "type": "string"
+          },
+          "agent_session_id": {
+            "type": "string"
+          }
+        },
+        "description": "A tailored CV in the re-open list."
+      },
+      "CvTemplateChoice": {
+        "type": "object",
+        "properties": {
+          "template_id": {
+            "type": "string"
+          }
+        }
+      },
+      "CvTracerLink": {
+        "type": "object",
+        "required": [
+          "source_path",
+          "destination_url",
+          "traced_url",
+          "clicks",
+          "bot_clicks"
+        ],
+        "properties": {
+          "source_path": {
+            "type": "string"
+          },
+          "destination_url": {
+            "type": "string"
+          },
+          "traced_url": {
+            "type": "string"
+          },
+          "clicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "bot_clicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "distinct_visitors": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Absent when the deployment has no visitor salt."
+          },
+          "last_click_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        },
+        "description": "One traced link as the owner reads it."
+      },
+      "CvTracerLinksSetting": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CvTracerLinksState": {
+        "type": "object",
+        "required": [
+          "tracer_links_enabled"
+        ],
+        "properties": {
+          "tracer_links_enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CvUpdate": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "document": {}
         }
       },
       "Deleted": {

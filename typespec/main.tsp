@@ -38,6 +38,7 @@ import "./jobs.tsp";
 import "./companies.tsp";
 import "./search.tsp";
 import "./resume.tsp";
+import "./cv.tsp";
 
 using Http;
 

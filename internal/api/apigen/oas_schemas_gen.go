@@ -3948,6 +3948,21 @@ func (s *CountThreadsOK) SetData(val ThreadCount) {
 }
 
 // A single item: `{"data": ...}`.
+type CreateCVCreated struct {
+	Data CvRecord `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateCVCreated) GetData() CvRecord {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateCVCreated) SetData(val CvRecord) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type CreateEmployerVacancyCreated struct {
 	Data jx.Raw `json:"data"`
 }
@@ -4172,6 +4187,1019 @@ func (s *CreateThreadRequest) SetBody(val OptString) {
 	s.Body = val
 }
 
+// Template, typography and margins a new CV starts with; a save replaces the whole set.
+// Ref: #/components/schemas/CvAppearanceDefaults
+type CvAppearanceDefaults struct {
+	TemplateID OptString `json:"template_id"`
+	Style      jx.Raw    `json:"style"`
+	Margins    jx.Raw    `json:"margins"`
+}
+
+// GetTemplateID returns the value of TemplateID.
+func (s *CvAppearanceDefaults) GetTemplateID() OptString {
+	return s.TemplateID
+}
+
+// GetStyle returns the value of Style.
+func (s *CvAppearanceDefaults) GetStyle() jx.Raw {
+	return s.Style
+}
+
+// GetMargins returns the value of Margins.
+func (s *CvAppearanceDefaults) GetMargins() jx.Raw {
+	return s.Margins
+}
+
+// SetTemplateID sets the value of TemplateID.
+func (s *CvAppearanceDefaults) SetTemplateID(val OptString) {
+	s.TemplateID = val
+}
+
+// SetStyle sets the value of Style.
+func (s *CvAppearanceDefaults) SetStyle(val jx.Raw) {
+	s.Style = val
+}
+
+// SetMargins sets the value of Margins.
+func (s *CvAppearanceDefaults) SetMargins(val jx.Raw) {
+	s.Margins = val
+}
+
+// Ref: #/components/schemas/CvAppearanceDefaultsResult
+type CvAppearanceDefaultsResult struct {
+	TemplateID string `json:"template_id"`
+	Style      jx.Raw `json:"style"`
+	Margins    jx.Raw `json:"margins"`
+}
+
+// GetTemplateID returns the value of TemplateID.
+func (s *CvAppearanceDefaultsResult) GetTemplateID() string {
+	return s.TemplateID
+}
+
+// GetStyle returns the value of Style.
+func (s *CvAppearanceDefaultsResult) GetStyle() jx.Raw {
+	return s.Style
+}
+
+// GetMargins returns the value of Margins.
+func (s *CvAppearanceDefaultsResult) GetMargins() jx.Raw {
+	return s.Margins
+}
+
+// SetTemplateID sets the value of TemplateID.
+func (s *CvAppearanceDefaultsResult) SetTemplateID(val string) {
+	s.TemplateID = val
+}
+
+// SetStyle sets the value of Style.
+func (s *CvAppearanceDefaultsResult) SetStyle(val jx.Raw) {
+	s.Style = val
+}
+
+// SetMargins sets the value of Margins.
+func (s *CvAppearanceDefaultsResult) SetMargins(val jx.Raw) {
+	s.Margins = val
+}
+
+// Ref: #/components/schemas/CvAtsDelta
+type CvAtsDelta struct {
+	Available bool      `json:"available"`
+	Reason    OptString `json:"reason"`
+	BaseCvID  OptString `json:"base_cv_id"`
+	Delta     jx.Raw    `json:"delta"`
+}
+
+// GetAvailable returns the value of Available.
+func (s *CvAtsDelta) GetAvailable() bool {
+	return s.Available
+}
+
+// GetReason returns the value of Reason.
+func (s *CvAtsDelta) GetReason() OptString {
+	return s.Reason
+}
+
+// GetBaseCvID returns the value of BaseCvID.
+func (s *CvAtsDelta) GetBaseCvID() OptString {
+	return s.BaseCvID
+}
+
+// GetDelta returns the value of Delta.
+func (s *CvAtsDelta) GetDelta() jx.Raw {
+	return s.Delta
+}
+
+// SetAvailable sets the value of Available.
+func (s *CvAtsDelta) SetAvailable(val bool) {
+	s.Available = val
+}
+
+// SetReason sets the value of Reason.
+func (s *CvAtsDelta) SetReason(val OptString) {
+	s.Reason = val
+}
+
+// SetBaseCvID sets the value of BaseCvID.
+func (s *CvAtsDelta) SetBaseCvID(val OptString) {
+	s.BaseCvID = val
+}
+
+// SetDelta sets the value of Delta.
+func (s *CvAtsDelta) SetDelta(val jx.Raw) {
+	s.Delta = val
+}
+
+// A base CV in the bases list and the tailoring picker.
+// Ref: #/components/schemas/CvBase
+type CvBase struct {
+	ID         string    `json:"id"`
+	Title      string    `json:"title"`
+	TemplateID string    `json:"template_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	// The base used wherever a single one is needed without asking.
+	IsDefault bool `json:"is_default"`
+	// The candidate changed it by hand; an upload refresh leaves it alone.
+	HandEdited bool `json:"hand_edited"`
+}
+
+// GetID returns the value of ID.
+func (s *CvBase) GetID() string {
+	return s.ID
+}
+
+// GetTitle returns the value of Title.
+func (s *CvBase) GetTitle() string {
+	return s.Title
+}
+
+// GetTemplateID returns the value of TemplateID.
+func (s *CvBase) GetTemplateID() string {
+	return s.TemplateID
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *CvBase) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetUpdatedAt returns the value of UpdatedAt.
+func (s *CvBase) GetUpdatedAt() time.Time {
+	return s.UpdatedAt
+}
+
+// GetIsDefault returns the value of IsDefault.
+func (s *CvBase) GetIsDefault() bool {
+	return s.IsDefault
+}
+
+// GetHandEdited returns the value of HandEdited.
+func (s *CvBase) GetHandEdited() bool {
+	return s.HandEdited
+}
+
+// SetID sets the value of ID.
+func (s *CvBase) SetID(val string) {
+	s.ID = val
+}
+
+// SetTitle sets the value of Title.
+func (s *CvBase) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetTemplateID sets the value of TemplateID.
+func (s *CvBase) SetTemplateID(val string) {
+	s.TemplateID = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *CvBase) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetUpdatedAt sets the value of UpdatedAt.
+func (s *CvBase) SetUpdatedAt(val time.Time) {
+	s.UpdatedAt = val
+}
+
+// SetIsDefault sets the value of IsDefault.
+func (s *CvBase) SetIsDefault(val bool) {
+	s.IsDefault = val
+}
+
+// SetHandEdited sets the value of HandEdited.
+func (s *CvBase) SetHandEdited(val bool) {
+	s.HandEdited = val
+}
+
+// Ref: #/components/schemas/CvBaseSession
+type CvBaseSession struct {
+	BaseCvID  string `json:"base_cv_id"`
+	SessionID string `json:"session_id"`
+}
+
+// GetBaseCvID returns the value of BaseCvID.
+func (s *CvBaseSession) GetBaseCvID() string {
+	return s.BaseCvID
+}
+
+// GetSessionID returns the value of SessionID.
+func (s *CvBaseSession) GetSessionID() string {
+	return s.SessionID
+}
+
+// SetBaseCvID sets the value of BaseCvID.
+func (s *CvBaseSession) SetBaseCvID(val string) {
+	s.BaseCvID = val
+}
+
+// SetSessionID sets the value of SessionID.
+func (s *CvBaseSession) SetSessionID(val string) {
+	s.SessionID = val
+}
+
+// A stored cover letter; `present` is false, with no letter, when none was drafted.
+// Ref: #/components/schemas/CvCoverLetter
+type CvCoverLetter struct {
+	Present bool      `json:"present"`
+	Stale   OptBool   `json:"stale"`
+	Letter  jx.Raw    `json:"letter"`
+	Cited   jx.Raw    `json:"cited"`
+	Model   OptString `json:"model"`
+}
+
+// GetPresent returns the value of Present.
+func (s *CvCoverLetter) GetPresent() bool {
+	return s.Present
+}
+
+// GetStale returns the value of Stale.
+func (s *CvCoverLetter) GetStale() OptBool {
+	return s.Stale
+}
+
+// GetLetter returns the value of Letter.
+func (s *CvCoverLetter) GetLetter() jx.Raw {
+	return s.Letter
+}
+
+// GetCited returns the value of Cited.
+func (s *CvCoverLetter) GetCited() jx.Raw {
+	return s.Cited
+}
+
+// GetModel returns the value of Model.
+func (s *CvCoverLetter) GetModel() OptString {
+	return s.Model
+}
+
+// SetPresent sets the value of Present.
+func (s *CvCoverLetter) SetPresent(val bool) {
+	s.Present = val
+}
+
+// SetStale sets the value of Stale.
+func (s *CvCoverLetter) SetStale(val OptBool) {
+	s.Stale = val
+}
+
+// SetLetter sets the value of Letter.
+func (s *CvCoverLetter) SetLetter(val jx.Raw) {
+	s.Letter = val
+}
+
+// SetCited sets the value of Cited.
+func (s *CvCoverLetter) SetCited(val jx.Raw) {
+	s.Cited = val
+}
+
+// SetModel sets the value of Model.
+func (s *CvCoverLetter) SetModel(val OptString) {
+	s.Model = val
+}
+
+// Ref: #/components/schemas/CvCreate
+type CvCreate struct {
+	Title OptString `json:"title"`
+	// Empty falls back to the caller's saved default, then to the system one.
+	TemplateID OptString `json:"template_id"`
+	// Pre-fills the CV from the stored résumé structure.
+	Seed OptBool `json:"seed"`
+}
+
+// GetTitle returns the value of Title.
+func (s *CvCreate) GetTitle() OptString {
+	return s.Title
+}
+
+// GetTemplateID returns the value of TemplateID.
+func (s *CvCreate) GetTemplateID() OptString {
+	return s.TemplateID
+}
+
+// GetSeed returns the value of Seed.
+func (s *CvCreate) GetSeed() OptBool {
+	return s.Seed
+}
+
+// SetTitle sets the value of Title.
+func (s *CvCreate) SetTitle(val OptString) {
+	s.Title = val
+}
+
+// SetTemplateID sets the value of TemplateID.
+func (s *CvCreate) SetTemplateID(val OptString) {
+	s.TemplateID = val
+}
+
+// SetSeed sets the value of Seed.
+func (s *CvCreate) SetSeed(val OptBool) {
+	s.Seed = val
+}
+
+// Ref: #/components/schemas/CvJobMatch
+type CvJobMatch struct {
+	Available bool      `json:"available"`
+	Reason    OptString `json:"reason"`
+	Score     jx.Raw    `json:"score"`
+}
+
+// GetAvailable returns the value of Available.
+func (s *CvJobMatch) GetAvailable() bool {
+	return s.Available
+}
+
+// GetReason returns the value of Reason.
+func (s *CvJobMatch) GetReason() OptString {
+	return s.Reason
+}
+
+// GetScore returns the value of Score.
+func (s *CvJobMatch) GetScore() jx.Raw {
+	return s.Score
+}
+
+// SetAvailable sets the value of Available.
+func (s *CvJobMatch) SetAvailable(val bool) {
+	s.Available = val
+}
+
+// SetReason sets the value of Reason.
+func (s *CvJobMatch) SetReason(val OptString) {
+	s.Reason = val
+}
+
+// SetScore sets the value of Score.
+func (s *CvJobMatch) SetScore(val jx.Raw) {
+	s.Score = val
+}
+
+// A CV without its document.
+// Ref: #/components/schemas/CvMeta
+type CvMeta struct {
+	ID         string    `json:"id"`
+	Title      string    `json:"title"`
+	TemplateID string    `json:"template_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// GetID returns the value of ID.
+func (s *CvMeta) GetID() string {
+	return s.ID
+}
+
+// GetTitle returns the value of Title.
+func (s *CvMeta) GetTitle() string {
+	return s.Title
+}
+
+// GetTemplateID returns the value of TemplateID.
+func (s *CvMeta) GetTemplateID() string {
+	return s.TemplateID
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *CvMeta) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetUpdatedAt returns the value of UpdatedAt.
+func (s *CvMeta) GetUpdatedAt() time.Time {
+	return s.UpdatedAt
+}
+
+// SetID sets the value of ID.
+func (s *CvMeta) SetID(val string) {
+	s.ID = val
+}
+
+// SetTitle sets the value of Title.
+func (s *CvMeta) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetTemplateID sets the value of TemplateID.
+func (s *CvMeta) SetTemplateID(val string) {
+	s.TemplateID = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *CvMeta) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetUpdatedAt sets the value of UpdatedAt.
+func (s *CvMeta) SetUpdatedAt(val time.Time) {
+	s.UpdatedAt = val
+}
+
+// A plan refusal: the sentence, the allowance it does not include and the upgrade link.
+// Ref: #/components/schemas/CvPlanRefusal
+type CvPlanRefusal struct {
+	Error      string    `json:"error"`
+	Allowance  jx.Raw    `json:"allowance"`
+	UpgradeURL OptString `json:"upgrade_url"`
+}
+
+// GetError returns the value of Error.
+func (s *CvPlanRefusal) GetError() string {
+	return s.Error
+}
+
+// GetAllowance returns the value of Allowance.
+func (s *CvPlanRefusal) GetAllowance() jx.Raw {
+	return s.Allowance
+}
+
+// GetUpgradeURL returns the value of UpgradeURL.
+func (s *CvPlanRefusal) GetUpgradeURL() OptString {
+	return s.UpgradeURL
+}
+
+// SetError sets the value of Error.
+func (s *CvPlanRefusal) SetError(val string) {
+	s.Error = val
+}
+
+// SetAllowance sets the value of Allowance.
+func (s *CvPlanRefusal) SetAllowance(val jx.Raw) {
+	s.Allowance = val
+}
+
+// SetUpgradeURL sets the value of UpgradeURL.
+func (s *CvPlanRefusal) SetUpgradeURL(val OptString) {
+	s.UpgradeURL = val
+}
+
+func (*CvPlanRefusal) draftCVCoverLetterRes() {}
+func (*CvPlanRefusal) tailorCVRes()           {}
+
+// One CV: its document and the state around it.
+// Ref: #/components/schemas/CvRecord
+type CvRecord struct {
+	ID         string    `json:"id"`
+	Title      string    `json:"title"`
+	TemplateID string    `json:"template_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	// The assistant conversation bound to a tailored CV; empty when none.
+	AgentSessionID string `json:"agent_session_id"`
+	// The structured CV document.
+	Document jx.Raw `json:"document"`
+	// The last unattended run's account of itself; absent when no run has happened.
+	AutopilotReport jx.Raw `json:"autopilot_report"`
+	// The candidate's consent for this CV's links to be traced.
+	TracerLinksEnabled bool `json:"tracer_links_enabled"`
+}
+
+// GetID returns the value of ID.
+func (s *CvRecord) GetID() string {
+	return s.ID
+}
+
+// GetTitle returns the value of Title.
+func (s *CvRecord) GetTitle() string {
+	return s.Title
+}
+
+// GetTemplateID returns the value of TemplateID.
+func (s *CvRecord) GetTemplateID() string {
+	return s.TemplateID
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *CvRecord) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetUpdatedAt returns the value of UpdatedAt.
+func (s *CvRecord) GetUpdatedAt() time.Time {
+	return s.UpdatedAt
+}
+
+// GetAgentSessionID returns the value of AgentSessionID.
+func (s *CvRecord) GetAgentSessionID() string {
+	return s.AgentSessionID
+}
+
+// GetDocument returns the value of Document.
+func (s *CvRecord) GetDocument() jx.Raw {
+	return s.Document
+}
+
+// GetAutopilotReport returns the value of AutopilotReport.
+func (s *CvRecord) GetAutopilotReport() jx.Raw {
+	return s.AutopilotReport
+}
+
+// GetTracerLinksEnabled returns the value of TracerLinksEnabled.
+func (s *CvRecord) GetTracerLinksEnabled() bool {
+	return s.TracerLinksEnabled
+}
+
+// SetID sets the value of ID.
+func (s *CvRecord) SetID(val string) {
+	s.ID = val
+}
+
+// SetTitle sets the value of Title.
+func (s *CvRecord) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetTemplateID sets the value of TemplateID.
+func (s *CvRecord) SetTemplateID(val string) {
+	s.TemplateID = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *CvRecord) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetUpdatedAt sets the value of UpdatedAt.
+func (s *CvRecord) SetUpdatedAt(val time.Time) {
+	s.UpdatedAt = val
+}
+
+// SetAgentSessionID sets the value of AgentSessionID.
+func (s *CvRecord) SetAgentSessionID(val string) {
+	s.AgentSessionID = val
+}
+
+// SetDocument sets the value of Document.
+func (s *CvRecord) SetDocument(val jx.Raw) {
+	s.Document = val
+}
+
+// SetAutopilotReport sets the value of AutopilotReport.
+func (s *CvRecord) SetAutopilotReport(val jx.Raw) {
+	s.AutopilotReport = val
+}
+
+// SetTracerLinksEnabled sets the value of TracerLinksEnabled.
+func (s *CvRecord) SetTracerLinksEnabled(val bool) {
+	s.TracerLinksEnabled = val
+}
+
+// Ref: #/components/schemas/CvRevisionUndo
+type CvRevisionUndo struct {
+	Cv       CvMeta `json:"cv"`
+	Revision jx.Raw `json:"revision"`
+}
+
+// GetCv returns the value of Cv.
+func (s *CvRevisionUndo) GetCv() CvMeta {
+	return s.Cv
+}
+
+// GetRevision returns the value of Revision.
+func (s *CvRevisionUndo) GetRevision() jx.Raw {
+	return s.Revision
+}
+
+// SetCv sets the value of Cv.
+func (s *CvRevisionUndo) SetCv(val CvMeta) {
+	s.Cv = val
+}
+
+// SetRevision sets the value of Revision.
+func (s *CvRevisionUndo) SetRevision(val jx.Raw) {
+	s.Revision = val
+}
+
+// Ref: #/components/schemas/CvSessionBinding
+type CvSessionBinding struct {
+	SessionID OptString `json:"session_id"`
+}
+
+// GetSessionID returns the value of SessionID.
+func (s *CvSessionBinding) GetSessionID() OptString {
+	return s.SessionID
+}
+
+// SetSessionID sets the value of SessionID.
+func (s *CvSessionBinding) SetSessionID(val OptString) {
+	s.SessionID = val
+}
+
+// Ref: #/components/schemas/CvTailorRequest
+type CvTailorRequest struct {
+	JobSlug OptString `json:"job_slug"`
+	// The base to copy; absent means the default base.
+	BaseCvID OptString `json:"base_cv_id"`
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *CvTailorRequest) GetJobSlug() OptString {
+	return s.JobSlug
+}
+
+// GetBaseCvID returns the value of BaseCvID.
+func (s *CvTailorRequest) GetBaseCvID() OptString {
+	return s.BaseCvID
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *CvTailorRequest) SetJobSlug(val OptString) {
+	s.JobSlug = val
+}
+
+// SetBaseCvID sets the value of BaseCvID.
+func (s *CvTailorRequest) SetBaseCvID(val OptString) {
+	s.BaseCvID = val
+}
+
+// Ref: #/components/schemas/CvTailorResult
+type CvTailorResult struct {
+	TailorCvID string `json:"tailor_cv_id"`
+	BaseCvID   string `json:"base_cv_id"`
+	// The cached fit analysis, or null.
+	Analysis  jx.Raw `json:"analysis"`
+	SessionID string `json:"session_id"`
+	// True exactly when this call created the tailored CV.
+	ColdStartRunning bool `json:"cold_start_running"`
+}
+
+// GetTailorCvID returns the value of TailorCvID.
+func (s *CvTailorResult) GetTailorCvID() string {
+	return s.TailorCvID
+}
+
+// GetBaseCvID returns the value of BaseCvID.
+func (s *CvTailorResult) GetBaseCvID() string {
+	return s.BaseCvID
+}
+
+// GetAnalysis returns the value of Analysis.
+func (s *CvTailorResult) GetAnalysis() jx.Raw {
+	return s.Analysis
+}
+
+// GetSessionID returns the value of SessionID.
+func (s *CvTailorResult) GetSessionID() string {
+	return s.SessionID
+}
+
+// GetColdStartRunning returns the value of ColdStartRunning.
+func (s *CvTailorResult) GetColdStartRunning() bool {
+	return s.ColdStartRunning
+}
+
+// SetTailorCvID sets the value of TailorCvID.
+func (s *CvTailorResult) SetTailorCvID(val string) {
+	s.TailorCvID = val
+}
+
+// SetBaseCvID sets the value of BaseCvID.
+func (s *CvTailorResult) SetBaseCvID(val string) {
+	s.BaseCvID = val
+}
+
+// SetAnalysis sets the value of Analysis.
+func (s *CvTailorResult) SetAnalysis(val jx.Raw) {
+	s.Analysis = val
+}
+
+// SetSessionID sets the value of SessionID.
+func (s *CvTailorResult) SetSessionID(val string) {
+	s.SessionID = val
+}
+
+// SetColdStartRunning sets the value of ColdStartRunning.
+func (s *CvTailorResult) SetColdStartRunning(val bool) {
+	s.ColdStartRunning = val
+}
+
+// Ref: #/components/schemas/CvTailorSession
+type CvTailorSession struct {
+	TailorCvID string `json:"tailor_cv_id"`
+	BaseCvID   string `json:"base_cv_id"`
+	SessionID  string `json:"session_id"`
+}
+
+// GetTailorCvID returns the value of TailorCvID.
+func (s *CvTailorSession) GetTailorCvID() string {
+	return s.TailorCvID
+}
+
+// GetBaseCvID returns the value of BaseCvID.
+func (s *CvTailorSession) GetBaseCvID() string {
+	return s.BaseCvID
+}
+
+// GetSessionID returns the value of SessionID.
+func (s *CvTailorSession) GetSessionID() string {
+	return s.SessionID
+}
+
+// SetTailorCvID sets the value of TailorCvID.
+func (s *CvTailorSession) SetTailorCvID(val string) {
+	s.TailorCvID = val
+}
+
+// SetBaseCvID sets the value of BaseCvID.
+func (s *CvTailorSession) SetBaseCvID(val string) {
+	s.BaseCvID = val
+}
+
+// SetSessionID sets the value of SessionID.
+func (s *CvTailorSession) SetSessionID(val string) {
+	s.SessionID = val
+}
+
+// A tailored CV in the re-open list.
+// Ref: #/components/schemas/CvTailored
+type CvTailored struct {
+	ID             string    `json:"id"`
+	Title          string    `json:"title"`
+	TemplateID     string    `json:"template_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	JobSlug        string    `json:"job_slug"`
+	JobTitle       string    `json:"job_title"`
+	JobCompany     string    `json:"job_company"`
+	AgentSessionID string    `json:"agent_session_id"`
+}
+
+// GetID returns the value of ID.
+func (s *CvTailored) GetID() string {
+	return s.ID
+}
+
+// GetTitle returns the value of Title.
+func (s *CvTailored) GetTitle() string {
+	return s.Title
+}
+
+// GetTemplateID returns the value of TemplateID.
+func (s *CvTailored) GetTemplateID() string {
+	return s.TemplateID
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *CvTailored) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetUpdatedAt returns the value of UpdatedAt.
+func (s *CvTailored) GetUpdatedAt() time.Time {
+	return s.UpdatedAt
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *CvTailored) GetJobSlug() string {
+	return s.JobSlug
+}
+
+// GetJobTitle returns the value of JobTitle.
+func (s *CvTailored) GetJobTitle() string {
+	return s.JobTitle
+}
+
+// GetJobCompany returns the value of JobCompany.
+func (s *CvTailored) GetJobCompany() string {
+	return s.JobCompany
+}
+
+// GetAgentSessionID returns the value of AgentSessionID.
+func (s *CvTailored) GetAgentSessionID() string {
+	return s.AgentSessionID
+}
+
+// SetID sets the value of ID.
+func (s *CvTailored) SetID(val string) {
+	s.ID = val
+}
+
+// SetTitle sets the value of Title.
+func (s *CvTailored) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetTemplateID sets the value of TemplateID.
+func (s *CvTailored) SetTemplateID(val string) {
+	s.TemplateID = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *CvTailored) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetUpdatedAt sets the value of UpdatedAt.
+func (s *CvTailored) SetUpdatedAt(val time.Time) {
+	s.UpdatedAt = val
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *CvTailored) SetJobSlug(val string) {
+	s.JobSlug = val
+}
+
+// SetJobTitle sets the value of JobTitle.
+func (s *CvTailored) SetJobTitle(val string) {
+	s.JobTitle = val
+}
+
+// SetJobCompany sets the value of JobCompany.
+func (s *CvTailored) SetJobCompany(val string) {
+	s.JobCompany = val
+}
+
+// SetAgentSessionID sets the value of AgentSessionID.
+func (s *CvTailored) SetAgentSessionID(val string) {
+	s.AgentSessionID = val
+}
+
+// Ref: #/components/schemas/CvTemplateChoice
+type CvTemplateChoice struct {
+	TemplateID OptString `json:"template_id"`
+}
+
+// GetTemplateID returns the value of TemplateID.
+func (s *CvTemplateChoice) GetTemplateID() OptString {
+	return s.TemplateID
+}
+
+// SetTemplateID sets the value of TemplateID.
+func (s *CvTemplateChoice) SetTemplateID(val OptString) {
+	s.TemplateID = val
+}
+
+// One traced link as the owner reads it.
+// Ref: #/components/schemas/CvTracerLink
+type CvTracerLink struct {
+	SourcePath     string `json:"source_path"`
+	DestinationURL string `json:"destination_url"`
+	TracedURL      string `json:"traced_url"`
+	Clicks         int64  `json:"clicks"`
+	BotClicks      int64  `json:"bot_clicks"`
+	// Absent when the deployment has no visitor salt.
+	DistinctVisitors OptInt64    `json:"distinct_visitors"`
+	LastClickAt      OptDateTime `json:"last_click_at"`
+}
+
+// GetSourcePath returns the value of SourcePath.
+func (s *CvTracerLink) GetSourcePath() string {
+	return s.SourcePath
+}
+
+// GetDestinationURL returns the value of DestinationURL.
+func (s *CvTracerLink) GetDestinationURL() string {
+	return s.DestinationURL
+}
+
+// GetTracedURL returns the value of TracedURL.
+func (s *CvTracerLink) GetTracedURL() string {
+	return s.TracedURL
+}
+
+// GetClicks returns the value of Clicks.
+func (s *CvTracerLink) GetClicks() int64 {
+	return s.Clicks
+}
+
+// GetBotClicks returns the value of BotClicks.
+func (s *CvTracerLink) GetBotClicks() int64 {
+	return s.BotClicks
+}
+
+// GetDistinctVisitors returns the value of DistinctVisitors.
+func (s *CvTracerLink) GetDistinctVisitors() OptInt64 {
+	return s.DistinctVisitors
+}
+
+// GetLastClickAt returns the value of LastClickAt.
+func (s *CvTracerLink) GetLastClickAt() OptDateTime {
+	return s.LastClickAt
+}
+
+// SetSourcePath sets the value of SourcePath.
+func (s *CvTracerLink) SetSourcePath(val string) {
+	s.SourcePath = val
+}
+
+// SetDestinationURL sets the value of DestinationURL.
+func (s *CvTracerLink) SetDestinationURL(val string) {
+	s.DestinationURL = val
+}
+
+// SetTracedURL sets the value of TracedURL.
+func (s *CvTracerLink) SetTracedURL(val string) {
+	s.TracedURL = val
+}
+
+// SetClicks sets the value of Clicks.
+func (s *CvTracerLink) SetClicks(val int64) {
+	s.Clicks = val
+}
+
+// SetBotClicks sets the value of BotClicks.
+func (s *CvTracerLink) SetBotClicks(val int64) {
+	s.BotClicks = val
+}
+
+// SetDistinctVisitors sets the value of DistinctVisitors.
+func (s *CvTracerLink) SetDistinctVisitors(val OptInt64) {
+	s.DistinctVisitors = val
+}
+
+// SetLastClickAt sets the value of LastClickAt.
+func (s *CvTracerLink) SetLastClickAt(val OptDateTime) {
+	s.LastClickAt = val
+}
+
+// Ref: #/components/schemas/CvTracerLinksSetting
+type CvTracerLinksSetting struct {
+	Enabled OptBool `json:"enabled"`
+}
+
+// GetEnabled returns the value of Enabled.
+func (s *CvTracerLinksSetting) GetEnabled() OptBool {
+	return s.Enabled
+}
+
+// SetEnabled sets the value of Enabled.
+func (s *CvTracerLinksSetting) SetEnabled(val OptBool) {
+	s.Enabled = val
+}
+
+// Ref: #/components/schemas/CvTracerLinksState
+type CvTracerLinksState struct {
+	TracerLinksEnabled bool `json:"tracer_links_enabled"`
+}
+
+// GetTracerLinksEnabled returns the value of TracerLinksEnabled.
+func (s *CvTracerLinksState) GetTracerLinksEnabled() bool {
+	return s.TracerLinksEnabled
+}
+
+// SetTracerLinksEnabled sets the value of TracerLinksEnabled.
+func (s *CvTracerLinksState) SetTracerLinksEnabled(val bool) {
+	s.TracerLinksEnabled = val
+}
+
+// Ref: #/components/schemas/CvUpdate
+type CvUpdate struct {
+	Title      OptString `json:"title"`
+	TemplateID OptString `json:"template_id"`
+	Document   jx.Raw    `json:"document"`
+}
+
+// GetTitle returns the value of Title.
+func (s *CvUpdate) GetTitle() OptString {
+	return s.Title
+}
+
+// GetTemplateID returns the value of TemplateID.
+func (s *CvUpdate) GetTemplateID() OptString {
+	return s.TemplateID
+}
+
+// GetDocument returns the value of Document.
+func (s *CvUpdate) GetDocument() jx.Raw {
+	return s.Document
+}
+
+// SetTitle sets the value of Title.
+func (s *CvUpdate) SetTitle(val OptString) {
+	s.Title = val
+}
+
+// SetTemplateID sets the value of TemplateID.
+func (s *CvUpdate) SetTemplateID(val OptString) {
+	s.TemplateID = val
+}
+
+// SetDocument sets the value of Document.
+func (s *CvUpdate) SetDocument(val jx.Raw) {
+	s.Document = val
+}
+
 // A single item: `{"data": ...}`.
 type DecideReferralOfferOK struct {
 	Data ReferralOffer `json:"data"`
@@ -4219,6 +5247,9 @@ func (s *DeleteBankedAnswerOK) GetData() Deleted {
 func (s *DeleteBankedAnswerOK) SetData(val Deleted) {
 	s.Data = val
 }
+
+// DeleteCVNoContent is response for DeleteCV operation.
+type DeleteCVNoContent struct{}
 
 // A single item: `{"data": ...}`.
 type DeleteCompanyFeedbackOK struct {
@@ -4680,6 +5711,38 @@ func (s *DismissJobReportRequest) SetReason(val OptString) {
 // SetNotifyReporter sets the value of NotifyReporter.
 func (s *DismissJobReportRequest) SetNotifyReporter(val OptBool) {
 	s.NotifyReporter = val
+}
+
+// A single item: `{"data": ...}`.
+type DraftCVCoverLetterOK struct {
+	Data CvCoverLetter `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DraftCVCoverLetterOK) GetData() CvCoverLetter {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DraftCVCoverLetterOK) SetData(val CvCoverLetter) {
+	s.Data = val
+}
+
+func (*DraftCVCoverLetterOK) draftCVCoverLetterRes() {}
+
+// A single item: `{"data": ...}`.
+type DuplicateCVCreated struct {
+	Data CvRecord `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DuplicateCVCreated) GetData() CvRecord {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DuplicateCVCreated) SetData(val CvRecord) {
+	s.Data = val
 }
 
 // The preference page's state: the address mail goes to and the three switches.
@@ -5956,6 +7019,96 @@ func (s *GetBillingSubscriptionOK) GetData() BillingOverview {
 
 // SetData sets the value of Data.
 func (s *GetBillingSubscriptionOK) SetData(val BillingOverview) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetCVATSDeltaOK struct {
+	Data CvAtsDelta `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetCVATSDeltaOK) GetData() CvAtsDelta {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetCVATSDeltaOK) SetData(val CvAtsDelta) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetCVAppearanceDefaultsOK struct {
+	Data CvAppearanceDefaultsResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetCVAppearanceDefaultsOK) GetData() CvAppearanceDefaultsResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetCVAppearanceDefaultsOK) SetData(val CvAppearanceDefaultsResult) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetCVCoverLetterOK struct {
+	Data CvCoverLetter `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetCVCoverLetterOK) GetData() CvCoverLetter {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetCVCoverLetterOK) SetData(val CvCoverLetter) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetCVJobMatchOK struct {
+	Data CvJobMatch `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetCVJobMatchOK) GetData() CvJobMatch {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetCVJobMatchOK) SetData(val CvJobMatch) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetCVOK struct {
+	Data CvRecord `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetCVOK) GetData() CvRecord {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetCVOK) SetData(val CvRecord) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetCVTailorContextOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetCVTailorContextOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetCVTailorContextOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
@@ -7737,6 +8890,96 @@ func (s *ListBankedAnswersOK) GetData() []BankedAnswer {
 
 // SetData sets the value of Data.
 func (s *ListBankedAnswersOK) SetData(val []BankedAnswer) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListBaseCVsOK struct {
+	Data []CvBase `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListBaseCVsOK) GetData() []CvBase {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListBaseCVsOK) SetData(val []CvBase) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListCVFontsOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListCVFontsOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListCVFontsOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListCVRevisionsOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListCVRevisionsOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListCVRevisionsOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListCVTemplatesOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListCVTemplatesOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListCVTemplatesOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListCVTracerLinksOK struct {
+	Data []CvTracerLink `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListCVTracerLinksOK) GetData() []CvTracerLink {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListCVTracerLinksOK) SetData(val []CvTracerLink) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListCVsOK struct {
+	Data []CvTailored `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListCVsOK) GetData() []CvTailored {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListCVsOK) SetData(val []CvTailored) {
 	s.Data = val
 }
 
@@ -10493,6 +11736,21 @@ func (s *PageMeta) SetOffset(val int64) {
 	s.Offset = val
 }
 
+// A single item: `{"data": ...}`.
+type PatchCVOK struct {
+	Data CvMeta `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PatchCVOK) GetData() CvMeta {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PatchCVOK) SetData(val CvMeta) {
+	s.Data = val
+}
+
 // Ref: #/components/schemas/PendingCompanyRelation
 type PendingCompanyRelation struct {
 	ID              int64     `json:"id"`
@@ -12550,6 +13808,36 @@ func (s *ReportedCompanyFeedback) SetReportReasons(val []string) {
 }
 
 // A single item: `{"data": ...}`.
+type ReseedBaseCVOK struct {
+	Data CvRecord `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ReseedBaseCVOK) GetData() CvRecord {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ReseedBaseCVOK) SetData(val CvRecord) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ReseedCVOK struct {
+	Data CvRecord `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ReseedCVOK) GetData() CvRecord {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ReseedCVOK) SetData(val CvRecord) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ResendEmployerClaimCodeOK struct {
 	Data EmployerAccount `json:"data"`
 }
@@ -14157,6 +15445,42 @@ func (s *SetAgentPermissionsOK) SetData(val AgentPermissions) {
 }
 
 // A single item: `{"data": ...}`.
+type SetCVAppearanceDefaultsOK struct {
+	Data CvAppearanceDefaultsResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SetCVAppearanceDefaultsOK) GetData() CvAppearanceDefaultsResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SetCVAppearanceDefaultsOK) SetData(val CvAppearanceDefaultsResult) {
+	s.Data = val
+}
+
+// SetCVSessionNoContent is response for SetCVSession operation.
+type SetCVSessionNoContent struct{}
+
+// SetCVTemplateNoContent is response for SetCVTemplate operation.
+type SetCVTemplateNoContent struct{}
+
+// A single item: `{"data": ...}`.
+type SetCVTracerLinksOK struct {
+	Data CvTracerLinksState `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SetCVTracerLinksOK) GetData() CvTracerLinksState {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SetCVTracerLinksOK) SetData(val CvTracerLinksState) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type SetSubscriptionActiveOK struct {
 	Data Subscription `json:"data"`
 }
@@ -14761,6 +16085,36 @@ func (s *SourceJobs) SetAtsUnmatched(val OptInt64) {
 // SetMeasuredAt sets the value of MeasuredAt.
 func (s *SourceJobs) SetMeasuredAt(val string) {
 	s.MeasuredAt = val
+}
+
+// A single item: `{"data": ...}`.
+type StartBaseSessionOK struct {
+	Data CvBaseSession `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *StartBaseSessionOK) GetData() CvBaseSession {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *StartBaseSessionOK) SetData(val CvBaseSession) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type StartTailorSessionCreated struct {
+	Data CvTailorSession `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *StartTailorSessionCreated) GetData() CvTailorSession {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *StartTailorSessionCreated) SetData(val CvTailorSession) {
+	s.Data = val
 }
 
 // A single item: `{"data": ...}`.
@@ -15884,6 +17238,23 @@ func (s *SyncBillingStoreOK) GetData() BillingStoreSync {
 func (s *SyncBillingStoreOK) SetData(val BillingStoreSync) {
 	s.Data = val
 }
+
+// A single item: `{"data": ...}`.
+type TailorCVCreated struct {
+	Data CvTailorResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *TailorCVCreated) GetData() CvTailorResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *TailorCVCreated) SetData(val CvTailorResult) {
+	s.Data = val
+}
+
+func (*TailorCVCreated) tailorCVRes() {}
 
 // The anonymised card: only what a dictionary can vouch for.
 // Ref: #/components/schemas/TalentCard
@@ -17283,6 +18654,36 @@ func (s *UndismissJobOK) SetData(val Interaction) {
 }
 
 // A single item: `{"data": ...}`.
+type UndoCVRevisionBatchOK struct {
+	Data CvMeta `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UndoCVRevisionBatchOK) GetData() CvMeta {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UndoCVRevisionBatchOK) SetData(val CvMeta) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UndoCVRevisionOK struct {
+	Data CvRevisionUndo `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UndoCVRevisionOK) GetData() CvRevisionUndo {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UndoCVRevisionOK) SetData(val CvRevisionUndo) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type UnsaveJobOK struct {
 	Data Interaction `json:"data"`
 }
@@ -17339,6 +18740,21 @@ func (s *UpdateAtomOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *UpdateAtomOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UpdateCVOK struct {
+	Data CvMeta `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateCVOK) GetData() CvMeta {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateCVOK) SetData(val CvMeta) {
 	s.Data = val
 }
 

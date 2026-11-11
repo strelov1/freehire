@@ -49,16 +49,16 @@ func seedAccount(t *testing.T, pool *pgxpool.Pool, email string, beta bool) int6
 func buildCVApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	saved := auth.RequireAuth(iss, testVersions)
-	app.Get("/api/v1/cv-templates", saved, h.ListCVTemplates)
-	app.Get("/api/v1/me/cvs", saved, h.ListCVs)
-	app.Post("/api/v1/me/cvs", saved, h.CreateCV)
-	app.Get("/api/v1/me/cvs/:id", saved, h.GetCV)
-	app.Put("/api/v1/me/cvs/:id", saved, h.UpdateCV)
-	app.Put("/api/v1/me/cvs/:id/template", saved, h.SetCVTemplate)
-	app.Delete("/api/v1/me/cvs/:id", saved, h.DeleteCV)
+	app.Get("/api/v1/cv-templates", saved, cvContract(h))
+	app.Get("/api/v1/me/cvs", saved, cvContract(h))
+	app.Post("/api/v1/me/cvs", saved, cvContract(h))
+	app.Get("/api/v1/me/cvs/:id", saved, cvContract(h))
+	app.Put("/api/v1/me/cvs/:id", saved, cvContract(h))
+	app.Put("/api/v1/me/cvs/:id/template", saved, cvContract(h))
+	app.Delete("/api/v1/me/cvs/:id", saved, cvContract(h))
 	app.Get("/api/v1/me/cvs/:id/pdf", saved, h.RenderCVPDF)
-	app.Get("/api/v1/me/cvs/:id/revisions", saved, h.ListCVRevisions)
-	app.Post("/api/v1/me/cvs/:id/revisions/:rid/undo", saved, h.UndoCVRevision)
+	app.Get("/api/v1/me/cvs/:id/revisions", saved, cvContract(h))
+	app.Post("/api/v1/me/cvs/:id/revisions/:rid/undo", saved, cvContract(h))
 	return app
 }
 

@@ -1,72 +1,70 @@
 package handler
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"context"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/api/apigen"
 )
-
-// cvBaseResponse is a base CV in the bases list and the tailoring picker.
-type cvBaseResponse struct {
-	cvMetaResponse
-	// IsDefault marks the base used wherever a single base is needed without asking: the one the
-	// newest tailored copy came from, else the oldest base. The picker preselects it.
-	IsDefault bool `json:"is_default"`
-	// HandEdited records that the candidate changed this base in the editor; the automatic
-	// refresh after a new CV upload leaves such a base alone.
-	HandEdited bool `json:"hand_edited"`
-}
 
 // ListBaseCVs returns the caller's base (non-tailored) CVs, oldest created first, flagging the
 // default. A separate read from GET /me/cvs, whose items describe tailored copies and are
 // consumed by the CLI and the legacy redirect. Cookie or API key, like the other CV reads.
-func (h *cvHandlers) ListBaseCVs(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+//
+// IsDefault marks the base used wherever a single base is needed without asking: the one the
+// newest tailored copy came from, else the oldest base. The picker preselects it. HandEdited
+// records that the candidate changed this base in the editor; the automatic refresh after a
+// new CV upload leaves such a base alone.
+func (h *cvHandlers) ListBaseCVs(ctx context.Context) (*apigen.ListBaseCVsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	items, err := h.cvStore.Bases(c.Context(), userID)
+	items, err := h.cvStore.Bases(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]cvBaseResponse, len(items))
+	out := make([]apigen.CvBase, len(items))
 	for i, it := range items {
-		out[i] = cvBaseResponse{cvMetaResponse: metaResponse(it.Meta), IsDefault: it.IsDefault, HandEdited: it.HandEdited}
+		meta := cvMetaOf(it.Meta)
+		out[i] = apigen.CvBase{
+			ID: meta.ID, Title: meta.Title, TemplateID: meta.TemplateID, CreatedAt: meta.CreatedAt, UpdatedAt: meta.UpdatedAt,
+			IsDefault: it.IsDefault, HandEdited: it.HandEdited,
+		}
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return &apigen.ListBaseCVsOK{Data: out}, nil
 }
 
 // DuplicateCV copies one of the caller's base CVs — the stored document, template and
 // appearance — as "<title> (copy)" and returns the new record so the client can open it.
 // Only a base may be duplicated (409 for a tailored copy); a foreign or missing id is a 404.
 // Cookie-only, like every CV mutation.
-func (h *cvHandlers) DuplicateCV(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) DuplicateCV(ctx context.Context, params apigen.DuplicateCVParams) (*apigen.DuplicateCVCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	src, err := h.cvStore.BaseByID(c.Context(), id, userID)
+	src, err := h.cvStore.BaseByID(ctx, id, userID)
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
-	meta, err := h.cvStore.Duplicate(c.Context(), id, userID, cvTitle(src.Title+" (copy)"))
+	meta, err := h.cvStore.Duplicate(ctx, id, userID, cvTitle(src.Title+" (copy)"))
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
-	rec, err := h.cvStore.Get(c.Context(), meta.ID, userID)
+	rec, err := h.cvStore.Get(ctx, meta.ID, userID)
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": recordResponse(rec)})
-}
-
-type baseSessionResponse struct {
-	BaseCVID  string `json:"base_cv_id"`
-	SessionID string `json:"session_id"`
+	out, err := cvRecordOf(rec)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.DuplicateCVCreated{Data: out}, nil
 }
 
 // StartBaseSession returns the assistant conversation for one of the caller's BASE CVs — the one
@@ -78,27 +76,27 @@ type baseSessionResponse struct {
 // What the gate guards is a turn, and every message already passes mw.paidAI(FeatureAssistant),
 // which answers an unpaid caller 402 — the upgrade state the chat shows in the tailoring workspace
 // too. 409 for a tailored copy (its conversation is /me/cvs/:id/tailor-session).
-func (h *cvHandlers) StartBaseSession(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) StartBaseSession(ctx context.Context, params apigen.StartBaseSessionParams) (*apigen.StartBaseSessionOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	rec, err := h.cvStore.BaseByID(c.Context(), id, userID)
+	rec, err := h.cvStore.BaseByID(ctx, id, userID)
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
-	sessionID, err := h.existingTailoringSession(c.Context(), userID, rec.ID)
+	sessionID, err := h.existingTailoringSession(ctx, userID, rec.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if sessionID == "" {
-		if sessionID, err = h.startCVSession(c.Context(), userID, rec.ID, assistant.PresetBase, nil); err != nil {
-			return err
+		if sessionID, err = h.startCVSession(ctx, userID, rec.ID, assistant.PresetBase, nil); err != nil {
+			return nil, err
 		}
 	}
-	return c.JSON(fiber.Map{"data": baseSessionResponse{BaseCVID: rec.ID.String(), SessionID: sessionID}})
+	return &apigen.StartBaseSessionOK{Data: apigen.CvBaseSession{BaseCvID: rec.ID.String(), SessionID: sessionID}}, nil
 }

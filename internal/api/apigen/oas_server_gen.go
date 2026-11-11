@@ -236,6 +236,10 @@ type Handler interface {
 	//
 	// GET /threads/count
 	CountThreads(ctx context.Context, params CountThreadsParams) (*CountThreadsOK, error)
+	// CreateCV implements createCV operation.
+	//
+	// POST /me/cvs
+	CreateCV(ctx context.Context, req *CvCreate) (*CreateCVCreated, error)
 	// CreateEmployerVacancy implements createEmployerVacancy operation.
 	//
 	// Publishes, or idempotently updates the caller's own vacancy at the same URL.
@@ -319,6 +323,10 @@ type Handler interface {
 	//
 	// DELETE /me/answer-bank/{id}
 	DeleteBankedAnswer(ctx context.Context, params DeleteBankedAnswerParams) (*DeleteBankedAnswerOK, error)
+	// DeleteCV implements deleteCV operation.
+	//
+	// DELETE /me/cvs/{id}
+	DeleteCV(ctx context.Context, params DeleteCVParams) error
 	// DeleteCompanyFeedback implements deleteCompanyFeedback operation.
 	//
 	// Removes the caller's review in one category; a no-op when there is none.
@@ -361,6 +369,18 @@ type Handler interface {
 	//
 	// POST /reports/{id}/dismiss
 	DismissJobReport(ctx context.Context, req OptDismissJobReportRequest, params DismissJobReportParams) (*DismissJobReportOK, error)
+	// DraftCVCoverLetter implements draftCVCoverLetter operation.
+	//
+	// Drafts the letter (the paid gate runs before this); 402 when the allowance is spent.
+	//
+	// POST /me/cvs/{id}/cover-letter
+	DraftCVCoverLetter(ctx context.Context, params DraftCVCoverLetterParams) (DraftCVCoverLetterRes, error)
+	// DuplicateCV implements duplicateCV operation.
+	//
+	// Copies a base CV as " (copy)"; 409 for a tailored one.
+	//
+	// POST /me/cvs/{id}/duplicate
+	DuplicateCV(ctx context.Context, params DuplicateCVParams) (*DuplicateCVCreated, error)
 	// EngagementStats implements engagementStats operation.
 	//
 	// GET /stats/engagement
@@ -412,6 +432,36 @@ type Handler interface {
 	//
 	// GET /billing/subscription
 	GetBillingSubscription(ctx context.Context) (*GetBillingSubscriptionOK, error)
+	// GetCV implements getCV operation.
+	//
+	// The document without its contact block to an API key.
+	//
+	// GET /me/cvs/{id}
+	GetCV(ctx context.Context, params GetCVParams) (*GetCVOK, error)
+	// GetCVATSDelta implements getCVATSDelta operation.
+	//
+	// GET /me/cvs/{id}/ats-delta
+	GetCVATSDelta(ctx context.Context, params GetCVATSDeltaParams) (*GetCVATSDeltaOK, error)
+	// GetCVAppearanceDefaults implements getCVAppearanceDefaults operation.
+	//
+	// GET /me/cv-appearance-defaults
+	GetCVAppearanceDefaults(ctx context.Context) (*GetCVAppearanceDefaultsOK, error)
+	// GetCVCoverLetter implements getCVCoverLetter operation.
+	//
+	// Never calls a model. With a session or an API key.
+	//
+	// GET /me/cvs/{id}/cover-letter
+	GetCVCoverLetter(ctx context.Context, params GetCVCoverLetterParams) (*GetCVCoverLetterOK, error)
+	// GetCVJobMatch implements getCVJobMatch operation.
+	//
+	// GET /me/cvs/{id}/job-match
+	GetCVJobMatch(ctx context.Context, params GetCVJobMatchParams) (*GetCVJobMatchOK, error)
+	// GetCVTailorContext implements getCVTailorContext operation.
+	//
+	// The cached fit analysis of a tailored CV, projected for the tailoring agent.
+	//
+	// GET /me/cvs/{id}/tailor-context
+	GetCVTailorContext(ctx context.Context, params GetCVTailorContextParams) (*GetCVTailorContextOK, error)
 	// GetDirectApplyForm implements getDirectApplyForm operation.
 	//
 	// The vacancy's questions and, for a signed-in candidate, their prefill. 501 when the deployment
@@ -652,6 +702,40 @@ type Handler interface {
 	//
 	// GET /me/answer-bank
 	ListBankedAnswers(ctx context.Context) (*ListBankedAnswersOK, error)
+	// ListBaseCVs implements listBaseCVs operation.
+	//
+	// The base CVs, oldest first, with the default flagged. With a session or an API key.
+	//
+	// GET /me/cvs/bases
+	ListBaseCVs(ctx context.Context) (*ListBaseCVsOK, error)
+	// ListCVFonts implements listCVFonts operation.
+	//
+	// The registered typefaces a CV may choose.
+	//
+	// GET /cv-fonts
+	ListCVFonts(ctx context.Context) (*ListCVFontsOK, error)
+	// ListCVRevisions implements listCVRevisions operation.
+	//
+	// What changed the CV, newest first.
+	//
+	// GET /me/cvs/{id}/revisions
+	ListCVRevisions(ctx context.Context, params ListCVRevisionsParams) (*ListCVRevisionsOK, error)
+	// ListCVTemplates implements listCVTemplates operation.
+	//
+	// The registered CV templates and their display metadata.
+	//
+	// GET /cv-templates
+	ListCVTemplates(ctx context.Context) (*ListCVTemplatesOK, error)
+	// ListCVTracerLinks implements listCVTracerLinks operation.
+	//
+	// GET /me/cvs/{id}/tracer-links
+	ListCVTracerLinks(ctx context.Context, params ListCVTracerLinksParams) (*ListCVTracerLinksOK, error)
+	// ListCVs implements listCVs operation.
+	//
+	// The caller's TAILORED CVs, newest edit first. With a session or an API key.
+	//
+	// GET /me/cvs
+	ListCVs(ctx context.Context) (*ListCVsOK, error)
 	// ListCompanies implements listCompanies operation.
 	//
 	// Ranked companies. `q` and the facet params (collections, regions, countries, domains, industries,
@@ -868,6 +952,13 @@ type Handler interface {
 	//
 	// POST /email-prefs/one-click
 	OneClickUnsubscribe(ctx context.Context, params OneClickUnsubscribeParams) (*OneClickUnsubscribeOK, error)
+	// PatchCV implements patchCV operation.
+	//
+	// Applies a batch of path operations (`{"ops": [...], "note": ""}`), decoded strictly in Go: an
+	// unknown field or bad addressing is a 422. With a session or an API key.
+	//
+	// PATCH /me/cvs/{id}
+	PatchCV(ctx context.Context, req jx.Raw, params PatchCVParams) (*PatchCVOK, error)
 	// PostAtsReport implements postAtsReport operation.
 	//
 	// Runs the model review (paid) over the stored CV, caches it and returns the report.
@@ -967,6 +1058,18 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/report
 	ReportConversation(ctx context.Context, req *ConversationReportRequest, params ReportConversationParams) error
+	// ReseedBaseCV implements reseedBaseCV operation.
+	//
+	// Rebuilds the default base CV from the current seed.
+	//
+	// POST /me/cvs/base/reseed
+	ReseedBaseCV(ctx context.Context) (*ReseedBaseCVOK, error)
+	// ReseedCV implements reseedCV operation.
+	//
+	// Rebuilds one CV from the current seed; destructive.
+	//
+	// POST /me/cvs/{id}/reseed
+	ReseedCV(ctx context.Context, params ReseedCVParams) (*ReseedCVOK, error)
 	// ResendEmployerClaimCode implements resendEmployerClaimCode operation.
 	//
 	// 409 without a pending claim or when the email is confirmed; 429 inside the cooldown.
@@ -1068,6 +1171,24 @@ type Handler interface {
 	//
 	// PUT /me/agent-permissions
 	SetAgentPermissions(ctx context.Context, req *AgentPermissions) (*SetAgentPermissionsOK, error)
+	// SetCVAppearanceDefaults implements setCVAppearanceDefaults operation.
+	//
+	// PUT /me/cv-appearance-defaults
+	SetCVAppearanceDefaults(ctx context.Context, req *CvAppearanceDefaults) (*SetCVAppearanceDefaultsOK, error)
+	// SetCVSession implements setCVSession operation.
+	//
+	// PUT /me/cvs/{id}/session
+	SetCVSession(ctx context.Context, req *CvSessionBinding, params SetCVSessionParams) error
+	// SetCVTemplate implements setCVTemplate operation.
+	//
+	// PUT /me/cvs/{id}/template
+	SetCVTemplate(ctx context.Context, req *CvTemplateChoice, params SetCVTemplateParams) error
+	// SetCVTracerLinks implements setCVTracerLinks operation.
+	//
+	// 409 when enabling on a deployment with no visitor salt.
+	//
+	// PUT /me/cvs/{id}/tracer-links
+	SetCVTracerLinks(ctx context.Context, req *CvTracerLinksSetting, params SetCVTracerLinksParams) (*SetCVTracerLinksOK, error)
 	// SetSubscriptionActive implements setSubscriptionActive operation.
 	//
 	// Pauses or resumes.
@@ -1092,6 +1213,16 @@ type Handler interface {
 	//
 	// GET /stats/skills/{slug}/neighbours
 	SkillNeighbours(ctx context.Context, params SkillNeighboursParams) (*SkillNeighbours, error)
+	// StartBaseSession implements startBaseSession operation.
+	//
+	// The assistant conversation for a base CV; not behind the paid gate.
+	//
+	// POST /me/cvs/{id}/base-session
+	StartBaseSession(ctx context.Context, params StartBaseSessionParams) (*StartBaseSessionOK, error)
+	// StartTailorSession implements startTailorSession operation.
+	//
+	// POST /me/cvs/{id}/tailor-session
+	StartTailorSession(ctx context.Context, params StartTailorSessionParams) (*StartTailorSessionCreated, error)
 	// StatsFacets implements statsFacets operation.
 	//
 	// The value-to-count distribution of each covered facet, from the daily snapshot.
@@ -1110,6 +1241,14 @@ type Handler interface {
 	//
 	// POST /billing/revenuecat/sync
 	SyncBillingStore(ctx context.Context) (*SyncBillingStoreOK, error)
+	// TailorCV implements tailorCV operation.
+	//
+	// Starts the tailoring session for a vacancy (the paid gate runs before this). 201 with the ids and
+	// the cached analysis; 402 when the allowance is spent and the vacancy is new. With a session or an
+	// API key.
+	//
+	// POST /me/cvs/tailor
+	TailorCV(ctx context.Context, req *CvTailorRequest) (TailorCVRes, error)
 	// TrackApplication implements trackApplication operation.
 	//
 	// PATCH /me/applications/{id}
@@ -1132,6 +1271,14 @@ type Handler interface {
 	//
 	// DELETE /jobs/{slug}/dismiss
 	UndismissJob(ctx context.Context, params UndismissJobParams) (*UndismissJobOK, error)
+	// UndoCVRevision implements undoCVRevision operation.
+	//
+	// POST /me/cvs/{id}/revisions/{rid}/undo
+	UndoCVRevision(ctx context.Context, params UndoCVRevisionParams) (*UndoCVRevisionOK, error)
+	// UndoCVRevisionBatch implements undoCVRevisionBatch operation.
+	//
+	// POST /me/cvs/{id}/revisions/batch/{bid}/undo
+	UndoCVRevisionBatch(ctx context.Context, params UndoCVRevisionBatchParams) (*UndoCVRevisionBatchOK, error)
 	// UnsaveJob implements unsaveJob operation.
 	//
 	// Unsaving a job that was never saved answers with the empty interaction.
@@ -1154,6 +1301,10 @@ type Handler interface {
 	//
 	// PUT /me/experience/atoms/{id}
 	UpdateAtom(ctx context.Context, req jx.Raw, params UpdateAtomParams) (*UpdateAtomOK, error)
+	// UpdateCV implements updateCV operation.
+	//
+	// PUT /me/cvs/{id}
+	UpdateCV(ctx context.Context, req *CvUpdate, params UpdateCVParams) (*UpdateCVOK, error)
 	// UpdateEmailPrefs implements updateEmailPrefs operation.
 	//
 	// PATCH /email-prefs

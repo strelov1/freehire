@@ -2,10 +2,10 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/candidate/cv"
@@ -170,64 +171,64 @@ func (h *cvHandlers) seedSource() cv.Seeder {
 	return bankedSeeder{resume: h.resume}
 }
 
-func (h *cvHandlers) register(api fiber.Router, mw middleware) {
+func (h *cvHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// CV builder + AI tailoring: open to every signed-in user (the plan meters the LLM spend).
 	// Cookie-only, owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no typst
 	// binary is configured; the rest still works.
-	api.Get("/cv-templates", mw.cookie, h.ListCVTemplates)
-	api.Get("/cv-fonts", mw.cookie, h.ListCVFonts)
+	api.Get("/cv-templates", mw.cookie, contract)
+	api.Get("/cv-fonts", mw.cookie, contract)
 	// The candidate's personal defaults for a NEW CV's template/typography/margins. Cookie-only:
 	// a personal setting, not something the in-app assistant needs to touch. A flat path
 	// (not nested under /me/cvs/:id) — this is not a CV, it never collides with the :id routes.
-	api.Get("/me/cv-appearance-defaults", mw.cookie, h.GetCVAppearanceDefaults)
-	api.Put("/me/cv-appearance-defaults", mw.cookie, h.SetCVAppearanceDefaults)
+	api.Get("/me/cv-appearance-defaults", mw.cookie, contract)
+	api.Put("/me/cv-appearance-defaults", mw.cookie, contract)
 	// Listing takes a key: it is a read of the caller's own tailored copies, and it is where
 	// a CLI learns the CV id every other keyed route here is addressed by. Creating a blank
 	// CV stays cookie-only — authoring a whole document is the browser's.
-	api.Get("/me/cvs", mw.key, h.ListCVs)
+	api.Get("/me/cvs", mw.key, contract)
 	// The base (non-tailored) CVs, with the default flagged. Literal segment, registered before
 	// `/me/cvs/:id` so Fiber does not read "bases" as a CV uuid.
-	api.Get("/me/cvs/bases", mw.key, h.ListBaseCVs)
-	api.Post("/me/cvs", mw.cookie, h.CreateCV)
+	api.Get("/me/cvs/bases", mw.key, contract)
+	api.Post("/me/cvs", mw.cookie, contract)
 	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
 	// and its PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
-	api.Get("/me/cvs/:id", mw.key, h.GetCV)
-	api.Put("/me/cvs/:id", mw.cookie, h.UpdateCV)
+	api.Get("/me/cvs/:id", mw.key, contract)
+	api.Put("/me/cvs/:id", mw.cookie, contract)
 	// Change only the template (the gallery's one-field switch); cookie-only like other mutations.
-	api.Put("/me/cvs/:id/template", mw.cookie, h.SetCVTemplate)
+	api.Put("/me/cvs/:id/template", mw.cookie, contract)
 	// Cookie-only, and deliberately its own route rather than a field on the update above:
 	// consent to track a third party is the candidate's to give, and it must not ride along
 	// with a document save the tailoring agent can also make.
-	api.Put("/me/cvs/:id/tracer-links", mw.cookie, h.SetCVTracerLinks)
-	api.Get("/me/cvs/:id/tracer-links", mw.cookie, h.ListCVTracerLinks)
-	api.Delete("/me/cvs/:id", mw.cookie, h.DeleteCV)
+	api.Put("/me/cvs/:id/tracer-links", mw.cookie, contract)
+	api.Get("/me/cvs/:id/tracer-links", mw.cookie, contract)
+	api.Delete("/me/cvs/:id", mw.cookie, contract)
 	// Copy a base CV (stored document, template, appearance) as "<title> (copy)".
-	api.Post("/me/cvs/:id/duplicate", mw.cookie, h.DuplicateCV)
+	api.Post("/me/cvs/:id/duplicate", mw.cookie, contract)
 	// The agent conversation for a BASE CV (no vacancy). Not behind paidAI: see StartBaseSession.
-	api.Post("/me/cvs/:id/base-session", mw.cookie, h.StartBaseSession)
+	api.Post("/me/cvs/:id/base-session", mw.cookie, contract)
 	api.Get("/me/cvs/:id/pdf", mw.key, h.RenderCVPDF)
 	// Tailoring: the bootstrap takes a key as well as a cookie, so a CLI can start the cycle
 	// it was already able to drive (edit + context/get/render all accept a key). It creates a
 	// copy of the caller's own CV and spends their own plan allowance — both of which a full-scope
 	// key already does through the fit analysis and the assistant — and never calls the LLM.
-	api.Post("/me/cvs/tailor", mw.key, mw.paidAI(plan.FeatureTailor), h.TailorCV)
-	api.Post("/me/cvs/:id/tailor-session", mw.cookie, mw.paidAI(plan.FeatureTailor), h.StartTailorSession)
+	api.Post("/me/cvs/tailor", mw.key, mw.paidAI(plan.FeatureTailor), contract)
+	api.Post("/me/cvs/:id/tailor-session", mw.cookie, mw.paidAI(plan.FeatureTailor), contract)
 	// Literal `/base/` before `:id` — otherwise Fiber treats "base" as a CV uuid.
-	api.Post("/me/cvs/base/reseed", mw.cookie, h.ReseedBaseCV)
+	api.Post("/me/cvs/base/reseed", mw.cookie, contract)
 	// Rebuild this tailored CV (and the base) from the current seed. Cookie-only:
 	// destructive whole-document replace; the browser is where the candidate confirms it.
-	api.Post("/me/cvs/:id/reseed", mw.cookie, h.ReseedCV)
-	api.Patch("/me/cvs/:id", mw.key, h.PatchCV)
-	api.Put("/me/cvs/:id/session", mw.key, h.SetCVSession)
-	api.Get("/me/cvs/:id/tailor-context", mw.key, h.TailorContext)
+	api.Post("/me/cvs/:id/reseed", mw.cookie, contract)
+	api.Patch("/me/cvs/:id", mw.key, contract)
+	api.Put("/me/cvs/:id/session", mw.key, contract)
+	api.Get("/me/cvs/:id/tailor-context", mw.key, contract)
 	// Reading a letter takes a key like every other tailoring read: it calls no model and
 	// spends nothing, so a scripted client may have it. Writing one is cookie-only because it
 	// spends a daily allowance, and an allowance a key could drain is one the account holder
 	// never agreed to spend. The assistant tool reaches the same write over a key-bearing
 	// session, which is not a hole: a session is the account holder's own, and its turn is
 	// metered before this one is.
-	api.Get("/me/cvs/:id/cover-letter", mw.key, h.GetCVCoverLetter)
-	api.Post("/me/cvs/:id/cover-letter", mw.cookie, mw.paidAI(plan.FeatureCoverLetter), h.DraftCVCoverLetter)
+	api.Get("/me/cvs/:id/cover-letter", mw.key, contract)
+	api.Post("/me/cvs/:id/cover-letter", mw.cookie, mw.paidAI(plan.FeatureCoverLetter), contract)
 	// The streaming twin of that POST, and what the workspace actually calls. The chain is
 	// three model calls in series and takes minutes; a proxy closes a silent response at
 	// sixty seconds, so the one-shot POST reached production only as a 504. The one-shot
@@ -243,160 +244,131 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	// as the run it belonged to. Cookie-only for the same reason as every other mutation —
 	// the browser is where the candidate is watching this happen, and the tailoring agent
 	// must not be able to undo the work it is being measured on.
-	api.Get("/me/cvs/:id/revisions", mw.cookie, h.ListCVRevisions)
-	api.Post("/me/cvs/:id/revisions/:rid/undo", mw.cookie, h.UndoCVRevision)
-	api.Post("/me/cvs/:id/revisions/batch/:bid/undo", mw.cookie, h.UndoCVRevisionBatch)
+	api.Get("/me/cvs/:id/revisions", mw.cookie, contract)
+	api.Post("/me/cvs/:id/revisions/:rid/undo", mw.cookie, contract)
+	api.Post("/me/cvs/:id/revisions/batch/:bid/undo", mw.cookie, contract)
 	// What tailoring did to the CV's ATS readiness. Cookie-only, and deliberately so: the
 	// tailoring agent authenticates with a CLI credential, so this gate is what keeps the
 	// score out of the reach of the thing being measured.
-	api.Get("/me/cvs/:id/ats-delta", mw.cookie, h.GetCVATSDelta)
+	api.Get("/me/cvs/:id/ats-delta", mw.cookie, contract)
 	// How well the tailored CV matches the vacancy it was written for. Cookie-only for the
 	// same reason as the delta: the tailoring agent authenticates with a CLI credential, and
 	// this gate is what keeps the score out of the reach of the thing being measured.
-	api.Get("/me/cvs/:id/job-match", mw.cookie, h.GetCVJobMatch)
+	api.Get("/me/cvs/:id/job-match", mw.cookie, contract)
 }
 
 const maxCVTitleRunes = 200
 
-type cvMetaResponse struct {
-	ID         string    `json:"id"`
-	Title      string    `json:"title"`
-	TemplateID string    `json:"template_id"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+// cvMetaOf is a CV without its document, as the contract answers it.
+func cvMetaOf(m cv.Meta) apigen.CvMeta {
+	return apigen.CvMeta{ID: m.ID.String(), Title: m.Title, TemplateID: m.TemplateID, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}
 }
 
-type cvResponse struct {
-	cvMetaResponse
-	// AgentSessionID is the roy session bound to a tailored CV (empty when none) — the tailoring
-	// workspace resumes it.
-	AgentSessionID string      `json:"agent_session_id"`
-	Document       cv.Document `json:"document"`
-	// AutopilotReport is the last unattended run's account of itself, one entry per
-	// requirement. The workspace panel renders it from this read rather than by parsing
-	// the conversation, so it survives a reload. Empty when no run has happened.
-	AutopilotReport []cv.AutopilotEntry `json:"autopilot_report,omitempty"`
-	// TracerLinksEnabled is the candidate's consent for this CV's links to be traced. Reported so
-	// the editor can show the toggle's actual state rather than assume it.
-	TracerLinksEnabled bool `json:"tracer_links_enabled"`
-}
-
-// cvTailoredResponse is a tailored CV in the /my/cvs re-open list: metadata plus the vacancy
-// slug and the bound agent session, so the client links each row to its tailoring workspace.
-type cvTailoredResponse struct {
-	cvMetaResponse
-	JobSlug        string `json:"job_slug"`
-	JobTitle       string `json:"job_title"`
-	JobCompany     string `json:"job_company"`
-	AgentSessionID string `json:"agent_session_id"`
-}
-
-type createCVRequest struct {
-	Title string `json:"title"`
-	// TemplateID selects the template; empty falls back to the caller's saved appearance
-	// default (CreateCV), or the classic-ats system default when they have none saved.
-	TemplateID string `json:"template_id"`
-	// Seed pre-fills the new CV from the caller's stored résumé structure when available.
-	Seed bool `json:"seed"`
-}
-
-type updateCVRequest struct {
-	Title      string      `json:"title"`
-	TemplateID string      `json:"template_id"`
-	Document   cv.Document `json:"document"`
-}
-
-func metaResponse(m cv.Meta) cvMetaResponse {
-	return cvMetaResponse{ID: m.ID.String(), Title: m.Title, TemplateID: m.TemplateID, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}
-}
-
-func recordResponse(rec cv.Record) cvResponse {
-	return cvResponse{
-		cvMetaResponse:     metaResponse(rec.Meta),
+// cvRecordOf is one CV with its document. The document and the run report belong to the
+// CV package and are shared with the assistant's tools, so they travel as the JSON their
+// types marshal to.
+func cvRecordOf(rec cv.Record) (apigen.CvRecord, error) {
+	doc, err := json.Marshal(rec.Document)
+	if err != nil {
+		return apigen.CvRecord{}, err
+	}
+	out := apigen.CvRecord{
+		ID: rec.ID.String(), Title: rec.Title, TemplateID: rec.TemplateID,
+		CreatedAt: rec.CreatedAt, UpdatedAt: rec.UpdatedAt,
 		AgentSessionID:     rec.AgentSessionID,
-		Document:           rec.Document,
-		AutopilotReport:    rec.AutopilotReport,
+		Document:           doc,
 		TracerLinksEnabled: rec.TracerLinksEnabled,
 	}
+	if len(rec.AutopilotReport) > 0 {
+		if out.AutopilotReport, err = json.Marshal(rec.AutopilotReport); err != nil {
+			return apigen.CvRecord{}, err
+		}
+	}
+	return out, nil
 }
 
 // ListCVTemplates returns the registered CV templates and their display metadata (id, label,
 // style, photo) so the UI can render the template gallery. Static registry data — no DB.
-func (h *cvHandlers) ListCVTemplates(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{"data": cv.Templates()})
+func (h *cvHandlers) ListCVTemplates(ctx context.Context) (*apigen.ListCVTemplatesOK, error) {
+	raw, err := json.Marshal(cv.Templates())
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.ListCVTemplatesOK{Data: raw}, nil
 }
 
 // ListCVFonts returns the registered typefaces a CV may choose (id, label, the familiar face
 // it matches, and the CSS stack the live preview renders with). Static registry data — no DB.
 // The client reads it instead of hard-coding a list, which is what keeps a second copy of the
 // registry from growing in the web app and drifting from the one the renderer obeys.
-func (h *cvHandlers) ListCVFonts(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{"data": cv.Fonts()})
+func (h *cvHandlers) ListCVFonts(ctx context.Context) (*apigen.ListCVFontsOK, error) {
+	raw, err := json.Marshal(cv.Fonts())
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.ListCVFontsOK{Data: raw}, nil
 }
 
 // ListCVs returns the caller's TAILORED CVs (the re-open list), newest edit first, each with
 // its vacancy slug and bound agent session so the client links back to the tailoring workspace.
-func (h *cvHandlers) ListCVs(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) ListCVs(ctx context.Context) (*apigen.ListCVsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	items, err := h.cvStore.ListTailored(c.Context(), userID)
+	items, err := h.cvStore.ListTailored(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]cvTailoredResponse, len(items))
+	out := make([]apigen.CvTailored, len(items))
 	for i, m := range items {
-		out[i] = cvTailoredResponse{
-			cvMetaResponse: metaResponse(m.Meta),
+		meta := cvMetaOf(m.Meta)
+		out[i] = apigen.CvTailored{
+			ID: meta.ID, Title: meta.Title, TemplateID: meta.TemplateID, CreatedAt: meta.CreatedAt, UpdatedAt: meta.UpdatedAt,
 			JobSlug:        m.JobSlug,
 			JobTitle:       m.JobTitle,
 			JobCompany:     m.JobCompany,
 			AgentSessionID: m.AgentSessionID,
 		}
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return &apigen.ListCVsOK{Data: out}, nil
 }
 
 // CreateCV creates a CV, optionally seeded from the caller's stored résumé structure.
-func (h *cvHandlers) CreateCV(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) CreateCV(ctx context.Context, req *apigen.CvCreate) (*apigen.CreateCVCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
-	}
-	var in createCVRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+		return nil, err
 	}
 	// An explicit template on the request always wins; an omitted one falls back to the
 	// caller's saved appearance defaults, then to the system default — never straight to
 	// classic-ats the way validCVTemplate("") would on its own. The request has no
 	// style/margin fields, so those always come from the saved (or system) defaults.
-	defaults, _, err := h.cvStore.GetAppearanceDefaults(c.Context(), userID)
+	defaults, _, err := h.cvStore.GetAppearanceDefaults(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	requestedTemplateID := in.TemplateID
+	requestedTemplateID := req.TemplateID.Value
 	if requestedTemplateID == "" {
 		requestedTemplateID = defaults.TemplateID
 	}
 	tmplID, err := validCVTemplate(requestedTemplateID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Seeding pulls the work history from the experience bank and the rest from the stored
 	// structure — both in Postgres, independent of S3 object storage, so it is NOT gated on
 	// résumé-storage being enabled. Nothing known degrades to an empty skeleton.
 	doc := cv.EmptyDocument()
-	if in.Seed {
+	if req.Seed.Value {
 		// A read that failed is not a candidate with nothing to seed from. Collapsing the
 		// two answered 201 with an empty skeleton for someone whose CV we hold, and the
 		// only way back is to notice and start again. Every other caller of this seed
 		// propagates (cv_reseed.go).
-		st, ok, err := h.seedSource().Structured(c.Context(), userID)
+		st, ok, err := h.seedSource().Structured(ctx, userID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if ok {
 			doc = cv.Seed(st)
@@ -405,89 +377,97 @@ func (h *cvHandlers) CreateCV(c *fiber.Ctx) error {
 	doc.Style = defaults.Style
 	doc.Margins = defaults.Margins
 
-	meta, err := h.cvStore.Create(c.Context(), userID, cvTitle(in.Title), tmplID, doc)
+	meta, err := h.cvStore.Create(ctx, userID, cvTitle(req.Title.Value), tmplID, doc)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Return the full record so the client can open the editor without a second fetch.
-	rec, err := h.cvStore.Get(c.Context(), meta.ID, userID)
+	rec, err := h.cvStore.Get(ctx, meta.ID, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": recordResponse(rec)})
+	out, err := cvRecordOf(rec)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.CreateCVCreated{Data: out}, nil
 }
 
 // GetCV returns one owned CV: the full document on the owner's own session, and the
 // document without its contact block to an agent reading with a key.
-func (h *cvHandlers) GetCV(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) GetCV(ctx context.Context, params apigen.GetCVParams) (*apigen.GetCVOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// An API-key caller is an agent running its own model over the CV, so it reads through
 	// the redacting accessor — the same one the in-process assistant's cv_get tool uses, so
 	// one implementation covers both and neither can drift. The owner's own cookie session
 	// reads in full; the stored contacts are untouched either way and still render in the PDF.
+	viaKey := auth.ViaAPIKeyFromContext(ctx)
 	read := h.cvStore.Get
-	if auth.ViaAPIKey(c) {
+	if viaKey {
 		read = h.cvStore.GetForModel
 	}
-	rec, err := read(c.Context(), id, userID)
+	rec, err := read(ctx, id, userID)
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
 	// Owner cookie sessions: fill empty header contacts from résumé identity
 	// (owned / current / provisional — see healRecordHeader). API-key reads stay
 	// redacted and never trigger a heal write. List and PDF do not heal.
-	if !auth.ViaAPIKey(c) && rec.IsTailored {
-		healed, herr := h.healRecordHeader(c.Context(), userID, rec)
+	if !viaKey && rec.IsTailored {
+		healed, herr := h.healRecordHeader(ctx, userID, rec)
 		if herr != nil {
 			log.Printf("cv: healing tailored header %s: %v", id, herr)
 		} else {
 			rec = healed
 		}
-		h.healBaseHeaderIfNeeded(c.Context(), userID)
+		h.healBaseHeaderIfNeeded(ctx, userID)
 	}
-	return c.JSON(fiber.Map{"data": recordResponse(rec)})
+	out, err := cvRecordOf(rec)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetCVOK{Data: out}, nil
 }
 
 // UpdateCV replaces an owned CV's title, template, and document.
-func (h *cvHandlers) UpdateCV(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) UpdateCV(ctx context.Context, req *apigen.CvUpdate, params apigen.UpdateCVParams) (*apigen.UpdateCVOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in updateCVRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	// The document is the CV package's own type: it decodes here, as it did from the body.
+	var doc cv.Document
+	if len(req.Document) > 0 {
+		if err := json.Unmarshal(req.Document, &doc); err != nil {
+			return nil, fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+		}
 	}
-	tmplID, err := validCVTemplate(in.TemplateID)
+	tmplID, err := validCVTemplate(req.TemplateID.Value)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// A whole-document save is an input format, not a second way to write the document: the
 	// differ derives the operations, and from the editor's point of view this is
 	// indistinguishable from an agent's batch. The actor is decided here, by the entry point
 	// that authenticated the caller, and never read from the body.
-	meta, _, err := h.editor.CommitDocument(c.Context(), id, userID,
+	meta, _, err := h.editor.CommitDocument(ctx, id, userID,
 		cvedit.ActorCandidate, cvedit.OriginEditor,
-		cvedit.State{Title: cvTitle(in.Title), TemplateID: tmplID, Document: in.Document})
+		cvedit.State{Title: cvTitle(req.Title.Value), TemplateID: tmplID, Document: doc})
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
-	return c.JSON(fiber.Map{"data": metaResponse(meta)})
-}
-
-type setCVTracerLinksRequest struct {
-	Enabled bool `json:"enabled"`
+	return &apigen.UpdateCVOK{Data: cvMetaOf(meta)}, nil
 }
 
 // SetCVTracerLinks records the candidate's decision to have the links in this CV's PDF traced,
@@ -497,41 +477,24 @@ type setCVTracerLinksRequest struct {
 // to tell one visitor from another, and accepting the consent while quietly recording less would
 // answer a question the candidate did not ask. Disabling is never refused — withdrawing consent is
 // not a favour the deployment grants.
-func (h *cvHandlers) SetCVTracerLinks(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) SetCVTracerLinks(ctx context.Context, req *apigen.CvTracerLinksSetting, params apigen.SetCVTracerLinksParams) (*apigen.SetCVTracerLinksOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in setCVTracerLinksRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	if in.Enabled && h.tracerSalt == "" {
-		return fiber.NewError(fiber.StatusConflict,
+	enabled := req.Enabled.Value
+	if enabled && h.tracerSalt == "" {
+		return nil, fiber.NewError(fiber.StatusConflict,
 			"link tracing is not configured on this deployment")
 	}
-	if err := h.cvStore.SetTracerLinks(c.Context(), id, userID, in.Enabled); err != nil {
-		return mapCVError(err)
+	if err := h.cvStore.SetTracerLinks(ctx, id, userID, enabled); err != nil {
+		return nil, mapCVError(err)
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"tracer_links_enabled": in.Enabled}})
-}
-
-// tracerLinkResponse is one traced link as the owner reads it.
-type tracerLinkResponse struct {
-	SourcePath     string `json:"source_path"`
-	DestinationURL string `json:"destination_url"`
-	TracedURL      string `json:"traced_url"`
-	Clicks         int64  `json:"clicks"`
-	BotClicks      int64  `json:"bot_clicks"`
-	// DistinctVisitors is omitted rather than reported as zero when the deployment has no salt:
-	// every click then carries an empty hash, and counting those would say "one visitor" about any
-	// number of people. Absent is the honest answer; zero would be a wrong one.
-	DistinctVisitors *int64     `json:"distinct_visitors,omitempty"`
-	LastClickAt      *time.Time `json:"last_click_at,omitempty"`
+	return &apigen.SetCVTracerLinksOK{Data: apigen.CvTracerLinksState{TracerLinksEnabled: enabled}}, nil
 }
 
 // ListCVTracerLinks reports what is known about each of an owned CV's traced links.
@@ -540,103 +503,88 @@ type tracerLinkResponse struct {
 // stays complete, not so they can be read back as somebody else's interest. Automated traffic is
 // counted separately rather than dropped, so the UI's "include likely bots" switch needs no second
 // request.
-func (h *cvHandlers) ListCVTracerLinks(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) ListCVTracerLinks(ctx context.Context, params apigen.ListCVTracerLinksParams) (*apigen.ListCVTracerLinksOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	rows, err := h.queries.ListTracerLinkStats(c.Context(), db.ListTracerLinkStatsParams{CvID: id, UserID: userID})
+	rows, err := h.queries.ListTracerLinkStats(ctx, db.ListTracerLinkStatsParams{CvID: id, UserID: userID})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]tracerLinkResponse, 0, len(rows))
+	out := make([]apigen.CvTracerLink, 0, len(rows))
 	for _, r := range rows {
-		item := tracerLinkResponse{
+		item := apigen.CvTracerLink{
 			SourcePath:     r.SourcePath,
 			DestinationURL: r.DestinationUrl,
 			TracedURL:      h.tracerBaseURL + "/cv/" + r.Token,
 			Clicks:         r.Clicks,
 			BotClicks:      r.BotClicks,
 		}
+		// DistinctVisitors is omitted rather than reported as zero when the deployment has no
+		// salt: every click then carries an empty hash, and counting those would say "one
+		// visitor" about any number of people. Absent is the honest answer; zero a wrong one.
 		if h.tracerSalt != "" {
-			n := r.DistinctVisitors
-			item.DistinctVisitors = &n
+			item.DistinctVisitors = apigen.NewOptInt64(r.DistinctVisitors)
 		}
 		if r.LastClickAt.Valid {
-			t := r.LastClickAt.Time
-			item.LastClickAt = &t
+			item.LastClickAt = apigen.NewOptDateTime(r.LastClickAt.Time)
 		}
 		out = append(out, item)
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return &apigen.ListCVTracerLinksOK{Data: out}, nil
 }
 
 // DeleteCV removes an owned CV.
-func (h *cvHandlers) DeleteCV(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) DeleteCV(ctx context.Context, params apigen.DeleteCVParams) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
 		return err
 	}
-	if err := h.cvStore.Delete(c.Context(), id, userID); err != nil {
+	if err := h.cvStore.Delete(ctx, id, userID); err != nil {
 		return mapCVError(err)
 	}
-	return c.SendStatus(fiber.StatusNoContent)
-}
-
-type setCVSessionRequest struct {
-	SessionID string `json:"session_id"`
+	return nil
 }
 
 // SetCVSession binds a roy agent session to an owned CV so the tailoring workspace can re-open
 // that exact session later. Cookie or API key; owner-scoped (a foreign/missing id is a 404).
-func (h *cvHandlers) SetCVSession(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) SetCVSession(ctx context.Context, req *apigen.CvSessionBinding, params apigen.SetCVSessionParams) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
 		return err
 	}
-	var in setCVSessionRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	if err := h.cvStore.SetSession(c.Context(), id, userID, in.SessionID); err != nil {
+	if err := h.cvStore.SetSession(ctx, id, userID, req.SessionID.Value); err != nil {
 		return mapCVError(err)
 	}
-	return c.SendStatus(fiber.StatusNoContent)
-}
-
-type setCVTemplateRequest struct {
-	TemplateID string `json:"template_id"`
+	return nil
 }
 
 // SetCVTemplate changes only the template of an owned CV (title and document untouched). The
 // gallery uses this to switch templates without re-sending the whole document. Owner-scoped
 // (a foreign/missing id is a 404); an unknown template_id is a 400.
-func (h *cvHandlers) SetCVTemplate(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) SetCVTemplate(ctx context.Context, req *apigen.CvTemplateChoice, params apigen.SetCVTemplateParams) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
 		return err
 	}
-	var in setCVTemplateRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	tmplID, err := validCVTemplate(in.TemplateID)
+	tmplID, err := validCVTemplate(req.TemplateID.Value)
 	if err != nil {
 		return err
 	}
@@ -646,7 +594,7 @@ func (h *cvHandlers) SetCVTemplate(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	_, _, err = h.editor.Commit(c.Context(), id, userID, cvedit.Change{
+	_, _, err = h.editor.Commit(ctx, id, userID, cvedit.Change{
 		Actor:  cvedit.ActorCandidate,
 		Origin: cvedit.OriginTemplate,
 		Ops:    []cvedit.Op{{Kind: cvedit.OpSet, Path: path, Value: tmplID}},
@@ -654,7 +602,7 @@ func (h *cvHandlers) SetCVTemplate(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return nil
 }
 
 // RenderCVPDF renders an owned CV to PDF and streams it. 501 when no renderer is
@@ -742,12 +690,16 @@ func mapCVError(err error) error {
 	}
 }
 
-// cvPathID parses the :id route param as a CV's UUID. A malformed id cannot name
-// any CV, so it is reported as missing rather than as a bad request — keeping
-// "not a CV" and "not yours" the same answer, which is what stops the id from
-// being probeable.
+// cvPathID parses the :id route param as a CV's UUID (see cvID).
 func cvPathID(c *fiber.Ctx) (uuid.UUID, error) {
-	id, err := uuid.Parse(c.Params("id"))
+	return cvID(c.Params("id"))
+}
+
+// cvID parses a CV's UUID. A malformed id cannot name any CV, so it is reported as
+// missing rather than as a bad request — keeping "not a CV" and "not yours" the same
+// answer, which is what stops the id from being probeable.
+func cvID(raw string) (uuid.UUID, error) {
+	id, err := uuid.Parse(raw)
 	if err != nil {
 		return uuid.Nil, fiber.NewError(fiber.StatusNotFound, "cv not found")
 	}
@@ -759,49 +711,57 @@ func cvPathID(c *fiber.Ctx) (uuid.UUID, error) {
 // The feed carries the addresses each revision touched but not the operations themselves:
 // the preview needs the places to underline, and the inverses hold the candidate's own
 // earlier text, which has no business travelling out for a list view.
-func (h *cvHandlers) ListCVRevisions(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) ListCVRevisions(ctx context.Context, params apigen.ListCVRevisionsParams) (*apigen.ListCVRevisionsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Owner-scoped read first, so a foreign CV is a 404 rather than an empty feed — the
 	// same answer "no such CV" and "not yours" have everywhere else here.
-	if _, err := h.cvStore.Get(c.Context(), id, userID); err != nil {
-		return mapCVError(err)
+	if _, err := h.cvStore.Get(ctx, id, userID); err != nil {
+		return nil, mapCVError(err)
 	}
-	revisions, err := h.editor.History(c.Context(), id, userID)
+	revisions, err := h.editor.History(ctx, id, userID)
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
-	return c.JSON(fiber.Map{"data": cvedit.Views(revisions)})
+	raw, err := json.Marshal(cvedit.Views(revisions))
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.ListCVRevisionsOK{Data: raw}, nil
 }
 
 // UndoCVRevision reverses one entry, leaving later edits in place. The undo is itself
 // recorded, so the feed keeps describing what actually happened to the document.
-func (h *cvHandlers) UndoCVRevision(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) UndoCVRevision(ctx context.Context, params apigen.UndoCVRevisionParams) (*apigen.UndoCVRevisionOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	revisionID, err := uuid.Parse(c.Params("rid"))
+	revisionID, err := uuid.Parse(params.Rid)
 	if err != nil {
 		// A malformed id names no revision, so it is reported as missing rather than as a
 		// bad request — keeping "no such revision" and "not yours" the same answer.
-		return fiber.NewError(fiber.StatusNotFound, "revision not found")
+		return nil, fiber.NewError(fiber.StatusNotFound, "revision not found")
 	}
-	meta, undo, err := h.editor.Revert(c.Context(), id, userID, revisionID)
+	meta, undo, err := h.editor.Revert(ctx, id, userID, revisionID)
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"cv": metaResponse(meta), "revision": undo.View()}})
+	view, err := json.Marshal(undo.View())
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.UndoCVRevisionOK{Data: apigen.CvRevisionUndo{Cv: cvMetaOf(meta), Revision: view}}, nil
 }
 
 // UndoCVRevisionBatch reverses every standing edit of one agent turn, newest first.
@@ -809,28 +769,42 @@ func (h *cvHandlers) UndoCVRevision(c *fiber.Ctx) error {
 // The batch id comes from the feed rather than from a column on the CV: the run's own
 // revisions carry it, which is what let the pre-run snapshot be retired along with the edge
 // two concurrent runs used to create.
-func (h *cvHandlers) UndoCVRevisionBatch(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) UndoCVRevisionBatch(ctx context.Context, params apigen.UndoCVRevisionBatchParams) (*apigen.UndoCVRevisionBatchOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	batchID, err := uuid.Parse(c.Params("bid"))
+	batchID, err := uuid.Parse(params.Bid)
 	if err != nil {
-		return fiber.NewError(fiber.StatusNotFound, "run not found")
+		return nil, fiber.NewError(fiber.StatusNotFound, "run not found")
 	}
-	meta, err := h.editor.RevertBatch(c.Context(), id, userID, batchID)
+	meta, err := h.editor.RevertBatch(ctx, id, userID, batchID)
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
 	// The run report goes with the run: it describes what the run made of each requirement,
 	// and those edits have just been reversed. Best-effort — the document is already back,
 	// and failing the request now would tell the candidate nothing was undone.
-	if err := h.cvStore.SetAutopilotReport(c.Context(), id, userID, nil); err != nil {
+	if err := h.cvStore.SetAutopilotReport(ctx, id, userID, nil); err != nil {
 		log.Printf("cv: clearing the run report after a batch revert: %v", err)
 	}
-	return c.JSON(fiber.Map{"data": metaResponse(meta)})
+	return &apigen.UndoCVRevisionBatchOK{Data: cvMetaOf(meta)}, nil
+}
+
+// cv is the refusal as the CV contract answers it: the body write402 sends, with the
+// allowance as the JSON its view marshals to.
+func (r planRefusal) cv() (*apigen.CvPlanRefusal, error) {
+	allowance, err := json.Marshal(r.allowance)
+	if err != nil {
+		return nil, err
+	}
+	out := &apigen.CvPlanRefusal{Error: r.message, Allowance: allowance}
+	if r.offerUpgrade {
+		out.UpgradeURL = apigen.NewOptString(upgradePath)
+	}
+	return out, nil
 }

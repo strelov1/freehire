@@ -29,12 +29,12 @@ import (
 func buildBasesApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	saved := auth.RequireAuth(iss, testVersions)
-	app.Get("/api/v1/me/cvs/bases", saved, h.ListBaseCVs)
-	app.Post("/api/v1/me/cvs/tailor", saved, markPaidAI(plan.FeatureTailor), h.TailorCV)
-	app.Post("/api/v1/me/cvs/:id/duplicate", saved, h.DuplicateCV)
+	app.Get("/api/v1/me/cvs/bases", saved, cvContract(h))
+	app.Post("/api/v1/me/cvs/tailor", saved, markPaidAI(plan.FeatureTailor), cvContract(h))
+	app.Post("/api/v1/me/cvs/:id/duplicate", saved, cvContract(h))
 	// No paidAI middleware, as in Register: opening a base conversation costs nothing.
-	app.Post("/api/v1/me/cvs/:id/base-session", saved, h.StartBaseSession)
-	app.Post("/api/v1/me/cvs/:id/tailor-session", saved, markPaidAI(plan.FeatureTailor), h.StartTailorSession)
+	app.Post("/api/v1/me/cvs/:id/base-session", saved, cvContract(h))
+	app.Post("/api/v1/me/cvs/:id/tailor-session", saved, markPaidAI(plan.FeatureTailor), cvContract(h))
 	return app
 }
 
