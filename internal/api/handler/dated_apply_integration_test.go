@@ -51,7 +51,7 @@ func datedApplyFixture(t *testing.T, email, ext, slug string) (*fiber.App, strin
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app := fiber.New()
-	app.Post("/jobs/:slug/apply", auth.RequireAuth(iss, testVersions), h.MarkApplied)
+	app.Post("/api/v1/jobs/:slug/apply", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 	token, err := iss.Issue(userID, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
@@ -61,7 +61,7 @@ func datedApplyFixture(t *testing.T, email, ext, slug string) (*fiber.App, strin
 
 func applyOn(t *testing.T, app *fiber.App, token, slug, body string) (int, string) {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodPost, "/jobs/"+slug+"/apply", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/jobs/"+slug+"/apply", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)

@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
@@ -59,7 +61,7 @@ func (h *experienceHandlers) withRequireContext(r experienceRequireContext) *exp
 	return h
 }
 
-func (h *experienceHandlers) register(api fiber.Router, mw middleware) {
+func (h *experienceHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// The read takes a key, like the profile read, so a programmatic consumer can ground
 	// itself in what the candidate has actually done. Creating takes a key too — it is
 	// additive-only, and a full-scope key already reaches everything more destructive than
@@ -81,25 +83,20 @@ func (h *experienceHandlers) register(api fiber.Router, mw middleware) {
 	// unionForMerge folds the discarded atom's metrics and skills into the kept one while
 	// the kept one's provenance stands, so a `manual` atom can absorb numbers an agent
 	// invented. That has to be settled before the gate moves.
-	api.Get("/me/experience", mw.key, h.ListExperience)
-	api.Post("/me/experience/employments", mw.key, h.AddEmployment)
-	api.Put("/me/experience/employments/:id", mw.key, h.UpdateEmployment)
-	api.Delete("/me/experience/employments/:id", mw.key, h.DeleteEmployment)
-	api.Post("/me/experience/atoms", mw.key, h.AddAtom)
-	api.Post("/me/experience/atoms/merge", mw.cookie, h.MergeAtoms)
-	api.Put("/me/experience/atoms/:id", mw.key, h.UpdateAtom)
-	api.Delete("/me/experience/atoms/:id", mw.key, h.DeleteAtom)
+	api.Get("/me/experience", mw.key, contract)
+	api.Post("/me/experience/employments", mw.key, contract)
+	api.Put("/me/experience/employments/:id", mw.key, contract)
+	api.Delete("/me/experience/employments/:id", mw.key, contract)
+	api.Post("/me/experience/atoms", mw.key, contract)
+	api.Post("/me/experience/atoms/merge", mw.cookie, contract)
+	api.Put("/me/experience/atoms/:id", mw.key, contract)
+	api.Delete("/me/experience/atoms/:id", mw.key, contract)
 }
 
-// experienceResponse is the bank as its owner sees it: the places, and the achievements
-// grouped under the place each belongs to. Achievements belonging to no place come back
-// under `unplaced` rather than being hidden — they are usually the ones volunteered in
-// conversation, which makes them the most important ones to be able to check.
-type experienceResponse struct {
-	Employments []employmentWithAtoms `json:"employments"`
-	Unplaced    []atomView            `json:"unplaced"`
-}
-
+// The bank as its owner sees it: the places, and the achievements grouped under the place
+// each belongs to. Achievements belonging to no place come back under `unplaced` rather than
+// being hidden — they are usually the ones volunteered in conversation, which makes them the
+// most important ones to be able to check.
 type employmentWithAtoms struct {
 	experience.Employment
 	Atoms []atomView `json:"atoms"`
@@ -131,18 +128,18 @@ type atomView struct {
 }
 
 // ListExperience returns the caller's whole bank. Cookie or key.
-func (h *experienceHandlers) ListExperience(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *experienceHandlers) ListExperience(ctx context.Context) (*apigen.ListExperienceOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	employments, err := h.bank.ListEmployments(c.Context(), userID)
+	employments, err := h.bank.ListEmployments(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	atoms, err := h.bank.ListAtoms(c.Context(), userID)
+	atoms, err := h.bank.ListAtoms(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	known := make(map[uuid.UUID]bool, len(employments))
@@ -166,18 +163,37 @@ func (h *experienceHandlers) ListExperience(c *fiber.Ctx) error {
 	}
 
 	views := projectAtomViews(atoms)
-	resp := experienceResponse{
-		Employments: make([]employmentWithAtoms, 0, len(employments)),
-		Unplaced:    atomViewsFor(unplaced, views),
+	unplacedRaw, err := marshalRaws(atomViewsFor(unplaced, views))
+	if err != nil {
+		return nil, err
+	}
+	resp := apigen.ExperienceBank{
+		Employments: make([]jx.Raw, 0, len(employments)),
+		Unplaced:    unplacedRaw,
 	}
 	for _, e := range employments {
 		entry := employmentWithAtoms{Employment: e, Atoms: atomViewsFor(grouped[e.ID], views)}
-		if entry.Atoms == nil {
-			entry.Atoms = []atomView{}
+		raw, err := json.Marshal(entry)
+		if err != nil {
+			return nil, err
 		}
-		resp.Employments = append(resp.Employments, entry)
+		resp.Employments = append(resp.Employments, raw)
 	}
-	return c.JSON(fiber.Map{"data": resp})
+	return &apigen.ListExperienceOK{Data: resp}, nil
+}
+
+// marshalRaws writes each value as the JSON its type marshals to, for an entry whose shape
+// belongs to the bank.
+func marshalRaws[T any](vs []T) ([]jx.Raw, error) {
+	out := make([]jx.Raw, 0, len(vs))
+	for _, v := range vs {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, raw)
+	}
+	return out, nil
 }
 
 // projectAtomViews builds the id→view map with richness and soft-dup cluster ids.
@@ -221,20 +237,33 @@ func atomViewsFor(atoms []experience.Atom, views map[uuid.UUID]atomView) []atomV
 // AddEmployment records a new place — a job or a project — under the caller. Unlike
 // UpdateEmployment this creates rather than corrects, so nothing about provenance applies:
 // an employment carries no claim of its own, only the atoms attached to it do.
-func (h *experienceHandlers) AddEmployment(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *experienceHandlers) AddEmployment(ctx context.Context, req jx.Raw) (*apigen.AddEmploymentCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var in experience.Employment
-	if err := c.BodyParser(&in); err != nil {
+	if err := decodeBody(req, &in); err != nil {
+		return nil, err
+	}
+	created, err := h.bank.CreateEmployment(ctx, userID, in)
+	if err != nil {
+		return nil, experienceError(err)
+	}
+	raw, err := json.Marshal(created)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.AddEmploymentCreated{Data: raw}, nil
+}
+
+// decodeBody reads a body that travels as raw JSON into the bank's own type, so its decoding
+// rules stay the type's.
+func decodeBody(raw jx.Raw, into any) error {
+	if err := json.Unmarshal(raw, into); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	created, err := h.bank.CreateEmployment(c.Context(), userID, in)
-	if err != nil {
-		return experienceError(err)
-	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": created})
+	return nil
 }
 
 // AddAtom records a new achievement under the caller. This is the only route that can add
@@ -242,92 +271,96 @@ func (h *experienceHandlers) AddEmployment(c *fiber.Ctx) error {
 // so provenance is forced to manual regardless of what the body sends, the same way
 // UpdateAtom already forces it on a correction: an authenticated POST with no chat
 // transcript behind it can only ever honestly be "the owner typed this themselves".
-func (h *experienceHandlers) AddAtom(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *experienceHandlers) AddAtom(ctx context.Context, req jx.Raw) (*apigen.AddAtomCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var in experience.Atom
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	if err := decodeBody(req, &in); err != nil {
+		return nil, err
 	}
-	if err := h.checkContextRequired(c.Context(), userID, in.Context); err != nil {
-		return experienceError(err)
+	if err := h.checkContextRequired(ctx, userID, in.Context); err != nil {
+		return nil, experienceError(err)
 	}
 	// The door names who is asserting this; the bank derives the label. A provenance in the
 	// body is inert.
-	created, err := h.bank.AddAtom(c.Context(), userID, in, experience.AuthorCandidate)
+	created, err := h.bank.AddAtom(ctx, userID, in, experience.AuthorCandidate)
 	if err != nil {
-		return experienceError(err)
+		return nil, experienceError(err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": created})
+	raw, err := json.Marshal(created)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.AddAtomCreated{Data: raw}, nil
 }
 
 // MergeAtoms folds two owned atoms into one richer keep. Cookie-only — merge deletes.
-func (h *experienceHandlers) MergeAtoms(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *experienceHandlers) MergeAtoms(ctx context.Context, req *apigen.MergeAtoms) (*apigen.MergeAtomsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in struct {
-		IDs []string `json:"ids"`
+	ids := req.Ids.Value
+	if len(ids) != 2 {
+		return nil, experienceError(experience.ErrInvalidMerge)
 	}
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	if len(in.IDs) != 2 {
-		return experienceError(experience.ErrInvalidMerge)
-	}
-	a, err := uuid.Parse(strings.TrimSpace(in.IDs[0]))
+	a, err := uuid.Parse(strings.TrimSpace(ids[0]))
 	if err != nil {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
+		return nil, fiber.NewError(fiber.StatusNotFound, "not found")
 	}
-	b, err := uuid.Parse(strings.TrimSpace(in.IDs[1]))
+	b, err := uuid.Parse(strings.TrimSpace(ids[1]))
 	if err != nil {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
+		return nil, fiber.NewError(fiber.StatusNotFound, "not found")
 	}
-	kept, err := h.bank.MergeAtoms(c.Context(), userID, a, b)
+	kept, err := h.bank.MergeAtoms(ctx, userID, a, b)
 	if err != nil {
-		return experienceError(err)
+		return nil, experienceError(err)
 	}
-	return c.JSON(fiber.Map{"data": kept})
+	raw, err := json.Marshal(kept)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.MergeAtomsOK{Data: raw}, nil
 }
 
 // UpdateEmployment replaces one place's fields with what the owner typed — blanks
 // included. This is the user editing their own history, so unlike import it means exactly
 // what it says.
-func (h *experienceHandlers) UpdateEmployment(c *fiber.Ctx) error {
-	userID, id, err := ownedEntry(c)
+func (h *experienceHandlers) UpdateEmployment(ctx context.Context, req jx.Raw, params apigen.UpdateEmploymentParams) (*apigen.UpdateEmploymentOK, error) {
+	userID, id, err := ownedEntry(ctx, params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var in experience.Employment
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	if err := decodeBody(req, &in); err != nil {
+		return nil, err
 	}
-	updated, err := h.bank.UpdateEmployment(c.Context(), id, userID, in)
+	updated, err := h.bank.UpdateEmployment(ctx, id, userID, in)
 	if err != nil {
-		return experienceError(err)
+		return nil, experienceError(err)
 	}
-	return c.JSON(fiber.Map{"data": updated})
+	raw, err := json.Marshal(updated)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.UpdateEmploymentOK{Data: raw}, nil
 }
 
 // DeleteEmployment removes a place and, with it, the achievements that were evidence of
 // it. Idempotent from the caller's side: a second delete is a 404, never a 500.
-func (h *experienceHandlers) DeleteEmployment(c *fiber.Ctx) error {
-	userID, id, err := ownedEntry(c)
+func (h *experienceHandlers) DeleteEmployment(ctx context.Context, params apigen.DeleteEmploymentParams) error {
+	userID, id, err := ownedEntry(ctx, params.ID)
 	if err != nil {
 		return err
 	}
-	if auth.ViaAPIKey(c) {
-		if err := h.refuseKeyedCascade(c.Context(), userID, id); err != nil {
+	if auth.ViaAPIKeyFromContext(ctx) {
+		if err := h.refuseKeyedCascade(ctx, userID, id); err != nil {
 			return err
 		}
 	}
-	if err := h.bank.DeleteEmployment(c.Context(), id, userID); err != nil {
-		return experienceError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return experienceError(h.bank.DeleteEmployment(ctx, id, userID))
 }
 
 // refuseKeyedCascade is the one thing a keyed caller may not do to the bank: take a place
@@ -382,36 +415,37 @@ func (h *experienceHandlers) refuseKeyedCascade(ctx context.Context, userID int6
 // they typed it — so the provenance becomes `manual` regardless of how it arrived. That is
 // the confirmation path for something the agent inferred: correct it, and it becomes
 // yours.
-func (h *experienceHandlers) UpdateAtom(c *fiber.Ctx) error {
-	userID, id, err := ownedEntry(c)
+func (h *experienceHandlers) UpdateAtom(ctx context.Context, req jx.Raw, params apigen.UpdateAtomParams) (*apigen.UpdateAtomOK, error) {
+	userID, id, err := ownedEntry(ctx, params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var in experience.Atom
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	if err := decodeBody(req, &in); err != nil {
+		return nil, err
 	}
 	// A keyed caller may change what an achievement says and may not change who is held to
 	// have said it — AuthorRewrite is that rule, and the bank reads the standing itself
 	// rather than trusting a label computed up here.
-	updated, err := h.bank.UpdateAtom(c.Context(), id, userID, in, updateAuthor(auth.ViaAPIKey(c)))
+	updated, err := h.bank.UpdateAtom(ctx, id, userID, in, updateAuthor(auth.ViaAPIKeyFromContext(ctx)))
 	if err != nil {
-		return experienceError(err)
+		return nil, experienceError(err)
 	}
-	return c.JSON(fiber.Map{"data": updated})
+	raw, err := json.Marshal(updated)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.UpdateAtomOK{Data: raw}, nil
 }
 
 // DeleteAtom removes one achievement. This is the only path that takes evidence out of the
 // bank — import never deletes — so it belongs to the owner and nobody else.
-func (h *experienceHandlers) DeleteAtom(c *fiber.Ctx) error {
-	userID, id, err := ownedEntry(c)
+func (h *experienceHandlers) DeleteAtom(ctx context.Context, params apigen.DeleteAtomParams) error {
+	userID, id, err := ownedEntry(ctx, params.ID)
 	if err != nil {
 		return err
 	}
-	if err := h.bank.DeleteAtom(c.Context(), id, userID); err != nil {
-		return experienceError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return experienceError(h.bank.DeleteAtom(ctx, id, userID))
 }
 
 // checkContextRequired refuses an interactive create with empty context when the owner
@@ -449,12 +483,12 @@ func updateAuthor(viaKey bool) experience.Author {
 	return experience.AuthorCandidate
 }
 
-func ownedEntry(c *fiber.Ctx) (int64, uuid.UUID, error) {
-	userID, err := requireUserID(c)
+func ownedEntry(ctx context.Context, rawID string) (int64, uuid.UUID, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return 0, uuid.Nil, err
 	}
-	id, err := uuid.Parse(c.Params("id"))
+	id, err := uuid.Parse(rawID)
 	if err != nil {
 		// A malformed id is indistinguishable from an id that does not exist, and saying
 		// so is the same disclosure choice ownership already makes.

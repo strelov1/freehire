@@ -62,7 +62,7 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 	app.Post("/api/v1/auth/extension/connect", optionalCookie, h.ExtensionConnectSubmit)
 	app.Get("/api/v1/me/api-keys", cookieAuth, h.ListAPIKeys)
 	app.Delete("/api/v1/me/api-keys/:id", cookieAuth, h.RevokeAPIKey)
-	app.Post("/api/v1/jobs/:slug/apply", keyAuth, th.MarkApplied)
+	app.Post("/api/v1/jobs/:slug/apply", keyAuth, newContract(contractHandlers{trackingHandlers: th}))
 
 	const connectPath = "/api/v1/auth/extension/connect"
 

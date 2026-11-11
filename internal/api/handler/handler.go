@@ -1116,7 +1116,9 @@ func Register(app *fiber.App, cfg Config) {
 		timelineHandlers:             timelineH,
 		profileHandlers:              profileH,
 		statsHandlers:                statsH,
-		submissionHandlers:           submissionsH})
+		submissionHandlers:           submissionsH,
+		trackingHandlers:             trackingH,
+		experienceHandlers:           experienceH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1164,7 +1166,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Per-user job interactions, tracking reads, and reminder controls
 	// (see trackingHandlers). The interaction writes precede the vote routes,
 	// mirroring the previous registration order.
-	trackingH.register(api, mw)
+	trackingH.register(api, mw, contract)
 	// The ledger's dated read, behind the tracking calendar. Its own namespace, not a
 	// segment under /me/tracking — see the comment on its register.
 	timelineH.register(api, mw, contract)
@@ -1240,7 +1242,7 @@ func Register(app *fiber.App, cfg Config) {
 	screeningAnswersH.register(api, mw, contract)
 	surveyH.register(api, mw, contract)
 	marketPulseH.register(api, mw, contract)
-	experienceH.register(api, mw)
+	experienceH.register(api, mw, contract)
 	talentNetworkH.register(api, mw, contract)
 	talentCatalogH.register(api, contract)
 

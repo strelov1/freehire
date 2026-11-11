@@ -93,7 +93,7 @@ func TestMeasureBoardLoad(t *testing.T) {
 	}
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 
 	// Warm the pool and the plan cache so the reported number is steady state, not first-call
 	// cost — the board is opened repeatedly by a signed-in user, never once.

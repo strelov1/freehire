@@ -4,6 +4,8 @@ package apigen
 
 import (
 	"context"
+
+	"github.com/go-faster/jx"
 )
 
 // Handler handles operations described by OpenAPI v3 specification.
@@ -15,6 +17,18 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/accept
 	AcceptConversation(ctx context.Context, params AcceptConversationParams) (*AcceptConversationOK, error)
+	// AddAtom implements addAtom operation.
+	//
+	// The body is an achievement; its provenance is set by the route, whatever the body says.
+	//
+	// POST /me/experience/atoms
+	AddAtom(ctx context.Context, req jx.Raw) (*AddAtomCreated, error)
+	// AddEmployment implements addEmployment operation.
+	//
+	// The body is a place; its shape is the bank's.
+	//
+	// POST /me/experience/employments
+	AddEmployment(ctx context.Context, req jx.Raw) (*AddEmploymentCreated, error)
 	// AddToWatchlist implements addToWatchlist operation.
 	//
 	// PUT /me/watchlist/{slug}
@@ -154,6 +168,10 @@ type Handler interface {
 	//
 	// GET /stats/catalog
 	CatalogScale(ctx context.Context) (*CatalogScaleOK, error)
+	// ClearApplicationStage implements clearApplicationStage operation.
+	//
+	// DELETE /me/applications/{id}/stage
+	ClearApplicationStage(ctx context.Context, params ClearApplicationStageParams) (*ClearApplicationStageOK, error)
 	// ClearCompanyVote implements clearCompanyVote operation.
 	//
 	// DELETE /companies/{slug}/vote
@@ -162,6 +180,12 @@ type Handler interface {
 	//
 	// DELETE /jobs/{slug}/vote
 	ClearJobVote(ctx context.Context, params ClearJobVoteParams) (*ClearJobVoteOK, error)
+	// ClearStage implements clearStage operation.
+	//
+	// Drops the stage and the apply date; the saved mark, views and notes stay.
+	//
+	// DELETE /jobs/{slug}/stage
+	ClearStage(ctx context.Context, params ClearStageParams) (*ClearStageOK, error)
 	// CloseThread implements closeThread operation.
 	//
 	// Moderators only: closes a thread.
@@ -227,6 +251,10 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/decline
 	DeclineConversation(ctx context.Context, params DeclineConversationParams) (*DeclineConversationOK, error)
+	// DeleteAtom implements deleteAtom operation.
+	//
+	// DELETE /me/experience/atoms/{id}
+	DeleteAtom(ctx context.Context, params DeleteAtomParams) error
 	// DeleteBankedAnswer implements deleteBankedAnswer operation.
 	//
 	// 400 for an id that is not a number, 404 for one the caller does not own.
@@ -239,6 +267,12 @@ type Handler interface {
 	//
 	// DELETE /companies/{slug}/feedback
 	DeleteCompanyFeedback(ctx context.Context, params DeleteCompanyFeedbackParams) (*DeleteCompanyFeedbackOK, error)
+	// DeleteEmployment implements deleteEmployment operation.
+	//
+	// 409 for a keyed caller while the place still holds achievements.
+	//
+	// DELETE /me/experience/employments/{id}
+	DeleteEmployment(ctx context.Context, params DeleteEmploymentParams) error
 	// DeleteProfile implements deleteProfile operation.
 	//
 	// Clears the profile. Idempotent: deleting when none exists is still a 204.
@@ -253,6 +287,10 @@ type Handler interface {
 	//
 	// DELETE /me/subscriptions/{id}
 	DeleteSubscription(ctx context.Context, params DeleteSubscriptionParams) error
+	// DismissJob implements dismissJob operation.
+	//
+	// POST /jobs/{slug}/dismiss
+	DismissJob(ctx context.Context, params DismissJobParams) (*DismissJobOK, error)
 	// DismissJobReport implements dismissJobReport operation.
 	//
 	// Moderators only. The body is optional.
@@ -315,6 +353,12 @@ type Handler interface {
 	//
 	// GET /me/usage
 	GetMyUsage(ctx context.Context) (*GetMyUsageOK, error)
+	// GetNotificationSettings implements getNotificationSettings operation.
+	//
+	// Session cookie only.
+	//
+	// GET /me/notification-settings
+	GetNotificationSettings(ctx context.Context) (*GetNotificationSettingsOK, error)
 	// GetPlans implements getPlans operation.
 	//
 	// What each plan allows and what it costs, read from the configuration metering uses.
@@ -440,6 +484,12 @@ type Handler interface {
 	//
 	// GET /stats/jobs-activity
 	JobsActivity(ctx context.Context, params JobsActivityParams) (*JobsActivity, error)
+	// ListAppliedCompanySlugs implements listAppliedCompanySlugs operation.
+	//
+	// The employers the caller has applied to.
+	//
+	// GET /me/tracking/applied-companies
+	ListAppliedCompanySlugs(ctx context.Context) (*ListAppliedCompanySlugsOK, error)
 	// ListBankedAnswers implements listBankedAnswers operation.
 	//
 	// GET /me/answer-bank
@@ -469,6 +519,14 @@ type Handler interface {
 	//
 	// GET /me/conversations
 	ListConversations(ctx context.Context) (*ListConversationsOK, error)
+	// ListDismissedSlugs implements listDismissedSlugs operation.
+	//
+	// GET /me/tracking/dismissed
+	ListDismissedSlugs(ctx context.Context) (*ListDismissedSlugsOK, error)
+	// ListExperience implements listExperience operation.
+	//
+	// GET /me/experience
+	ListExperience(ctx context.Context) (*ListExperienceOK, error)
 	// ListMyContributions implements listMyContributions operation.
 	//
 	// GET /me/contributions
@@ -511,6 +569,10 @@ type Handler interface {
 	//
 	// GET /me/searches
 	ListSavedSearches(ctx context.Context) (*SavedSearchList, error)
+	// ListSavedSlugs implements listSavedSlugs operation.
+	//
+	// GET /me/tracking/saved
+	ListSavedSlugs(ctx context.Context) (*ListSavedSlugsOK, error)
 	// ListSources implements listSources operation.
 	//
 	// Every source the catalogue is built from, with what it holds and how its crawl is doing.
@@ -531,18 +593,44 @@ type Handler interface {
 	//
 	// GET /threads
 	ListThreads(ctx context.Context, params ListThreadsParams) (*ThreadPage, error)
+	// ListTrackedJobs implements listTrackedJobs operation.
+	//
+	// The caller's interactions joined with their jobs, most recently touched first. `filter` is all,
+	// viewed, saved, applied or board (400 otherwise); `compact` drops each card's blurb, skills and ghost
+	// signal. A page param that does not read falls back to its default.
+	//
+	// GET /me/tracking
+	ListTrackedJobs(ctx context.Context, params ListTrackedJobsParams) (*TrackedJobPage, error)
+	// ListViewedSlugs implements listViewedSlugs operation.
+	//
+	// Every posting the caller has interacted with.
+	//
+	// GET /me/tracking/viewed
+	ListViewedSlugs(ctx context.Context) (*ListViewedSlugsOK, error)
 	// ListWatchlist implements listWatchlist operation.
 	//
 	// One page, newest first. A page param that does not read falls back to its default.
 	//
 	// GET /me/watchlist
 	ListWatchlist(ctx context.Context, params ListWatchlistParams) (*WatchlistPageHeaders, error)
+	// MarkApplied implements markApplied operation.
+	//
+	// The body is optional: without a date the application is stamped now. 400 for a date out of range.
+	//
+	// POST /jobs/{slug}/apply
+	MarkApplied(ctx context.Context, req OptApplyJob, params MarkAppliedParams) (*MarkAppliedOK, error)
 	// MarkConversationRead implements markConversationRead operation.
 	//
 	// Records that the caller has read up to a message.
 	//
 	// POST /me/conversations/{id}/read
 	MarkConversationRead(ctx context.Context, req *ConversationReadRequest, params MarkConversationReadParams) error
+	// MergeAtoms implements mergeAtoms operation.
+	//
+	// Folds two owned achievements into one. 409 when they conflict.
+	//
+	// POST /me/experience/atoms/merge
+	MergeAtoms(ctx context.Context, req *MergeAtoms) (*MergeAtomsOK, error)
 	// MyCompanyFeedback implements myCompanyFeedback operation.
 	//
 	// All of the caller's own reviews of the company, one per category; empty when none.
@@ -591,6 +679,10 @@ type Handler interface {
 	//
 	// POST /dictionary/gaps
 	RecordDictionaryGap(ctx context.Context, req *DictionaryGap) (*RecordDictionaryGapOK, error)
+	// RecordView implements recordView operation.
+	//
+	// POST /jobs/{slug}/view
+	RecordView(ctx context.Context, params RecordViewParams) (*RecordViewOK, error)
 	// RedeemPromoCode implements redeemPromoCode operation.
 	//
 	// Uses a code. 409 when the caller already used one.
@@ -670,6 +762,10 @@ type Handler interface {
 	//
 	// PUT /me/answer-bank
 	SaveBankedAnswer(ctx context.Context, req *SaveBankedAnswer) (*SaveBankedAnswerOK, error)
+	// SaveJob implements saveJob operation.
+	//
+	// POST /jobs/{slug}/save
+	SaveJob(ctx context.Context, params SaveJobParams) (*SaveJobOK, error)
 	// SearchCities implements searchCities operation.
 	//
 	// Up to 20 cities whose name matches, optionally within one country.
@@ -718,18 +814,70 @@ type Handler interface {
 	//
 	// GET /suggest
 	Suggest(ctx context.Context, params SuggestParams) (*SuggestOK, error)
+	// TrackApplication implements trackApplication operation.
+	//
+	// PATCH /me/applications/{id}
+	TrackApplication(ctx context.Context, req *TrackJob, params TrackApplicationParams) (*TrackApplicationOK, error)
+	// TrackJob implements trackJob operation.
+	//
+	// 400 for an unknown stage or an empty body.
+	//
+	// PATCH /jobs/{slug}/track
+	TrackJob(ctx context.Context, req *TrackJob, params TrackJobParams) (*TrackJobOK, error)
+	// TrackingPipeline implements trackingPipeline operation.
+	//
+	// GET /me/tracking/pipeline
+	TrackingPipeline(ctx context.Context) (*TrackingPipelineOK, error)
 	// UnbanUser implements unbanUser operation.
 	//
 	// POST /moderation/users/{id}/unban
 	UnbanUser(ctx context.Context, params UnbanUserParams) (*UnbanUserOK, error)
+	// UndismissJob implements undismissJob operation.
+	//
+	// DELETE /jobs/{slug}/dismiss
+	UndismissJob(ctx context.Context, params UndismissJobParams) (*UndismissJobOK, error)
+	// UnsaveJob implements unsaveJob operation.
+	//
+	// Unsaving a job that was never saved answers with the empty interaction.
+	//
+	// DELETE /jobs/{slug}/save
+	UnsaveJob(ctx context.Context, params UnsaveJobParams) (*UnsaveJobOK, error)
+	// Untrack implements untrack operation.
+	//
+	// Takes the job off the board; the view history stays.
+	//
+	// DELETE /jobs/{slug}/track
+	Untrack(ctx context.Context, params UntrackParams) (*UntrackOK, error)
+	// UntrackApplication implements untrackApplication operation.
+	//
+	// DELETE /me/applications/{id}
+	UntrackApplication(ctx context.Context, params UntrackApplicationParams) (*UntrackApplicationOK, error)
+	// UpdateAtom implements updateAtom operation.
+	//
+	// A keyed edit leaves the provenance alone.
+	//
+	// PUT /me/experience/atoms/{id}
+	UpdateAtom(ctx context.Context, req jx.Raw, params UpdateAtomParams) (*UpdateAtomOK, error)
 	// UpdateEmailPrefs implements updateEmailPrefs operation.
 	//
 	// PATCH /email-prefs
 	UpdateEmailPrefs(ctx context.Context, req *EmailPrefsTokenUpdate) (*UpdateEmailPrefsOK, error)
+	// UpdateEmployment implements updateEmployment operation.
+	//
+	// The body is a place; blanks are kept. 404 for an id the caller does not own.
+	//
+	// PUT /me/experience/employments/{id}
+	UpdateEmployment(ctx context.Context, req jx.Raw, params UpdateEmploymentParams) (*UpdateEmploymentOK, error)
 	// UpdateMyEmailGroups implements updateMyEmailGroups operation.
 	//
 	// PATCH /me/email-groups
 	UpdateMyEmailGroups(ctx context.Context, req *EmailPrefsUpdate) (*UpdateMyEmailGroupsOK, error)
+	// UpdateNotificationSettings implements updateNotificationSettings operation.
+	//
+	// An enabled rule needs a valid channel. Session cookie only.
+	//
+	// PUT /me/notification-settings
+	UpdateNotificationSettings(ctx context.Context, req *NotificationSettingsUpdate) (*UpdateNotificationSettingsOK, error)
 	// UpdateSavedSearch implements updateSavedSearch operation.
 	//
 	// PATCH /me/searches/{id}

@@ -1,33 +1,25 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/reminder"
 )
 
-// notificationSettingsResponse is the public shape of the account's shared
+// notificationSettingsOut is the public shape of the account's shared
 // notification rule (saved-job reminders + both lifecycle nudges), plus the
 // delivery-timing controls (digest frequency/time/interval, quiet hours). It carries no
 // user_id (the caller is the user) and always emits channels as an array so the
-// SPA can bind checkboxes without a null guard. Times are "HH:MM" strings (nil
+// SPA can bind checkboxes without a null guard. Times are "HH:MM" strings (null
 // when unset), matching an HTML time input and readable without a client-side
 // duration library.
-type notificationSettingsResponse struct {
-	Enabled             bool     `json:"enabled"`
-	Channels            []string `json:"channels"`
-	DigestFrequency     string   `json:"digest_frequency"`
-	DigestTime          *string  `json:"digest_time"`
-	DigestIntervalHours int      `json:"digest_interval_hours"`
-	QuietHoursStart     *string  `json:"quiet_hours_start"`
-	QuietHoursEnd       *string  `json:"quiet_hours_end"`
-}
-
-func toNotificationSettingsResponse(s reminder.Settings) notificationSettingsResponse {
+func notificationSettingsOut(s reminder.Settings) apigen.NotificationSettings {
 	ch := s.Channels
 	if ch == nil {
 		ch = []string{}
@@ -36,28 +28,15 @@ func toNotificationSettingsResponse(s reminder.Settings) notificationSettingsRes
 	if freq == "" {
 		freq = notify.FrequencyDaily
 	}
-	return notificationSettingsResponse{
+	return apigen.NotificationSettings{
 		Enabled:             s.Enabled,
 		Channels:            ch,
 		DigestFrequency:     freq,
-		DigestTime:          formatHHMM(s.DigestTime),
-		DigestIntervalHours: s.DigestIntervalHours,
-		QuietHoursStart:     formatHHMM(s.QuietHoursStart),
-		QuietHoursEnd:       formatHHMM(s.QuietHoursEnd),
+		DigestTime:          nilString(formatHHMM(s.DigestTime)),
+		DigestIntervalHours: int64(s.DigestIntervalHours),
+		QuietHoursStart:     nilString(formatHHMM(s.QuietHoursStart)),
+		QuietHoursEnd:       nilString(formatHHMM(s.QuietHoursEnd)),
 	}
-}
-
-// notificationSettingsRequest is the PUT body for the account notification rule.
-// An omitted digest_interval_hours reads as the default, so a client that
-// predates the field keeps working.
-type notificationSettingsRequest struct {
-	Enabled             bool     `json:"enabled"`
-	Channels            []string `json:"channels"`
-	DigestFrequency     string   `json:"digest_frequency"`
-	DigestTime          *string  `json:"digest_time"`
-	DigestIntervalHours int      `json:"digest_interval_hours"`
-	QuietHoursStart     *string  `json:"quiet_hours_start"`
-	QuietHoursEnd       *string  `json:"quiet_hours_end"`
 }
 
 // formatHHMM renders a time-of-day duration as "HH:MM", or nil when unset.
@@ -111,52 +90,49 @@ func reminderError(err error) error {
 
 // GetNotificationSettings returns the caller's notification rule (the
 // opt-out-by-default default when never set). Cookie-only (RequireAuth), owner-scoped.
-func (h *trackingHandlers) GetNotificationSettings(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *trackingHandlers) GetNotificationSettings(ctx context.Context) (*apigen.GetNotificationSettingsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	s, err := h.reminder.GetSettings(c.Context(), userID)
+	s, err := h.reminder.GetSettings(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": toNotificationSettingsResponse(s)})
+	return &apigen.GetNotificationSettingsOK{Data: notificationSettingsOut(s)}, nil
 }
 
 // UpdateNotificationSettings validates and stores the caller's rule. An enabled
-// rule needs at least one valid channel. Cookie-only.
-func (h *trackingHandlers) UpdateNotificationSettings(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+// rule needs at least one valid channel. Cookie-only. An omitted digest_interval_hours
+// reads as the default, so a client that predates the field keeps working.
+func (h *trackingHandlers) UpdateNotificationSettings(ctx context.Context, req *apigen.NotificationSettingsUpdate) (*apigen.UpdateNotificationSettingsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in notificationSettingsRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	digestTime, err := parseHHMM(in.DigestTime)
+	digestTime, err := parseHHMM(ptrOf(req.DigestTime.Get))
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "digest_time must be HH:MM")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "digest_time must be HH:MM")
 	}
-	quietStart, err := parseHHMM(in.QuietHoursStart)
+	quietStart, err := parseHHMM(ptrOf(req.QuietHoursStart.Get))
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "quiet_hours_start must be HH:MM")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "quiet_hours_start must be HH:MM")
 	}
-	quietEnd, err := parseHHMM(in.QuietHoursEnd)
+	quietEnd, err := parseHHMM(ptrOf(req.QuietHoursEnd.Get))
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "quiet_hours_end must be HH:MM")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "quiet_hours_end must be HH:MM")
 	}
-	s, err := h.reminder.UpdateSettings(c.Context(), userID, reminder.Settings{
-		Enabled:             in.Enabled,
-		Channels:            in.Channels,
-		DigestFrequency:     in.DigestFrequency,
+	s, err := h.reminder.UpdateSettings(ctx, userID, reminder.Settings{
+		Enabled:             req.Enabled.Value,
+		Channels:            req.Channels.Value,
+		DigestFrequency:     req.DigestFrequency.Value,
 		DigestTime:          digestTime,
-		DigestIntervalHours: in.DigestIntervalHours,
+		DigestIntervalHours: int(req.DigestIntervalHours.Value),
 		QuietHoursStart:     quietStart,
 		QuietHoursEnd:       quietEnd,
 	})
 	if err != nil {
-		return reminderError(err)
+		return nil, reminderError(err)
 	}
-	return c.JSON(fiber.Map{"data": toNotificationSettingsResponse(s)})
+	return &apigen.UpdateNotificationSettingsOK{Data: notificationSettingsOut(s)}, nil
 }

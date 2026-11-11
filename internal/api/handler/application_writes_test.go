@@ -38,9 +38,9 @@ func appWriteApp(t *testing.T, repo jobtracking.Repository) (*fiber.App, *auth.I
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &trackingHandlers{tracking: jobtracking.New(repo)}
 	app := fiber.New()
-	app.Patch("/me/applications/:id", auth.RequireAuth(iss, testVersions), h.TrackApplication)
-	app.Delete("/me/applications/:id", auth.RequireAuth(iss, testVersions), h.UntrackApplication)
-	app.Delete("/me/applications/:id/stage", auth.RequireAuth(iss, testVersions), h.ClearApplicationStage)
+	app.Patch("/api/v1/me/applications/:id", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
+	app.Delete("/api/v1/me/applications/:id", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
+	app.Delete("/api/v1/me/applications/:id/stage", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 	return app, iss
 }
 
@@ -72,7 +72,7 @@ func TestApplicationWritesRejectABadBodyBeforeTheLookup(t *testing.T) {
 		{"unknown stage", `{"stage":"banana"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			res := appWriteReq(t, app, iss, fiber.MethodPatch, "/me/applications/a42", tc.body)
+			res := appWriteReq(t, app, iss, fiber.MethodPatch, "/api/v1/me/applications/a42", tc.body)
 			defer res.Body.Close()
 			if res.StatusCode != fiber.StatusBadRequest {
 				t.Errorf("status = %d, want 400 — the body is wrong whichever way the row was named", res.StatusCode)
@@ -83,7 +83,7 @@ func TestApplicationWritesRejectABadBodyBeforeTheLookup(t *testing.T) {
 
 func TestApplicationWritesAcceptAValidStage(t *testing.T) {
 	app, iss := appWriteApp(t, stubTrackingRepo{})
-	res := appWriteReq(t, app, iss, fiber.MethodPatch, "/me/applications/a42", `{"stage":"interview"}`)
+	res := appWriteReq(t, app, iss, fiber.MethodPatch, "/api/v1/me/applications/a42", `{"stage":"interview"}`)
 	defer res.Body.Close()
 	if res.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", res.StatusCode)
@@ -95,7 +95,7 @@ func TestApplicationWritesAcceptAValidStage(t *testing.T) {
 func TestApplicationWritesAcceptBothIDForms(t *testing.T) {
 	app, iss := appWriteApp(t, stubTrackingRepo{})
 	for _, id := range []string{"a42", "senior-go-engineer-stripe-mfzg42lt"} {
-		res := appWriteReq(t, app, iss, fiber.MethodPatch, "/me/applications/"+id, `{"stage":"offer"}`)
+		res := appWriteReq(t, app, iss, fiber.MethodPatch, "/api/v1/me/applications/"+id, `{"stage":"offer"}`)
 		defer res.Body.Close()
 		if res.StatusCode != fiber.StatusOK {
 			t.Errorf("id %q: status = %d, want 200", id, res.StatusCode)
@@ -108,9 +108,9 @@ func TestApplicationWritesAcceptBothIDForms(t *testing.T) {
 func TestApplicationWritesAnswerOneNotFound(t *testing.T) {
 	app, iss := appWriteApp(t, notFoundRepo{})
 	for _, tc := range []struct{ name, method, path, body string }{
-		{"track", fiber.MethodPatch, "/me/applications/a999", `{"stage":"offer"}`},
-		{"untrack", fiber.MethodDelete, "/me/applications/a999", ""},
-		{"clear stage", fiber.MethodDelete, "/me/applications/a999/stage", ""},
+		{"track", fiber.MethodPatch, "/api/v1/me/applications/a999", `{"stage":"offer"}`},
+		{"untrack", fiber.MethodDelete, "/api/v1/me/applications/a999", ""},
+		{"clear stage", fiber.MethodDelete, "/api/v1/me/applications/a999/stage", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			res := appWriteReq(t, app, iss, tc.method, tc.path, tc.body)
@@ -124,7 +124,7 @@ func TestApplicationWritesAnswerOneNotFound(t *testing.T) {
 
 func TestApplicationWritesRequireAuthentication(t *testing.T) {
 	app, _ := appWriteApp(t, stubTrackingRepo{})
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/me/applications/a42", strings.NewReader(`{"stage":"offer"}`))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/api/v1/me/applications/a42", strings.NewReader(`{"stage":"offer"}`))
 	req.Header.Set("Content-Type", "application/json")
 	res, err := app.Test(req, -1)
 	if err != nil {
