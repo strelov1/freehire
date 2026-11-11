@@ -12,6 +12,12 @@ type Handler interface {
 	//
 	// PUT /me/watchlist/{slug}
 	AddToWatchlist(ctx context.Context, params AddToWatchlistParams) (*AddToWatchlistOK, error)
+	// ApproveCompanyRelation implements approveCompanyRelation operation.
+	//
+	// Moderators only. Approving again resumes a move that failed part-way.
+	//
+	// POST /company-relations/{id}/approve
+	ApproveCompanyRelation(ctx context.Context, params ApproveCompanyRelationParams) (*ApproveCompanyRelationOK, error)
 	// BanUser implements banUser operation.
 	//
 	// POST /moderation/users/{id}/ban
@@ -35,6 +41,12 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/ghost-report
 	CreateGhostReport(ctx context.Context, req *GhostReportRequest, params CreateGhostReportParams) (*CreateGhostReportCreated, error)
+	// CreateJobReport implements createJobReport operation.
+	//
+	// 404 for an unknown job, 409 for a second open report by the same person.
+	//
+	// POST /jobs/{slug}/reports
+	CreateJobReport(ctx context.Context, req *JobReportRequest, params CreateJobReportParams) (*CreateJobReportCreated, error)
 	// CreateSavedSearch implements createSavedSearch operation.
 	//
 	// 400 for a bad name, 409 for a duplicate name or the per-user cap.
@@ -53,6 +65,12 @@ type Handler interface {
 	//
 	// DELETE /me/answer-bank/{id}
 	DeleteBankedAnswer(ctx context.Context, params DeleteBankedAnswerParams) (*DeleteBankedAnswerOK, error)
+	// DeleteCompanyFeedback implements deleteCompanyFeedback operation.
+	//
+	// Removes the caller's review in one category; a no-op when there is none.
+	//
+	// DELETE /companies/{slug}/feedback
+	DeleteCompanyFeedback(ctx context.Context, params DeleteCompanyFeedbackParams) (*DeleteCompanyFeedbackOK, error)
 	// DeleteSavedSearch implements deleteSavedSearch operation.
 	//
 	// DELETE /me/searches/{id}
@@ -61,6 +79,12 @@ type Handler interface {
 	//
 	// DELETE /me/subscriptions/{id}
 	DeleteSubscription(ctx context.Context, params DeleteSubscriptionParams) error
+	// DismissJobReport implements dismissJobReport operation.
+	//
+	// Moderators only. The body is optional.
+	//
+	// POST /reports/{id}/dismiss
+	DismissJobReport(ctx context.Context, req OptDismissJobReportRequest, params DismissJobReportParams) (*DismissJobReportOK, error)
 	// FileProcessReport implements fileProcessReport operation.
 	//
 	// 409 when the caller already reported this kind.
@@ -149,6 +173,12 @@ type Handler interface {
 	//
 	// GET /me/watchlist/{slug}
 	GetWatching(ctx context.Context, params GetWatchingParams) (*GetWatchingOKHeaders, error)
+	// HideCompanyFeedback implements hideCompanyFeedback operation.
+	//
+	// Moderators only: hides a review. Idempotent.
+	//
+	// POST /company-feedback/{id}/hide
+	HideCompanyFeedback(ctx context.Context, params HideCompanyFeedbackParams) error
 	// ImportWatchlist implements importWatchlist operation.
 	//
 	// Adds the companies the names identify and reports what it could not resolve.
@@ -159,10 +189,34 @@ type Handler interface {
 	//
 	// GET /me/answer-bank
 	ListBankedAnswers(ctx context.Context) (*ListBankedAnswersOK, error)
+	// ListCompanyFeedback implements listCompanyFeedback operation.
+	//
+	// Newest first. A page param that does not read falls back to its default.
+	//
+	// GET /companies/{slug}/feedback
+	ListCompanyFeedback(ctx context.Context, params ListCompanyFeedbackParams) (*CompanyFeedbackPage, error)
 	// ListMyContributions implements listMyContributions operation.
 	//
 	// GET /me/contributions
 	ListMyContributions(ctx context.Context) (*ListMyContributionsOK, error)
+	// ListPendingCompanyRelations implements listPendingCompanyRelations operation.
+	//
+	// Moderators only, oldest first.
+	//
+	// GET /company-relations
+	ListPendingCompanyRelations(ctx context.Context) (*ListPendingCompanyRelationsOK, error)
+	// ListPendingJobReports implements listPendingJobReports operation.
+	//
+	// Moderators only.
+	//
+	// GET /reports
+	ListPendingJobReports(ctx context.Context) (*ListPendingJobReportsOK, error)
+	// ListReportedCompanyFeedback implements listReportedCompanyFeedback operation.
+	//
+	// Moderators only: every review with a report, most reported first.
+	//
+	// GET /company-feedback/reported
+	ListReportedCompanyFeedback(ctx context.Context) (*ListReportedCompanyFeedbackOK, error)
 	// ListSavedSearches implements listSavedSearches operation.
 	//
 	// GET /me/searches
@@ -181,6 +235,12 @@ type Handler interface {
 	//
 	// GET /me/watchlist
 	ListWatchlist(ctx context.Context, params ListWatchlistParams) (*WatchlistPageHeaders, error)
+	// MyCompanyFeedback implements myCompanyFeedback operation.
+	//
+	// All of the caller's own reviews of the company, one per category; empty when none.
+	//
+	// GET /companies/{slug}/feedback/mine
+	MyCompanyFeedback(ctx context.Context, params MyCompanyFeedbackParams) (*MyCompanyFeedbackOK, error)
 	// MyProcessReports implements myProcessReports operation.
 	//
 	// The kinds the caller has reported for the company.
@@ -199,6 +259,12 @@ type Handler interface {
 	//
 	// POST /me/promo/preview
 	PreviewPromoCode(ctx context.Context, req *PromoCode) (*PreviewPromoCodeOK, error)
+	// ProposeCompanyRelation implements proposeCompanyRelation operation.
+	//
+	// Session cookie only. The path's slug is the company that retires, or the subsidiary.
+	//
+	// POST /companies/{slug}/relations
+	ProposeCompanyRelation(ctx context.Context, req *CompanyRelationRequest, params ProposeCompanyRelationParams) (*ProposeCompanyRelationCreated, error)
 	// RecordDictionaryGap implements recordDictionaryGap operation.
 	//
 	// Asks for a term the dictionary does not resolve. 409 when it already does. Session cookie only.
@@ -211,12 +277,25 @@ type Handler interface {
 	//
 	// POST /me/promo/redeem
 	RedeemPromoCode(ctx context.Context, req *PromoCode) (*RedeemPromoCodeOK, error)
+	// RejectCompanyRelation implements rejectCompanyRelation operation.
+	//
+	// Moderators only.
+	//
+	// POST /company-relations/{id}/reject
+	RejectCompanyRelation(ctx context.Context, params RejectCompanyRelationParams) (*RejectCompanyRelationOK, error)
 	// RemoveFromWatchlist implements removeFromWatchlist operation.
 	//
 	// A company that was not on the list is not an error.
 	//
 	// DELETE /me/watchlist/{slug}
 	RemoveFromWatchlist(ctx context.Context, params RemoveFromWatchlistParams) error
+	// ReportCompanyFeedback implements reportCompanyFeedback operation.
+	//
+	// The id is declared a string and parsed in Go, which keeps the 400 text. A second report by the same
+	// person is a silent no-op.
+	//
+	// POST /company-feedback/{id}/report
+	ReportCompanyFeedback(ctx context.Context, req *CompanyFeedbackReportRequest, params ReportCompanyFeedbackParams) error
 	// ResolveJob implements resolveJob operation.
 	//
 	// Finds the catalogue job behind a page, or imports it. 200 when it was already there, 201 when this
@@ -231,6 +310,12 @@ type Handler interface {
 	//
 	// POST /me/jd/resolve
 	ResolveJobDescription(ctx context.Context, req *JobDescriptionSource) (*ResolveJobDescriptionOK, error)
+	// ResolveJobReport implements resolveJobReport operation.
+	//
+	// Moderators only. The body is optional. 404 for an unknown id, 409 for one already decided.
+	//
+	// POST /reports/{id}/resolve
+	ResolveJobReport(ctx context.Context, req OptResolveJobReportRequest, params ResolveJobReportParams) (*ResolveJobReportOK, error)
 	// RetractGhostReport implements retractGhostReport operation.
 	//
 	// Withdraws the caller's report. 404 when there is none.
@@ -301,6 +386,12 @@ type Handler interface {
 	//
 	// PUT /me/survey
 	UpdateSurvey(ctx context.Context, req *SurveyResponses) (*UpdateSurveyOK, error)
+	// UpsertCompanyFeedback implements upsertCompanyFeedback operation.
+	//
+	// Creates or overwrites the caller's review in one category.
+	//
+	// POST /companies/{slug}/feedback
+	UpsertCompanyFeedback(ctx context.Context, req *CompanyFeedbackRequest, params UpsertCompanyFeedbackParams) (*UpsertCompanyFeedbackCreated, error)
 	// VoteCompany implements voteCompany operation.
 	//
 	// POST /companies/{slug}/vote

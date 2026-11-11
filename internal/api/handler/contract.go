@@ -42,6 +42,9 @@ type contractHandlers struct {
 	*voteHandlers
 	*ghostReportHandlers
 	*talentNetworkHandlers
+	*companyFeedbackHandlers
+	*companyRelationHandlers
+	*reportHandlers
 	*answerBankHandlers
 	*userModerationHandlers
 	*companyProcessReportHandlers

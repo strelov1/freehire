@@ -221,6 +221,15 @@ func contractPageBounded(ctx context.Context, fallback, ceiling int) (limit, off
 	return clampPage(queryIntOr(query, "limit", fallback), queryIntOr(query, "offset", 0), ceiling)
 }
 
+// contractPageWindowed is pageParamsWithin at the shared window for a contract operation.
+func contractPageWindowed(ctx context.Context, fallback, ceiling int) (limit, offset int, err error) {
+	limit, offset = contractPageBounded(ctx, fallback, ceiling)
+	if offset+limit > maxPageWindow {
+		return 0, 0, fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
+	}
+	return limit, offset, nil
+}
+
 func clampPage(limit, offset, ceiling int) (int, int) {
 	return min(max(limit, 1), ceiling), min(max(offset, 0), math.MaxInt32)
 }
@@ -1088,7 +1097,9 @@ func Register(app *fiber.App, cfg Config) {
 	emailPrefsH := newEmailPrefsHandlers(mailPrefs)
 	agentPermissionsH := &agentPermissionHandlers{queries: queries}
 	userModerationH := newUserModerationHandlers(queries)
-	contract := newContract(contractHandlers{emailPrefsHandlers: emailPrefsH, talentCatalogHandlers: talentCatalogH,
+	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
+	contract := newContract(contractHandlers{companyFeedbackHandlers: companyFeedbackH, companyRelationHandlers: companyRelationH, reportHandlers: reportsH,
+		emailPrefsHandlers: emailPrefsH, talentCatalogHandlers: talentCatalogH,
 		companyWatchHandlers: companyWatchH,
 		geoHandlers:          geoH, suggestHandlers: suggestH, agentPermissionHandlers: agentPermissionsH,
 		usageHandlers: usageH, plansHandlers: plansH, dictionaryHandlers: dictionaryH,
@@ -1126,9 +1137,7 @@ func Register(app *fiber.App, cfg Config) {
 	)
 	jobsH.register(api, mw)
 	companiesH.register(api, mw)
-	(&companyRelationHandlers{
-		relations: companyrelation.New(cfg.Pool),
-	}).register(api, mw)
+	companyRelationH.register(api, mw, contract)
 	geoH.register(api, contract)
 
 	// Saved searches + the public shared-board read (see savedSearchHandlers).
@@ -1154,7 +1163,7 @@ func Register(app *fiber.App, cfg Config) {
 	timelineH.register(api, mw)
 	votesH.register(api, mw, contract)
 	companyWatchH.register(api, mw, contract)
-	companyFeedbackH.register(api, mw)
+	companyFeedbackH.register(api, mw, contract)
 	// The manual account ban (see userModerationHandlers).
 	userModerationH.register(api, mw, contract)
 	companyProcessReportH.register(api, mw, contract)
@@ -1199,7 +1208,7 @@ func Register(app *fiber.App, cfg Config) {
 	mentorSuggestionsH.register(api, mw, contract)
 
 	// Job reports + review queue (see reportHandlers).
-	reportsH.register(api, mw)
+	reportsH.register(api, mw, contract)
 	ghostReportsH.register(api, mw, contract)
 
 	// Community discussion threads (see communityHandlers).

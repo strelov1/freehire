@@ -40,9 +40,9 @@ func TestCompanyRelationProposeApproveAndShow(t *testing.T) {
 	companies := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	signedIn := func(c *fiber.Ctx) error { c.Locals(auth.LocalsUserID, userID); return c.Next() }
-	app.Post("/api/v1/companies/:slug/relations", signedIn, h.Propose)
-	app.Get("/api/v1/company-relations", signedIn, h.ListPending)
-	app.Post("/api/v1/company-relations/:id/approve", signedIn, h.Approve)
+	h.register(app.Group("/api/v1"), middleware{
+		cookie: signedIn, moderator: func(c *fiber.Ctx) error { return c.Next() },
+	}, newContract(contractHandlers{companyRelationHandlers: h}))
 	app.Get("/api/v1/companies/:slug", companies.GetCompany)
 
 	do := func(t *testing.T, method, url, body string) (int, []byte) {
