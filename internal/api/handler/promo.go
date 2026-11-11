@@ -8,6 +8,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/promo"
 )
 
@@ -31,12 +32,12 @@ func newPromoHandlers(svc *promo.Service) *promoHandlers {
 }
 
 // register mounts the referral and promo routes.
-func (h *promoHandlers) register(api fiber.Router, mw middleware) {
+func (h *promoHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Cookie only, like the rest of /me. A link that decides who gets credited for a
 	// referral is minted for a browser session, not for a script holding a key.
-	api.Get("/me/invite", mw.cookie, h.Invite)
+	api.Get("/me/invite", mw.cookie, contract)
 
-	api.Post("/me/promo/preview", mw.cookie, h.PreviewCode)
+	api.Post("/me/promo/preview", mw.cookie, contract)
 
 	// POST, and that is a security property rather than a style choice. Redeeming spends
 	// the account's one lifetime redemption, and the first draft did it on the checkout
@@ -47,100 +48,86 @@ func (h *promoHandlers) register(api fiber.Router, mw middleware) {
 	//
 	// Limited by the same pair: a redemption that refuses tells a guesser as much as a
 	// preview that refuses, so bounding one and not the other bounds neither.
-	api.Post("/me/promo/redeem", mw.cookie, h.RedeemCode)
+	api.Post("/me/promo/redeem", mw.cookie, contract)
 }
 
-// Invite returns this account's invite link and what it has earned.
+// GetInvite returns this account's invite link and what it has earned.
 //
 // The counts name nobody. Telling a referrer which of their contacts signed up would
 // disclose that a particular person is looking for work, which is not theirs to know — so
 // the service returns aggregates and there is no query that could return more.
-func (h *promoHandlers) Invite(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *promoHandlers) GetInvite(ctx context.Context) (*apigen.GetInviteOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(c.Context(), promoReadTimeout)
+	ctx, cancel := context.WithTimeout(ctx, promoReadTimeout)
 	defer cancel()
 
 	link, err := h.promo.Link(ctx, userID)
 	if err != nil {
 		log.Printf("promo: minting an invite link for user %d: %v", userID, err)
-		return fiber.NewError(fiber.StatusInternalServerError, "could not read your invite link")
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "could not read your invite link")
 	}
 
 	stats, err := h.promo.Stats(ctx, userID)
 	if err != nil {
 		log.Printf("promo: reading invite stats for user %d: %v", userID, err)
-		return fiber.NewError(fiber.StatusInternalServerError, "could not read your invite link")
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "could not read your invite link")
 	}
 
-	return c.JSON(fiber.Map{"data": fiber.Map{
-		"link":         link,
-		"invitees":     stats.Invitees,
-		"rewarded":     stats.Rewarded,
-		"credit_cents": stats.CreditCents,
-		"percent_off":  promo.InvitePercent,
-	}})
+	return &apigen.GetInviteOK{Data: apigen.Invite{
+		Link:        link,
+		Invitees:    stats.Invitees,
+		Rewarded:    stats.Rewarded,
+		CreditCents: stats.CreditCents,
+		PercentOff:  int64(promo.InvitePercent),
+	}}, nil
 }
 
-// PreviewCode reports what a code is worth to this caller, without consuming a seat.
+// PreviewPromoCode reports what a code is worth to this caller, without consuming a seat.
 //
 // Rate limited above, and every refusal about the CODE is the same refusal: the route is
 // reachable by anyone who can create an account, and answering "that code exists but is out
 // of seats" differently from "no such code" would turn it into an oracle for guessing.
-func (h *promoHandlers) PreviewCode(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *promoHandlers) PreviewPromoCode(ctx context.Context, req *apigen.PromoCode) (*apigen.PreviewPromoCodeOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var body struct {
-		Code string `json:"code"`
-	}
-	if err := c.BodyParser(&body); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "expected a JSON body with a code")
-	}
-
-	ctx, cancel := context.WithTimeout(c.Context(), promoReadTimeout)
+	ctx, cancel := context.WithTimeout(ctx, promoReadTimeout)
 	defer cancel()
 
-	percent, err := h.promo.Preview(ctx, userID, body.Code)
+	percent, err := h.promo.Preview(ctx, userID, req.Code.Value)
 	if err != nil {
-		return promoError(err, "could not check that code", userID)
+		return nil, promoError(err, "could not check that code", userID)
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"percent_off": percent}})
+	return &apigen.PreviewPromoCodeOK{Data: apigen.PromoDiscount{PercentOff: int64(percent)}}, nil
 }
 
-// RedeemCode spends this account's one lifetime redemption on a code.
+// RedeemPromoCode spends this account's one lifetime redemption on a code.
 //
 // Separate from checkout on purpose. The redemption is DURABLE: once recorded, every later
 // checkout reads the percentage back through `promo.Discount`, so a provider failure while
 // opening the payment page costs a retry rather than the offer. Making the checkout GET do
 // this instead — as the first draft did — was both a CSRF hole and a way to burn somebody's
 // one code on a call that then failed.
-func (h *promoHandlers) RedeemCode(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *promoHandlers) RedeemPromoCode(ctx context.Context, req *apigen.PromoCode) (*apigen.RedeemPromoCodeOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var body struct {
-		Code string `json:"code"`
-	}
-	if err := c.BodyParser(&body); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "expected a JSON body with a code")
-	}
-
-	ctx, cancel := context.WithTimeout(c.Context(), promoReadTimeout)
+	ctx, cancel := context.WithTimeout(ctx, promoReadTimeout)
 	defer cancel()
 
-	percent, err := h.promo.Redeem(ctx, userID, body.Code)
+	percent, err := h.promo.Redeem(ctx, userID, req.Code.Value)
 	if err != nil {
-		return promoError(err, "could not apply that code", userID)
+		return nil, promoError(err, "could not apply that code", userID)
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"percent_off": percent}})
+	return &apigen.RedeemPromoCodeOK{Data: apigen.PromoDiscount{PercentOff: int64(percent)}}, nil
 }
 
 // promoError renders the two refusals this surface distinguishes, and nothing else.

@@ -1095,7 +1095,9 @@ func Register(app *fiber.App, cfg Config) {
 		jdResolveHandlers: jdResolveH, screeningAnswersHandlers: screeningAnswersH, surveyHandlers: surveyH,
 		voteHandlers: votesH, ghostReportHandlers: ghostReportsH, talentNetworkHandlers: talentNetworkH,
 		answerBankHandlers: answerBankH, userModerationHandlers: userModerationH,
-		companyProcessReportHandlers: companyProcessReportH})
+		companyProcessReportHandlers: companyProcessReportH,
+		contributionHandlers:         contributionsH, marketPulseHandlers: marketPulseH, promoHandlers: promoH,
+		mentorSuggestionsHandlers: mentorSuggestionsH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1179,7 +1181,7 @@ func Register(app *fiber.App, cfg Config) {
 	directApplyH.register(api, mw)
 
 	// Link contributions (see contributionHandlers).
-	contributionsH.register(api, mw)
+	contributionsH.register(api, mw, contract)
 	jdResolveH.register(api, mw, contract)
 
 	// Employee referrals (see referralHandlers).
@@ -1193,7 +1195,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// The mentorship marketplace (see mentorshipHandlers).
 	mentorshipH.register(api, mw)
-	mentorSuggestionsH.register(api, mw)
+	mentorSuggestionsH.register(api, mw, contract)
 
 	// Job reports + review queue (see reportHandlers).
 	reportsH.register(api, mw)
@@ -1207,7 +1209,7 @@ func Register(app *fiber.App, cfg Config) {
 	billingH.register(api, mw)
 	// Mounted whatever billing is doing: sharing an invite link and counting who came is
 	// not a purchase, and a deployment that sells nothing can still have a referral page.
-	promoH.register(api, mw)
+	promoH.register(api, mw, contract)
 	plansH.register(api, contract)
 	usageH.register(api, mw, contract)
 
@@ -1220,7 +1222,7 @@ func Register(app *fiber.App, cfg Config) {
 	// The candidate's own screening answers (see screeningAnswersHandlers).
 	screeningAnswersH.register(api, mw, contract)
 	surveyH.register(api, mw, contract)
-	marketPulseH.register(api, mw)
+	marketPulseH.register(api, mw, contract)
 	experienceH.register(api, mw)
 	talentNetworkH.register(api, mw, contract)
 	talentCatalogH.register(api, contract)

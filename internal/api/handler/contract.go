@@ -45,6 +45,10 @@ type contractHandlers struct {
 	*answerBankHandlers
 	*userModerationHandlers
 	*companyProcessReportHandlers
+	*contributionHandlers
+	*marketPulseHandlers
+	*promoHandlers
+	*mentorSuggestionsHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}

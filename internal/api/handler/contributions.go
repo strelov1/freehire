@@ -1,10 +1,11 @@
 package handler
 
 import (
-	"time"
+	"context"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -32,40 +33,33 @@ func newContributionHandlers(contribution *contribution.Service, queries *db.Que
 	}
 }
 
-func (h *contributionHandlers) register(api fiber.Router, mw middleware) {
+func (h *contributionHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// One intake for every surface: resolve the page to a catalog posting, importing it when
 	// anything can read it and recording the board behind it either way. There is deliberately
 	// no second "contribute a board" endpoint — a link pasted on the website, in the bot, in
 	// the extension or in the CLI must get the same answer, and two endpoints would drift.
-	api.Post("/jobs/resolve", mw.key, h.ResolveJob)
+	api.Post("/jobs/resolve", mw.key, contract)
 
 	// The caller reads their own contributions; the credit balance rides on /auth/me.
-	api.Get("/me/contributions", mw.key, h.ListMyContributions)
-}
-
-// contributionResponse is the public shape of a recorded contribution. submitted_by is
-// omitted (ownership, internal); source + board name the company board the user discovered.
-type contributionResponse struct {
-	ID        int64      `json:"id"`
-	URL       string     `json:"url"`
-	Source    string     `json:"source"`
-	Board     string     `json:"board"`
-	Status    string     `json:"status"`
-	Surface   string     `json:"surface"`
-	CreatedAt *time.Time `json:"created_at"`
+	api.Get("/me/contributions", mw.key, contract)
 }
 
 // toContributionResponse maps a domain contribution to its wire shape.
-func toContributionResponse(c contribution.Contribution) contributionResponse {
-	return contributionResponse{
-		ID:        c.ID,
-		URL:       c.URL,
-		Source:    c.Source,
-		Board:     c.Board,
-		Status:    c.Status,
-		Surface:   c.Surface,
-		CreatedAt: c.CreatedAt,
+func contributionOut(c contribution.Contribution) apigen.Contribution {
+	out := apigen.Contribution{
+		ID:      c.ID,
+		URL:     c.URL,
+		Source:  c.Source,
+		Board:   c.Board,
+		Status:  c.Status,
+		Surface: c.Surface,
 	}
+	if c.CreatedAt != nil {
+		out.CreatedAt = apigen.NewNilDateTime(*c.CreatedAt)
+	} else {
+		out.CreatedAt.SetToNull()
+	}
+	return out
 }
 
 // Contributing a board earns nothing at the moment. The reward used to be one AI credit,
@@ -80,19 +74,19 @@ func toContributionResponse(c contribution.Contribution) contributionResponse {
 
 // ListMyContributions returns the caller's own contributions, newest first. Scoped to the
 // authenticated user, so it never reveals another user's.
-func (h *contributionHandlers) ListMyContributions(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *contributionHandlers) ListMyContributions(ctx context.Context) (*apigen.ListMyContributionsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	rows, err := h.contribution.ListMine(c.Context(), userID)
+	rows, err := h.contribution.ListMine(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]contributionResponse, len(rows))
+	out := make([]apigen.Contribution, len(rows))
 	for i, r := range rows {
-		out[i] = toContributionResponse(r)
+		out[i] = contributionOut(r)
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return &apigen.ListMyContributionsOK{Data: out}, nil
 }

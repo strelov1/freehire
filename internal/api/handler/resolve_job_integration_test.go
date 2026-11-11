@@ -193,7 +193,7 @@ func TestResolveJobEndpoint(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
-	app.Post("/api/v1/jobs/resolve", keyAuth, h.ResolveJob)
+	app.Post("/api/v1/jobs/resolve", keyAuth, newContract(contractHandlers{contributionHandlers: h}))
 
 	resolve := func(t *testing.T, url string, withCookie bool) (*http.Response, resolveReply) {
 		t.Helper()
