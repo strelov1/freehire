@@ -223,3 +223,44 @@ func TestSetActivePausesFreelyAndResumesARunnableOne(t *testing.T) {
 		t.Fatalf("resume: err=%v reached=%v", err, repo.setActive)
 	}
 }
+
+func TestCreateAndResumeRefuseInvalidVisaFilters(t *testing.T) {
+	for _, value := range []string{"yes", "1", "false,true", " "} {
+		for _, resume := range []bool{false, true} {
+			t.Run(value+"/"+map[bool]string{false: "create", true: "resume"}[resume], func(t *testing.T) {
+				query := url.Values{"work_mode": {"remote"}, "visa_sponsorship": {value}}.Encode()
+				repo := &fakeRepo{savedSearchQuery: query, channel: ChannelEmail}
+				svc := New(repo)
+				var err error
+				if resume {
+					_, err = svc.SetActive(context.Background(), 1, 2, true)
+				} else {
+					_, err = svc.Create(context.Background(), 1, 2, ChannelEmail)
+				}
+				if !errors.Is(err, search.ErrBadQuery) {
+					t.Errorf("error = %v, want ErrBadQuery for a visa filter the matching worker would pause", err)
+				}
+				if repo.created != nil || repo.setActive != nil {
+					t.Error("invalid query reached subscription writer")
+				}
+			})
+		}
+	}
+}
+
+func TestCreateAndResumeAcceptValidOrAbsentVisaFilters(t *testing.T) {
+	for _, values := range [][]string{nil, {""}, {"true"}, {"false"}, {" TRUE "}, {"False"}, {"true", "yes"}} {
+		query := url.Values{"work_mode": {"remote"}, "visa_sponsorship": values}.Encode()
+		repo := &fakeRepo{savedSearchQuery: query, channel: ChannelEmail}
+		svc := New(repo)
+		if _, err := svc.Create(context.Background(), 1, 2, ChannelEmail); err != nil {
+			t.Errorf("create %q: %v", values, err)
+		}
+		if _, err := svc.SetActive(context.Background(), 1, 2, true); err != nil {
+			t.Errorf("resume %q: %v", values, err)
+		}
+		if repo.created == nil || repo.setActive == nil {
+			t.Errorf("valid query %q did not reach subscription writers", values)
+		}
+	}
+}

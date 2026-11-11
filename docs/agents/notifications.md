@@ -61,7 +61,8 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
 
 - **A subscription must carry a query the search can RUN, and stays that way.** Create
   and resume (`subscription.Service.SetActive(true)`) share one gate (`admit`): the
-  query parses (`search.ParseQuery` — e.g. at most 5 OR alternatives), narrows, and the
+  query parses (`search.ParseQuery` — e.g. at most 5 OR alternatives), any nonempty
+  `visa_sponsorship` value is a boolean, the query narrows, and the
   channel can reach the account. Saved searches check only that the query parses, on
   create and edit — an unfiltered one is a legitimate "show all" view; narrowing and
   the channel are a subscription's gates. What predates a rule — a query saved before it existed, or one a tightened rule

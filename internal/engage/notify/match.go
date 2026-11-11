@@ -162,9 +162,7 @@ func (r *Runner) pauseUnrunnable(ctx context.Context, groups map[matchGroup][]db
 		vals, _ := url.ParseQuery(query)
 		// Invalid visa values used to mean false. Dropping them now would widen
 		// existing alerts, so pause those queries until their owner fixes them.
-		invalidVisa := vals.Get("visa_sponsorship") != "" && len(search.IgnoredValues(url.Values{
-			"visa_sponsorship": vals["visa_sponsorship"],
-		})) != 0
+		invalidVisa := search.HasInvalidVisaSponsorship(vals)
 		if _, err := search.ParseQuery(vals.Get("q")); err == nil && !invalidVisa {
 			continue
 		}

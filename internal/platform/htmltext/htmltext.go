@@ -8,10 +8,13 @@ import (
 	"container/list"
 	"crypto/sha256"
 	"encoding/hex"
+	stdhtml "html"
+	"strings"
 	"sync"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/jaytaylor/html2text"
+	"golang.org/x/net/html"
 
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
@@ -36,22 +39,67 @@ var (
 // ToText renders HTML as plain text with tags removed. On a conversion error it
 // returns the (possibly truncated) input unchanged.
 func ToText(html string) string {
-	return convert(html, textCache, plainText)
+	return convert(html, textCache, func(s string) (string, error) {
+		return html2text.FromString(s, html2text.Options{OmitLinks: true})
+	})
 }
 
-// ToTextFull renders all supplied HTML as plain text for derivation that needs the
-// complete description. It neither truncates nor caches potentially large results.
-// On a conversion error it returns the full input unchanged.
-func ToTextFull(html string) string {
-	out, err := plainText(html)
-	if err != nil {
-		return html
+// ToTextFull extracts the complete visible text for derivation, without wrapping,
+// emphasis markers, truncation or caching. Text-node content is preserved and block
+// elements add line boundaries. Plain text keeps its original line boundaries;
+// on a parse error it returns the full input unchanged.
+func ToTextFull(input string) string {
+	if !hasHTMLMarkup(input) {
+		return stdhtml.UnescapeString(input)
 	}
-	return out
+	doc, err := html.Parse(strings.NewReader(input))
+	if err != nil {
+		return input
+	}
+	var out strings.Builder
+	var visit func(*html.Node)
+	visit = func(node *html.Node) {
+		if node.Type == html.TextNode {
+			out.WriteString(node.Data)
+			return
+		}
+		block := false
+		if node.Type == html.ElementNode {
+			switch node.Data {
+			case "head", "script", "style", "template":
+				return
+			case "address", "article", "aside", "blockquote", "br", "dd", "details", "div", "dl", "dt",
+				"fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6",
+				"header", "hr", "li", "main", "nav", "ol", "p", "pre", "section", "summary", "table",
+				"tbody", "td", "tfoot", "th", "thead", "tr", "ul":
+				block = true
+			}
+		}
+		if block {
+			out.WriteByte('\n')
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+		if block {
+			out.WriteByte('\n')
+		}
+	}
+	visit(doc)
+	return strings.TrimSpace(out.String())
 }
 
-func plainText(html string) (string, error) {
-	return html2text.FromString(html, html2text.Options{OmitLinks: true})
+// hasHTMLMarkup distinguishes tags from plain-text comparisons such as "< 5".
+func hasHTMLMarkup(input string) bool {
+	tokens := html.NewTokenizer(strings.NewReader(input))
+	for {
+		switch tokens.Next() {
+		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken, html.CommentToken, html.DoctypeToken:
+			return true
+		case html.ErrorToken:
+			return false
+		}
+	}
 }
 
 // ToMarkdown converts HTML to Markdown, preserving block structure such as lists

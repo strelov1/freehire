@@ -132,6 +132,33 @@ func TestSubscriptionsEndToEnd(t *testing.T) {
 	if res.StatusCode != http.StatusOK || env["data"].(map[string]any)["active"] != false {
 		t.Errorf("pause status=%d data=%+v, want 200/active=false", res.StatusCode, env["data"])
 	}
+	// Invalid legacy visa values cannot create an alert or resume one the worker
+	// would immediately pause. Both paths return the ordinary bad-query envelope.
+	if _, err := pool.Exec(ctx, `UPDATE saved_searches SET query = 'work_mode=remote&visa_sponsorship=yes' WHERE id = $1`, ownerSS); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ method, path, body string }{
+		{http.MethodPost, path, fmt.Sprintf(`{"saved_search_id":%d,"channel":"email"}`, ownerSS)},
+		{http.MethodPatch, fmt.Sprintf("%s/%d", path, subID), `{"active":true}`},
+	} {
+		res, env = do(req(test.method, test.path, ownerCookie, test.body))
+		if err := res.Body.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != http.StatusBadRequest || env["error"] != "invalid search query" {
+			t.Errorf("invalid visa %s: status=%d body=%v, want 400 bad-query envelope", test.method, res.StatusCode, env)
+		}
+	}
+	var active bool
+	if err := pool.QueryRow(ctx, `SELECT active FROM subscriptions WHERE id = $1`, subID).Scan(&active); err != nil {
+		t.Fatal(err)
+	}
+	if active {
+		t.Error("invalid visa subscription was resumed")
+	}
+	if _, err := pool.Exec(ctx, `UPDATE saved_searches SET query = 'q=go' WHERE id = $1`, ownerSS); err != nil {
+		t.Fatal(err)
+	}
 	// Cross-user toggle → 404.
 	if res, _ := do(req(http.MethodPatch, fmt.Sprintf("%s/%d", path, subID), otherCookie, `{"active":true}`)); res.StatusCode != http.StatusNotFound {
 		t.Errorf("cross-user toggle status = %d, want 404", res.StatusCode)

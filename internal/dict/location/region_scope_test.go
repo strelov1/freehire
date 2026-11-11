@@ -177,6 +177,26 @@ func TestRegionScopeFromDescription(t *testing.T) {
 			[]string{"ca"}, []string{"north_america"},
 		},
 		{
+			"plain text newline ends hiring clause",
+			"We are hiring in Canada\nBenefits include paid leave.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"plain text comparison preserves newline boundary",
+			"We are hiring in Canada\nBenefits include < 5 office visits a year.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"HTML emphasis inside restriction anchor",
+			"<p>Candidates <strong>based in</strong> Canada.</p>",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"blockquote does not wrap restriction anchor",
+			"<blockquote><p>" + strings.Repeat("x", 54) + " Candidates <strong>based in</strong> Canada.</p></blockquote>",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
 			"empty description",
 			"",
 			nil, nil,

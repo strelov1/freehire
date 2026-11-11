@@ -9,6 +9,7 @@ package subscription
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"time"
 
@@ -158,6 +159,9 @@ func (s *Service) admit(ctx context.Context, userID int64, query, channel string
 	// the matcher would reject its query rather than promising an alert it cannot send.
 	if _, err := search.ParseQuery(vals.Get("q")); err != nil {
 		return err
+	}
+	if search.HasInvalidVisaSponsorship(vals) {
+		return fmt.Errorf("%w: visa_sponsorship must be true or false", search.ErrBadQuery)
 	}
 	if !search.Narrows(vals) {
 		return ErrUnfilteredSearch
