@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/ogen-go/ogen/ogenerrors"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // The contract server is the part of the API that TypeSpec describes
@@ -24,6 +26,7 @@ import (
 // embeds its handlers here, so a group that misses an operation does not compile.
 type contractHandlers struct {
 	*emailPrefsHandlers
+	*talentCatalogHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}
@@ -34,6 +37,11 @@ var _ apigen.Handler = contractHandlers{}
 const localsContractFault = "contract.fault"
 
 type contractFault struct{ err error }
+
+// localsContractQuery carries the raw query into the handlers. The generated server
+// decodes only the params the contract names, and an endpoint that widens on a param it
+// cannot read has to name the rest in meta.ignored_params.
+const localsContractQuery = "contract.query"
 
 // newContract builds the generated server and returns the Fiber handler that ends
 // every contract route.
@@ -49,6 +57,7 @@ func newContract(h contractHandlers) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		fault := &contractFault{}
 		c.Locals(localsContractFault, fault)
+		c.Locals(localsContractQuery, queryValues(c))
 		// Fiber routes HEAD to every Get, but the generated router knows only the
 		// methods the contract names. Serve it as GET and put HEAD back, so fasthttp,
 		// which decides after the handler, still drops the body.
@@ -108,4 +117,40 @@ func recordContractFault(ctx context.Context, err error) {
 	if fault, ok := ctx.Value(localsContractFault).(*contractFault); ok {
 		fault.err = err
 	}
+}
+
+// contractQuery is the request's whole query, for an operation that reports what it did
+// not read.
+func contractQuery(ctx context.Context) url.Values {
+	vals, _ := ctx.Value(localsContractQuery).(url.Values)
+	return vals
+}
+
+// contractIgnoredParams is the wire form of search's report: nil when empty, so the
+// optional field is left out rather than sent as `[]` (see listResponseWithIgnored).
+func contractIgnoredParams(ignored []search.UnknownParam) []apigen.IgnoredParam {
+	if len(ignored) == 0 {
+		return nil
+	}
+	out := make([]apigen.IgnoredParam, len(ignored))
+	for i, p := range ignored {
+		out[i] = apigen.IgnoredParam{Param: p.Param, DidYouMean: optString(p.DidYouMean)}
+	}
+	return out
+}
+
+// optString is an omitempty string: unset when empty.
+func optString(s string) apigen.OptString {
+	if s == "" {
+		return apigen.OptString{}
+	}
+	return apigen.NewOptString(s)
+}
+
+// nilIfEmpty is an omitempty slice: the generated encoder leaves out only a nil one.
+func nilIfEmpty[T any](s []T) []T {
+	if len(s) == 0 {
+		return nil
+	}
+	return s
 }

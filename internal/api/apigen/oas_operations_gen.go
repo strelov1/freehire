@@ -8,6 +8,10 @@ type OperationName = string
 const (
 	GetEmailPrefsOperation       OperationName = "GetEmailPrefs"
 	GetMyEmailGroupsOperation    OperationName = "GetMyEmailGroups"
+	GetTalentFacetsOperation     OperationName = "GetTalentFacets"
+	GetTalentMemberOperation     OperationName = "GetTalentMember"
+	GetTalentPhotoOperation      OperationName = "GetTalentPhoto"
+	ListTalentOperation          OperationName = "ListTalent"
 	OneClickUnsubscribeOperation OperationName = "OneClickUnsubscribe"
 	UpdateEmailPrefsOperation    OperationName = "UpdateEmailPrefs"
 	UpdateMyEmailGroupsOperation OperationName = "UpdateMyEmailGroups"

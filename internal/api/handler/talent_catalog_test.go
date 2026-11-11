@@ -76,12 +76,9 @@ func catalogRow(handle, cv string, fresh time.Time) db.ListTalentNetworkMembersR
 func talentCatalogApp(store talentnetwork.Store, photos *headshot.Store) *fiber.App {
 	h := newTalentCatalogHandlers(talentnetwork.NewCatalogue(store, time.Minute, time.Now), photos)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/talent", h.List)
-	// Registered before the parametrised route, exactly as `register` does — a test that
-	// mounted them the other way round would pass while the real router 404s.
-	app.Get("/talent/facets", h.Facets)
-	app.Get("/talent/:handle", h.Get)
-	app.Get("/talent/:handle/photo", h.GetPhoto)
+	// Mounted through the real register and contract, so the routes are the ones the
+	// server serves.
+	h.register(app.Group("/api/v1"), newContract(contractHandlers{talentCatalogHandlers: h}))
 	return app
 }
 
@@ -186,7 +183,7 @@ func forbidSubstrings(t *testing.T, body string, forbidden ...string) {
 
 func doTalent(t *testing.T, app *fiber.App, target string) *http.Response {
 	t.Helper()
-	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, target, nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1"+target, nil))
 	if err != nil {
 		t.Fatalf("request %s: %v", target, err)
 	}

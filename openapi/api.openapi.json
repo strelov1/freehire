@@ -7,6 +7,9 @@
   "tags": [
     {
       "name": "Email preferences"
+    },
+    {
+      "name": "Talent Network"
     }
   ],
   "paths": {
@@ -246,9 +249,345 @@
           }
         }
       }
+    },
+    "/talent": {
+      "get": {
+        "operationId": "listTalent",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TalentQuery.categories"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.seniorities"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.skills"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.tz"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.cities"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.specializations"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.min_years"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TalentMember"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  },
+                  "description": "A list: `{\"data\": [...], \"meta\": {...}}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Talent Network"
+        ]
+      }
+    },
+    "/talent/facets": {
+      "get": {
+        "operationId": "getTalentFacets",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TalentQuery.categories"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.seniorities"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.skills"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.tz"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.cities"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.specializations"
+          },
+          {
+            "$ref": "#/components/parameters/TalentQuery.min_years"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TalentFacets"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/IgnoredMeta"
+                    }
+                  },
+                  "description": "A single item that read query params: `{\"data\": ...}`, plus `meta` when one was dropped."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Talent Network"
+        ]
+      }
+    },
+    "/talent/{handle}": {
+      "get": {
+        "operationId": "getTalentMember",
+        "description": "A card is a person: cached privately only, so leaving takes effect at once.",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Robots-Tag": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TalentMember"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Talent Network"
+        ]
+      }
+    },
+    "/talent/{handle}/photo": {
+      "get": {
+        "operationId": "getTalentPhoto",
+        "description": "The member's photo, blurred past recognition. The original is never served.",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Robots-Tag": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "contentMediaType": "image/jpeg"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Talent Network"
+        ]
+      }
     }
   },
   "components": {
+    "parameters": {
+      "TalentQuery.categories": {
+        "name": "categories",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "explode": false
+      },
+      "TalentQuery.cities": {
+        "name": "cities",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "explode": false
+      },
+      "TalentQuery.min_years": {
+        "name": "min_years",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "explode": false
+      },
+      "TalentQuery.seniorities": {
+        "name": "seniorities",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "explode": false
+      },
+      "TalentQuery.skills": {
+        "name": "skills",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "explode": false
+      },
+      "TalentQuery.specializations": {
+        "name": "specializations",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "explode": false
+      },
+      "TalentQuery.tz": {
+        "name": "tz",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "explode": false
+      }
+    },
     "schemas": {
       "EmailPrefs": {
         "type": "object",
@@ -349,6 +688,80 @@
         },
         "description": "A patch: an absent switch keeps its stored value. Searches can only be turned off."
       },
+      "FacetRange": {
+        "type": "object",
+        "required": [
+          "min",
+          "max"
+        ],
+        "properties": {
+          "min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "max": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "IgnoredMeta": {
+        "type": "object",
+        "properties": {
+          "ignored_params": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IgnoredParam"
+            }
+          }
+        },
+        "description": "The meta of a single-item answer, sent only to carry a warning."
+      },
+      "IgnoredParam": {
+        "type": "object",
+        "required": [
+          "param"
+        ],
+        "properties": {
+          "param": {
+            "type": "string"
+          },
+          "did_you_mean": {
+            "type": "string"
+          }
+        },
+        "description": "A query param the endpoint did not read: unknown, or known but unreadable\n(`min_years=lots`). Either way the answer is wider than the caller asked for."
+      },
+      "ListMeta": {
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ignored_params": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IgnoredParam"
+            },
+            "description": "Absent when every param was read."
+          }
+        },
+        "description": "A page of a list, with what the filter dropped."
+      },
       "OneClickResult": {
         "type": "object",
         "required": [
@@ -364,6 +777,23 @@
           }
         }
       },
+      "PeriodDate": {
+        "type": "object",
+        "required": [
+          "year"
+        ],
+        "properties": {
+          "year": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "month": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A year, with a month when the CV gives one."
+      },
       "Problem": {
         "type": "object",
         "required": [
@@ -378,6 +808,172 @@
           }
         },
         "description": "Every refusal, whatever its status: `{\"error\": msg}`. `code` is set only where a\nclient branches on the reason (the auth flows)."
+      },
+      "TalentCard": {
+        "type": "object",
+        "required": [
+          "skills",
+          "roles"
+        ],
+        "properties": {
+          "seniority": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "total_years": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TalentRole"
+            }
+          },
+          "education": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TalentEducation"
+            }
+          },
+          "certifications": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "The anonymised card: only what a dictionary can vouch for."
+      },
+      "TalentEducation": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "year": {
+            "$ref": "#/components/schemas/PeriodDate"
+          }
+        },
+        "description": "One education entry: the degree level a dictionary resolved, and the year."
+      },
+      "TalentFacets": {
+        "type": "object",
+        "required": [
+          "total",
+          "facets",
+          "stats"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "facets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "format": "int32"
+              }
+            },
+            "description": "Facet name → value → member count."
+          },
+          "stats": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FacetRange"
+            },
+            "description": "Ranged facets. The catalogue has none, so this is always empty."
+          }
+        },
+        "description": "How many members stand behind each filter value."
+      },
+      "TalentMember": {
+        "type": "object",
+        "required": [
+          "handle",
+          "card",
+          "cities",
+          "specializations",
+          "updated_at",
+          "has_photo"
+        ],
+        "properties": {
+          "handle": {
+            "type": "string"
+          },
+          "card": {
+            "$ref": "#/components/schemas/TalentCard"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "The IANA zone."
+          },
+          "timezone_region": {
+            "type": "string",
+            "description": "The part of the zone before the slash; the `tz` filter reads it."
+          },
+          "cities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "specializations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "has_photo": {
+            "type": "boolean",
+            "description": "Whether GET /talent/{handle}/photo has something to serve."
+          }
+        }
+      },
+      "TalentRole": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "start": {
+            "$ref": "#/components/schemas/PeriodDate"
+          },
+          "end": {
+            "$ref": "#/components/schemas/PeriodDate"
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "stack": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "One role of a work history, with everything nameable removed."
       }
     }
   },

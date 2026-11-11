@@ -1064,7 +1064,7 @@ func Register(app *fiber.App, cfg Config) {
 	// The two /me routes beside them are the same switches for a caller the cookie
 	// already identified.
 	emailPrefsH := newEmailPrefsHandlers(mailPrefs)
-	contract := newContract(contractHandlers{emailPrefsHandlers: emailPrefsH})
+	contract := newContract(contractHandlers{emailPrefsHandlers: emailPrefsH, talentCatalogHandlers: talentCatalogH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1192,7 +1192,7 @@ func Register(app *fiber.App, cfg Config) {
 	marketPulseH.register(api, mw)
 	experienceH.register(api, mw)
 	talentNetworkH.register(api, mw)
-	talentCatalogH.register(api, mw)
+	talentCatalogH.register(api, contract)
 
 	// CV builder + AI tailoring (see cvHandlers).
 	cvH.register(api, mw)
