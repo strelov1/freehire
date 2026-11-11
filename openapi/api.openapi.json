@@ -19,9 +19,69 @@
     },
     {
       "name": "Account"
+    },
+    {
+      "name": "Plans"
+    },
+    {
+      "name": "Dictionary"
+    },
+    {
+      "name": "Tailoring"
     }
   ],
   "paths": {
+    "/dictionary/gaps": {
+      "post": {
+        "operationId": "recordDictionaryGap",
+        "description": "Asks for a term the dictionary does not resolve. 409 when it already does. Session\ncookie only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DictionaryGapRecorded"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Dictionary"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DictionaryGap"
+              }
+            }
+          }
+        }
+      }
+    },
     "/email-prefs": {
       "get": {
         "operationId": "getEmailPrefs",
@@ -412,6 +472,57 @@
         }
       }
     },
+    "/me/jd/resolve": {
+      "post": {
+        "operationId": "resolveJobDescription",
+        "description": "Turns a catalogue job, a vacancy URL or pasted text into a job the tailoring workspace\ncan open. 404 for an unknown slug, 422 for a URL with no readable vacancy. Session\ncookie only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ResolvedJob"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Tailoring"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobDescriptionSource"
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/usage": {
       "get": {
         "operationId": "getMyUsage",
@@ -706,6 +817,47 @@
         },
         "tags": [
           "Watchlist"
+        ]
+      }
+    },
+    "/plans": {
+      "get": {
+        "operationId": "getPlans",
+        "description": "What each plan allows and what it costs, read from the configuration metering uses.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Plans"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Plans"
         ]
       }
     },
@@ -1141,6 +1293,35 @@
           }
         }
       },
+      "DictionaryGap": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "`specialization`, `skill` or `industry`; anything else is a 400."
+          },
+          "term": {
+            "type": "string"
+          }
+        }
+      },
+      "DictionaryGapRecorded": {
+        "type": "object",
+        "required": [
+          "request_count",
+          "status"
+        ],
+        "properties": {
+          "request_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many people have asked for this term."
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
       "EmailPrefs": {
         "type": "object",
         "required": [
@@ -1284,6 +1465,28 @@
         },
         "description": "A query param the endpoint did not read: unknown, or known but unreadable\n(`min_years=lots`). Either way the answer is wider than the caller asked for."
       },
+      "JobDescriptionSource": {
+        "type": "object",
+        "properties": {
+          "job_slug": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "description": "Hints used only with `text`."
+          },
+          "company": {
+            "type": "string"
+          }
+        },
+        "description": "Exactly one of `job_slug`, `url` and `text`; anything else is a 400."
+      },
       "ListMeta": {
         "type": "object",
         "required": [
@@ -1369,6 +1572,112 @@
         },
         "description": "A year, with a month when the CV gives one."
       },
+      "PlanFeature": {
+        "type": "object",
+        "required": [
+          "feature",
+          "free",
+          "pro",
+          "ultra"
+        ],
+        "properties": {
+          "feature": {
+            "type": "string"
+          },
+          "free": {
+            "$ref": "#/components/schemas/PlanTierAllowance"
+          },
+          "pro": {
+            "$ref": "#/components/schemas/PlanTierAllowance"
+          },
+          "ultra": {
+            "$ref": "#/components/schemas/PlanTierAllowance"
+          }
+        }
+      },
+      "PlanPrice": {
+        "type": "object",
+        "required": [
+          "id",
+          "amount_cents",
+          "currency",
+          "interval",
+          "default",
+          "tier"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "amount_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The smallest currency unit, as the payment provider stores it."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "interval": {
+            "type": "string",
+            "description": "`month` or `year`."
+          },
+          "default": {
+            "type": "boolean",
+            "description": "The price a new subscriber is sold unless they choose another."
+          },
+          "tier": {
+            "type": "string",
+            "description": "The plan the price buys: `pro`, `ultra`, `api` or `api_data`."
+          }
+        }
+      },
+      "PlanTierAllowance": {
+        "type": "object",
+        "required": [
+          "limit",
+          "unlimited"
+        ],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The daily ceiling; with `unlimited`, the fair-use guard behind it."
+          },
+          "unlimited": {
+            "type": "boolean"
+          }
+        },
+        "description": "What one tier allows for one feature in a UTC day."
+      },
+      "Plans": {
+        "type": "object",
+        "required": [
+          "features",
+          "prices",
+          "enforced"
+        ],
+        "properties": {
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanFeature"
+            }
+          },
+          "prices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanPrice"
+            }
+          },
+          "enforced": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The features whose ceiling refuses today."
+          }
+        }
+      },
       "Problem": {
         "type": "object",
         "required": [
@@ -1383,6 +1692,17 @@
           }
         },
         "description": "Every refusal, whatever its status: `{\"error\": msg}`. `code` is set only where a\nclient branches on the reason (the auth flows)."
+      },
+      "ResolvedJob": {
+        "type": "object",
+        "required": [
+          "job_slug"
+        ],
+        "properties": {
+          "job_slug": {
+            "type": "string"
+          }
+        }
       },
       "SuggestMeta": {
         "type": "object",

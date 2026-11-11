@@ -1090,14 +1090,15 @@ func Register(app *fiber.App, cfg Config) {
 	contract := newContract(contractHandlers{emailPrefsHandlers: emailPrefsH, talentCatalogHandlers: talentCatalogH,
 		companyWatchHandlers: companyWatchH,
 		geoHandlers:          geoH, suggestHandlers: suggestH, agentPermissionHandlers: agentPermissionsH,
-		usageHandlers: usageH})
+		usageHandlers: usageH, plansHandlers: plansH, dictionaryHandlers: dictionaryH,
+		jdResolveHandlers: jdResolveH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
 	searchH.register(api, mw)
 	suggestH.register(api, contract)
-	dictionaryH.register(api, mw)
+	dictionaryH.register(api, mw, contract)
 	// Beside the search it builds a filter for, though it shares none of its
 	// dependencies: interpretation needs a model and the caller's profile, not the
 	// index.
@@ -1175,7 +1176,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Link contributions (see contributionHandlers).
 	contributionsH.register(api, mw)
-	jdResolveH.register(api, mw)
+	jdResolveH.register(api, mw, contract)
 
 	// Employee referrals (see referralHandlers).
 	referralsH.register(api, mw)
@@ -1203,7 +1204,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Mounted whatever billing is doing: sharing an invite link and counting who came is
 	// not a purchase, and a deployment that sells nothing can still have a referral page.
 	promoH.register(api, mw)
-	plansH.register(api)
+	plansH.register(api, contract)
 	usageH.register(api, mw, contract)
 
 	// API-key management and the auth surface (see authHandlers).

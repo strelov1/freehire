@@ -78,6 +78,19 @@ func encodeGetMyUsageResponse(response *GetMyUsageOK, w http.ResponseWriter) err
 	return nil
 }
 
+func encodeGetPlansResponse(response *GetPlansOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeGetTalentFacetsResponse(response *GetTalentFacetsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -274,8 +287,34 @@ func encodeOneClickUnsubscribeResponse(response *OneClickUnsubscribeOK, w http.R
 	return nil
 }
 
+func encodeRecordDictionaryGapResponse(response *RecordDictionaryGapOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeRemoveFromWatchlistResponse(response *RemoveFromWatchlistNoContent, w http.ResponseWriter) error {
 	w.WriteHeader(204)
+
+	return nil
+}
+
+func encodeResolveJobDescriptionResponse(response *ResolveJobDescriptionOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
 
 	return nil
 }

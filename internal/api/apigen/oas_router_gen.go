@@ -11,6 +11,9 @@ import (
 )
 
 var (
+	rn18AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
 	rn6AllowedHeaders = map[string]string{
 		"PATCH": "Content-Type",
 	}
@@ -20,7 +23,10 @@ var (
 	rn7AllowedHeaders = map[string]string{
 		"PATCH": "Content-Type",
 	}
-	rn13AllowedHeaders = map[string]string{
+	rn19AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn14AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 )
@@ -76,6 +82,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			switch elem[0] {
+			case 'd': // Prefix: "dictionary/gaps"
+
+				if l := len("dictionary/gaps"); len(elem) >= l && elem[0:l] == "dictionary/gaps" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "POST":
+						s.handleRecordDictionaryGapRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "POST",
+							allowedHeaders: rn18AllowedHeaders,
+							acceptPost:     "application/json",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
 			case 'e': // Prefix: "email-prefs"
 
 				if l := len("email-prefs"); len(elem) >= l && elem[0:l] == "email-prefs" {
@@ -220,6 +251,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 
+				case 'j': // Prefix: "jd/resolve"
+
+					if l := len("jd/resolve"); len(elem) >= l && elem[0:l] == "jd/resolve" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "POST":
+							s.handleResolveJobDescriptionRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "POST",
+								allowedHeaders: rn19AllowedHeaders,
+								acceptPost:     "application/json",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
 				case 'u': // Prefix: "usage"
 
 					if l := len("usage"); len(elem) >= l && elem[0:l] == "usage" {
@@ -297,7 +353,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								default:
 									s.notAllowed(w, r, notAllowedParams{
 										allowedMethods: "POST",
-										allowedHeaders: rn13AllowedHeaders,
+										allowedHeaders: rn14AllowedHeaders,
 										acceptPost:     "application/json",
 										acceptPatch:    "",
 									})
@@ -346,6 +402,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 					}
 
+				}
+
+			case 'p': // Prefix: "plans"
+
+				if l := len("plans"); len(elem) >= l && elem[0:l] == "plans" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleGetPlansRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
 				}
 
 			case 's': // Prefix: "suggest"
@@ -594,6 +675,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 				break
 			}
 			switch elem[0] {
+			case 'd': // Prefix: "dictionary/gaps"
+
+				if l := len("dictionary/gaps"); len(elem) >= l && elem[0:l] == "dictionary/gaps" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "POST":
+						r.name = RecordDictionaryGapOperation
+						r.summary = ""
+						r.operationID = "recordDictionaryGap"
+						r.operationGroup = ""
+						r.pathPattern = "/dictionary/gaps"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
 			case 'e': // Prefix: "email-prefs"
 
 				if l := len("email-prefs"); len(elem) >= l && elem[0:l] == "email-prefs" {
@@ -759,6 +865,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						}
 					}
 
+				case 'j': // Prefix: "jd/resolve"
+
+					if l := len("jd/resolve"); len(elem) >= l && elem[0:l] == "jd/resolve" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "POST":
+							r.name = ResolveJobDescriptionOperation
+							r.summary = ""
+							r.operationID = "resolveJobDescription"
+							r.operationGroup = ""
+							r.pathPattern = "/me/jd/resolve"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
 				case 'u': // Prefix: "usage"
 
 					if l := len("usage"); len(elem) >= l && elem[0:l] == "usage" {
@@ -893,6 +1024,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 
 					}
 
+				}
+
+			case 'p': // Prefix: "plans"
+
+				if l := len("plans"); len(elem) >= l && elem[0:l] == "plans" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = GetPlansOperation
+						r.summary = ""
+						r.operationID = "getPlans"
+						r.operationGroup = ""
+						r.pathPattern = "/plans"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
 				}
 
 			case 's': // Prefix: "suggest"

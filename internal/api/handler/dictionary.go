@@ -6,10 +6,10 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	dictclassify "github.com/strelov1/freehire/internal/dict/classify"
 	"github.com/strelov1/freehire/internal/dict/industrytag"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
-	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -22,8 +22,8 @@ type dictionaryHandlers struct {
 	write   gapWrite
 }
 
-func (h *dictionaryHandlers) register(api fiber.Router, mw middleware) {
-	api.Post("/dictionary/gaps", mw.cookie, h.Record)
+func (h *dictionaryHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Post("/dictionary/gaps", mw.cookie, contract)
 }
 
 // dictionaryKnown reports whether the dictionary behind `kind` already resolves
@@ -51,20 +51,18 @@ type dictionaryRecordBody struct {
 	Status       string `json:"status"`
 }
 
-func (h *dictionaryHandlers) Record(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.ErrUnauthorized
-	}
-	var req dictionaryRecordRequest
-	if err := c.BodyParser(&req); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
-	}
-	result, err := h.recordTerm(c.Context(), userID, req)
+func (h *dictionaryHandlers) RecordDictionaryGap(ctx context.Context, req *apigen.DictionaryGap) (*apigen.RecordDictionaryGapOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": result})
+	result, err := h.recordTerm(ctx, userID, dictionaryRecordRequest{Kind: req.Kind.Value, Term: req.Term.Value})
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.RecordDictionaryGapOK{Data: apigen.DictionaryGapRecorded{
+		RequestCount: int64(result.RequestCount), Status: result.Status,
+	}}, nil
 }
 
 func (h *dictionaryHandlers) recordTerm(
