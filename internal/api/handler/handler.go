@@ -1114,7 +1114,9 @@ func Register(app *fiber.App, cfg Config) {
 		savedSearchHandlers:          savedSearchH,
 		subscriptionHandlers:         subscriptionH,
 		timelineHandlers:             timelineH,
-		profileHandlers:              profileH})
+		profileHandlers:              profileH,
+		statsHandlers:                statsH,
+		submissionHandlers:           submissionsH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1150,7 +1152,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
 	// ingest-status reads (see statsHandlers).
-	statsH.register(api, optionalAuth)
+	statsH.register(api, optionalAuth, contract)
 	// The homepage's live "recently added jobs" SSE feed (see recentFeedHandlers).
 	recentFeedH.register(api)
 	// The public /embeddings page's coverage figures and their live stream.
@@ -1188,7 +1190,7 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/tools/ws", auth.RequireAuthWS(a.issuer, a.queries, apiKeys{a.queries}), a.BrowserToolsWS())
 
 	// Public job submissions + review queue (see submissionHandlers).
-	submissionsH.register(api, mw)
+	submissionsH.register(api, mw, contract)
 
 	// Verified-employer accounts: claim, curated profile, own vacancies, and the
 	// moderator/admin review surface (see employerHandlers).

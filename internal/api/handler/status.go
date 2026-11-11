@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/observability"
@@ -194,61 +194,15 @@ func fleetStatus(rolls []providerRollup, now time.Time) providerStatus {
 	return deriveStatus(fleet, now)
 }
 
-// statusProvider is the public, sanitized per-provider entry: board counts,
-// freshness, and the derived status. It deliberately has no field for last_error
-// or board identifiers — sanitization by construction, so an internal detail
-// cannot leak by omission.
-type statusProvider struct {
-	Provider      string         `json:"provider"`
-	Kind          string         `json:"kind"`
-	Status        providerStatus `json:"status"`
-	TotalBoards   int64          `json:"total_boards"`
-	HealthyBoards int64          `json:"healthy_boards"`
-	CooledBoards  int64          `json:"cooled_boards"`
-	LastRun       *string        `json:"last_run"`
-	LastSuccess   *string        `json:"last_success"`
-	IngestedTotal int64          `json:"ingested_total"`
-}
-
-// siteHealth is the public, sanitized verdict for the site/API itself —
-// independent of the ingest fleet's own status (`overall`). database is
-// "up" or "down", the wire encoding health.go's Health handler already
-// uses. error_rate is the fraction of 5xx responses over the trailing
-// window_minutes, computed from the process's own recent traffic (see
-// internal/platform/observability.ErrorRate) — never from an external
-// Prometheus query.
-type siteHealth struct {
-	Status    providerStatus `json:"status"`
-	Database  string         `json:"database"`
-	ErrorRate float64        `json:"error_rate"`
-	// PoolPressure is the fraction of the database connection pool held at once, 0..1.
-	// Carried on the wire beside ErrorRate because the two answer different questions and
-	// the page needs both: the error fraction describes the requests that FINISHED, this
-	// one describes the requests that cannot start. On 2026-09-14 the first read clean for
-	// the whole outage precisely because nothing was finishing.
-	PoolPressure  float64            `json:"pool_pressure"`
-	WindowMinutes int                `json:"window_minutes"`
-	History       []siteHistoryEntry `json:"history"`
-}
-
-// siteHistoryEntry is one day's recorded worst-of-day site status. Day is a
-// plain "2006-01-02" date string — the underlying column is DATE, not a
-// timestamp, so there is no time-of-day or timezone to carry. A day with no
-// recorded sample simply has no entry; see siteHistoryFromRows.
-type siteHistoryEntry struct {
-	Day    string         `json:"day"`
-	Status providerStatus `json:"status"`
-}
-
 // siteHistoryFromRows converts the trailing-90-days read into the wire
 // shape, in the order the query already returns (ascending by day). Always
 // non-nil so an empty history serializes as `[]`, never `null`.
-func siteHistoryFromRows(rows []db.SiteStatusHistoryRow) []siteHistoryEntry {
-	entries := make([]siteHistoryEntry, len(rows))
+func siteHistoryFromRows(rows []db.SiteStatusHistoryRow) []apigen.SiteHistoryEntry {
+	entries := make([]apigen.SiteHistoryEntry, len(rows))
 	for i, r := range rows {
-		entries[i] = siteHistoryEntry{
+		entries[i] = apigen.SiteHistoryEntry{
 			Day:    r.Day.Time.Format(dateLayout),
-			Status: severityToStatus(r.WorstSeverity),
+			Status: string(severityToStatus(r.WorstSeverity)),
 		}
 	}
 	return entries
@@ -268,7 +222,7 @@ func siteHistoryFromRows(rows []db.SiteStatusHistoryRow) []siteHistoryEntry {
 // estimator are irrelevant to it), and building a partially-populated one
 // just to reach this method would be a nil-pointer panic waiting for the
 // day this function starts needing one of those other fields too.
-func currentSiteHealth(ctx context.Context, pool *pgxpool.Pool) (health siteHealth, dbUp bool) {
+func currentSiteHealth(ctx context.Context, pool *pgxpool.Pool) (health apigen.SiteHealth, dbUp bool) {
 	errorRate, totalRequests := observability.ErrorRate(siteErrorWindow)
 	dbUp = pool.Ping(ctx) == nil
 
@@ -277,11 +231,11 @@ func currentSiteHealth(ctx context.Context, pool *pgxpool.Pool) (health siteHeal
 	stat := pool.Stat()
 	pressure := poolPressure(stat.AcquiredConns(), stat.MaxConns())
 
-	return siteHealth{
-		Status:        deriveSiteStatus(dbUp, errorRate, totalRequests),
+	return apigen.SiteHealth{
+		Status:        string(deriveSiteStatus(dbUp, errorRate, totalRequests)),
 		Database:      dbStatusLabel(dbUp),
 		ErrorRate:     errorRate,
-		WindowMinutes: int(siteErrorWindow / time.Minute),
+		WindowMinutes: int64(siteErrorWindow / time.Minute),
 		PoolPressure:  pressure,
 	}, dbUp
 }
@@ -305,9 +259,9 @@ func currentSiteHealth(ctx context.Context, pool *pgxpool.Pool) (health siteHeal
 // value an empty rollup already gets — rather than "down": a database
 // outage means the fleet's health is UNKNOWN, not that it has failed, and
 // only site.status should carry the database's own honest "down" verdict.
-func (h *statsHandlers) IngestStatus(c *fiber.Ctx) error {
+func (h *statsHandlers) IngestStatus(ctx context.Context) (*apigen.IngestStatusOK, error) {
 	now := time.Now().UTC()
-	site, dbUp := currentSiteHealth(c.Context(), h.pool)
+	site, dbUp := currentSiteHealth(ctx, h.pool)
 	if !dbUp {
 		// overall reads "operational" here — the same "no data" convention
 		// fleetStatus already uses for a genuinely empty rollup (see its own
@@ -321,29 +275,29 @@ func (h *statsHandlers) IngestStatus(c *fiber.Ctx) error {
 		// would produce for a genuinely empty history, through the one function
 		// that encodes that invariant rather than a second hand-built copy of it.
 		site.History = siteHistoryFromRows(nil)
-		return statusResponse(c, now, statusOperational, nil, []statusProvider{}, site)
+		return statusResponse(now, statusOperational, apigen.NilString{Null: true}, []apigen.StatusProvider{}, site), nil
 	}
 
-	historyRows, err := h.queries.SiteStatusHistory(c.Context())
+	historyRows, err := h.queries.SiteStatusHistory(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	site.History = siteHistoryFromRows(historyRows)
 
-	rows, err := h.queries.ProviderHealthRollup(c.Context())
+	rows, err := h.queries.ProviderHealthRollup(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	lastJobAddedAt, err := h.queries.LatestOpenJobAddedAt(c.Context())
+	lastJobAddedAt, err := h.queries.LatestOpenJobAddedAt(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// One registry per request to classify each provider by adapter kind (ATS /
 	// aggregator / company page). Taxonomy, not a crawl registry — this host holds
 	// no ingest credentials.
 	reg := sources.Taxonomy()
-	providers := make([]statusProvider, len(rows))
+	providers := make([]apigen.StatusProvider, len(rows))
 	rolls := make([]providerRollup, len(rows))
 	for i, r := range rows {
 		rolls[i] = providerRollup{
@@ -351,10 +305,10 @@ func (h *statsHandlers) IngestStatus(c *fiber.Ctx) error {
 			healthy:     r.HealthyBoards,
 			lastSuccess: tsTime(r.LastSuccessAt),
 		}
-		providers[i] = statusProvider{
+		providers[i] = apigen.StatusProvider{
 			Provider:      r.Provider,
 			Kind:          sources.ProviderKind(reg, r.Provider),
-			Status:        deriveStatus(rolls[i], now),
+			Status:        string(deriveStatus(rolls[i], now)),
 			TotalBoards:   r.TotalBoards,
 			HealthyBoards: r.HealthyBoards,
 			CooledBoards:  r.CooledBoards,
@@ -364,22 +318,20 @@ func (h *statsHandlers) IngestStatus(c *fiber.Ctx) error {
 		}
 	}
 
-	return statusResponse(c, now, fleetStatus(rolls, now), isoOrNil(lastJobAddedAt), providers, site)
+	return statusResponse(now, fleetStatus(rolls, now), isoOrNil(lastJobAddedAt), providers, site), nil
 }
 
-// statusResponse renders the /api/v1/status envelope shared by the healthy
+// statusResponse builds the /api/v1/status answer shared by the healthy
 // path and the database-down short-circuit above, so the two agree on shape
 // by construction rather than by two hand-kept copies of the same map.
-func statusResponse(c *fiber.Ctx, now time.Time, overall providerStatus, lastJobAddedAt *string, providers []statusProvider, site siteHealth) error {
-	return c.JSON(fiber.Map{
-		"data": fiber.Map{
-			"overall":           overall,
-			"generated_at":      now.Format(time.RFC3339),
-			"last_job_added_at": lastJobAddedAt,
-			"providers":         providers,
-			"site":              site,
-		},
-	})
+func statusResponse(now time.Time, overall providerStatus, lastJobAddedAt apigen.NilString, providers []apigen.StatusProvider, site apigen.SiteHealth) *apigen.IngestStatusOK {
+	return &apigen.IngestStatusOK{Data: apigen.IngestStatus{
+		Overall:        string(overall),
+		GeneratedAt:    now.Format(time.RFC3339),
+		LastJobAddedAt: lastJobAddedAt,
+		Providers:      providers,
+		Site:           site,
+	}}
 }
 
 // dbStatusLabel renders a database-availability bool as the wire string
@@ -401,12 +353,11 @@ func tsTime(ts pgtype.Timestamptz) time.Time {
 	return ts.Time
 }
 
-// isoOrNil renders a nullable timestamp as an RFC 3339 UTC string, or nil for
+// isoOrNil renders a nullable timestamp as an RFC 3339 UTC string, or null for
 // NULL so the wire field is `null` rather than a zero date.
-func isoOrNil(ts pgtype.Timestamptz) *string {
+func isoOrNil(ts pgtype.Timestamptz) apigen.NilString {
 	if !ts.Valid {
-		return nil
+		return apigen.NilString{Null: true}
 	}
-	s := ts.Time.UTC().Format(time.RFC3339)
-	return &s
+	return apigen.NewNilString(ts.Time.UTC().Format(time.RFC3339))
 }

@@ -25,7 +25,7 @@ import (
 func StartSiteStatusSampler(ctx context.Context, pool *pgxpool.Pool, queries *db.Queries, interval time.Duration) {
 	sample := func() {
 		site, _ := currentSiteHealth(ctx, pool)
-		if err := queries.RecordSiteStatusSample(ctx, severityFromStatus(site.Status)); err != nil {
+		if err := queries.RecordSiteStatusSample(ctx, severityFromStatus(providerStatus(site.Status))); err != nil {
 			log.Printf("site-status sampler: record: %v", err)
 		}
 	}

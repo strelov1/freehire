@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -18,8 +19,8 @@ func ts(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Val
 
 func i8(n int64) pgtype.Int8 { return pgtype.Int8{Int64: n, Valid: true} }
 
-func entriesBySource(entries []sourceEntry) map[string]sourceEntry {
-	out := make(map[string]sourceEntry, len(entries))
+func entriesBySource(entries []apigen.SourceEntry) map[string]apigen.SourceEntry {
+	out := make(map[string]apigen.SourceEntry, len(entries))
 	for _, e := range entries {
 		out[e.Source] = e
 	}
@@ -50,22 +51,22 @@ func TestBuildSourceEntriesCarriesOverlapForAggregatorsOnly(t *testing.T) {
 
 	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))
 
-	adzuna := got["adzuna"].Jobs
-	if adzuna == nil || adzuna.ATSMatched == nil || *adzuna.ATSMatched != 70 {
+	adzuna := got["adzuna"].Jobs.Value
+	if m, ok := adzuna.AtsMatched.Get(); !ok || m != 70 {
 		t.Fatalf("adzuna overlap = %+v, want a matched count of 70", adzuna)
 	}
-	if adzuna.ATSUnmatched == nil || *adzuna.ATSUnmatched != 30 {
-		t.Errorf("adzuna unmatched = %+v, want 30 (raw minus matched)", adzuna.ATSUnmatched)
+	if u, ok := adzuna.AtsUnmatched.Get(); !ok || u != 30 {
+		t.Errorf("adzuna unmatched = %+v, want 30 (raw minus matched)", adzuna.AtsUnmatched)
 	}
 
 	// A first-party ATS source is never marked by the aggregator-suppression pass, so its
 	// 0 is arithmetic rather than a finding. Publishing it would read as "fully exclusive".
 	gh := got["greenhouse"].Jobs
-	if gh == nil {
+	if gh.Null {
 		t.Fatal("greenhouse has no jobs block")
 	}
-	if gh.ATSMatched != nil || gh.ATSUnmatched != nil {
-		t.Errorf("greenhouse carries overlap figures %+v/%+v, want neither", gh.ATSMatched, gh.ATSUnmatched)
+	if gh.Value.AtsMatched.Set || gh.Value.AtsUnmatched.Set {
+		t.Errorf("greenhouse carries overlap figures %+v/%+v, want neither", gh.Value.AtsMatched, gh.Value.AtsUnmatched)
 	}
 }
 
@@ -77,10 +78,10 @@ func TestBuildSourceEntriesKeepsAnUnmeasuredCountAbsent(t *testing.T) {
 
 	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))
 
-	if b := got["greenhouse"].Jobs.Browsable; b != nil {
-		t.Errorf("greenhouse browsable = %d, want absent — Meilisearch was not measured", *b)
+	if b := got["greenhouse"].Jobs.Value.Browsable; !b.Null {
+		t.Errorf("greenhouse browsable = %d, want null — Meilisearch was not measured", b.Value)
 	}
-	if b := got["lever"].Jobs.Browsable; b == nil || *b != 0 {
+	if b := got["lever"].Jobs.Value.Browsable; b.Null || b.Value != 0 {
 		t.Errorf("lever browsable = %v, want a measured 0", b)
 	}
 }
@@ -88,7 +89,7 @@ func TestBuildSourceEntriesKeepsAnUnmeasuredCountAbsent(t *testing.T) {
 func TestBuildSourceEntriesHasNoJobsBlockWithoutASnapshot(t *testing.T) {
 	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, nil, sourcesNow))
 
-	if got["greenhouse"].Jobs != nil {
+	if !got["greenhouse"].Jobs.Null {
 		t.Errorf("greenhouse carries a jobs block with no snapshot: %+v", got["greenhouse"].Jobs)
 	}
 	if len(got) == 0 {
@@ -116,7 +117,7 @@ func TestBuildSourceEntriesHasNoHealthBlockWithoutAHealthRecord(t *testing.T) {
 	if !got["greenhouse"].Adapter {
 		t.Error("greenhouse is not reported as a crawl adapter")
 	}
-	if tg.Health != nil {
+	if !tg.Health.Null {
 		t.Errorf("telegram carries a health verdict %+v, want none", tg.Health)
 	}
 }
@@ -130,14 +131,14 @@ func TestBuildSourceEntriesCarriesHealthWhenThereIsARecord(t *testing.T) {
 
 	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), health, nil, sourcesNow))["greenhouse"]
 
-	if got.Health == nil {
+	if got.Health.Null {
 		t.Fatal("greenhouse has no health block")
 	}
-	if got.Health.IngestedTotal != 4321 || got.Health.TotalBoards != 900 {
+	if got.Health.Value.IngestedTotal != 4321 || got.Health.Value.TotalBoards != 900 {
 		t.Errorf("health = %+v, want the rollup's figures", got.Health)
 	}
-	if got.Health.Status != statusOperational {
-		t.Errorf("status = %q, want operational", got.Health.Status)
+	if got.Health.Value.Status != string(statusOperational) {
+		t.Errorf("status = %q, want operational", got.Health.Value.Status)
 	}
 }
 

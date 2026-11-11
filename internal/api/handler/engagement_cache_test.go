@@ -28,11 +28,9 @@ func TestEngagementStatsServedFromCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := &statsHandlers{cache: mem}
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/stats/engagement", h.EngagementStats)
+	app := statsTestApp(&statsHandlers{cache: mem})
 
-	resp, err := app.Test(httptest.NewRequestWithContext(ctx, fiber.MethodGet, "/stats/engagement", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(ctx, fiber.MethodGet, "/api/v1/stats/engagement", nil))
 	if err != nil {
 		t.Fatal(err)
 	}

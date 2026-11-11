@@ -30,7 +30,7 @@ func TestIngestStatusEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: db.New(pool), pool: pool}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/status", h.IngestStatus)
+	app.Get("/api/v1/status", statsContract(h))
 
 	type providerEntry struct {
 		Provider      string  `json:"provider"`

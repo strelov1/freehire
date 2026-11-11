@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -248,10 +249,10 @@ func TestSiteHistoryFromRows(t *testing.T) {
 			{Day: day(2026, time.September, 3), WorstSeverity: 1},
 		}
 		got := siteHistoryFromRows(rows)
-		want := []siteHistoryEntry{
-			{Day: "2026-09-01", Status: statusOperational},
-			{Day: "2026-09-02", Status: statusDown},
-			{Day: "2026-09-03", Status: statusDegraded},
+		want := []apigen.SiteHistoryEntry{
+			{Day: "2026-09-01", Status: string(statusOperational)},
+			{Day: "2026-09-02", Status: string(statusDown)},
+			{Day: "2026-09-03", Status: string(statusDegraded)},
 		}
 		if len(got) != len(want) {
 			t.Fatalf("len = %d, want %d", len(got), len(want))

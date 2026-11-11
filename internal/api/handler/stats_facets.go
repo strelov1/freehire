@@ -1,10 +1,11 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
-
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/facetsnapshot"
 )
@@ -37,19 +38,19 @@ func groupFacetStats(rows []db.InsightsFacetStat) map[string]map[string]int64 {
 // from the snapshot keeps /open off the live Meilisearch facet count. Aggregate-only
 // — the query selects nothing but per-value counts. An unpopulated snapshot yields
 // the four empty facet maps (200), not an error.
-func (h *statsHandlers) StatsFacets(c *fiber.Ctx) error {
-	rows, err := h.queries.ListFacetStats(c.Context())
+func (h *statsHandlers) StatsFacets(ctx context.Context) (*apigen.StatsFacetsOK, error) {
+	rows, err := h.queries.ListFacetStats(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return c.JSON(fiber.Map{"data": fiber.Map{"facets": groupFacetStats(rows)}})
-}
-
-// skillNeighbour is one entry of a skill's neighbours: Count open postings list both.
-type skillNeighbour struct {
-	Skill string `json:"skill"`
-	Count int64  `json:"count"`
+	// Marshalled here, not modelled: the keys are facet values and json.Marshal keeps
+	// them sorted, as the answer always had them.
+	facets, err := json.Marshal(groupFacetStats(rows))
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.StatsFacetsOK{Data: apigen.FacetStats{Facets: facets}}, nil
 }
 
 // SkillNeighbours serves the skills most often listed beside one skill, most frequent
@@ -57,15 +58,15 @@ type skillNeighbour struct {
 // The /skills/<slug> glossary page reads this instead of a live skills facet count,
 // which costs the engine 100-700 ms per call and is what a crawler burst turned into
 // 500s. An unknown skill, or a snapshot not yet built, is an empty list (200).
-func (h *statsHandlers) SkillNeighbours(c *fiber.Ctx) error {
-	skill := strings.ToLower(c.Params("slug"))
-	rows, err := h.queries.ListSkillNeighbours(c.Context(), skill)
+func (h *statsHandlers) SkillNeighbours(ctx context.Context, params apigen.SkillNeighboursParams) (*apigen.SkillNeighbours, error) {
+	skill := strings.ToLower(params.Slug)
+	rows, err := h.queries.ListSkillNeighbours(ctx, skill)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	items := make([]skillNeighbour, len(rows))
+	items := make([]apigen.SkillNeighbour, len(rows))
 	for i, r := range rows {
-		items[i] = skillNeighbour{Skill: r.Neighbour, Count: r.Count}
+		items[i] = apigen.SkillNeighbour{Skill: r.Neighbour, Count: r.Count}
 	}
-	return c.JSON(fiber.Map{"data": items, "meta": fiber.Map{"skill": skill}})
+	return &apigen.SkillNeighbours{Data: items, Meta: apigen.SkillNeighboursMeta{Skill: skill}}, nil
 }

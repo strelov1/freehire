@@ -70,6 +70,15 @@
     },
     {
       "name": "Buddies"
+    },
+    {
+      "name": "Stats"
+    },
+    {
+      "name": "Insights"
+    },
+    {
+      "name": "Submissions"
     }
   ],
   "paths": {
@@ -1161,6 +1170,489 @@
         },
         "tags": [
           "Search"
+        ]
+      }
+    },
+    "/insights/companies": {
+      "get": {
+        "operationId": "insightsCompanies",
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "min_open",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompaniesAnswer"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Insights"
+        ]
+      }
+    },
+    "/insights/role-countries": {
+      "get": {
+        "operationId": "insightsRoleCountries",
+        "parameters": [
+          {
+            "name": "countries",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleCountriesAnswer"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Insights"
+        ]
+      }
+    },
+    "/insights/role-pulse": {
+      "get": {
+        "operationId": "insightsRolePulse",
+        "description": "The category is required.",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolePulseAnswer"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Insights"
+        ]
+      }
+    },
+    "/insights/roles": {
+      "get": {
+        "operationId": "insightsRoles",
+        "description": "Roles ranked by open count or growth. Naming both category and seniority adds the\nrole's skill distribution and, for a signed-in caller, their coverage; that answer\nis then private.",
+        "parameters": [
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "seniority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": false,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolesAnswer"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Insights"
+        ]
+      }
+    },
+    "/insights/salary": {
+      "get": {
+        "operationId": "insightsSalary",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "seniority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalaryAnswer"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Insights"
+        ]
+      }
+    },
+    "/insights/salary/history": {
+      "get": {
+        "operationId": "insightsSalaryHistory",
+        "description": "The category is required.",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalaryHistoryAnswer"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Insights"
+        ]
+      }
+    },
+    "/insights/skills": {
+      "get": {
+        "operationId": "insightsSkills",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillsAnswer"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Insights"
+        ]
+      }
+    },
+    "/insights/velocity": {
+      "get": {
+        "operationId": "insightsVelocity",
+        "parameters": [
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "seniority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VelocityAnswer"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Insights"
         ]
       }
     },
@@ -4217,6 +4709,49 @@
         ]
       }
     },
+    "/me/submissions": {
+      "get": {
+        "operationId": "listMySubmissions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Submission"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submissions"
+        ]
+      }
+    },
     "/me/subscriptions": {
       "get": {
         "operationId": "listSubscriptions",
@@ -5386,6 +5921,612 @@
         }
       }
     },
+    "/sources": {
+      "get": {
+        "operationId": "listSources",
+        "description": "Every source the catalogue is built from, with what it holds and how its crawl is doing.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SourceEntry"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/stats/catalog": {
+      "get": {
+        "operationId": "catalogScale",
+        "description": "The catalogue size. Never fails: a cold cache degrades to an estimate and `exact` says so.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CatalogScale"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/stats/engagement": {
+      "get": {
+        "operationId": "engagementStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Engagement"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/stats/facets": {
+      "get": {
+        "operationId": "statsFacets",
+        "description": "The value-to-count distribution of each covered facet, from the daily snapshot.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/FacetStats"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/stats/jobs-activity": {
+      "get": {
+        "operationId": "jobsActivity",
+        "description": "Added and removed vacancies per period. A bad granularity or date, or a range over 4000 days, is a 400.",
+        "parameters": [
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobsActivity"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/stats/skills/{slug}/neighbours": {
+      "get": {
+        "operationId": "skillNeighbours",
+        "description": "Skills most often listed beside one skill. An unknown skill is an empty list.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillNeighbours"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/stats/user-growth": {
+      "get": {
+        "operationId": "userGrowth",
+        "description": "Cumulative registrations per UTC day.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/GrowthPoint"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/status": {
+      "get": {
+        "operationId": "ingestStatus",
+        "description": "The site's own live status plus a sanitized per-provider rollup of the ingest fleet.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IngestStatus"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/submissions": {
+      "post": {
+        "operationId": "createSubmission",
+        "description": "409 for a duplicate pending URL or a vacancy already in the catalogue, 403 for a blocked domain.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Submission"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submissions"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmissionRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listPendingSubmissions",
+        "description": "Moderators only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Submission"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submissions"
+        ]
+      }
+    },
+    "/submissions/prefill": {
+      "post": {
+        "operationId": "prefillSubmission",
+        "description": "Writes nothing. An unrecognised URL answers 200 with every field empty.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SubmissionPrefill"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submissions"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrefillRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submissions/{id}/approve": {
+      "post": {
+        "operationId": "approveSubmission",
+        "description": "Moderators only. 404 for an unknown id, 409 for one already decided.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Submission"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submissions"
+        ]
+      }
+    },
+    "/submissions/{id}/reject": {
+      "post": {
+        "operationId": "rejectSubmission",
+        "description": "Moderators only. The body is optional.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Submission"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submissions"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectSubmissionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/suggest": {
       "get": {
         "operationId": "suggest",
@@ -6163,6 +7304,48 @@
       }
     },
     "schemas": {
+      "ActivityMeta": {
+        "type": "object",
+        "required": [
+          "granularity",
+          "from",
+          "to"
+        ],
+        "properties": {
+          "granularity": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityPoint": {
+        "type": "object",
+        "required": [
+          "period",
+          "added",
+          "removed"
+        ],
+        "properties": {
+          "period": {
+            "type": "string",
+            "description": "YYYY-MM-DD."
+          },
+          "added": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "removed": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Vacancies added and removed in one period."
+      },
       "AgentPermissions": {
         "type": "object",
         "properties": {
@@ -7219,6 +8402,65 @@
           }
         }
       },
+      "CatalogScale": {
+        "type": "object",
+        "required": [
+          "open_jobs",
+          "unique_open_jobs",
+          "companies",
+          "sources",
+          "ats_platforms",
+          "telegram_channels",
+          "computed_at",
+          "exact"
+        ],
+        "properties": {
+          "open_jobs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unique_open_jobs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "companies": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ats_platforms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "telegram_channels": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "computed_at": {
+            "type": "string",
+            "description": "RFC 3339 with fractional seconds, as the snapshot carries it."
+          },
+          "exact": {
+            "type": "boolean",
+            "description": "False when the snapshot is unavailable and `open_jobs` is the approximate fallback."
+          }
+        },
+        "description": "The size of the catalogue, from one published snapshot."
+      },
+      "CategoryMeta": {
+        "type": "object",
+        "required": [
+          "category"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          }
+        }
+      },
       "CityMatch": {
         "type": "object",
         "required": [
@@ -7233,6 +8475,45 @@
           "country": {
             "type": "string",
             "description": "ISO 3166-1 alpha-2, lower case."
+          }
+        }
+      },
+      "CompaniesAnswer": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompanyInsight"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/CompaniesMeta"
+          }
+        }
+      },
+      "CompaniesMeta": {
+        "type": "object",
+        "required": [
+          "sort",
+          "min_open",
+          "limit"
+        ],
+        "properties": {
+          "sort": {
+            "type": "string"
+          },
+          "min_open": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -7347,6 +8628,36 @@
           }
         },
         "description": "A company's recomputed feedback counters."
+      },
+      "CompanyInsight": {
+        "type": "object",
+        "required": [
+          "company_slug",
+          "company_name",
+          "open_now",
+          "open_prev_30d",
+          "growth_30d"
+        ],
+        "properties": {
+          "company_slug": {
+            "type": "string"
+          },
+          "company_name": {
+            "type": "string"
+          },
+          "open_now": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "open_prev_30d": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "growth_30d": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "CompanyRelationApproval": {
         "type": "object",
@@ -7967,6 +9278,65 @@
         },
         "description": "A patch: an absent switch keeps its stored value. Searches can only be turned off."
       },
+      "Engagement": {
+        "type": "object",
+        "required": [
+          "saved",
+          "applied",
+          "viewed",
+          "viewed_since",
+          "cvs_uploaded",
+          "cvs_tailored",
+          "alert_subscribers",
+          "inboxes_connected",
+          "saved_searches"
+        ],
+        "properties": {
+          "saved": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "applied": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "viewed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "viewed_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The first day `viewed` covers, YYYY-MM-DD; null when nothing is rolled up yet."
+          },
+          "cvs_uploaded": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cvs_tailored": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "alert_subscribers": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "inboxes_connected": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "saved_searches": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "FacetRange": {
         "type": "object",
         "required": [
@@ -7981,6 +9351,17 @@
           "max": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "FacetStats": {
+        "type": "object",
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "description": "Facet param, then value, then count. Every covered facet is present."
           }
         }
       },
@@ -8046,6 +9427,30 @@
           }
         }
       },
+      "GrowthPoint": {
+        "type": "object",
+        "required": [
+          "date",
+          "total",
+          "new"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD."
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Cumulative members as of that day."
+          },
+          "new": {
+            "type": "integer",
+            "format": "int64",
+            "description": "That day's own signups."
+          }
+        }
+      },
       "IgnoredMeta": {
         "type": "object",
         "properties": {
@@ -8072,6 +9477,43 @@
           }
         },
         "description": "A query param the endpoint did not read: unknown, or known but unreadable\n(`min_years=lots`). Either way the answer is wider than the caller asked for."
+      },
+      "IngestStatus": {
+        "type": "object",
+        "required": [
+          "overall",
+          "generated_at",
+          "last_job_added_at",
+          "providers",
+          "site"
+        ],
+        "properties": {
+          "overall": {
+            "type": "string"
+          },
+          "generated_at": {
+            "type": "string"
+          },
+          "last_job_added_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatusProvider"
+            }
+          },
+          "site": {
+            "$ref": "#/components/schemas/SiteHealth"
+          }
+        }
       },
       "Invite": {
         "type": "object",
@@ -8199,6 +9641,24 @@
           },
           "contact_telegram": {
             "type": "string"
+          }
+        }
+      },
+      "JobsActivity": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityPoint"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ActivityMeta"
           }
         }
       },
@@ -8609,6 +10069,14 @@
               "type": "string"
             },
             "description": "The features whose ceiling refuses today."
+          }
+        }
+      },
+      "PrefillRequest": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
           }
         }
       },
@@ -9047,6 +10515,97 @@
           }
         }
       },
+      "PulseCompetition": {
+        "type": "object",
+        "required": [
+          "views",
+          "views_prev",
+          "exposure_days",
+          "exposure_days_prev",
+          "views_through"
+        ],
+        "properties": {
+          "views": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "views_prev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "exposure_days": {
+            "type": "number",
+            "format": "double"
+          },
+          "exposure_days_prev": {
+            "type": "number",
+            "format": "double"
+          },
+          "views_through": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "PulseInflow": {
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "PulseTimeToClose": {
+        "type": "object",
+        "required": [
+          "closed",
+          "closed_prev",
+          "median_days",
+          "median_days_prev"
+        ],
+        "properties": {
+          "closed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "closed_prev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "median_days": {
+            "anyOf": [
+              {
+                "type": "number",
+                "format": "float"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "median_days_prev": {
+            "anyOf": [
+              {
+                "type": "number",
+                "format": "float"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
       "RecentThread": {
         "type": "object",
         "required": [
@@ -9117,6 +10676,18 @@
           },
           "meta": {
             "$ref": "#/components/schemas/ThreadCursorMeta"
+          }
+        }
+      },
+      "RejectSubmissionRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "block_domain": {
+            "type": "boolean",
+            "description": "Also blocks the URL's host and rejects every other pending submission on it."
           }
         }
       },
@@ -9300,6 +10871,356 @@
           }
         },
         "description": "Where a job page ended up."
+      },
+      "RoleCountriesAnswer": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleCountryCell"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/RoleCountriesMeta"
+          }
+        }
+      },
+      "RoleCountriesMeta": {
+        "type": "object",
+        "required": [
+          "countries"
+        ],
+        "properties": {
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RoleCountryCell": {
+        "type": "object",
+        "required": [
+          "category",
+          "country",
+          "open_count",
+          "open_count_prev"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "Empty for the all-countries column."
+          },
+          "open_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "open_count_prev": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "RoleInsight": {
+        "type": "object",
+        "required": [
+          "category",
+          "seniority",
+          "open_count",
+          "growth"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "open_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "growth": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sample_size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Only when a single role was named."
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleSkill"
+            },
+            "description": "Only when a single role was named; an empty list is a real answer."
+          },
+          "coverage": {
+            "description": "The signed-in caller's own standing against `skills`; shaped like a job match."
+          }
+        }
+      },
+      "RolePulse": {
+        "type": "object",
+        "required": [
+          "category",
+          "open_count",
+          "competition",
+          "time_to_close",
+          "inflow"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "open_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "competition": {
+            "$ref": "#/components/schemas/PulseCompetition"
+          },
+          "time_to_close": {
+            "$ref": "#/components/schemas/PulseTimeToClose"
+          },
+          "inflow": {
+            "$ref": "#/components/schemas/PulseInflow"
+          }
+        }
+      },
+      "RolePulseAnswer": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RolePulse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/CategoryMeta"
+          }
+        }
+      },
+      "RoleSkill": {
+        "type": "object",
+        "required": [
+          "skill",
+          "open_count",
+          "share"
+        ],
+        "properties": {
+          "skill": {
+            "type": "string"
+          },
+          "open_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "share": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "RolesAnswer": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleInsight"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/RolesMeta"
+          }
+        }
+      },
+      "RolesMeta": {
+        "type": "object",
+        "required": [
+          "country",
+          "category",
+          "seniority",
+          "sort",
+          "limit"
+        ],
+        "properties": {
+          "country": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "sort": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "skills_geography_scoped": {
+            "type": "boolean",
+            "description": "Present, and false, only for a single role."
+          }
+        }
+      },
+      "SalaryAnswer": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalaryBand"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/SalaryMeta"
+          }
+        }
+      },
+      "SalaryBand": {
+        "type": "object",
+        "required": [
+          "seniority",
+          "currency",
+          "period",
+          "sample_size",
+          "p25",
+          "p50",
+          "p75"
+        ],
+        "properties": {
+          "seniority": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string"
+          },
+          "sample_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "p25": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "p50": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "p75": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SalaryHistoryAnswer": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalaryMonth"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/CategoryMeta"
+          }
+        }
+      },
+      "SalaryMeta": {
+        "type": "object",
+        "required": [
+          "category",
+          "seniority",
+          "country"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "breakdown": {
+            "type": "string",
+            "description": "\"seniority\" when every seniority's bands are returned."
+          }
+        }
+      },
+      "SalaryMonth": {
+        "type": "object",
+        "required": [
+          "currency",
+          "period",
+          "month",
+          "sample_size",
+          "p25",
+          "p50",
+          "p75"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string"
+          },
+          "month": {
+            "type": "string",
+            "description": "YYYY-MM."
+          },
+          "sample_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "p25": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "p50": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "p75": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "SaveBankedAnswer": {
         "type": "object",
@@ -9703,6 +11624,129 @@
           }
         }
       },
+      "SiteHealth": {
+        "type": "object",
+        "required": [
+          "status",
+          "database",
+          "error_rate",
+          "pool_pressure",
+          "window_minutes",
+          "history"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "operational, degraded or down."
+          },
+          "database": {
+            "type": "string",
+            "description": "\"up\" or \"down\"."
+          },
+          "error_rate": {
+            "type": "number",
+            "format": "double",
+            "description": "Fraction of 5xx responses over the trailing `window_minutes`, from the process's own traffic."
+          },
+          "pool_pressure": {
+            "type": "number",
+            "format": "double",
+            "description": "Fraction of the database pool held at once, 0..1. Reported, never judged: it says what the error rate cannot, that requests are unable to start."
+          },
+          "window_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SiteHistoryEntry"
+            }
+          }
+        },
+        "description": "The site's own verdict, independent of the ingest fleet's `overall`."
+      },
+      "SiteHistoryEntry": {
+        "type": "object",
+        "required": [
+          "day",
+          "status"
+        ],
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "SkillInsight": {
+        "type": "object",
+        "required": [
+          "skill",
+          "open_count",
+          "growth"
+        ],
+        "properties": {
+          "skill": {
+            "type": "string"
+          },
+          "open_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "growth": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SkillNeighbour": {
+        "type": "object",
+        "required": [
+          "skill",
+          "count"
+        ],
+        "properties": {
+          "skill": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SkillNeighbours": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillNeighbour"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/SkillNeighboursMeta"
+          }
+        }
+      },
+      "SkillNeighboursMeta": {
+        "type": "object",
+        "required": [
+          "skill"
+        ],
+        "properties": {
+          "skill": {
+            "type": "string"
+          }
+        }
+      },
       "SkillPulse": {
         "type": "object",
         "required": [
@@ -9757,6 +11801,595 @@
             "format": "int64"
           }
         }
+      },
+      "SkillsAnswer": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillInsight"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/SkillsMeta"
+          }
+        }
+      },
+      "SkillsMeta": {
+        "type": "object",
+        "required": [
+          "category",
+          "country",
+          "sort",
+          "limit"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "sort": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SourceEntry": {
+        "type": "object",
+        "required": [
+          "source",
+          "kind",
+          "adapter",
+          "jobs",
+          "health"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "adapter": {
+            "type": "boolean",
+            "description": "Whether the source is a crawl adapter at all."
+          },
+          "jobs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceJobs"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null until a snapshot has been taken for this source."
+          },
+          "health": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceHealth"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when no board health record exists."
+          }
+        }
+      },
+      "SourceHealth": {
+        "type": "object",
+        "required": [
+          "status",
+          "total_boards",
+          "healthy_boards",
+          "cooled_boards",
+          "last_run",
+          "last_success",
+          "ingested_total"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "total_boards": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "healthy_boards": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cooled_boards": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_success": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ingested_total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SourceJobs": {
+        "type": "object",
+        "required": [
+          "open",
+          "browsable",
+          "measured_at"
+        ],
+        "properties": {
+          "open": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "browsable": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the search index could not be measured."
+          },
+          "ats_matched": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Aggregators only."
+          },
+          "ats_unmatched": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "measured_at": {
+            "type": "string"
+          }
+        }
+      },
+      "StatusProvider": {
+        "type": "object",
+        "required": [
+          "provider",
+          "kind",
+          "status",
+          "total_boards",
+          "healthy_boards",
+          "cooled_boards",
+          "last_run",
+          "last_success",
+          "ingested_total"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "total_boards": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "healthy_boards": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cooled_boards": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_success": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ingested_total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Submission": {
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "title",
+          "company",
+          "remote",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "url": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "remote": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "posted_at": {
+            "type": "string",
+            "description": "RFC 3339."
+          },
+          "status": {
+            "type": "string",
+            "description": "pending, approved or rejected."
+          },
+          "review_reason": {
+            "type": "string"
+          },
+          "reviewed_at": {
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "submitter_email": {
+            "type": "string",
+            "description": "Moderator queue only."
+          },
+          "job_slug": {
+            "type": "string",
+            "description": "The minted vacancy's slug; on an approved submission in the caller's own list only."
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "work_mode": {
+            "type": "string"
+          },
+          "employment_type": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "salary_min": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "salary_max": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "salary_currency": {
+            "type": "string"
+          },
+          "salary_period": {
+            "type": "string"
+          }
+        },
+        "description": "A submission as the API shows it."
+      },
+      "SubmissionPrefill": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "work_mode": {
+            "type": "string"
+          },
+          "employment_type": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string"
+          },
+          "existing_job_slug": {
+            "type": "string",
+            "description": "Set, with every other field empty, when the catalogue already carries the vacancy."
+          }
+        },
+        "description": "What could be parsed from the URL. Empty when it is not recognised."
+      },
+      "SubmissionRequest": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "remote": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "RFC 3339."
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "regions": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cities": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "work_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "employment_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seniority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "salary_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "salary_max": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "salary_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "salary_period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "A vacancy to submit. url, title and company are required; the service refuses a body without them with a 400."
       },
       "Subscription": {
         "type": "object",
@@ -10451,6 +13084,51 @@
           }
         },
         "description": "Today's AI use on the account's own model credential. No money: the plan bounds use."
+      },
+      "VelocityAnswer": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityPoint"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/VelocityMeta"
+          }
+        }
+      },
+      "VelocityMeta": {
+        "type": "object",
+        "required": [
+          "granularity",
+          "from",
+          "to",
+          "facet_kind",
+          "facet_value"
+        ],
+        "properties": {
+          "granularity": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "facet_kind": {
+            "type": "string"
+          },
+          "facet_value": {
+            "type": "string"
+          }
+        }
       },
       "VoteRequest": {
         "type": "object",

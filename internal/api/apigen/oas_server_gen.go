@@ -25,6 +25,12 @@ type Handler interface {
 	//
 	// POST /company-relations/{id}/approve
 	ApproveCompanyRelation(ctx context.Context, params ApproveCompanyRelationParams) (*ApproveCompanyRelationOK, error)
+	// ApproveSubmission implements approveSubmission operation.
+	//
+	// Moderators only. 404 for an unknown id, 409 for one already decided.
+	//
+	// POST /submissions/{id}/approve
+	ApproveSubmission(ctx context.Context, params ApproveSubmissionParams) (*ApproveSubmissionOK, error)
 	// BanUser implements banUser operation.
 	//
 	// POST /moderation/users/{id}/ban
@@ -142,6 +148,12 @@ type Handler interface {
 	//
 	// DELETE /me/buddies/feed/{id}/reaction
 	BuddyUnreact(ctx context.Context, params BuddyUnreactParams) (*BuddyUnreactOK, error)
+	// CatalogScale implements catalogScale operation.
+	//
+	// The catalogue size. Never fails: a cold cache degrades to an estimate and `exact` says so.
+	//
+	// GET /stats/catalog
+	CatalogScale(ctx context.Context) (*CatalogScaleOK, error)
 	// ClearCompanyVote implements clearCompanyVote operation.
 	//
 	// DELETE /companies/{slug}/vote
@@ -191,6 +203,12 @@ type Handler interface {
 	//
 	// POST /me/searches
 	CreateSavedSearch(ctx context.Context, req *SavedSearchCreate) (*CreateSavedSearchCreated, error)
+	// CreateSubmission implements createSubmission operation.
+	//
+	// 409 for a duplicate pending URL or a vacancy already in the catalogue, 403 for a blocked domain.
+	//
+	// POST /submissions
+	CreateSubmission(ctx context.Context, req *SubmissionRequest) (*CreateSubmissionCreated, error)
 	// CreateSubscription implements createSubscription operation.
 	//
 	// A non-owned saved search is a 404, a duplicate a 409.
@@ -241,6 +259,10 @@ type Handler interface {
 	//
 	// POST /reports/{id}/dismiss
 	DismissJobReport(ctx context.Context, req OptDismissJobReportRequest, params DismissJobReportParams) (*DismissJobReportOK, error)
+	// EngagementStats implements engagementStats operation.
+	//
+	// GET /stats/engagement
+	EngagementStats(ctx context.Context) (*EngagementStatsOK, error)
 	// FileProcessReport implements fileProcessReport operation.
 	//
 	// 409 when the caller already reported this kind.
@@ -366,6 +388,58 @@ type Handler interface {
 	//
 	// POST /me/watchlist/import
 	ImportWatchlist(ctx context.Context, req *WatchlistImport) (*ImportWatchlistOK, error)
+	// IngestStatus implements ingestStatus operation.
+	//
+	// The site's own live status plus a sanitized per-provider rollup of the ingest fleet.
+	//
+	// GET /status
+	IngestStatus(ctx context.Context) (*IngestStatusOK, error)
+	// InsightsCompanies implements insightsCompanies operation.
+	//
+	// GET /insights/companies
+	InsightsCompanies(ctx context.Context, params InsightsCompaniesParams) (*CompaniesAnswer, error)
+	// InsightsRoleCountries implements insightsRoleCountries operation.
+	//
+	// GET /insights/role-countries
+	InsightsRoleCountries(ctx context.Context, params InsightsRoleCountriesParams) (*RoleCountriesAnswer, error)
+	// InsightsRolePulse implements insightsRolePulse operation.
+	//
+	// The category is required.
+	//
+	// GET /insights/role-pulse
+	InsightsRolePulse(ctx context.Context, params InsightsRolePulseParams) (*RolePulseAnswer, error)
+	// InsightsRoles implements insightsRoles operation.
+	//
+	// Roles ranked by open count or growth. Naming both category and seniority adds the role's skill
+	// distribution and, for a signed-in caller, their coverage; that answer is then private.
+	//
+	// GET /insights/roles
+	InsightsRoles(ctx context.Context, params InsightsRolesParams) (*RolesAnswerHeaders, error)
+	// InsightsSalary implements insightsSalary operation.
+	//
+	// GET /insights/salary
+	InsightsSalary(ctx context.Context, params InsightsSalaryParams) (*SalaryAnswer, error)
+	// InsightsSalaryHistory implements insightsSalaryHistory operation.
+	//
+	// The category is required.
+	//
+	// GET /insights/salary/history
+	InsightsSalaryHistory(ctx context.Context, params InsightsSalaryHistoryParams) (*SalaryHistoryAnswer, error)
+	// InsightsSkills implements insightsSkills operation.
+	//
+	// GET /insights/skills
+	InsightsSkills(ctx context.Context, params InsightsSkillsParams) (*SkillsAnswer, error)
+	// InsightsVelocity implements insightsVelocity operation.
+	//
+	// GET /insights/velocity
+	InsightsVelocity(ctx context.Context, params InsightsVelocityParams) (*VelocityAnswer, error)
+	// JobsActivity implements jobsActivity operation.
+	//
+	// Added and removed vacancies per period. A bad granularity or date, or a range over 4000 days, is a
+	// 400.
+	//
+	// GET /stats/jobs-activity
+	JobsActivity(ctx context.Context, params JobsActivityParams) (*JobsActivity, error)
 	// ListBankedAnswers implements listBankedAnswers operation.
 	//
 	// GET /me/answer-bank
@@ -399,6 +473,10 @@ type Handler interface {
 	//
 	// GET /me/contributions
 	ListMyContributions(ctx context.Context) (*ListMyContributionsOK, error)
+	// ListMySubmissions implements listMySubmissions operation.
+	//
+	// GET /me/submissions
+	ListMySubmissions(ctx context.Context) (*ListMySubmissionsOK, error)
 	// ListPendingCompanyRelations implements listPendingCompanyRelations operation.
 	//
 	// Moderators only, oldest first.
@@ -411,6 +489,12 @@ type Handler interface {
 	//
 	// GET /reports
 	ListPendingJobReports(ctx context.Context) (*ListPendingJobReportsOK, error)
+	// ListPendingSubmissions implements listPendingSubmissions operation.
+	//
+	// Moderators only.
+	//
+	// GET /submissions
+	ListPendingSubmissions(ctx context.Context) (*ListPendingSubmissionsOK, error)
 	// ListRecentThreads implements listRecentThreads operation.
 	//
 	// Open threads across every subject, newest first, keyset-paged: the discussions feed.
@@ -427,6 +511,12 @@ type Handler interface {
 	//
 	// GET /me/searches
 	ListSavedSearches(ctx context.Context) (*SavedSearchList, error)
+	// ListSources implements listSources operation.
+	//
+	// Every source the catalogue is built from, with what it holds and how its crawl is doing.
+	//
+	// GET /sources
+	ListSources(ctx context.Context) (*ListSourcesOK, error)
 	// ListSubscriptions implements listSubscriptions operation.
 	//
 	// GET /me/subscriptions
@@ -471,6 +561,12 @@ type Handler interface {
 	//
 	// POST /email-prefs/one-click
 	OneClickUnsubscribe(ctx context.Context, params OneClickUnsubscribeParams) (*OneClickUnsubscribeOK, error)
+	// PrefillSubmission implements prefillSubmission operation.
+	//
+	// Writes nothing. An unrecognised URL answers 200 with every field empty.
+	//
+	// POST /submissions/prefill
+	PrefillSubmission(ctx context.Context, req *PrefillRequest) (*PrefillSubmissionOK, error)
 	// PreviewPromoCode implements previewPromoCode operation.
 	//
 	// What a code would take off, without using it. 404 for a code that cannot be used.
@@ -507,6 +603,12 @@ type Handler interface {
 	//
 	// POST /company-relations/{id}/reject
 	RejectCompanyRelation(ctx context.Context, params RejectCompanyRelationParams) (*RejectCompanyRelationOK, error)
+	// RejectSubmission implements rejectSubmission operation.
+	//
+	// Moderators only. The body is optional.
+	//
+	// POST /submissions/{id}/reject
+	RejectSubmission(ctx context.Context, req OptRejectSubmissionRequest, params RejectSubmissionParams) (*RejectSubmissionOK, error)
 	// RemoveFromWatchlist implements removeFromWatchlist operation.
 	//
 	// A company that was not on the list is not an error.
@@ -598,6 +700,18 @@ type Handler interface {
 	//
 	// PUT /me/talent-network
 	SetTalentNetworkVisibility(ctx context.Context, req *TalentNetworkVisibilityUpdate) (*SetTalentNetworkVisibilityOK, error)
+	// SkillNeighbours implements skillNeighbours operation.
+	//
+	// Skills most often listed beside one skill. An unknown skill is an empty list.
+	//
+	// GET /stats/skills/{slug}/neighbours
+	SkillNeighbours(ctx context.Context, params SkillNeighboursParams) (*SkillNeighbours, error)
+	// StatsFacets implements statsFacets operation.
+	//
+	// The value-to-count distribution of each covered facet, from the daily snapshot.
+	//
+	// GET /stats/facets
+	StatsFacets(ctx context.Context) (*StatsFacetsOK, error)
 	// Suggest implements suggest operation.
 	//
 	// Search-box suggestions. 503 when search is not configured.
@@ -634,6 +748,12 @@ type Handler interface {
 	//
 	// POST /companies/{slug}/feedback
 	UpsertCompanyFeedback(ctx context.Context, req *CompanyFeedbackRequest, params UpsertCompanyFeedbackParams) (*UpsertCompanyFeedbackCreated, error)
+	// UserGrowth implements userGrowth operation.
+	//
+	// Cumulative registrations per UTC day.
+	//
+	// GET /stats/user-growth
+	UserGrowth(ctx context.Context) (*UserGrowthOK, error)
 	// VoteCompany implements voteCompany operation.
 	//
 	// POST /companies/{slug}/vote

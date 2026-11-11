@@ -51,7 +51,7 @@ func TestInsightsRoleCountriesEndpoint(t *testing.T) {
 
 	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/insights/role-countries", h.InsightsRoleCountries)
+	app.Get("/api/v1/insights/role-countries", statsContract(h))
 
 	t.Run("default grid", func(t *testing.T) {
 		out, raw, code := getInsights(t, ctx, app, "/api/v1/insights/role-countries")
