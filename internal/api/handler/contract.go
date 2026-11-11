@@ -61,6 +61,8 @@ type contractHandlers struct {
 	*buddyHandlers
 	*statsHandlers
 	*submissionHandlers
+	*trackingHandlers
+	*experienceHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}
@@ -275,4 +277,12 @@ func optNilInt(p *int, setTo func(int64)) {
 	if p != nil {
 		setTo(int64(*p))
 	}
+}
+
+// nilString is an always-present nullable string set from a domain pointer: null for nil.
+func nilString(p *string) apigen.NilString {
+	if p == nil {
+		return apigen.NilString{Null: true}
+	}
+	return apigen.NewNilString(*p)
 }

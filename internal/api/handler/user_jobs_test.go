@@ -24,10 +24,10 @@ func userJobsApp() (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &trackingHandlers{tracking: jobtracking.New(stubTrackingRepo{})}
 	app := fiber.New()
-	app.Post("/jobs/:slug/view", auth.RequireAuth(iss, testVersions), h.RecordView)
-	app.Post("/jobs/:slug/apply", auth.RequireAuth(iss, testVersions), h.MarkApplied)
-	app.Post("/jobs/:slug/save", auth.RequireAuth(iss, testVersions), h.SaveJob)
-	app.Delete("/jobs/:slug/save", auth.RequireAuth(iss, testVersions), h.UnsaveJob)
+	app.Post("/api/v1/jobs/:slug/view", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
+	app.Post("/api/v1/jobs/:slug/apply", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
+	app.Post("/api/v1/jobs/:slug/save", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
+	app.Delete("/api/v1/jobs/:slug/save", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 	return app, iss
 }
 
@@ -52,28 +52,28 @@ func requestUserJob(t *testing.T, app *fiber.App, method, path, token string) in
 
 func TestRecordView_RequiresAuth(t *testing.T) {
 	app, _ := userJobsApp()
-	if got := postUserJob(t, app, "/jobs/go-dev-acme-t35nijto/view", ""); got != fiber.StatusUnauthorized {
+	if got := postUserJob(t, app, "/api/v1/jobs/go-dev-acme-t35nijto/view", ""); got != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", got)
 	}
 }
 
 func TestMarkApplied_RequiresAuth(t *testing.T) {
 	app, _ := userJobsApp()
-	if got := postUserJob(t, app, "/jobs/go-dev-acme-t35nijto/apply", ""); got != fiber.StatusUnauthorized {
+	if got := postUserJob(t, app, "/api/v1/jobs/go-dev-acme-t35nijto/apply", ""); got != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", got)
 	}
 }
 
 func TestSaveJob_RequiresAuth(t *testing.T) {
 	app, _ := userJobsApp()
-	if got := postUserJob(t, app, "/jobs/go-dev-acme-t35nijto/save", ""); got != fiber.StatusUnauthorized {
+	if got := postUserJob(t, app, "/api/v1/jobs/go-dev-acme-t35nijto/save", ""); got != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", got)
 	}
 }
 
 func TestUnsaveJob_RequiresAuth(t *testing.T) {
 	app, _ := userJobsApp()
-	if got := requestUserJob(t, app, fiber.MethodDelete, "/jobs/go-dev-acme-t35nijto/save", ""); got != fiber.StatusUnauthorized {
+	if got := requestUserJob(t, app, fiber.MethodDelete, "/api/v1/jobs/go-dev-acme-t35nijto/save", ""); got != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", got)
 	}
 }
@@ -163,13 +163,13 @@ func datedApplyApp(repo jobtracking.Repository) (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &trackingHandlers{tracking: jobtracking.New(repo)}
 	app := fiber.New()
-	app.Post("/jobs/:slug/apply", auth.RequireAuth(iss, testVersions), h.MarkApplied)
+	app.Post("/api/v1/jobs/:slug/apply", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 	return app, iss
 }
 
 func postApply(t *testing.T, app *fiber.App, token, body string) int {
 	t.Helper()
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/jobs/go-dev/apply", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/jobs/go-dev/apply", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
@@ -247,5 +247,37 @@ func TestMarkApplied_RefusesAnUnusableDate(t *testing.T) {
 				t.Error("an unusable date reached the repository")
 			}
 		})
+	}
+}
+
+// TestInteractionOut_MatchesAssistantShape pins the route's contract type to the shape the
+// assistant's tools still answer with: null timestamps, stage and notes stay present as null.
+func TestInteractionOut_MatchesAssistantShape(t *testing.T) {
+	viewedAt := time.Date(2026, 6, 14, 9, 30, 0, 0, time.UTC)
+	stage := "interview"
+	in := jobtracking.Interaction{JobID: 7, ViewedAt: &viewedAt, Stage: &stage}
+
+	got, err := json.Marshal(interactionOut(in))
+	if err != nil {
+		t.Fatalf("marshal contract type: %v", err)
+	}
+	want, err := json.Marshal(toResponse(in))
+	if err != nil {
+		t.Fatalf("marshal tool type: %v", err)
+	}
+	var gotFields, wantFields map[string]any
+	if err := json.Unmarshal(got, &gotFields); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(want, &wantFields); err != nil {
+		t.Fatal(err)
+	}
+	if len(gotFields) != len(wantFields) {
+		t.Fatalf("contract %s, tool %s", got, want)
+	}
+	for k, v := range wantFields {
+		if gotFields[k] != v {
+			t.Errorf("%s = %v, want %v", k, gotFields[k], v)
+		}
 	}
 }

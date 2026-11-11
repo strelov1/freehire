@@ -94,7 +94,7 @@ func trackApp() (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &trackingHandlers{tracking: jobtracking.New(stubTrackingRepo{})}
 	app := fiber.New()
-	app.Patch("/jobs/:slug/track", auth.RequireAuth(iss, testVersions), h.TrackJob)
+	app.Patch("/api/v1/jobs/:slug/track", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 	return app, iss
 }
 
@@ -109,7 +109,7 @@ func TestTrackJob_RejectsEmptyAndUnknownStage(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(tc.body))
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/api/v1/jobs/go-dev/track", strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
 			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 			resp, err := app.Test(req)
@@ -126,7 +126,7 @@ func TestTrackJob_RejectsEmptyAndUnknownStage(t *testing.T) {
 
 func TestTrackJob_RequiresAuth(t *testing.T) {
 	app, _ := trackApp()
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(`{"stage":"interview"}`))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/api/v1/jobs/go-dev/track", strings.NewReader(`{"stage":"interview"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -168,7 +168,7 @@ func TestInteractionResponse_HasStageAndNotes(t *testing.T) {
 func TestTrackJob_AcceptsExpired(t *testing.T) {
 	app, iss := trackApp()
 	token, _ := iss.Issue(7, testTokenVersion)
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(`{"stage":"expired"}`))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/api/v1/jobs/go-dev/track", strings.NewReader(`{"stage":"expired"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)

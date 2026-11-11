@@ -27,6 +27,8 @@ import "./community.tsp";
 import "./buddies.tsp";
 import "./stats.tsp";
 import "./submissions.tsp";
+import "./tracking.tsp";
+import "./experience.tsp";
 
 using Http;
 

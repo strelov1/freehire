@@ -59,6 +59,13 @@ func ViaAPIKey(c *fiber.Ctx) bool {
 	return via
 }
 
+// ViaAPIKeyFromContext is ViaAPIKey for a contract handler, which holds the request context
+// and not the Fiber one (the adaptor passes the RequestCtx on as the context).
+func ViaAPIKeyFromContext(ctx context.Context) bool {
+	via, _ := ctx.Value(localsViaAPIKey).(bool)
+	return via
+}
+
 // KeyScope returns the authenticating key's scope, or "" when the caller is a cookie
 // session (or did not pass through a key-accepting middleware).
 func KeyScope(c *fiber.Ctx) string {

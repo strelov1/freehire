@@ -55,7 +55,7 @@ func TestAPIKeysEndToEnd(t *testing.T) {
 	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.CreateAPIKey)
 	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.ListAPIKeys)
 	app.Delete("/api/v1/me/api-keys/:id", auth.RequireAuth(iss, testVersions), h.RevokeAPIKey)
-	app.Post("/api/v1/jobs/:slug/apply", keyAuth, th.MarkApplied)
+	app.Post("/api/v1/jobs/:slug/apply", keyAuth, newContract(contractHandlers{trackingHandlers: th}))
 
 	const applyPath = "/api/v1/jobs/go-dev-acme-t35nijto/apply"
 

@@ -107,6 +107,36 @@ func (s *ActivityPoint) SetRemoved(val int64) {
 }
 
 // A single item: `{"data": ...}`.
+type AddAtomCreated struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *AddAtomCreated) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *AddAtomCreated) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type AddEmploymentCreated struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *AddEmploymentCreated) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *AddEmploymentCreated) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type AddToWatchlistOK struct {
 	Data WatchedCompany `json:"data"`
 }
@@ -150,6 +180,22 @@ func (s *AlertListMeta) GetTotal() int64 {
 // SetTotal sets the value of Total.
 func (s *AlertListMeta) SetTotal(val int64) {
 	s.Total = val
+}
+
+// Ref: #/components/schemas/ApplyJob
+type ApplyJob struct {
+	// The day the application was sent, `2026-07-29`. Absent, null or empty means now.
+	AppliedOn OptNilString `json:"applied_on"`
+}
+
+// GetAppliedOn returns the value of AppliedOn.
+func (s *ApplyJob) GetAppliedOn() OptNilString {
+	return s.AppliedOn
+}
+
+// SetAppliedOn sets the value of AppliedOn.
+func (s *ApplyJob) SetAppliedOn(val OptNilString) {
+	s.AppliedOn = val
 }
 
 // A single item: `{"data": ...}`.
@@ -2288,6 +2334,21 @@ func (s *CityMatch) SetCountry(val string) {
 }
 
 // A single item: `{"data": ...}`.
+type ClearApplicationStageOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ClearApplicationStageOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ClearApplicationStageOK) SetData(val Interaction) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ClearCompanyVoteOK struct {
 	Data VoteResult `json:"data"`
 }
@@ -2314,6 +2375,21 @@ func (s *ClearJobVoteOK) GetData() VoteResult {
 
 // SetData sets the value of Data.
 func (s *ClearJobVoteOK) SetData(val VoteResult) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ClearStageOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ClearStageOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ClearStageOK) SetData(val Interaction) {
 	s.Data = val
 }
 
@@ -3590,6 +3666,9 @@ func (s *DeclineConversationOK) SetData(val Conversation) {
 	s.Data = val
 }
 
+// DeleteAtomNoContent is response for DeleteAtom operation.
+type DeleteAtomNoContent struct{}
+
 // A single item: `{"data": ...}`.
 type DeleteBankedAnswerOK struct {
 	Data Deleted `json:"data"`
@@ -3619,6 +3698,9 @@ func (s *DeleteCompanyFeedbackOK) GetData() CompanyFeedbackSummary {
 func (s *DeleteCompanyFeedbackOK) SetData(val CompanyFeedbackSummary) {
 	s.Data = val
 }
+
+// DeleteEmploymentNoContent is response for DeleteEmployment operation.
+type DeleteEmploymentNoContent struct{}
 
 // DeleteProfileNoContent is response for DeleteProfile operation.
 type DeleteProfileNoContent struct{}
@@ -3734,6 +3816,21 @@ func (s *DictionaryGapRecorded) SetRequestCount(val int64) {
 // SetStatus sets the value of Status.
 func (s *DictionaryGapRecorded) SetStatus(val string) {
 	s.Status = val
+}
+
+// A single item: `{"data": ...}`.
+type DismissJobOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DismissJobOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DismissJobOK) SetData(val Interaction) {
+	s.Data = val
 }
 
 // A single item: `{"data": ...}`.
@@ -4105,6 +4202,34 @@ func (s *EngagementStatsOK) SetData(val Engagement) {
 	s.Data = val
 }
 
+// The places with their achievements, and the achievements that belong to no place.
+// Ref: #/components/schemas/ExperienceBank
+type ExperienceBank struct {
+	// Each place with an `atoms` array of its achievements.
+	Employments []jx.Raw `json:"employments"`
+	Unplaced    []jx.Raw `json:"unplaced"`
+}
+
+// GetEmployments returns the value of Employments.
+func (s *ExperienceBank) GetEmployments() []jx.Raw {
+	return s.Employments
+}
+
+// GetUnplaced returns the value of Unplaced.
+func (s *ExperienceBank) GetUnplaced() []jx.Raw {
+	return s.Unplaced
+}
+
+// SetEmployments sets the value of Employments.
+func (s *ExperienceBank) SetEmployments(val []jx.Raw) {
+	s.Employments = val
+}
+
+// SetUnplaced sets the value of Unplaced.
+func (s *ExperienceBank) SetUnplaced(val []jx.Raw) {
+	s.Unplaced = val
+}
+
 // Ref: #/components/schemas/FacetRange
 type FacetRange struct {
 	Min int32 `json:"min"`
@@ -4314,6 +4439,21 @@ func (s *GetMyUsageOK) GetData() Usage {
 
 // SetData sets the value of Data.
 func (s *GetMyUsageOK) SetData(val Usage) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetNotificationSettingsOK struct {
+	Data NotificationSettings `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetNotificationSettingsOK) GetData() NotificationSettings {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetNotificationSettingsOK) SetData(val NotificationSettings) {
 	s.Data = val
 }
 
@@ -4815,6 +4955,89 @@ func (s *IngestStatusOK) SetData(val IngestStatus) {
 	s.Data = val
 }
 
+// The caller's interaction with one job. Every timestamp, the stage and the notes are null until the
+// job is viewed, saved, applied to, dismissed or tracked.
+// Ref: #/components/schemas/Interaction
+type Interaction struct {
+	JobID       int64       `json:"job_id"`
+	ViewedAt    NilDateTime `json:"viewed_at"`
+	SavedAt     NilDateTime `json:"saved_at"`
+	AppliedAt   NilDateTime `json:"applied_at"`
+	DismissedAt NilDateTime `json:"dismissed_at"`
+	Stage       NilString   `json:"stage"`
+	Notes       NilString   `json:"notes"`
+}
+
+// GetJobID returns the value of JobID.
+func (s *Interaction) GetJobID() int64 {
+	return s.JobID
+}
+
+// GetViewedAt returns the value of ViewedAt.
+func (s *Interaction) GetViewedAt() NilDateTime {
+	return s.ViewedAt
+}
+
+// GetSavedAt returns the value of SavedAt.
+func (s *Interaction) GetSavedAt() NilDateTime {
+	return s.SavedAt
+}
+
+// GetAppliedAt returns the value of AppliedAt.
+func (s *Interaction) GetAppliedAt() NilDateTime {
+	return s.AppliedAt
+}
+
+// GetDismissedAt returns the value of DismissedAt.
+func (s *Interaction) GetDismissedAt() NilDateTime {
+	return s.DismissedAt
+}
+
+// GetStage returns the value of Stage.
+func (s *Interaction) GetStage() NilString {
+	return s.Stage
+}
+
+// GetNotes returns the value of Notes.
+func (s *Interaction) GetNotes() NilString {
+	return s.Notes
+}
+
+// SetJobID sets the value of JobID.
+func (s *Interaction) SetJobID(val int64) {
+	s.JobID = val
+}
+
+// SetViewedAt sets the value of ViewedAt.
+func (s *Interaction) SetViewedAt(val NilDateTime) {
+	s.ViewedAt = val
+}
+
+// SetSavedAt sets the value of SavedAt.
+func (s *Interaction) SetSavedAt(val NilDateTime) {
+	s.SavedAt = val
+}
+
+// SetAppliedAt sets the value of AppliedAt.
+func (s *Interaction) SetAppliedAt(val NilDateTime) {
+	s.AppliedAt = val
+}
+
+// SetDismissedAt sets the value of DismissedAt.
+func (s *Interaction) SetDismissedAt(val NilDateTime) {
+	s.DismissedAt = val
+}
+
+// SetStage sets the value of Stage.
+func (s *Interaction) SetStage(val NilString) {
+	s.Stage = val
+}
+
+// SetNotes sets the value of Notes.
+func (s *Interaction) SetNotes(val NilString) {
+	s.Notes = val
+}
+
 // Ref: #/components/schemas/Invite
 type Invite struct {
 	Link        string `json:"link"`
@@ -5139,6 +5362,21 @@ func (s *JobsActivity) SetMeta(val ActivityMeta) {
 }
 
 // A single item: `{"data": ...}`.
+type ListAppliedCompanySlugsOK struct {
+	Data []string `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListAppliedCompanySlugsOK) GetData() []string {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListAppliedCompanySlugsOK) SetData(val []string) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ListBankedAnswersOK struct {
 	Data []BankedAnswer `json:"data"`
 }
@@ -5180,6 +5418,36 @@ func (s *ListConversationsOK) GetData() []Conversation {
 
 // SetData sets the value of Data.
 func (s *ListConversationsOK) SetData(val []Conversation) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListDismissedSlugsOK struct {
+	Data []string `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListDismissedSlugsOK) GetData() []string {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListDismissedSlugsOK) SetData(val []string) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListExperienceOK struct {
+	Data ExperienceBank `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListExperienceOK) GetData() ExperienceBank {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListExperienceOK) SetData(val ExperienceBank) {
 	s.Data = val
 }
 
@@ -5324,6 +5592,21 @@ func (s *ListReportedCompanyFeedbackOK) SetData(val []ReportedCompanyFeedback) {
 }
 
 // A single item: `{"data": ...}`.
+type ListSavedSlugsOK struct {
+	Data []string `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListSavedSlugsOK) GetData() []string {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListSavedSlugsOK) SetData(val []string) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ListSourcesOK struct {
 	Data []SourceEntry `json:"data"`
 }
@@ -5362,6 +5645,36 @@ func (s *ListTalentOK) SetData(val []TalentMember) {
 // SetMeta sets the value of Meta.
 func (s *ListTalentOK) SetMeta(val ListMeta) {
 	s.Meta = val
+}
+
+// A single item: `{"data": ...}`.
+type ListViewedSlugsOK struct {
+	Data []string `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListViewedSlugsOK) GetData() []string {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListViewedSlugsOK) SetData(val []string) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type MarkAppliedOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *MarkAppliedOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *MarkAppliedOK) SetData(val Interaction) {
+	s.Data = val
 }
 
 // MarkConversationReadNoContent is response for MarkConversationRead operation.
@@ -5463,6 +5776,37 @@ func (s *MentorProfileSuggestions) SetTimezone(val OptString) {
 // SetCompanySlug sets the value of CompanySlug.
 func (s *MentorProfileSuggestions) SetCompanySlug(val OptString) {
 	s.CompanySlug = val
+}
+
+// Ref: #/components/schemas/MergeAtoms
+type MergeAtoms struct {
+	// Exactly two achievement ids; anything else is a 400.
+	Ids OptNilStringArray `json:"ids"`
+}
+
+// GetIds returns the value of Ids.
+func (s *MergeAtoms) GetIds() OptNilStringArray {
+	return s.Ids
+}
+
+// SetIds sets the value of Ids.
+func (s *MergeAtoms) SetIds(val OptNilStringArray) {
+	s.Ids = val
+}
+
+// A single item: `{"data": ...}`.
+type MergeAtomsOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *MergeAtomsOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *MergeAtomsOK) SetData(val jx.Raw) {
+	s.Data = val
 }
 
 // Ref: #/components/schemas/ModeratedUser
@@ -6206,6 +6550,170 @@ func (o NilString) Or(d string) string {
 	return d
 }
 
+// Ref: #/components/schemas/NotificationSettings
+type NotificationSettings struct {
+	Enabled         bool     `json:"enabled"`
+	Channels        []string `json:"channels"`
+	DigestFrequency string   `json:"digest_frequency"`
+	// `HH:MM`.
+	DigestTime          NilString `json:"digest_time"`
+	DigestIntervalHours int64     `json:"digest_interval_hours"`
+	QuietHoursStart     NilString `json:"quiet_hours_start"`
+	QuietHoursEnd       NilString `json:"quiet_hours_end"`
+}
+
+// GetEnabled returns the value of Enabled.
+func (s *NotificationSettings) GetEnabled() bool {
+	return s.Enabled
+}
+
+// GetChannels returns the value of Channels.
+func (s *NotificationSettings) GetChannels() []string {
+	return s.Channels
+}
+
+// GetDigestFrequency returns the value of DigestFrequency.
+func (s *NotificationSettings) GetDigestFrequency() string {
+	return s.DigestFrequency
+}
+
+// GetDigestTime returns the value of DigestTime.
+func (s *NotificationSettings) GetDigestTime() NilString {
+	return s.DigestTime
+}
+
+// GetDigestIntervalHours returns the value of DigestIntervalHours.
+func (s *NotificationSettings) GetDigestIntervalHours() int64 {
+	return s.DigestIntervalHours
+}
+
+// GetQuietHoursStart returns the value of QuietHoursStart.
+func (s *NotificationSettings) GetQuietHoursStart() NilString {
+	return s.QuietHoursStart
+}
+
+// GetQuietHoursEnd returns the value of QuietHoursEnd.
+func (s *NotificationSettings) GetQuietHoursEnd() NilString {
+	return s.QuietHoursEnd
+}
+
+// SetEnabled sets the value of Enabled.
+func (s *NotificationSettings) SetEnabled(val bool) {
+	s.Enabled = val
+}
+
+// SetChannels sets the value of Channels.
+func (s *NotificationSettings) SetChannels(val []string) {
+	s.Channels = val
+}
+
+// SetDigestFrequency sets the value of DigestFrequency.
+func (s *NotificationSettings) SetDigestFrequency(val string) {
+	s.DigestFrequency = val
+}
+
+// SetDigestTime sets the value of DigestTime.
+func (s *NotificationSettings) SetDigestTime(val NilString) {
+	s.DigestTime = val
+}
+
+// SetDigestIntervalHours sets the value of DigestIntervalHours.
+func (s *NotificationSettings) SetDigestIntervalHours(val int64) {
+	s.DigestIntervalHours = val
+}
+
+// SetQuietHoursStart sets the value of QuietHoursStart.
+func (s *NotificationSettings) SetQuietHoursStart(val NilString) {
+	s.QuietHoursStart = val
+}
+
+// SetQuietHoursEnd sets the value of QuietHoursEnd.
+func (s *NotificationSettings) SetQuietHoursEnd(val NilString) {
+	s.QuietHoursEnd = val
+}
+
+// Every field is read as its zero value when left out. Times are `HH:MM`.
+// Ref: #/components/schemas/NotificationSettingsUpdate
+type NotificationSettingsUpdate struct {
+	Enabled             OptNilBool        `json:"enabled"`
+	Channels            OptNilStringArray `json:"channels"`
+	DigestFrequency     OptNilString      `json:"digest_frequency"`
+	DigestTime          OptNilString      `json:"digest_time"`
+	DigestIntervalHours OptNilInt64       `json:"digest_interval_hours"`
+	QuietHoursStart     OptNilString      `json:"quiet_hours_start"`
+	QuietHoursEnd       OptNilString      `json:"quiet_hours_end"`
+}
+
+// GetEnabled returns the value of Enabled.
+func (s *NotificationSettingsUpdate) GetEnabled() OptNilBool {
+	return s.Enabled
+}
+
+// GetChannels returns the value of Channels.
+func (s *NotificationSettingsUpdate) GetChannels() OptNilStringArray {
+	return s.Channels
+}
+
+// GetDigestFrequency returns the value of DigestFrequency.
+func (s *NotificationSettingsUpdate) GetDigestFrequency() OptNilString {
+	return s.DigestFrequency
+}
+
+// GetDigestTime returns the value of DigestTime.
+func (s *NotificationSettingsUpdate) GetDigestTime() OptNilString {
+	return s.DigestTime
+}
+
+// GetDigestIntervalHours returns the value of DigestIntervalHours.
+func (s *NotificationSettingsUpdate) GetDigestIntervalHours() OptNilInt64 {
+	return s.DigestIntervalHours
+}
+
+// GetQuietHoursStart returns the value of QuietHoursStart.
+func (s *NotificationSettingsUpdate) GetQuietHoursStart() OptNilString {
+	return s.QuietHoursStart
+}
+
+// GetQuietHoursEnd returns the value of QuietHoursEnd.
+func (s *NotificationSettingsUpdate) GetQuietHoursEnd() OptNilString {
+	return s.QuietHoursEnd
+}
+
+// SetEnabled sets the value of Enabled.
+func (s *NotificationSettingsUpdate) SetEnabled(val OptNilBool) {
+	s.Enabled = val
+}
+
+// SetChannels sets the value of Channels.
+func (s *NotificationSettingsUpdate) SetChannels(val OptNilStringArray) {
+	s.Channels = val
+}
+
+// SetDigestFrequency sets the value of DigestFrequency.
+func (s *NotificationSettingsUpdate) SetDigestFrequency(val OptNilString) {
+	s.DigestFrequency = val
+}
+
+// SetDigestTime sets the value of DigestTime.
+func (s *NotificationSettingsUpdate) SetDigestTime(val OptNilString) {
+	s.DigestTime = val
+}
+
+// SetDigestIntervalHours sets the value of DigestIntervalHours.
+func (s *NotificationSettingsUpdate) SetDigestIntervalHours(val OptNilInt64) {
+	s.DigestIntervalHours = val
+}
+
+// SetQuietHoursStart sets the value of QuietHoursStart.
+func (s *NotificationSettingsUpdate) SetQuietHoursStart(val OptNilString) {
+	s.QuietHoursStart = val
+}
+
+// SetQuietHoursEnd sets the value of QuietHoursEnd.
+func (s *NotificationSettingsUpdate) SetQuietHoursEnd(val OptNilString) {
+	s.QuietHoursEnd = val
+}
+
 // Ref: #/components/schemas/OnboardingCompleted
 type OnboardingCompleted struct {
 	OnboardingComplete bool `json:"onboarding_complete"`
@@ -6260,6 +6768,52 @@ func (s *OneClickUnsubscribeOK) GetData() OneClickResult {
 // SetData sets the value of Data.
 func (s *OneClickUnsubscribeOK) SetData(val OneClickResult) {
 	s.Data = val
+}
+
+// NewOptApplyJob returns new OptApplyJob with value set to v.
+func NewOptApplyJob(v ApplyJob) OptApplyJob {
+	return OptApplyJob{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptApplyJob is optional ApplyJob.
+type OptApplyJob struct {
+	Value ApplyJob
+	Set   bool
+}
+
+// IsSet returns true if OptApplyJob was set.
+func (o OptApplyJob) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptApplyJob) Reset() {
+	var v ApplyJob
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptApplyJob) SetTo(v ApplyJob) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptApplyJob) Get() (v ApplyJob, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptApplyJob) Or(d ApplyJob) ApplyJob {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
 }
 
 // NewOptBool returns new OptBool with value set to v.
@@ -8146,6 +8700,21 @@ func (s *RecordDictionaryGapOK) SetData(val DictionaryGapRecorded) {
 }
 
 // A single item: `{"data": ...}`.
+type RecordViewOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RecordViewOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RecordViewOK) SetData(val Interaction) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type RedeemPromoCodeOK struct {
 	Data PromoDiscount `json:"data"`
 }
@@ -9296,6 +9865,21 @@ func (s *SaveBankedAnswerOK) GetData() Saved {
 
 // SetData sets the value of Data.
 func (s *SaveBankedAnswerOK) SetData(val Saved) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type SaveJobOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SaveJobOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SaveJobOK) SetData(val Interaction) {
 	s.Data = val
 }
 
@@ -12470,6 +13054,468 @@ func (s *TimelineMeta) SetCount(val int64) {
 }
 
 // A single item: `{"data": ...}`.
+type TrackApplicationOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *TrackApplicationOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *TrackApplicationOK) SetData(val Interaction) {
+	s.Data = val
+}
+
+// At least one of the two is required. A field left out or null keeps the stored value.
+// Ref: #/components/schemas/TrackJob
+type TrackJob struct {
+	Stage OptNilString `json:"stage"`
+	Notes OptNilString `json:"notes"`
+}
+
+// GetStage returns the value of Stage.
+func (s *TrackJob) GetStage() OptNilString {
+	return s.Stage
+}
+
+// GetNotes returns the value of Notes.
+func (s *TrackJob) GetNotes() OptNilString {
+	return s.Notes
+}
+
+// SetStage sets the value of Stage.
+func (s *TrackJob) SetStage(val OptNilString) {
+	s.Stage = val
+}
+
+// SetNotes sets the value of Notes.
+func (s *TrackJob) SetNotes(val OptNilString) {
+	s.Notes = val
+}
+
+// A single item: `{"data": ...}`.
+type TrackJobOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *TrackJobOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *TrackJobOK) SetData(val Interaction) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/TrackedJob
+type TrackedJob struct {
+	AddedToBoardAt NilDateTime `json:"added_to_board_at"`
+	// Addresses the row: the posting's slug, or `a<id>` for an application whose posting is gone.
+	ID          string `json:"id"`
+	CompanySlug string `json:"company_slug"`
+	RoleTitle   string `json:"role_title"`
+	// The job in the shared wire shape; null once the catalogue has removed the posting.
+	Job        jx.Raw      `json:"job"`
+	ViewedAt   NilDateTime `json:"viewed_at"`
+	SavedAt    NilDateTime `json:"saved_at"`
+	AppliedAt  NilDateTime `json:"applied_at"`
+	Stage      NilString   `json:"stage"`
+	Notes      NilString   `json:"notes"`
+	EmailCount int64       `json:"email_count"`
+	// The silence fields are null together on any row that is not awaiting a reply.
+	LastActivityAt NilDateTime `json:"last_activity_at"`
+	DaysSilent     NilInt64    `json:"days_silent"`
+	SilenceState   NilString   `json:"silence_state"`
+	FollowedUpAt   NilDateTime `json:"followed_up_at"`
+	CvOpenedAt     NilDateTime `json:"cv_opened_at"`
+	// The status of this job's live auto-apply attempt; absent when it has none.
+	AutoApplyStatus OptString `json:"auto_apply_status"`
+}
+
+// GetAddedToBoardAt returns the value of AddedToBoardAt.
+func (s *TrackedJob) GetAddedToBoardAt() NilDateTime {
+	return s.AddedToBoardAt
+}
+
+// GetID returns the value of ID.
+func (s *TrackedJob) GetID() string {
+	return s.ID
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *TrackedJob) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// GetRoleTitle returns the value of RoleTitle.
+func (s *TrackedJob) GetRoleTitle() string {
+	return s.RoleTitle
+}
+
+// GetJob returns the value of Job.
+func (s *TrackedJob) GetJob() jx.Raw {
+	return s.Job
+}
+
+// GetViewedAt returns the value of ViewedAt.
+func (s *TrackedJob) GetViewedAt() NilDateTime {
+	return s.ViewedAt
+}
+
+// GetSavedAt returns the value of SavedAt.
+func (s *TrackedJob) GetSavedAt() NilDateTime {
+	return s.SavedAt
+}
+
+// GetAppliedAt returns the value of AppliedAt.
+func (s *TrackedJob) GetAppliedAt() NilDateTime {
+	return s.AppliedAt
+}
+
+// GetStage returns the value of Stage.
+func (s *TrackedJob) GetStage() NilString {
+	return s.Stage
+}
+
+// GetNotes returns the value of Notes.
+func (s *TrackedJob) GetNotes() NilString {
+	return s.Notes
+}
+
+// GetEmailCount returns the value of EmailCount.
+func (s *TrackedJob) GetEmailCount() int64 {
+	return s.EmailCount
+}
+
+// GetLastActivityAt returns the value of LastActivityAt.
+func (s *TrackedJob) GetLastActivityAt() NilDateTime {
+	return s.LastActivityAt
+}
+
+// GetDaysSilent returns the value of DaysSilent.
+func (s *TrackedJob) GetDaysSilent() NilInt64 {
+	return s.DaysSilent
+}
+
+// GetSilenceState returns the value of SilenceState.
+func (s *TrackedJob) GetSilenceState() NilString {
+	return s.SilenceState
+}
+
+// GetFollowedUpAt returns the value of FollowedUpAt.
+func (s *TrackedJob) GetFollowedUpAt() NilDateTime {
+	return s.FollowedUpAt
+}
+
+// GetCvOpenedAt returns the value of CvOpenedAt.
+func (s *TrackedJob) GetCvOpenedAt() NilDateTime {
+	return s.CvOpenedAt
+}
+
+// GetAutoApplyStatus returns the value of AutoApplyStatus.
+func (s *TrackedJob) GetAutoApplyStatus() OptString {
+	return s.AutoApplyStatus
+}
+
+// SetAddedToBoardAt sets the value of AddedToBoardAt.
+func (s *TrackedJob) SetAddedToBoardAt(val NilDateTime) {
+	s.AddedToBoardAt = val
+}
+
+// SetID sets the value of ID.
+func (s *TrackedJob) SetID(val string) {
+	s.ID = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *TrackedJob) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
+// SetRoleTitle sets the value of RoleTitle.
+func (s *TrackedJob) SetRoleTitle(val string) {
+	s.RoleTitle = val
+}
+
+// SetJob sets the value of Job.
+func (s *TrackedJob) SetJob(val jx.Raw) {
+	s.Job = val
+}
+
+// SetViewedAt sets the value of ViewedAt.
+func (s *TrackedJob) SetViewedAt(val NilDateTime) {
+	s.ViewedAt = val
+}
+
+// SetSavedAt sets the value of SavedAt.
+func (s *TrackedJob) SetSavedAt(val NilDateTime) {
+	s.SavedAt = val
+}
+
+// SetAppliedAt sets the value of AppliedAt.
+func (s *TrackedJob) SetAppliedAt(val NilDateTime) {
+	s.AppliedAt = val
+}
+
+// SetStage sets the value of Stage.
+func (s *TrackedJob) SetStage(val NilString) {
+	s.Stage = val
+}
+
+// SetNotes sets the value of Notes.
+func (s *TrackedJob) SetNotes(val NilString) {
+	s.Notes = val
+}
+
+// SetEmailCount sets the value of EmailCount.
+func (s *TrackedJob) SetEmailCount(val int64) {
+	s.EmailCount = val
+}
+
+// SetLastActivityAt sets the value of LastActivityAt.
+func (s *TrackedJob) SetLastActivityAt(val NilDateTime) {
+	s.LastActivityAt = val
+}
+
+// SetDaysSilent sets the value of DaysSilent.
+func (s *TrackedJob) SetDaysSilent(val NilInt64) {
+	s.DaysSilent = val
+}
+
+// SetSilenceState sets the value of SilenceState.
+func (s *TrackedJob) SetSilenceState(val NilString) {
+	s.SilenceState = val
+}
+
+// SetFollowedUpAt sets the value of FollowedUpAt.
+func (s *TrackedJob) SetFollowedUpAt(val NilDateTime) {
+	s.FollowedUpAt = val
+}
+
+// SetCvOpenedAt sets the value of CvOpenedAt.
+func (s *TrackedJob) SetCvOpenedAt(val NilDateTime) {
+	s.CvOpenedAt = val
+}
+
+// SetAutoApplyStatus sets the value of AutoApplyStatus.
+func (s *TrackedJob) SetAutoApplyStatus(val OptString) {
+	s.AutoApplyStatus = val
+}
+
+// Ref: #/components/schemas/TrackedJobPage
+type TrackedJobPage struct {
+	Data []TrackedJob `json:"data"`
+	Meta TrackingMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *TrackedJobPage) GetData() []TrackedJob {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *TrackedJobPage) GetMeta() TrackingMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *TrackedJobPage) SetData(val []TrackedJob) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *TrackedJobPage) SetMeta(val TrackingMeta) {
+	s.Meta = val
+}
+
+// Rows per tab.
+// Ref: #/components/schemas/TrackingCounts
+type TrackingCounts struct {
+	All       int64 `json:"all"`
+	Viewed    int64 `json:"viewed"`
+	Saved     int64 `json:"saved"`
+	Applied   int64 `json:"applied"`
+	Board     int64 `json:"board"`
+	Dismissed int64 `json:"dismissed"`
+}
+
+// GetAll returns the value of All.
+func (s *TrackingCounts) GetAll() int64 {
+	return s.All
+}
+
+// GetViewed returns the value of Viewed.
+func (s *TrackingCounts) GetViewed() int64 {
+	return s.Viewed
+}
+
+// GetSaved returns the value of Saved.
+func (s *TrackingCounts) GetSaved() int64 {
+	return s.Saved
+}
+
+// GetApplied returns the value of Applied.
+func (s *TrackingCounts) GetApplied() int64 {
+	return s.Applied
+}
+
+// GetBoard returns the value of Board.
+func (s *TrackingCounts) GetBoard() int64 {
+	return s.Board
+}
+
+// GetDismissed returns the value of Dismissed.
+func (s *TrackingCounts) GetDismissed() int64 {
+	return s.Dismissed
+}
+
+// SetAll sets the value of All.
+func (s *TrackingCounts) SetAll(val int64) {
+	s.All = val
+}
+
+// SetViewed sets the value of Viewed.
+func (s *TrackingCounts) SetViewed(val int64) {
+	s.Viewed = val
+}
+
+// SetSaved sets the value of Saved.
+func (s *TrackingCounts) SetSaved(val int64) {
+	s.Saved = val
+}
+
+// SetApplied sets the value of Applied.
+func (s *TrackingCounts) SetApplied(val int64) {
+	s.Applied = val
+}
+
+// SetBoard sets the value of Board.
+func (s *TrackingCounts) SetBoard(val int64) {
+	s.Board = val
+}
+
+// SetDismissed sets the value of Dismissed.
+func (s *TrackingCounts) SetDismissed(val int64) {
+	s.Dismissed = val
+}
+
+// Ref: #/components/schemas/TrackingMeta
+type TrackingMeta struct {
+	Total  int64          `json:"total"`
+	Limit  int64          `json:"limit"`
+	Offset int64          `json:"offset"`
+	Counts TrackingCounts `json:"counts"`
+}
+
+// GetTotal returns the value of Total.
+func (s *TrackingMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// GetLimit returns the value of Limit.
+func (s *TrackingMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetOffset returns the value of Offset.
+func (s *TrackingMeta) GetOffset() int64 {
+	return s.Offset
+}
+
+// GetCounts returns the value of Counts.
+func (s *TrackingMeta) GetCounts() TrackingCounts {
+	return s.Counts
+}
+
+// SetTotal sets the value of Total.
+func (s *TrackingMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
+// SetLimit sets the value of Limit.
+func (s *TrackingMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetOffset sets the value of Offset.
+func (s *TrackingMeta) SetOffset(val int64) {
+	s.Offset = val
+}
+
+// SetCounts sets the value of Counts.
+func (s *TrackingMeta) SetCounts(val TrackingCounts) {
+	s.Counts = val
+}
+
+// The application count and the count at each stage, zero included.
+// Ref: #/components/schemas/TrackingPipeline
+type TrackingPipeline struct {
+	Applications int64                  `json:"applications"`
+	Stages       TrackingPipelineStages `json:"stages"`
+	// The reply-rate benchmark, only when it clears its sample gate.
+	ReplyRate jx.Raw `json:"reply_rate"`
+}
+
+// GetApplications returns the value of Applications.
+func (s *TrackingPipeline) GetApplications() int64 {
+	return s.Applications
+}
+
+// GetStages returns the value of Stages.
+func (s *TrackingPipeline) GetStages() TrackingPipelineStages {
+	return s.Stages
+}
+
+// GetReplyRate returns the value of ReplyRate.
+func (s *TrackingPipeline) GetReplyRate() jx.Raw {
+	return s.ReplyRate
+}
+
+// SetApplications sets the value of Applications.
+func (s *TrackingPipeline) SetApplications(val int64) {
+	s.Applications = val
+}
+
+// SetStages sets the value of Stages.
+func (s *TrackingPipeline) SetStages(val TrackingPipelineStages) {
+	s.Stages = val
+}
+
+// SetReplyRate sets the value of ReplyRate.
+func (s *TrackingPipeline) SetReplyRate(val jx.Raw) {
+	s.ReplyRate = val
+}
+
+// A single item: `{"data": ...}`.
+type TrackingPipelineOK struct {
+	Data TrackingPipeline `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *TrackingPipelineOK) GetData() TrackingPipeline {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *TrackingPipelineOK) SetData(val TrackingPipeline) {
+	s.Data = val
+}
+
+type TrackingPipelineStages map[string]int64
+
+func (s *TrackingPipelineStages) init() TrackingPipelineStages {
+	m := *s
+	if m == nil {
+		m = map[string]int64{}
+		*s = m
+	}
+	return m
+}
+
+// A single item: `{"data": ...}`.
 type UnbanUserOK struct {
 	Data ModeratedUser `json:"data"`
 }
@@ -12481,6 +13527,81 @@ func (s *UnbanUserOK) GetData() ModeratedUser {
 
 // SetData sets the value of Data.
 func (s *UnbanUserOK) SetData(val ModeratedUser) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UndismissJobOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UndismissJobOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UndismissJobOK) SetData(val Interaction) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UnsaveJobOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UnsaveJobOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UnsaveJobOK) SetData(val Interaction) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UntrackApplicationOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UntrackApplicationOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UntrackApplicationOK) SetData(val Interaction) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UntrackOK struct {
+	Data Interaction `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UntrackOK) GetData() Interaction {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UntrackOK) SetData(val Interaction) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UpdateAtomOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateAtomOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateAtomOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
@@ -12500,6 +13621,21 @@ func (s *UpdateEmailPrefsOK) SetData(val EmailPrefs) {
 }
 
 // A single item: `{"data": ...}`.
+type UpdateEmploymentOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateEmploymentOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateEmploymentOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type UpdateMyEmailGroupsOK struct {
 	Data EmailPrefs `json:"data"`
 }
@@ -12511,6 +13647,21 @@ func (s *UpdateMyEmailGroupsOK) GetData() EmailPrefs {
 
 // SetData sets the value of Data.
 func (s *UpdateMyEmailGroupsOK) SetData(val EmailPrefs) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UpdateNotificationSettingsOK struct {
+	Data NotificationSettings `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateNotificationSettingsOK) GetData() NotificationSettings {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateNotificationSettingsOK) SetData(val NotificationSettings) {
 	s.Data = val
 }
 

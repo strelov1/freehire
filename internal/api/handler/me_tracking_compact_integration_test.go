@@ -52,7 +52,7 @@ func TestListTrackedJobs_CompactDropsWhatTheBoardDoesNotDraw(t *testing.T) {
 	}
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 
 	type card struct {
 		PublicSlug  string   `json:"public_slug"`
@@ -91,12 +91,12 @@ func TestListTrackedJobs_CompactDropsWhatTheBoardDoesNotDraw(t *testing.T) {
 		return *parsed.Data[0].Job
 	}
 
-	full := get(t, "/me/tracking?filter=board&limit=500")
+	full := get(t, "/api/v1/me/tracking?filter=board&limit=500")
 	if full.Blurb == "" || len(full.Skills) == 0 || len(full.Collections) == 0 {
 		t.Errorf("full card lost its blurb/skills/collections: %+v", full)
 	}
 
-	compact := get(t, "/me/tracking?filter=board&limit=500&compact=1")
+	compact := get(t, "/api/v1/me/tracking?filter=board&limit=500&compact=1")
 	if compact.Blurb != "" || compact.Skills != nil || compact.Collections != nil {
 		t.Errorf("compact card still carries what the board never draws: %+v", compact)
 	}

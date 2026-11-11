@@ -47,8 +47,8 @@ func TestSaveUnsaveEndpoints(t *testing.T) {
 	queries := db.New(pool)
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/jobs/:slug/save", auth.RequireAuth(iss, testVersions), h.SaveJob)
-	app.Delete("/api/v1/jobs/:slug/save", auth.RequireAuth(iss, testVersions), h.UnsaveJob)
+	app.Post("/api/v1/jobs/:slug/save", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
+	app.Delete("/api/v1/jobs/:slug/save", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 
 	type interaction struct {
 		JobID     int64   `json:"job_id"`

@@ -60,8 +60,8 @@ func TestListTrackedJobs_BoardDatesReflectRecordedActions(t *testing.T) {
 	}
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(db.New(pool), pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
-	req := httptest.NewRequestWithContext(ctx, fiber.MethodGet, "/me/tracking?filter=all&compact=1", nil)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
+	req := httptest.NewRequestWithContext(ctx, fiber.MethodGet, "/api/v1/me/tracking?filter=all&compact=1", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req, 30_000)
 	if err != nil {

@@ -89,7 +89,7 @@ func TestMyPipelineEndpoint(t *testing.T) {
 	}
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking/pipeline", auth.RequireAuth(iss, testVersions), h.TrackingPipeline)
+	app.Get("/api/v1/me/tracking/pipeline", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 
 	t.Run("counts applications by stage", func(t *testing.T) {
 		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/tracking/pipeline", nil)

@@ -73,7 +73,7 @@ func TestExperienceRegister_Gates(t *testing.T) {
 			(&experienceHandlers{}).register(app.Group(""), middleware{
 				key:    namedGate("key"),
 				cookie: namedGate("cookie"),
-			})
+			}, func(*fiber.Ctx) error { return nil })
 			resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), tc.method, tc.path, nil))
 			if err != nil {
 				t.Fatalf("request: %v", err)
@@ -126,10 +126,11 @@ func TestUpdateAtomEndToEndProvenance(t *testing.T) {
 
 			guard := auth.RequireAuthOrKey(iss, testVersions, stubKeys{userID: 1})
 			app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-			newExperienceHandlers(bank).register(app.Group(""), middleware{cookie: guard, key: guard})
+			expH := newExperienceHandlers(bank)
+			expH.register(app.Group("/api/v1"), middleware{cookie: guard, key: guard}, newContract(contractHandlers{experienceHandlers: expH}))
 
 			req := httptest.NewRequestWithContext(context.Background(), http.MethodPut,
-				"/me/experience/atoms/"+atom.ID.String(),
+				"/api/v1/me/experience/atoms/"+atom.ID.String(),
 				strings.NewReader(`{"claim":"Rewrote the billing pipeline end to end"}`))
 			req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
 			if tc.viaKey {

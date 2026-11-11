@@ -25,7 +25,8 @@ func deleteApp(t *testing.T, bank *stubBank) (*fiber.App, string) {
 	}
 	guard := auth.RequireAuthOrKey(iss, testVersions, stubKeys{userID: 1})
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	newExperienceHandlers(bank).register(app.Group(""), middleware{cookie: guard, key: guard})
+	expH := newExperienceHandlers(bank)
+	expH.register(app.Group("/api/v1"), middleware{cookie: guard, key: guard}, newContract(contractHandlers{experienceHandlers: expH}))
 	return app, token
 }
 
@@ -67,7 +68,7 @@ func TestKeyedEmploymentDeleteRefusesToCascade(t *testing.T) {
 	bank.reindex()
 	app, _ := deleteApp(t, bank)
 
-	resp := deleteReq(t, app, "/me/experience/employments/"+place.ID.String(), "", true)
+	resp := deleteReq(t, app, "/api/v1/me/experience/employments/"+place.ID.String(), "", true)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusConflict {
 		t.Fatalf("keyed delete of a non-empty employment = %d, want 409", resp.StatusCode)
@@ -90,7 +91,7 @@ func TestCookieEmploymentDeleteStillCascades(t *testing.T) {
 	bank.reindex()
 	app, token := deleteApp(t, bank)
 
-	resp := deleteReq(t, app, "/me/experience/employments/"+place.ID.String(), token, false)
+	resp := deleteReq(t, app, "/api/v1/me/experience/employments/"+place.ID.String(), token, false)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("cookie delete of a non-empty employment = %d, want 204", resp.StatusCode)
@@ -107,7 +108,7 @@ func TestKeyedEmploymentDeleteAllowsAnEmptyPlace(t *testing.T) {
 	place := bank.addEmployment(1, experience.Employment{Kind: experience.KindJob, Company: "TEST — delete me"})
 	app, _ := deleteApp(t, bank)
 
-	resp := deleteReq(t, app, "/me/experience/employments/"+place.ID.String(), "", true)
+	resp := deleteReq(t, app, "/api/v1/me/experience/employments/"+place.ID.String(), "", true)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("keyed delete of an empty employment = %d, want 204", resp.StatusCode)
@@ -122,7 +123,7 @@ func TestKeyedAtomDelete(t *testing.T) {
 	bank.reindex()
 	app, _ := deleteApp(t, bank)
 
-	resp := deleteReq(t, app, "/me/experience/atoms/"+atom.ID.String(), "", true)
+	resp := deleteReq(t, app, "/api/v1/me/experience/atoms/"+atom.ID.String(), "", true)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("keyed atom delete = %d, want 204", resp.StatusCode)
@@ -136,7 +137,7 @@ func TestKeyedAtomDelete(t *testing.T) {
 // never doubles as a way to probe whether an id exists.
 func TestKeyedEmploymentDeleteUnknownID(t *testing.T) {
 	app, _ := deleteApp(t, newStubBank())
-	resp := deleteReq(t, app, "/me/experience/employments/"+uuid.NewString(), "", true)
+	resp := deleteReq(t, app, "/api/v1/me/experience/employments/"+uuid.NewString(), "", true)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("keyed delete of an unknown employment = %d, want 404", resp.StatusCode)

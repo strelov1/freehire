@@ -49,9 +49,9 @@ func listSilence(t *testing.T, items []jobtracking.TrackedJob) []trackingRow {
 	h := &trackingHandlers{tracking: jobtracking.New(silenceRepo{items: items})}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/tracking", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/tracking", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req, -1)
 	if err != nil {
@@ -163,7 +163,7 @@ func TestTrackingSilenceUnconfirmed(t *testing.T) {
 // followed_up_at from the wire, or letting the chase move the clock — collapses it back to two.
 func TestTrackingCarriesTheChaseBesideTheSilence(t *testing.T) {
 	chased := row("applied", 40*oneDay, 30*oneDay, false)
-	at := time.Now().Add(-2 * oneDay)
+	at := time.Now().Add(-2 * oneDay).Truncate(time.Second) // the wire carries whole seconds
 	chased.FollowedUpAt = &at
 
 	rows := listSilence(t, []jobtracking.TrackedJob{chased, row("applied", 40*oneDay, 30*oneDay, false)})

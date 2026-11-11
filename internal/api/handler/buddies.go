@@ -200,14 +200,6 @@ func (h *buddyHandlers) BuddyFeed(ctx context.Context, params apigen.BuddyFeedPa
 	return &apigen.BuddyFeedPage{Data: out, Meta: apigen.BuddyFeedMeta{NextCursor: nilString(next)}}, nil
 }
 
-// nilString is a nullable string from a pointer: null when nil.
-func nilString(p *string) apigen.NilString {
-	if p == nil {
-		return apigen.NilString{Null: true}
-	}
-	return apigen.NewNilString(*p)
-}
-
 // BuddyProfile shows one member's anonymous card.
 func (h *buddyHandlers) BuddyProfile(ctx context.Context, params apigen.BuddyProfileParams) (*apigen.BuddyProfileOK, error) {
 	userID, err := requireUserIDFromContext(ctx)

@@ -2,61 +2,18 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/go-faster/jx"
 
-	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
-
-// myJobResponse is one item of the my-jobs listing: the job in the shared
-// jobview wire shape with the caller's interaction timestamps riding alongside
-// (not flattened in — the job shape stays identical to every other job surface).
-type myJobResponse struct {
-	// AddedToBoardAt is when the save or application record was first recorded, independent
-	// of passive views and an application date the candidate can correct retroactively.
-	AddedToBoardAt *time.Time `json:"added_to_board_at"`
-	// ID addresses the row. The board keys, routes and opens by it rather than by the
-	// posting's slug, which an application whose posting was pruned does not have.
-	ID string `json:"id"`
-	// Company and RoleTitle ride on every row, read from the application record, so a
-	// card renders whether or not a posting is still there.
-	Company   string `json:"company_slug"`
-	RoleTitle string `json:"role_title"`
-	// Job is null once the catalogue has removed the posting. The application is a fact
-	// about the candidate's life and outlives our inventory of it.
-	Job        *jobview.Card `json:"job"`
-	ViewedAt   *time.Time    `json:"viewed_at"`
-	SavedAt    *time.Time    `json:"saved_at"`
-	AppliedAt  *time.Time    `json:"applied_at"`
-	Stage      *string       `json:"stage"`
-	Notes      *string       `json:"notes"`
-	EmailCount int           `json:"email_count"`
-	// The silence fields are null together on any row that is not an application
-	// awaiting a reply — a job merely viewed or saved, or one in a settled stage.
-	// Null means "nothing is owed here", which the board must be able to tell
-	// apart from "owed and answered promptly".
-	LastActivityAt *time.Time `json:"last_activity_at"`
-	DaysSilent     *int       `json:"days_silent"`
-	SilenceState   *string    `json:"silence_state"`
-	// FollowedUpAt is when the caller last recorded chasing, or null for never. It is
-	// independent of the silence fields above — a chased application stays silent —
-	// so the board can show both readings at once.
-	FollowedUpAt *time.Time `json:"followed_up_at"`
-	// CVOpenedAt is when somebody last opened a CV the caller sent for this job, or null. Like
-	// FollowedUpAt it sits beside the silence fields and not inside them: a recruiter reading a CV
-	// is not a reply, and the card shows both — still unanswered, and read yesterday.
-	CVOpenedAt *time.Time `json:"cv_opened_at"`
-	// AutoApplyStatus is the seven-value status of this job's live auto-apply attempt, null
-	// when it has none (openspec/changes/auto-apply-review-tracking) — the board card's own
-	// "needs your review" badge. The full answer preview lives in the drawer's own read
-	// (GET /me/tracking/:slug), not here.
-	AutoApplyStatus *autoapply.Status `json:"auto_apply_status,omitempty"`
-}
 
 // ListTrackedJobs returns the authenticated user's job interactions joined with the
 // jobs, most recently touched first, narrowed by ?filter=all|viewed|saved|applied|board
@@ -71,70 +28,83 @@ type myJobResponse struct {
 // only (no blurb, skills or collections) and no ghost signal, since the board draws
 // none of them. That drops the ghost pass's three queries and its Meilisearch round
 // trip, and on a 500-card board ~40% of the bytes.
-func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *trackingHandlers) ListTrackedJobs(ctx context.Context, params apigen.ListTrackedJobsParams) (*apigen.TrackedJobPage, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	limit, offset := pageParamsBounded(c, defaultLimit, trackingMaxLimit)
+	limit, offset := contractPageBounded(ctx, defaultLimit, trackingMaxLimit)
 	detail := jobtracking.CardFull
-	if c.QueryBool("compact") {
+	if compact, _ := strconv.ParseBool(params.Compact.Value); compact {
 		detail = jobtracking.CardCompact
 	}
-	listing, err := h.tracking.ListTracked(c.Context(), userID, c.Query("filter"), detail, int32(limit), int32(offset))
+	listing, err := h.tracking.ListTracked(ctx, userID, params.Filter.Value, detail, int32(limit), int32(offset))
 	if err != nil {
-		return trackingError(err)
+		return nil, trackingError(err)
+	}
+	// The ghost signal is set on each card in place, so it is attached before the cards are
+	// written out.
+	if detail == jobtracking.CardFull {
+		h.attachGhostToTrackedCards(ctx, listing.Items)
 	}
 
 	// One clock for the whole page: silence is derived against now(), and two rows
 	// read a moment apart must not disagree about what "now" was.
 	now := time.Now()
-	items := make([]myJobResponse, 0, len(listing.Items))
+	items := make([]apigen.TrackedJob, 0, len(listing.Items))
 	for _, it := range listing.Items {
-		item := myJobResponse{
-			ID:              it.ID,
-			AddedToBoardAt:  it.AddedToBoardAt,
-			Company:         it.CompanySlug,
-			RoleTitle:       it.RoleTitle,
-			Job:             it.Job,
-			ViewedAt:        it.ViewedAt,
-			SavedAt:         it.SavedAt,
-			AppliedAt:       it.AppliedAt,
-			Stage:           it.Stage,
-			Notes:           it.Notes,
-			EmailCount:      it.EmailCount,
-			FollowedUpAt:    it.FollowedUpAt,
-			CVOpenedAt:      it.CVOpenedAt,
-			AutoApplyStatus: it.AutoApplyStatus,
+		// The card travels as the jobview wire shape, exactly as it marshals.
+		job, err := json.Marshal(it.Job)
+		if err != nil {
+			return nil, err
+		}
+		item := apigen.TrackedJob{
+			ID:             it.ID,
+			AddedToBoardAt: nilDateTime(it.AddedToBoardAt),
+			CompanySlug:    it.CompanySlug,
+			RoleTitle:      it.RoleTitle,
+			Job:            jx.Raw(job),
+			ViewedAt:       nilDateTime(it.ViewedAt),
+			SavedAt:        nilDateTime(it.SavedAt),
+			AppliedAt:      nilDateTime(it.AppliedAt),
+			Stage:          nilString(it.Stage),
+			Notes:          nilString(it.Notes),
+			EmailCount:     int64(it.EmailCount),
+			FollowedUpAt:   nilDateTime(it.FollowedUpAt),
+			CvOpenedAt:     nilDateTime(it.CVOpenedAt),
+		}
+		if it.AutoApplyStatus != nil {
+			item.AutoApplyStatus = apigen.NewOptString(string(*it.AutoApplyStatus))
 		}
 		if s := it.Silence(now); s != nil {
-			item.LastActivityAt = &s.LastActivityAt
-			item.DaysSilent = &s.DaysSilent
-			item.SilenceState = &s.State
+			item.LastActivityAt = apigen.NewNilDateTime(s.LastActivityAt)
+			item.DaysSilent = apigen.NewNilInt64(int64(s.DaysSilent))
+			item.SilenceState = apigen.NewNilString(s.State)
+		} else {
+			item.LastActivityAt.SetToNull()
+			item.DaysSilent.SetToNull()
+			item.SilenceState.SetToNull()
 		}
 		items = append(items, item)
 	}
-	if detail == jobtracking.CardFull {
-		h.attachGhostToTrackedCards(c.Context(), listing.Items)
-	}
 
-	return c.JSON(fiber.Map{
-		"data": items,
-		"meta": fiber.Map{
-			"total":  listing.Total(),
-			"limit":  limit,
-			"offset": offset,
-			"counts": fiber.Map{
-				"all":       listing.Counts.All,
-				"viewed":    listing.Counts.Viewed,
-				"saved":     listing.Counts.Saved,
-				"applied":   listing.Counts.Applied,
-				"board":     listing.Counts.Board,
-				"dismissed": listing.Counts.Dismissed,
+	return &apigen.TrackedJobPage{
+		Data: items,
+		Meta: apigen.TrackingMeta{
+			Total:  listing.Total(),
+			Limit:  int64(limit),
+			Offset: int64(offset),
+			Counts: apigen.TrackingCounts{
+				All:       listing.Counts.All,
+				Viewed:    listing.Counts.Viewed,
+				Saved:     listing.Counts.Saved,
+				Applied:   listing.Counts.Applied,
+				Board:     listing.Counts.Board,
+				Dismissed: listing.Counts.Dismissed,
 			},
 		},
-	})
+	}, nil
 }
 
 // attachGhostToTrackedCards attaches each tracked job's ghost signal to its already-built
@@ -209,18 +179,26 @@ func (h *trackingHandlers) attachGhostToTrackedCards(ctx context.Context, tracke
 // server-side over all of the caller's applications. The SPA Pipeline tab groups those
 // stages with the generated STAGE_GROUPS to draw the Sankey, and derives the
 // interview/offer rate cards from the same counts.
-func (h *trackingHandlers) TrackingPipeline(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *trackingHandlers) TrackingPipeline(ctx context.Context) (*apigen.TrackingPipelineOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	pipeline, err := h.tracking.Pipeline(c.Context(), userID)
+	pipeline, err := h.tracking.Pipeline(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return c.JSON(fiber.Map{"data": pipeline})
+	out := apigen.TrackingPipeline{Applications: pipeline.Applications, Stages: apigen.TrackingPipelineStages(pipeline.Stages)}
+	if pipeline.ReplyRate != nil {
+		reply, err := json.Marshal(pipeline.ReplyRate)
+		if err != nil {
+			return nil, err
+		}
+		out.ReplyRate = jx.Raw(reply)
+	}
+	return &apigen.TrackingPipelineOK{Data: out}, nil
 }
 
 // ListViewedSlugs returns the set of public job slugs the authenticated caller
@@ -229,18 +207,18 @@ func (h *trackingHandlers) TrackingPipeline(c *fiber.Ctx) error {
 // authenticating the public job-read path — viewed state is cross-referenced
 // client-side, never joined into ListJobs/SearchJobs. The response is a flat
 // {"data": [slug, ...]} list scoped to the caller.
-func (h *trackingHandlers) ListViewedSlugs(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *trackingHandlers) ListViewedSlugs(ctx context.Context) (*apigen.ListViewedSlugsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	slugs, err := h.tracking.ViewedSlugs(c.Context(), userID)
+	slugs, err := h.tracking.ViewedSlugs(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return c.JSON(fiber.Map{"data": slugs})
+	return &apigen.ListViewedSlugsOK{Data: slugs}, nil
 }
 
 // ListSavedSlugs returns the set of public job slugs the authenticated caller has
@@ -249,18 +227,18 @@ func (h *trackingHandlers) ListViewedSlugs(c *fiber.Ctx) error {
 // authenticating the public job-read path — saved state is cross-referenced
 // client-side, never joined into ListJobs/SearchJobs. The response is a flat
 // {"data": [slug, ...]} list scoped to the caller.
-func (h *trackingHandlers) ListSavedSlugs(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *trackingHandlers) ListSavedSlugs(ctx context.Context) (*apigen.ListSavedSlugsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	slugs, err := h.tracking.SavedSlugs(c.Context(), userID)
+	slugs, err := h.tracking.SavedSlugs(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return c.JSON(fiber.Map{"data": slugs})
+	return &apigen.ListSavedSlugsOK{Data: slugs}, nil
 }
 
 // ListDismissedSlugs returns the set of public job slugs the authenticated caller
@@ -268,18 +246,18 @@ func (h *trackingHandlers) ListSavedSlugs(c *fiber.Ctx) error {
 // browse feed client-side, mirroring ListSavedSlugs — dismissed state is
 // cross-referenced client-side, never joined into ListJobs/SearchJobs. The
 // response is a flat {"data": [slug, ...]} list scoped to the caller.
-func (h *trackingHandlers) ListDismissedSlugs(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *trackingHandlers) ListDismissedSlugs(ctx context.Context) (*apigen.ListDismissedSlugsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	slugs, err := h.tracking.DismissedSlugs(c.Context(), userID)
+	slugs, err := h.tracking.DismissedSlugs(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return c.JSON(fiber.Map{"data": slugs})
+	return &apigen.ListDismissedSlugsOK{Data: slugs}, nil
 }
 
 // ListAppliedCompanySlugs returns the company slugs of the employers the authenticated
@@ -287,16 +265,16 @@ func (h *trackingHandlers) ListDismissedSlugs(c *fiber.Ctx) error {
 // company" on catalogue cards and the job page, cross-referencing each posting's
 // company_slug client-side — the public job reads stay unauthenticated and cacheable,
 // the same arrangement as the viewed and saved sets. Response: {"data": ["acme", ...]}.
-func (h *trackingHandlers) ListAppliedCompanySlugs(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *trackingHandlers) ListAppliedCompanySlugs(ctx context.Context) (*apigen.ListAppliedCompanySlugsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	slugs, err := h.tracking.AppliedCompanySlugs(c.Context(), userID)
+	slugs, err := h.tracking.AppliedCompanySlugs(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return c.JSON(fiber.Map{"data": slugs})
+	return &apigen.ListAppliedCompanySlugsOK{Data: slugs}, nil
 }

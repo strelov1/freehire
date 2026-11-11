@@ -64,7 +64,7 @@ func TestListMyJobsEndpoint(t *testing.T) {
 	}
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 
 	type item struct {
 		Job       map[string]json.RawMessage `json:"job"`
@@ -211,7 +211,7 @@ func TestListMyJobsBoardFilter(t *testing.T) {
 	}
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 
 	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/tracking?filter=board", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
@@ -313,7 +313,7 @@ func TestTrackedBoardKeepsAnApplicationWhosePostingWasPruned(t *testing.T) {
 	}
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 
 	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/tracking?filter=board", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
@@ -389,7 +389,7 @@ func TestTrackedBoardPagesOrphanedApplicationsWithoutDuplication(t *testing.T) {
 	queries := db.New(pool)
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 
 	type response struct {
 		Data []struct {
@@ -501,7 +501,7 @@ func TestListMyJobs_AutoApplyStatusBadge(t *testing.T) {
 	}
 	h := &trackingHandlers{tracking: tracking}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/me/tracking?filter=board", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
@@ -598,7 +598,7 @@ func TestTrackedBoardPagesTheMergedListAsOneWindow(t *testing.T) {
 	}
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(db.New(pool), pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
 
 	type page struct {
 		Data []struct {

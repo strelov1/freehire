@@ -53,7 +53,7 @@ func TestOAuthGrant_AuthenticatesLikeAFullScopeAPIKey(t *testing.T) {
 	th := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
-	app.Post("/api/v1/jobs/:slug/apply", keyAuth, th.MarkApplied)
+	app.Post("/api/v1/jobs/:slug/apply", keyAuth, newContract(contractHandlers{trackingHandlers: th}))
 	app.Get("/api/v1/auth/me", auth.RequireAuthOrScopedKey(iss, testVersions, apiKeys{queries}, auth.ScopeCV), func(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusOK)
 	})
