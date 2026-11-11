@@ -394,13 +394,24 @@ func TestEmailPrefs_EveryRefusalLooksTheSameAndNamesNobody(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			res, body := doPrefs(t, app, http.MethodGet, "/api/v1/email-prefs?t="+tc.token, "")
-			if res.Status != http.StatusNotFound {
-				t.Errorf("status = %d, want 404 for every refusal alike", res.Status)
+			// The save carries the token in its body, where an absent one is a valid body
+			// with no token: it must get the same 404, never a 400 that tells the two apart.
+			patch := `{"news_enabled":false}`
+			if tc.token != "" {
+				patch = `{"news_enabled":false,"token":"` + tc.token + `"}`
 			}
-			for _, secret := range []string{"real-account@example.test", "Rust in Berlin", "999999"} {
-				if strings.Contains(body, secret) {
-					t.Errorf("a refusal leaked %q: %s", secret, body)
+			for _, req := range []struct{ method, target, body string }{
+				{http.MethodGet, "/api/v1/email-prefs?t=" + tc.token, ""},
+				{http.MethodPatch, "/api/v1/email-prefs", patch},
+			} {
+				res, body := doPrefs(t, app, req.method, req.target, req.body)
+				if res.Status != http.StatusNotFound {
+					t.Errorf("%s status = %d, want 404 for every refusal alike", req.method, res.Status)
+				}
+				for _, secret := range []string{"real-account@example.test", "Rust in Berlin", "999999"} {
+					if strings.Contains(body, secret) {
+						t.Errorf("%s: a refusal leaked %q: %s", req.method, secret, body)
+					}
 				}
 			}
 		})
