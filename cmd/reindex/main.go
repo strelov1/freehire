@@ -193,12 +193,14 @@ func run() int {
 	// Only from here does the rebuild write to Meilisearch, so only from here does it compete
 	// with the drain, whose pushes re-merge the whole index. Everything above reads Postgres:
 	// pausing the drain from the start kept new jobs and alerts waiting about 6 hours for nothing.
+	releaseDrain := func() {}
 	if !*facetdOnly {
-		releaseDrain, err := worker.HoldPause(ctx, cfg.RedisURL, worker.SearchDrainJob, drainHoldTTL)
+		release, err := worker.HoldPause(ctx, cfg.RedisURL, worker.SearchDrainJob, drainHoldTTL)
 		if err != nil {
 			log.Printf("reindex: could not pause the drain, the load will compete with it: %v", err)
 		} else {
-			defer releaseDrain()
+			releaseDrain = release
+			defer release()
 		}
 	}
 	var rb rebuilder
@@ -224,9 +226,15 @@ func run() int {
 		return 0 // Meilisearch was not rebuilt: the outbox rows are still owed to it
 	}
 	if t, ok := rb.(*teeRebuild); ok && t.secondaryDown {
-		// facetd kept its old generation and never saw these rows' changes; the drain still owes them to it
-		log.Printf("reindex: facetd rebuild failed, search_outbox entries kept for the drain")
-		return 0
+		// Meilisearch is done: the drain need not wait out facetd's second pass.
+		releaseDrain()
+		retry := func(ctx context.Context, b rebuilder) error {
+			_, _, err := reindexFull(ctx, reader, b, lookup, geo, q, time.Now())
+			return err
+		}
+		if !retryFacetd(ctx, t, retry) {
+			return 0
+		}
 	}
 
 	// Best-effort: the reindex itself already succeeded, so a purge failure just leaves

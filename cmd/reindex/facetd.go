@@ -128,3 +128,17 @@ func (t *teeRebuild) Cleanup(ctx context.Context) error {
 	}
 	return err
 }
+
+// retryFacetd rebuilds facetd alone once after it fell out of the tee, and reports whether
+// it now holds this run's catalogue. Without it facetd keeps its old generation: the drain
+// replays only search_outbox rows, never the derived fields a full rebuild recomputes
+// (reality.class, closure geography), so facetd's answers stay stale until the next rebuild.
+func retryFacetd(ctx context.Context, t *teeRebuild, retry func(context.Context, rebuilder) error) bool {
+	log.Printf("reindex: facetd fell out of the rebuild, rebuilding it alone")
+	if err := retry(ctx, t.secondary); err != nil {
+		// facetd kept its old generation and never saw these rows' changes; the drain still owes them to it
+		log.Printf("reindex: facetd retry failed, search_outbox entries kept for the drain: %v", err)
+		return false
+	}
+	return true
+}
