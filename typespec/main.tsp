@@ -8,6 +8,9 @@ import "./talent.tsp";
 import "./watchlist.tsp";
 import "./lookups.tsp";
 import "./me.tsp";
+import "./plans.tsp";
+import "./dictionary.tsp";
+import "./jd.tsp";
 
 using Http;
 

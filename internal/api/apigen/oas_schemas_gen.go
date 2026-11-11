@@ -73,6 +73,60 @@ func (s *CityMatch) SetCountry(val string) {
 	s.Country = val
 }
 
+// Ref: #/components/schemas/DictionaryGap
+type DictionaryGap struct {
+	// `specialization`, `skill` or `industry`; anything else is a 400.
+	Kind OptString `json:"kind"`
+	Term OptString `json:"term"`
+}
+
+// GetKind returns the value of Kind.
+func (s *DictionaryGap) GetKind() OptString {
+	return s.Kind
+}
+
+// GetTerm returns the value of Term.
+func (s *DictionaryGap) GetTerm() OptString {
+	return s.Term
+}
+
+// SetKind sets the value of Kind.
+func (s *DictionaryGap) SetKind(val OptString) {
+	s.Kind = val
+}
+
+// SetTerm sets the value of Term.
+func (s *DictionaryGap) SetTerm(val OptString) {
+	s.Term = val
+}
+
+// Ref: #/components/schemas/DictionaryGapRecorded
+type DictionaryGapRecorded struct {
+	// How many people have asked for this term.
+	RequestCount int64  `json:"request_count"`
+	Status       string `json:"status"`
+}
+
+// GetRequestCount returns the value of RequestCount.
+func (s *DictionaryGapRecorded) GetRequestCount() int64 {
+	return s.RequestCount
+}
+
+// GetStatus returns the value of Status.
+func (s *DictionaryGapRecorded) GetStatus() string {
+	return s.Status
+}
+
+// SetRequestCount sets the value of RequestCount.
+func (s *DictionaryGapRecorded) SetRequestCount(val int64) {
+	s.RequestCount = val
+}
+
+// SetStatus sets the value of Status.
+func (s *DictionaryGapRecorded) SetStatus(val string) {
+	s.Status = val
+}
+
 // The preference page's state: the address mail goes to and the three switches.
 // Ref: #/components/schemas/EmailPrefs
 type EmailPrefs struct {
@@ -368,6 +422,21 @@ func (s *GetMyUsageOK) SetData(val Usage) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type GetPlansOK struct {
+	Data Plans `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetPlansOK) GetData() Plans {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetPlansOK) SetData(val Plans) {
+	s.Data = val
+}
+
 // A single item that read query params: `{"data": ...}`, plus `meta` when one was dropped.
 type GetTalentFacetsOK struct {
 	Data TalentFacets   `json:"data"`
@@ -595,6 +664,67 @@ func (s *ImportWatchlistOK) GetData() WatchlistImportResult {
 // SetData sets the value of Data.
 func (s *ImportWatchlistOK) SetData(val WatchlistImportResult) {
 	s.Data = val
+}
+
+// Exactly one of `job_slug`, `url` and `text`; anything else is a 400.
+// Ref: #/components/schemas/JobDescriptionSource
+type JobDescriptionSource struct {
+	JobSlug OptString `json:"job_slug"`
+	URL     OptString `json:"url"`
+	Text    OptString `json:"text"`
+	// Hints used only with `text`.
+	Title   OptString `json:"title"`
+	Company OptString `json:"company"`
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *JobDescriptionSource) GetJobSlug() OptString {
+	return s.JobSlug
+}
+
+// GetURL returns the value of URL.
+func (s *JobDescriptionSource) GetURL() OptString {
+	return s.URL
+}
+
+// GetText returns the value of Text.
+func (s *JobDescriptionSource) GetText() OptString {
+	return s.Text
+}
+
+// GetTitle returns the value of Title.
+func (s *JobDescriptionSource) GetTitle() OptString {
+	return s.Title
+}
+
+// GetCompany returns the value of Company.
+func (s *JobDescriptionSource) GetCompany() OptString {
+	return s.Company
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *JobDescriptionSource) SetJobSlug(val OptString) {
+	s.JobSlug = val
+}
+
+// SetURL sets the value of URL.
+func (s *JobDescriptionSource) SetURL(val OptString) {
+	s.URL = val
+}
+
+// SetText sets the value of Text.
+func (s *JobDescriptionSource) SetText(val OptString) {
+	s.Text = val
+}
+
+// SetTitle sets the value of Title.
+func (s *JobDescriptionSource) SetTitle(val OptString) {
+	s.Title = val
+}
+
+// SetCompany sets the value of Company.
+func (s *JobDescriptionSource) SetCompany(val OptString) {
+	s.Company = val
 }
 
 // A page of a filtered list, with what the filter dropped.
@@ -971,6 +1101,194 @@ func (s *PeriodDate) SetMonth(val OptInt32) {
 	s.Month = val
 }
 
+// Ref: #/components/schemas/PlanFeature
+type PlanFeature struct {
+	Feature string            `json:"feature"`
+	Free    PlanTierAllowance `json:"free"`
+	Pro     PlanTierAllowance `json:"pro"`
+	Ultra   PlanTierAllowance `json:"ultra"`
+}
+
+// GetFeature returns the value of Feature.
+func (s *PlanFeature) GetFeature() string {
+	return s.Feature
+}
+
+// GetFree returns the value of Free.
+func (s *PlanFeature) GetFree() PlanTierAllowance {
+	return s.Free
+}
+
+// GetPro returns the value of Pro.
+func (s *PlanFeature) GetPro() PlanTierAllowance {
+	return s.Pro
+}
+
+// GetUltra returns the value of Ultra.
+func (s *PlanFeature) GetUltra() PlanTierAllowance {
+	return s.Ultra
+}
+
+// SetFeature sets the value of Feature.
+func (s *PlanFeature) SetFeature(val string) {
+	s.Feature = val
+}
+
+// SetFree sets the value of Free.
+func (s *PlanFeature) SetFree(val PlanTierAllowance) {
+	s.Free = val
+}
+
+// SetPro sets the value of Pro.
+func (s *PlanFeature) SetPro(val PlanTierAllowance) {
+	s.Pro = val
+}
+
+// SetUltra sets the value of Ultra.
+func (s *PlanFeature) SetUltra(val PlanTierAllowance) {
+	s.Ultra = val
+}
+
+// Ref: #/components/schemas/PlanPrice
+type PlanPrice struct {
+	ID string `json:"id"`
+	// The smallest currency unit, as the payment provider stores it.
+	AmountCents int64  `json:"amount_cents"`
+	Currency    string `json:"currency"`
+	// `month` or `year`.
+	Interval string `json:"interval"`
+	// The price a new subscriber is sold unless they choose another.
+	Default bool `json:"default"`
+	// The plan the price buys: `pro`, `ultra`, `api` or `api_data`.
+	Tier string `json:"tier"`
+}
+
+// GetID returns the value of ID.
+func (s *PlanPrice) GetID() string {
+	return s.ID
+}
+
+// GetAmountCents returns the value of AmountCents.
+func (s *PlanPrice) GetAmountCents() int64 {
+	return s.AmountCents
+}
+
+// GetCurrency returns the value of Currency.
+func (s *PlanPrice) GetCurrency() string {
+	return s.Currency
+}
+
+// GetInterval returns the value of Interval.
+func (s *PlanPrice) GetInterval() string {
+	return s.Interval
+}
+
+// GetDefault returns the value of Default.
+func (s *PlanPrice) GetDefault() bool {
+	return s.Default
+}
+
+// GetTier returns the value of Tier.
+func (s *PlanPrice) GetTier() string {
+	return s.Tier
+}
+
+// SetID sets the value of ID.
+func (s *PlanPrice) SetID(val string) {
+	s.ID = val
+}
+
+// SetAmountCents sets the value of AmountCents.
+func (s *PlanPrice) SetAmountCents(val int64) {
+	s.AmountCents = val
+}
+
+// SetCurrency sets the value of Currency.
+func (s *PlanPrice) SetCurrency(val string) {
+	s.Currency = val
+}
+
+// SetInterval sets the value of Interval.
+func (s *PlanPrice) SetInterval(val string) {
+	s.Interval = val
+}
+
+// SetDefault sets the value of Default.
+func (s *PlanPrice) SetDefault(val bool) {
+	s.Default = val
+}
+
+// SetTier sets the value of Tier.
+func (s *PlanPrice) SetTier(val string) {
+	s.Tier = val
+}
+
+// What one tier allows for one feature in a UTC day.
+// Ref: #/components/schemas/PlanTierAllowance
+type PlanTierAllowance struct {
+	// The daily ceiling; with `unlimited`, the fair-use guard behind it.
+	Limit     int64 `json:"limit"`
+	Unlimited bool  `json:"unlimited"`
+}
+
+// GetLimit returns the value of Limit.
+func (s *PlanTierAllowance) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetUnlimited returns the value of Unlimited.
+func (s *PlanTierAllowance) GetUnlimited() bool {
+	return s.Unlimited
+}
+
+// SetLimit sets the value of Limit.
+func (s *PlanTierAllowance) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetUnlimited sets the value of Unlimited.
+func (s *PlanTierAllowance) SetUnlimited(val bool) {
+	s.Unlimited = val
+}
+
+// Ref: #/components/schemas/Plans
+type Plans struct {
+	Features []PlanFeature `json:"features"`
+	Prices   []PlanPrice   `json:"prices"`
+	// The features whose ceiling refuses today.
+	Enforced []string `json:"enforced"`
+}
+
+// GetFeatures returns the value of Features.
+func (s *Plans) GetFeatures() []PlanFeature {
+	return s.Features
+}
+
+// GetPrices returns the value of Prices.
+func (s *Plans) GetPrices() []PlanPrice {
+	return s.Prices
+}
+
+// GetEnforced returns the value of Enforced.
+func (s *Plans) GetEnforced() []string {
+	return s.Enforced
+}
+
+// SetFeatures sets the value of Features.
+func (s *Plans) SetFeatures(val []PlanFeature) {
+	s.Features = val
+}
+
+// SetPrices sets the value of Prices.
+func (s *Plans) SetPrices(val []PlanPrice) {
+	s.Prices = val
+}
+
+// SetEnforced sets the value of Enforced.
+func (s *Plans) SetEnforced(val []string) {
+	s.Enforced = val
+}
+
 // Every refusal, whatever its status: `{"error": msg}`. `code` is set only where a client branches on
 // the reason (the auth flows).
 // Ref: #/components/schemas/Problem
@@ -1025,8 +1343,53 @@ func (s *ProblemStatusCode) SetResponse(val Problem) {
 	s.Response = val
 }
 
+// A single item: `{"data": ...}`.
+type RecordDictionaryGapOK struct {
+	Data DictionaryGapRecorded `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RecordDictionaryGapOK) GetData() DictionaryGapRecorded {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RecordDictionaryGapOK) SetData(val DictionaryGapRecorded) {
+	s.Data = val
+}
+
 // RemoveFromWatchlistNoContent is response for RemoveFromWatchlist operation.
 type RemoveFromWatchlistNoContent struct{}
+
+// A single item: `{"data": ...}`.
+type ResolveJobDescriptionOK struct {
+	Data ResolvedJob `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ResolveJobDescriptionOK) GetData() ResolvedJob {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ResolveJobDescriptionOK) SetData(val ResolvedJob) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/ResolvedJob
+type ResolvedJob struct {
+	JobSlug string `json:"job_slug"`
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *ResolvedJob) GetJobSlug() string {
+	return s.JobSlug
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *ResolvedJob) SetJobSlug(val string) {
+	s.JobSlug = val
+}
 
 // A single item: `{"data": ...}`.
 type SearchCitiesOK struct {

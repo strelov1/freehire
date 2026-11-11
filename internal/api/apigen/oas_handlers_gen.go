@@ -440,6 +440,82 @@ func (s *Server) handleGetMyUsageRequest(args [0]string, argsEscaped bool, w htt
 	}
 }
 
+// handleGetPlansRequest handles getPlans operation.
+//
+// What each plan allows and what it costs, read from the configuration metering uses.
+//
+// GET /plans
+func (s *Server) handleGetPlansRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err error
+	)
+
+	var rawBody []byte
+
+	var response *GetPlansOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetPlansOperation,
+			OperationSummary: "",
+			OperationID:      "getPlans",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = *GetPlansOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetPlans(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetPlans(ctx)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetPlansResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleGetTalentFacetsRequest handles getTalentFacets operation.
 //
 // GET /talent/facets
@@ -1258,6 +1334,101 @@ func (s *Server) handleOneClickUnsubscribeRequest(args [0]string, argsEscaped bo
 	}
 }
 
+// handleRecordDictionaryGapRequest handles recordDictionaryGap operation.
+//
+// Asks for a term the dictionary does not resolve. 409 when it already does. Session cookie only.
+//
+// POST /dictionary/gaps
+func (s *Server) handleRecordDictionaryGapRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: RecordDictionaryGapOperation,
+			ID:   "recordDictionaryGap",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeRecordDictionaryGapRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *RecordDictionaryGapOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    RecordDictionaryGapOperation,
+			OperationSummary: "",
+			OperationID:      "recordDictionaryGap",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *DictionaryGap
+			Params   = struct{}
+			Response = *RecordDictionaryGapOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.RecordDictionaryGap(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.RecordDictionaryGap(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeRecordDictionaryGapResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleRemoveFromWatchlistRequest handles removeFromWatchlist operation.
 //
 // A company that was not on the list is not an error.
@@ -1345,6 +1516,102 @@ func (s *Server) handleRemoveFromWatchlistRequest(args [1]string, argsEscaped bo
 	}
 
 	if err := encodeRemoveFromWatchlistResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleResolveJobDescriptionRequest handles resolveJobDescription operation.
+//
+// Turns a catalogue job, a vacancy URL or pasted text into a job the tailoring workspace can open. 404
+// for an unknown slug, 422 for a URL with no readable vacancy. Session cookie only.
+//
+// POST /me/jd/resolve
+func (s *Server) handleResolveJobDescriptionRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ResolveJobDescriptionOperation,
+			ID:   "resolveJobDescription",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeResolveJobDescriptionRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *ResolveJobDescriptionOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ResolveJobDescriptionOperation,
+			OperationSummary: "",
+			OperationID:      "resolveJobDescription",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *JobDescriptionSource
+			Params   = struct{}
+			Response = *ResolveJobDescriptionOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ResolveJobDescription(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ResolveJobDescription(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeResolveJobDescriptionResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

@@ -32,6 +32,12 @@ type Handler interface {
 	//
 	// GET /me/usage
 	GetMyUsage(ctx context.Context) (*GetMyUsageOK, error)
+	// GetPlans implements getPlans operation.
+	//
+	// What each plan allows and what it costs, read from the configuration metering uses.
+	//
+	// GET /plans
+	GetPlans(ctx context.Context) (*GetPlansOK, error)
 	// GetTalentFacets implements getTalentFacets operation.
 	//
 	// GET /talent/facets
@@ -74,12 +80,25 @@ type Handler interface {
 	//
 	// POST /email-prefs/one-click
 	OneClickUnsubscribe(ctx context.Context, params OneClickUnsubscribeParams) (*OneClickUnsubscribeOK, error)
+	// RecordDictionaryGap implements recordDictionaryGap operation.
+	//
+	// Asks for a term the dictionary does not resolve. 409 when it already does. Session cookie only.
+	//
+	// POST /dictionary/gaps
+	RecordDictionaryGap(ctx context.Context, req *DictionaryGap) (*RecordDictionaryGapOK, error)
 	// RemoveFromWatchlist implements removeFromWatchlist operation.
 	//
 	// A company that was not on the list is not an error.
 	//
 	// DELETE /me/watchlist/{slug}
 	RemoveFromWatchlist(ctx context.Context, params RemoveFromWatchlistParams) error
+	// ResolveJobDescription implements resolveJobDescription operation.
+	//
+	// Turns a catalogue job, a vacancy URL or pasted text into a job the tailoring workspace can open. 404
+	// for an unknown slug, 422 for a URL with no readable vacancy. Session cookie only.
+	//
+	// POST /me/jd/resolve
+	ResolveJobDescription(ctx context.Context, req *JobDescriptionSource) (*ResolveJobDescriptionOK, error)
 	// SearchCities implements searchCities operation.
 	//
 	// Up to 20 cities whose name matches, optionally within one country.

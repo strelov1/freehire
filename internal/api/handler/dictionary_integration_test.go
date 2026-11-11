@@ -31,7 +31,7 @@ func TestDictionaryRecordNormalizesAndDeduplicatesTerms(t *testing.T) {
 	h := &dictionaryHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	h.register(api, middleware{cookie: auth.RequireAuth(iss, testVersions)})
+	h.register(api, middleware{cookie: auth.RequireAuth(iss, testVersions)}, newContract(contractHandlers{dictionaryHandlers: h}))
 
 	const path = "/api/v1/dictionary/gaps"
 	code, body := doDictionary(t, app, http.MethodPost, path, `{"kind":"specialization","term":"Underwater Basket Weaving"}`, cookie)
@@ -79,7 +79,7 @@ func TestIndustryDictionaryGapIsDeduplicatedByTheExistingQueue(t *testing.T) {
 	h := &dictionaryHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	h.register(api, middleware{cookie: auth.RequireAuth(iss, testVersions)})
+	h.register(api, middleware{cookie: auth.RequireAuth(iss, testVersions)}, newContract(contractHandlers{dictionaryHandlers: h}))
 
 	const path = "/api/v1/dictionary/gaps"
 	for i, term := range []string{"underwater basket weaving industry", "UNDERWATER BASKET WEAVING INDUSTRY"} {
@@ -115,7 +115,7 @@ func TestDictionaryMCPAndWebsiteShareQueue(t *testing.T) {
 		t.Fatal(err)
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(issuer, testVersions)})
+	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(issuer, testVersions)}, newContract(contractHandlers{dictionaryHandlers: h}))
 	cookie := &http.Cookie{Name: auth.CookieName, Value: token}
 	tool := (&assistantHandlers{dictionary: h}).dictionaryMCPTools()[0]
 	body := json.RawMessage(`{"kind":"skill","term":"Unlisted Quasar Tech"}`)
