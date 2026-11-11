@@ -120,13 +120,6 @@ func interactionOut(i jobtracking.Interaction) apigen.Interaction {
 	}
 }
 
-func nilString(s *string) apigen.NilString {
-	if s == nil {
-		return apigen.NilString{Null: true}
-	}
-	return apigen.NewNilString(*s)
-}
-
 // trackingError maps the jobtracking sentinels onto HTTP statuses. Anything else
 // (e.g. a DB failure) falls through to the central RenderError as a 500.
 func trackingError(err error) error {
