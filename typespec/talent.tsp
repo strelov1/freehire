@@ -65,7 +65,10 @@ model FacetRange {
 model TalentFacets {
   total: int32;
 
-  /** Facet name → value → member count. */
+  /**
+   * Facet name → value → member count. A count of -1 means the value is present but
+   * held by too few members to say how many; 0 means nobody holds it.
+   */
   facets: Record<Record<int32>>;
 
   /** Ranged facets. The catalogue has none, so this is always empty. */

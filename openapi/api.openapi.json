@@ -1526,7 +1526,7 @@
                 "format": "int32"
               }
             },
-            "description": "Facet name → value → member count."
+            "description": "Facet name → value → member count. A count of -1 means the value is present but\nheld by too few members to say how many; 0 means nobody holds it."
           },
           "stats": {
             "type": "object",

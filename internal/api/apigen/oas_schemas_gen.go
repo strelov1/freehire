@@ -1344,7 +1344,8 @@ func (s *TalentEducation) SetYear(val OptPeriodDate) {
 // Ref: #/components/schemas/TalentFacets
 type TalentFacets struct {
 	Total int32 `json:"total"`
-	// Facet name → value → member count.
+	// Facet name → value → member count. A count of -1 means the value is present but held by too few
+	// members to say how many; 0 means nobody holds it.
 	Facets TalentFacetsFacets `json:"facets"`
 	// Ranged facets. The catalogue has none, so this is always empty.
 	Stats TalentFacetsStats `json:"stats"`
@@ -1380,7 +1381,8 @@ func (s *TalentFacets) SetStats(val TalentFacetsStats) {
 	s.Stats = val
 }
 
-// Facet name → value → member count.
+// Facet name → value → member count. A count of -1 means the value is present but held by too few
+// members to say how many; 0 means nobody holds it.
 type TalentFacetsFacets map[string]TalentFacetsFacetsItem
 
 func (s *TalentFacetsFacets) init() TalentFacetsFacets {
