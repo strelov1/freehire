@@ -30,8 +30,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Test CI change selection
-        run: python3 -m unittest discover -s .github/scripts -p test_ci_changes.py
+      - name: Test CI scripts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
 
       - name: Select required checks
         id: scope
@@ -88,11 +88,14 @@ jobs:
 
       # Résumé PDF text extraction shells out to poppler's pdftotext (prod ships it in
       # the image / on the host); install it so the extraction tests run instead of skip.
-      # Bounded and retried: a hung apt mirror otherwise holds the runner for the
-      # job's whole 6-hour budget instead of failing in a minute. Observed five
-      # times in a row on 2026-08-18, each run stuck on this step while sibling
-      # branches installed fine — so it is a per-runner stall, and a fresh
-      # attempt is the fix. `timeout` bounds each command; the loop retries.
+      # Keep the runner's mirror+file sources and Ubuntu signing keys, but use an
+      # independent HTTPS mirror before the Ubuntu hosts that failed DNS across
+      # repeated runners on 2026-11-11. Request timeouts allow bounded failover.
+      - name: Configure APT mirror fallback
+        if: matrix.task != 'checks'
+        run: sudo bash .github/scripts/configure-apt-mirrors.sh
+
+      # Bound the entire command too: a mirror trickling data can evade request timeouts.
       - name: Install poppler-utils
         if: matrix.task != 'checks'
         timeout-minutes: 6
@@ -1183,7 +1186,11 @@ jobs:
       # required check list names jobs. It runs wherever web-work does, which the `web` job
       # below reports on every PR. Needs no backend, no secrets and no network beyond the
       # Chromium download.
+      - name: Configure APT mirror fallback
+        run: sudo bash ../.github/scripts/configure-apt-mirrors.sh
+
       - name: Install Chromium
+        timeout-minutes: 8
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Accessibility check (axe-core)

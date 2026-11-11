@@ -248,17 +248,36 @@ func (s *fakeStore) ClaimSubscriptionMatches(_ context.Context, a db.ClaimSubscr
 		if rows[i].PersonLastSentAt.Valid {
 			continue
 		}
-		for _, o := range rows {
-			if o.UserID != rows[i].UserID || o.Channel != rows[i].Channel ||
-				(rows[i].Channel == ChannelWebhook && o.SubscriptionID != rows[i].SubscriptionID) {
-				continue
-			}
-			if t := s.delivery[o.SubscriptionID].LastDigestSentAt; t.Valid && (!rows[i].PersonLastSentAt.Valid || t.Time.After(rows[i].PersonLastSentAt.Time)) {
-				rows[i].PersonLastSentAt = t
-			}
-		}
+		info := s.delivery[rows[i].SubscriptionID]
+		info.ID, info.UserID = rows[i].SubscriptionID, rows[i].UserID
+		rows[i].PersonLastSentAt = s.lastDigestSent(s.delivery, info)
 	}
 	return rows, nil
+}
+
+// Delivery fixtures include active siblings even when they have no pending matches.
+func (s *fakeStore) lastDigestSent(src map[int64]db.GetSubscriptionForDeliveryRow, info db.GetSubscriptionForDeliveryRow) pgtype.Timestamptz {
+	last := info.PersonLastSentAt
+	for id, other := range src {
+		ownerID := other.UserID
+		if ownerID == 0 {
+			ownerID = id
+			for _, claim := range s.claimed {
+				if claim.SubscriptionID == id && claim.UserID != 0 {
+					ownerID = claim.UserID
+					break
+				}
+			}
+		}
+		if ownerID != info.UserID || other.Channel != info.Channel ||
+			(info.Channel == ChannelWebhook && id != info.ID) {
+			continue
+		}
+		if t := other.LastDigestSentAt; t.Valid && (!last.Valid || t.Time.After(last.Time)) {
+			last = t
+		}
+	}
+	return last
 }
 
 // ListDeliveryCandidates lists the subscriptions the scripted claim holds matches for,
@@ -284,24 +303,7 @@ func (s *fakeStore) ListDeliveryCandidates(context.Context) ([]db.ListDeliveryCa
 				info.UserID = c.SubscriptionID
 			}
 		}
-		// The owner's newest stamp on the channel, as the SQL reads it.
-		for _, o := range s.claimed {
-			other := src[o.SubscriptionID]
-			ownerID := other.UserID
-			if ownerID == 0 {
-				ownerID = o.UserID
-			}
-			if ownerID == 0 {
-				ownerID = o.SubscriptionID
-			}
-			if ownerID != info.UserID || other.Channel != info.Channel ||
-				(info.Channel == ChannelWebhook && o.SubscriptionID != info.ID) {
-				continue
-			}
-			if t := src[o.SubscriptionID].LastDigestSentAt; t.Valid && (!info.PersonLastSentAt.Valid || t.Time.After(info.PersonLastSentAt.Time)) {
-				info.PersonLastSentAt = t
-			}
-		}
+		info.PersonLastSentAt = s.lastDigestSent(src, info)
 		rows = append(rows, db.ListDeliveryCandidatesRow(info))
 	}
 	return rows, nil

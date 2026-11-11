@@ -124,6 +124,54 @@ func TestDeliver_LastSendIsScopedToTheMessage(t *testing.T) {
 	}
 }
 
+func TestDeliver_AlreadySentSiblingWithoutPendingMatches(t *testing.T) {
+	now := time.Date(2026, 8, 14, 10, 0, 0, 0, time.UTC)
+	for _, afterListing := range []bool{false, true} {
+		name := "before listing"
+		if afterListing {
+			name = "after listing"
+		}
+		t.Run(name, func(t *testing.T) {
+			info := func(id int64) db.GetSubscriptionForDeliveryRow {
+				return telegramInfo(id, func(i *db.GetSubscriptionForDeliveryRow) {
+					i.UserID = 42
+					i.DigestFrequency = FrequencyDaily
+					i.DigestTime = pgTime(9, 0)
+				})
+			}
+			sibling := info(2)
+			sibling.LastDigestSentAt = pgtype.Timestamptz{Time: now.Add(-time.Minute), Valid: true}
+			store := &fakeStore{
+				claimed: []db.ClaimSubscriptionMatchesRow{
+					{SubscriptionID: 1, JobID: 10, UserID: 42, Channel: ChannelTelegram},
+				},
+				delivery:   map[int64]db.GetSubscriptionForDeliveryRow{1: info(1), 2: sibling},
+				digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
+			}
+			if afterListing {
+				store.listed = map[int64]db.GetSubscriptionForDeliveryRow{1: info(1), 2: info(2)}
+			}
+			notifier := &fakeNotifier{}
+			r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+			r.now = func() time.Time { return now }
+			stats, err := r.Run(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(notifier.sent) != 0 || stats.Deferred != 1 {
+				t.Fatalf("sent=%d deferred=%d, want 0/1", len(notifier.sent), stats.Deferred)
+			}
+			wantClaims := 0
+			if afterListing {
+				wantClaims = 1
+			}
+			if len(store.claimParams) != wantClaims || len(store.released) != wantClaims {
+				t.Fatalf("claims=%d releases=%d, want %d each", len(store.claimParams), len(store.released), wantClaims)
+			}
+		})
+	}
+}
+
 // The recheck after the lease stays: quiet hours began, or the chat was unlinked, between the
 // listing and the claim. The lease is then released, as before.
 func TestDeliver_RechecksAfterTheLease(t *testing.T) {
