@@ -197,6 +197,101 @@ func TestRegionScopeFromDescription(t *testing.T) {
 			[]string{"ca"}, []string{"north_america"},
 		},
 		{
+			"HTML wrapped and list",
+			"<p>We are hiring in Canada\nand the US.</p>",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"HTML CRLF wrapped list",
+			"<p>We are hiring in Canada\r\n\tand\tthe US.</p>",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"plain wrapped or list",
+			"We are hiring in Canada\n or the US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"CRLF and tab wrapped list",
+			"We are hiring in Canada\r\n\tand\tthe US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"wrapped ampersand list",
+			"We are hiring in Canada\n & the US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"blank line ends restriction before connector",
+			"We are hiring in Canada\n\nand the US.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"separate HTML paragraphs end restriction before connector",
+			"<p>We are hiring in Canada</p><p>and the US.</p>",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"connector must be a whole word",
+			"We are hiring in Canada\nAndroid teams work in the US.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"nested HTML block ends restriction before connector",
+			"<div>We are hiring in Canada<div>and the US.</div></div>",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"whitespace only blank line ends restriction",
+			"We are hiring in Canada\r\n\t\r\nand the US.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"uppercase wrapped connector",
+			"We are hiring in Canada\nAND the US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"plain wrap after and",
+			"We are hiring in Canada and\nthe US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"HTML wrap after and",
+			"<p>We are hiring in Canada and\nthe US.</p>",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"plain wrap after comma",
+			"We are hiring in Canada,\nthe US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"HTML wrap after comma",
+			"<p>We are hiring in Canada,\nthe US.</p>",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"plain wrap after or",
+			"We are hiring in Canada or\nthe US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"plain wrap after ampersand",
+			"We are hiring in Canada &\nthe US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"blank line after comma ends restriction",
+			"We are hiring in Canada,\n\nthe US.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"HTML block after comma ends restriction",
+			"<p>We are hiring in Canada,\n<div>the US.</div></p>",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
 			"empty description",
 			"",
 			nil, nil,

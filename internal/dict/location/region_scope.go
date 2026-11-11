@@ -65,7 +65,7 @@ const clauseWindow = 200
 // found in a sentence that denies it ("not restricted to the US") is not a match, the
 // same negation handling EligibilityFromDescription uses.
 func RegionScopeFromDescription(desc string) (countries, regions []string) {
-	lower := strings.ToLower(htmltext.ToTextFull(desc))
+	lower := strings.ToLower(htmltext.ToTextFull(joinWrappedRegionLists(desc)))
 	lower = strings.NewReplacer("u.s.a.", "usa", "u.s.", "us", "u.k.", "uk").Replace(lower)
 	// Keep phrase priority, but let an unresolved clause yield to a later anchor.
 	for _, p := range regionScopePhrases {
@@ -88,6 +88,37 @@ func RegionScopeFromDescription(desc string) (countries, regions []string) {
 	return nil, nil
 }
 
+// joinWrappedRegionLists joins source line wraps beside a list connector or after a comma.
+// Running before HTML extraction keeps block-element boundaries distinct from wraps.
+func joinWrappedRegionLists(desc string) string {
+	lines := strings.Split(strings.ReplaceAll(desc, "\r\n", "\n"), "\n")
+	var joined strings.Builder
+	joined.Grow(len(desc))
+	previousNonblank := false
+	previousContinues := false
+	for i, line := range lines {
+		fields := strings.Fields(line)
+		nonblank := len(fields) > 0
+		if i > 0 {
+			continuation := previousNonblank && nonblank &&
+				(previousContinues || len(fields) > 1 && isRegionListConnector(fields[0]))
+			if continuation {
+				joined.WriteByte(' ')
+			} else {
+				joined.WriteByte('\n')
+			}
+		}
+		joined.WriteString(line)
+		previousNonblank = nonblank
+		previousContinues = nonblank && (isRegionListConnector(fields[len(fields)-1]) || strings.HasSuffix(fields[len(fields)-1], ","))
+	}
+	return joined.String()
+}
+
+func isRegionListConnector(word string) bool {
+	return strings.EqualFold(word, "and") || strings.EqualFold(word, "or") || word == "&"
+}
+
 func regionScopeFromClause(clause string) (countries, regions []string) {
 	countrySet := map[string]struct{}{}
 	regionSet := map[string]struct{}{}
@@ -101,6 +132,7 @@ func regionScopeFromClause(clause string) (countries, regions []string) {
 // splitting a conjunction only when the full token names no known place. Each
 // remaining prefix is tried longest-first so a list can contain compound names.
 func resolveRestrictionToken(tok string, countrySet, regionSet map[string]struct{}) {
+	tok = strings.Join(strings.Fields(tok), " ")
 	tok = strings.TrimSuffix(strings.Trim(tok, "* "), " only")
 	tok = strings.TrimPrefix(tok, "the ")
 	// No neighboring token is supplied: unlike Parse, a restriction list cannot

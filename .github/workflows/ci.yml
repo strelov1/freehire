@@ -88,15 +88,20 @@ jobs:
 
       # Résumé PDF text extraction shells out to poppler's pdftotext (prod ships it in
       # the image / on the host); install it so the extraction tests run instead of skip.
-      # Bounded and retried: a hung apt mirror otherwise holds the runner for the
-      # job's whole 6-hour budget instead of failing in a minute. Observed five
-      # times in a row on 2026-08-18, each run stuck on this step while sibling
-      # branches installed fine — so it is a per-runner stall, and a fresh
-      # attempt is the fix. `timeout` bounds each command; the loop retries.
+      # Use Ubuntu's official HTTPS archive: Azure's HTTP mirror stalled across
+      # every test shard on 2026-11-11. Cover both direct/deb822 sources and the
+      # runner's mirror lists, keeping suites, components and signing keys intact.
+      # Each apt command remains bounded, with three attempts for transient faults.
       - name: Install poppler-utils
         if: matrix.task != 'checks'
         timeout-minutes: 6
         run: |
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources /etc/apt/apt-mirrors*.txt; do
+            [ -f "$source" ] || continue
+            sudo sed -i -E \
+              -e 's@https?://azure\.archive\.ubuntu\.com/ubuntu/?@https://archive.ubuntu.com/ubuntu/@g' \
+              -e 's@http://((archive|security)\.ubuntu\.com/ubuntu/?)@https://\1@g' "$source"
+          done
           for attempt in 1 2 3; do
             if timeout 100 sudo apt-get update \
               && timeout 60 sudo apt-get install -y --no-install-recommends poppler-utils; then
@@ -1183,8 +1188,17 @@ jobs:
       # required check list names jobs. It runs wherever web-work does, which the `web` job
       # below reports on every PR. Needs no backend, no secrets and no network beyond the
       # Chromium download.
+      # Playwright's system dependencies use apt too; apply the same HTTPS mirror fix.
       - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 10
+        run: |
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources /etc/apt/apt-mirrors*.txt; do
+            [ -f "$source" ] || continue
+            sudo sed -i -E \
+              -e 's@https?://azure\.archive\.ubuntu\.com/ubuntu/?@https://archive.ubuntu.com/ubuntu/@g' \
+              -e 's@http://((archive|security)\.ubuntu\.com/ubuntu/?)@https://\1@g' "$source"
+          done
+          pnpm exec playwright install --with-deps chromium
 
       - name: Accessibility check (axe-core)
         run: pnpm run test:a11y
