@@ -445,3 +445,18 @@ func TestEmailPrefs_UndecodableBodyIsA400InTheUsualShape(t *testing.T) {
 		t.Errorf("status = %d, body = %q; want 400 {\"error\":\"invalid body\"}", res.Status, body)
 	}
 }
+
+// Fiber answers HEAD on every Get route; a route moved into the contract must keep
+// doing so (headers and status of the GET, no body), not fall to the generated
+// router's 405.
+func TestEmailPrefs_HeadIsServedLikeGetWithoutABody(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	app := newEmailPrefsApp(queries)
+	token := mintPrefsToken(t, seedPrefsUser(t, pool, "head@example.test"), emailprefs.GroupNews)
+
+	res, body := doPrefs(t, app, http.MethodHead, "/api/v1/email-prefs?t="+token, "")
+	if res.Status != http.StatusOK || body != "" {
+		t.Errorf("status = %d, body = %q; want 200 and no body", res.Status, body)
+	}
+}

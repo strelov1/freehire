@@ -49,6 +49,13 @@ func newContract(h contractHandlers) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		fault := &contractFault{}
 		c.Locals(localsContractFault, fault)
+		// Fiber routes HEAD to every Get, but the generated router knows only the
+		// methods the contract names. Serve it as GET and put HEAD back, so fasthttp,
+		// which decides after the handler, still drops the body.
+		if c.Method() == fiber.MethodHead {
+			c.Request().Header.SetMethod(fiber.MethodGet)
+			defer c.Request().Header.SetMethod(fiber.MethodHead)
+		}
 		if err := serve(c); err != nil {
 			return err
 		}

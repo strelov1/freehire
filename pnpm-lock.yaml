@@ -4,6 +4,10 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  undici@>=7.0.0 <7.30.1: 7.30.1
+  undici@>=8.0.0 <8.12.4: 8.12.4
+
 importers:
 
   .:
@@ -918,12 +922,12 @@ packages:
     resolution: {integrity: sha512-b7zoBQvpWp0vuN5q2vK2RRBR2SvuruQAs50DApdDveBSn3eSYd84IaHodFqQIMlvY9K2VnyBUEXgwOBuGU9GBg==}
     engines: {node: '>=14'}
 
-  undici@7.24.4:
-    resolution: {integrity: sha512-BM/JzwwaRXxrLdElV2Uo6cTLEjhSb3WXboncJamZ15NgUURmvlXvxa6xkwIOILIjPNo9i8ku136ZvWV0Uly8+w==}
+  undici@7.30.1:
+    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
     engines: {node: '>=20.18.1'}
 
-  undici@8.12.3:
-    resolution: {integrity: sha512-+fdndUTwBP86cVjihTp21hZHo7d6oj1c/47XPA3lL8mM0XHs+C4EkcjmgRsFnFk2f/UONGDy9ItBItmXsLOQHw==}
+  undici@8.12.4:
+    resolution: {integrity: sha512-8Mx+uNKKER2bA4AdtedkqRbwUCIJFr2nJckXRe5yrDqzePqwLP7VNcctN8/XdmDSbF7mS+jJKIszlL+vbam1VA==}
     engines: {node: '>=22.19.0'}
 
   verkit@0.5.0:
@@ -1318,14 +1322,14 @@ snapshots:
     dependencies:
       '@scalar/helpers': 0.12.0
       pathe: 2.0.3
-      undici: 7.24.4
+      undici: 7.30.1
       yaml: 2.9.0
 
   '@scalar/json-magic@0.18.0':
     dependencies:
       '@scalar/helpers': 0.17.0
       pathe: 2.0.3
-      undici: 8.12.3
+      undici: 8.12.4
       yaml: 2.9.1
 
   '@scalar/json-schema-validator@0.1.18':
@@ -1762,9 +1766,9 @@ snapshots:
 
   unbash@4.0.10: {}
 
-  undici@7.24.4: {}
+  undici@7.30.1: {}
 
-  undici@8.12.3: {}
+  undici@8.12.4: {}
 
   verkit@0.5.0: {}
 
