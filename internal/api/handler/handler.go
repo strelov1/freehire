@@ -291,24 +291,9 @@ func pageParams(c *fiber.Ctx) (limit, offset int, err error) {
 	return pageParamsWindowed(c, defaultLimit, maxLimit)
 }
 
-// listResponse writes the shared paginated-list envelope: the data slice plus a
-// meta block carrying the filtered total and the limit/offset echoed back. It is
-// the single source of the list wire shape, so the jobs/companies/search list
-// endpoints cannot drift from one another.
-func listResponse(c *fiber.Ctx, data any, total int64, limit, offset int) error {
-	return c.JSON(fiber.Map{
-		"data": data,
-		"meta": fiber.Map{
-			"total":  total,
-			"limit":  limit,
-			"offset": offset,
-		},
-	})
-}
-
-// listResponseWithHidden is listResponse plus the count a default filter suppressed.
+// listResponseWithHidden is the shared list envelope plus the count a default filter suppressed.
 //
-// Separate from listResponse rather than a widened one: every other listing hides nothing,
+// Separate from the plain envelope rather than a widened one: every other listing hides nothing,
 // and a `hidden: 0` on all of them would be a field readers have to learn to ignore.
 func listResponseWithHidden(c *fiber.Ctx, data any, total, hidden int64, limit, offset int) error {
 	return c.JSON(fiber.Map{
@@ -322,7 +307,7 @@ func listResponseWithHidden(c *fiber.Ctx, data any, total, hidden int64, limit, 
 	})
 }
 
-// listResponseWithIgnored is listResponse plus the query params the filter did
+// listResponseWithIgnored is the shared list envelope plus the query params the filter did
 // not read and the facet values outside their closed vocabulary (values: see
 // search.IgnoredValues; nil for an endpoint that builds no job filter), each
 // omitted entirely when there are none.

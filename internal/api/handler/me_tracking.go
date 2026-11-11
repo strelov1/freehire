@@ -64,7 +64,7 @@ type myJobResponse struct {
 // board is the Kanban view — jobs with saved_at, applied_at, or stage set).
 // meta carries total/limit/offset for the active filter plus the per-filter
 // counts for the tab badges — which is also why this writes its own envelope
-// instead of listResponse. Closed jobs stay listed: a user's history must not
+// instead of the shared list envelope. Closed jobs stay listed: a user's history must not
 // shrink when a posting closes.
 //
 // ?compact=1 is the Kanban board's read: each card carries its identity and tag row
