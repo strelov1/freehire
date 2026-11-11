@@ -132,3 +132,70 @@ func TestTalentbrewListingErrorFailsTheBoard(t *testing.T) {
 		t.Fatal("want listing error")
 	}
 }
+
+func TestTalentbrewDeclaredSingleEmptyPage(t *testing.T) {
+	fake := (&routedHTTP{}).route("search-jobs/results", tbListing(1))
+	jobs, err := NewTalentbrew(fake).Fetch(context.Background(), CompanyEntry{Board: "careers.aldi.us"})
+	if err != nil || len(jobs) != 0 {
+		t.Fatalf("declared single empty page: jobs=%v err=%v", jobs, err)
+	}
+}
+
+func TestTalentbrewPaginationBoundRequiresCompletion(t *testing.T) {
+	for _, pages := range []int{100, 101} {
+		t.Run(fmt.Sprintf("declared_%d_pages", pages), func(t *testing.T) {
+			fake := &routedHTTP{}
+			for page := 1; page <= 100; page++ {
+				fake.route(fmt.Sprintf("CurrentPage=%d&", page), tbListing(pages,
+					[2]string{fmt.Sprintf("/job/a/%d", page), fmt.Sprint(page)}))
+			}
+			jobs, err := NewTalentbrew(fake).(HydratingSource).FetchNew(context.Background(),
+				CompanyEntry{Board: "careers.aldi.us"}, func(string) bool { return true })
+			if pages == 100 && (err != nil || len(jobs) != 100) {
+				t.Fatalf("complete 100-page listing: jobs=%d err=%v", len(jobs), err)
+			}
+			if pages == 101 && (err == nil || len(jobs) != 0) {
+				t.Fatalf("100 of 101 pages cannot authorize a sweep: jobs=%d err=%v", len(jobs), err)
+			}
+		})
+	}
+}
+
+func TestTalentbrewIncompleteListingFailsBeforeHydration(t *testing.T) {
+	first := tbListing(2, [2]string{"/job/a/1", "1"})
+	for _, tc := range []struct {
+		name, first, second string
+		secondErr           error
+	}{
+		{name: "later fetch failure", first: first, secondErr: fmt.Errorf("temporary failure")},
+		{name: "later malformed JSON", first: first, second: `{`},
+		{name: "missing results", first: `{}`},
+		{name: "missing section", first: `{"results":"<a data-job-id=1 href=/job/a/1>A</a>"}`},
+		{name: "nested duplicate section", first: `{"results":"<section id=search-results data-total-pages=1><section id=search-results data-total-pages=1><a data-job-id=1 href=/job/a/1>A</a></section></section>"}`},
+		{name: "sibling duplicate sections", first: `{"results":"<section id=search-results data-total-pages=1><a data-job-id=1 href=/job/a/1>A</a></section><section id=search-results data-total-pages=1></section>"}`},
+		{name: "missing page declaration", first: strings.Replace(first, ` data-total-pages=\"2\"`, "", 1)},
+		{name: "invalid page declaration", first: strings.Replace(first, `data-total-pages=\"2\"`, `data-total-pages=\"unknown\"`, 1)},
+		{name: "later missing metadata", first: first, second: `{"results":"<a data-job-id=2 href=/job/b/2>B</a>"}`},
+		{name: "changed declaration", first: first, second: tbListing(1, [2]string{"/job/b/2", "2"})},
+		{name: "early empty page", first: tbListing(3, [2]string{"/job/a/1", "1"}), second: tbListing(3)},
+		{name: "empty first page before end", first: tbListing(2)},
+		{name: "repeated last page", first: first, second: first},
+		{name: "page cap", first: tbListing(tbMaxPages+1, [2]string{"/job/a/1", "1"})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := (&routedHTTP{}).route("CurrentPage=1&", tc.first).route("CurrentPage=2&", tc.second)
+			if tc.secondErr != nil {
+				fake.routeErr("CurrentPage=2&", tc.secondErr)
+			}
+			seenCalls := 0
+			jobs, err := NewTalentbrew(fake).(HydratingSource).FetchNew(context.Background(),
+				CompanyEntry{Company: "ALDI", Board: "careers.aldi.us"}, func(string) bool {
+					seenCalls++
+					return true
+				})
+			if err == nil || len(jobs) != 0 || seenCalls != 0 {
+				t.Fatalf("incomplete listing must fail before refresh/detail processing: jobs=%v err=%v seen calls=%d", jobs, err, seenCalls)
+			}
+		})
+	}
+}
