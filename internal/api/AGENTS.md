@@ -34,8 +34,9 @@ A migrated route is still a Fiber route: it keeps its middleware chain and ends 
   `contractIgnoredParams`.
 - The generated encoder leaves out only an unset `Opt*` and a nil slice. A Go field that
   was `omitempty` maps through `optString` / `nilIfEmpty`, or the answer changes shape.
-- The wrapper hands the generated router what Fiber already accepted: one trailing slash
-  and repeated params cut to the first value (`servedAsFiberWould`). An exploded array
+- The wrapper hands the generated router the request as Fiber already accepted it: the
+  matched route's own path (any letter case, one trailing slash) and repeated params cut to
+  the first value (`fiberTarget`). An exploded array
   param would be cut too, so that function changes before one is declared.
 - A binary answer (an image) works: `@body photo: bytes` with a fixed `contentType`.
 - Streams (SSE), websockets and redirects stay hand-written Fiber.

@@ -54,13 +54,18 @@ func newContract(h contractHandlers) fiber.Handler {
 		// Only the static options above can fail it, so this is a programming error.
 		panic("contract server: " + err.Error())
 	}
-	serve := adaptor.HTTPHandler(srv)
+	serve := adaptor.HTTPHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if target, ok := r.Context().Value(localsContractTarget).(*url.URL); ok {
+			r.URL.Path, r.URL.RawPath, r.URL.RawQuery = target.Path, "", target.RawQuery
+		}
+		srv.ServeHTTP(w, r)
+	}))
 	return func(c *fiber.Ctx) error {
 		fault := &contractFault{}
 		c.Locals(localsContractFault, fault)
 		query := queryValues(c)
 		c.Locals(localsContractQuery, query)
-		defer servedAsFiberWould(c, query)()
+		c.Locals(localsContractTarget, fiberTarget(c, query))
 		// Fiber routes HEAD to every Get, but the generated router knows only the
 		// methods the contract names. Serve it as GET and put HEAD back, so fasthttp,
 		// which decides after the handler, still drops the body.
@@ -122,38 +127,40 @@ func recordContractFault(ctx context.Context, err error) {
 	}
 }
 
-// servedAsFiberWould hands the generated router the request the way Fiber already
-// accepted it, and returns what puts the original back: Fiber matches a route with one
-// trailing slash and reads the first of repeated params, while the generated router
-// 404s the slash and refuses a repeated scalar param with a 400.
+// localsContractTarget is the URL the generated router is given instead of the one sent.
+const localsContractTarget = "contract.target"
+
+// fiberTarget is the request as Fiber already accepted it, for the generated router,
+// which is stricter: Fiber matches a route whatever the letter case and with one trailing
+// slash, and reads the first of repeated params, while the generated router 404s the
+// first two and refuses a repeated scalar param with a 400. The path is the matched
+// route's own, with the request's param values put in.
 //
 // shortcut: every repeated param is cut to its first value, which would also cut an
 // exploded array param; declare one only after this keeps the arrays the contract names.
-func servedAsFiberWould(c *fiber.Ctx, query url.Values) (restore func()) {
-	uri := c.Request().URI()
-	path, rawQuery := string(uri.Path()), string(uri.QueryString())
-	changed := false
-	if len(path) > 1 && strings.HasSuffix(path, "/") {
-		path, changed = strings.TrimSuffix(path, "/"), true
+func fiberTarget(c *fiber.Ctx, query url.Values) *url.URL {
+	segments := strings.Split(c.Route().Path, "/")
+	for i, seg := range segments {
+		if name, ok := strings.CutPrefix(seg, ":"); ok {
+			value, err := url.PathUnescape(c.Params(name))
+			if err != nil {
+				value = c.Params(name)
+			}
+			segments[i] = value
+		}
 	}
+	target := &url.URL{Path: strings.Join(segments, "/"), RawQuery: string(c.Request().URI().QueryString())}
 	for _, vals := range query {
 		if len(vals) > 1 {
 			first := make(url.Values, len(query))
 			for k, v := range query {
 				first[k] = v[:1]
 			}
-			rawQuery, changed = first.Encode(), true
+			target.RawQuery = first.Encode()
 			break
 		}
 	}
-	if !changed {
-		return func() {}
-	}
-	// The net/http adaptor reads the request line, not the parsed URI.
-	original := string(c.Request().RequestURI())
-	target := (&url.URL{Path: path, RawQuery: rawQuery}).RequestURI()
-	c.Request().SetRequestURI(target)
-	return func() { c.Request().SetRequestURI(original) }
+	return target
 }
 
 // contractQuery is the request's whole query, for an operation that reports what it did
