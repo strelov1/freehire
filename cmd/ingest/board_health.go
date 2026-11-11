@@ -14,6 +14,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -107,12 +108,13 @@ func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board, region
 // cooldown a concurrent RecordSuccess/ClearProviderCooldowns just cleared. Zero rows
 // affected means a newer writer already moved consecutive_failures past this one's
 // snapshot — expected under the race, not an error, so it is only logged, not returned.
-func (h *boardHealth) RecordFailure(ctx context.Context, provider, board, region, errMsg string) error {
+func (h *boardHealth) RecordFailure(ctx context.Context, provider, board, region string, cause error) error {
 	failures, err := h.q.RecordBoardFailure(ctx, db.RecordBoardFailureParams{
 		Provider:  provider,
 		Board:     board,
 		Region:    region,
-		LastError: pgtype.Text{String: errMsg, Valid: true},
+		LastError: pgtype.Text{String: cause.Error(), Valid: true},
+		BoardGone: errors.Is(cause, sources.ErrBoardGone),
 	})
 	if err != nil {
 		return err

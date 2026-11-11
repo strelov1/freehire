@@ -46,6 +46,78 @@ WITH closed AS (
 )
 SELECT count(*) FROM closed;
 
+-- name: CloseBoardGoneJobs :one
+-- Close one board only after repeated explicit disappearance spanning age_window and a recent
+-- successful sibling crawl. Revalidate current health in the UPDATE to close the read/write gap.
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at = now(), closed_reason = 'board_gone', updated_at = now()
+    WHERE closed_at IS NULL
+      AND source = sqlc.arg(source)
+      AND NOT is_private
+      AND external_id LIKE sqlc.arg(board_pattern)
+      AND EXISTS (
+          SELECT 1 FROM board_health h
+          WHERE h.provider = sqlc.arg(source)
+            AND h.board = sqlc.arg(board)
+            AND h.region = sqlc.arg(region)
+            AND h.consecutive_board_gone_failures >= 3
+            AND h.board_gone_since < now() - sqlc.arg(age_window)::interval
+            AND h.last_error_at >= h.board_gone_since + sqlc.arg(age_window)::interval
+            AND NOT EXISTS (
+                SELECT 1 FROM board_health regional
+                WHERE regional.provider = h.provider
+                  AND regional.board = h.board
+                  AND regional.region <> h.region
+            )
+            AND EXISTS (
+                SELECT 1 FROM board_health sibling
+                WHERE sibling.provider = h.provider
+                  AND (sibling.board, sibling.region) <> (h.board, h.region)
+                  AND sibling.board <> h.board
+                  AND sibling.consecutive_failures = 0
+                  AND sibling.last_success_at >= now() - interval '48 hours'
+            )
+      )
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
+
+-- name: CountBoardGoneJobs :one
+-- Dry-run twin of CloseBoardGoneJobs with the same current-health predicate.
+SELECT count(*) FROM jobs
+WHERE closed_at IS NULL
+  AND source = sqlc.arg(source)
+  AND NOT is_private
+  AND external_id LIKE sqlc.arg(board_pattern)
+  AND EXISTS (
+      SELECT 1 FROM board_health h
+      WHERE h.provider = sqlc.arg(source)
+        AND h.board = sqlc.arg(board)
+        AND h.region = sqlc.arg(region)
+        AND h.consecutive_board_gone_failures >= 3
+        AND h.board_gone_since < now() - sqlc.arg(age_window)::interval
+        AND h.last_error_at >= h.board_gone_since + sqlc.arg(age_window)::interval
+        AND NOT EXISTS (
+            SELECT 1 FROM board_health regional
+            WHERE regional.provider = h.provider
+              AND regional.board = h.board
+              AND regional.region <> h.region
+        )
+        AND EXISTS (
+            SELECT 1 FROM board_health sibling
+            WHERE sibling.provider = h.provider
+              AND (sibling.board, sibling.region) <> (h.board, h.region)
+              AND sibling.board <> h.board
+              AND sibling.consecutive_failures = 0
+              AND sibling.last_success_at >= now() - interval '48 hours'
+        )
+  );
+
 -- name: CloseChronicProviderJobs :one
 -- The chronic-board safety net's source-scoped sibling, for a BOARDLESS provider's chronic
 -- record (board = '', see ingest-board-health spec): such a record already stands for the

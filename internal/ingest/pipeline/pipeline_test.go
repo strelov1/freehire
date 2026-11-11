@@ -821,6 +821,25 @@ func TestRunIsolatesSourceFailure(t *testing.T) {
 	}
 }
 
+func TestRunClassifiesOnlyExplicitBoardGoneFailures(t *testing.T) {
+	health := &fakeHealth{}
+	r := Runner{
+		Registry:    registry(fakeSource{provider: "greenhouse", err: sources.ErrBoardGone}, fakeSource{provider: "lever", err: errors.New("403 forbidden")}),
+		Store:       &fakeStore{},
+		BoardHealth: health,
+	}
+	_, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Gone", Provider: "greenhouse", Board: "gone"},
+		{Company: "Refused", Provider: "lever", Board: "refused"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !reflect.DeepEqual(health.boardGone, []string{"greenhouse/gone/"}) {
+		t.Fatalf("boardGone evidence = %v, want only the explicit disappearance", health.boardGone)
+	}
+}
+
 func TestRunSkipsWorkOnCancelledContext(t *testing.T) {
 	src := fakeSource{provider: "greenhouse", jobs: []sources.Job{{ExternalID: "1", Title: "x"}}}
 	store := &fakeStore{}

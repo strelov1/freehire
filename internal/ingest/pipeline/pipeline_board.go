@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"log"
 	"slices"
 	"time"
@@ -33,7 +34,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 	src, ok := r.Registry[e.Provider]
 	if !ok {
 		log.Printf("ingest: %s/%s: unknown provider %q", e.Company, e.Board, e.Provider)
-		r.recordFailure(ctx, e, "unknown provider "+e.Provider)
+		r.recordFailure(ctx, e, errors.New("unknown provider "+e.Provider))
 		return Stats{Failed: 1}
 	}
 
@@ -62,7 +63,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		// would make a heavily-covered aggregator board MORE likely to be misclassified as
 		// failed as the coverage gate does its job better, not less.
 		if st.Failed > 0 && st.Ingested == 0 && st.Rejected == 0 && st.ATSCovered == 0 {
-			r.recordFailure(ctx, e, "streaming board failed with no progress")
+			r.recordFailure(ctx, e, errors.New("streaming board failed with no progress"))
 		} else {
 			r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st), r.completeListingFingerprint(ctx, src, listed, st))
 		}
@@ -81,7 +82,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		// Log the cause so a failed board is diagnosable (the source error carries
 		// the HTTP status / timeout); the run still isolates and continues.
 		log.Printf("ingest: %s board %q (%s) failed: %v", e.Provider, e.Board, e.Company, err)
-		r.recordFailure(ctx, e, err.Error())
+		r.recordFailure(ctx, e, err)
 		return Stats{Failed: 1}
 	}
 	return r.ingestFetched(ctx, e, fetched)

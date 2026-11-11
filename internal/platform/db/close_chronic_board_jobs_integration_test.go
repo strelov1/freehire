@@ -44,6 +44,132 @@ func seedChronicBoardHealth(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	}
 }
 
+func seedConfirmedGoneBoard(t *testing.T, ctx context.Context, pool *pgxpool.Pool, q *Queries, provider, board string) {
+	t.Helper()
+	for range 3 {
+		if _, err := q.RecordBoardFailure(ctx, RecordBoardFailureParams{
+			Provider: provider, Board: board, Region: "",
+			LastError: pgtype.Text{String: "teamtailor: " + board + ": " + "board no longer exists on the platform", Valid: true},
+			BoardGone: true,
+		}); err != nil {
+			t.Fatalf("seed board-gone health %s/%s: %v", provider, board, err)
+		}
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE board_health SET board_gone_since = now() - interval '10 days',
+		 last_error_at = now() - interval '2 days' WHERE provider = $1 AND board = $2`,
+		provider, board); err != nil {
+		t.Fatalf("age board-gone health %s/%s: %v", provider, board, err)
+	}
+	if _, err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
+		Provider: provider, Board: "healthy-sibling", Region: "",
+		LastIngestedCount: pgtype.Int4{Int32: 1, Valid: true}, Reached: true,
+	}); err != nil {
+		t.Fatalf("seed successful sibling %s: %v", provider, err)
+	}
+}
+
+// TestCloseBoardGoneJobsRequiresRepeatedEvidenceAndProviderHealth proves the special path
+// only closes after three consecutive explicit board-gone responses spanning a week while a
+// sibling board has a recent success, preserving sibling jobs and search cleanup.
+func TestCloseBoardGoneJobsRequiresRepeatedEvidenceAndProviderHealth(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	seedConfirmedGoneBoard(t, ctx, pool, q, "teamtailor", "gone-board")
+	deadParams := ingestParams(externalid.Namespace("gone-board", "1"), "Stale role")
+	deadParams.Source = "teamtailor"
+	dead, err := ingestUpsert(ctx, q, deadParams)
+	if err != nil {
+		t.Fatalf("upsert gone-board job: %v", err)
+	}
+	siblingParams := ingestParams(externalid.Namespace("healthy-sibling", "2"), "Live role")
+	siblingParams.Source = "teamtailor"
+	sibling, err := ingestUpsert(ctx, q, siblingParams)
+	if err != nil {
+		t.Fatalf("upsert sibling job: %v", err)
+	}
+
+	rows, err := q.ListBoardGoneBoards(ctx, ListBoardGoneBoardsParams{
+		AgeWindow: pgtype.Interval{Days: 7, Valid: true}, MaxBoards: 10,
+	})
+	if err != nil {
+		t.Fatalf("list confirmed gone boards: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Board != "gone-board" || rows[0].ConsecutiveBoardGoneFailures != 3 {
+		t.Fatalf("confirmed gone boards = %+v, want gone-board with three failures", rows)
+	}
+
+	closed, err := q.CloseBoardGoneJobs(ctx, CloseBoardGoneJobsParams{
+		Source: "teamtailor", BoardPattern: externalid.BoardPattern("gone-board"), Board: "gone-board", Region: "",
+		AgeWindow: pgtype.Interval{Days: 7, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("close board-gone jobs: %v", err)
+	}
+	if closed != 1 {
+		t.Fatalf("closed %d jobs, want 1", closed)
+	}
+	if got := closedReason(t, ctx, q, dead.ID); got != "board_gone" {
+		t.Fatalf("closed_reason = %q, want board_gone", got)
+	}
+	if after, err := q.GetJob(ctx, sibling.ID); err != nil || after.ClosedAt.Valid {
+		t.Fatalf("healthy sibling job closed or unreadable: job=%+v err=%v", after, err)
+	}
+	var queued int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM search_delete_outbox WHERE job_id = $1", dead.ID).Scan(&queued); err != nil {
+		t.Fatalf("read search_delete_outbox: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("search_delete_outbox has %d rows for closed job, want 1", queued)
+	}
+}
+
+// TestCloseBoardGoneJobsRechecksRegionAmbiguity protects the gap between the command's
+// ambiguity read and its close: if the same board appears in another region during that gap,
+// the statement must refuse to close jobs whose external ids do not carry a region.
+func TestCloseBoardGoneJobsRechecksRegionAmbiguity(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+	seedConfirmedGoneBoard(t, ctx, pool, q, "teamtailor", "regional-board")
+	jobParams := ingestParams(externalid.Namespace("regional-board", "1"), "Regional stale role")
+	jobParams.Source = "teamtailor"
+	job, err := ingestUpsert(ctx, q, jobParams)
+	if err != nil {
+		t.Fatalf("upsert regional job: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO board_health (provider, board, region, consecutive_board_gone_failures,
+		board_gone_since, last_error_at) VALUES ('teamtailor', 'regional-board', 'us', 3,
+		now() - interval '10 days', now() - interval '2 days')`); err != nil {
+		t.Fatalf("add second region after ambiguity read: %v", err)
+	}
+	params := CloseBoardGoneJobsParams{
+		Source: "teamtailor", BoardPattern: externalid.BoardPattern("regional-board"), Board: "regional-board",
+		Region: "", AgeWindow: pgtype.Interval{Days: 7, Valid: true},
+	}
+	count, err := q.CountBoardGoneJobs(ctx, CountBoardGoneJobsParams(params))
+	if err != nil {
+		t.Fatalf("count ambiguous board-gone jobs: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("dry-run count = %d, want 0 after the board became region-ambiguous", count)
+	}
+	closed, err := q.CloseBoardGoneJobs(ctx, params)
+	if err != nil {
+		t.Fatalf("close ambiguous board-gone jobs: %v", err)
+	}
+	if closed != 0 {
+		t.Fatalf("closed %d jobs after board became region-ambiguous, want 0", closed)
+	}
+	if after, err := q.GetJob(ctx, job.ID); err != nil || after.ClosedAt.Valid {
+		t.Fatalf("ambiguous board job was closed or unreadable: job=%+v err=%v", after, err)
+	}
+}
+
 func closedReason(t *testing.T, ctx context.Context, q *Queries, id int64) string {
 	t.Helper()
 	job, err := q.GetJob(ctx, id)

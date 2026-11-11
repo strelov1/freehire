@@ -111,6 +111,69 @@ func (q *Queries) GetBoardCooldown(ctx context.Context, arg GetBoardCooldownPara
 	return i, err
 }
 
+const listBoardGoneBoards = `-- name: ListBoardGoneBoards :many
+SELECT h.provider, h.board, h.region, h.consecutive_board_gone_failures,
+       h.board_gone_since, count(*) OVER () AS total
+FROM board_health h
+WHERE h.board <> ''
+  AND h.consecutive_board_gone_failures >= 3
+  AND h.board_gone_since < now() - $1::interval
+  AND h.last_error_at >= h.board_gone_since + $1::interval
+  AND EXISTS (
+      SELECT 1 FROM board_health sibling
+      WHERE sibling.provider = h.provider
+        AND (sibling.board, sibling.region) <> (h.board, h.region)
+        AND sibling.board <> h.board
+        AND sibling.consecutive_failures = 0
+        AND sibling.last_success_at >= now() - interval '48 hours'
+  )
+ORDER BY h.board_gone_since, h.provider, h.board, h.region
+LIMIT $2
+`
+
+type ListBoardGoneBoardsParams struct {
+	AgeWindow pgtype.Interval `json:"age_window"`
+	MaxBoards int32           `json:"max_boards"`
+}
+
+type ListBoardGoneBoardsRow struct {
+	Provider                     string             `json:"provider"`
+	Board                        string             `json:"board"`
+	Region                       string             `json:"region"`
+	ConsecutiveBoardGoneFailures int64              `json:"consecutive_board_gone_failures"`
+	BoardGoneSince               pgtype.Timestamptz `json:"board_gone_since"`
+	Total                        int64              `json:"total"`
+}
+
+// Boards with repeated explicit disappearance evidence spanning age_window, plus a recent
+// successful sibling crawl as a guard against provider-wide outages.
+func (q *Queries) ListBoardGoneBoards(ctx context.Context, arg ListBoardGoneBoardsParams) ([]ListBoardGoneBoardsRow, error) {
+	rows, err := q.db.Query(ctx, listBoardGoneBoards, arg.AgeWindow, arg.MaxBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBoardGoneBoardsRow{}
+	for rows.Next() {
+		var i ListBoardGoneBoardsRow
+		if err := rows.Scan(
+			&i.Provider,
+			&i.Board,
+			&i.Region,
+			&i.ConsecutiveBoardGoneFailures,
+			&i.BoardGoneSince,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBoardLastRuns = `-- name: ListBoardLastRuns :many
 SELECT board, region, last_run_at
 FROM board_health
@@ -471,14 +534,23 @@ func (q *Queries) ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRol
 }
 
 const recordBoardFailure = `-- name: RecordBoardFailure :one
-INSERT INTO board_health (provider, board, region, consecutive_failures, last_error, last_error_at, last_run_at)
-VALUES ($1, $2, $3, 1, $4, now(), now())
+INSERT INTO board_health (provider, board, region, consecutive_failures, last_error, last_error_at, last_run_at,
+                          consecutive_board_gone_failures, board_gone_since)
+VALUES ($1, $2, $3, 1, $4, now(), now(),
+        CASE WHEN $5::boolean THEN 1 ELSE 0 END,
+        CASE WHEN $5::boolean THEN now() END)
 ON CONFLICT (provider, lower(board), region) DO UPDATE SET
     board                = EXCLUDED.board,
     consecutive_failures = board_health.consecutive_failures + 1,
     last_error           = EXCLUDED.last_error,
     last_error_at        = now(),
-    last_run_at          = now()
+    last_run_at          = now(),
+    consecutive_board_gone_failures = CASE WHEN $5::boolean
+        THEN board_health.consecutive_board_gone_failures + 1 ELSE 0 END,
+    board_gone_since = CASE
+        WHEN NOT $5::boolean THEN NULL
+        WHEN board_health.consecutive_board_gone_failures = 0 THEN now()
+        ELSE board_health.board_gone_since END
 RETURNING consecutive_failures
 `
 
@@ -487,6 +559,7 @@ type RecordBoardFailureParams struct {
 	Board     string      `json:"board"`
 	Region    string      `json:"region"`
 	LastError pgtype.Text `json:"last_error"`
+	BoardGone bool        `json:"board_gone"`
 }
 
 // Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
@@ -500,6 +573,7 @@ func (q *Queries) RecordBoardFailure(ctx context.Context, arg RecordBoardFailure
 		arg.Board,
 		arg.Region,
 		arg.LastError,
+		arg.BoardGone,
 	)
 	var consecutive_failures int32
 	err := row.Scan(&consecutive_failures)
@@ -509,13 +583,15 @@ func (q *Queries) RecordBoardFailure(ctx context.Context, arg RecordBoardFailure
 const recordBoardSuccess = `-- name: RecordBoardSuccess :one
 INSERT INTO board_health (provider, board, region, consecutive_failures, cooldown_until,
                           last_success_at, last_ingested_count, last_run_at, last_yield_at,
-                          listing_fingerprint)
+                          listing_fingerprint, consecutive_board_gone_failures, board_gone_since)
 VALUES ($1, $2, $3, 0, NULL, now(), $4, now(),
         CASE WHEN $5::boolean THEN now() END,
-        $6::text)
+        $6::text, 0, NULL)
 ON CONFLICT (provider, lower(board), region) DO UPDATE SET
     board                = EXCLUDED.board,
     consecutive_failures = 0,
+    consecutive_board_gone_failures = 0,
+    board_gone_since      = NULL,
     cooldown_until       = NULL,
     last_success_at      = now(),
     last_ingested_count  = EXCLUDED.last_ingested_count,

@@ -37,7 +37,7 @@ func closeEmptyFeedBoards(ctx context.Context, q *db.Queries, closeWindowDays in
 
 	report := closeReport{boardsProcessed: len(rows)}
 	for _, r := range rows {
-		ref := boardRef{r.Provider, r.Board}
+		ref := boardRef{provider: r.Provider, board: r.Board}
 		ambiguous, err := isRegionAmbiguous(ctx, q, ref)
 		if err != nil {
 			return report, err
@@ -52,7 +52,7 @@ func closeEmptyFeedBoards(ctx context.Context, q *db.Queries, closeWindowDays in
 			return report, err
 		}
 		report.jobsAffected += n
-		logBoardAction("empty-feed", ref, n, apply)
+		logBoardAction("empty-feed", ref, n, apply, "--apply-empty-feed")
 	}
 	if len(rows) > 0 {
 		logCapOverflow("empty-feed", rows[0].Total, len(rows))

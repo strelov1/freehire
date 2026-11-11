@@ -26,28 +26,32 @@ const textfileName = "freehire_chronic_boards.prom"
 //
 // The numbers are the ones the log line carries, taken from the same reports, so the durable
 // copy and the readable one can never tell different stories.
-func render(unreachable, emptyFeed closeReport, applyUnreachable, applyEmptyFeed bool) string {
+func render(unreachable, emptyFeed, boardGone closeReport, applyUnreachable, applyEmptyFeed, applyBoardGone bool) string {
 	var b strings.Builder
 
 	family(&b, "freehire_chronic_boards",
-		"Boards the safety net selected as chronically unreachable, or as reachable but empty.",
+		"Boards selected by the chronic-board safety nets.",
 		sample("unreachable", unreachable.boardsProcessed),
-		sample("empty_feed", emptyFeed.boardsProcessed))
+		sample("empty_feed", emptyFeed.boardsProcessed),
+		sample("board_gone", boardGone.boardsProcessed))
 
 	family(&b, "freehire_chronic_boards_skipped",
 		"Boards the pass refused to act on because their region is ambiguous.",
 		sample("unreachable", unreachable.boardsSkippedAmbiguous),
-		sample("empty_feed", emptyFeed.boardsSkippedAmbiguous))
+		sample("empty_feed", emptyFeed.boardsSkippedAmbiguous),
+		sample("board_gone", boardGone.boardsSkippedAmbiguous))
 
 	family(&b, "freehire_chronic_board_jobs",
 		"Open postings on those boards — closed when the pass is armed, reported when it is not.",
 		sample("unreachable", int(unreachable.jobsAffected)),
-		sample("empty_feed", int(emptyFeed.jobsAffected)))
+		sample("empty_feed", int(emptyFeed.jobsAffected)),
+		sample("board_gone", int(boardGone.jobsAffected)))
 
 	family(&b, "freehire_chronic_boards_armed",
 		"1 when the pass closes what it finds, 0 when it only reports it.",
 		sample("unreachable", boolGauge(applyUnreachable)),
-		sample("empty_feed", boolGauge(applyEmptyFeed)))
+		sample("empty_feed", boolGauge(applyEmptyFeed)),
+		sample("board_gone", boolGauge(applyBoardGone)))
 
 	return b.String()
 }

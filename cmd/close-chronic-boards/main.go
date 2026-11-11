@@ -46,6 +46,10 @@ const chronicBoardCloseWindowDaysDefault int32 = 60
 // tighter than leaving the postings open forever, which is what happened before this existed.
 const emptyFeedCloseWindowDaysDefault int32 = 30
 
+// Board-gone needs repeated explicit platform evidence, so one week is enough separation from
+// transient 404s while materially faster than the generic 60-day unreachable safety net.
+const boardGoneCloseWindowDaysDefault int32 = 7
+
 func main() { worker.Main(run) }
 
 func run() int {
@@ -57,7 +61,8 @@ func run() int {
 	// reviewed, which is precisely the posture the dry-run default exists to prevent. Each
 	// safety net is armed by a person who has read that net's own reports.
 	applyEmptyFeed := flag.Bool("apply-empty-feed", false, "actually close reachable-but-EMPTY boards; without it that pass only reports")
-	flag.Bool("dry-run", false, "no-op: reporting is the default, --apply / --apply-empty-feed are what close")
+	applyBoardGone := flag.Bool("apply-board-gone", false, "actually close boards with repeated explicit board-gone evidence; without it that pass only reports")
+	flag.Bool("dry-run", false, "no-op: reporting is the default, --apply flags are what close")
 	flag.Parse()
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
@@ -78,8 +83,29 @@ func run() int {
 		log.Printf("close-chronic-boards: %v", err)
 		return 1
 	}
+	boardGoneDays, err := worker.EnvInt32("BOARD_GONE_CLOSE_WINDOW_DAYS", boardGoneCloseWindowDaysDefault)
+	if err != nil {
+		log.Printf("close-chronic-boards: %v", err)
+		return 1
+	}
+	if boardGoneDays < 1 {
+		log.Printf("close-chronic-boards: BOARD_GONE_CLOSE_WINDOW_DAYS must be positive")
+		return 1
+	}
 
 	q := db.New(pool)
+
+	gone, err := closeBoardGoneBoards(ctx, q, boardGoneDays, maxChronicBoardsPerRun, *applyBoardGone)
+	if err != nil {
+		log.Printf("close-chronic-boards: %v", err)
+		return 1
+	}
+	goneVerb := "would close"
+	if *applyBoardGone {
+		goneVerb = "closed"
+	}
+	log.Printf("close-chronic-boards: %d confirmed-gone board(s) (%d skipped as region-ambiguous), %s %d job(s) total",
+		gone.boardsProcessed, gone.boardsSkippedAmbiguous, goneVerb, gone.jobsAffected)
 
 	report, err := closeChronicBoards(ctx, q, days, maxChronicBoardsPerRun, *apply)
 	if err != nil {
@@ -116,19 +142,19 @@ func run() int {
 	// reports rotated away inside a day — six days of them were gone before anyone looked.
 	// Best-effort and last: the close (or the refusal to close) is the job, and a metrics
 	// write that fails must not turn a successful run red.
-	publishMetrics(report, empty, *apply, *applyEmptyFeed)
+	publishMetrics(report, empty, gone, *apply, *applyEmptyFeed, *applyBoardGone)
 	return 0
 }
 
 // publishMetrics writes the run's verdict to the node_exporter textfile collector. A no-op
 // that touches nothing when PROM_TEXTFILE_DIR is unset, the same contract queue-metrics and
 // llm-probe keep.
-func publishMetrics(unreachable, emptyFeed closeReport, applyUnreachable, applyEmptyFeed bool) {
+func publishMetrics(unreachable, emptyFeed, boardGone closeReport, applyUnreachable, applyEmptyFeed, applyBoardGone bool) {
 	dir := os.Getenv(worker.PromTextfileDirEnv)
 	if dir == "" {
 		return
 	}
-	if err := worker.WriteTextfile(dir, textfileName, render(unreachable, emptyFeed, applyUnreachable, applyEmptyFeed)); err != nil {
+	if err := worker.WriteTextfile(dir, textfileName, render(unreachable, emptyFeed, boardGone, applyUnreachable, applyEmptyFeed, applyBoardGone)); err != nil {
 		log.Printf("close-chronic-boards: metrics not published: %v", err)
 	}
 }

@@ -23,6 +23,7 @@ type fakeHealth struct {
 	cooldowns map[string]time.Time // "provider/board/region" → cooldown_until
 	successes []string
 	failures  []string
+	boardGone []string
 	cleared   []string        // providers passed to ClearCooldowns, in call order
 	reached   map[string]bool // "provider/board/region" → the last RecordSuccess's reached flag
 	// quiet holds canned quiet pauses, served by Pauses beside the cooldown and never touched by
@@ -59,8 +60,12 @@ func (f *fakeHealth) RecordSuccess(_ context.Context, provider, board, region st
 	return nil
 }
 
-func (f *fakeHealth) RecordFailure(_ context.Context, provider, board, region, _ string) error {
-	f.failures = append(f.failures, healthKey(provider, board, region))
+func (f *fakeHealth) RecordFailure(_ context.Context, provider, board, region string, cause error) error {
+	key := healthKey(provider, board, region)
+	f.failures = append(f.failures, key)
+	if errors.Is(cause, sources.ErrBoardGone) {
+		f.boardGone = append(f.boardGone, key)
+	}
 	return nil
 }
 

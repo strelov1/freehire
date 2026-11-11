@@ -119,6 +119,100 @@ func TestRecordBoardFailureDoesNotTouchFirstSeenAt(t *testing.T) {
 	}
 }
 
+func TestBoardGoneEvidenceCountsOnlyConsecutiveExplicitFailures(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateBoardHealth(t, pool)
+
+	for range 2 {
+		if _, err := q.RecordBoardFailure(ctx, RecordBoardFailureParams{
+			Provider: "teamtailor", Board: "gone", Region: "",
+			LastError: pgtype.Text{String: "board no longer exists on the platform", Valid: true}, BoardGone: true,
+		}); err != nil {
+			t.Fatalf("record board-gone failure: %v", err)
+		}
+	}
+	if _, err := q.RecordBoardFailure(ctx, RecordBoardFailureParams{
+		Provider: "teamtailor", Board: "gone", Region: "",
+		LastError: pgtype.Text{String: "429 too many requests", Valid: true}, BoardGone: false,
+	}); err != nil {
+		t.Fatalf("record rate-limit failure: %v", err)
+	}
+	var count int32
+	var since *time.Time
+	if err := pool.QueryRow(ctx, `SELECT consecutive_board_gone_failures, board_gone_since
+		FROM board_health WHERE provider = 'teamtailor' AND board = 'gone'`).Scan(&count, &since); err != nil {
+		t.Fatalf("read board-gone state: %v", err)
+	}
+	if count != 0 || since != nil {
+		t.Fatalf("after ordinary failure, gone evidence = (%d, %v), want (0, nil)", count, since)
+	}
+
+	if _, err := q.RecordBoardFailure(ctx, RecordBoardFailureParams{
+		Provider: "teamtailor", Board: "gone", Region: "",
+		LastError: pgtype.Text{String: "board no longer exists on the platform", Valid: true}, BoardGone: true,
+	}); err != nil {
+		t.Fatalf("record board-gone failure: %v", err)
+	}
+	if _, err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
+		Provider: "teamtailor", Board: "gone", Region: "",
+		LastIngestedCount: pgtype.Int4{Int32: 0, Valid: true}, Reached: false,
+	}); err != nil {
+		t.Fatalf("record recovery: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT consecutive_board_gone_failures, board_gone_since
+		FROM board_health WHERE provider = 'teamtailor' AND board = 'gone'`).Scan(&count, &since); err != nil {
+		t.Fatalf("read recovered board-gone state: %v", err)
+	}
+	if count != 0 || since != nil {
+		t.Fatalf("after success, gone evidence = (%d, %v), want (0, nil)", count, since)
+	}
+}
+
+func TestListBoardGoneBoardsRequiresRecentHealthySibling(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateBoardHealth(t, pool)
+	for range 3 {
+		if _, err := q.RecordBoardFailure(ctx, RecordBoardFailureParams{
+			Provider: "teamtailor", Board: "gone", Region: "",
+			LastError: pgtype.Text{String: "board no longer exists on the platform", Valid: true}, BoardGone: true,
+		}); err != nil {
+			t.Fatalf("record board-gone failure: %v", err)
+		}
+	}
+	if _, err := pool.Exec(ctx, "UPDATE board_health SET board_gone_since = now() - interval '8 days'"); err != nil {
+		t.Fatalf("age board-gone evidence: %v", err)
+	}
+	params := ListBoardGoneBoardsParams{AgeWindow: pgtype.Interval{Days: 7, Valid: true}, MaxBoards: 10}
+	rows, err := q.ListBoardGoneBoards(ctx, params)
+	if err != nil {
+		t.Fatalf("list without healthy sibling: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("gone boards without a healthy sibling = %+v, want none", rows)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE board_health SET last_error_at = now() - interval '1 day'"); err != nil {
+		t.Fatalf("age latest gone failure: %v", err)
+	}
+
+	if _, err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
+		Provider: "teamtailor", Board: "healthy", Region: "",
+		LastIngestedCount: pgtype.Int4{Int32: 1, Valid: true}, Reached: true,
+	}); err != nil {
+		t.Fatalf("record healthy sibling: %v", err)
+	}
+	rows, err = q.ListBoardGoneBoards(ctx, params)
+	if err != nil {
+		t.Fatalf("list with healthy sibling: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Board != "gone" {
+		t.Fatalf("gone boards with a healthy sibling = %+v, want gone", rows)
+	}
+}
+
 // TestListChronicBoards pins the two-window classification (openspec change
 // close-chronically-unreachable-boards, design.md Decision 3): a board is chronic when
 // last_success_at is older than the window, or — for a board that has never succeeded —

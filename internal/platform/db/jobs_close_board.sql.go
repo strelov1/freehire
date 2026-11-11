@@ -11,6 +11,69 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const closeBoardGoneJobs = `-- name: CloseBoardGoneJobs :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at = now(), closed_reason = 'board_gone', updated_at = now()
+    WHERE closed_at IS NULL
+      AND source = $1
+      AND NOT is_private
+      AND external_id LIKE $2
+      AND EXISTS (
+          SELECT 1 FROM board_health h
+          WHERE h.provider = $1
+            AND h.board = $3
+            AND h.region = $4
+            AND h.consecutive_board_gone_failures >= 3
+            AND h.board_gone_since < now() - $5::interval
+            AND h.last_error_at >= h.board_gone_since + $5::interval
+            AND NOT EXISTS (
+                SELECT 1 FROM board_health regional
+                WHERE regional.provider = h.provider
+                  AND regional.board = h.board
+                  AND regional.region <> h.region
+            )
+            AND EXISTS (
+                SELECT 1 FROM board_health sibling
+                WHERE sibling.provider = h.provider
+                  AND (sibling.board, sibling.region) <> (h.board, h.region)
+                  AND sibling.board <> h.board
+                  AND sibling.consecutive_failures = 0
+                  AND sibling.last_success_at >= now() - interval '48 hours'
+            )
+      )
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
+`
+
+type CloseBoardGoneJobsParams struct {
+	Source       string          `json:"source"`
+	BoardPattern string          `json:"board_pattern"`
+	Board        string          `json:"board"`
+	Region       string          `json:"region"`
+	AgeWindow    pgtype.Interval `json:"age_window"`
+}
+
+// Close one board only after repeated explicit disappearance spanning age_window and a recent
+// successful sibling crawl. Revalidate current health in the UPDATE to close the read/write gap.
+func (q *Queries) CloseBoardGoneJobs(ctx context.Context, arg CloseBoardGoneJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, closeBoardGoneJobs,
+		arg.Source,
+		arg.BoardPattern,
+		arg.Board,
+		arg.Region,
+		arg.AgeWindow,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const closeChronicBoardJobs = `-- name: CloseChronicBoardJobs :one
 WITH closed AS (
     UPDATE jobs
@@ -346,6 +409,59 @@ type CloseUnseenJobsBySourceParams struct {
 // otherwise mass-close everything it never reached); a partial run falls back to CloseUnseenJobs.
 func (q *Queries) CloseUnseenJobsBySource(ctx context.Context, arg CloseUnseenJobsBySourceParams) (int64, error) {
 	row := q.db.QueryRow(ctx, closeUnseenJobsBySource, arg.Source, arg.Cutoff, arg.SkippedBoardPatterns)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countBoardGoneJobs = `-- name: CountBoardGoneJobs :one
+SELECT count(*) FROM jobs
+WHERE closed_at IS NULL
+  AND source = $1
+  AND NOT is_private
+  AND external_id LIKE $2
+  AND EXISTS (
+      SELECT 1 FROM board_health h
+      WHERE h.provider = $1
+        AND h.board = $3
+        AND h.region = $4
+        AND h.consecutive_board_gone_failures >= 3
+        AND h.board_gone_since < now() - $5::interval
+        AND h.last_error_at >= h.board_gone_since + $5::interval
+        AND NOT EXISTS (
+            SELECT 1 FROM board_health regional
+            WHERE regional.provider = h.provider
+              AND regional.board = h.board
+              AND regional.region <> h.region
+        )
+        AND EXISTS (
+            SELECT 1 FROM board_health sibling
+            WHERE sibling.provider = h.provider
+              AND (sibling.board, sibling.region) <> (h.board, h.region)
+              AND sibling.board <> h.board
+              AND sibling.consecutive_failures = 0
+              AND sibling.last_success_at >= now() - interval '48 hours'
+        )
+  )
+`
+
+type CountBoardGoneJobsParams struct {
+	Source       string          `json:"source"`
+	BoardPattern string          `json:"board_pattern"`
+	Board        string          `json:"board"`
+	Region       string          `json:"region"`
+	AgeWindow    pgtype.Interval `json:"age_window"`
+}
+
+// Dry-run twin of CloseBoardGoneJobs with the same current-health predicate.
+func (q *Queries) CountBoardGoneJobs(ctx context.Context, arg CountBoardGoneJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countBoardGoneJobs,
+		arg.Source,
+		arg.BoardPattern,
+		arg.Board,
+		arg.Region,
+		arg.AgeWindow,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

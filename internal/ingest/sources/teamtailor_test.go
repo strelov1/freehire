@@ -429,6 +429,49 @@ func TestTeamtailorFallsBackToRootListingWhenJobsPath404s(t *testing.T) {
 	}
 }
 
+type ttGoneListingHTTP struct {
+	jobsCode int
+	rootCode int
+}
+
+func (h ttGoneListingHTTP) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	code := h.rootCode
+	if strings.Contains(u, "/jobs?page=") {
+		code = h.jobsCode
+	}
+	return nil, &StatusError{Method: "GET", Code: code, URL: u}
+}
+
+func (ttGoneListingHTTP) GetXML(context.Context, string, any) error { return nil }
+
+func TestTeamtailorOnlyReportsBoardGoneWhenBothListingPaths404(t *testing.T) {
+	_, err := NewTeamtailor(ttGoneListingHTTP{jobsCode: 404, rootCode: 404}).(teamtailor).
+		jobURLs(context.Background(), CompanyEntry{Board: "jobs.example.com"})
+	if !errors.Is(err, ErrBoardGone) {
+		t.Fatalf("jobURLs error = %v, want ErrBoardGone", err)
+	}
+}
+
+func TestTeamtailorFallbackFailuresRemainOrdinaryErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		jobsCode int
+		rootCode int
+	}{
+		{name: "jobs forbidden", jobsCode: 403, rootCode: 404},
+		{name: "root rate limited", jobsCode: 404, rootCode: 429},
+		{name: "root server failure", jobsCode: 404, rootCode: 503},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewTeamtailor(ttGoneListingHTTP{jobsCode: tc.jobsCode, rootCode: tc.rootCode}).(teamtailor).
+				jobURLs(context.Background(), CompanyEntry{Board: "jobs.example.com"})
+			if err == nil || errors.Is(err, ErrBoardGone) {
+				t.Fatalf("jobURLs error = %v, want ordinary failure", err)
+			}
+		})
+	}
+}
+
 func TestTeamtailorEmptyListingYieldsNoJobsNoError(t *testing.T) {
 	fake := (&routedHTTP{}).route("page=1", ttListingHTML())
 	jobs, err := NewTeamtailor(fake).Fetch(context.Background(), CompanyEntry{Board: "b"})
