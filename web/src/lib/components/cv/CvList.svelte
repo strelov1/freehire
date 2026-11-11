@@ -169,7 +169,7 @@
       <ul class="flex flex-col gap-3">
         {#each bases as base (base.id)}
           <li
-            class="group relative flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-muted/30"
+            class="group relative flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-muted/30"
           >
             <!-- The whole card opens the workspace in base mode; the actions below sit above it. -->
             <a
@@ -184,7 +184,7 @@
               class="h-16 w-12 shrink-0 rounded border border-border bg-white object-cover object-top"
             />
             <div class="min-w-0 flex-1">
-              <p class="flex items-center gap-2">
+              <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span class="truncate font-medium">{base.title}</span>
                 {#if base.is_default}
                   <span class="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
@@ -197,51 +197,57 @@
               </p>
               <p class="mt-0.5 text-xs text-muted-foreground/80">{format(s.updated, { date: fmt(base.updated_at) })}</p>
             </div>
-            <div class="relative z-10 flex flex-wrap items-center justify-end gap-1">
-              <a
-                href={resolve('/tailor/base/[id]', { id: base.id })}
-                class="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <Pencil class="size-4" aria-hidden="true" />{s.base.edit}
-              </a>
-              <button
-                type="button"
-                onclick={() => openCvIntake(base.id)}
-                class="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                {s.base.tailor}
-              </button>
-              <!-- eslint-disable svelte/no-navigation-without-resolve -- external CV PDF API URL, not an internal route -->
-              <a
-                href={api.cvPdfUrl(base.id)}
-                target="_blank"
-                rel="noopener"
-                aria-label={s.openPdf}
-                title={s.openPdf}
-                class={iconButton}
-              >
-                <!-- eslint-enable svelte/no-navigation-without-resolve -->
-                <Download class="h-4 w-4" />
-              </a>
-              <button
-                type="button"
-                aria-label={s.base.duplicate}
-                title={s.base.duplicate}
-                disabled={busy}
-                onclick={() => duplicate(base)}
-                class={iconButton}
-              >
-                <Copy class="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                aria-label={s.deleteTitle}
-                title={s.deleteTitle}
-                onclick={() => requestRemove({ id: base.id, title: base.title, base: true })}
-                class={iconButton}
-              >
-                <Trash2 class="h-4 w-4" />
-              </button>
+            <div
+              class="relative z-10 flex w-full flex-wrap items-center justify-between gap-2 border-t border-border pt-3"
+            >
+              <div class="flex flex-wrap items-center gap-1">
+                <a
+                  href={resolve('/tailor/base/[id]', { id: base.id })}
+                  class="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <Pencil class="size-4" aria-hidden="true" />{s.base.edit}
+                </a>
+                <button
+                  type="button"
+                  onclick={() => openCvIntake(base.id)}
+                  class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-center text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  {s.base.tailor}
+                </button>
+              </div>
+              <div class="ml-auto flex shrink-0 items-center gap-1">
+                <!-- eslint-disable svelte/no-navigation-without-resolve -- external CV PDF API URL, not an internal route -->
+                <a
+                  href={api.cvPdfUrl(base.id)}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label={s.openPdf}
+                  title={s.openPdf}
+                  class={iconButton}
+                >
+                  <!-- eslint-enable svelte/no-navigation-without-resolve -->
+                  <Download class="h-4 w-4" />
+                </a>
+                <button
+                  type="button"
+                  aria-label={s.base.duplicate}
+                  title={s.base.duplicate}
+                  disabled={busy}
+                  onclick={() => duplicate(base)}
+                  class={iconButton}
+                >
+                  <Copy class="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={s.deleteTitle}
+                  title={s.deleteTitle}
+                  onclick={() => requestRemove({ id: base.id, title: base.title, base: true })}
+                  class={iconButton}
+                >
+                  <Trash2 class="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </li>
         {/each}

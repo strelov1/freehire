@@ -2,9 +2,9 @@ import { defineMessages } from '#lib/i18n/t.js';
 
 export const messages = defineMessages(
   {
-    title: 'CVs',
-    description: 'Your base CVs, the CVs you tailored for specific roles, and the appearance a new one starts with.',
-    tailorForJob: 'Tailor to a job',
+    title: 'Tailor CV',
+    tailorForJob: 'Tailor for a job',
+    description: 'Edit your CVs and manage versions for specific jobs.',
     sections: {
       list: 'List',
       template: 'Template',
@@ -14,10 +14,9 @@ export const messages = defineMessages(
   },
   {
     ru: {
-      title: 'Резюме',
-      description:
-        'Ваши базовые резюме, резюме, адаптированные под конкретные роли, и оформление, с которого начинается новое.',
-      tailorForJob: 'Адаптировать под вакансию',
+      title: 'Адаптация резюме',
+      tailorForJob: 'Под вакансию',
+      description: 'Редактируйте резюме и управляйте версиями для конкретных вакансий.',
       sections: {
         list: 'Список',
         template: 'Шаблон',

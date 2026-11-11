@@ -62,7 +62,7 @@ describe('CvList base CVs', () => {
     expect(screen.getByText('Data')).toBeTruthy();
     expect(screen.getAllByText('Default')).toHaveLength(1);
     expect(screen.getAllByText('Edit')).toHaveLength(2);
-    expect(screen.getAllByText('Tailor to a job')).toHaveLength(2);
+    expect(screen.getAllByText('Tailor CV to a job')).toHaveLength(2);
     expect(screen.getAllByLabelText('Duplicate')).toHaveLength(2);
     expect(await screen.findAllByText(/Template: Classic ATS/)).toHaveLength(2);
   });
@@ -71,7 +71,7 @@ describe('CvList base CVs', () => {
     listBaseCvs.mockResolvedValue([base('a', 'Backend', true), base('b', 'Data')]);
     render(CvList);
     await screen.findByText('Data');
-    await fireEvent.click(screen.getAllByText('Tailor to a job')[1] as HTMLElement);
+    await fireEvent.click(screen.getAllByText('Tailor CV to a job')[1] as HTMLElement);
     expect(openCvIntake).toHaveBeenCalledWith('b');
   });
 
