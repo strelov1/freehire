@@ -4241,6 +4241,9 @@ type DeleteEmploymentNoContent struct{}
 // DeleteProfileNoContent is response for DeleteProfile operation.
 type DeleteProfileNoContent struct{}
 
+// DeleteResumeNoContent is response for DeleteResume operation.
+type DeleteResumeNoContent struct{}
+
 // DeleteSavedSearchNoContent is response for DeleteSavedSearch operation.
 type DeleteSavedSearchNoContent struct{}
 
@@ -5897,6 +5900,21 @@ func (s *GetAgentPermissionsOK) SetData(val AgentPermissions) {
 }
 
 // A single item: `{"data": ...}`.
+type GetAtsReportOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetAtsReportOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetAtsReportOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type GetBillingCheckoutOK struct {
 	Data BillingCheckout `json:"data"`
 }
@@ -6182,6 +6200,36 @@ func (s *GetProfileOK) GetData() NilProfile {
 
 // SetData sets the value of Data.
 func (s *GetProfileOK) SetData(val NilProfile) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetResumeOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetResumeOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetResumeOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetResumeVerdictOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetResumeVerdictOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetResumeVerdictOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
@@ -8148,6 +8196,32 @@ func (s *MarkAppliedOK) SetData(val Interaction) {
 
 // MarkConversationReadNoContent is response for MarkConversationRead operation.
 type MarkConversationReadNoContent struct{}
+
+// A single item that read query params: `{"data": ...}`, plus `meta` when one was dropped.
+type MarketCoverageOK struct {
+	Data jx.Raw         `json:"data"`
+	Meta OptIgnoredMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *MarketCoverageOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *MarketCoverageOK) GetMeta() OptIgnoredMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *MarketCoverageOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *MarketCoverageOK) SetMeta(val OptIgnoredMeta) {
+	s.Meta = val
+}
 
 // Ref: #/components/schemas/MarketPulseMeta
 type MarketPulseMeta struct {
@@ -10964,6 +11038,21 @@ func (s *Plans) SetEnforced(val []string) {
 	s.Enforced = val
 }
 
+// A single item: `{"data": ...}`.
+type PostAtsReportOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PostAtsReportOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PostAtsReportOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
 // Ref: #/components/schemas/PrefillRequest
 type PrefillRequest struct {
 	URL OptString `json:"url"`
@@ -11520,6 +11609,21 @@ func (s *PutProfileOK) GetData() Profile {
 
 // SetData sets the value of Data.
 func (s *PutProfileOK) SetData(val Profile) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type PutResumeContactsOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PutResumeContactsOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PutResumeContactsOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
@@ -12297,6 +12401,21 @@ func (s *ReopenEmployerVacancyOK) SetData(val EmployerClosed) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type ReplaceResumeContactsFromCvOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ReplaceResumeContactsFromCvOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ReplaceResumeContactsFromCvOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
 // ReportCompanyFeedbackNoContent is response for ReportCompanyFeedback operation.
 type ReportCompanyFeedbackNoContent struct{}
 
@@ -12664,6 +12783,23 @@ func (s *ResolvedJobPage) SetCompanySlug(val OptString) {
 	s.CompanySlug = val
 }
 
+// The skill list a coverage reading scores against the market.
+// Ref: #/components/schemas/ResumeCoverageRequest
+type ResumeCoverageRequest struct {
+	// Required and at most 100 once blanks are dropped; anything else is a 400.
+	Skills OptNilStringArray `json:"skills"`
+}
+
+// GetSkills returns the value of Skills.
+func (s *ResumeCoverageRequest) GetSkills() OptNilStringArray {
+	return s.Skills
+}
+
+// SetSkills sets the value of Skills.
+func (s *ResumeCoverageRequest) SetSkills(val OptNilStringArray) {
+	s.Skills = val
+}
+
 // RetractGhostReportNoContent is response for RetractGhostReport operation.
 type RetractGhostReportNoContent struct{}
 
@@ -12681,6 +12817,9 @@ func (s *RetractProcessReportOK) GetData() ProcessReport {
 func (s *RetractProcessReportOK) SetData(val ProcessReport) {
 	s.Data = val
 }
+
+// RetryResumeExtractAccepted is response for RetryResumeExtract operation.
+type RetryResumeExtractAccepted struct{}
 
 // A single item: `{"data": ...}`.
 type RevokeEmployerAccountOK struct {

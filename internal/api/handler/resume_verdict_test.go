@@ -71,7 +71,7 @@ func verdictApp(t *testing.T, repo *fakeProfileRepo, fc facetCounter) (*fiber.Ap
 	}
 	h := &resumeHandlers{userProfile: userprofile.New(repo), facets: fc}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/profile/verdict", auth.RequireAuth(iss, testVersions), h.GetResumeVerdict)
+	app.Get("/api/v1/me/profile/verdict", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{resumeHandlers: h}))
 	return app, token
 }
 
@@ -102,7 +102,7 @@ func dataOf(t *testing.T, body map[string]any) map[string]any {
 
 func TestGetVerdict_FacetsUnconfigured503(t *testing.T) {
 	app, token := verdictApp(t, ownedProfile(), nil)
-	status, _ := getVerdict(t, app, "/me/profile/verdict", token)
+	status, _ := getVerdict(t, app, "/api/v1/me/profile/verdict", token)
 	if status != fiber.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", status)
 	}
@@ -111,7 +111,7 @@ func TestGetVerdict_FacetsUnconfigured503(t *testing.T) {
 func TestGetVerdict_ProfileNotFound404(t *testing.T) {
 	repo := &fakeProfileRepo{getErr: userprofile.ErrNotFound}
 	app, token := verdictApp(t, repo, coverageFacets())
-	status, _ := getVerdict(t, app, "/me/profile/verdict", token)
+	status, _ := getVerdict(t, app, "/api/v1/me/profile/verdict", token)
 	if status != fiber.StatusNotFound {
 		t.Fatalf("status = %d, want 404", status)
 	}
@@ -119,7 +119,7 @@ func TestGetVerdict_ProfileNotFound404(t *testing.T) {
 
 func TestGetVerdict_CoverageFromFacets(t *testing.T) {
 	app, token := verdictApp(t, ownedProfile(), coverageFacets())
-	status, body := getVerdict(t, app, "/me/profile/verdict", token)
+	status, body := getVerdict(t, app, "/api/v1/me/profile/verdict", token)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -140,7 +140,7 @@ func TestGetVerdict_CoverageFromFacets(t *testing.T) {
 func TestGetVerdict_DefaultsToProfileSpecializations(t *testing.T) {
 	fc := coverageFacets()
 	app, token := verdictApp(t, ownedProfile(), fc)
-	if status, _ := getVerdict(t, app, "/me/profile/verdict", token); status != fiber.StatusOK {
+	if status, _ := getVerdict(t, app, "/api/v1/me/profile/verdict", token); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	want := [][]string{{`enrichment.category = "backend"`}}
@@ -152,7 +152,7 @@ func TestGetVerdict_DefaultsToProfileSpecializations(t *testing.T) {
 func TestGetVerdict_FilterOverridesRole(t *testing.T) {
 	fc := coverageFacets()
 	app, token := verdictApp(t, ownedProfile(), fc)
-	if status, _ := getVerdict(t, app, "/me/profile/verdict?category=data", token); status != fiber.StatusOK {
+	if status, _ := getVerdict(t, app, "/api/v1/me/profile/verdict?category=data", token); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	want := [][]string{{`enrichment.category = "data"`}}
@@ -166,7 +166,7 @@ func TestGetVerdict_RequestSkillsAreNotAFilter(t *testing.T) {
 	app, token := verdictApp(t, ownedProfile(), fc)
 	// ?skills=rust must not filter the role by rust, and rust is not an owned skill:
 	// the role stays the profile's default and the uncovered query excludes only "go".
-	if status, _ := getVerdict(t, app, "/me/profile/verdict?skills=rust", token); status != fiber.StatusOK {
+	if status, _ := getVerdict(t, app, "/api/v1/me/profile/verdict?skills=rust", token); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	roleWant := [][]string{{`enrichment.category = "backend"`}}

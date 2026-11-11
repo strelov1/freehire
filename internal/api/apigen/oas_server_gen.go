@@ -337,6 +337,12 @@ type Handler interface {
 	//
 	// DELETE /me/profile
 	DeleteProfile(ctx context.Context) error
+	// DeleteResume implements deleteResume operation.
+	//
+	// Removes the stored CV. 501 when storage is off.
+	//
+	// DELETE /me/resume
+	DeleteResume(ctx context.Context) error
 	// DeleteSavedSearch implements deleteSavedSearch operation.
 	//
 	// DELETE /me/searches/{id}
@@ -381,6 +387,13 @@ type Handler interface {
 	//
 	// GET /me/agent-permissions
 	GetAgentPermissions(ctx context.Context) (*GetAgentPermissionsOK, error)
+	// GetAtsReport implements getAtsReport operation.
+	//
+	// The ATS-readiness report of the caller's stored CV, with any cached model review folded in. `has_cv`
+	// is false, and `report` null, when no CV is stored.
+	//
+	// GET /me/profile/ats-report
+	GetAtsReport(ctx context.Context) (*GetAtsReportOK, error)
 	// GetBillingCheckout implements getBillingCheckout operation.
 	//
 	// 404 when checkout is unconfigured or the price is not offered. Cookie session only.
@@ -485,6 +498,19 @@ type Handler interface {
 	//
 	// GET /me/profile
 	GetProfile(ctx context.Context) (*GetProfileOK, error)
+	// GetResume implements getResume operation.
+	//
+	// Whether storage is on, a CV is stored, when, and its structured view. Always 200.
+	//
+	// GET /me/resume
+	GetResume(ctx context.Context) (*GetResumeOK, error)
+	// GetResumeVerdict implements getResumeVerdict operation.
+	//
+	// The market-coverage verdict for the caller's profile, scored against the role the query's facet
+	// params select. Cookie only; 404 without a profile; 503 when search is off.
+	//
+	// GET /me/profile/verdict
+	GetResumeVerdict(ctx context.Context) (*GetResumeVerdictOK, error)
 	// GetScreeningAnswers implements getScreeningAnswers operation.
 	//
 	// `data` is null before the first save.
@@ -811,6 +837,13 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/read
 	MarkConversationRead(ctx context.Context, req *ConversationReadRequest, params MarkConversationReadParams) error
+	// MarketCoverage implements marketCoverage operation.
+	//
+	// Scores a skill list against the market the query's facet params select. The `skills` facet params
+	// are not read here and are reported in `meta.ignored_params`.
+	//
+	// POST /market/coverage
+	MarketCoverage(ctx context.Context, req *ResumeCoverageRequest) (*MarketCoverageOK, error)
 	// MergeAtoms implements mergeAtoms operation.
 	//
 	// Folds two owned achievements into one. 409 when they conflict.
@@ -835,6 +868,12 @@ type Handler interface {
 	//
 	// POST /email-prefs/one-click
 	OneClickUnsubscribe(ctx context.Context, params OneClickUnsubscribeParams) (*OneClickUnsubscribeOK, error)
+	// PostAtsReport implements postAtsReport operation.
+	//
+	// Runs the model review (paid) over the stored CV, caches it and returns the report.
+	//
+	// POST /me/profile/ats-report
+	PostAtsReport(ctx context.Context) (*PostAtsReportOK, error)
 	// PrefillSubmission implements prefillSubmission operation.
 	//
 	// Writes nothing. An unrecognised URL answers 200 with every field empty.
@@ -859,6 +898,12 @@ type Handler interface {
 	//
 	// PUT /me/profile
 	PutProfile(ctx context.Context, req *ProfileUpdate) (*PutProfileOK, error)
+	// PutResumeContacts implements putResumeContacts operation.
+	//
+	// Replaces the owned overrides (contacts, headline, summary, languages, certifications).
+	//
+	// PUT /me/resume/contacts
+	PutResumeContacts(ctx context.Context, req jx.Raw) (*PutResumeContactsOK, error)
 	// RecordDictionaryGap implements recordDictionaryGap operation.
 	//
 	// Asks for a term the dictionary does not resolve. 409 when it already does. Session cookie only.
@@ -903,6 +948,12 @@ type Handler interface {
 	//
 	// POST /employer/jobs/{slug}/reopen
 	ReopenEmployerVacancy(ctx context.Context, params ReopenEmployerVacancyParams) (*ReopenEmployerVacancyOK, error)
+	// ReplaceResumeContactsFromCv implements replaceResumeContactsFromCv operation.
+	//
+	// Overwrites every owned override from the current structured CV. 409 without one.
+	//
+	// POST /me/resume/contacts/replace-from-cv
+	ReplaceResumeContactsFromCv(ctx context.Context) (*ReplaceResumeContactsFromCvOK, error)
 	// ReportCompanyFeedback implements reportCompanyFeedback operation.
 	//
 	// The id is declared a string and parsed in Go, which keeps the 400 text. A second report by the same
@@ -962,6 +1013,12 @@ type Handler interface {
 	//
 	// DELETE /companies/{slug}/process-reports
 	RetractProcessReport(ctx context.Context, params RetractProcessReportParams) (*RetractProcessReportOK, error)
+	// RetryResumeExtract implements retryResumeExtract operation.
+	//
+	// Re-runs the structured extraction over the stored upload. 409 when none is stored.
+	//
+	// POST /me/resume/retry-extract
+	RetryResumeExtract(ctx context.Context) error
 	// RevokeEmployerAccount implements revokeEmployerAccount operation.
 	//
 	// Admins only: deactivates the account but keeps the company reservation.

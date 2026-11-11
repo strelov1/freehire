@@ -1084,6 +1084,7 @@ func Register(app *fiber.App, cfg Config) {
 	userModerationH := newUserModerationHandlers(queries)
 	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
 	contract := newContract(contractHandlers{conversationHandlers: conversationH,
+		resumeHandlers:               resumeH,
 		communityHandlers:            communityH,
 		companyFeedbackHandlers:      companyFeedbackH,
 		companyRelationHandlers:      companyRelationH,
@@ -1264,7 +1265,7 @@ func Register(app *fiber.App, cfg Config) {
 	inboxH.register(api, mw)
 	// Résumé/CV surfaces: verdict, ATS report, extraction, storage (see
 	// resumeHandlers).
-	resumeH.register(api, mw)
+	resumeH.register(api, mw, contract)
 	// The headshot the photo-bearing CV templates print (see photoHandlers).
 	photoH.register(api, mw)
 	// Dictation for the assistant composer.

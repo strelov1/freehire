@@ -2,10 +2,13 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"maps"
 	"net/url"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/cvsection"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/job/verdict"
@@ -18,35 +21,39 @@ import (
 // facet params (defaulting to the profile's specializations when no category is
 // given); the profile's skills are always the measured set, never a filter.
 // Cookie-only, session-scoped (no profile → 404); 503 when search is unconfigured.
-func (h *resumeHandlers) GetResumeVerdict(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *resumeHandlers) GetResumeVerdict(ctx context.Context) (*apigen.GetResumeVerdictOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	profile, err := h.userProfile.Get(c.Context(), userID)
+	profile, err := h.userProfile.Get(ctx, userID)
 	if err != nil {
-		return profileError(err)
+		return nil, profileError(err)
 	}
 	if h.facets == nil {
-		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
-	v, err := h.computeCoverage(c, userID, profile)
+	v, err := h.computeCoverage(ctx, userID, profile)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": v})
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetResumeVerdictOK{Data: raw}, nil
 }
 
 // computeCoverage builds the coverage verdict for the caller's profile: the role
 // filter is the request facets (defaulting category to the profile), the covered
 // count is measured against the profile's structured skills, and the role-skill
 // breakdown is scored against the CV's parsed declared/body/all sets.
-func (h *resumeHandlers) computeCoverage(c *fiber.Ctx, userID int64, profile userprofile.Profile) (verdict.Verdict, error) {
-	roleFilter := search.FilterFromValues(roleValues(c, profile))
-	declared, body, all := h.cvSkillSets(c, userID)
-	return h.coverageFor(c.Context(), roleFilter, profile.Skills, declared, body, all)
+func (h *resumeHandlers) computeCoverage(ctx context.Context, userID int64, profile userprofile.Profile) (verdict.Verdict, error) {
+	roleFilter := search.FilterFromValues(roleValues(contractQuery(ctx), profile))
+	declared, body, all := h.cvSkillSets(ctx, userID)
+	return h.coverageFor(ctx, roleFilter, profile.Skills, declared, body, all)
 }
 
 // coverageFor runs the three facet queries behind the coverage verdict for a role
@@ -109,8 +116,8 @@ func (h *resumeHandlers) coverageWithRole(ctx context.Context, roleFilter any, r
 // and union skill sets for the role breakdown and bundle coverage. Best-effort: with
 // no CV stored (or a read error) it returns empty sets so the breakdown degrades to
 // all-missing rather than failing the verdict.
-func (h *resumeHandlers) cvSkillSets(c *fiber.Ctx, userID int64) (declared, body, all []string) {
-	text, ok, err := h.storedCVText(c, userID)
+func (h *resumeHandlers) cvSkillSets(ctx context.Context, userID int64) (declared, body, all []string) {
+	text, ok, err := h.storedCVText(ctx, userID)
 	if err != nil || !ok {
 		return nil, nil, nil
 	}
@@ -121,8 +128,8 @@ func (h *resumeHandlers) cvSkillSets(c *fiber.Ctx, userID int64) (declared, body
 // strips the `skills` facet (the profile's skills are the measured set, not a role
 // filter) and defaults `category` to the profile's specializations when the caller
 // selected no category — so an unfiltered verdict scores the profile's own role.
-func roleValues(c *fiber.Ctx, profile userprofile.Profile) url.Values {
-	vals := queryValues(c)
+func roleValues(query url.Values, profile userprofile.Profile) url.Values {
+	vals := maps.Clone(query)
 	stripSkillParams(vals)
 	if !hasNonEmpty(vals["category"]) {
 		vals["category"] = profile.Specializations

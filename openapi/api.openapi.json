@@ -103,6 +103,9 @@
     },
     {
       "name": "Companies"
+    },
+    {
+      "name": "Résumé"
     }
   ],
   "paths": {
@@ -4298,6 +4301,58 @@
         ]
       }
     },
+    "/market/coverage": {
+      "post": {
+        "operationId": "marketCoverage",
+        "description": "Scores a skill list against the market the query's facet params select. The `skills`\nfacet params are not read here and are reported in `meta.ignored_params`.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "$ref": "#/components/schemas/IgnoredMeta"
+                    }
+                  },
+                  "description": "A single item that read query params: `{\"data\": ...}`, plus `meta` when one was dropped."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Résumé"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeCoverageRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/agent-permissions": {
       "get": {
         "operationId": "getAgentPermissions",
@@ -7325,6 +7380,121 @@
         ]
       }
     },
+    "/me/profile/ats-report": {
+      "get": {
+        "operationId": "getAtsReport",
+        "description": "The ATS-readiness report of the caller's stored CV, with any cached model review folded\nin. `has_cv` is false, and `report` null, when no CV is stored.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Résumé"
+        ]
+      },
+      "post": {
+        "operationId": "postAtsReport",
+        "description": "Runs the model review (paid) over the stored CV, caches it and returns the report.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Résumé"
+        ]
+      }
+    },
+    "/me/profile/verdict": {
+      "get": {
+        "operationId": "getResumeVerdict",
+        "description": "The market-coverage verdict for the caller's profile, scored against the role the\nquery's facet params select. Cookie only; 404 without a profile; 503 when search is off.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Résumé"
+        ]
+      }
+    },
     "/me/promo/preview": {
       "post": {
         "operationId": "previewPromoCode",
@@ -7756,6 +7926,179 @@
         },
         "tags": [
           "Referrals"
+        ]
+      }
+    },
+    "/me/resume": {
+      "get": {
+        "operationId": "getResume",
+        "description": "Whether storage is on, a CV is stored, when, and its structured view. Always 200.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Résumé"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteResume",
+        "description": "Removes the stored CV. 501 when storage is off.",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Résumé"
+        ]
+      }
+    },
+    "/me/resume/contacts": {
+      "put": {
+        "operationId": "putResumeContacts",
+        "description": "Replaces the owned overrides (contacts, headline, summary, languages, certifications).",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Résumé"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          }
+        }
+      }
+    },
+    "/me/resume/contacts/replace-from-cv": {
+      "post": {
+        "operationId": "replaceResumeContactsFromCv",
+        "description": "Overwrites every owned override from the current structured CV. 409 without one.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Résumé"
+        ]
+      }
+    },
+    "/me/resume/retry-extract": {
+      "post": {
+        "operationId": "retryResumeExtract",
+        "description": "Re-runs the structured extraction over the stored upload. 409 when none is stored.",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "The request has been accepted for processing, but processing has not yet completed."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Résumé"
         ]
       }
     },
@@ -16377,6 +16720,26 @@
           }
         },
         "description": "Where a job page ended up."
+      },
+      "ResumeCoverageRequest": {
+        "type": "object",
+        "properties": {
+          "skills": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required and at most 100 once blanks are dropped; anything else is a 400."
+          }
+        },
+        "description": "The skill list a coverage reading scores against the market."
       },
       "RoleCountriesAnswer": {
         "type": "object",

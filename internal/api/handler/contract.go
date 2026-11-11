@@ -73,6 +73,7 @@ type contractHandlers struct {
 	*jobsHandlers
 	*searchHandlers
 	*companiesHandlers
+	*resumeHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}

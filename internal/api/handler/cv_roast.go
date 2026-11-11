@@ -111,7 +111,7 @@ func (h *resumeHandlers) RoastCV(c *fiber.Ctx) error {
 			out.Market = &v
 		}
 	}
-	return dataResponseWithIgnored(c, out, coverageIgnoredParams(c), ignoredJobValues(queryValues(c)))
+	return dataResponseWithIgnored(c, out, coverageIgnoredParams(queryValues(c)), ignoredJobValues(queryValues(c)))
 }
 
 // roleFacet answers the role's skill distribution, or a zero result and an error when

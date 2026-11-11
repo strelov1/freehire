@@ -48,7 +48,7 @@ func (r *recordingFacetCounter) callFilter(n int) [][]string {
 func coverageApp(fc facetCounter) *fiber.App {
 	h := &resumeHandlers{facets: fc}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/market/coverage", h.MarketCoverage)
+	app.Post("/api/v1/market/coverage", newContract(contractHandlers{resumeHandlers: h}))
 	return app
 }
 
@@ -68,7 +68,7 @@ func doPostJSON(t *testing.T, app *fiber.App, target, body string) (int, map[str
 
 func TestMarketCoverage_DisabledReturns503(t *testing.T) {
 	app := coverageApp(nil) // search not configured
-	status, _ := doPostJSON(t, app, "/market/coverage", `{"skills":["go"]}`)
+	status, _ := doPostJSON(t, app, "/api/v1/market/coverage", `{"skills":["go"]}`)
 	if status != fiber.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", status)
 	}
@@ -77,7 +77,7 @@ func TestMarketCoverage_DisabledReturns503(t *testing.T) {
 func TestMarketCoverage_EmptySkillsReturns400(t *testing.T) {
 	fake := &recordingFacetCounter{}
 	app := coverageApp(fake)
-	status, _ := doPostJSON(t, app, "/market/coverage", `{"skills":[]}`)
+	status, _ := doPostJSON(t, app, "/api/v1/market/coverage", `{"skills":[]}`)
 	if status != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", status)
 	}
@@ -95,9 +95,9 @@ func TestMarketCoverage_TooManySkillsReturns400(t *testing.T) {
 	for i := range big {
 		big[i] = "s" + strconv.Itoa(i)
 	}
-	payload, _ := json.Marshal(coverageRequest{Skills: big})
+	payload, _ := json.Marshal(map[string][]string{"skills": big})
 
-	status, _ := doPostJSON(t, app, "/market/coverage", string(payload))
+	status, _ := doPostJSON(t, app, "/api/v1/market/coverage", string(payload))
 	if status != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", status)
 	}
@@ -115,7 +115,7 @@ func TestMarketCoverage_ComputesAndShapesResponse(t *testing.T) {
 	}}
 	app := coverageApp(fake)
 
-	status, body := doPostJSON(t, app, "/market/coverage?category=backend", `{"skills":["go"]}`)
+	status, body := doPostJSON(t, app, "/api/v1/market/coverage?category=backend", `{"skills":["go"]}`)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -145,7 +145,7 @@ func TestMarketCoverage_FilterFromQueryAndSkillsFromBody(t *testing.T) {
 	fake := &recordingFacetCounter{res: search.FacetResult{Total: 10}}
 	app := coverageApp(fake)
 
-	status, _ := doPostJSON(t, app, "/market/coverage?category=backend&countries=BR", `{"skills":["go","docker"]}`)
+	status, _ := doPostJSON(t, app, "/api/v1/market/coverage?category=backend&countries=BR", `{"skills":["go","docker"]}`)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -177,7 +177,7 @@ func TestMarketCoverage_ReportsIgnoredParams(t *testing.T) {
 	// ask about, and the percentage looks just as confident either way.
 	app := coverageApp(&recordingFacetCounter{})
 
-	_, body := doPostJSON(t, app, "/market/coverage?country=it", `{"skills":["go"]}`)
+	_, body := doPostJSON(t, app, "/api/v1/market/coverage?country=it", `{"skills":["go"]}`)
 
 	meta, _ := body["meta"].(map[string]any)
 	ignored, _ := meta["ignored_params"].([]any)
@@ -197,7 +197,7 @@ func TestMarketCoverage_ReportsTheSkillsParamItDiscards(t *testing.T) {
 	// silently obeyed-looking.
 	app := coverageApp(&recordingFacetCounter{})
 
-	_, body := doPostJSON(t, app, "/market/coverage?skills=rust", `{"skills":["go"]}`)
+	_, body := doPostJSON(t, app, "/api/v1/market/coverage?skills=rust", `{"skills":["go"]}`)
 
 	meta, _ := body["meta"].(map[string]any)
 	ignored, _ := meta["ignored_params"].([]any)
@@ -212,10 +212,22 @@ func TestMarketCoverage_ReportsTheSkillsParamItDiscards(t *testing.T) {
 func TestMarketCoverage_CleanQueryKeepsTheBareDataEnvelope(t *testing.T) {
 	app := coverageApp(&recordingFacetCounter{})
 
-	_, body := doPostJSON(t, app, "/market/coverage?countries=it", `{"skills":["go"]}`)
+	_, body := doPostJSON(t, app, "/api/v1/market/coverage?countries=it", `{"skills":["go"]}`)
 
 	if _, present := body["meta"]; present {
 		t.Errorf("meta = %v, want the key absent on a clean query", body["meta"])
+	}
+}
+
+func TestMarketCoverage_ReportsIgnoredValues(t *testing.T) {
+	app := coverageApp(&recordingFacetCounter{})
+
+	_, body := doPostJSON(t, app, "/api/v1/market/coverage?work_mode=foo", `{"skills":["go"]}`)
+
+	meta, _ := body["meta"].(map[string]any)
+	values, _ := meta["ignored_values"].(map[string]any)
+	if got, _ := values["work_mode"].([]any); len(got) != 1 || got[0] != "foo" {
+		t.Errorf("meta.ignored_values = %v, want {work_mode: [foo]}", meta["ignored_values"])
 	}
 }
 
@@ -225,7 +237,7 @@ func TestMarketCoverage_IgnoredReportStaysSortedAndCapped(t *testing.T) {
 	// exists to enforce, and break the alphabetical order the rest relies on.
 	app := coverageApp(&recordingFacetCounter{})
 
-	q := "/market/coverage?skills=a&skills_exclude=b&skills_mode=and"
+	q := "/api/v1/market/coverage?skills=a&skills_exclude=b&skills_mode=and"
 	for i := range 12 {
 		q += fmt.Sprintf("&junk%02d=x", i)
 	}
