@@ -12,7 +12,7 @@ import (
 // mouth.
 func TestDeAuthoredContentIsNotTheAIPersona(t *testing.T) {
 	t.Run("reply by a deleted member", func(t *testing.T) {
-		got := toReplyResponse(community.Reply{ID: 1, ThreadID: 2, AuthorHandle: "", IsAI: false})
+		got := toReply(community.Reply{ID: 1, ThreadID: 2, AuthorHandle: "", IsAI: false})
 		if got.Author == aiAuthor {
 			t.Errorf("author = %q, want a deleted-member marker, not the AI persona", got.Author)
 		}
@@ -22,21 +22,21 @@ func TestDeAuthoredContentIsNotTheAIPersona(t *testing.T) {
 	})
 
 	t.Run("AI reply keeps the AI persona", func(t *testing.T) {
-		got := toReplyResponse(community.Reply{ID: 1, ThreadID: 2, AuthorHandle: "", IsAI: true})
+		got := toReply(community.Reply{ID: 1, ThreadID: 2, AuthorHandle: "", IsAI: true})
 		if got.Author != aiAuthor {
 			t.Errorf("author = %q, want %q", got.Author, aiAuthor)
 		}
 	})
 
 	t.Run("live handle is untouched", func(t *testing.T) {
-		got := toReplyResponse(community.Reply{ID: 1, ThreadID: 2, AuthorHandle: "quiet-otter"})
+		got := toReply(community.Reply{ID: 1, ThreadID: 2, AuthorHandle: "quiet-otter"})
 		if got.Author != "quiet-otter" {
 			t.Errorf("author = %q, want the persona handle", got.Author)
 		}
 	})
 
 	t.Run("thread by a deleted member", func(t *testing.T) {
-		got := toThreadResponse(community.Thread{ID: 1, AuthorHandle: ""})
+		got := toThread(community.Thread{ID: 1, AuthorHandle: ""})
 		if got.Author == "" || got.Author == aiAuthor {
 			t.Errorf("author = %q, want an explicit deleted-member marker", got.Author)
 		}

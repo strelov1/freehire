@@ -61,6 +61,12 @@
     },
     {
       "name": "Tracking"
+    },
+    {
+      "name": "Conversations"
+    },
+    {
+      "name": "Community"
     }
   ],
   "paths": {
@@ -1777,6 +1783,401 @@
         ]
       }
     },
+    "/me/conversations": {
+      "get": {
+        "operationId": "listConversations",
+        "description": "The caller's conversations of every kind, newest message first.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Conversation"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conversations"
+        ]
+      }
+    },
+    "/me/conversations/{id}/accept": {
+      "post": {
+        "operationId": "acceptConversation",
+        "description": "Opens a pending conversation the caller did not start. The id is declared a string and parsed in Go, which keeps the 400 text.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Conversation"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conversations"
+        ]
+      }
+    },
+    "/me/conversations/{id}/block": {
+      "post": {
+        "operationId": "blockConversation",
+        "description": "Closes every conversation with the other participant and stops either from starting another, of any kind.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conversations"
+        ]
+      }
+    },
+    "/me/conversations/{id}/decline": {
+      "post": {
+        "operationId": "declineConversation",
+        "description": "Refuses a pending conversation.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Conversation"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conversations"
+        ]
+      }
+    },
+    "/me/conversations/{id}/messages": {
+      "get": {
+        "operationId": "listConversationMessages",
+        "description": "The messages after the given id, oldest first. Params that do not read fall back to their defaults.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ConversationMessage"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conversations"
+        ]
+      },
+      "post": {
+        "operationId": "sendConversationMessage",
+        "description": "Posts a message into an open conversation.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConversationMessage"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conversations"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationSendRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/conversations/{id}/read": {
+      "post": {
+        "operationId": "markConversationRead",
+        "description": "Records that the caller has read up to a message.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conversations"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationReadRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/conversations/{id}/report": {
+      "post": {
+        "operationId": "reportConversation",
+        "description": "Files a complaint about a conversation the caller takes part in.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conversations"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationReportRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/email-groups": {
       "get": {
         "operationId": "getMyEmailGroups",
@@ -3348,6 +3749,100 @@
         ]
       }
     },
+    "/moderation/conversation-reports": {
+      "get": {
+        "operationId": "listConversationReports",
+        "description": "Moderators only: the reported conversations. Page params that do not read fall back to their defaults.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "include_resolved",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationReportsPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conversations"
+        ]
+      }
+    },
+    "/moderation/conversation-reports/{id}/resolve": {
+      "post": {
+        "operationId": "resolveConversationReport",
+        "description": "Moderators only: marks a report handled. Idempotent; 404 for an unknown id.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conversations"
+        ]
+      }
+    },
     "/moderation/users": {
       "get": {
         "operationId": "findModeratedUser",
@@ -4048,6 +4543,377 @@
           "Talent Network"
         ]
       }
+    },
+    "/threads": {
+      "get": {
+        "operationId": "listThreads",
+        "description": "A subject's open threads, newest first, keyset-paged.",
+        "parameters": [
+          {
+            "name": "subject_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "subject_slug",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Community"
+        ]
+      },
+      "post": {
+        "operationId": "createThread",
+        "description": "Opens a thread on a company or job.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Thread"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Community"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateThreadRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/threads/count": {
+      "get": {
+        "operationId": "countThreads",
+        "description": "A subject's open-thread count.",
+        "parameters": [
+          {
+            "name": "subject_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "subject_slug",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ThreadCount"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Community"
+        ]
+      }
+    },
+    "/threads/recent": {
+      "get": {
+        "operationId": "listRecentThreads",
+        "description": "Open threads across every subject, newest first, keyset-paged: the discussions feed.",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentThreadPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Community"
+        ]
+      }
+    },
+    "/threads/{id}": {
+      "get": {
+        "operationId": "getThread",
+        "description": "A thread with its first page of replies. The id is declared a string and parsed in Go, which keeps the 400 text.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadDetailPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Community"
+        ]
+      }
+    },
+    "/threads/{id}/close": {
+      "post": {
+        "operationId": "closeThread",
+        "description": "Moderators only: closes a thread.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ThreadClosed"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Community"
+        ]
+      }
+    },
+    "/threads/{id}/replies": {
+      "post": {
+        "operationId": "createReply",
+        "description": "Posts a reply to an open thread.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ThreadReply"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Community"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReplyRequest"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4207,6 +5073,22 @@
           }
         },
         "description": "The current single place: an ISO country code and a free-text city."
+      },
+      "BuddyCounterpart": {
+        "type": "object",
+        "required": [
+          "handle",
+          "card_summary"
+        ],
+        "properties": {
+          "handle": {
+            "type": "string"
+          },
+          "card_summary": {
+            "$ref": "#/components/schemas/ConversationCardSummary"
+          }
+        },
+        "description": "The buddy persona's own shape. Nothing here names the account behind it."
       },
       "CityMatch": {
         "type": "object",
@@ -4461,6 +5343,300 @@
           }
         },
         "description": "A job page the caller sent in, and what became of it."
+      },
+      "Conversation": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status_for_me",
+          "counterpart",
+          "unread",
+          "last_message_at",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status_for_me": {
+            "type": "string"
+          },
+          "counterpart": {
+            "$ref": "#/components/schemas/ConversationCounterpart"
+          },
+          "unread": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_message_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "`unread` and `last_message_at` mean something on the list only; elsewhere they are 0 and null."
+      },
+      "ConversationCardSummary": {
+        "type": "object",
+        "required": [
+          "category",
+          "seniority",
+          "country"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          }
+        },
+        "description": "A buddy's card, reduced to what an invitation shows."
+      },
+      "ConversationCounterpart": {
+        "type": "object",
+        "required": [
+          "persona",
+          "reachable",
+          "detail"
+        ],
+        "properties": {
+          "persona": {
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuddyCounterpart"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "The other side, as the persona they speak as draws them. `detail` is null when not reachable."
+      },
+      "ConversationMessage": {
+        "type": "object",
+        "required": [
+          "id",
+          "mine",
+          "body",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "mine": {
+            "type": "boolean"
+          },
+          "body": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConversationReadRequest": {
+        "type": "object",
+        "properties": {
+          "up_to": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ConversationReport": {
+        "type": "object",
+        "required": [
+          "id",
+          "conversation_id",
+          "kind",
+          "reason",
+          "note",
+          "created_at",
+          "resolved_at",
+          "reporter",
+          "reported",
+          "messages"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "conversation_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reporter": {
+            "type": "string"
+          },
+          "reported": {
+            "type": "string"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationReportMessage"
+            }
+          }
+        },
+        "description": "Each account is named the way the conversation's kind draws it, so a moderator reads what the participants saw."
+      },
+      "ConversationReportMessage": {
+        "type": "object",
+        "required": [
+          "sender",
+          "body",
+          "created_at"
+        ],
+        "properties": {
+          "sender": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConversationReportRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "ConversationReportsMeta": {
+        "type": "object",
+        "required": [
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ConversationReportsPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationReport"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ConversationReportsMeta"
+          }
+        }
+      },
+      "ConversationSendRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateReplyRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "parent_reply_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Nests the reply under another reply; 0 or omitted is top-level."
+          }
+        }
+      },
+      "CreateThreadRequest": {
+        "type": "object",
+        "properties": {
+          "subject_type": {
+            "type": "string"
+          },
+          "subject_slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          }
+        }
       },
       "Deleted": {
         "type": "object",
@@ -5742,6 +6918,79 @@
           }
         }
       },
+      "RecentThread": {
+        "type": "object",
+        "required": [
+          "id",
+          "subject_type",
+          "subject_slug",
+          "title",
+          "body",
+          "author",
+          "reply_count",
+          "status",
+          "created_at",
+          "subject_title",
+          "subject_company"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subject_type": {
+            "type": "string"
+          },
+          "subject_slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "reply_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subject_title": {
+            "type": "string"
+          },
+          "subject_company": {
+            "type": "string"
+          }
+        },
+        "description": "A feed row: the thread plus the subject's display names, empty when the subject no longer exists."
+      },
+      "RecentThreadPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecentThread"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ThreadCursorMeta"
+          }
+        }
+      },
       "Relocation": {
         "type": "object",
         "properties": {
@@ -6792,6 +8041,176 @@
           }
         },
         "description": "One role of a work history, with everything nameable removed."
+      },
+      "Thread": {
+        "type": "object",
+        "required": [
+          "id",
+          "subject_type",
+          "subject_slug",
+          "title",
+          "body",
+          "author",
+          "reply_count",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subject_type": {
+            "type": "string"
+          },
+          "subject_slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "reply_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "The author is the persona handle, \"AI\" for a system reply or \"[deleted]\" once the account is gone."
+      },
+      "ThreadClosed": {
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ThreadCount": {
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ThreadCursorMeta": {
+        "type": "object",
+        "properties": {
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "description": "`next_cursor` is set only when the page came back full; a partial page is the last."
+      },
+      "ThreadDetailPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ThreadWithReplies"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ThreadCursorMeta"
+          }
+        }
+      },
+      "ThreadPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Thread"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ThreadCursorMeta"
+          }
+        }
+      },
+      "ThreadReply": {
+        "type": "object",
+        "required": [
+          "id",
+          "thread_id",
+          "parent_id",
+          "author",
+          "body",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "parent_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "author": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ThreadWithReplies": {
+        "type": "object",
+        "required": [
+          "thread",
+          "replies"
+        ],
+        "properties": {
+          "thread": {
+            "$ref": "#/components/schemas/Thread"
+          },
+          "replies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThreadReply"
+            }
+          }
+        }
       },
       "TimelineEvent": {
         "type": "object",

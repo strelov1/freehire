@@ -28,6 +28,102 @@ func (c *codeRecorder) Unwrap() http.ResponseWriter {
 
 func recordError(string, error) {}
 
+// handleAcceptConversationRequest handles acceptConversation operation.
+//
+// Opens a pending conversation the caller did not start. The id is declared a string and parsed in Go,
+// which keeps the 400 text.
+//
+// POST /me/conversations/{id}/accept
+func (s *Server) handleAcceptConversationRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: AcceptConversationOperation,
+			ID:   "acceptConversation",
+		}
+	)
+	params, err := decodeAcceptConversationParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *AcceptConversationOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    AcceptConversationOperation,
+			OperationSummary: "",
+			OperationID:      "acceptConversation",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = AcceptConversationParams
+			Response = *AcceptConversationOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackAcceptConversationParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.AcceptConversation(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.AcceptConversation(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeAcceptConversationResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleAddToWatchlistRequest handles addToWatchlist operation.
 //
 // PUT /me/watchlist/{slug}
@@ -324,6 +420,102 @@ func (s *Server) handleBanUserRequest(args [1]string, argsEscaped bool, w http.R
 	}
 }
 
+// handleBlockConversationRequest handles blockConversation operation.
+//
+// Closes every conversation with the other participant and stops either from starting another, of any
+// kind.
+//
+// POST /me/conversations/{id}/block
+func (s *Server) handleBlockConversationRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: BlockConversationOperation,
+			ID:   "blockConversation",
+		}
+	)
+	params, err := decodeBlockConversationParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *BlockConversationNoContent
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    BlockConversationOperation,
+			OperationSummary: "",
+			OperationID:      "blockConversation",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = BlockConversationParams
+			Response = *BlockConversationNoContent
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackBlockConversationParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				err = s.h.BlockConversation(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		err = s.h.BlockConversation(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeBlockConversationResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleClearCompanyVoteRequest handles clearCompanyVote operation.
 //
 // DELETE /companies/{slug}/vote
@@ -510,6 +702,101 @@ func (s *Server) handleClearJobVoteRequest(args [1]string, argsEscaped bool, w h
 	}
 }
 
+// handleCloseThreadRequest handles closeThread operation.
+//
+// Moderators only: closes a thread.
+//
+// POST /threads/{id}/close
+func (s *Server) handleCloseThreadRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: CloseThreadOperation,
+			ID:   "closeThread",
+		}
+	)
+	params, err := decodeCloseThreadParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *CloseThreadOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    CloseThreadOperation,
+			OperationSummary: "",
+			OperationID:      "closeThread",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = CloseThreadParams
+			Response = *CloseThreadOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackCloseThreadParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.CloseThread(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.CloseThread(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeCloseThreadResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleCompleteOnboardingRequest handles completeOnboarding operation.
 //
 // POST /me/onboarding/complete
@@ -576,6 +863,105 @@ func (s *Server) handleCompleteOnboardingRequest(args [0]string, argsEscaped boo
 	}
 
 	if err := encodeCompleteOnboardingResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleCountThreadsRequest handles countThreads operation.
+//
+// A subject's open-thread count.
+//
+// GET /threads/count
+func (s *Server) handleCountThreadsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: CountThreadsOperation,
+			ID:   "countThreads",
+		}
+	)
+	params, err := decodeCountThreadsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *CountThreadsOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    CountThreadsOperation,
+			OperationSummary: "",
+			OperationID:      "countThreads",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "subject_type",
+					In:   "query",
+				}: params.SubjectType,
+				{
+					Name: "subject_slug",
+					In:   "query",
+				}: params.SubjectSlug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = CountThreadsParams
+			Response = *CountThreadsOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackCountThreadsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.CountThreads(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.CountThreads(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeCountThreadsResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -805,6 +1191,116 @@ func (s *Server) handleCreateJobReportRequest(args [1]string, argsEscaped bool, 
 	}
 }
 
+// handleCreateReplyRequest handles createReply operation.
+//
+// Posts a reply to an open thread.
+//
+// POST /threads/{id}/replies
+func (s *Server) handleCreateReplyRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: CreateReplyOperation,
+			ID:   "createReply",
+		}
+	)
+	params, err := decodeCreateReplyParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeCreateReplyRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *CreateReplyCreated
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    CreateReplyOperation,
+			OperationSummary: "",
+			OperationID:      "createReply",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = *CreateReplyRequest
+			Params   = CreateReplyParams
+			Response = *CreateReplyCreated
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackCreateReplyParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.CreateReply(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.CreateReply(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeCreateReplyResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleCreateSavedSearchRequest handles createSavedSearch operation.
 //
 // 400 for a bad name, 409 for a duplicate name or the per-user cap.
@@ -987,6 +1483,196 @@ func (s *Server) handleCreateSubscriptionRequest(args [0]string, argsEscaped boo
 	}
 
 	if err := encodeCreateSubscriptionResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleCreateThreadRequest handles createThread operation.
+//
+// Opens a thread on a company or job.
+//
+// POST /threads
+func (s *Server) handleCreateThreadRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: CreateThreadOperation,
+			ID:   "createThread",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeCreateThreadRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *CreateThreadCreated
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    CreateThreadOperation,
+			OperationSummary: "",
+			OperationID:      "createThread",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *CreateThreadRequest
+			Params   = struct{}
+			Response = *CreateThreadCreated
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.CreateThread(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.CreateThread(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeCreateThreadResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleDeclineConversationRequest handles declineConversation operation.
+//
+// Refuses a pending conversation.
+//
+// POST /me/conversations/{id}/decline
+func (s *Server) handleDeclineConversationRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: DeclineConversationOperation,
+			ID:   "declineConversation",
+		}
+	)
+	params, err := decodeDeclineConversationParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *DeclineConversationOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    DeclineConversationOperation,
+			OperationSummary: "",
+			OperationID:      "declineConversation",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = DeclineConversationParams
+			Response = *DeclineConversationOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackDeclineConversationParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.DeclineConversation(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.DeclineConversation(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeDeclineConversationResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -3093,6 +3779,106 @@ func (s *Server) handleGetTalentPhotoRequest(args [1]string, argsEscaped bool, w
 	}
 }
 
+// handleGetThreadRequest handles getThread operation.
+//
+// A thread with its first page of replies. The id is declared a string and parsed in Go, which keeps
+// the 400 text.
+//
+// GET /threads/{id}
+func (s *Server) handleGetThreadRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetThreadOperation,
+			ID:   "getThread",
+		}
+	)
+	params, err := decodeGetThreadParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *ThreadDetailPage
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetThreadOperation,
+			OperationSummary: "",
+			OperationID:      "getThread",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+				{
+					Name: "cursor",
+					In:   "query",
+				}: params.Cursor,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetThreadParams
+			Response = *ThreadDetailPage
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetThreadParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetThread(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetThread(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetThreadResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleGetTimelineRequest handles getTimeline operation.
 //
 // The caller's events between `from` and `to` inclusive, oldest first.
@@ -3652,6 +4438,289 @@ func (s *Server) handleListCompanyFeedbackRequest(args [1]string, argsEscaped bo
 	}
 }
 
+// handleListConversationMessagesRequest handles listConversationMessages operation.
+//
+// The messages after the given id, oldest first. Params that do not read fall back to their defaults.
+//
+// GET /me/conversations/{id}/messages
+func (s *Server) handleListConversationMessagesRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ListConversationMessagesOperation,
+			ID:   "listConversationMessages",
+		}
+	)
+	params, err := decodeListConversationMessagesParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *ListConversationMessagesOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListConversationMessagesOperation,
+			OperationSummary: "",
+			OperationID:      "listConversationMessages",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+				{
+					Name: "after",
+					In:   "query",
+				}: params.After,
+				{
+					Name: "limit",
+					In:   "query",
+				}: params.Limit,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = ListConversationMessagesParams
+			Response = *ListConversationMessagesOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackListConversationMessagesParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListConversationMessages(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListConversationMessages(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListConversationMessagesResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleListConversationReportsRequest handles listConversationReports operation.
+//
+// Moderators only: the reported conversations. Page params that do not read fall back to their
+// defaults.
+//
+// GET /moderation/conversation-reports
+func (s *Server) handleListConversationReportsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ListConversationReportsOperation,
+			ID:   "listConversationReports",
+		}
+	)
+	params, err := decodeListConversationReportsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *ConversationReportsPage
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListConversationReportsOperation,
+			OperationSummary: "",
+			OperationID:      "listConversationReports",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "limit",
+					In:   "query",
+				}: params.Limit,
+				{
+					Name: "offset",
+					In:   "query",
+				}: params.Offset,
+				{
+					Name: "include_resolved",
+					In:   "query",
+				}: params.IncludeResolved,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = ListConversationReportsParams
+			Response = *ConversationReportsPage
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackListConversationReportsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListConversationReports(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListConversationReports(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListConversationReportsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleListConversationsRequest handles listConversations operation.
+//
+// The caller's conversations of every kind, newest message first.
+//
+// GET /me/conversations
+func (s *Server) handleListConversationsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err error
+	)
+
+	var rawBody []byte
+
+	var response *ListConversationsOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListConversationsOperation,
+			OperationSummary: "",
+			OperationID:      "listConversations",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = *ListConversationsOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListConversations(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListConversations(ctx)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListConversationsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleListMyContributionsRequest handles listMyContributions operation.
 //
 // GET /me/contributions
@@ -3870,6 +4939,101 @@ func (s *Server) handleListPendingJobReportsRequest(args [0]string, argsEscaped 
 	}
 
 	if err := encodeListPendingJobReportsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleListRecentThreadsRequest handles listRecentThreads operation.
+//
+// Open threads across every subject, newest first, keyset-paged: the discussions feed.
+//
+// GET /threads/recent
+func (s *Server) handleListRecentThreadsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ListRecentThreadsOperation,
+			ID:   "listRecentThreads",
+		}
+	)
+	params, err := decodeListRecentThreadsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *RecentThreadPage
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListRecentThreadsOperation,
+			OperationSummary: "",
+			OperationID:      "listRecentThreads",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "cursor",
+					In:   "query",
+				}: params.Cursor,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = ListRecentThreadsParams
+			Response = *RecentThreadPage
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackListRecentThreadsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListRecentThreads(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListRecentThreads(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListRecentThreadsResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -4227,6 +5391,109 @@ func (s *Server) handleListTalentRequest(args [0]string, argsEscaped bool, w htt
 	}
 }
 
+// handleListThreadsRequest handles listThreads operation.
+//
+// A subject's open threads, newest first, keyset-paged.
+//
+// GET /threads
+func (s *Server) handleListThreadsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ListThreadsOperation,
+			ID:   "listThreads",
+		}
+	)
+	params, err := decodeListThreadsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *ThreadPage
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListThreadsOperation,
+			OperationSummary: "",
+			OperationID:      "listThreads",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "subject_type",
+					In:   "query",
+				}: params.SubjectType,
+				{
+					Name: "subject_slug",
+					In:   "query",
+				}: params.SubjectSlug,
+				{
+					Name: "cursor",
+					In:   "query",
+				}: params.Cursor,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = ListThreadsParams
+			Response = *ThreadPage
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackListThreadsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListThreads(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListThreads(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListThreadsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleListWatchlistRequest handles listWatchlist operation.
 //
 // One page, newest first. A page param that does not read falls back to its default.
@@ -4322,6 +5589,116 @@ func (s *Server) handleListWatchlistRequest(args [0]string, argsEscaped bool, w 
 	}
 
 	if err := encodeListWatchlistResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleMarkConversationReadRequest handles markConversationRead operation.
+//
+// Records that the caller has read up to a message.
+//
+// POST /me/conversations/{id}/read
+func (s *Server) handleMarkConversationReadRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: MarkConversationReadOperation,
+			ID:   "markConversationRead",
+		}
+	)
+	params, err := decodeMarkConversationReadParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeMarkConversationReadRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *MarkConversationReadNoContent
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    MarkConversationReadOperation,
+			OperationSummary: "",
+			OperationID:      "markConversationRead",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = *ConversationReadRequest
+			Params   = MarkConversationReadParams
+			Response = *MarkConversationReadNoContent
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackMarkConversationReadParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				err = s.h.MarkConversationRead(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		err = s.h.MarkConversationRead(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeMarkConversationReadResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -5406,6 +6783,211 @@ func (s *Server) handleReportCompanyFeedbackRequest(args [1]string, argsEscaped 
 	}
 }
 
+// handleReportConversationRequest handles reportConversation operation.
+//
+// Files a complaint about a conversation the caller takes part in.
+//
+// POST /me/conversations/{id}/report
+func (s *Server) handleReportConversationRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ReportConversationOperation,
+			ID:   "reportConversation",
+		}
+	)
+	params, err := decodeReportConversationParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeReportConversationRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *ReportConversationNoContent
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ReportConversationOperation,
+			OperationSummary: "",
+			OperationID:      "reportConversation",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = *ConversationReportRequest
+			Params   = ReportConversationParams
+			Response = *ReportConversationNoContent
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackReportConversationParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				err = s.h.ReportConversation(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		err = s.h.ReportConversation(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeReportConversationResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleResolveConversationReportRequest handles resolveConversationReport operation.
+//
+// Moderators only: marks a report handled. Idempotent; 404 for an unknown id.
+//
+// POST /moderation/conversation-reports/{id}/resolve
+func (s *Server) handleResolveConversationReportRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ResolveConversationReportOperation,
+			ID:   "resolveConversationReport",
+		}
+	)
+	params, err := decodeResolveConversationReportParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *ResolveConversationReportNoContent
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ResolveConversationReportOperation,
+			OperationSummary: "",
+			OperationID:      "resolveConversationReport",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = ResolveConversationReportParams
+			Response = *ResolveConversationReportNoContent
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackResolveConversationReportParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				err = s.h.ResolveConversationReport(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		err = s.h.ResolveConversationReport(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeResolveConversationReportResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleResolveJobRequest handles resolveJob operation.
 //
 // Finds the catalogue job behind a page, or imports it. 200 when it was already there, 201 when this
@@ -6086,6 +7668,116 @@ func (s *Server) handleSearchCitiesRequest(args [0]string, argsEscaped bool, w h
 	}
 
 	if err := encodeSearchCitiesResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleSendConversationMessageRequest handles sendConversationMessage operation.
+//
+// Posts a message into an open conversation.
+//
+// POST /me/conversations/{id}/messages
+func (s *Server) handleSendConversationMessageRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: SendConversationMessageOperation,
+			ID:   "sendConversationMessage",
+		}
+	)
+	params, err := decodeSendConversationMessageParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeSendConversationMessageRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *SendConversationMessageCreated
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    SendConversationMessageOperation,
+			OperationSummary: "",
+			OperationID:      "sendConversationMessage",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = *ConversationSendRequest
+			Params   = SendConversationMessageParams
+			Response = *SendConversationMessageCreated
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackSendConversationMessageParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.SendConversationMessage(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.SendConversationMessage(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeSendConversationMessageResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

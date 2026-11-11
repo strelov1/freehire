@@ -16,6 +16,21 @@ func (s *ProblemStatusCode) Error() string {
 }
 
 // A single item: `{"data": ...}`.
+type AcceptConversationOK struct {
+	Data Conversation `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *AcceptConversationOK) GetData() Conversation {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *AcceptConversationOK) SetData(val Conversation) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type AddToWatchlistOK struct {
 	Data WatchedCompany `json:"data"`
 }
@@ -179,6 +194,36 @@ func (s *BankedAnswer) SetUpdatedAt(val time.Time) {
 	s.UpdatedAt = val
 }
 
+// BlockConversationNoContent is response for BlockConversation operation.
+type BlockConversationNoContent struct{}
+
+// The buddy persona's own shape. Nothing here names the account behind it.
+// Ref: #/components/schemas/BuddyCounterpart
+type BuddyCounterpart struct {
+	Handle      string                  `json:"handle"`
+	CardSummary ConversationCardSummary `json:"card_summary"`
+}
+
+// GetHandle returns the value of Handle.
+func (s *BuddyCounterpart) GetHandle() string {
+	return s.Handle
+}
+
+// GetCardSummary returns the value of CardSummary.
+func (s *BuddyCounterpart) GetCardSummary() ConversationCardSummary {
+	return s.CardSummary
+}
+
+// SetHandle sets the value of Handle.
+func (s *BuddyCounterpart) SetHandle(val string) {
+	s.Handle = val
+}
+
+// SetCardSummary sets the value of CardSummary.
+func (s *BuddyCounterpart) SetCardSummary(val ConversationCardSummary) {
+	s.CardSummary = val
+}
+
 // Ref: #/components/schemas/CityMatch
 type CityMatch struct {
 	// The city's canonical name, the value the filters take.
@@ -234,6 +279,21 @@ func (s *ClearJobVoteOK) GetData() VoteResult {
 
 // SetData sets the value of Data.
 func (s *ClearJobVoteOK) SetData(val VoteResult) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type CloseThreadOK struct {
+	Data ThreadClosed `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CloseThreadOK) GetData() ThreadClosed {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CloseThreadOK) SetData(val ThreadClosed) {
 	s.Data = val
 }
 
@@ -696,6 +756,488 @@ func (s *Contribution) SetCreatedAt(val NilDateTime) {
 	s.CreatedAt = val
 }
 
+// `unread` and `last_message_at` mean something on the list only; elsewhere they are 0 and null.
+// Ref: #/components/schemas/Conversation
+type Conversation struct {
+	ID            int64                   `json:"id"`
+	Kind          string                  `json:"kind"`
+	StatusForMe   string                  `json:"status_for_me"`
+	Counterpart   ConversationCounterpart `json:"counterpart"`
+	Unread        int64                   `json:"unread"`
+	LastMessageAt NilDateTime             `json:"last_message_at"`
+	CreatedAt     time.Time               `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *Conversation) GetID() int64 {
+	return s.ID
+}
+
+// GetKind returns the value of Kind.
+func (s *Conversation) GetKind() string {
+	return s.Kind
+}
+
+// GetStatusForMe returns the value of StatusForMe.
+func (s *Conversation) GetStatusForMe() string {
+	return s.StatusForMe
+}
+
+// GetCounterpart returns the value of Counterpart.
+func (s *Conversation) GetCounterpart() ConversationCounterpart {
+	return s.Counterpart
+}
+
+// GetUnread returns the value of Unread.
+func (s *Conversation) GetUnread() int64 {
+	return s.Unread
+}
+
+// GetLastMessageAt returns the value of LastMessageAt.
+func (s *Conversation) GetLastMessageAt() NilDateTime {
+	return s.LastMessageAt
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *Conversation) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *Conversation) SetID(val int64) {
+	s.ID = val
+}
+
+// SetKind sets the value of Kind.
+func (s *Conversation) SetKind(val string) {
+	s.Kind = val
+}
+
+// SetStatusForMe sets the value of StatusForMe.
+func (s *Conversation) SetStatusForMe(val string) {
+	s.StatusForMe = val
+}
+
+// SetCounterpart sets the value of Counterpart.
+func (s *Conversation) SetCounterpart(val ConversationCounterpart) {
+	s.Counterpart = val
+}
+
+// SetUnread sets the value of Unread.
+func (s *Conversation) SetUnread(val int64) {
+	s.Unread = val
+}
+
+// SetLastMessageAt sets the value of LastMessageAt.
+func (s *Conversation) SetLastMessageAt(val NilDateTime) {
+	s.LastMessageAt = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *Conversation) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// A buddy's card, reduced to what an invitation shows.
+// Ref: #/components/schemas/ConversationCardSummary
+type ConversationCardSummary struct {
+	Category  string `json:"category"`
+	Seniority string `json:"seniority"`
+	Country   string `json:"country"`
+}
+
+// GetCategory returns the value of Category.
+func (s *ConversationCardSummary) GetCategory() string {
+	return s.Category
+}
+
+// GetSeniority returns the value of Seniority.
+func (s *ConversationCardSummary) GetSeniority() string {
+	return s.Seniority
+}
+
+// GetCountry returns the value of Country.
+func (s *ConversationCardSummary) GetCountry() string {
+	return s.Country
+}
+
+// SetCategory sets the value of Category.
+func (s *ConversationCardSummary) SetCategory(val string) {
+	s.Category = val
+}
+
+// SetSeniority sets the value of Seniority.
+func (s *ConversationCardSummary) SetSeniority(val string) {
+	s.Seniority = val
+}
+
+// SetCountry sets the value of Country.
+func (s *ConversationCardSummary) SetCountry(val string) {
+	s.Country = val
+}
+
+// The other side, as the persona they speak as draws them. `detail` is null when not reachable.
+// Ref: #/components/schemas/ConversationCounterpart
+type ConversationCounterpart struct {
+	Persona   string              `json:"persona"`
+	Reachable bool                `json:"reachable"`
+	Detail    NilBuddyCounterpart `json:"detail"`
+}
+
+// GetPersona returns the value of Persona.
+func (s *ConversationCounterpart) GetPersona() string {
+	return s.Persona
+}
+
+// GetReachable returns the value of Reachable.
+func (s *ConversationCounterpart) GetReachable() bool {
+	return s.Reachable
+}
+
+// GetDetail returns the value of Detail.
+func (s *ConversationCounterpart) GetDetail() NilBuddyCounterpart {
+	return s.Detail
+}
+
+// SetPersona sets the value of Persona.
+func (s *ConversationCounterpart) SetPersona(val string) {
+	s.Persona = val
+}
+
+// SetReachable sets the value of Reachable.
+func (s *ConversationCounterpart) SetReachable(val bool) {
+	s.Reachable = val
+}
+
+// SetDetail sets the value of Detail.
+func (s *ConversationCounterpart) SetDetail(val NilBuddyCounterpart) {
+	s.Detail = val
+}
+
+// Ref: #/components/schemas/ConversationMessage
+type ConversationMessage struct {
+	ID        int64     `json:"id"`
+	Mine      bool      `json:"mine"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *ConversationMessage) GetID() int64 {
+	return s.ID
+}
+
+// GetMine returns the value of Mine.
+func (s *ConversationMessage) GetMine() bool {
+	return s.Mine
+}
+
+// GetBody returns the value of Body.
+func (s *ConversationMessage) GetBody() string {
+	return s.Body
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *ConversationMessage) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *ConversationMessage) SetID(val int64) {
+	s.ID = val
+}
+
+// SetMine sets the value of Mine.
+func (s *ConversationMessage) SetMine(val bool) {
+	s.Mine = val
+}
+
+// SetBody sets the value of Body.
+func (s *ConversationMessage) SetBody(val string) {
+	s.Body = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *ConversationMessage) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/ConversationReadRequest
+type ConversationReadRequest struct {
+	UpTo OptInt64 `json:"up_to"`
+}
+
+// GetUpTo returns the value of UpTo.
+func (s *ConversationReadRequest) GetUpTo() OptInt64 {
+	return s.UpTo
+}
+
+// SetUpTo sets the value of UpTo.
+func (s *ConversationReadRequest) SetUpTo(val OptInt64) {
+	s.UpTo = val
+}
+
+// Each account is named the way the conversation's kind draws it, so a moderator reads what the
+// participants saw.
+// Ref: #/components/schemas/ConversationReport
+type ConversationReport struct {
+	ID             int64                       `json:"id"`
+	ConversationID int64                       `json:"conversation_id"`
+	Kind           string                      `json:"kind"`
+	Reason         string                      `json:"reason"`
+	Note           string                      `json:"note"`
+	CreatedAt      time.Time                   `json:"created_at"`
+	ResolvedAt     NilDateTime                 `json:"resolved_at"`
+	Reporter       string                      `json:"reporter"`
+	Reported       string                      `json:"reported"`
+	Messages       []ConversationReportMessage `json:"messages"`
+}
+
+// GetID returns the value of ID.
+func (s *ConversationReport) GetID() int64 {
+	return s.ID
+}
+
+// GetConversationID returns the value of ConversationID.
+func (s *ConversationReport) GetConversationID() int64 {
+	return s.ConversationID
+}
+
+// GetKind returns the value of Kind.
+func (s *ConversationReport) GetKind() string {
+	return s.Kind
+}
+
+// GetReason returns the value of Reason.
+func (s *ConversationReport) GetReason() string {
+	return s.Reason
+}
+
+// GetNote returns the value of Note.
+func (s *ConversationReport) GetNote() string {
+	return s.Note
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *ConversationReport) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetResolvedAt returns the value of ResolvedAt.
+func (s *ConversationReport) GetResolvedAt() NilDateTime {
+	return s.ResolvedAt
+}
+
+// GetReporter returns the value of Reporter.
+func (s *ConversationReport) GetReporter() string {
+	return s.Reporter
+}
+
+// GetReported returns the value of Reported.
+func (s *ConversationReport) GetReported() string {
+	return s.Reported
+}
+
+// GetMessages returns the value of Messages.
+func (s *ConversationReport) GetMessages() []ConversationReportMessage {
+	return s.Messages
+}
+
+// SetID sets the value of ID.
+func (s *ConversationReport) SetID(val int64) {
+	s.ID = val
+}
+
+// SetConversationID sets the value of ConversationID.
+func (s *ConversationReport) SetConversationID(val int64) {
+	s.ConversationID = val
+}
+
+// SetKind sets the value of Kind.
+func (s *ConversationReport) SetKind(val string) {
+	s.Kind = val
+}
+
+// SetReason sets the value of Reason.
+func (s *ConversationReport) SetReason(val string) {
+	s.Reason = val
+}
+
+// SetNote sets the value of Note.
+func (s *ConversationReport) SetNote(val string) {
+	s.Note = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *ConversationReport) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetResolvedAt sets the value of ResolvedAt.
+func (s *ConversationReport) SetResolvedAt(val NilDateTime) {
+	s.ResolvedAt = val
+}
+
+// SetReporter sets the value of Reporter.
+func (s *ConversationReport) SetReporter(val string) {
+	s.Reporter = val
+}
+
+// SetReported sets the value of Reported.
+func (s *ConversationReport) SetReported(val string) {
+	s.Reported = val
+}
+
+// SetMessages sets the value of Messages.
+func (s *ConversationReport) SetMessages(val []ConversationReportMessage) {
+	s.Messages = val
+}
+
+// Ref: #/components/schemas/ConversationReportMessage
+type ConversationReportMessage struct {
+	Sender    string    `json:"sender"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// GetSender returns the value of Sender.
+func (s *ConversationReportMessage) GetSender() string {
+	return s.Sender
+}
+
+// GetBody returns the value of Body.
+func (s *ConversationReportMessage) GetBody() string {
+	return s.Body
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *ConversationReportMessage) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// SetSender sets the value of Sender.
+func (s *ConversationReportMessage) SetSender(val string) {
+	s.Sender = val
+}
+
+// SetBody sets the value of Body.
+func (s *ConversationReportMessage) SetBody(val string) {
+	s.Body = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *ConversationReportMessage) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/ConversationReportRequest
+type ConversationReportRequest struct {
+	Reason OptString `json:"reason"`
+	Note   OptString `json:"note"`
+}
+
+// GetReason returns the value of Reason.
+func (s *ConversationReportRequest) GetReason() OptString {
+	return s.Reason
+}
+
+// GetNote returns the value of Note.
+func (s *ConversationReportRequest) GetNote() OptString {
+	return s.Note
+}
+
+// SetReason sets the value of Reason.
+func (s *ConversationReportRequest) SetReason(val OptString) {
+	s.Reason = val
+}
+
+// SetNote sets the value of Note.
+func (s *ConversationReportRequest) SetNote(val OptString) {
+	s.Note = val
+}
+
+// Ref: #/components/schemas/ConversationReportsMeta
+type ConversationReportsMeta struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+// GetLimit returns the value of Limit.
+func (s *ConversationReportsMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetOffset returns the value of Offset.
+func (s *ConversationReportsMeta) GetOffset() int64 {
+	return s.Offset
+}
+
+// SetLimit sets the value of Limit.
+func (s *ConversationReportsMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetOffset sets the value of Offset.
+func (s *ConversationReportsMeta) SetOffset(val int64) {
+	s.Offset = val
+}
+
+// Ref: #/components/schemas/ConversationReportsPage
+type ConversationReportsPage struct {
+	Data []ConversationReport    `json:"data"`
+	Meta ConversationReportsMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *ConversationReportsPage) GetData() []ConversationReport {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *ConversationReportsPage) GetMeta() ConversationReportsMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *ConversationReportsPage) SetData(val []ConversationReport) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *ConversationReportsPage) SetMeta(val ConversationReportsMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/ConversationSendRequest
+type ConversationSendRequest struct {
+	Body OptString `json:"body"`
+}
+
+// GetBody returns the value of Body.
+func (s *ConversationSendRequest) GetBody() OptString {
+	return s.Body
+}
+
+// SetBody sets the value of Body.
+func (s *ConversationSendRequest) SetBody(val OptString) {
+	s.Body = val
+}
+
+// A single item: `{"data": ...}`.
+type CountThreadsOK struct {
+	Data ThreadCount `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CountThreadsOK) GetData() ThreadCount {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CountThreadsOK) SetData(val ThreadCount) {
+	s.Data = val
+}
+
 // A single item: `{"data": ...}`.
 type CreateGhostReportCreated struct {
 	Data GhostReport `json:"data"`
@@ -727,6 +1269,48 @@ func (s *CreateJobReportCreated) SetData(val JobReport) {
 }
 
 // A single item: `{"data": ...}`.
+type CreateReplyCreated struct {
+	Data ThreadReply `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateReplyCreated) GetData() ThreadReply {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateReplyCreated) SetData(val ThreadReply) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/CreateReplyRequest
+type CreateReplyRequest struct {
+	Body OptString `json:"body"`
+	// Nests the reply under another reply; 0 or omitted is top-level.
+	ParentReplyID OptInt64 `json:"parent_reply_id"`
+}
+
+// GetBody returns the value of Body.
+func (s *CreateReplyRequest) GetBody() OptString {
+	return s.Body
+}
+
+// GetParentReplyID returns the value of ParentReplyID.
+func (s *CreateReplyRequest) GetParentReplyID() OptInt64 {
+	return s.ParentReplyID
+}
+
+// SetBody sets the value of Body.
+func (s *CreateReplyRequest) SetBody(val OptString) {
+	s.Body = val
+}
+
+// SetParentReplyID sets the value of ParentReplyID.
+func (s *CreateReplyRequest) SetParentReplyID(val OptInt64) {
+	s.ParentReplyID = val
+}
+
+// A single item: `{"data": ...}`.
 type CreateSavedSearchCreated struct {
 	Data SavedSearch `json:"data"`
 }
@@ -753,6 +1337,84 @@ func (s *CreateSubscriptionCreated) GetData() Subscription {
 
 // SetData sets the value of Data.
 func (s *CreateSubscriptionCreated) SetData(val Subscription) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type CreateThreadCreated struct {
+	Data Thread `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateThreadCreated) GetData() Thread {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateThreadCreated) SetData(val Thread) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/CreateThreadRequest
+type CreateThreadRequest struct {
+	SubjectType OptString `json:"subject_type"`
+	SubjectSlug OptString `json:"subject_slug"`
+	Title       OptString `json:"title"`
+	Body        OptString `json:"body"`
+}
+
+// GetSubjectType returns the value of SubjectType.
+func (s *CreateThreadRequest) GetSubjectType() OptString {
+	return s.SubjectType
+}
+
+// GetSubjectSlug returns the value of SubjectSlug.
+func (s *CreateThreadRequest) GetSubjectSlug() OptString {
+	return s.SubjectSlug
+}
+
+// GetTitle returns the value of Title.
+func (s *CreateThreadRequest) GetTitle() OptString {
+	return s.Title
+}
+
+// GetBody returns the value of Body.
+func (s *CreateThreadRequest) GetBody() OptString {
+	return s.Body
+}
+
+// SetSubjectType sets the value of SubjectType.
+func (s *CreateThreadRequest) SetSubjectType(val OptString) {
+	s.SubjectType = val
+}
+
+// SetSubjectSlug sets the value of SubjectSlug.
+func (s *CreateThreadRequest) SetSubjectSlug(val OptString) {
+	s.SubjectSlug = val
+}
+
+// SetTitle sets the value of Title.
+func (s *CreateThreadRequest) SetTitle(val OptString) {
+	s.Title = val
+}
+
+// SetBody sets the value of Body.
+func (s *CreateThreadRequest) SetBody(val OptString) {
+	s.Body = val
+}
+
+// A single item: `{"data": ...}`.
+type DeclineConversationOK struct {
+	Data Conversation `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DeclineConversationOK) GetData() Conversation {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DeclineConversationOK) SetData(val Conversation) {
 	s.Data = val
 }
 
@@ -2044,6 +2706,36 @@ func (s *ListBankedAnswersOK) SetData(val []BankedAnswer) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type ListConversationMessagesOK struct {
+	Data []ConversationMessage `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListConversationMessagesOK) GetData() []ConversationMessage {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListConversationMessagesOK) SetData(val []ConversationMessage) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListConversationsOK struct {
+	Data []Conversation `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListConversationsOK) GetData() []Conversation {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListConversationsOK) SetData(val []Conversation) {
+	s.Data = val
+}
+
 // A page of a filtered list, with what the filter dropped.
 // Ref: #/components/schemas/ListMeta
 type ListMeta struct {
@@ -2179,6 +2871,9 @@ func (s *ListTalentOK) SetData(val []TalentMember) {
 func (s *ListTalentOK) SetMeta(val ListMeta) {
 	s.Meta = val
 }
+
+// MarkConversationReadNoContent is response for MarkConversationRead operation.
+type MarkConversationReadNoContent struct{}
 
 // Ref: #/components/schemas/MarketPulseMeta
 type MarketPulseMeta struct {
@@ -2387,6 +3082,51 @@ func (s *MyProcessReportsOK) GetData() []string {
 // SetData sets the value of Data.
 func (s *MyProcessReportsOK) SetData(val []string) {
 	s.Data = val
+}
+
+// NewNilBuddyCounterpart returns new NilBuddyCounterpart with value set to v.
+func NewNilBuddyCounterpart(v BuddyCounterpart) NilBuddyCounterpart {
+	return NilBuddyCounterpart{
+		Value: v,
+	}
+}
+
+// NilBuddyCounterpart is nullable BuddyCounterpart.
+type NilBuddyCounterpart struct {
+	Value BuddyCounterpart
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilBuddyCounterpart) SetTo(v BuddyCounterpart) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilBuddyCounterpart) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilBuddyCounterpart) SetToNull() {
+	o.Null = true
+	var v BuddyCounterpart
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilBuddyCounterpart) Get() (v BuddyCounterpart, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilBuddyCounterpart) Or(d BuddyCounterpart) BuddyCounterpart {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
 }
 
 // NewNilDateTime returns new NilDateTime with value set to v.
@@ -4278,6 +5018,158 @@ func (s *PutProfileOK) SetData(val Profile) {
 	s.Data = val
 }
 
+// A feed row: the thread plus the subject's display names, empty when the subject no longer exists.
+// Ref: #/components/schemas/RecentThread
+type RecentThread struct {
+	ID             int64     `json:"id"`
+	SubjectType    string    `json:"subject_type"`
+	SubjectSlug    string    `json:"subject_slug"`
+	Title          string    `json:"title"`
+	Body           string    `json:"body"`
+	Author         string    `json:"author"`
+	ReplyCount     int64     `json:"reply_count"`
+	Status         string    `json:"status"`
+	CreatedAt      time.Time `json:"created_at"`
+	SubjectTitle   string    `json:"subject_title"`
+	SubjectCompany string    `json:"subject_company"`
+}
+
+// GetID returns the value of ID.
+func (s *RecentThread) GetID() int64 {
+	return s.ID
+}
+
+// GetSubjectType returns the value of SubjectType.
+func (s *RecentThread) GetSubjectType() string {
+	return s.SubjectType
+}
+
+// GetSubjectSlug returns the value of SubjectSlug.
+func (s *RecentThread) GetSubjectSlug() string {
+	return s.SubjectSlug
+}
+
+// GetTitle returns the value of Title.
+func (s *RecentThread) GetTitle() string {
+	return s.Title
+}
+
+// GetBody returns the value of Body.
+func (s *RecentThread) GetBody() string {
+	return s.Body
+}
+
+// GetAuthor returns the value of Author.
+func (s *RecentThread) GetAuthor() string {
+	return s.Author
+}
+
+// GetReplyCount returns the value of ReplyCount.
+func (s *RecentThread) GetReplyCount() int64 {
+	return s.ReplyCount
+}
+
+// GetStatus returns the value of Status.
+func (s *RecentThread) GetStatus() string {
+	return s.Status
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *RecentThread) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetSubjectTitle returns the value of SubjectTitle.
+func (s *RecentThread) GetSubjectTitle() string {
+	return s.SubjectTitle
+}
+
+// GetSubjectCompany returns the value of SubjectCompany.
+func (s *RecentThread) GetSubjectCompany() string {
+	return s.SubjectCompany
+}
+
+// SetID sets the value of ID.
+func (s *RecentThread) SetID(val int64) {
+	s.ID = val
+}
+
+// SetSubjectType sets the value of SubjectType.
+func (s *RecentThread) SetSubjectType(val string) {
+	s.SubjectType = val
+}
+
+// SetSubjectSlug sets the value of SubjectSlug.
+func (s *RecentThread) SetSubjectSlug(val string) {
+	s.SubjectSlug = val
+}
+
+// SetTitle sets the value of Title.
+func (s *RecentThread) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetBody sets the value of Body.
+func (s *RecentThread) SetBody(val string) {
+	s.Body = val
+}
+
+// SetAuthor sets the value of Author.
+func (s *RecentThread) SetAuthor(val string) {
+	s.Author = val
+}
+
+// SetReplyCount sets the value of ReplyCount.
+func (s *RecentThread) SetReplyCount(val int64) {
+	s.ReplyCount = val
+}
+
+// SetStatus sets the value of Status.
+func (s *RecentThread) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *RecentThread) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetSubjectTitle sets the value of SubjectTitle.
+func (s *RecentThread) SetSubjectTitle(val string) {
+	s.SubjectTitle = val
+}
+
+// SetSubjectCompany sets the value of SubjectCompany.
+func (s *RecentThread) SetSubjectCompany(val string) {
+	s.SubjectCompany = val
+}
+
+// Ref: #/components/schemas/RecentThreadPage
+type RecentThreadPage struct {
+	Data []RecentThread   `json:"data"`
+	Meta ThreadCursorMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *RecentThreadPage) GetData() []RecentThread {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *RecentThreadPage) GetMeta() ThreadCursorMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *RecentThreadPage) SetData(val []RecentThread) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *RecentThreadPage) SetMeta(val ThreadCursorMeta) {
+	s.Meta = val
+}
+
 // A single item: `{"data": ...}`.
 type RecordDictionaryGapOK struct {
 	Data DictionaryGapRecorded `json:"data"`
@@ -4328,6 +5220,9 @@ type RemoveFromWatchlistNoContent struct{}
 
 // ReportCompanyFeedbackNoContent is response for ReportCompanyFeedback operation.
 type ReportCompanyFeedbackNoContent struct{}
+
+// ReportConversationNoContent is response for ReportConversation operation.
+type ReportConversationNoContent struct{}
 
 // A review with what a moderator triages by.
 // Ref: #/components/schemas/ReportedCompanyFeedback
@@ -4455,6 +5350,9 @@ func (s *ReportedCompanyFeedback) SetReportCount(val int64) {
 func (s *ReportedCompanyFeedback) SetReportReasons(val []string) {
 	s.ReportReasons = val
 }
+
+// ResolveConversationReportNoContent is response for ResolveConversationReport operation.
+type ResolveConversationReportNoContent struct{}
 
 // A single item: `{"data": ...}`.
 type ResolveJobAccepted struct {
@@ -5249,6 +6147,21 @@ func (s *SearchCitiesOK) GetData() []CityMatch {
 
 // SetData sets the value of Data.
 func (s *SearchCitiesOK) SetData(val []CityMatch) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type SendConversationMessageCreated struct {
+	Data ConversationMessage `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SendConversationMessageCreated) GetData() ConversationMessage {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SendConversationMessageCreated) SetData(val ConversationMessage) {
 	s.Data = val
 }
 
@@ -6177,6 +7090,315 @@ func (s *TalentRole) SetCurrent(val OptBool) {
 // SetStack sets the value of Stack.
 func (s *TalentRole) SetStack(val []string) {
 	s.Stack = val
+}
+
+// The author is the persona handle, "AI" for a system reply or "[deleted]" once the account is gone.
+// Ref: #/components/schemas/Thread
+type Thread struct {
+	ID          int64     `json:"id"`
+	SubjectType string    `json:"subject_type"`
+	SubjectSlug string    `json:"subject_slug"`
+	Title       string    `json:"title"`
+	Body        string    `json:"body"`
+	Author      string    `json:"author"`
+	ReplyCount  int64     `json:"reply_count"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *Thread) GetID() int64 {
+	return s.ID
+}
+
+// GetSubjectType returns the value of SubjectType.
+func (s *Thread) GetSubjectType() string {
+	return s.SubjectType
+}
+
+// GetSubjectSlug returns the value of SubjectSlug.
+func (s *Thread) GetSubjectSlug() string {
+	return s.SubjectSlug
+}
+
+// GetTitle returns the value of Title.
+func (s *Thread) GetTitle() string {
+	return s.Title
+}
+
+// GetBody returns the value of Body.
+func (s *Thread) GetBody() string {
+	return s.Body
+}
+
+// GetAuthor returns the value of Author.
+func (s *Thread) GetAuthor() string {
+	return s.Author
+}
+
+// GetReplyCount returns the value of ReplyCount.
+func (s *Thread) GetReplyCount() int64 {
+	return s.ReplyCount
+}
+
+// GetStatus returns the value of Status.
+func (s *Thread) GetStatus() string {
+	return s.Status
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *Thread) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *Thread) SetID(val int64) {
+	s.ID = val
+}
+
+// SetSubjectType sets the value of SubjectType.
+func (s *Thread) SetSubjectType(val string) {
+	s.SubjectType = val
+}
+
+// SetSubjectSlug sets the value of SubjectSlug.
+func (s *Thread) SetSubjectSlug(val string) {
+	s.SubjectSlug = val
+}
+
+// SetTitle sets the value of Title.
+func (s *Thread) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetBody sets the value of Body.
+func (s *Thread) SetBody(val string) {
+	s.Body = val
+}
+
+// SetAuthor sets the value of Author.
+func (s *Thread) SetAuthor(val string) {
+	s.Author = val
+}
+
+// SetReplyCount sets the value of ReplyCount.
+func (s *Thread) SetReplyCount(val int64) {
+	s.ReplyCount = val
+}
+
+// SetStatus sets the value of Status.
+func (s *Thread) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *Thread) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/ThreadClosed
+type ThreadClosed struct {
+	ID     int64  `json:"id"`
+	Status string `json:"status"`
+}
+
+// GetID returns the value of ID.
+func (s *ThreadClosed) GetID() int64 {
+	return s.ID
+}
+
+// GetStatus returns the value of Status.
+func (s *ThreadClosed) GetStatus() string {
+	return s.Status
+}
+
+// SetID sets the value of ID.
+func (s *ThreadClosed) SetID(val int64) {
+	s.ID = val
+}
+
+// SetStatus sets the value of Status.
+func (s *ThreadClosed) SetStatus(val string) {
+	s.Status = val
+}
+
+// Ref: #/components/schemas/ThreadCount
+type ThreadCount struct {
+	Count int64 `json:"count"`
+}
+
+// GetCount returns the value of Count.
+func (s *ThreadCount) GetCount() int64 {
+	return s.Count
+}
+
+// SetCount sets the value of Count.
+func (s *ThreadCount) SetCount(val int64) {
+	s.Count = val
+}
+
+// `next_cursor` is set only when the page came back full; a partial page is the last.
+// Ref: #/components/schemas/ThreadCursorMeta
+type ThreadCursorMeta struct {
+	NextCursor OptString `json:"next_cursor"`
+}
+
+// GetNextCursor returns the value of NextCursor.
+func (s *ThreadCursorMeta) GetNextCursor() OptString {
+	return s.NextCursor
+}
+
+// SetNextCursor sets the value of NextCursor.
+func (s *ThreadCursorMeta) SetNextCursor(val OptString) {
+	s.NextCursor = val
+}
+
+// Ref: #/components/schemas/ThreadDetailPage
+type ThreadDetailPage struct {
+	Data ThreadWithReplies `json:"data"`
+	Meta ThreadCursorMeta  `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *ThreadDetailPage) GetData() ThreadWithReplies {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *ThreadDetailPage) GetMeta() ThreadCursorMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *ThreadDetailPage) SetData(val ThreadWithReplies) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *ThreadDetailPage) SetMeta(val ThreadCursorMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/ThreadPage
+type ThreadPage struct {
+	Data []Thread         `json:"data"`
+	Meta ThreadCursorMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *ThreadPage) GetData() []Thread {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *ThreadPage) GetMeta() ThreadCursorMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *ThreadPage) SetData(val []Thread) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *ThreadPage) SetMeta(val ThreadCursorMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/ThreadReply
+type ThreadReply struct {
+	ID        int64     `json:"id"`
+	ThreadID  int64     `json:"thread_id"`
+	ParentID  int64     `json:"parent_id"`
+	Author    string    `json:"author"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *ThreadReply) GetID() int64 {
+	return s.ID
+}
+
+// GetThreadID returns the value of ThreadID.
+func (s *ThreadReply) GetThreadID() int64 {
+	return s.ThreadID
+}
+
+// GetParentID returns the value of ParentID.
+func (s *ThreadReply) GetParentID() int64 {
+	return s.ParentID
+}
+
+// GetAuthor returns the value of Author.
+func (s *ThreadReply) GetAuthor() string {
+	return s.Author
+}
+
+// GetBody returns the value of Body.
+func (s *ThreadReply) GetBody() string {
+	return s.Body
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *ThreadReply) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *ThreadReply) SetID(val int64) {
+	s.ID = val
+}
+
+// SetThreadID sets the value of ThreadID.
+func (s *ThreadReply) SetThreadID(val int64) {
+	s.ThreadID = val
+}
+
+// SetParentID sets the value of ParentID.
+func (s *ThreadReply) SetParentID(val int64) {
+	s.ParentID = val
+}
+
+// SetAuthor sets the value of Author.
+func (s *ThreadReply) SetAuthor(val string) {
+	s.Author = val
+}
+
+// SetBody sets the value of Body.
+func (s *ThreadReply) SetBody(val string) {
+	s.Body = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *ThreadReply) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/ThreadWithReplies
+type ThreadWithReplies struct {
+	Thread  Thread        `json:"thread"`
+	Replies []ThreadReply `json:"replies"`
+}
+
+// GetThread returns the value of Thread.
+func (s *ThreadWithReplies) GetThread() Thread {
+	return s.Thread
+}
+
+// GetReplies returns the value of Replies.
+func (s *ThreadWithReplies) GetReplies() []ThreadReply {
+	return s.Replies
+}
+
+// SetThread sets the value of Thread.
+func (s *ThreadWithReplies) SetThread(val Thread) {
+	s.Thread = val
+}
+
+// SetReplies sets the value of Replies.
+func (s *ThreadWithReplies) SetReplies(val []ThreadReply) {
+	s.Replies = val
 }
 
 // One ledger event. An event happened and cannot change.

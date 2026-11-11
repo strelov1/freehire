@@ -1083,7 +1083,8 @@ func Register(app *fiber.App, cfg Config) {
 	agentPermissionsH := &agentPermissionHandlers{queries: queries}
 	userModerationH := newUserModerationHandlers(queries)
 	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
-	contract := newContract(contractHandlers{companyFeedbackHandlers: companyFeedbackH, companyRelationHandlers: companyRelationH, reportHandlers: reportsH,
+	contract := newContract(contractHandlers{conversationHandlers: conversationH, communityHandlers: communityH,
+		companyFeedbackHandlers: companyFeedbackH, companyRelationHandlers: companyRelationH, reportHandlers: reportsH,
 		emailPrefsHandlers: emailPrefsH, talentCatalogHandlers: talentCatalogH,
 		companyWatchHandlers: companyWatchH,
 		geoHandlers:          geoH, suggestHandlers: suggestH, agentPermissionHandlers: agentPermissionsH,
@@ -1187,7 +1188,7 @@ func Register(app *fiber.App, cfg Config) {
 	buddyH.register(api, mw)
 
 	// Conversations of every kind (see conversationHandlers).
-	conversationH.register(api, mw)
+	conversationH.register(api, mw, contract)
 
 	// The mentorship marketplace (see mentorshipHandlers).
 	mentorshipH.register(api, mw)
@@ -1198,7 +1199,7 @@ func Register(app *fiber.App, cfg Config) {
 	ghostReportsH.register(api, mw, contract)
 
 	// Community discussion threads (see communityHandlers).
-	communityH.register(api, mw)
+	communityH.register(api, mw, contract)
 
 	planH.register(api, mw)
 	// Mounts nothing when billing is unconfigured — see billingHandlers.register.
