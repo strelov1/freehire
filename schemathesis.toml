@@ -14,3 +14,10 @@ unsupported_method.enabled = false
 # Same for OPTIONS: Fiber answers it before any route, listing every method of every route
 # the path matches, so `/me/watchlist/import` also advertises the `{slug}` routes' methods.
 allow_header_conformance.enabled = false
+
+# Applying on freehire answers 501 on a deployment without a CV renderer and mail (the CI
+# stack has neither): a stated refusal, not a fault, so it is not a server error here.
+[[operations]]
+include-path-regex = '/direct-apply$'
+checks.not_a_server_error.enabled = false
+checks.positive_data_acceptance.expected-statuses = ["2xx", 400, 401, 402, 403, 404, 409, 422, 429, 501]

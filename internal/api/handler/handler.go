@@ -1202,8 +1202,6 @@ func Register(app *fiber.App, cfg Config) {
 	// Verified-employer accounts: claim, curated profile, own vacancies, and the
 	// moderator/admin review surface (see employerHandlers).
 	employerH.register(api, mw, contract)
-	directApplyH.register(api, mw)
-	employerH.register(api, mw)
 	directApplyH.register(api, mw, contract)
 
 	// Link contributions (see contributionHandlers).
