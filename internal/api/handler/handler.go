@@ -1095,7 +1095,7 @@ func Register(app *fiber.App, cfg Config) {
 		contributionHandlers:         contributionsH, marketPulseHandlers: marketPulseH, promoHandlers: promoH,
 		mentorSuggestionsHandlers: mentorSuggestionsH,
 		savedSearchHandlers:       savedSearchH, subscriptionHandlers: subscriptionH,
-		mentorSuggestionsHandlers: mentorSuggestionsH, timelineHandlers: timelineH, profileHandlers: profileH})
+		timelineHandlers: timelineH, profileHandlers: profileH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
