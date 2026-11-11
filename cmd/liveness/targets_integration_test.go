@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestTargetedRunPreservesIneligibleTargetsAndUnrelatedExpiry(t *testing.T) {
 	private := seed("target-private", "manual", true, true, false)
 	seed("unrelated-deadline", "greenhouse", false, false, true)
 	seed("unrelated-telegram", "telegram", false, true, false)
-	seed("unrelated-whatjobs", "whatjobs_us", false, true, false)
+	seed("unrelated-whatjobs", "whatjobs", false, true, false)
 
 	// Prove all three bulk paths have real work in this fixture, then roll it
 	// back: an accidentally unscoped run must produce observable collateral closes.
@@ -57,7 +58,11 @@ func TestTargetedRunPreservesIneligibleTargetsAndUnrelatedExpiry(t *testing.T) {
 	if n, err := q.CloseStaleUnsignalledJobs(ctx, db.CloseStaleUnsignalledJobsParams{Sources: []string{"telegram"}, Cutoff: cutoff}); err != nil || n != 1 {
 		t.Fatalf("telegram control: count=%d err=%v", n, err)
 	}
-	if n, err := q.CloseStaleUnseenUnprobeableJobs(ctx, db.CloseStaleUnseenUnprobeableJobsParams{Sources: []string{"whatjobs_us"}, Cutoff: cutoff, SeenCutoff: pgtype.Timestamptz{Time: time.Now().Add(-48 * time.Hour), Valid: true}}); err != nil || n != 1 {
+	fallbackSources, sweepGrace := registeredAgeFallback()
+	if !slices.Contains(fallbackSources, "whatjobs") {
+		t.Fatal("WhatJobs control is not a real registered age-fallback source")
+	}
+	if n, err := q.CloseStaleUnseenUnprobeableJobs(ctx, db.CloseStaleUnseenUnprobeableJobsParams{Sources: fallbackSources, Cutoff: cutoff, SeenCutoff: pgtype.Timestamptz{Time: time.Now().Add(-unseenWindow(fallbackSources, sweepGrace)), Valid: true}}); err != nil || n != 1 {
 		t.Fatalf("registered fallback control: count=%d err=%v", n, err)
 	}
 	if err := tx.Rollback(ctx); err != nil {
