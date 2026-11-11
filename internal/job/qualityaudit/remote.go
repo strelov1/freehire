@@ -88,10 +88,10 @@ When the description states the arrangement explicitly, it outranks a bare locat
 An office address, city label, occupation, duties, facility description, client visits, or travel requirement alone cannot establish "onsite" or "hybrid". Do not infer mandatory workplace attendance from them.
 A vague home-working benefit such as "Flexible work from home options available" alone is "unclear": it does not establish either fully remote work or mandatory hybrid attendance.
 
-worldwide:
-- "yes": the posting says the candidate may work from any country (e.g. "work from anywhere in the world").
-- "no": it limits where the candidate may live or work — to countries, a region, a city, or working hours tied to a time zone — or the work is hybrid/onsite.
-- "unclear": it does not say.
+worldwide describes geographic eligibility, not the working schedule:
+- "yes": the posting explicitly permits work from any country, including a worldwide location label. Required working, overlap, shift, or training hours in a named time zone do not contradict that geographic permission.
+- "no": it explicitly limits where the candidate must reside or be based — countries, a region, a city, or specified geographic time zones — or the work is hybrid/onsite. A role-specific geographic restriction outweighs a broad worldwide location label.
+- "unclear": it does not state geographic eligibility. Working, overlap, shift, or training hours alone do not establish where the candidate must reside.
 
 Rules:
 - Use "unclear" whenever the text does not state the answer. Never infer from the company, the industry, the job title, the occupation or duties, the presence of a facility, or what is typical.

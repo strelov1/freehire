@@ -38,8 +38,8 @@ type BoardScope struct {
 // reaches only a slice of the catalogue, so a board-scoped close on the default window would
 // close postings that merely drifted past the crawl's depth; a fullCatalog provider already
 // closes by source alone on a clean run, strictly broader than board scope (and today's
-// fullCatalog adapters are boardless besides, so this exclusion is belt-and-braces). Callers
-// gate on ShouldSweep first, same as SweepBySource.
+// fullCatalog adapters are boardless besides, so this exclusion is belt-and-braces). This
+// board-level decision is separate from ShouldSweep's company/source gate.
 //
 // sliceBoardListing is the other way in, and it requires hasGrace instead of excluding it: such
 // an adapter (whatjobs) reads a board only to a page budget, so it never proves a full listing,
@@ -135,13 +135,13 @@ func SweepableCompanies(crawled []string, stats pipeline.Stats) []string {
 	return kept
 }
 
-// SweepableProviders returns, sorted, the providers in a run that ingested at least one
-// job — the only ones safe to sweep (a zero-ingest provider proves only that its crawl
-// failed). Sorting gives a deterministic sweep order across runs and tests.
+// SweepableProviders returns, sorted, the providers with company/source eligibility or
+// finished-board evidence. Board evidence only admits a provider to dispatch: callers
+// retain ShouldSweep for company/source scope and SweepableBoards for board scope.
 func SweepableProviders(rs pipeline.RunStats) []string {
 	providers := make([]string, 0, len(rs))
 	for provider, s := range rs {
-		if ShouldSweep(s) {
+		if ShouldSweep(s) || len(s.QualifyingBoards) > 0 || len(s.EmptyBoards) > 0 {
 			providers = append(providers, provider)
 		}
 	}
@@ -149,8 +149,9 @@ func SweepableProviders(rs pipeline.RunStats) []string {
 	return providers
 }
 
-// ShouldSweep reports whether the run saw enough of the world to justify closing
-// jobs: a run that ingested nothing proves only that the crawl failed. A stored row the
+// ShouldSweep reports whether a run permits company/source sweeps. A run with no
+// ingested or refreshed rows may still have independently verified board evidence,
+// which SweepableBoards handles without granting this broader scope. A stored row the
 // coverage gate refreshed counts too: on an aggregator whose every employer is crawled
 // first-hand nothing is ingested, yet the crawl plainly worked, and those rows' companies are
 // already in the crawled scope waiting for this sweep.
