@@ -1091,7 +1091,7 @@ func Register(app *fiber.App, cfg Config) {
 		companyWatchHandlers: companyWatchH,
 		geoHandlers:          geoH, suggestHandlers: suggestH, agentPermissionHandlers: agentPermissionsH,
 		usageHandlers: usageH, plansHandlers: plansH, dictionaryHandlers: dictionaryH,
-		jdResolveHandlers: jdResolveH})
+		jdResolveHandlers: jdResolveH, screeningAnswersHandlers: screeningAnswersH, surveyHandlers: surveyH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1214,8 +1214,8 @@ func Register(app *fiber.App, cfg Config) {
 	// The per-user profile singleton (see profileHandlers).
 	profileH.register(api, mw)
 	// The candidate's own screening answers (see screeningAnswersHandlers).
-	screeningAnswersH.register(api, mw)
-	surveyH.register(api, mw)
+	screeningAnswersH.register(api, mw, contract)
+	surveyH.register(api, mw, contract)
 	marketPulseH.register(api, mw)
 	experienceH.register(api, mw)
 	talentNetworkH.register(api, mw)
