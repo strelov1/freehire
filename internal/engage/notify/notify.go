@@ -227,6 +227,9 @@ type Store interface {
 	// DeactivateSubscriptions pauses the given subscriptions and returns how many it
 	// paused; see pauseUnrunnable.
 	DeactivateSubscriptions(ctx context.Context, arg db.DeactivateSubscriptionsParams) (int64, error)
+	// ListDeliveryCandidates lists the subscriptions with a pending match and their delivery
+	// context, so the worker leases only the ones deliverable now (see deliveryHold).
+	ListDeliveryCandidates(ctx context.Context) ([]db.ListDeliveryCandidatesRow, error)
 	ClaimSubscriptionMatches(ctx context.Context, arg db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error)
 	// ExpireStaleSubscriptionMatches takes up to BatchSize stale matches (older
 	// than the freshness window, or for a closed job) out of the pending set and

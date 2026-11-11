@@ -40,10 +40,6 @@ VALUES (sqlc.arg('category'), sqlc.arg('currency'), sqlc.arg('period'), sqlc.arg
 INSERT INTO insights_velocity_daily (day, facet_kind, facet_value, added, removed)
 VALUES (sqlc.arg('day'), sqlc.arg('facet_kind'), sqlc.arg('facet_value'), sqlc.arg('added'), sqlc.arg('removed'));
 
--- name: CopyInsightsCompanyStats :copyfrom
-INSERT INTO insights_company_stats (company_slug, day, added, removed, open)
-VALUES (sqlc.arg('company_slug'), sqlc.arg('day'), sqlc.arg('added'), sqlc.arg('removed'), sqlc.arg('open'));
-
 -- name: CopyInsightsCompanyGrowth :copyfrom
 INSERT INTO insights_company_growth (company_slug, open_count, open_count_prev)
 VALUES (sqlc.arg('company_slug'), sqlc.arg('open_count'), sqlc.arg('open_count_prev'));

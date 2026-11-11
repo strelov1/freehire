@@ -71,7 +71,7 @@ func TestClaimTakesTheNewestMatchesFirst(t *testing.T) {
 	}
 
 	claimed, err := queries.ClaimSubscriptionMatches(ctx, db.ClaimSubscriptionMatchesParams{
-		LeaseSeconds: 600, PerSubscription: 2, BatchSize: 100,
+		LeaseSeconds: 600, PerSubscription: 2, BatchSize: 100, SubscriptionIds: candidateIDs(t, queries),
 	})
 	if err != nil {
 		t.Fatalf("claim: %v", err)

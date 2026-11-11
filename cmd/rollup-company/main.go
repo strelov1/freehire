@@ -15,7 +15,9 @@
 //
 // It is a run-once-and-exit worker (cron-scheduled, ~daily given the company grain):
 // computation precedes one atomic primary publication transaction, so a reader never sees a table
-// mid-rebuild and orphaned rows (e.g. a reopened job) vanish in the same step. Kept
+// mid-rebuild and orphaned rows (e.g. a reopened job) vanish in the same step.
+// insights_company_stats, the largest of the five, is published as a difference against
+// the stored rows (publishCompanyStats) rather than deleted and copied whole. Kept
 // separate from rollup-stats so its heavier, company-grained recompute schedules
 // independently and its failure never blocks the public /insights rollups. Re-running
 // is safe; it exits non-zero if the rebuild transaction fails, so cron can alert.

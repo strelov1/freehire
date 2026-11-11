@@ -47,6 +47,11 @@ WITH claimable AS (
         FOR UPDATE SKIP LOCKED
     ) m
     WHERE s.active
+      -- Only the subscriptions the caller found deliverable NOW (ListDeliveryCandidates run
+      -- through notify's deliveryHold). Without it a daily digest before its time, quiet
+      -- hours or an unlinked channel were claimed and released again on every pass, one
+      -- UPDATE pair per pending match.
+      AND s.id = ANY($3::bigint[])
       -- The account-wide "job alerts by email" switch, the same gate ListActiveSubscriptions
       -- applies when matches are recorded. Recording alone is not enough: matches recorded
       -- BEFORE an opt-out (an RFC 8058 one-click unsubscribe) are still pending, and without
@@ -78,7 +83,7 @@ WITH claimable AS (
               <= now() - make_interval(hours => COALESCE(ns.digest_interval_hours, 1)::int))
     -- A backstop, not the working bound: per_subscription x active subscriptions is what
     -- a pass normally claims. This only caps a pathological subscription count.
-    LIMIT $3
+    LIMIT $4
 )
 UPDATE subscription_matches m
 SET claimed_at = now()
@@ -88,9 +93,10 @@ RETURNING m.subscription_id, m.job_id, m.matched_at, c.user_id, c.channel, c.per
 `
 
 type ClaimSubscriptionMatchesParams struct {
-	LeaseSeconds    int32 `json:"lease_seconds"`
-	PerSubscription int32 `json:"per_subscription"`
-	BatchSize       int32 `json:"batch_size"`
+	LeaseSeconds    int32   `json:"lease_seconds"`
+	PerSubscription int32   `json:"per_subscription"`
+	SubscriptionIds []int64 `json:"subscription_ids"`
+	BatchSize       int32   `json:"batch_size"`
 }
 
 type ClaimSubscriptionMatchesRow struct {
@@ -132,7 +138,12 @@ type ClaimSubscriptionMatchesRow struct {
 // pass and takes them out of the pending set, so the predicate stays the plain pending one
 // the partial index subscription_matches_pending_matched_idx is built on.
 func (q *Queries) ClaimSubscriptionMatches(ctx context.Context, arg ClaimSubscriptionMatchesParams) ([]ClaimSubscriptionMatchesRow, error) {
-	rows, err := q.db.Query(ctx, claimSubscriptionMatches, arg.LeaseSeconds, arg.PerSubscription, arg.BatchSize)
+	rows, err := q.db.Query(ctx, claimSubscriptionMatches,
+		arg.LeaseSeconds,
+		arg.PerSubscription,
+		arg.SubscriptionIds,
+		arg.BatchSize,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +484,13 @@ SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_dige
        COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
        COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
-       ns.quiet_hours_end AS quiet_hours_end
+       ns.quiet_hours_end AS quiet_hours_end,
+       -- When this person was last written to on this channel: the claim's ` + "`" + `pl.last_sent` + "`" + `,
+       -- the newest stamp among their active subscriptions on it (a webhook keeps its own).
+       (SELECT max(o.last_digest_sent_at)
+          FROM subscriptions o
+         WHERE o.user_id = s.user_id AND o.channel = s.channel AND o.active
+           AND (s.channel <> 'webhook' OR o.id = s.id))::timestamptz AS person_last_sent_at
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 JOIN users u ON u.id = s.user_id
@@ -502,6 +519,7 @@ type GetSubscriptionForDeliveryRow struct {
 	DigestTime       pgtype.Time        `json:"digest_time"`
 	QuietHoursStart  pgtype.Time        `json:"quiet_hours_start"`
 	QuietHoursEnd    pgtype.Time        `json:"quiet_hours_end"`
+	PersonLastSentAt pgtype.Timestamptz `json:"person_last_sent_at"`
 }
 
 // The delivery context for one subscription: channel + destination, the saved
@@ -540,6 +558,7 @@ func (q *Queries) GetSubscriptionForDelivery(ctx context.Context, id int64) (Get
 		&i.DigestTime,
 		&i.QuietHoursStart,
 		&i.QuietHoursEnd,
+		&i.PersonLastSentAt,
 	)
 	return i, err
 }
@@ -653,6 +672,112 @@ func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubs
 			&i.DigestTime,
 			&i.QuietHoursStart,
 			&i.QuietHoursEnd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeliveryCandidates = `-- name: ListDeliveryCandidates :many
+SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_digest_sent_at,
+       ss.name AS saved_search_name,
+       ss.query AS saved_search_query,
+       mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS account_email,
+       u.timezone AS timezone,
+       tl.chat_id AS telegram_chat_id,
+       (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id))::boolean AS has_push_device,
+       wc.url AS webhook_url,
+       COALESCE(wc.enabled, false) AS webhook_enabled,
+       COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
+       COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
+       ns.quiet_hours_start AS quiet_hours_start,
+       ns.quiet_hours_end AS quiet_hours_end,
+       -- When this person was last written to on this channel: the claim's ` + "`" + `pl.last_sent` + "`" + `,
+       -- the newest stamp among their active subscriptions on it (a webhook keeps its own).
+       (SELECT max(o.last_digest_sent_at)
+          FROM subscriptions o
+         WHERE o.user_id = s.user_id AND o.channel = s.channel AND o.active
+           AND (s.channel <> 'webhook' OR o.id = s.id))::timestamptz AS person_last_sent_at
+FROM subscriptions s
+JOIN saved_searches ss ON ss.id = s.saved_search_id
+JOIN users u ON u.id = s.user_id
+LEFT JOIN telegram_links tl ON tl.user_id = s.user_id AND u.banned_at IS NULL
+LEFT JOIN webhook_configs wc ON wc.user_id = s.user_id AND u.banned_at IS NULL
+LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
+WHERE s.active
+  AND EXISTS (
+      SELECT 1 FROM subscription_matches mm
+      WHERE mm.subscription_id = s.id
+        AND mm.notified_at IS NULL
+        AND mm.failed_at IS NULL
+        AND mm.expired_at IS NULL
+        AND mm.query_revision = ss.query_revision
+  )
+`
+
+type ListDeliveryCandidatesRow struct {
+	ID               int64              `json:"id"`
+	UserID           int64              `json:"user_id"`
+	SavedSearchID    int64              `json:"saved_search_id"`
+	Channel          string             `json:"channel"`
+	Destination      pgtype.Text        `json:"destination"`
+	LastDigestSentAt pgtype.Timestamptz `json:"last_digest_sent_at"`
+	SavedSearchName  string             `json:"saved_search_name"`
+	SavedSearchQuery string             `json:"saved_search_query"`
+	AccountEmail     string             `json:"account_email"`
+	Timezone         pgtype.Text        `json:"timezone"`
+	TelegramChatID   pgtype.Int8        `json:"telegram_chat_id"`
+	HasPushDevice    bool               `json:"has_push_device"`
+	WebhookUrl       pgtype.Text        `json:"webhook_url"`
+	WebhookEnabled   bool               `json:"webhook_enabled"`
+	DigestFrequency  string             `json:"digest_frequency"`
+	DigestTime       pgtype.Time        `json:"digest_time"`
+	QuietHoursStart  pgtype.Time        `json:"quiet_hours_start"`
+	QuietHoursEnd    pgtype.Time        `json:"quiet_hours_end"`
+	PersonLastSentAt pgtype.Timestamptz `json:"person_last_sent_at"`
+}
+
+// Every active subscription that has a pending match, with the SAME delivery context row as
+// GetSubscriptionForDelivery (column for column: notify converts one into the other, so the
+// build breaks if they drift). The worker decides from it, with deliverywindow and recipient,
+// which of them are deliverable now, and only those go to ClaimSubscriptionMatches: a
+// subscription held by quiet hours, a daily digest time or a missing recipient is never leased.
+// A superset of what the claim can take (no lease or email opt-out test here: the claim keeps
+// those), so a row listed and then not claimed costs a read, never a missed delivery.
+func (q *Queries) ListDeliveryCandidates(ctx context.Context) ([]ListDeliveryCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listDeliveryCandidates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDeliveryCandidatesRow{}
+	for rows.Next() {
+		var i ListDeliveryCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.SavedSearchID,
+			&i.Channel,
+			&i.Destination,
+			&i.LastDigestSentAt,
+			&i.SavedSearchName,
+			&i.SavedSearchQuery,
+			&i.AccountEmail,
+			&i.Timezone,
+			&i.TelegramChatID,
+			&i.HasPushDevice,
+			&i.WebhookUrl,
+			&i.WebhookEnabled,
+			&i.DigestFrequency,
+			&i.DigestTime,
+			&i.QuietHoursStart,
+			&i.QuietHoursEnd,
+			&i.PersonLastSentAt,
 		); err != nil {
 			return nil, err
 		}

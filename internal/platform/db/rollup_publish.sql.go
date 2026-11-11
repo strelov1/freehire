@@ -28,14 +28,6 @@ type CopyInsightsCompanyResponseParams struct {
 	MedianReplyDays pgtype.Float4 `json:"median_reply_days"`
 }
 
-type CopyInsightsCompanyStatsParams struct {
-	CompanySlug string      `json:"company_slug"`
-	Day         pgtype.Date `json:"day"`
-	Added       int32       `json:"added"`
-	Removed     int32       `json:"removed"`
-	Open        int32       `json:"open"`
-}
-
 type CopyInsightsCompanyViewsParams struct {
 	CompanySlug string `json:"company_slug"`
 	Views       int64  `json:"views"`

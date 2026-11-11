@@ -213,11 +213,13 @@ func materializeInsightsCompanyStats(q *Queries) func(context.Context) (int64, e
 		if err != nil {
 			return 0, err
 		}
-		values := make([]CopyInsightsCompanyStatsParams, len(rows))
-		for i, row := range rows {
-			values[i] = CopyInsightsCompanyStatsParams(row)
+		for _, r := range rows {
+			if _, err := q.db.Exec(ctx, `INSERT INTO insights_company_stats (company_slug, day, added, removed, open)
+				VALUES ($1, $2, $3, $4, $5)`, r.CompanySlug, r.Day, r.Added, r.Removed, r.Open); err != nil {
+				return 0, err
+			}
 		}
-		return q.CopyInsightsCompanyStats(ctx, values)
+		return int64(len(rows)), nil
 	}
 }
 

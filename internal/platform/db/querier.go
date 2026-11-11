@@ -1223,6 +1223,9 @@ type Querier interface {
 	// clock skew) still count as answered but are kept out of the median, where they would
 	// contribute a negative duration.
 	ComputeInsightsCompanyResponse(ctx context.Context) ([]ComputeInsightsCompanyResponseRow, error)
+	// ---------------------------------------------------------------------------
+	// Per-company hiring signal
+	// ---------------------------------------------------------------------------
 	// Compute on the read connection; publish the result separately on the writer.
 	// Per-(company, day) hiring velocity with a running open count, from the retained
 	// jobs lifecycle. Each canonical, attributable job (company_slug <> '' AND
@@ -1383,7 +1386,6 @@ type Querier interface {
 	CopyInsightsCompanyGrowth(ctx context.Context, arg []CopyInsightsCompanyGrowthParams) (int64, error)
 	CopyInsightsCompanyLifetime(ctx context.Context, arg []CopyInsightsCompanyLifetimeParams) (int64, error)
 	CopyInsightsCompanyResponse(ctx context.Context, arg []CopyInsightsCompanyResponseParams) (int64, error)
-	CopyInsightsCompanyStats(ctx context.Context, arg []CopyInsightsCompanyStatsParams) (int64, error)
 	CopyInsightsCompanyViews(ctx context.Context, arg []CopyInsightsCompanyViewsParams) (int64, error)
 	CopyInsightsRoleCountryStats(ctx context.Context, arg []CopyInsightsRoleCountryStatsParams) (int64, error)
 	CopyInsightsRolePulse(ctx context.Context, arg []CopyInsightsRolePulseParams) (int64, error)
@@ -1737,10 +1739,6 @@ type Querier interface {
 	// ---------------------------------------------------------------------------
 	DeleteAllInsightsCompanyLifetime(ctx context.Context) error
 	DeleteAllInsightsCompanyResponse(ctx context.Context) error
-	// ---------------------------------------------------------------------------
-	// Per-company hiring signal
-	// ---------------------------------------------------------------------------
-	DeleteAllInsightsCompanyStats(ctx context.Context) error
 	// ---------------------------------------------------------------------------
 	// Per-company posting views (backs the company page's Hiring tab)
 	// ---------------------------------------------------------------------------
@@ -4451,6 +4449,14 @@ type Querier interface {
 	// soonest-to-expire first — the recovery probe's candidates. The ordering rotates the sample as
 	// cooldowns lapse, so a run does not keep probing the same few boards.
 	ListCooledBoards(ctx context.Context, arg ListCooledBoardsParams) ([]ListCooledBoardsRow, error)
+	// Every active subscription that has a pending match, with the SAME delivery context row as
+	// GetSubscriptionForDelivery (column for column: notify converts one into the other, so the
+	// build breaks if they drift). The worker decides from it, with deliverywindow and recipient,
+	// which of them are deliverable now, and only those go to ClaimSubscriptionMatches: a
+	// subscription held by quiet hours, a daily digest time or a missing recipient is never leased.
+	// A superset of what the claim can take (no lease or email opt-out test here: the claim keeps
+	// those), so a row listed and then not claimed costs a read, never a missed delivery.
+	ListDeliveryCandidates(ctx context.Context) ([]ListDeliveryCandidatesRow, error)
 	// The next page of bindings to reconcile, each with the plan that decides its role.
 	//
 	// The plan comes back WITH the link, in one read, because resolving it separately would be
