@@ -19,6 +19,7 @@ func HybridArrangementStated(desc string) bool {
 	for _, p := range []string{
 		"fully remote", "fully-remote", "100% remote", "100 % remote",
 		"this position is remote", "position is remote", "role is remote",
+		"remote position", "remote role",
 	} {
 		if phraseMatches(text, p) && guardedPhraseMatches(text, p, "remote", remoteGuards) {
 			return false
@@ -28,8 +29,8 @@ func HybridArrangementStated(desc string) bool {
 		return false
 	}
 	english := phraseGuards{
-		negations:      []string{"not ", "no ", "experience ", "previous ", "prior "},
-		refusals:       []string{"not available", "not offered", "preferred", "experience"},
+		negations:      []string{"not ", "no ", "experience ", "previous ", "prior ", "optional ", "optionally "},
+		refusals:       []string{"not available", "not offered", "preferred", "experience", "optional"},
 		negationWindow: 60,
 	}
 	for _, p := range []string{
@@ -58,7 +59,7 @@ func HybridArrangementStated(desc string) bool {
 			return true
 		}
 	}
-	return hybridLocationHeader(text)
+	return hybridLocationHeader(text, english)
 }
 
 // The employer explicitly requires a partial office week; a generic corporate
@@ -68,13 +69,17 @@ var mandatoryOfficeWeek = regexp.MustCompile(`\bworking from the office in [^.!?
 // A parenthesized hybrid marker directly after a known city is an arrangement
 // header, not a technical reference such as "infrastructure (hybrid)". A labeled
 // location may name several cities or end with a state instead.
-func hybridLocationHeader(text string) bool {
+func hybridLocationHeader(text string, guards phraseGuards) bool {
 	for offset := 0; offset < len(text); {
 		at := strings.Index(text[offset:], "(hybrid)")
 		if at < 0 {
 			return false
 		}
 		at += offset
+		offset = at + len("(hybrid)")
+		if guards.withdraws(text, at, offset) {
+			continue
+		}
 		before := text[max(0, at-180):at]
 		labeled := strings.LastIndex(before, "location:")
 		if labeled >= 0 {
@@ -89,7 +94,6 @@ func hybridLocationHeader(text string) bool {
 				return true
 			}
 		}
-		offset = at + len("(hybrid)")
 	}
 	return false
 }
