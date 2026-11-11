@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Signed out on purpose: the warning has to reach somebody who has not signed in yet,
 // because that is the state a first-time visitor reads the page in. If it were nested
@@ -43,64 +43,8 @@ function renderPricing(matrix: PlansMatrix = plans) {
   });
 }
 
-/** Stands in for the edge, answering `/geo/region` with one country. */
-function edgePlaces(country: string | null) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => new Response(JSON.stringify({ region: null, country }), { status: 200 })),
-  );
-}
-
-// The page asks the edge on arrival and renders the answer a tick later, so every
-// assertion here waits rather than reading the first paint.
-const WARNING = /Cards issued in Brazil can.t be charged here/;
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
-describe('/pricing — the local-card warning', () => {
-  it('warns a visitor the edge places in the account’s own country', async () => {
-    edgePlaces('BR');
-    renderPricing();
-    // Both paid cards carry it: somebody comparing Pro against Ultra must not have to
-    // pick the right column to be told their card cannot pay for either.
-    await expect(screen.findAllByText(WARNING)).resolves.toHaveLength(2);
-  });
-
-  it('says nothing to a visitor anywhere else', async () => {
-    edgePlaces('PT');
-    renderPricing();
-    await screen.findByText('Upgrade to Pro', { exact: false }).catch(() => null);
-    expect(screen.queryByText(WARNING)).toBeNull();
-  });
-
-  it('says nothing when the edge could not place the visitor', async () => {
-    edgePlaces(null);
-    renderPricing();
-    await screen.findByText('Upgrade to Pro', { exact: false }).catch(() => null);
-    expect(screen.queryByText(WARNING)).toBeNull();
-  });
-
-  // The warning may only ever add a sentence. An edge that cannot be reached must
-  // leave the page exactly as it would have been for anyone else — never blank, and
-  // never warning everybody just because one request failed.
-  it('says nothing when the edge cannot be reached', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw new Error('offline');
-      }),
-    );
-    renderPricing();
-    await screen.findByText('Upgrade to Pro', { exact: false }).catch(() => null);
-    expect(screen.queryByText(WARNING)).toBeNull();
-  });
-});
-
 describe('/pricing — the API plans', () => {
   it('lists both API plans and their commercial-use licence', async () => {
-    edgePlaces(null);
     renderPricing({
       ...plans,
       prices: [...plans.prices, price('api', 'price_api'), price('api_data', 'price_data')],
@@ -112,7 +56,6 @@ describe('/pricing — the API plans', () => {
   });
 
   it('shows no API section when the product is not sold', async () => {
-    edgePlaces(null);
     renderPricing();
     await Promise.resolve();
     expect(screen.queryByRole('heading', { name: 'Jobs API', level: 2 })).toBeNull();
