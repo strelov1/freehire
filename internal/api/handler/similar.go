@@ -8,6 +8,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -22,22 +23,26 @@ const (
 )
 
 // SimilarJobs searches the live index within the source's location and specialization.
-func (h *searchHandlers) SimilarJobs(c *fiber.Ctx) error {
-	row, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
+func (h *searchHandlers) SimilarJobs(ctx context.Context, params apigen.SimilarJobsParams) (*apigen.SimilarJobsOK, error) {
+	row, err := h.queries.GetJobBySlug(ctx, params.Slug)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := jobVisibleToCaller(row, 0, false); err != nil {
-		return err
+		return nil, err
 	}
-	limit := min(max(c.QueryInt("limit", defaultSimilarLimit), 1), maxSimilarLimit)
-	views, err := similarViews(c.Context(), h.search, h.queries, row, limit, func(row db.Job) bool {
+	limit := min(max(queryIntOr(contractQuery(ctx), "limit", defaultSimilarLimit), 1), maxSimilarLimit)
+	views, err := similarViews(ctx, h.search, h.queries, row, limit, func(row db.Job) bool {
 		return !row.ClosedAt.Valid && !row.IsPrivate
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": views})
+	data, err := marshalRaws(views)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.SimilarJobsOK{Data: data}, nil
 }
 
 type similarReader interface {

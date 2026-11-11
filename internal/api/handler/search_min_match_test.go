@@ -73,7 +73,7 @@ func TestMinSkillMatch_KeepsOnlyPostingsAtOrAboveTheThresholdAcrossPages(t *test
 	app := matchSortApp(r, 7, fakeProfiles{profile: minMatchUser})
 
 	// 70% keeps the 100% and 83% postings (ids 1-6) and not the 67% ones.
-	status, body := doGet(t, app, "/jobs/search?sort=match&min_skill_match=70&limit=4&offset=0")
+	status, body := doGet(t, app, "/api/v1/jobs/search?sort=match&min_skill_match=70&limit=4&offset=0")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d", status)
 	}
@@ -85,7 +85,7 @@ func TestMinSkillMatch_KeepsOnlyPostingsAtOrAboveTheThresholdAcrossPages(t *test
 		t.Errorf("page 1 meta = %v, want total 5 as a lower bound (one more exists)", meta)
 	}
 
-	_, body = doGet(t, app, "/jobs/search?sort=match&min_skill_match=70&limit=4&offset=4")
+	_, body = doGet(t, app, "/api/v1/jobs/search?sort=match&min_skill_match=70&limit=4&offset=4")
 	if got := slugs(t, body); fmt.Sprint(got) != "[job-5 job-6]" {
 		t.Errorf("page 2 = %v", got)
 	}
@@ -102,7 +102,7 @@ func TestMinSkillMatch_StopsOnTheRuleWithoutReadingTheRest(t *testing.T) {
 	r := &rankedSearcher{docs: ranking()}
 	app := matchSortApp(r, 7, fakeProfiles{profile: minMatchUser})
 
-	doGet(t, app, "/jobs/search?sort=match&min_skill_match=70&limit=20")
+	doGet(t, app, "/api/v1/jobs/search?sort=match&min_skill_match=70&limit=20")
 	if r.calls != 1 {
 		t.Errorf("calls = %d, want 1", r.calls)
 	}
@@ -112,7 +112,7 @@ func TestMinSkillMatch_TotalIsExactWhenTheWholeRankingWasRead(t *testing.T) {
 	r := &rankedSearcher{docs: []search.JobDocument{posting(1, 6), posting(2, 6)}}
 	app := matchSortApp(r, 7, fakeProfiles{profile: minMatchUser})
 
-	_, body := doGet(t, app, "/jobs/search?sort=match&min_skill_match=70&limit=10")
+	_, body := doGet(t, app, "/api/v1/jobs/search?sort=match&min_skill_match=70&limit=10")
 	meta := metaOf(body)
 	if meta["total"] != float64(2) {
 		t.Errorf("total = %v, want 2", meta["total"])
@@ -131,7 +131,7 @@ func TestMinSkillMatch_DepthBoundCapsTheRead(t *testing.T) {
 	app := matchSortApp(r, 7, fakeProfiles{profile: minMatchUser})
 
 	// The filtered stream cannot reach past the depth, so this window is cut short.
-	_, body := doGet(t, app, fmt.Sprintf("/jobs/search?sort=match&min_skill_match=70&limit=20&offset=%d", minMatchScanDepth-5))
+	_, body := doGet(t, app, fmt.Sprintf("/api/v1/jobs/search?sort=match&min_skill_match=70&limit=20&offset=%d", minMatchScanDepth-5))
 	if got := len(slugs(t, body)); got != 5 {
 		t.Errorf("hits = %d, want 5", got)
 	}
@@ -146,7 +146,7 @@ func TestMinSkillMatch_DepthBoundCapsTheRead(t *testing.T) {
 
 func TestMinSkillMatch_IsPrivateWhenApplied(t *testing.T) {
 	app := matchSortApp(&rankedSearcher{docs: ranking()}, 7, fakeProfiles{profile: minMatchUser})
-	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/jobs/search?sort=match&min_skill_match=70", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/jobs/search?sort=match&min_skill_match=70", nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestMinSkillMatch_IgnoredWhereItCannotBeServed(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			r := &rankedSearcher{docs: ranking()}
 			app := matchSortApp(r, c.userID, fakeProfiles{profile: c.profile})
-			status, body := doGet(t, app, "/jobs/search?limit=20&"+c.query)
+			status, body := doGet(t, app, "/api/v1/jobs/search?limit=20&"+c.query)
 			if status != fiber.StatusOK {
 				t.Fatalf("status = %d, want 200", status)
 			}

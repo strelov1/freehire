@@ -61,7 +61,7 @@ func (f *fakeFacetCounter) reqFilter(attr string) any {
 func facetsApp(fc facetCounter) *fiber.App {
 	h := &searchHandlers{facets: fc}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/facets", h.JobFacets)
+	app.Get("/api/v1/jobs/facets", newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
@@ -69,13 +69,13 @@ func facetsApp(fc facetCounter) *fiber.App {
 func facetsAppCached(fc facetCounter, c cache.Cache) *fiber.App {
 	h := &searchHandlers{facets: fc, cache: c}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/facets", h.JobFacets)
+	app.Get("/api/v1/jobs/facets", newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
 func TestJobFacets_DisabledReturns503(t *testing.T) {
 	app := facetsApp(nil) // search not configured
-	status, _ := doGet(t, app, "/jobs/facets")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets")
 	if status != fiber.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", status)
 	}
@@ -85,7 +85,7 @@ func TestJobFacets_DisjunctiveReducesEachFacetsOwnFilter(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&seniority=senior&regions=latam")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets?disjunctive=1&seniority=senior&regions=latam")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -125,7 +125,7 @@ func TestJobFacets_DisjunctiveDropsWholeLocationGroup(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&countries=BR&seniority=senior")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets?disjunctive=1&countries=BR&seniority=senior")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -154,7 +154,7 @@ func TestJobFacets_PassesFiltersAndRequestsFacets(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?q=golang&seniority=senior&regions=latam")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets?q=golang&seniority=senior&regions=latam")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -188,7 +188,7 @@ func TestJobFacets_RetiredRoleFilterIsIgnored(t *testing.T) {
 	}}
 	app := facetsApp(fake)
 
-	_, body := doGet(t, app, "/jobs/facets?role=senior_backend")
+	_, body := doGet(t, app, "/api/v1/jobs/facets?role=senior_backend")
 
 	if groups, ok := fake.got.Filter.([][]string); ok && filterHas(groups, `roles = "senior_backend"`) {
 		t.Errorf("role still filters: %#v", fake.got.Filter)
@@ -222,7 +222,7 @@ func TestJobFacets_PrunesNumericDistributionAndRekeys(t *testing.T) {
 	}}
 	app := facetsApp(fake)
 
-	_, body := doGet(t, app, "/jobs/facets")
+	_, body := doGet(t, app, "/api/v1/jobs/facets")
 	facets := body["data"].(map[string]any)["facets"].(map[string]any)
 
 	if _, present := facets["salary_min"]; present {
@@ -250,7 +250,7 @@ func TestJobFacets_ShapesResponse(t *testing.T) {
 	}}
 	app := facetsApp(fake)
 
-	status, body := doGet(t, app, "/jobs/facets")
+	status, body := doGet(t, app, "/api/v1/jobs/facets")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -288,7 +288,7 @@ func TestJobFacets_FacetsParamNarrowsTheRequest(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?work_mode=remote&facets=seniority,regions")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets?work_mode=remote&facets=seniority,regions")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -320,7 +320,7 @@ func TestJobFacets_UnknownFacetIsRejected(t *testing.T) {
 	for _, name := range []string{"nonsense", "company"} {
 		fake := &fakeFacetCounter{}
 		app := facetsApp(fake)
-		status, _ := doGet(t, app, "/jobs/facets?facets="+name)
+		status, _ := doGet(t, app, "/api/v1/jobs/facets?facets="+name)
 		if status != fiber.StatusBadRequest {
 			t.Errorf("facets=%s: status = %d, want 400", name, status)
 		}
@@ -336,7 +336,7 @@ func TestJobFacets_FacetsParamRejectedWithDisjunctive(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&facets=seniority")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets?disjunctive=1&facets=seniority")
 	if status != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", status)
 	}
@@ -351,7 +351,7 @@ func TestJobFacets_ReportsIgnoredParams(t *testing.T) {
 	// the listing: it does not look like a long list, it looks like a fact.
 	app := facetsApp(&fakeFacetCounter{})
 
-	_, body := doGet(t, app, "/jobs/facets?country=it")
+	_, body := doGet(t, app, "/api/v1/jobs/facets?country=it")
 
 	meta, _ := body["meta"].(map[string]any)
 	ignored, _ := meta["ignored_params"].([]any)
@@ -369,7 +369,7 @@ func TestJobFacets_CleanQueryKeepsTheBareDataEnvelope(t *testing.T) {
 	// keep that shape rather than grow an empty meta block.
 	app := facetsApp(&fakeFacetCounter{})
 
-	_, body := doGet(t, app, "/jobs/facets?q=go&facets=skills&countries=it")
+	_, body := doGet(t, app, "/api/v1/jobs/facets?q=go&facets=skills&countries=it")
 
 	if _, present := body["meta"]; present {
 		t.Errorf("meta = %v, want the key absent on a clean query", body["meta"])
@@ -383,7 +383,7 @@ func TestJobFacets_CacheServesRepeatedRequestWithoutRecomputing(t *testing.T) {
 	// Two identical requests. The first computes and populates the cache; the
 	// second must be served from it, leaving FacetCounts called exactly once.
 	for i := 0; i < 2; i++ {
-		status, _ := doGet(t, app, "/jobs/facets?q=go&seniority=senior")
+		status, _ := doGet(t, app, "/api/v1/jobs/facets?q=go&seniority=senior")
 		if status != fiber.StatusOK {
 			t.Fatalf("request %d: status = %d, want 200", i, status)
 		}
@@ -401,7 +401,7 @@ func TestJobFacets_CacheKeyStableAcrossMultiFacetRequests(t *testing.T) {
 	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
 	app := facetsAppCached(fake, cache.NewMemory())
 
-	const q = "/jobs/facets?seniority=senior&work_mode=remote&category=backend&regions=latam"
+	const q = "/api/v1/jobs/facets?seniority=senior&work_mode=remote&category=backend&regions=latam"
 	for i := 0; i < 8; i++ {
 		status, _ := doGet(t, app, q)
 		if status != fiber.StatusOK {
@@ -418,8 +418,8 @@ func TestJobFacets_CacheKeyVariesByFilter(t *testing.T) {
 	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
 	app := facetsAppCached(fake, cache.NewMemory())
 
-	doGet(t, app, "/jobs/facets?seniority=senior")
-	doGet(t, app, "/jobs/facets?seniority=junior")
+	doGet(t, app, "/api/v1/jobs/facets?seniority=senior")
+	doGet(t, app, "/api/v1/jobs/facets?seniority=junior")
 
 	if fake.calls != 2 {
 		t.Errorf("FacetCounts calls = %d, want 2 (distinct filters must not share a cache key)", fake.calls)
@@ -432,8 +432,8 @@ func TestJobFacets_DisjunctiveIsNotCached(t *testing.T) {
 	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
 	app := facetsAppCached(fake, cache.NewMemory())
 
-	doGet(t, app, "/jobs/facets?disjunctive=1&seniority=senior")
-	doGet(t, app, "/jobs/facets?disjunctive=1&seniority=senior")
+	doGet(t, app, "/api/v1/jobs/facets?disjunctive=1&seniority=senior")
+	doGet(t, app, "/api/v1/jobs/facets?disjunctive=1&seniority=senior")
 
 	if fake.calls != 0 {
 		t.Fatalf("FacetCounts calls = %d; disjunctive should not use the FacetCounts path at all", fake.calls)
@@ -446,8 +446,8 @@ func TestJobFacets_NilCacheStillComputes(t *testing.T) {
 	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
 	app := facetsApp(fake) // nil cache
 
-	doGet(t, app, "/jobs/facets?seniority=senior")
-	doGet(t, app, "/jobs/facets?seniority=senior")
+	doGet(t, app, "/api/v1/jobs/facets?seniority=senior")
+	doGet(t, app, "/api/v1/jobs/facets?seniority=senior")
 
 	if fake.calls != 2 {
 		t.Errorf("FacetCounts calls = %d, want 2 (no cache = always compute)", fake.calls)
@@ -493,9 +493,9 @@ func TestJobFacets_CompanySlugReportsExactTotalAndNamedTop50(t *testing.T) {
 	names := &fakeCompanyNames{names: map[string]string{"co-00": "Company Zero", "co-01": "Company One"}}
 	h := &searchHandlers{facets: fake, companyNames: names}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/facets", h.JobFacets)
+	app.Get("/api/v1/jobs/facets", newContract(contractHandlers{searchHandlers: h}))
 
-	status, body := doGet(t, app, "/jobs/facets?countries=BR&facets=countries,company_slug")
+	status, body := doGet(t, app, "/api/v1/jobs/facets?countries=BR&facets=countries,company_slug")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 (%v)", status, body)
 	}
@@ -546,9 +546,9 @@ func TestJobFacets_CompanyNameReadFailureFallsBackToSlugs(t *testing.T) {
 	names := &fakeCompanyNames{err: errors.New("db down")}
 	h := &searchHandlers{facets: fake, companyNames: names}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/facets", h.JobFacets)
+	app.Get("/api/v1/jobs/facets", newContract(contractHandlers{searchHandlers: h}))
 
-	status, body := doGet(t, app, "/jobs/facets?facets=company_slug")
+	status, body := doGet(t, app, "/api/v1/jobs/facets?facets=company_slug")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 (%v)", status, body)
 	}
@@ -566,7 +566,7 @@ func TestJobFacets_CompanySlugNotRequestedRunsNoDistinctCount(t *testing.T) {
 	fake := &fakeFacetCounter{res: search.FacetResult{Total: 5}}
 	app := facetsApp(fake)
 
-	for _, target := range []string{"/jobs/facets", "/jobs/facets?facets=countries"} {
+	for _, target := range []string{"/api/v1/jobs/facets", "/api/v1/jobs/facets?facets=countries"} {
 		status, body := doGet(t, app, target)
 		if status != fiber.StatusOK {
 			t.Fatalf("%s: status = %d, want 200", target, status)
@@ -591,7 +591,7 @@ func TestJobFacets_CompanySlugRefusedUnderDisjunctive(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&facets=company_slug")
+	status, _ := doGet(t, app, "/api/v1/jobs/facets?disjunctive=1&facets=company_slug")
 	if status != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", status)
 	}
@@ -606,7 +606,7 @@ func TestJobFacets_CompanyCountIsCached(t *testing.T) {
 	app := facetsAppCached(fake, cache.NewMemory())
 
 	for i := 0; i < 2; i++ {
-		status, body := doGet(t, app, "/jobs/facets?facets=company_slug")
+		status, body := doGet(t, app, "/api/v1/jobs/facets?facets=company_slug")
 		if status != fiber.StatusOK {
 			t.Fatalf("request %d: status = %d", i, status)
 		}

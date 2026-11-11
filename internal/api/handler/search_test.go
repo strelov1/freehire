@@ -26,7 +26,7 @@ func (f *fakeSearcher) Search(_ context.Context, p search.SearchParams) (search.
 func searchApp(s searcher) *fiber.App {
 	h := &searchHandlers{search: s}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/search", h.SearchJobs)
+	app.Get("/api/v1/jobs/search", newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
@@ -42,7 +42,7 @@ func doGet(t *testing.T, app *fiber.App, target string) (int, map[string]any) {
 
 func TestSearchJobs_DisabledReturns503(t *testing.T) {
 	app := searchApp(nil) // search not configured
-	status, _ := doGet(t, app, "/jobs/search?q=go")
+	status, _ := doGet(t, app, "/api/v1/jobs/search?q=go")
 	if status != fiber.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", status)
 	}
@@ -55,7 +55,7 @@ func TestSearchJobs_PassesParamsAndShapesResponse(t *testing.T) {
 	}}
 	app := searchApp(fake)
 
-	status, body := doGet(t, app, "/jobs/search?q=golang&limit=10&offset=20&seniority=senior&regions=latam")
+	status, body := doGet(t, app, "/api/v1/jobs/search?q=golang&limit=10&offset=20&seniority=senior&regions=latam")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -98,7 +98,7 @@ func TestSearchJobs_DeepPaginationRejected(t *testing.T) {
 	app := searchApp(fake)
 
 	// offset+limit past the window must be refused before the backend is touched.
-	status, body := doGet(t, app, "/jobs/search?offset=10000&limit=100")
+	status, body := doGet(t, app, "/api/v1/jobs/search?offset=10000&limit=100")
 	if status != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", status)
 	}
@@ -115,7 +115,7 @@ func TestSearchJobs_PaginationAtWindowBoundaryAllowed(t *testing.T) {
 	app := searchApp(fake)
 
 	// offset+limit exactly at the window is still allowed and reaches the backend.
-	status, _ := doGet(t, app, "/jobs/search?offset=9900&limit=100")
+	status, _ := doGet(t, app, "/api/v1/jobs/search?offset=9900&limit=100")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -127,7 +127,7 @@ func TestSearchJobs_PaginationAtWindowBoundaryAllowed(t *testing.T) {
 func TestSearchJobs_BackendErrorMaps500(t *testing.T) {
 	fake := &fakeSearcher{err: context.DeadlineExceeded}
 	app := searchApp(fake)
-	status, _ := doGet(t, app, "/jobs/search?q=go")
+	status, _ := doGet(t, app, "/api/v1/jobs/search?q=go")
 	if status != fiber.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", status)
 	}
@@ -137,7 +137,7 @@ func TestSearchJobs_ExcludeAndAndMode(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := searchApp(fake)
 
-	doGet(t, app, "/jobs/search?seniority=senior&seniority_exclude=junior&skills=go&skills=react&skills_mode=and")
+	doGet(t, app, "/api/v1/jobs/search?seniority=senior&seniority_exclude=junior&skills=go&skills=react&skills_mode=and")
 
 	groups, ok := fake.got.Filter.([][]string)
 	if !ok {
@@ -181,7 +181,7 @@ func TestSearchJobs_DefaultSortIsPostedAtForEmptyQuery(t *testing.T) {
 	app := searchApp(fake)
 
 	// No query text, no sort → freshest by posting date first.
-	if status, _ := doGet(t, app, "/jobs/search"); status != fiber.StatusOK {
+	if status, _ := doGet(t, app, "/api/v1/jobs/search"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	if len(fake.got.Sort) != 1 || fake.got.Sort[0] != "posted_at:desc" {
@@ -189,7 +189,7 @@ func TestSearchJobs_DefaultSortIsPostedAtForEmptyQuery(t *testing.T) {
 	}
 
 	// Text query, no sort → relevance (nil sort).
-	if status, _ := doGet(t, app, "/jobs/search?q=golang"); status != fiber.StatusOK {
+	if status, _ := doGet(t, app, "/api/v1/jobs/search?q=golang"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	if fake.got.Sort != nil {
@@ -197,7 +197,7 @@ func TestSearchJobs_DefaultSortIsPostedAtForEmptyQuery(t *testing.T) {
 	}
 
 	// Explicit sort always wins, q or not — and created_at is still accepted.
-	if status, _ := doGet(t, app, "/jobs/search?q=golang&sort=created_at&order=asc"); status != fiber.StatusOK {
+	if status, _ := doGet(t, app, "/api/v1/jobs/search?q=golang&sort=created_at&order=asc"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	if len(fake.got.Sort) != 1 || fake.got.Sort[0] != "created_at:asc" {
@@ -213,7 +213,7 @@ func TestSearchJobs_ReportsIgnoredParams(t *testing.T) {
 	// The query still runs — old links and saved searches must keep working —
 	// but the response has to say the param was dropped, or an unfiltered
 	// result set reads as a real answer about Italy.
-	status, body := doGet(t, app, "/jobs/search?country=it")
+	status, body := doGet(t, app, "/api/v1/jobs/search?country=it")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -236,7 +236,7 @@ func TestSearchJobs_ReportsIgnoredValues(t *testing.T) {
 	// `foo` is no work mode, so the filter narrows to nothing and `total: 0` would
 	// read as an empty market. The filter still receives it — the report describes
 	// the answer, it does not change it.
-	status, body := doGet(t, app, "/jobs/search?work_mode=foo")
+	status, body := doGet(t, app, "/api/v1/jobs/search?work_mode=foo")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -250,7 +250,7 @@ func TestSearchJobs_ReportsIgnoredValues(t *testing.T) {
 		t.Errorf("meta.ignored_values = %v, want {work_mode: [foo]}", meta["ignored_values"])
 	}
 
-	_, body = doGet(t, app, "/jobs/search?work_mode=remote")
+	_, body = doGet(t, app, "/api/v1/jobs/search?work_mode=remote")
 	meta, _ = body["meta"].(map[string]any)
 	if _, present := meta["ignored_values"]; present {
 		t.Errorf("meta.ignored_values = %v, want the key absent on a clean request", meta["ignored_values"])
@@ -261,7 +261,7 @@ func TestSearchJobs_QFieldsRestrictsSearchableAttributes(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := searchApp(fake)
 
-	status, body := doGet(t, app, "/jobs/search?q=systems&q_fields=title")
+	status, body := doGet(t, app, "/api/v1/jobs/search?q=systems&q_fields=title")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -280,7 +280,7 @@ func TestSearchJobs_QFieldsAbsentLeavesAllFieldsSearchable(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := searchApp(fake)
 
-	doGet(t, app, "/jobs/search?q=golang")
+	doGet(t, app, "/api/v1/jobs/search?q=golang")
 	if fake.got.QFields != nil {
 		t.Errorf("QFields = %v, want nil when q_fields is absent", fake.got.QFields)
 	}
@@ -290,7 +290,7 @@ func TestSearchJobs_UnrecognizedQFieldsIsReportedAndAppliesNoRestriction(t *test
 	fake := &fakeSearcher{}
 	app := searchApp(fake)
 
-	status, body := doGet(t, app, "/jobs/search?q=systems&q_fields=salary")
+	status, body := doGet(t, app, "/api/v1/jobs/search?q=systems&q_fields=salary")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -314,7 +314,7 @@ func TestSearchJobs_CleanQueryReportsNothingIgnored(t *testing.T) {
 
 	// Transport params belong to the handler rather than to the filter
 	// vocabulary; a well-formed query must not accuse them of anything.
-	_, body := doGet(t, app, "/jobs/search?q=go&limit=10&offset=0&sort=posted_at&order=asc&countries=it")
+	_, body := doGet(t, app, "/api/v1/jobs/search?q=go&limit=10&offset=0&sort=posted_at&order=asc&countries=it")
 
 	meta, _ := body["meta"].(map[string]any)
 	if _, present := meta["ignored_params"]; present {
@@ -331,7 +331,7 @@ func TestSearchJobs_ViewCountSortDefaultsToDescending(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := searchApp(fake)
 
-	if status, _ := doGet(t, app, "/jobs/search?sort=view_count"); status != fiber.StatusOK {
+	if status, _ := doGet(t, app, "/api/v1/jobs/search?sort=view_count"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	if len(fake.got.Sort) != 1 || fake.got.Sort[0] != "view_count:desc" {
@@ -339,7 +339,7 @@ func TestSearchJobs_ViewCountSortDefaultsToDescending(t *testing.T) {
 	}
 
 	// Ascending is reachable, so "least viewed first" needs no separate parameter.
-	if status, _ := doGet(t, app, "/jobs/search?sort=view_count&order=asc"); status != fiber.StatusOK {
+	if status, _ := doGet(t, app, "/api/v1/jobs/search?sort=view_count&order=asc"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	if len(fake.got.Sort) != 1 || fake.got.Sort[0] != "view_count:asc" {
@@ -348,7 +348,7 @@ func TestSearchJobs_ViewCountSortDefaultsToDescending(t *testing.T) {
 
 	// It ranks by a stored figure, so it survives query text rather than yielding to
 	// relevance the way an unrecognised value would.
-	if status, _ := doGet(t, app, "/jobs/search?q=golang&sort=view_count"); status != fiber.StatusOK {
+	if status, _ := doGet(t, app, "/api/v1/jobs/search?q=golang&sort=view_count"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	if len(fake.got.Sort) != 1 || fake.got.Sort[0] != "view_count:desc" {

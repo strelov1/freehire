@@ -408,6 +408,129 @@ func (s *Server) handleAddToWatchlistRequest(args [1]string, argsEscaped bool, w
 	}
 }
 
+// handleAgentSearchJobsRequest handles agentSearchJobs operation.
+//
+// The same query as `/jobs/search`, always with the full description in the chosen format.
+//
+// GET /agent/jobs/search
+func (s *Server) handleAgentSearchJobsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: AgentSearchJobsOperation,
+			ID:   "agentSearchJobs",
+		}
+	)
+	params, err := decodeAgentSearchJobsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *AgentJobSearchPageHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    AgentSearchJobsOperation,
+			OperationSummary: "",
+			OperationID:      "agentSearchJobs",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "q",
+					In:   "query",
+				}: params.Q,
+				{
+					Name: "q_fields",
+					In:   "query",
+				}: params.QFields,
+				{
+					Name: "sort",
+					In:   "query",
+				}: params.Sort,
+				{
+					Name: "order",
+					In:   "query",
+				}: params.Order,
+				{
+					Name: "limit",
+					In:   "query",
+				}: params.Limit,
+				{
+					Name: "offset",
+					In:   "query",
+				}: params.Offset,
+				{
+					Name: "description_format",
+					In:   "query",
+				}: params.DescriptionFormat,
+				{
+					Name: "semantic",
+					In:   "query",
+				}: params.Semantic,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = AgentSearchJobsParams
+			Response = *AgentJobSearchPageHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackAgentSearchJobsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.AgentSearchJobs(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.AgentSearchJobs(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeAgentSearchJobsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleApproveCompanyRelationRequest handles approveCompanyRelation operation.
 //
 // Moderators only. Approving again resumes a move that failed part-way.
@@ -10401,6 +10524,109 @@ func (s *Server) handleJobCopiesRequest(args [1]string, argsEscaped bool, w http
 	}
 }
 
+// handleJobFacetsRequest handles jobFacets operation.
+//
+// The count of postings per facet value under the same filters, keyed by public facet param.
+//
+// GET /jobs/facets
+func (s *Server) handleJobFacetsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: JobFacetsOperation,
+			ID:   "jobFacets",
+		}
+	)
+	params, err := decodeJobFacetsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *JobFacetsOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    JobFacetsOperation,
+			OperationSummary: "",
+			OperationID:      "jobFacets",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "q",
+					In:   "query",
+				}: params.Q,
+				{
+					Name: "facets",
+					In:   "query",
+				}: params.Facets,
+				{
+					Name: "disjunctive",
+					In:   "query",
+				}: params.Disjunctive,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = JobFacetsParams
+			Response = *JobFacetsOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackJobFacetsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.JobFacets(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.JobFacets(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeJobFacetsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleJobsActivityRequest handles jobsActivity operation.
 //
 // Added and removed vacancies per period. A bad granularity or date, or a range over 4000 days, is a
@@ -16453,6 +16679,136 @@ func (s *Server) handleSearchCitiesRequest(args [0]string, argsEscaped bool, w h
 	}
 }
 
+// handleSearchJobsRequest handles searchJobs operation.
+//
+// Full-text and faceted search over open postings. Public; a signed-in caller can also use
+// `hide_seen`, `hide_applied_companies`, `former_employers`, `watchlist`, `min_skill_match` and
+// `sort=match`, which make the answer private. A filter the endpoint does not read is named in
+// `meta.ignored_params`, a value outside a closed vocabulary in `meta.ignored_values`.
+//
+// GET /jobs/search
+func (s *Server) handleSearchJobsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: SearchJobsOperation,
+			ID:   "searchJobs",
+		}
+	)
+	params, err := decodeSearchJobsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *JobSearchPageHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    SearchJobsOperation,
+			OperationSummary: "",
+			OperationID:      "searchJobs",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "q",
+					In:   "query",
+				}: params.Q,
+				{
+					Name: "q_fields",
+					In:   "query",
+				}: params.QFields,
+				{
+					Name: "sort",
+					In:   "query",
+				}: params.Sort,
+				{
+					Name: "order",
+					In:   "query",
+				}: params.Order,
+				{
+					Name: "limit",
+					In:   "query",
+				}: params.Limit,
+				{
+					Name: "offset",
+					In:   "query",
+				}: params.Offset,
+				{
+					Name: "hide_seen",
+					In:   "query",
+				}: params.HideSeen,
+				{
+					Name: "hide_applied_companies",
+					In:   "query",
+				}: params.HideAppliedCompanies,
+				{
+					Name: "min_skill_match",
+					In:   "query",
+				}: params.MinSkillMatch,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = SearchJobsParams
+			Response = *JobSearchPageHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackSearchJobsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.SearchJobs(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.SearchJobs(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeSearchJobsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleSendConversationMessageRequest handles sendConversationMessage operation.
 //
 // Posts a message into an open conversation.
@@ -16965,6 +17321,105 @@ func (s *Server) handleSetTalentNetworkVisibilityRequest(args [0]string, argsEsc
 	}
 
 	if err := encodeSetTalentNetworkVisibilityResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleSimilarJobsRequest handles similarJobs operation.
+//
+// Open postings in the same specialization and place as the job.
+//
+// GET /jobs/{slug}/similar
+func (s *Server) handleSimilarJobsRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: SimilarJobsOperation,
+			ID:   "similarJobs",
+		}
+	)
+	params, err := decodeSimilarJobsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *SimilarJobsOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    SimilarJobsOperation,
+			OperationSummary: "",
+			OperationID:      "similarJobs",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+				{
+					Name: "limit",
+					In:   "query",
+				}: params.Limit,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = SimilarJobsParams
+			Response = *SimilarJobsOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackSimilarJobsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.SimilarJobs(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.SimilarJobs(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeSimilarJobsResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

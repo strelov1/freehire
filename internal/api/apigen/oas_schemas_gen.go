@@ -151,6 +151,142 @@ func (s *AddToWatchlistOK) SetData(val WatchedCompany) {
 	s.Data = val
 }
 
+// Ref: #/components/schemas/AgentJobSearchMeta
+type AgentJobSearchMeta struct {
+	Total  int64 `json:"total"`
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+	// Absent when every param was read.
+	IgnoredParams []IgnoredParam `json:"ignored_params"`
+	IgnoredValues jx.Raw         `json:"ignored_values"`
+	// True when `total` counts only what was read, not the whole match.
+	TotalIsLowerBound OptBool `json:"total_is_lower_bound"`
+	// "unavailable" when `semantic=true` was asked and the request was answered by keywords.
+	Semantic OptString `json:"semantic"`
+}
+
+// GetTotal returns the value of Total.
+func (s *AgentJobSearchMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// GetLimit returns the value of Limit.
+func (s *AgentJobSearchMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetOffset returns the value of Offset.
+func (s *AgentJobSearchMeta) GetOffset() int64 {
+	return s.Offset
+}
+
+// GetIgnoredParams returns the value of IgnoredParams.
+func (s *AgentJobSearchMeta) GetIgnoredParams() []IgnoredParam {
+	return s.IgnoredParams
+}
+
+// GetIgnoredValues returns the value of IgnoredValues.
+func (s *AgentJobSearchMeta) GetIgnoredValues() jx.Raw {
+	return s.IgnoredValues
+}
+
+// GetTotalIsLowerBound returns the value of TotalIsLowerBound.
+func (s *AgentJobSearchMeta) GetTotalIsLowerBound() OptBool {
+	return s.TotalIsLowerBound
+}
+
+// GetSemantic returns the value of Semantic.
+func (s *AgentJobSearchMeta) GetSemantic() OptString {
+	return s.Semantic
+}
+
+// SetTotal sets the value of Total.
+func (s *AgentJobSearchMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
+// SetLimit sets the value of Limit.
+func (s *AgentJobSearchMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetOffset sets the value of Offset.
+func (s *AgentJobSearchMeta) SetOffset(val int64) {
+	s.Offset = val
+}
+
+// SetIgnoredParams sets the value of IgnoredParams.
+func (s *AgentJobSearchMeta) SetIgnoredParams(val []IgnoredParam) {
+	s.IgnoredParams = val
+}
+
+// SetIgnoredValues sets the value of IgnoredValues.
+func (s *AgentJobSearchMeta) SetIgnoredValues(val jx.Raw) {
+	s.IgnoredValues = val
+}
+
+// SetTotalIsLowerBound sets the value of TotalIsLowerBound.
+func (s *AgentJobSearchMeta) SetTotalIsLowerBound(val OptBool) {
+	s.TotalIsLowerBound = val
+}
+
+// SetSemantic sets the value of Semantic.
+func (s *AgentJobSearchMeta) SetSemantic(val OptString) {
+	s.Semantic = val
+}
+
+// Ref: #/components/schemas/AgentJobSearchPage
+type AgentJobSearchPage struct {
+	Data []jx.Raw           `json:"data"`
+	Meta AgentJobSearchMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *AgentJobSearchPage) GetData() []jx.Raw {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *AgentJobSearchPage) GetMeta() AgentJobSearchMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *AgentJobSearchPage) SetData(val []jx.Raw) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *AgentJobSearchPage) SetMeta(val AgentJobSearchMeta) {
+	s.Meta = val
+}
+
+// AgentJobSearchPageHeaders wraps AgentJobSearchPage with response headers.
+type AgentJobSearchPageHeaders struct {
+	CacheControl OptString
+	Response     AgentJobSearchPage
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *AgentJobSearchPageHeaders) GetCacheControl() OptString {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *AgentJobSearchPageHeaders) GetResponse() AgentJobSearchPage {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *AgentJobSearchPageHeaders) SetCacheControl(val OptString) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *AgentJobSearchPageHeaders) SetResponse(val AgentJobSearchPage) {
+	s.Response = val
+}
+
 // Ref: #/components/schemas/AgentPermissions
 type AgentPermissions struct {
 	// Whether an agent acting for the account may submit applications. Absent reads as false.
@@ -6389,6 +6525,7 @@ type HideCompanyFeedbackNoContent struct{}
 // Ref: #/components/schemas/IgnoredMeta
 type IgnoredMeta struct {
 	IgnoredParams []IgnoredParam `json:"ignored_params"`
+	IgnoredValues jx.Raw         `json:"ignored_values"`
 }
 
 // GetIgnoredParams returns the value of IgnoredParams.
@@ -6396,9 +6533,19 @@ func (s *IgnoredMeta) GetIgnoredParams() []IgnoredParam {
 	return s.IgnoredParams
 }
 
+// GetIgnoredValues returns the value of IgnoredValues.
+func (s *IgnoredMeta) GetIgnoredValues() jx.Raw {
+	return s.IgnoredValues
+}
+
 // SetIgnoredParams sets the value of IgnoredParams.
 func (s *IgnoredMeta) SetIgnoredParams(val []IgnoredParam) {
 	s.IgnoredParams = val
+}
+
+// SetIgnoredValues sets the value of IgnoredValues.
+func (s *IgnoredMeta) SetIgnoredValues(val jx.Raw) {
+	s.IgnoredValues = val
 }
 
 // A query param the endpoint did not read: unknown, or known but unreadable (`min_years=lots`). Either
@@ -7032,6 +7179,32 @@ func (s *JobDescriptionSource) SetCompany(val OptString) {
 	s.Company = val
 }
 
+// A single item that read query params: `{"data": ...}`, plus `meta` when one was dropped.
+type JobFacetsOK struct {
+	Data jx.Raw         `json:"data"`
+	Meta OptIgnoredMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *JobFacetsOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *JobFacetsOK) GetMeta() OptIgnoredMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *JobFacetsOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *JobFacetsOK) SetMeta(val OptIgnoredMeta) {
+	s.Meta = val
+}
+
 // Ref: #/components/schemas/JobFindMeta
 type JobFindMeta struct {
 	// Whether the URL sits on an ATS board freehire knows how to crawl.
@@ -7266,6 +7439,130 @@ func (s *JobReportRequest) SetDetails(val OptString) {
 // SetContactTelegram sets the value of ContactTelegram.
 func (s *JobReportRequest) SetContactTelegram(val OptString) {
 	s.ContactTelegram = val
+}
+
+// Ref: #/components/schemas/JobSearchMeta
+type JobSearchMeta struct {
+	Total  int64 `json:"total"`
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+	// Absent when every param was read.
+	IgnoredParams []IgnoredParam `json:"ignored_params"`
+	IgnoredValues jx.Raw         `json:"ignored_values"`
+	// True when `total` counts only what was read, not the whole match.
+	TotalIsLowerBound OptBool `json:"total_is_lower_bound"`
+}
+
+// GetTotal returns the value of Total.
+func (s *JobSearchMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// GetLimit returns the value of Limit.
+func (s *JobSearchMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetOffset returns the value of Offset.
+func (s *JobSearchMeta) GetOffset() int64 {
+	return s.Offset
+}
+
+// GetIgnoredParams returns the value of IgnoredParams.
+func (s *JobSearchMeta) GetIgnoredParams() []IgnoredParam {
+	return s.IgnoredParams
+}
+
+// GetIgnoredValues returns the value of IgnoredValues.
+func (s *JobSearchMeta) GetIgnoredValues() jx.Raw {
+	return s.IgnoredValues
+}
+
+// GetTotalIsLowerBound returns the value of TotalIsLowerBound.
+func (s *JobSearchMeta) GetTotalIsLowerBound() OptBool {
+	return s.TotalIsLowerBound
+}
+
+// SetTotal sets the value of Total.
+func (s *JobSearchMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
+// SetLimit sets the value of Limit.
+func (s *JobSearchMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetOffset sets the value of Offset.
+func (s *JobSearchMeta) SetOffset(val int64) {
+	s.Offset = val
+}
+
+// SetIgnoredParams sets the value of IgnoredParams.
+func (s *JobSearchMeta) SetIgnoredParams(val []IgnoredParam) {
+	s.IgnoredParams = val
+}
+
+// SetIgnoredValues sets the value of IgnoredValues.
+func (s *JobSearchMeta) SetIgnoredValues(val jx.Raw) {
+	s.IgnoredValues = val
+}
+
+// SetTotalIsLowerBound sets the value of TotalIsLowerBound.
+func (s *JobSearchMeta) SetTotalIsLowerBound(val OptBool) {
+	s.TotalIsLowerBound = val
+}
+
+// Ref: #/components/schemas/JobSearchPage
+type JobSearchPage struct {
+	Data []jx.Raw      `json:"data"`
+	Meta JobSearchMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *JobSearchPage) GetData() []jx.Raw {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *JobSearchPage) GetMeta() JobSearchMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *JobSearchPage) SetData(val []jx.Raw) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *JobSearchPage) SetMeta(val JobSearchMeta) {
+	s.Meta = val
+}
+
+// JobSearchPageHeaders wraps JobSearchPage with response headers.
+type JobSearchPageHeaders struct {
+	CacheControl OptString
+	Response     JobSearchPage
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *JobSearchPageHeaders) GetCacheControl() OptString {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *JobSearchPageHeaders) GetResponse() JobSearchPage {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *JobSearchPageHeaders) SetCacheControl(val OptString) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *JobSearchPageHeaders) SetResponse(val JobSearchPage) {
+	s.Response = val
 }
 
 // The moderator edit body: a field left out or null is unchanged.
@@ -7560,6 +7857,7 @@ type ListMeta struct {
 	Offset int64 `json:"offset"`
 	// Absent when every param was read.
 	IgnoredParams []IgnoredParam `json:"ignored_params"`
+	IgnoredValues jx.Raw         `json:"ignored_values"`
 }
 
 // GetTotal returns the value of Total.
@@ -7582,6 +7880,11 @@ func (s *ListMeta) GetIgnoredParams() []IgnoredParam {
 	return s.IgnoredParams
 }
 
+// GetIgnoredValues returns the value of IgnoredValues.
+func (s *ListMeta) GetIgnoredValues() jx.Raw {
+	return s.IgnoredValues
+}
+
 // SetTotal sets the value of Total.
 func (s *ListMeta) SetTotal(val int64) {
 	s.Total = val
@@ -7600,6 +7903,11 @@ func (s *ListMeta) SetOffset(val int64) {
 // SetIgnoredParams sets the value of IgnoredParams.
 func (s *ListMeta) SetIgnoredParams(val []IgnoredParam) {
 	s.IgnoredParams = val
+}
+
+// SetIgnoredValues sets the value of IgnoredValues.
+func (s *ListMeta) SetIgnoredValues(val jx.Raw) {
+	s.IgnoredValues = val
 }
 
 // A single item: `{"data": ...}`.
@@ -13736,6 +14044,21 @@ func (s *SetTalentNetworkVisibilityOK) GetData() TalentNetworkMembership {
 
 // SetData sets the value of Data.
 func (s *SetTalentNetworkVisibilityOK) SetData(val TalentNetworkMembership) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type SimilarJobsOK struct {
+	Data []jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SimilarJobsOK) GetData() []jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SimilarJobsOK) SetData(val []jx.Raw) {
 	s.Data = val
 }
 

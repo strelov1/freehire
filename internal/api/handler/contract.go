@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/ogen-go/ogen/ogenerrors"
@@ -70,6 +71,7 @@ type contractHandlers struct {
 	*planHandlers
 	*directApplyHandlers
 	*jobsHandlers
+	*searchHandlers
 	*companiesHandlers
 }
 
@@ -325,4 +327,15 @@ func nilDateTime(t *time.Time) apigen.NilDateTime {
 		return apigen.NilDateTime{Null: true}
 	}
 	return apigen.NewNilDateTime(*t)
+}
+
+// contractIgnoredValues is search's value-level report as the raw object encoding/json wrote
+// (keys sorted; a generated map would encode them in random order). Nil when empty, so the
+// optional field is left out.
+func contractIgnoredValues(values map[string][]string) jx.Raw {
+	if len(values) == 0 {
+		return nil
+	}
+	raw, _ := json.Marshal(values) // a map of string slices always marshals
+	return raw
 }

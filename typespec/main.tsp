@@ -36,6 +36,7 @@ import "./plan.tsp";
 import "./direct-apply.tsp";
 import "./jobs.tsp";
 import "./companies.tsp";
+import "./search.tsp";
 
 using Http;
 

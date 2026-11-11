@@ -106,6 +106,120 @@
     }
   ],
   "paths": {
+    "/agent/jobs/search": {
+      "get": {
+        "operationId": "agentSearchJobs",
+        "description": "The same query as `/jobs/search`, always with the full description in the chosen format.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "q_fields",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "description_format",
+            "in": "query",
+            "required": false,
+            "description": "`text` or `markdown`; anything else leaves the stored HTML.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "semantic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": false,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentJobSearchPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Search"
+        ]
+      }
+    },
     "/billing/checkout": {
       "get": {
         "operationId": "getBillingCheckout",
@@ -2763,6 +2877,77 @@
         }
       }
     },
+    "/jobs/facets": {
+      "get": {
+        "operationId": "jobFacets",
+        "description": "The count of postings per facet value under the same filters, keyed by public facet param.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "facets",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated facet params to count instead of all of them.",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "disjunctive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {},
+                    "meta": {
+                      "$ref": "#/components/schemas/IgnoredMeta"
+                    }
+                  },
+                  "description": "A single item that read query params: `{\"data\": ...}`, plus `meta` when one was dropped."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Search"
+        ]
+      }
+    },
     "/jobs/find": {
       "get": {
         "operationId": "findJob",
@@ -2892,6 +3077,128 @@
             }
           }
         }
+      }
+    },
+    "/jobs/search": {
+      "get": {
+        "operationId": "searchJobs",
+        "description": "Full-text and faceted search over open postings. Public; a signed-in caller can also use\n`hide_seen`, `hide_applied_companies`, `former_employers`, `watchlist`, `min_skill_match`\nand `sort=match`, which make the answer private. A filter the endpoint does not read is\nnamed in `meta.ignored_params`, a value outside a closed vocabulary in `meta.ignored_values`.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "q_fields",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "hide_seen",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "hide_applied_companies",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "min_skill_match",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": false,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobSearchPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Search"
+        ]
       }
     },
     "/jobs/{slug}": {
@@ -3615,6 +3922,66 @@
         },
         "tags": [
           "Tracking"
+        ]
+      }
+    },
+    "/jobs/{slug}/similar": {
+      "get": {
+        "operationId": "similarJobs",
+        "description": "Open postings in the same specialization and place as the job.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {}
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Search"
         ]
       }
     },
@@ -10681,6 +11048,60 @@
         },
         "description": "Vacancies added and removed in one period."
       },
+      "AgentJobSearchMeta": {
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ignored_params": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IgnoredParam"
+            },
+            "description": "Absent when every param was read."
+          },
+          "ignored_values": {},
+          "total_is_lower_bound": {
+            "type": "boolean",
+            "description": "True when `total` counts only what was read, not the whole match."
+          },
+          "semantic": {
+            "type": "string",
+            "description": "\"unavailable\" when `semantic=true` was asked and the request was answered by keywords."
+          }
+        }
+      },
+      "AgentJobSearchPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {}
+          },
+          "meta": {
+            "$ref": "#/components/schemas/AgentJobSearchMeta"
+          }
+        }
+      },
       "AgentPermissions": {
         "type": "object",
         "properties": {
@@ -13581,7 +14002,8 @@
             "items": {
               "$ref": "#/components/schemas/IgnoredParam"
             }
-          }
+          },
+          "ignored_values": {}
         },
         "description": "The meta of a single-item answer, sent only to carry a warning."
       },
@@ -14059,6 +14481,56 @@
           }
         }
       },
+      "JobSearchMeta": {
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ignored_params": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IgnoredParam"
+            },
+            "description": "Absent when every param was read."
+          },
+          "ignored_values": {},
+          "total_is_lower_bound": {
+            "type": "boolean",
+            "description": "True when `total` counts only what was read, not the whole match."
+          }
+        }
+      },
+      "JobSearchPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {}
+          },
+          "meta": {
+            "$ref": "#/components/schemas/JobSearchMeta"
+          }
+        }
+      },
       "JobUpdate": {
         "type": "object",
         "properties": {
@@ -14171,7 +14643,8 @@
               "$ref": "#/components/schemas/IgnoredParam"
             },
             "description": "Absent when every param was read."
-          }
+          },
+          "ignored_values": {}
         },
         "description": "A page of a filtered list, with what the filter dropped."
       },

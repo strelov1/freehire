@@ -28,12 +28,12 @@ func (f *fakeSeen) ExcludedJobIDs(context.Context, int64) ([]int64, error) {
 func hideSeenApp(s searcher, userID int64, seen seenJobs) *fiber.App {
 	h := &searchHandlers{search: s, seen: seen}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/search", func(c *fiber.Ctx) error {
+	app.Get("/api/v1/jobs/search", func(c *fiber.Ctx) error {
 		if userID != 0 {
 			c.Locals(auth.LocalsUserID, userID)
 		}
-		return h.SearchJobs(c)
-	})
+		return c.Next()
+	}, newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
@@ -62,7 +62,7 @@ func TestSearchJobsHideSeen_SignedInExcludesSeenInsideTheQuery(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := hideSeenApp(fake, 7, &fakeSeen{ids: []int64{11, 12}})
 
-	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/jobs/search?hide_seen=true&seniority=senior", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/jobs/search?hide_seen=true&seniority=senior", nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestSearchJobsHideSeen_AnonymousCallerIsToldItWasNotApplied(t *testing.T) {
 	seen := &fakeSeen{ids: []int64{11}}
 	app := hideSeenApp(fake, 0, seen)
 
-	status, body := doGet(t, app, "/jobs/search?hide_seen=true")
+	status, body := doGet(t, app, "/api/v1/jobs/search?hide_seen=true")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 — a shared link carrying hide_seen must not break", status)
 	}
@@ -111,7 +111,7 @@ func TestSearchJobsHideSeen_UnreadableRecordWidensAndSaysSo(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := hideSeenApp(fake, 7, &fakeSeen{err: errors.New("db down")})
 
-	status, body := doGet(t, app, "/jobs/search?hide_seen=true")
+	status, body := doGet(t, app, "/api/v1/jobs/search?hide_seen=true")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -134,7 +134,7 @@ func TestSearchJobsHideSeen_ValueRules(t *testing.T) {
 		t.Run(tc.query, func(t *testing.T) {
 			seen := &fakeSeen{ids: []int64{11}}
 			app := hideSeenApp(&fakeSearcher{}, 7, seen)
-			_, body := doGet(t, app, "/jobs/search?"+tc.query)
+			_, body := doGet(t, app, "/api/v1/jobs/search?"+tc.query)
 			if seen.called != tc.wantRead {
 				t.Errorf("read seen set = %v, want %v", seen.called, tc.wantRead)
 			}
@@ -152,7 +152,7 @@ func TestSearchJobsHideSeen_SurvivesTheFilterDegradeRetry(t *testing.T) {
 	fake := &retrySearcher{first: search.ErrBadQuery}
 	app := hideSeenApp(fake, 7, &fakeSeen{ids: []int64{11}})
 
-	if status, _ := doGet(t, app, "/jobs/search?hide_seen=true&seniority=senior"); status != fiber.StatusOK {
+	if status, _ := doGet(t, app, "/api/v1/jobs/search?hide_seen=true&seniority=senior"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	groups, _ := fake.last.Filter.([][]string)

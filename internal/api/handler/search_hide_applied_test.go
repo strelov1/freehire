@@ -28,12 +28,12 @@ func (f *fakeAppliedCompanies) AppliedCompanySlugs(context.Context, int64) ([]st
 func hideAppliedApp(s searcher, userID int64, applied appliedCompanyReader) *fiber.App {
 	h := &searchHandlers{search: s, appliedCompanies: applied}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/search", func(c *fiber.Ctx) error {
+	app.Get("/api/v1/jobs/search", func(c *fiber.Ctx) error {
 		if userID != 0 {
 			c.Locals(auth.LocalsUserID, userID)
 		}
-		return h.SearchJobs(c)
-	})
+		return c.Next()
+	}, newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
@@ -53,7 +53,7 @@ func TestSearchJobsHideAppliedCompanies_ExcludesInsideTheQuery(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := hideAppliedApp(fake, 7, &fakeAppliedCompanies{slugs: []string{"acme", "globex"}})
 
-	status, body := doGet(t, app, "/jobs/search?hide_applied_companies=true&seniority=senior")
+	status, body := doGet(t, app, "/api/v1/jobs/search?hide_applied_companies=true&seniority=senior")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -72,7 +72,7 @@ func TestSearchJobsHideAppliedCompanies_ExcludesInsideTheQuery(t *testing.T) {
 
 func TestSearchJobsHideAppliedCompanies_ResponseIsPrivate(t *testing.T) {
 	app := hideAppliedApp(&fakeSearcher{}, 7, &fakeAppliedCompanies{slugs: []string{"acme"}})
-	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/jobs/search?hide_applied_companies=true", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/jobs/search?hide_applied_companies=true", nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestSearchJobsHideAppliedCompanies_NoApplicationsExcludesNothing(t *testing
 	fake := &fakeSearcher{}
 	app := hideAppliedApp(fake, 7, &fakeAppliedCompanies{})
 
-	_, body := doGet(t, app, "/jobs/search?hide_applied_companies=true")
+	_, body := doGet(t, app, "/api/v1/jobs/search?hide_applied_companies=true")
 	if fake.got.Filter != nil {
 		t.Errorf("Filter = %#v, want none", fake.got.Filter)
 	}
@@ -101,7 +101,7 @@ func TestSearchJobsHideAppliedCompanies_AnonymousCallerIsToldItWasNotApplied(t *
 	applied := &fakeAppliedCompanies{slugs: []string{"acme"}}
 	app := hideAppliedApp(fake, 0, applied)
 
-	status, body := doGet(t, app, "/jobs/search?hide_applied_companies=true")
+	status, body := doGet(t, app, "/api/v1/jobs/search?hide_applied_companies=true")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 — a shared link carrying the param must not break", status)
 	}
@@ -119,7 +119,7 @@ func TestSearchJobsHideAppliedCompanies_AnonymousCallerIsToldItWasNotApplied(t *
 func TestSearchJobsHideAppliedCompanies_UnreadableRecordWidensAndSaysSo(t *testing.T) {
 	app := hideAppliedApp(&fakeSearcher{}, 7, &fakeAppliedCompanies{err: errors.New("db down")})
 
-	status, body := doGet(t, app, "/jobs/search?hide_applied_companies=true")
+	status, body := doGet(t, app, "/api/v1/jobs/search?hide_applied_companies=true")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -143,7 +143,7 @@ func TestSearchJobsHideAppliedCompanies_ValueRules(t *testing.T) {
 		t.Run(tc.query, func(t *testing.T) {
 			applied := &fakeAppliedCompanies{slugs: []string{"acme"}}
 			app := hideAppliedApp(&fakeSearcher{}, 7, applied)
-			_, body := doGet(t, app, "/jobs/search?"+tc.query)
+			_, body := doGet(t, app, "/api/v1/jobs/search?"+tc.query)
 			if applied.called != tc.wantRead {
 				t.Errorf("read applied set = %v, want %v", applied.called, tc.wantRead)
 			}
@@ -179,7 +179,7 @@ func TestSearchJobsHideAppliedCompanies_SurvivesTheFilterDegradeRetry(t *testing
 	fake := &failOnceSearcher{err: search.ErrBadQuery}
 	app := hideAppliedApp(fake, 7, &fakeAppliedCompanies{slugs: []string{"acme"}})
 
-	if status, _ := doGet(t, app, "/jobs/search?hide_applied_companies=true&seniority=senior"); status != fiber.StatusOK {
+	if status, _ := doGet(t, app, "/api/v1/jobs/search?hide_applied_companies=true&seniority=senior"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	groups, _ := fake.last.Filter.([][]string)

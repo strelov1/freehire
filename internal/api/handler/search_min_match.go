@@ -6,10 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
-
 	"github.com/strelov1/freehire/internal/dict/skillvec"
-	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -36,18 +33,6 @@ const (
 type skillMatchFilter struct {
 	percent int
 	held    []string
-}
-
-// skillMatchFilter resolves ?min_skill_match=N and reports whether the param has to be
-// named in meta.ignored_params instead. The response is private whenever it applies, as
-// the answer depends on who asked under a URL that does not say so.
-func (h *searchHandlers) skillMatchFilter(c *fiber.Ctx) (*skillMatchFilter, bool) {
-	userID, _ := auth.UserID(c)
-	f, ignored := h.skillMatchFilterFor(c.Context(), userID, queryValues(c))
-	if f != nil {
-		c.Set(fiber.HeaderCacheControl, "private, no-store")
-	}
-	return f, ignored
 }
 
 // skillMatchFilterFor honours the param for a signed-in caller with recognised skills

@@ -24,7 +24,7 @@ func (f *fakeRemovals) ListPendingSearchRemovals(_ context.Context, ids []int64)
 func pendingRemovalsApp(s searcher, r pendingRemovals) *fiber.App {
 	h := &searchHandlers{search: s, removals: r}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/search", h.SearchJobs)
+	app.Get("/api/v1/jobs/search", newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
@@ -40,7 +40,7 @@ func TestSearchJobsDropsPostingsWhoseRemovalIsQueued(t *testing.T) {
 	removals := &fakeRemovals{gone: []int64{2}}
 	app := pendingRemovalsApp(&fakeSearcher{res: pageOf(1, 2, 3)}, removals)
 
-	status, body := doGet(t, app, "/jobs/search")
+	status, body := doGet(t, app, "/api/v1/jobs/search")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -60,7 +60,7 @@ func TestSearchJobsDropsPostingsWhoseRemovalIsQueued(t *testing.T) {
 func TestSearchJobsKeepsThePageWhenNothingIsQueued(t *testing.T) {
 	app := pendingRemovalsApp(&fakeSearcher{res: pageOf(1, 2)}, &fakeRemovals{})
 
-	_, body := doGet(t, app, "/jobs/search")
+	_, body := doGet(t, app, "/api/v1/jobs/search")
 	if data, _ := body["data"].([]any); len(data) != 2 {
 		t.Errorf("hits = %d, want 2", len(data))
 	}
@@ -73,7 +73,7 @@ func TestSearchJobsKeepsThePageWhenNothingIsQueued(t *testing.T) {
 func TestSearchJobsServesTheIndexAsItIsWhenTheLookupFails(t *testing.T) {
 	app := pendingRemovalsApp(&fakeSearcher{res: pageOf(1, 2)}, &fakeRemovals{err: errors.New("db down")})
 
-	status, body := doGet(t, app, "/jobs/search")
+	status, body := doGet(t, app, "/api/v1/jobs/search")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 — a failed lookup must not fail the search", status)
 	}

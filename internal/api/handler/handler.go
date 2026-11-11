@@ -1125,12 +1125,13 @@ func Register(app *fiber.App, cfg Config) {
 		planHandlers:                 planH,
 		directApplyHandlers:          directApplyH,
 		jobsHandlers:                 jobsH,
+		searchHandlers:               searchH,
 		companiesHandlers:            companiesH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
-	searchH.register(api, mw)
+	searchH.register(api, mw, contract)
 	suggestH.register(api, contract)
 	dictionaryH.register(api, mw, contract)
 	// Beside the search it builds a filter for, though it shares none of its
