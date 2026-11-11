@@ -28,9 +28,118 @@
     },
     {
       "name": "Tailoring"
+    },
+    {
+      "name": "Feedback"
     }
   ],
   "paths": {
+    "/companies/{slug}/vote": {
+      "post": {
+        "operationId": "voteCompany",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VoteResult"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Feedback"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoteRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "clearCompanyVote",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VoteResult"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Feedback"
+        ]
+      }
+    },
     "/dictionary/gaps": {
       "post": {
         "operationId": "recordDictionaryGap",
@@ -291,6 +400,204 @@
         },
         "tags": [
           "Search"
+        ]
+      }
+    },
+    "/jobs/{slug}/ghost-report": {
+      "post": {
+        "operationId": "createGhostReport",
+        "description": "Reports that the job went silent after the caller applied. 403 until the caller's\naddress is confirmed, 409 for a closed job or a second report.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/GhostReport"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Feedback"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GhostReportRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "retractGhostReport",
+        "description": "Withdraws the caller's report. 404 when there is none.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Feedback"
+        ]
+      }
+    },
+    "/jobs/{slug}/vote": {
+      "post": {
+        "operationId": "voteJob",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VoteResult"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Feedback"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoteRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "clearJobVote",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VoteResult"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Feedback"
         ]
       }
     },
@@ -740,6 +1047,96 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SurveyResponses"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/talent-network": {
+      "get": {
+        "operationId": "getTalentNetworkMembership",
+        "description": "With a session or an API key.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TalentNetworkMembership"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Talent Network"
+        ]
+      },
+      "put": {
+        "operationId": "setTalentNetworkVisibility",
+        "description": "Joins or leaves the catalogue. Session cookie only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TalentNetworkMembership"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Talent Network"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TalentNetworkVisibilityUpdate"
               }
             }
           }
@@ -1661,6 +2058,36 @@
           }
         }
       },
+      "GhostReport": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "applied_on"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "applied_on": {
+            "type": "string",
+            "description": "YYYY-MM-DD."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "GhostReportRequest": {
+        "type": "object",
+        "properties": {
+          "applied_on": {
+            "type": "string",
+            "description": "The date the caller applied, YYYY-MM-DD."
+          }
+        }
+      },
       "IgnoredMeta": {
         "type": "object",
         "properties": {
@@ -2431,6 +2858,37 @@
           }
         }
       },
+      "TalentNetworkMembership": {
+        "type": "object",
+        "required": [
+          "talent_network_visibility",
+          "listed"
+        ],
+        "properties": {
+          "talent_network_visibility": {
+            "type": "string",
+            "description": "`off` or `anonymous`."
+          },
+          "talent_handle": {
+            "type": "string",
+            "description": "The handle in the member's public URL, once they have one."
+          },
+          "listed": {
+            "type": "boolean",
+            "description": "Whether the catalogue shows the member right now."
+          }
+        },
+        "description": "The caller's own place in the Talent Network."
+      },
+      "TalentNetworkVisibilityUpdate": {
+        "type": "object",
+        "properties": {
+          "visibility": {
+            "type": "string",
+            "description": "`off` or `anonymous`; anything else is a 400."
+          }
+        }
+      },
       "TalentRole": {
         "type": "object",
         "properties": {
@@ -2493,6 +2951,38 @@
           }
         },
         "description": "Today's AI use on the account's own model credential. No money: the plan bounds use."
+      },
+      "VoteRequest": {
+        "type": "object",
+        "properties": {
+          "vote": {
+            "type": "string",
+            "description": "`up` or `down`; anything else is a 400."
+          }
+        }
+      },
+      "VoteResult": {
+        "type": "object",
+        "required": [
+          "upvote_count",
+          "downvote_count",
+          "my_vote"
+        ],
+        "properties": {
+          "upvote_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "downvote_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "my_vote": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The caller's own vote: 1 up, -1 down, 0 none."
+          }
+        }
       },
       "WatchedCompany": {
         "type": "object",

@@ -74,6 +74,36 @@ func (s *CityMatch) SetCountry(val string) {
 }
 
 // A single item: `{"data": ...}`.
+type ClearCompanyVoteOK struct {
+	Data VoteResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ClearCompanyVoteOK) GetData() VoteResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ClearCompanyVoteOK) SetData(val VoteResult) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ClearJobVoteOK struct {
+	Data VoteResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ClearJobVoteOK) GetData() VoteResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ClearJobVoteOK) SetData(val VoteResult) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type CompleteOnboardingOK struct {
 	Data OnboardingCompleted `json:"data"`
 }
@@ -85,6 +115,21 @@ func (s *CompleteOnboardingOK) GetData() OnboardingCompleted {
 
 // SetData sets the value of Data.
 func (s *CompleteOnboardingOK) SetData(val OnboardingCompleted) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type CreateGhostReportCreated struct {
+	Data GhostReport `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateGhostReportCreated) GetData() GhostReport {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateGhostReportCreated) SetData(val GhostReport) {
 	s.Data = val
 }
 
@@ -559,6 +604,21 @@ func (s *GetTalentMemberOKHeaders) SetResponse(val GetTalentMemberOK) {
 	s.Response = val
 }
 
+// A single item: `{"data": ...}`.
+type GetTalentNetworkMembershipOK struct {
+	Data TalentNetworkMembership `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetTalentNetworkMembershipOK) GetData() TalentNetworkMembership {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetTalentNetworkMembershipOK) SetData(val TalentNetworkMembership) {
+	s.Data = val
+}
+
 type GetTalentPhotoOK struct {
 	Data io.Reader
 }
@@ -649,6 +709,60 @@ func (s *GetWatchingOKHeaders) SetCacheControl(val string) {
 // SetResponse sets the value of Response.
 func (s *GetWatchingOKHeaders) SetResponse(val GetWatchingOK) {
 	s.Response = val
+}
+
+// Ref: #/components/schemas/GhostReport
+type GhostReport struct {
+	JobID int64 `json:"job_id"`
+	// YYYY-MM-DD.
+	AppliedOn string      `json:"applied_on"`
+	CreatedAt OptDateTime `json:"created_at"`
+}
+
+// GetJobID returns the value of JobID.
+func (s *GhostReport) GetJobID() int64 {
+	return s.JobID
+}
+
+// GetAppliedOn returns the value of AppliedOn.
+func (s *GhostReport) GetAppliedOn() string {
+	return s.AppliedOn
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *GhostReport) GetCreatedAt() OptDateTime {
+	return s.CreatedAt
+}
+
+// SetJobID sets the value of JobID.
+func (s *GhostReport) SetJobID(val int64) {
+	s.JobID = val
+}
+
+// SetAppliedOn sets the value of AppliedOn.
+func (s *GhostReport) SetAppliedOn(val string) {
+	s.AppliedOn = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *GhostReport) SetCreatedAt(val OptDateTime) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/GhostReportRequest
+type GhostReportRequest struct {
+	// The date the caller applied, YYYY-MM-DD.
+	AppliedOn OptString `json:"applied_on"`
+}
+
+// GetAppliedOn returns the value of AppliedOn.
+func (s *GhostReportRequest) GetAppliedOn() OptString {
+	return s.AppliedOn
+}
+
+// SetAppliedOn sets the value of AppliedOn.
+func (s *GhostReportRequest) SetAppliedOn(val OptString) {
+	s.AppliedOn = val
 }
 
 // The meta of a single-item answer, sent only to carry a warning.
@@ -988,6 +1102,52 @@ func (o OptBool) Get() (v bool, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptBool) Or(d bool) bool {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptDateTime returns new OptDateTime with value set to v.
+func NewOptDateTime(v time.Time) OptDateTime {
+	return OptDateTime{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptDateTime is optional time.Time.
+type OptDateTime struct {
+	Value time.Time
+	Set   bool
+}
+
+// IsSet returns true if OptDateTime was set.
+func (o OptDateTime) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptDateTime) Reset() {
+	var v time.Time
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptDateTime) SetTo(v time.Time) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptDateTime) Get() (v time.Time, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptDateTime) Or(d time.Time) time.Time {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -1767,6 +1927,9 @@ func (s *ResolvedJob) SetJobSlug(val string) {
 	s.JobSlug = val
 }
 
+// RetractGhostReportNoContent is response for RetractGhostReport operation.
+type RetractGhostReportNoContent struct{}
+
 // Answers an application form asks for, saved once and reused. Each field is optional.
 // Ref: #/components/schemas/ScreeningAnswers
 type ScreeningAnswers struct {
@@ -2019,6 +2182,21 @@ func (s *SetAgentPermissionsOK) GetData() AgentPermissions {
 
 // SetData sets the value of Data.
 func (s *SetAgentPermissionsOK) SetData(val AgentPermissions) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type SetTalentNetworkVisibilityOK struct {
+	Data TalentNetworkMembership `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SetTalentNetworkVisibilityOK) GetData() TalentNetworkMembership {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SetTalentNetworkVisibilityOK) SetData(val TalentNetworkMembership) {
 	s.Data = val
 }
 
@@ -2548,6 +2726,63 @@ func (s *TalentMember) SetHasPhoto(val bool) {
 	s.HasPhoto = val
 }
 
+// The caller's own place in the Talent Network.
+// Ref: #/components/schemas/TalentNetworkMembership
+type TalentNetworkMembership struct {
+	// `off` or `anonymous`.
+	TalentNetworkVisibility string `json:"talent_network_visibility"`
+	// The handle in the member's public URL, once they have one.
+	TalentHandle OptString `json:"talent_handle"`
+	// Whether the catalogue shows the member right now.
+	Listed bool `json:"listed"`
+}
+
+// GetTalentNetworkVisibility returns the value of TalentNetworkVisibility.
+func (s *TalentNetworkMembership) GetTalentNetworkVisibility() string {
+	return s.TalentNetworkVisibility
+}
+
+// GetTalentHandle returns the value of TalentHandle.
+func (s *TalentNetworkMembership) GetTalentHandle() OptString {
+	return s.TalentHandle
+}
+
+// GetListed returns the value of Listed.
+func (s *TalentNetworkMembership) GetListed() bool {
+	return s.Listed
+}
+
+// SetTalentNetworkVisibility sets the value of TalentNetworkVisibility.
+func (s *TalentNetworkMembership) SetTalentNetworkVisibility(val string) {
+	s.TalentNetworkVisibility = val
+}
+
+// SetTalentHandle sets the value of TalentHandle.
+func (s *TalentNetworkMembership) SetTalentHandle(val OptString) {
+	s.TalentHandle = val
+}
+
+// SetListed sets the value of Listed.
+func (s *TalentNetworkMembership) SetListed(val bool) {
+	s.Listed = val
+}
+
+// Ref: #/components/schemas/TalentNetworkVisibilityUpdate
+type TalentNetworkVisibilityUpdate struct {
+	// `off` or `anonymous`; anything else is a 400.
+	Visibility OptString `json:"visibility"`
+}
+
+// GetVisibility returns the value of Visibility.
+func (s *TalentNetworkVisibilityUpdate) GetVisibility() OptString {
+	return s.Visibility
+}
+
+// SetVisibility sets the value of Visibility.
+func (s *TalentNetworkVisibilityUpdate) SetVisibility(val OptString) {
+	s.Visibility = val
+}
+
 // One role of a work history, with everything nameable removed.
 // Ref: #/components/schemas/TalentRole
 type TalentRole struct {
@@ -2749,6 +2984,90 @@ func (s *Usage) SetPeriod(val string) {
 // SetResetsAt sets the value of ResetsAt.
 func (s *Usage) SetResetsAt(val time.Time) {
 	s.ResetsAt = val
+}
+
+// A single item: `{"data": ...}`.
+type VoteCompanyOK struct {
+	Data VoteResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *VoteCompanyOK) GetData() VoteResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *VoteCompanyOK) SetData(val VoteResult) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type VoteJobOK struct {
+	Data VoteResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *VoteJobOK) GetData() VoteResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *VoteJobOK) SetData(val VoteResult) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/VoteRequest
+type VoteRequest struct {
+	// `up` or `down`; anything else is a 400.
+	Vote OptString `json:"vote"`
+}
+
+// GetVote returns the value of Vote.
+func (s *VoteRequest) GetVote() OptString {
+	return s.Vote
+}
+
+// SetVote sets the value of Vote.
+func (s *VoteRequest) SetVote(val OptString) {
+	s.Vote = val
+}
+
+// Ref: #/components/schemas/VoteResult
+type VoteResult struct {
+	UpvoteCount   int64 `json:"upvote_count"`
+	DownvoteCount int64 `json:"downvote_count"`
+	// The caller's own vote: 1 up, -1 down, 0 none.
+	MyVote int64 `json:"my_vote"`
+}
+
+// GetUpvoteCount returns the value of UpvoteCount.
+func (s *VoteResult) GetUpvoteCount() int64 {
+	return s.UpvoteCount
+}
+
+// GetDownvoteCount returns the value of DownvoteCount.
+func (s *VoteResult) GetDownvoteCount() int64 {
+	return s.DownvoteCount
+}
+
+// GetMyVote returns the value of MyVote.
+func (s *VoteResult) GetMyVote() int64 {
+	return s.MyVote
+}
+
+// SetUpvoteCount sets the value of UpvoteCount.
+func (s *VoteResult) SetUpvoteCount(val int64) {
+	s.UpvoteCount = val
+}
+
+// SetDownvoteCount sets the value of DownvoteCount.
+func (s *VoteResult) SetDownvoteCount(val int64) {
+	s.DownvoteCount = val
+}
+
+// SetMyVote sets the value of MyVote.
+func (s *VoteResult) SetMyVote(val int64) {
+	s.MyVote = val
 }
 
 // Ref: #/components/schemas/WatchedCompany

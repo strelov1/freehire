@@ -12,6 +12,7 @@ import "./plans.tsp";
 import "./dictionary.tsp";
 import "./jd.tsp";
 import "./forms.tsp";
+import "./feedback.tsp";
 
 using Http;
 

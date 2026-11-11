@@ -12,10 +12,25 @@ type Handler interface {
 	//
 	// PUT /me/watchlist/{slug}
 	AddToWatchlist(ctx context.Context, params AddToWatchlistParams) (*AddToWatchlistOK, error)
+	// ClearCompanyVote implements clearCompanyVote operation.
+	//
+	// DELETE /companies/{slug}/vote
+	ClearCompanyVote(ctx context.Context, params ClearCompanyVoteParams) (*ClearCompanyVoteOK, error)
+	// ClearJobVote implements clearJobVote operation.
+	//
+	// DELETE /jobs/{slug}/vote
+	ClearJobVote(ctx context.Context, params ClearJobVoteParams) (*ClearJobVoteOK, error)
 	// CompleteOnboarding implements completeOnboarding operation.
 	//
 	// POST /me/onboarding/complete
 	CompleteOnboarding(ctx context.Context) (*CompleteOnboardingOK, error)
+	// CreateGhostReport implements createGhostReport operation.
+	//
+	// Reports that the job went silent after the caller applied. 403 until the caller's address is
+	// confirmed, 409 for a closed job or a second report.
+	//
+	// POST /jobs/{slug}/ghost-report
+	CreateGhostReport(ctx context.Context, req *GhostReportRequest, params CreateGhostReportParams) (*CreateGhostReportCreated, error)
 	// GetAgentPermissions implements getAgentPermissions operation.
 	//
 	// Readable with a session or an API key.
@@ -62,6 +77,12 @@ type Handler interface {
 	//
 	// GET /talent/{handle}
 	GetTalentMember(ctx context.Context, params GetTalentMemberParams) (*GetTalentMemberOKHeaders, error)
+	// GetTalentNetworkMembership implements getTalentNetworkMembership operation.
+	//
+	// With a session or an API key.
+	//
+	// GET /me/talent-network
+	GetTalentNetworkMembership(ctx context.Context) (*GetTalentNetworkMembershipOK, error)
 	// GetTalentPhoto implements getTalentPhoto operation.
 	//
 	// The member's photo, blurred past recognition. The original is never served.
@@ -113,6 +134,12 @@ type Handler interface {
 	//
 	// POST /me/jd/resolve
 	ResolveJobDescription(ctx context.Context, req *JobDescriptionSource) (*ResolveJobDescriptionOK, error)
+	// RetractGhostReport implements retractGhostReport operation.
+	//
+	// Withdraws the caller's report. 404 when there is none.
+	//
+	// DELETE /jobs/{slug}/ghost-report
+	RetractGhostReport(ctx context.Context, params RetractGhostReportParams) error
 	// SearchCities implements searchCities operation.
 	//
 	// Up to 20 cities whose name matches, optionally within one country.
@@ -125,6 +152,12 @@ type Handler interface {
 	//
 	// PUT /me/agent-permissions
 	SetAgentPermissions(ctx context.Context, req *AgentPermissions) (*SetAgentPermissionsOK, error)
+	// SetTalentNetworkVisibility implements setTalentNetworkVisibility operation.
+	//
+	// Joins or leaves the catalogue. Session cookie only.
+	//
+	// PUT /me/talent-network
+	SetTalentNetworkVisibility(ctx context.Context, req *TalentNetworkVisibilityUpdate) (*SetTalentNetworkVisibilityOK, error)
 	// Suggest implements suggest operation.
 	//
 	// Search-box suggestions. 503 when search is not configured.
@@ -147,6 +180,14 @@ type Handler interface {
 	//
 	// PUT /me/survey
 	UpdateSurvey(ctx context.Context, req *SurveyResponses) (*UpdateSurveyOK, error)
+	// VoteCompany implements voteCompany operation.
+	//
+	// POST /companies/{slug}/vote
+	VoteCompany(ctx context.Context, req *VoteRequest, params VoteCompanyParams) (*VoteCompanyOK, error)
+	// VoteJob implements voteJob operation.
+	//
+	// POST /jobs/{slug}/vote
+	VoteJob(ctx context.Context, req *VoteRequest, params VoteJobParams) (*VoteJobOK, error)
 	// NewError creates *ProblemStatusCode from error returned by handler.
 	//
 	// Used for common default response.
