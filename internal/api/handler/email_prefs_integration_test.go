@@ -13,9 +13,11 @@
 package handler
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -447,16 +449,43 @@ func TestEmailPrefs_UndecodableBodyIsA400InTheUsualShape(t *testing.T) {
 }
 
 // Fiber answers HEAD on every Get route; a route moved into the contract must keep
-// doing so (headers and status of the GET, no body), not fall to the generated
-// router's 405.
+// doing so (the GET's status, no body), not fall to the generated router's 405. Both
+// requests go down one raw connection, because app.Test and net/http's client each
+// drop or retry around a body sent after HEAD: here such a body sits in front of the
+// GET's response and that response fails to parse.
 func TestEmailPrefs_HeadIsServedLikeGetWithoutABody(t *testing.T) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	app := newEmailPrefsApp(queries)
 	token := mintPrefsToken(t, seedPrefsUser(t, pool, "head@example.test"), emailprefs.GroupNews)
 
-	res, body := doPrefs(t, app, http.MethodHead, "/api/v1/email-prefs?t="+token, "")
-	if res.Status != http.StatusOK || body != "" {
-		t.Errorf("status = %d, body = %q; want 200 and no body", res.Status, body)
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	go func() { _ = app.Listener(ln) }()
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	target := "/api/v1/email-prefs?t=" + token
+	if _, err := io.WriteString(conn, "HEAD "+target+" HTTP/1.1\r\nHost: x\r\n\r\n"+
+		"GET "+target+" HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	br := bufio.NewReader(conn)
+	for _, method := range []string{http.MethodHead, http.MethodGet} {
+		res, err := http.ReadResponse(br, &http.Request{Method: method})
+		if err != nil {
+			t.Fatalf("%s response: %v", method, err)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("%s: status = %d, want 200", method, res.StatusCode)
+		}
 	}
 }
