@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/apptimeline"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -20,7 +22,7 @@ func newTimelineHandlers(queries *db.Queries) *timelineHandlers {
 	return &timelineHandlers{timeline: apptimeline.New(queries)}
 }
 
-func (h *timelineHandlers) register(api fiber.Router, mw middleware) {
+func (h *timelineHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Its own namespace rather than a segment under /me/tracking. GET /me/tracking/:slug
 	// is mounted from gmail.go and only avoids shadowing its static siblings because the
 	// registration order is deliberate — both sides say so (see the comment there and the
@@ -31,14 +33,14 @@ func (h *timelineHandlers) register(api fiber.Router, mw middleware) {
 	//
 	// mw.key like the rest of /me: a cookie or a full-scope key, so a caller's own harness
 	// can read its history.
-	api.Get("/me/timeline", mw.key, h.Timeline)
+	api.Get("/me/timeline", mw.key, contract)
 	// The calendar's second layer, on its own path rather than folded into the timeline.
 	// /me/timeline is published with `data` as a list of events and is read by the CLI
 	// and MCP surfaces; a second list inside it would either break that shape or hide
 	// the meetings in `meta`. The day panel's no-fetch rule does not require ONE request
 	// — it requires the data to be in hand before a day is clicked, and the page asks
 	// for both ranges together.
-	api.Get("/me/interviews", mw.key, h.Interviews)
+	api.Get("/me/interviews", mw.key, contract)
 }
 
 // timelineEvent is one ledger event on the wire — a projection of apptimeline.Event, and
@@ -90,94 +92,93 @@ func timelineEvents(events []apptimeline.Event) []timelineEvent {
 	return out
 }
 
-// Timeline serves the caller's events between from and to inclusive, oldest first.
-func (h *timelineHandlers) Timeline(c *fiber.Ctx) error {
-	userID, from, to, err := timelineRequest(c)
+// GetTimeline serves the caller's events between from and to inclusive, oldest first.
+func (h *timelineHandlers) GetTimeline(ctx context.Context, params apigen.GetTimelineParams) (*apigen.GetTimelineOK, error) {
+	userID, from, to, err := timelineRequest(ctx, params.From, params.To)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	events, err := h.timeline.Range(c.Context(), userID, from, to)
+	events, err := h.timeline.Range(ctx, userID, from, to)
 	if err != nil {
 		if errors.Is(err, apptimeline.ErrInvalidRange) {
-			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+			return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 		}
-		return err
+		return nil, err
 	}
 
-	out := timelineEvents(events)
-	return c.JSON(fiber.Map{
-		"data": out,
-		"meta": fiber.Map{"from": from, "to": to, "count": len(out)},
-	})
+	out := make([]apigen.TimelineEvent, 0, len(events))
+	for _, e := range events {
+		out = append(out, apigen.TimelineEvent{
+			ID:            e.ID,
+			Kind:          e.Kind,
+			Signal:        optString(e.Signal),
+			Source:        e.Source,
+			Observed:      e.Observed,
+			OccurredAt:    e.OccurredAt,
+			CompanySlug:   e.CompanySlug,
+			RoleTitle:     optString(e.RoleTitle),
+			ApplicationID: optInt64(e.ApplicationID),
+			JobSlug:       optString(e.JobSlug),
+			EmailID:       optInt64(e.EmailID),
+			EmailSubject:  optString(e.EmailSubject),
+		})
+	}
+	return &apigen.GetTimelineOK{Data: out, Meta: apigen.TimelineMeta{From: from, To: to, Count: int64(len(out))}}, nil
 }
 
-// scheduledInterview is one arranged meeting on the wire.
+// GetInterviews serves the caller's arranged meetings whose start falls in the range.
 //
-// Separate from timelineEvent because it is a different kind of fact: an event happened
-// and cannot change, a meeting is arranged and can move or be called off. Rendering them
-// with one shape would invite the view to draw them with one meaning.
-type scheduledInterview struct {
-	ID            int64     `json:"id"`
-	ApplicationID int64     `json:"application_id"`
-	StartsAt      time.Time `json:"starts_at"`
-	// A pointer, not a time.Time with omitempty: encoding/json has no notion of an empty
-	// struct, so the tag is inert there and a meeting with no end serialises as year 1.
-	// An all-day entry legitimately has no end, and a reader that trusted the field would
-	// draw it two millennia long.
-	EndsAt  *time.Time `json:"ends_at,omitempty"`
-	Title   string     `json:"title,omitempty"`
-	JoinURL string     `json:"join_url,omitempty"`
-	// Status is suggested | confirmed | cancelled — the matcher's certainty, and then
-	// the organiser's. A cancelled meeting is served, not withheld.
-	Status      string `json:"status"`
-	CompanySlug string `json:"company_slug"`
-	RoleTitle   string `json:"role_title,omitempty"`
-	JobSlug     string `json:"job_slug,omitempty"`
-}
-
-// Interviews serves the caller's arranged meetings whose start falls in the range.
-func (h *timelineHandlers) Interviews(c *fiber.Ctx) error {
-	userID, from, to, err := timelineRequest(c)
+// A meeting is a different kind of fact from a timeline event: an event happened and
+// cannot change, a meeting is arranged and can move or be called off. Rendering them with
+// one shape would invite the view to draw them with one meaning.
+func (h *timelineHandlers) GetInterviews(ctx context.Context, params apigen.GetInterviewsParams) (*apigen.GetInterviewsOK, error) {
+	userID, from, to, err := timelineRequest(ctx, params.From, params.To)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	found, err := h.timeline.Interviews(c.Context(), userID, from, to)
+	found, err := h.timeline.Interviews(ctx, userID, from, to)
 	if err != nil {
 		if errors.Is(err, apptimeline.ErrInvalidRange) {
-			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+			return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 		}
-		return err
+		return nil, err
 	}
 
-	out := make([]scheduledInterview, 0, len(found))
+	out := make([]apigen.ScheduledInterview, 0, len(found))
 	for _, iv := range found {
-		out = append(out, scheduledInterview{
+		out = append(out, apigen.ScheduledInterview{
 			ID:            iv.ID,
 			ApplicationID: iv.ApplicationID,
 			StartsAt:      iv.StartsAt,
-			EndsAt:        optionalTime(iv.EndsAt),
-			Title:         iv.Title,
-			JoinURL:       iv.JoinURL,
-			Status:        iv.Status,
-			CompanySlug:   iv.CompanySlug,
-			RoleTitle:     iv.RoleTitle,
-			JobSlug:       iv.JobSlug,
+			// An all-day entry legitimately has no end; a zero time is left out, not
+			// sent as the year 1, which a reader would draw two millennia long.
+			EndsAt:      optTime(iv.EndsAt),
+			Title:       optString(iv.Title),
+			JoinURL:     optString(iv.JoinURL),
+			Status:      iv.Status,
+			CompanySlug: iv.CompanySlug,
+			RoleTitle:   optString(iv.RoleTitle),
+			JobSlug:     optString(iv.JobSlug),
 		})
 	}
-	return c.JSON(fiber.Map{
-		"data": out,
-		"meta": fiber.Map{"from": from, "to": to, "count": len(out)},
-	})
+	return &apigen.GetInterviewsOK{Data: out, Meta: apigen.TimelineMeta{From: from, To: to, Count: int64(len(out))}}, nil
 }
 
-// optionalTime renders a zero time as absent rather than as the year 1.
-func optionalTime(at time.Time) *time.Time {
-	if at.IsZero() {
-		return nil
+func optInt64(n int64) apigen.OptInt64 {
+	if n == 0 {
+		return apigen.OptInt64{}
 	}
-	return &at
+	return apigen.NewOptInt64(n)
+}
+
+// optTime renders a zero time as absent rather than as the year 1.
+func optTime(at time.Time) apigen.OptDateTime {
+	if at.IsZero() {
+		return apigen.OptDateTime{}
+	}
+	return apigen.NewOptDateTime(at)
 }
 
 // timelineRequest reads the caller and the range both calendar layers are asked for.
@@ -185,14 +186,14 @@ func optionalTime(at time.Time) *time.Time {
 // Shared so a change to how a range is read cannot reach one layer and not the other:
 // the view puts the two answers on one grid, and a bound parsed differently by each would
 // paint half a month with nothing to say why.
-func timelineRequest(c *fiber.Ctx) (userID int64, from, to time.Time, err error) {
-	if userID, err = requireUserID(c); err != nil {
+func timelineRequest(ctx context.Context, rawFrom, rawTo apigen.OptString) (userID int64, from, to time.Time, err error) {
+	if userID, err = requireUserIDFromContext(ctx); err != nil {
 		return 0, time.Time{}, time.Time{}, err
 	}
-	if from, err = timelineBound(c, "from"); err != nil {
+	if from, err = timelineBound("from", rawFrom.Value); err != nil {
 		return 0, time.Time{}, time.Time{}, err
 	}
-	if to, err = timelineBound(c, "to"); err != nil {
+	if to, err = timelineBound("to", rawTo.Value); err != nil {
 		return 0, time.Time{}, time.Time{}, err
 	}
 	return userID, from, to, nil
@@ -201,8 +202,7 @@ func timelineRequest(c *fiber.Ctx) (userID int64, from, to time.Time, err error)
 // timelineBound parses one RFC3339 bound. Both are required and neither is defaulted: a
 // missing bound silently widened to "the last month" would answer a question the caller
 // did not ask, and the reader's month is not the server's to guess.
-func timelineBound(c *fiber.Ctx, name string) (time.Time, error) {
-	raw := c.Query(name)
+func timelineBound(name, raw string) (time.Time, error) {
 	if raw == "" {
 		return time.Time{}, fiber.NewError(fiber.StatusBadRequest, "both from and to are required, as RFC3339 instants")
 	}

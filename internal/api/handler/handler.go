@@ -1094,7 +1094,8 @@ func Register(app *fiber.App, cfg Config) {
 		companyProcessReportHandlers: companyProcessReportH,
 		contributionHandlers:         contributionsH, marketPulseHandlers: marketPulseH, promoHandlers: promoH,
 		mentorSuggestionsHandlers: mentorSuggestionsH,
-		savedSearchHandlers:       savedSearchH, subscriptionHandlers: subscriptionH})
+		savedSearchHandlers:       savedSearchH, subscriptionHandlers: subscriptionH,
+		mentorSuggestionsHandlers: mentorSuggestionsH, timelineHandlers: timelineH, profileHandlers: profileH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1145,7 +1146,7 @@ func Register(app *fiber.App, cfg Config) {
 	trackingH.register(api, mw)
 	// The ledger's dated read, behind the tracking calendar. Its own namespace, not a
 	// segment under /me/tracking — see the comment on its register.
-	timelineH.register(api, mw)
+	timelineH.register(api, mw, contract)
 	votesH.register(api, mw, contract)
 	companyWatchH.register(api, mw, contract)
 	companyFeedbackH.register(api, mw, contract)
@@ -1213,7 +1214,7 @@ func Register(app *fiber.App, cfg Config) {
 	authH.registerV2(app.Group("/api/v2"), mw)
 
 	// The per-user profile singleton (see profileHandlers).
-	profileH.register(api, mw)
+	profileH.register(api, mw, contract)
 	// The candidate's own screening answers (see screeningAnswersHandlers).
 	screeningAnswersH.register(api, mw, contract)
 	surveyH.register(api, mw, contract)

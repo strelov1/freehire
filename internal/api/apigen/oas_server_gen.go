@@ -71,6 +71,12 @@ type Handler interface {
 	//
 	// DELETE /companies/{slug}/feedback
 	DeleteCompanyFeedback(ctx context.Context, params DeleteCompanyFeedbackParams) (*DeleteCompanyFeedbackOK, error)
+	// DeleteProfile implements deleteProfile operation.
+	//
+	// Clears the profile. Idempotent: deleting when none exists is still a 204.
+	//
+	// DELETE /me/profile
+	DeleteProfile(ctx context.Context) error
 	// DeleteSavedSearch implements deleteSavedSearch operation.
 	//
 	// DELETE /me/searches/{id}
@@ -105,6 +111,12 @@ type Handler interface {
 	//
 	// GET /email-prefs
 	GetEmailPrefs(ctx context.Context, params GetEmailPrefsParams) (*GetEmailPrefsOK, error)
+	// GetInterviews implements getInterviews operation.
+	//
+	// The caller's arranged meetings whose start falls in the range.
+	//
+	// GET /me/interviews
+	GetInterviews(ctx context.Context, params GetInterviewsParams) (*GetInterviewsOK, error)
 	// GetInvite implements getInvite operation.
 	//
 	// The caller's invite link and what it has earned. Session cookie only.
@@ -137,6 +149,12 @@ type Handler interface {
 	//
 	// GET /plans
 	GetPlans(ctx context.Context) (*GetPlansOK, error)
+	// GetProfile implements getProfile operation.
+	//
+	// `data` is null before the first save.
+	//
+	// GET /me/profile
+	GetProfile(ctx context.Context) (*GetProfileOK, error)
 	// GetScreeningAnswers implements getScreeningAnswers operation.
 	//
 	// `data` is null before the first save.
@@ -169,6 +187,12 @@ type Handler interface {
 	//
 	// GET /talent/{handle}/photo
 	GetTalentPhoto(ctx context.Context, params GetTalentPhotoParams) (*GetTalentPhotoOKHeaders, error)
+	// GetTimeline implements getTimeline operation.
+	//
+	// The caller's events between `from` and `to` inclusive, oldest first.
+	//
+	// GET /me/timeline
+	GetTimeline(ctx context.Context, params GetTimelineParams) (*GetTimelineOK, error)
 	// GetWatching implements getWatching operation.
 	//
 	// GET /me/watchlist/{slug}
@@ -265,6 +289,12 @@ type Handler interface {
 	//
 	// POST /companies/{slug}/relations
 	ProposeCompanyRelation(ctx context.Context, req *CompanyRelationRequest, params ProposeCompanyRelationParams) (*ProposeCompanyRelationCreated, error)
+	// PutProfile implements putProfile operation.
+	//
+	// Creates or replaces the profile.
+	//
+	// PUT /me/profile
+	PutProfile(ctx context.Context, req *ProfileUpdate) (*PutProfileOK, error)
 	// RecordDictionaryGap implements recordDictionaryGap operation.
 	//
 	// Asks for a term the dictionary does not resolve. 409 when it already does. Session cookie only.

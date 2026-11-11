@@ -29,7 +29,7 @@ func TestProfileRegister_ReadTakesAKeyAndWritesDoNot(t *testing.T) {
 		key:    namedGate("key"),
 		cvKey:  namedGate("cvKey"),
 		cookie: namedGate("cookie"),
-	})
+	}, newContract(contractHandlers{profileHandlers: &profileHandlers{}}))
 
 	for _, tc := range []struct {
 		method, want string

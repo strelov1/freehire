@@ -44,7 +44,7 @@ func meTimelineApp(t *testing.T, store apptimeline.Queries) (*fiber.App, string)
 	}
 	h := &timelineHandlers{timeline: apptimeline.New(store)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/timeline", auth.RequireAuth(iss, testVersions), h.Timeline)
+	app.Get("/api/v1/me/timeline", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{timelineHandlers: h}))
 	return app, token
 }
 
@@ -68,7 +68,7 @@ func getTimeline(t *testing.T, app *fiber.App, path, token string) (int, []byte)
 
 func TestTimeline_RequiresAuth(t *testing.T) {
 	app, _ := meTimelineApp(t, nil)
-	if got, _ := getTimeline(t, app, "/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", ""); got != fiber.StatusUnauthorized {
+	if got, _ := getTimeline(t, app, "/api/v1/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", ""); got != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", got)
 	}
 }
@@ -76,11 +76,11 @@ func TestTimeline_RequiresAuth(t *testing.T) {
 // Each of these is refused before the store is consulted — the nil store proves it.
 func TestTimeline_RefusesABadRangeBeforeReachingTheStore(t *testing.T) {
 	cases := map[string]string{
-		"no bounds":       "/me/timeline",
-		"only a lower":    "/me/timeline?from=2026-08-01T00:00:00Z",
-		"unparseable":     "/me/timeline?from=August&to=2026-08-31T00:00:00Z",
-		"inverted":        "/me/timeline?from=2026-08-31T00:00:00Z&to=2026-08-01T00:00:00Z",
-		"beyond the span": "/me/timeline?from=2020-01-01T00:00:00Z&to=2026-08-01T00:00:00Z",
+		"no bounds":       "/api/v1/me/timeline",
+		"only a lower":    "/api/v1/me/timeline?from=2026-08-01T00:00:00Z",
+		"unparseable":     "/api/v1/me/timeline?from=August&to=2026-08-31T00:00:00Z",
+		"inverted":        "/api/v1/me/timeline?from=2026-08-31T00:00:00Z&to=2026-08-01T00:00:00Z",
+		"beyond the span": "/api/v1/me/timeline?from=2020-01-01T00:00:00Z&to=2026-08-01T00:00:00Z",
 	}
 	for name, path := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -106,7 +106,7 @@ func TestTimeline_RendersTheDocumentedEnvelope(t *testing.T) {
 		EmailSubject: pgtype.Text{String: "Invitation to interview", Valid: true},
 	}}})
 
-	status, body := getTimeline(t, app, "/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", token)
+	status, body := getTimeline(t, app, "/api/v1/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", token)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 (body %s)", status, body)
 	}
@@ -155,7 +155,7 @@ func TestTimeline_RendersTheDocumentedEnvelope(t *testing.T) {
 func TestTimeline_AQuietRangeAnswersEmptyAndNamesItsBounds(t *testing.T) {
 	app, token := meTimelineApp(t, timelineStore{})
 
-	status, body := getTimeline(t, app, "/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", token)
+	status, body := getTimeline(t, app, "/api/v1/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", token)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 (body %s)", status, body)
 	}
@@ -195,7 +195,7 @@ func TestTimeline_AHandRecordedEventCarriesNoMessage(t *testing.T) {
 		CompanySlug: "linear",
 	}}})
 
-	status, body := getTimeline(t, app, "/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", token)
+	status, body := getTimeline(t, app, "/api/v1/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", token)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 (body %s)", status, body)
 	}
@@ -245,9 +245,9 @@ func TestInterviews_ServesArrangedMeetingsIncludingCancelledOnes(t *testing.T) {
 	}}
 	h := &timelineHandlers{timeline: apptimeline.New(store)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/interviews", auth.RequireAuth(iss, testVersions), h.Interviews)
+	app.Get("/api/v1/me/interviews", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{timelineHandlers: h}))
 
-	status, body := getTimeline(t, app, "/me/interviews?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", token)
+	status, body := getTimeline(t, app, "/api/v1/me/interviews?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", token)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 (body %s)", status, body)
 	}
@@ -285,15 +285,29 @@ func TestInterviews_RefusesABadRangeAndRequiresAuth(t *testing.T) {
 	}
 	h := &timelineHandlers{timeline: apptimeline.New(nil)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/interviews", auth.RequireAuth(iss, testVersions), h.Interviews)
+	app.Get("/api/v1/me/interviews", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{timelineHandlers: h}))
 
-	if got, _ := getTimeline(t, app, "/me/interviews?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", ""); got != fiber.StatusUnauthorized {
+	if got, _ := getTimeline(t, app, "/api/v1/me/interviews?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", ""); got != fiber.StatusUnauthorized {
 		t.Errorf("unauthenticated status = %d, want 401", got)
 	}
 	// Refused before the store is reached — the nil store proves it, as it does for the
 	// timeline read, and both share one bound rule so neither can accept what the other
 	// refuses.
-	if got, _ := getTimeline(t, app, "/me/interviews?from=2020-01-01T00:00:00Z&to=2026-08-01T00:00:00Z", token); got != fiber.StatusBadRequest {
+	if got, _ := getTimeline(t, app, "/api/v1/me/interviews?from=2020-01-01T00:00:00Z&to=2026-08-01T00:00:00Z", token); got != fiber.StatusBadRequest {
 		t.Errorf("over-long range status = %d, want 400", got)
 	}
+}
+
+// scheduledInterview is one meeting as the API serves it, for the tests to decode.
+type scheduledInterview struct {
+	ID            int64      `json:"id"`
+	ApplicationID int64      `json:"application_id"`
+	StartsAt      time.Time  `json:"starts_at"`
+	EndsAt        *time.Time `json:"ends_at,omitempty"`
+	Title         string     `json:"title,omitempty"`
+	JoinURL       string     `json:"join_url,omitempty"`
+	Status        string     `json:"status"`
+	CompanySlug   string     `json:"company_slug"`
+	RoleTitle     string     `json:"role_title,omitempty"`
+	JobSlug       string     `json:"job_slug,omitempty"`
 }

@@ -54,6 +54,8 @@ type contractHandlers struct {
 	*mentorSuggestionsHandlers
 	*savedSearchHandlers
 	*subscriptionHandlers
+	*timelineHandlers
+	*profileHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 )
@@ -69,9 +70,10 @@ func profileApp(t *testing.T, repo *fakeProfileRepo) (*fiber.App, string) {
 	h := &profileHandlers{userProfile: userprofile.New(repo)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss, testVersions)
-	app.Get("/me/profile", g, h.GetProfile)
-	app.Put("/me/profile", g, h.PutProfile)
-	app.Delete("/me/profile", g, h.DeleteProfile)
+	contract := newContract(contractHandlers{profileHandlers: h})
+	app.Get("/api/v1/me/profile", g, contract)
+	app.Put("/api/v1/me/profile", g, contract)
+	app.Delete("/api/v1/me/profile", g, contract)
 	return app, token
 }
 
@@ -79,9 +81,9 @@ func doProfile(t *testing.T, app *fiber.App, method, body, token string) *http.R
 	t.Helper()
 	var r *http.Request
 	if body == "" {
-		r = httptest.NewRequestWithContext(context.Background(), method, "/me/profile", nil)
+		r = httptest.NewRequestWithContext(context.Background(), method, "/api/v1/me/profile", nil)
 	} else {
-		r = httptest.NewRequestWithContext(context.Background(), method, "/me/profile", strings.NewReader(body))
+		r = httptest.NewRequestWithContext(context.Background(), method, "/api/v1/me/profile", strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 	}
 	if token != "" {
@@ -505,4 +507,20 @@ func TestPutProfile_RejectsMalformedJobLanguage(t *testing.T) {
 	if resp.StatusCode != fiber.StatusBadRequest || repo.upserted.UserID != 0 {
 		t.Fatalf("status = %d, persisted = %v", resp.StatusCode, repo.upserted)
 	}
+}
+
+// profileResponse is the profile as the API serves it, for the tests to decode.
+type profileResponse struct {
+	Specializations     []string                    `json:"specializations"`
+	Skills              []string                    `json:"skills"`
+	Seniorities         []string                    `json:"seniorities"`
+	ExcludedSkills      []string                    `json:"excluded_skills"`
+	ExcludedSources     []string                    `json:"excluded_sources"`
+	JobLanguages        []string                    `json:"job_languages"`
+	ExcludedCompanies   []string                    `json:"excluded_companies"`
+	LocationPreferences json.RawMessage             `json:"location_preferences"`
+	DerivedLocation     *derivedLocation            `json:"derived_location"`
+	CV                  *resumeextract.Professional `json:"cv"`
+	CreatedAt           *time.Time                  `json:"created_at"`
+	UpdatedAt           *time.Time                  `json:"updated_at"`
 }
