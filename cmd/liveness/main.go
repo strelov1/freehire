@@ -157,7 +157,7 @@ const staleCutoff = sources.DefaultSweepGrace
 // (internal/ingest/sources/whatjobs.go's whatjobsMarkets — ~50 as of writing), each its own
 // registered provider ("whatjobs" for the bare US market, "whatjobs-<cc>" for every
 // other), all sharing the identical unprobeable-URL shape. Matching by prefix against the
-// live registry (see the derivation in run()) means a newly onboarded market is covered
+// taxonomy registry (see the derivation in run()) means a newly onboarded market is covered
 // automatically instead of silently falling through an enumerated list.
 //
 // adzuna reaches the same classification by a different route, and the obvious objection —
@@ -256,17 +256,15 @@ func run() int {
 		}
 	}
 
-	// Derived from the live registry rather than enumerated (see
-	// expireDespiteRegisteredPrefixes), so a newly onboarded whatjobs market is covered this
-	// run without being named anywhere. That construction is why the list holds prefixes,
-	// and it is a complete answer for a member being ADDED — but not for one being ABSENT,
-	// which is what a missing crawl credential produces. Guard that case explicitly.
+	// Keep the credential guard on the live crawl registry. The fallback's membership
+	// and grace come from taxonomy, so a market missing this host's credentials still
+	// has an age-based closure path instead of being excluded from every path.
 	if missing := unmatchedPrefixes(crawlProviders, expireDespiteRegisteredPrefixes); len(missing) > 0 {
 		log.Printf("liveness: %q matches no registered ATS provider — refusing to run (a source that cannot be age-expired would silently fall to the URL probe instead)",
 			strings.Join(missing, ", "))
 		return 1
 	}
-	expireDespiteRegistered := matchingProviders(crawlProviders, expireDespiteRegisteredPrefixes)
+	expireDespiteRegistered, registeredSweepGrace := registeredAgeFallback()
 
 	// Appended AFTER the guard above so the empty-ATS-registry safeguard still keys
 	// off atsProviders alone. See unsignalledSources for why these are excluded.
@@ -373,7 +371,7 @@ func run() int {
 	// these sources are re-crawled, so age alone says nothing, and the crawl's own reading
 	// has to agree before the guess is allowed to close anything. See unseenWindow.
 	sourcesToExpireDespiteRegistered := filterSources(expireDespiteRegistered, *sourceFilter)
-	unseenFor := unseenWindow(sourcesToExpireDespiteRegistered, sources.SweepGraceWindows(registry))
+	unseenFor := unseenWindow(sourcesToExpireDespiteRegistered, registeredSweepGrace)
 	expiredRegistered, err := queries.CloseStaleUnseenUnprobeableJobs(ctx, db.CloseStaleUnseenUnprobeableJobsParams{
 		Sources:    sourcesToExpireDespiteRegistered,
 		Cutoff:     pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
@@ -555,6 +553,12 @@ func applyHimalayasVerdicts(ctx context.Context, client *http.Client, queries *d
 		}
 		return liveness.Expired, "absent_from_sitemap"
 	})
+}
+
+// registeredAgeFallback includes every classified market, even without a local crawl credential.
+func registeredAgeFallback() ([]string, map[string]time.Duration) {
+	registry := sources.Taxonomy()
+	return matchingProviders(providerKeys(registry), expireDespiteRegisteredPrefixes), sources.SweepGraceWindows(registry)
 }
 
 // Classification must not depend on whether this host can authenticate a crawl.

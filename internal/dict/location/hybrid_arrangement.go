@@ -27,7 +27,7 @@ func HybridArrangementStated(desc string) bool {
 		return false
 	}
 	english := phraseGuards{
-		negations:      []string{"not ", "no ", "experience ", "previous ", "prior "},
+		negations:      []string{"not ", "no ", "never ", "experience ", "previous ", "prior "},
 		refusals:       []string{"not available", "not offered", "preferred", "experience"},
 		negationWindow: 60,
 	}
@@ -61,7 +61,7 @@ var englishHybridStatements = regexp.MustCompile(
 
 var (
 	optionalArrangementBefore = regexp.MustCompile(`\boptional(?:ly)?\s*$`)
-	optionalArrangementAfter  = regexp.MustCompile(`^\s*(?:(?:work )?(?:arrangements?|models?|schedules?|options?)\s+)?(?:(?:is|are|remains?|may be|can be)\s+)?optional(?:ly)?\b`)
+	optionalArrangementAfter  = regexp.MustCompile(`^\s*(?:(?:work )?(?:arrangements?|models?|schedules?|options?)\s+)?(?:(?:is|are|remains?|may be|can be)\s+)?(?:(?:entirely|completely|totally|fully|purely|wholly|always|strictly)\s+){0,2}optional(?:ly)?\b`)
 	conditionalArrangement    = regexp.MustCompile(`^\s*(?:if|when) you (?:choose|select|opt for) (?:the |an? )?optional hybrid\b`)
 )
 
