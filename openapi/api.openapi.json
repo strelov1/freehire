@@ -21,6 +21,12 @@
       "name": "Account"
     },
     {
+      "name": "Promo"
+    },
+    {
+      "name": "Mentorship"
+    },
+    {
       "name": "Plans"
     },
     {
@@ -31,9 +37,187 @@
     },
     {
       "name": "Feedback"
+    },
+    {
+      "name": "Answer bank"
+    },
+    {
+      "name": "Moderation"
+    },
+    {
+      "name": "Contributions"
     }
   ],
   "paths": {
+    "/companies/{slug}/process-reports": {
+      "post": {
+        "operationId": "fileProcessReport",
+        "description": "409 when the caller already reported this kind.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ProcessReport"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Feedback"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessReportRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "retractProcessReport",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ProcessReport"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Feedback"
+        ]
+      }
+    },
+    "/companies/{slug}/process-reports/mine": {
+      "get": {
+        "operationId": "myProcessReports",
+        "description": "The kinds the caller has reported for the company.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Feedback"
+        ]
+      }
+    },
     "/companies/{slug}/vote": {
       "post": {
         "operationId": "voteCompany",
@@ -403,6 +587,95 @@
         ]
       }
     },
+    "/jobs/resolve": {
+      "post": {
+        "operationId": "resolveJob",
+        "description": "Finds the catalogue job behind a page, or imports it. 200 when it was already\nthere, 201 when this request created it, 202 when it is queued for later.\nWith a session or an API key.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ResolvedJobPage"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ResolvedJobPage"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "The request has been accepted for processing, but processing has not yet completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ResolvedJobPage"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Contributions"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveJobRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/jobs/{slug}/ghost-report": {
       "post": {
         "operationId": "createGhostReport",
@@ -691,6 +964,191 @@
         }
       }
     },
+    "/me/answer-bank": {
+      "get": {
+        "operationId": "listBankedAnswers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BankedAnswer"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Answer bank"
+        ]
+      },
+      "put": {
+        "operationId": "saveBankedAnswer",
+        "description": "Saves under the question's topic, replacing the answer already there.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Saved"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Answer bank"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveBankedAnswer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/answer-bank/{id}": {
+      "delete": {
+        "operationId": "deleteBankedAnswer",
+        "description": "400 for an id that is not a number, 404 for one the caller does not own.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Deleted"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Answer bank"
+        ]
+      }
+    },
+    "/me/contributions": {
+      "get": {
+        "operationId": "listMyContributions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Contribution"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Contributions"
+        ]
+      }
+    },
     "/me/email-groups": {
       "get": {
         "operationId": "getMyEmailGroups",
@@ -779,6 +1237,47 @@
         }
       }
     },
+    "/me/invite": {
+      "get": {
+        "operationId": "getInvite",
+        "description": "The caller's invite link and what it has earned. Session cookie only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Invite"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Promo"
+        ]
+      }
+    },
     "/me/jd/resolve": {
       "post": {
         "operationId": "resolveJobDescription",
@@ -830,6 +1329,93 @@
         }
       }
     },
+    "/me/market-pulse": {
+      "get": {
+        "operationId": "getMarketPulse",
+        "description": "Demand for the caller's profile skills, week by week. Session cookie only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SkillPulse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MarketPulseMeta"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/me/mentorship/profile/suggestions": {
+      "get": {
+        "operationId": "getMentorProfileSuggestions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MentorProfileSuggestions"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
     "/me/onboarding/complete": {
       "post": {
         "operationId": "completeOnboarding",
@@ -868,6 +1454,108 @@
         "tags": [
           "Account"
         ]
+      }
+    },
+    "/me/promo/preview": {
+      "post": {
+        "operationId": "previewPromoCode",
+        "description": "What a code would take off, without using it. 404 for a code that cannot be used.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PromoDiscount"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Promo"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoCode"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/promo/redeem": {
+      "post": {
+        "operationId": "redeemPromoCode",
+        "description": "Uses a code. 409 when the caller already used one.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PromoDiscount"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Promo"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoCode"
+              }
+            }
+          }
+        }
       }
     },
     "/me/screening-answers": {
@@ -1440,6 +2128,164 @@
         ]
       }
     },
+    "/moderation/users": {
+      "get": {
+        "operationId": "findModeratedUser",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ModeratedUser"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Moderation"
+        ]
+      }
+    },
+    "/moderation/users/{id}/ban": {
+      "post": {
+        "operationId": "banUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ModeratedUser"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Moderation"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BanRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/moderation/users/{id}/unban": {
+      "post": {
+        "operationId": "unbanUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ModeratedUser"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Moderation"
+        ]
+      }
+    },
     "/plans": {
       "get": {
         "operationId": "getPlans",
@@ -1896,6 +2742,50 @@
           }
         }
       },
+      "BanRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "1 to 500 characters."
+          }
+        }
+      },
+      "BankedAnswer": {
+        "type": "object",
+        "required": [
+          "id",
+          "topic",
+          "question",
+          "answer",
+          "provenance",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "provenance": {
+            "type": "string",
+            "description": "Who wrote it: the candidate, or an agent on their behalf."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "An answer to a free-text screening question, saved for the next form that asks it."
+      },
       "CityMatch": {
         "type": "object",
         "required": [
@@ -1910,6 +2800,62 @@
           "country": {
             "type": "string",
             "description": "ISO 3166-1 alpha-2, lower case."
+          }
+        }
+      },
+      "Contribution": {
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "source",
+          "board",
+          "status",
+          "surface",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "url": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "board": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "A job page the caller sent in, and what became of it."
+      },
+      "Deleted": {
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "properties": {
+          "deleted": {
+            "type": "boolean"
           }
         }
       },
@@ -2115,6 +3061,38 @@
         },
         "description": "A query param the endpoint did not read: unknown, or known but unreadable\n(`min_years=lots`). Either way the answer is wider than the caller asked for."
       },
+      "Invite": {
+        "type": "object",
+        "required": [
+          "link",
+          "invitees",
+          "rewarded",
+          "credit_cents",
+          "percent_off"
+        ],
+        "properties": {
+          "link": {
+            "type": "string"
+          },
+          "invitees": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rewarded": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "credit_cents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "percent_off": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The discount an invitee gets."
+          }
+        }
+      },
       "JobDescriptionSource": {
         "type": "object",
         "properties": {
@@ -2166,6 +3144,109 @@
           }
         },
         "description": "A page of a filtered list, with what the filter dropped."
+      },
+      "MarketPulseMeta": {
+        "type": "object",
+        "required": [
+          "week_start"
+        ],
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "description": "The current ISO week's Monday, YYYY-MM-DD."
+          }
+        }
+      },
+      "MentorProfileSuggestions": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string"
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "company_slug": {
+            "type": "string"
+          }
+        },
+        "description": "A prefill for the mentor-profile form, from what the account already knows."
+      },
+      "ModeratedUser": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "username",
+          "role",
+          "banned",
+          "banned_at",
+          "ban_reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "email": {
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "type": "string"
+          },
+          "banned": {
+            "type": "boolean"
+          },
+          "banned_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ban_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
       },
       "OnboardingCompleted": {
         "type": "object",
@@ -2354,6 +3435,65 @@
         },
         "description": "Every refusal, whatever its status: `{\"error\": msg}`. `code` is set only where a\nclient branches on the reason (the auth flows)."
       },
+      "ProcessReport": {
+        "type": "object",
+        "required": [
+          "kind",
+          "count"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many people have reported this kind for the company."
+          }
+        },
+        "description": "What a person reported about a company's hiring process."
+      },
+      "ProcessReportRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          }
+        }
+      },
+      "PromoCode": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "PromoDiscount": {
+        "type": "object",
+        "required": [
+          "percent_off"
+        ],
+        "properties": {
+          "percent_off": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ResolveJobRequest": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The job page the caller is on; anything not http(s) is a 422."
+          },
+          "surface": {
+            "type": "string",
+            "description": "Where the request came from (`extension`, `cli`, …), for the contribution record."
+          }
+        }
+      },
       "ResolvedJob": {
         "type": "object",
         "required": [
@@ -2362,6 +3502,56 @@
         "properties": {
           "job_slug": {
             "type": "string"
+          }
+        }
+      },
+      "ResolvedJobPage": {
+        "type": "object",
+        "required": [
+          "public_slug",
+          "status"
+        ],
+        "properties": {
+          "public_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The catalogue job; null while it is still queued."
+          },
+          "status": {
+            "type": "string",
+            "description": "`found`, `tracked`, `imported`, `review` or `queued`."
+          },
+          "company_slug": {
+            "type": "string"
+          }
+        },
+        "description": "Where a job page ended up."
+      },
+      "SaveBankedAnswer": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          }
+        }
+      },
+      "Saved": {
+        "type": "object",
+        "required": [
+          "saved"
+        ],
+        "properties": {
+          "saved": {
+            "type": "boolean"
           }
         }
       },
@@ -2583,6 +3773,61 @@
               }
             ],
             "description": "Field names to clear. An unknown name is a 400."
+          }
+        }
+      },
+      "SkillPulse": {
+        "type": "object",
+        "required": [
+          "skill",
+          "open_count",
+          "change_pct",
+          "series"
+        ],
+        "properties": {
+          "skill": {
+            "type": "string"
+          },
+          "open_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "format": "double"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Percent change from the first to the latest week; null without two weeks to compare."
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillPulsePoint"
+            },
+            "description": "Oldest first."
+          }
+        },
+        "description": "How demand for one of the caller's skills moved."
+      },
+      "SkillPulsePoint": {
+        "type": "object",
+        "required": [
+          "week_start",
+          "open_count"
+        ],
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "description": "The ISO week's Monday, YYYY-MM-DD."
+          },
+          "open_count": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

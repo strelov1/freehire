@@ -1,19 +1,14 @@
 package handler
 
 import (
+	"context"
 	"net/url"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-)
 
-// resolveJobRequest is what the endpoint takes: the page the caller is looking at, and
-// optionally which surface they are on. The surface is recorded, never enforced — an older
-// client that sends none is served exactly the same.
-type resolveJobRequest struct {
-	URL     string `json:"url"`
-	Surface string `json:"surface"`
-}
+	"github.com/strelov1/freehire/internal/api/apigen"
+)
 
 // Intake outcomes. They differ only in what the system already knew about the link, which is
 // precisely what the caller needs to be told.
@@ -52,41 +47,35 @@ const (
 // company_slug rides along on every 201 whose employer the catalog already carries, whatever
 // became of the board — the two are independent, and a surface that reads "new company" off
 // the status alone gets it wrong for a company we reach through a different ATS.
-func (h *contributionHandlers) ResolveJob(c *fiber.Ctx) error {
-	var in resolveJobRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	pageURL := strings.TrimSpace(in.URL)
+func (h *contributionHandlers) ResolveJob(ctx context.Context, req *apigen.ResolveJobRequest) (apigen.ResolveJobRes, error) {
+	pageURL := strings.TrimSpace(req.URL.Value)
 	if !isHTTPURL(pageURL) {
-		return fiber.NewError(fiber.StatusUnprocessableEntity, "not a job page URL")
+		return nil, fiber.NewError(fiber.StatusUnprocessableEntity, "not a job page URL")
 	}
 
-	userID, err := requireUserID(c)
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	out, err := h.intake.Resolve(c.Context(), userID, pageURL, in.Surface)
+	out, err := h.intake.Resolve(ctx, userID, pageURL, req.Surface.Value)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	switch out.Status {
-	case outcomeFound:
-		body := fiber.Map{"public_slug": out.PublicSlug, "status": out.Status}
-		if out.CompanySlug != "" {
-			body["company_slug"] = out.CompanySlug
-		}
-		return c.JSON(fiber.Map{"data": body})
-	case outcomeQueued:
-		return c.Status(fiber.StatusAccepted).
-			JSON(fiber.Map{"data": fiber.Map{"public_slug": nil, "status": out.Status}})
+	if out.Status == outcomeQueued {
+		page := apigen.ResolvedJobPage{Status: out.Status}
+		page.PublicSlug.SetToNull()
+		return &apigen.ResolveJobAccepted{Data: page}, nil
 	}
-	body := fiber.Map{"public_slug": out.PublicSlug, "status": out.Status}
-	if out.CompanySlug != "" {
-		body["company_slug"] = out.CompanySlug
+	page := apigen.ResolvedJobPage{
+		PublicSlug:  apigen.NewNilString(out.PublicSlug),
+		Status:      out.Status,
+		CompanySlug: optString(out.CompanySlug),
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": body})
+	if out.Status == outcomeFound {
+		return &apigen.ResolveJobOK{Data: page}, nil
+	}
+	return &apigen.ResolveJobCreated{Data: page}, nil
 }
 
 // isHTTPURL reports whether raw is an absolute http(s) URL — the only thing worth

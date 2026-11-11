@@ -47,9 +47,10 @@ func newBanRig(t *testing.T) *banRig {
 	app.Post("/api/v1/auth/register", h.Register)
 	app.Post("/api/v1/auth/login", h.Login)
 	app.Get("/api/v1/auth/me", cookie, h.Me)
-	newUserModerationHandlers(queries).register(app.Group("/api/v1"), middleware{
+	moderation := newUserModerationHandlers(queries)
+	moderation.register(app.Group("/api/v1"), middleware{
 		cookie: cookie, moderator: auth.RequireRole(queries, "moderator"),
-	})
+	}, newContract(contractHandlers{userModerationHandlers: moderation}))
 	return &banRig{app: app, pool: pool, queries: queries, svc: svc, mailer: mailer, h: h}
 }
 

@@ -73,12 +73,12 @@ func promoApp(t *testing.T, repo *stubPromoRepo, callerID int64) *fiber.App {
 	t.Helper()
 	h := newPromoHandlers(promo.New(repo, promo.Config{SiteURL: "https://example.test"}))
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/me/promo/preview", func(c *fiber.Ctx) error {
+	h.register(app.Group("/api/v1"), middleware{cookie: func(c *fiber.Ctx) error {
 		if callerID > 0 {
 			c.Locals(auth.LocalsUserID, callerID)
 		}
 		return c.Next()
-	}, h.PreviewCode)
+	}}, newContract(contractHandlers{promoHandlers: h}))
 	return app
 }
 
@@ -87,7 +87,7 @@ func promoApp(t *testing.T, repo *stubPromoRepo, callerID int64) *fiber.App {
 func postPreview(t *testing.T, app *fiber.App, body string) int {
 	t.Helper()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost,
-		"/me/promo/preview", strings.NewReader(body))
+		"/api/v1/me/promo/preview", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {

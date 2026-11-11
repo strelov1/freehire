@@ -59,7 +59,7 @@ func TestMyContributionsList(t *testing.T) {
 	ch := &contributionHandlers{contribution: contribution.New(repo, nil)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/contributions", auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), ch.ListMyContributions)
+	app.Get("/api/v1/me/contributions", auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), newContract(contractHandlers{contributionHandlers: ch}))
 
 	r := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/contributions", nil)
 	r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})

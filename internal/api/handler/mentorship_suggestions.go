@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/dict/normalize"
@@ -86,19 +87,26 @@ func newMentorSuggestionsHandlers(
 	}
 }
 
-func (h *mentorSuggestionsHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/me/mentorship/profile/suggestions", mw.key, h.GetSuggestions)
+func (h *mentorSuggestionsHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Get("/me/mentorship/profile/suggestions", mw.key, contract)
 }
 
-// GetSuggestions answers with the caller's best-effort mentor-profile prefill. It never
+// GetMentorProfileSuggestions answers with the caller's best-effort mentor-profile prefill. It never
 // fails on missing or unreadable source data — every field simply degrades to absent —
 // so the only failure this route can report is an unauthenticated caller.
-func (h *mentorSuggestionsHandlers) GetSuggestions(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *mentorSuggestionsHandlers) GetMentorProfileSuggestions(ctx context.Context) (*apigen.GetMentorProfileSuggestionsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": h.suggest(c.Context(), userID)})
+	in := h.suggest(ctx, userID)
+	out := apigen.MentorProfileSuggestions{Languages: in.Languages, Topics: in.Topics}
+	optNil(in.Name, out.Name.SetTo)
+	optNil(in.Headline, out.Headline.SetTo)
+	optNil(in.Bio, out.Bio.SetTo)
+	optNil(in.Timezone, out.Timezone.SetTo)
+	optNil(in.CompanySlug, out.CompanySlug.SetTo)
+	return &apigen.GetMentorProfileSuggestionsOK{Data: out}, nil
 }
 
 func (h *mentorSuggestionsHandlers) suggest(ctx context.Context, userID int64) mentorProfileSuggestions {

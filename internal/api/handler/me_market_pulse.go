@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/isoweek"
@@ -31,52 +32,35 @@ func newMarketPulseHandlers(userProfile *userprofile.Service, history skillHisto
 	return &marketPulseHandlers{userProfile: userProfile, history: history}
 }
 
-func (h *marketPulseHandlers) register(api fiber.Router, mw middleware) {
+func (h *marketPulseHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Cookie-only like the other personal /me/* browser surfaces (profile, inbox) — a
 	// leaked API key must not read a candidate's own skill trend.
-	api.Get("/me/market-pulse", mw.cookie, h.GetMarketPulse)
-}
-
-// skillPulsePoint is one weekly snapshot on the wire.
-type skillPulsePoint struct {
-	WeekStart string `json:"week_start"`
-	OpenCount int32  `json:"open_count"`
-}
-
-// skillPulse is one profile skill's trend on the wire. ChangePct is null when fewer
-// than two snapshots exist yet, or when the earliest snapshot's count is zero (a
-// percent change from zero is undefined, not infinite).
-type skillPulse struct {
-	Skill     string            `json:"skill"`
-	OpenCount int32             `json:"open_count"`
-	ChangePct *float64          `json:"change_pct"`
-	Series    []skillPulsePoint `json:"series"`
+	api.Get("/me/market-pulse", mw.cookie, contract)
 }
 
 // GetMarketPulse returns the caller's own profile skills' demand trend. A caller with
 // no profile, or a profile with no skills, gets an empty data array rather than an
 // error — there is nothing to plot yet, not a failure.
-func (h *marketPulseHandlers) GetMarketPulse(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *marketPulseHandlers) GetMarketPulse(ctx context.Context) (*apigen.GetMarketPulseOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	profile, err := h.userProfile.Get(c.Context(), userID)
+	profile, err := h.userProfile.Get(ctx, userID)
 	if err != nil && !errors.Is(err, userprofile.ErrNotFound) {
-		return err
+		return nil, err
 	}
-	meta := fiber.Map{"week_start": isoweek.Start(time.Now().UTC()).Format("2006-01-02")}
+	meta := apigen.MarketPulseMeta{WeekStart: isoweek.Start(time.Now().UTC()).Format("2006-01-02")}
 	if len(profile.Skills) == 0 {
-		return c.JSON(fiber.Map{"data": []skillPulse{}, "meta": meta})
+		return &apigen.GetMarketPulseOK{Data: []apigen.SkillPulse{}, Meta: meta}, nil
 	}
 
-	rows, err := h.history.ListInsightsSkillHistory(c.Context(), profile.Skills)
+	rows, err := h.history.ListInsightsSkillHistory(ctx, profile.Skills)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	return c.JSON(fiber.Map{"data": buildSkillPulses(profile.Skills, rows), "meta": meta})
+	return &apigen.GetMarketPulseOK{Data: buildSkillPulses(profile.Skills, rows), Meta: meta}, nil
 }
 
 // buildSkillPulses groups the caller's skill-history rows by skill (preserving the
@@ -84,37 +68,38 @@ func (h *marketPulseHandlers) GetMarketPulse(c *fiber.Ctx) error {
 // and chronological series. rows arrive newest-first per skill (ListInsightsSkillHistory's
 // ORDER BY skill, week_start DESC); a skill with no rows at all — never seen in an open
 // job — is omitted rather than reported with a fabricated count.
-func buildSkillPulses(skills []string, rows []db.InsightsSkillHistory) []skillPulse {
+func buildSkillPulses(skills []string, rows []db.InsightsSkillHistory) []apigen.SkillPulse {
 	bySkill := make(map[string][]db.InsightsSkillHistory, len(skills))
 	for _, r := range rows {
 		bySkill[r.Skill] = append(bySkill[r.Skill], r)
 	}
 
-	out := make([]skillPulse, 0, len(skills))
+	out := make([]apigen.SkillPulse, 0, len(skills))
 	for _, skill := range skills {
 		newestFirst := bySkill[skill]
 		if len(newestFirst) == 0 {
 			continue
 		}
 
-		series := make([]skillPulsePoint, len(newestFirst))
+		series := make([]apigen.SkillPulsePoint, len(newestFirst))
 		for i, r := range newestFirst {
-			series[len(newestFirst)-1-i] = skillPulsePoint{
+			series[len(newestFirst)-1-i] = apigen.SkillPulsePoint{
 				WeekStart: r.WeekStart.Time.Format("2006-01-02"),
-				OpenCount: r.OpenCount,
+				OpenCount: int64(r.OpenCount),
 			}
 		}
 
-		var changePct *float64
+		var changePct apigen.NilFloat64
+		changePct.SetToNull()
 		if len(series) >= 2 && series[0].OpenCount > 0 {
 			earliest, latest := series[0].OpenCount, series[len(series)-1].OpenCount
 			pct := (float64(latest) - float64(earliest)) / float64(earliest) * 100
-			changePct = &pct
+			changePct.SetTo(pct)
 		}
 
-		out = append(out, skillPulse{
+		out = append(out, apigen.SkillPulse{
 			Skill:     skill,
-			OpenCount: newestFirst[0].OpenCount,
+			OpenCount: int64(newestFirst[0].OpenCount),
 			ChangePct: changePct,
 			Series:    series,
 		})

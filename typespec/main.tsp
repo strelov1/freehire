@@ -13,6 +13,9 @@ import "./dictionary.tsp";
 import "./jd.tsp";
 import "./forms.tsp";
 import "./feedback.tsp";
+import "./answer-bank.tsp";
+import "./moderation.tsp";
+import "./contributions.tsp";
 
 using Http;
 

@@ -12,6 +12,10 @@ type Handler interface {
 	//
 	// PUT /me/watchlist/{slug}
 	AddToWatchlist(ctx context.Context, params AddToWatchlistParams) (*AddToWatchlistOK, error)
+	// BanUser implements banUser operation.
+	//
+	// POST /moderation/users/{id}/ban
+	BanUser(ctx context.Context, req *BanRequest, params BanUserParams) (*BanUserOK, error)
 	// ClearCompanyVote implements clearCompanyVote operation.
 	//
 	// DELETE /companies/{slug}/vote
@@ -31,6 +35,22 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/ghost-report
 	CreateGhostReport(ctx context.Context, req *GhostReportRequest, params CreateGhostReportParams) (*CreateGhostReportCreated, error)
+	// DeleteBankedAnswer implements deleteBankedAnswer operation.
+	//
+	// 400 for an id that is not a number, 404 for one the caller does not own.
+	//
+	// DELETE /me/answer-bank/{id}
+	DeleteBankedAnswer(ctx context.Context, params DeleteBankedAnswerParams) (*DeleteBankedAnswerOK, error)
+	// FileProcessReport implements fileProcessReport operation.
+	//
+	// 409 when the caller already reported this kind.
+	//
+	// POST /companies/{slug}/process-reports
+	FileProcessReport(ctx context.Context, req *ProcessReportRequest, params FileProcessReportParams) (*FileProcessReportCreated, error)
+	// FindModeratedUser implements findModeratedUser operation.
+	//
+	// GET /moderation/users
+	FindModeratedUser(ctx context.Context, params FindModeratedUserParams) (*FindModeratedUserOK, error)
 	// GetAgentPermissions implements getAgentPermissions operation.
 	//
 	// Readable with a session or an API key.
@@ -41,6 +61,22 @@ type Handler interface {
 	//
 	// GET /email-prefs
 	GetEmailPrefs(ctx context.Context, params GetEmailPrefsParams) (*GetEmailPrefsOK, error)
+	// GetInvite implements getInvite operation.
+	//
+	// The caller's invite link and what it has earned. Session cookie only.
+	//
+	// GET /me/invite
+	GetInvite(ctx context.Context) (*GetInviteOK, error)
+	// GetMarketPulse implements getMarketPulse operation.
+	//
+	// Demand for the caller's profile skills, week by week. Session cookie only.
+	//
+	// GET /me/market-pulse
+	GetMarketPulse(ctx context.Context) (*GetMarketPulseOK, error)
+	// GetMentorProfileSuggestions implements getMentorProfileSuggestions operation.
+	//
+	// GET /me/mentorship/profile/suggestions
+	GetMentorProfileSuggestions(ctx context.Context) (*GetMentorProfileSuggestionsOK, error)
 	// GetMyEmailGroups implements getMyEmailGroups operation.
 	//
 	// GET /me/email-groups
@@ -99,6 +135,14 @@ type Handler interface {
 	//
 	// POST /me/watchlist/import
 	ImportWatchlist(ctx context.Context, req *WatchlistImport) (*ImportWatchlistOK, error)
+	// ListBankedAnswers implements listBankedAnswers operation.
+	//
+	// GET /me/answer-bank
+	ListBankedAnswers(ctx context.Context) (*ListBankedAnswersOK, error)
+	// ListMyContributions implements listMyContributions operation.
+	//
+	// GET /me/contributions
+	ListMyContributions(ctx context.Context) (*ListMyContributionsOK, error)
 	// ListTalent implements listTalent operation.
 	//
 	// GET /talent
@@ -109,24 +153,49 @@ type Handler interface {
 	//
 	// GET /me/watchlist
 	ListWatchlist(ctx context.Context, params ListWatchlistParams) (*WatchlistPageHeaders, error)
+	// MyProcessReports implements myProcessReports operation.
+	//
+	// The kinds the caller has reported for the company.
+	//
+	// GET /companies/{slug}/process-reports/mine
+	MyProcessReports(ctx context.Context, params MyProcessReportsParams) (*MyProcessReportsOK, error)
 	// OneClickUnsubscribe implements oneClickUnsubscribe operation.
 	//
 	// RFC 8058 one-click unsubscribe: turns off only the group the token names.
 	//
 	// POST /email-prefs/one-click
 	OneClickUnsubscribe(ctx context.Context, params OneClickUnsubscribeParams) (*OneClickUnsubscribeOK, error)
+	// PreviewPromoCode implements previewPromoCode operation.
+	//
+	// What a code would take off, without using it. 404 for a code that cannot be used.
+	//
+	// POST /me/promo/preview
+	PreviewPromoCode(ctx context.Context, req *PromoCode) (*PreviewPromoCodeOK, error)
 	// RecordDictionaryGap implements recordDictionaryGap operation.
 	//
 	// Asks for a term the dictionary does not resolve. 409 when it already does. Session cookie only.
 	//
 	// POST /dictionary/gaps
 	RecordDictionaryGap(ctx context.Context, req *DictionaryGap) (*RecordDictionaryGapOK, error)
+	// RedeemPromoCode implements redeemPromoCode operation.
+	//
+	// Uses a code. 409 when the caller already used one.
+	//
+	// POST /me/promo/redeem
+	RedeemPromoCode(ctx context.Context, req *PromoCode) (*RedeemPromoCodeOK, error)
 	// RemoveFromWatchlist implements removeFromWatchlist operation.
 	//
 	// A company that was not on the list is not an error.
 	//
 	// DELETE /me/watchlist/{slug}
 	RemoveFromWatchlist(ctx context.Context, params RemoveFromWatchlistParams) error
+	// ResolveJob implements resolveJob operation.
+	//
+	// Finds the catalogue job behind a page, or imports it. 200 when it was already there, 201 when this
+	// request created it, 202 when it is queued for later. With a session or an API key.
+	//
+	// POST /jobs/resolve
+	ResolveJob(ctx context.Context, req *ResolveJobRequest) (ResolveJobRes, error)
 	// ResolveJobDescription implements resolveJobDescription operation.
 	//
 	// Turns a catalogue job, a vacancy URL or pasted text into a job the tailoring workspace can open. 404
@@ -140,6 +209,16 @@ type Handler interface {
 	//
 	// DELETE /jobs/{slug}/ghost-report
 	RetractGhostReport(ctx context.Context, params RetractGhostReportParams) error
+	// RetractProcessReport implements retractProcessReport operation.
+	//
+	// DELETE /companies/{slug}/process-reports
+	RetractProcessReport(ctx context.Context, params RetractProcessReportParams) (*RetractProcessReportOK, error)
+	// SaveBankedAnswer implements saveBankedAnswer operation.
+	//
+	// Saves under the question's topic, replacing the answer already there.
+	//
+	// PUT /me/answer-bank
+	SaveBankedAnswer(ctx context.Context, req *SaveBankedAnswer) (*SaveBankedAnswerOK, error)
 	// SearchCities implements searchCities operation.
 	//
 	// Up to 20 cities whose name matches, optionally within one country.
@@ -164,6 +243,10 @@ type Handler interface {
 	//
 	// GET /suggest
 	Suggest(ctx context.Context, params SuggestParams) (*SuggestOK, error)
+	// UnbanUser implements unbanUser operation.
+	//
+	// POST /moderation/users/{id}/unban
+	UnbanUser(ctx context.Context, params UnbanUserParams) (*UnbanUserOK, error)
 	// UpdateEmailPrefs implements updateEmailPrefs operation.
 	//
 	// PATCH /email-prefs

@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
 )
 
@@ -16,10 +18,87 @@ type answerBankHandlers struct{ bank *answerbank.Store }
 // register mounts the bank's three routes. mw.key, matching every other /me route that a
 // client other than the web app may reasonably call: the CLI (strelov1/freehire-cli) reaches
 // these with an API key.
-func (h *answerBankHandlers) register(api fiber.Router, mw middleware) {
-	api.Get("/me/answer-bank", mw.key, h.ListAnswers)
-	api.Put("/me/answer-bank", mw.key, h.SaveAnswer)
-	api.Delete("/me/answer-bank/:id", mw.key, h.DeleteAnswer)
+func (h *answerBankHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Get("/me/answer-bank", mw.key, contract)
+	api.Put("/me/answer-bank", mw.key, contract)
+	api.Delete("/me/answer-bank/:id", mw.key, contract)
+}
+
+// ListBankedAnswers returns the caller's whole bank, newest first.
+func (h *answerBankHandlers) ListBankedAnswers(ctx context.Context) (*apigen.ListBankedAnswersOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	answers, err := h.bank.List(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.ListBankedAnswersOK{Data: bankedAnswersOut(answers)}, nil
+}
+
+// bankedAnswersOut renders the bank for the HTTP route. The assistant and MCP tools keep
+// toBankedAnswerResponses below: the MCP SDK checks a tool's answer against its Go type, and
+// a generated type with its own MarshalJSON is exactly what that check has refused before.
+func bankedAnswersOut(answers []answerbank.Answer) []apigen.BankedAnswer {
+	out := make([]apigen.BankedAnswer, 0, len(answers))
+	for _, a := range answers {
+		out = append(out, apigen.BankedAnswer{
+			ID: a.ID, Topic: a.Topic, Question: a.Question, Answer: a.Answer,
+			Provenance: a.Provenance, UpdatedAt: a.UpdatedAt.UTC(),
+		})
+	}
+	return out
+}
+
+// SaveBankedAnswer records the caller's answer to one question.
+//
+// The provenance is AuthorCandidate because of WHERE this ran — a request the candidate
+// themselves authenticated — never because a body said so. There is no field for it in the
+// request (apigen.SaveBankedAnswer, saveAnswerRequest for the tool), and that absence is the
+// enforcement.
+func (h *answerBankHandlers) SaveBankedAnswer(ctx context.Context, req *apigen.SaveBankedAnswer) (*apigen.SaveBankedAnswerOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := bankSaveError(h.bank.Save(ctx, userID, req.Question.Value, req.Answer.Value, answerbank.AuthorCandidate)); err != nil {
+		return nil, err
+	}
+	return &apigen.SaveBankedAnswerOK{Data: apigen.Saved{Saved: true}}, nil
+}
+
+// bankSaveError names a refused save for the caller; the route and the MCP tool share it.
+func bankSaveError(err error) error {
+	switch {
+	case errors.Is(err, answerbank.ErrEmptyAnswer):
+		return fiber.NewError(fiber.StatusBadRequest, "the answer is empty")
+	case errors.Is(err, answerbank.ErrUnkeyable):
+		return fiber.NewError(fiber.StatusBadRequest, "this question cannot be saved — it has no readable text")
+	case errors.Is(err, answerbank.ErrTooLong):
+		return fiber.NewError(fiber.StatusBadRequest, "this answer is too long for a screening question")
+	}
+	return err
+}
+
+// DeleteBankedAnswer removes one of the caller's own answers. Nothing else ever removes from the
+// bank.
+func (h *answerBankHandlers) DeleteBankedAnswer(ctx context.Context, params apigen.DeleteBankedAnswerParams) (*apigen.DeleteBankedAnswerOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := strconv.ParseInt(params.ID, 10, 64)
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid answer id")
+	}
+	if err := h.bank.Delete(ctx, userID, id); err != nil {
+		if errors.Is(err, answerbank.ErrNotFound) {
+			return nil, fiber.NewError(fiber.StatusNotFound, "no such answer")
+		}
+		return nil, err
+	}
+	return &apigen.DeleteBankedAnswerOK{Data: apigen.Deleted{Deleted: true}}, nil
 }
 
 // bankedAnswerResponse is one answer on the wire. provenance rides along so a surface can
@@ -38,19 +117,6 @@ type bankedAnswerResponse struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// ListAnswers returns the caller's whole bank, newest first.
-func (h *answerBankHandlers) ListAnswers(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	answers, err := h.bank.List(c.Context(), userID)
-	if err != nil {
-		return err
-	}
-	return c.JSON(fiber.Map{"data": toBankedAnswerResponses(answers)})
-}
-
 // toBankedAnswerResponses renders the bank for the wire; the route and the MCP tool share it.
 func toBankedAnswerResponses(answers []answerbank.Answer) []bankedAnswerResponse {
 	out := make([]bankedAnswerResponse, 0, len(answers))
@@ -67,60 +133,4 @@ func toBankedAnswerResponses(answers []answerbank.Answer) []bankedAnswerResponse
 type saveAnswerRequest struct {
 	Question string `json:"question"`
 	Answer   string `json:"answer"`
-}
-
-// SaveAnswer records the caller's answer to one question.
-//
-// The provenance is AuthorCandidate because of WHERE this ran — a request the candidate
-// themselves authenticated — never because a body said so. There is no field for it in
-// saveAnswerRequest, and that absence is the enforcement.
-func (h *answerBankHandlers) SaveAnswer(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	var in saveAnswerRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-
-	if err := bankSaveError(h.bank.Save(c.Context(), userID, in.Question, in.Answer, answerbank.AuthorCandidate)); err != nil {
-		return err
-	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"saved": true}})
-}
-
-// bankSaveError names a refused save for the caller; the route and the MCP tool share it.
-func bankSaveError(err error) error {
-	switch {
-	case errors.Is(err, answerbank.ErrEmptyAnswer):
-		return fiber.NewError(fiber.StatusBadRequest, "the answer is empty")
-	case errors.Is(err, answerbank.ErrUnkeyable):
-		return fiber.NewError(fiber.StatusBadRequest, "this question cannot be saved — it has no readable text")
-	case errors.Is(err, answerbank.ErrTooLong):
-		return fiber.NewError(fiber.StatusBadRequest, "this answer is too long for a screening question")
-	}
-	return err
-}
-
-// DeleteAnswer removes one of the caller's own answers. Nothing else ever removes from the
-// bank.
-func (h *answerBankHandlers) DeleteAnswer(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
-	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid answer id")
-	}
-	if err := h.bank.Delete(c.Context(), userID, id); err != nil {
-		if errors.Is(err, answerbank.ErrNotFound) {
-			// 404, never 403: a foreign id and a missing one look alike, so a probing
-			// caller learns nothing about what another candidate holds.
-			return fiber.NewError(fiber.StatusNotFound, "no such answer")
-		}
-		return err
-	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"deleted": true}})
 }
