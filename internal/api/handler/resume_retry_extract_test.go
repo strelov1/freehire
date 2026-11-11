@@ -25,13 +25,13 @@ func retryResumeExtractApp(t *testing.T, store *resume.Store) (*fiber.App, strin
 	h := &resumeHandlers{resume: store}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss, testVersions)
-	app.Post("/me/resume/retry-extract", g, h.RetryResumeExtract)
+	app.Post("/api/v1/me/resume/retry-extract", g, newContract(contractHandlers{resumeHandlers: h}))
 	return app, token
 }
 
 func retryReq(t *testing.T, app *fiber.App, token string) int {
 	t.Helper()
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/me/resume/retry-extract", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/resume/retry-extract", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {

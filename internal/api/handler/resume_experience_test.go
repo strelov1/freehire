@@ -111,7 +111,7 @@ func resumeAppWithBank(t *testing.T, store *resume.Store, bank experienceBank) (
 	}
 	h := &resumeHandlers{resume: store, bank: bank}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/resume", auth.RequireAuth(iss, testVersions), h.GetResume)
+	app.Get("/api/v1/me/resume", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{resumeHandlers: h}))
 	return app, token
 }
 
@@ -125,7 +125,7 @@ func TestGetResumeServesBankedExperienceThroughAStaleWindow(t *testing.T) {
 	}}
 	app, token := resumeAppWithBank(t, store, bank)
 
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/resume", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/resume", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {
@@ -167,7 +167,7 @@ func TestGetResumeProvisionalContactsThroughAStaleWindow(t *testing.T) {
 	bank := &fakeBank{history: []resumeextract.Experience{{Company: "RingCentral", Title: "SWE"}}}
 	app, token := resumeAppWithBank(t, store, bank)
 
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/resume", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/resume", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {
@@ -212,7 +212,7 @@ func TestGetResumeOwnedContactsOverlayCurrentExtract(t *testing.T) {
 	store := resume.New(newFakeResumeBlobs(), repo)
 	app, token := resumeAppWithBank(t, store, &fakeBank{})
 
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/resume", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/resume", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {
@@ -253,7 +253,7 @@ func TestGetResumeCurrentStructureKeepsSemanticSections(t *testing.T) {
 	store := resume.New(newFakeResumeBlobs(), repo)
 	app, token := resumeAppWithBank(t, store, &fakeBank{})
 
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/resume", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/resume", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {
@@ -288,7 +288,7 @@ func TestGetResumeServesBankProjects(t *testing.T) {
 	}
 	app, token := resumeAppWithBank(t, store, bank)
 
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/resume", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/resume", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {
@@ -324,7 +324,7 @@ func TestGetResumeServesPlacelessHighlights(t *testing.T) {
 	}
 	app, token := resumeAppWithBank(t, store, bank)
 
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/resume", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/resume", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {

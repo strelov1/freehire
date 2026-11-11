@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -9,9 +10,11 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/resume"
@@ -77,16 +80,16 @@ func newExperienceBank(queries *db.Queries, profileSkills experience.ProfileSkil
 	return experience.NewStore(experience.NewQueriesRepository(queries)).SetProfileSkills(profileSkills)
 }
 
-func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
+func (h *resumeHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// The résumé verdict is a profile sub-resource: GET computes the live
 	// market-coverage verdict from the profile's skills against the selected role.
 	// Cookie-only and session-scoped, like the profile it hangs off (no profile → 404).
-	api.Get("/me/profile/verdict", mw.cookie, h.GetResumeVerdict)
+	api.Get("/me/profile/verdict", mw.cookie, contract)
 	// The CV ATS-readiness report is a sibling profile sub-resource: GET scores the
 	// caller's stored CV (structure + role keyword-match); POST runs the optional LLM
 	// qualitative review over it and caches it. Cookie-only, session-scoped.
-	api.Get("/me/profile/ats-report", mw.cookie, h.GetATSReport)
-	api.Post("/me/profile/ats-report", mw.cookie, mw.paidAI(unmeteredAI), h.PostATSReport)
+	api.Get("/me/profile/ats-report", mw.cookie, contract)
+	api.Post("/me/profile/ats-report", mw.cookie, mw.paidAI(unmeteredAI), contract)
 
 	// Resume skill extraction takes an optional session. Signed in, it feeds the profile
 	// edit modal and the onboarding wizard (extracted skills merge into the profile), and
@@ -104,22 +107,22 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
 	// feature with nothing to read.
 	api.Post("/me/resume/extract", mw.optional, h.ExtractResumeProfile)
 
-	// Résumé storage (cookie-only): store the résumé once so the verdict's coherence can
+	// Résumé storage (cookie-only; the upload itself is multipart-or-JSON, so it stays on Fiber): store the résumé once so the verdict's coherence can
 	// reuse it without a second upload. PUT stores/replaces, GET reports status (enabled +
 	// present + uploaded_at), DELETE removes it. 501 from PUT/DELETE when S3 is
 	// unconfigured — the SPA then falls back to per-request upload on the verdict page.
 	api.Put("/me/resume", mw.cookie, h.PutResume)
-	api.Get("/me/resume", mw.cookie, h.GetResume)
-	api.Put("/me/resume/contacts", mw.cookie, h.PutResumeContacts)
-	api.Post("/me/resume/contacts/replace-from-cv", mw.cookie, h.ReplaceResumeContactsFromCV)
-	api.Delete("/me/resume", mw.cookie, h.DeleteResume)
+	api.Get("/me/resume", mw.cookie, contract)
+	api.Put("/me/resume/contacts", mw.cookie, contract)
+	api.Post("/me/resume/contacts/replace-from-cv", mw.cookie, contract)
+	api.Delete("/me/resume", mw.cookie, contract)
 	// The retry runs the same free extraction again, so it is open to free as well.
-	api.Post("/me/resume/retry-extract", mw.cookie, h.RetryResumeExtract)
+	api.Post("/me/resume/retry-extract", mw.cookie, contract)
 
 	// Stateless market-coverage: score a caller-supplied skill list (request body)
 	// against the facet-filtered market. Cookie or API key — the CLI drives it with
 	// a key. No user data is stored; it is the stateless sibling of the CV verdict.
-	api.Post("/market/coverage", mw.key, h.MarketCoverage)
+	api.Post("/market/coverage", mw.key, contract)
 
 	// The public CV roast: no session, no API key. It is the landing page for search
 	// traffic that has never heard of us, so an account gate here would spend the visit
@@ -400,26 +403,35 @@ func wireParseStatus(es resume.ExtractStatus) (status string, pending bool) {
 	return es.Status, es.Status == resume.ExtractStatusPending || es.Status == resume.ExtractStatusFailed
 }
 
+// resumeDataOK answers GetResume with the value as the Go type marshals it.
+func resumeDataOK(v any) (*apigen.GetResumeOK, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetResumeOK{Data: raw}, nil
+}
+
 // GetResume reports whether the caller has a stored résumé (and when). Always 200:
 // unconfigured storage or no résumé is a normal state the SPA renders (it decides between
 // "re-run coherence" and a single upload prompt). Cookie-only.
 // Identity composition follows internal/candidate/resume/AGENTS.md: owned contacts as a block,
 // current structure for semantic sections, provisional contacts while pending.
-func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *resumeHandlers) GetResume(ctx context.Context) (*apigen.GetResumeOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !h.resume.Enabled() {
-		return c.JSON(fiber.Map{"data": newResumeMeta(false, resume.Meta{})})
+		return resumeDataOK(newResumeMeta(false, resume.Meta{}))
 	}
-	meta, err := h.resume.Status(c.Context(), userID)
+	meta, err := h.resume.Status(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp := newResumeMeta(true, meta)
 
-	row, err := h.resume.StructuredRow(c.Context(), userID)
+	row, err := h.resume.StructuredRow(ctx, userID)
 	if err != nil {
 		log.Printf("resume structured row: user %d: %v", userID, err)
 	} else {
@@ -428,7 +440,7 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 		resp.ParseDetail = es.Detail
 	}
 
-	if owned, err := h.resume.CandidateOwned(c.Context(), userID); err != nil {
+	if owned, err := h.resume.CandidateOwned(ctx, userID); err != nil {
 		log.Printf("resume owned: user %d: %v", userID, err)
 	} else if !owned.Empty() {
 		contacts := owned
@@ -436,7 +448,7 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 	}
 
 	var st resumeextract.Structured
-	if pr, err := h.resume.ProfileReadForUser(c.Context(), userID); err != nil {
+	if pr, err := h.resume.ProfileReadForUser(ctx, userID); err != nil {
 		log.Printf("resume structured read: user %d: %v", userID, err)
 	} else {
 		if pr.Pending {
@@ -463,7 +475,7 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 		}
 	}
 	if h.bank != nil {
-		history, err := h.bank.SeedHistory(c.Context(), userID)
+		history, err := h.bank.SeedHistory(ctx, userID)
 		if err != nil {
 			log.Printf("resume seed history: user %d: %v", userID, err)
 		} else {
@@ -474,47 +486,55 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 	if resumeStructureWorthServing(st) {
 		resp.Structured = &st
 	}
-	return c.JSON(fiber.Map{"data": resp})
+	return resumeDataOK(resp)
 }
 
 // PutResumeContacts replaces the candidate's owned overrides without a CV upload — the
 // route name predates Owned growing past identity fields; the body now accepts
 // headline/summary/languages/certifications too (resume.Owned, see owned.go).
-func (h *resumeHandlers) PutResumeContacts(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *resumeHandlers) PutResumeContacts(ctx context.Context, req jx.Raw) (*apigen.PutResumeContactsOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var in resume.Owned
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid contacts body")
+	if err := json.Unmarshal(req, &in); err != nil {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid contacts body")
 	}
-	out, err := h.resume.SetCandidateOwned(c.Context(), userID, in)
+	out, err := h.resume.SetCandidateOwned(ctx, userID, in)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": out})
+	raw, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.PutResumeContactsOK{Data: raw}, nil
 }
 
 // ReplaceResumeContactsFromCV overwrites every owned override from the current structured
 // résumé — a full reset, not just identity fields.
-func (h *resumeHandlers) ReplaceResumeContactsFromCV(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *resumeHandlers) ReplaceResumeContactsFromCv(ctx context.Context) (*apigen.ReplaceResumeContactsFromCvOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	st, ok, err := h.resume.Structured(c.Context(), userID)
+	st, ok, err := h.resume.Structured(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !ok {
-		return fiber.NewError(fiber.StatusConflict, "no current structured résumé to copy contacts from")
+		return nil, fiber.NewError(fiber.StatusConflict, "no current structured résumé to copy contacts from")
 	}
-	out, err := h.resume.ReplaceOwnedFromStructured(c.Context(), userID, st)
+	out, err := h.resume.ReplaceOwnedFromStructured(ctx, userID, st)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": out})
+	raw, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.ReplaceResumeContactsFromCvOK{Data: raw}, nil
 }
 
 // resumeStructureWorthServing reports whether the composed structure has anything the
@@ -532,18 +552,15 @@ func resumeStructureWorthServing(st resumeextract.Structured) bool {
 
 // DeleteResume removes the caller's stored résumé (object + pointer). 501 when storage is
 // unconfigured. Cookie-only.
-func (h *resumeHandlers) DeleteResume(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *resumeHandlers) DeleteResume(ctx context.Context) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
 	if !h.resume.Enabled() {
 		return fiber.NewError(fiber.StatusNotImplemented, "résumé storage is not available")
 	}
-	if err := h.resume.Delete(c.Context(), userID); err != nil {
-		return err
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return h.resume.Delete(ctx, userID)
 }
 
 // RetryResumeExtract re-derives the structured résumé from the candidate's already-stored
@@ -556,26 +573,26 @@ func (h *resumeHandlers) DeleteResume(c *fiber.Ctx) error {
 // client polling GET /me/resume right after this call returns would see the PREVIOUS
 // attempt's "failed" status (nothing else clears it) and mistake it for the retry's own
 // outcome, when the retry has barely started. Cookie-only.
-func (h *resumeHandlers) RetryResumeExtract(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *resumeHandlers) RetryResumeExtract(ctx context.Context) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
 	if !h.resume.Enabled() {
 		return fiber.NewError(fiber.StatusNotImplemented, "résumé storage is not available")
 	}
-	text, uploadedAt, err := h.resume.TextAndUploadedAt(c.Context(), userID)
+	text, uploadedAt, err := h.resume.TextAndUploadedAt(ctx, userID)
 	if errors.Is(err, resume.ErrNotStored) {
 		return fiber.NewError(fiber.StatusConflict, "no résumé stored to retry")
 	}
 	if err != nil {
 		return err
 	}
-	if err := h.resume.MarkExtractPending(c.Context(), userID, uploadedAt); err != nil {
+	if err := h.resume.MarkExtractPending(ctx, userID, uploadedAt); err != nil {
 		return err
 	}
 	h.deriveResumeArtifacts(userID, text, &uploadedAt)
-	return c.SendStatus(fiber.StatusAccepted)
+	return nil
 }
 
 // readResumeUpload reads a résumé from the request into its original bytes, content type,

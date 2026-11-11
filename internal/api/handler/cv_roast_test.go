@@ -451,7 +451,7 @@ func TestRoastCV_IsMountedPublic(t *testing.T) {
 		paidAI: markPaidAI,
 		cookie: refuse,
 		key:    refuse,
-	})
+	}, newContract(contractHandlers{resumeHandlers: h}))
 
 	post := func() int {
 		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost,

@@ -149,7 +149,8 @@ func gatedApp(t *testing.T, plans paidEntitlement) *fiber.App {
 	(&assistantHandlers{}).register(api, mw)
 	(&cvHandlers{}).register(api, mw)
 	(&referralMessageHandlers{}).register(api, mw)
-	(&resumeHandlers{}).register(api, mw)
+	resumeH := &resumeHandlers{}
+	resumeH.register(api, mw, newContract(contractHandlers{resumeHandlers: resumeH}))
 	(&speechHandlers{}).register(api, mw)
 	(&intentHandlers{}).register(api, mw)
 	(&inboxHandlers{}).register(api, mw)

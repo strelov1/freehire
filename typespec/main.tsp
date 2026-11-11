@@ -37,6 +37,7 @@ import "./direct-apply.tsp";
 import "./jobs.tsp";
 import "./companies.tsp";
 import "./search.tsp";
+import "./resume.tsp";
 
 using Http;
 

@@ -800,6 +800,12 @@ func encodeDeleteProfileResponse(response *DeleteProfileNoContent, w http.Respon
 	return nil
 }
 
+func encodeDeleteResumeResponse(response *DeleteResumeNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
 func encodeDeleteSavedSearchResponse(response *DeleteSavedSearchNoContent, w http.ResponseWriter) error {
 	w.WriteHeader(204)
 
@@ -891,6 +897,19 @@ func encodeFindModeratedUserResponse(response *FindModeratedUserOK, w http.Respo
 }
 
 func encodeGetAgentPermissionsResponse(response *GetAgentPermissionsOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeGetAtsReportResponse(response *GetAtsReportOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -1125,6 +1144,32 @@ func encodeGetPlansResponse(response *GetPlansOK, w http.ResponseWriter) error {
 }
 
 func encodeGetProfileResponse(response *GetProfileOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeGetResumeResponse(response *GetResumeOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeGetResumeVerdictResponse(response *GetResumeVerdictOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -2001,6 +2046,19 @@ func encodeMarkConversationReadResponse(response *MarkConversationReadNoContent,
 	return nil
 }
 
+func encodeMarketCoverageResponse(response *MarketCoverageOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeMergeAtomsResponse(response *MergeAtomsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -2053,6 +2111,19 @@ func encodeOneClickUnsubscribeResponse(response *OneClickUnsubscribeOK, w http.R
 	return nil
 }
 
+func encodePostAtsReportResponse(response *PostAtsReportOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodePrefillSubmissionResponse(response *PrefillSubmissionOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -2093,6 +2164,19 @@ func encodeProposeCompanyRelationResponse(response *ProposeCompanyRelationCreate
 }
 
 func encodePutProfileResponse(response *PutProfileOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodePutResumeContactsResponse(response *PutResumeContactsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -2190,6 +2274,19 @@ func encodeRemoveFromWatchlistResponse(response *RemoveFromWatchlistNoContent, w
 }
 
 func encodeReopenEmployerVacancyResponse(response *ReopenEmployerVacancyOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeReplaceResumeContactsFromCvResponse(response *ReplaceResumeContactsFromCvOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -2330,6 +2427,12 @@ func encodeRetractProcessReportResponse(response *RetractProcessReportOK, w http
 	if _, err := e.WriteTo(w); err != nil {
 		return errors.Wrap(err, "write")
 	}
+
+	return nil
+}
+
+func encodeRetryResumeExtractResponse(response *RetryResumeExtractAccepted, w http.ResponseWriter) error {
+	w.WriteHeader(202)
 
 	return nil
 }

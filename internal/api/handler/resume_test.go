@@ -44,7 +44,7 @@ func resumeAppWith(t *testing.T, h *resumeHandlers) (*fiber.App, string) {
 		cookie:   cookie,
 		key:      cookie,
 		paidAI:   markPaidAI,
-	})
+	}, newContract(contractHandlers{resumeHandlers: h}))
 	return app, token
 }
 
