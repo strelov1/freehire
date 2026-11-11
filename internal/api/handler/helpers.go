@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/url"
 
 	"github.com/gofiber/fiber/v2"
@@ -14,6 +15,15 @@ import (
 // middleware.
 func requireUserID(c *fiber.Ctx) (int64, error) {
 	id, ok := auth.UserID(c)
+	if !ok {
+		return 0, fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	}
+	return id, nil
+}
+
+// requireUserIDFromContext is requireUserID for a contract handler (see contract.go).
+func requireUserIDFromContext(ctx context.Context) (int64, error) {
+	id, ok := auth.UserIDFromContext(ctx)
 	if !ok {
 		return 0, fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
 	}

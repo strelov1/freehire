@@ -12,4 +12,20 @@ reports the whole graph at once, including imports that exist only in test files
 
 ## Packages
 
-`atsapply` `candidateprofile` `handler` `ogimage` `realtime`
+`apigen` `atsapply` `candidateprofile` `handler` `ogimage` `realtime`
+
+## The HTTP contract (TypeSpec → OpenAPI → ogen)
+
+Routes are moving, one group at a time, to a contract in `typespec/`. `make api-contract`
+compiles it to `openapi/api.openapi.json` and generates the ogen server in `apigen`
+(never edit either by hand; CI's `api-contract` job regenerates and diffs). `handler`
+implements `apigen.Handler`: a migrated group embeds its handlers in `contractHandlers`
+(`handler/contract.go`), so a missing or mistyped operation does not compile.
+
+A migrated route is still a Fiber route: it keeps its middleware chain and ends in the
+`contract` handler, which runs the generated server through the net/http adaptor.
+- The caller's id comes from `auth.UserIDFromContext(ctx)`: Fiber Locals are fasthttp
+  user values, and the adaptor passes the RequestCtx on as the request context.
+- Return errors as before (`fiber.NewError`, domain errors); `NewError` renders them
+  through `classify`, and faults are reported with the Fiber route's attributes.
+- Streams (SSE), websockets, redirects and raw bodies stay hand-written Fiber.

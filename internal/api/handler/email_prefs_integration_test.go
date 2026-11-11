@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -42,7 +43,7 @@ func newEmailPrefsApp(queries *db.Queries) *fiber.App {
 		cookie: func(c *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
 		},
-	})
+	}, newContract(contractHandlers{emailPrefsHandlers: h}))
 	return app
 }
 
@@ -401,5 +402,46 @@ func TestEmailPrefs_EveryRefusalLooksTheSameAndNamesNobody(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The signed-in routes run through the generated contract server, mounted behind the
+// Fiber cookie middleware. The user id that middleware stores in Locals has to reach
+// the contract handler through the adaptor, or every signed-in call would be a 401.
+func TestEmailPrefs_SignedInRoutesSeeTheCookieUser(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	userID := seedPrefsUser(t, pool, "signed-in@example.test")
+	h := newEmailPrefsHandlers(emailprefs.NewService(queries, prefsSecret))
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	h.register(app.Group("/api/v1"), middleware{
+		cookie: func(c *fiber.Ctx) error {
+			c.Locals(auth.LocalsUserID, userID)
+			return c.Next()
+		},
+	}, newContract(contractHandlers{emailPrefsHandlers: h}))
+
+	res, body := doPrefs(t, app, http.MethodPatch, "/api/v1/me/email-groups", `{"alerts_enabled":false}`)
+	if res.Status != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", res.Status, body)
+	}
+	var got prefsResp
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("decode: %v (%s)", err, body)
+	}
+	if got.Data.Email != "signed-in@example.test" || got.Data.Alerts || !got.Data.News {
+		t.Errorf("got %+v, want the cookie user's prefs with only alerts turned off", got.Data)
+	}
+}
+
+// A body the contract cannot decode is refused before any handler runs, in the same
+// {"error": msg} shape as every other refusal.
+func TestEmailPrefs_UndecodableBodyIsA400InTheUsualShape(t *testing.T) {
+	pool := startPostgres(t)
+	app := newEmailPrefsApp(db.New(pool))
+
+	res, body := doPrefs(t, app, http.MethodPatch, "/api/v1/email-prefs", `{"news_enabled":"yes"}`)
+	if res.Status != http.StatusBadRequest || body != `{"error":"invalid body"}`+"\n" {
+		t.Errorf("status = %d, body = %q; want 400 {\"error\":\"invalid body\"}", res.Status, body)
 	}
 }

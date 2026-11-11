@@ -1063,7 +1063,9 @@ func Register(app *fiber.App, cfg Config) {
 	// without an account — so the signed token in the link stands in for a session.
 	// The two /me routes beside them are the same switches for a caller the cookie
 	// already identified.
-	newEmailPrefsHandlers(mailPrefs).register(api, mw)
+	emailPrefsH := newEmailPrefsHandlers(mailPrefs)
+	contract := newContract(contractHandlers{emailPrefsHandlers: emailPrefsH})
+	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
