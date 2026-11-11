@@ -348,20 +348,26 @@ func TestAuditFollowsFiveRedirects(t *testing.T) {
 
 // AppOne's SPA route can 404 while its authoritative JSON detail is still live.
 func TestAuditAppOneUsesPostingAPI(t *testing.T) {
-	a := newAuditor(100)
-	a.Client = &http.Client{Transport: auditTransport(func(r *http.Request) (*http.Response, error) {
-		status, body := http.StatusNotFound, ""
-		if r.URL.Path == "/api/apply/v2/jobposting/6af32ead3c3083588ad823e0" {
-			status, body = http.StatusOK, `{"description":"Salon Sales Associate"}`
-		}
-		if strings.HasPrefix(r.URL.Path, "/job/") {
-			t.Errorf("probed misleading SPA route: %s", r.URL.Path)
-		}
-		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
-	})}
-	got := a.Run(context.Background(), []Posting{{ID: 1, Source: "appone", ExternalID: "6af32ead3c3083588ad823e0", URL: "https://apply.appone.com/job/6af32ead3c3083588ad823e0"}})
-	if len(got) != 1 || got[0].Outcome != Live {
-		t.Fatalf("live API detail = %+v", got)
+	for _, externalID := range []string{"6af32ead3c3083588ad823e0", "zoomtan:6af32ead3c3083588ad823e0"} {
+		t.Run(externalID, func(t *testing.T) {
+			a := newAuditor(100)
+			detailRequests := 0
+			a.Client = &http.Client{Transport: auditTransport(func(r *http.Request) (*http.Response, error) {
+				status, body := http.StatusNotFound, ""
+				if r.URL.Path == "/api/apply/v2/jobposting/6af32ead3c3083588ad823e0" {
+					detailRequests++
+					status, body = http.StatusOK, `{"description":"Salon Sales Associate"}`
+				}
+				if strings.HasPrefix(r.URL.Path, "/job/") {
+					t.Errorf("probed misleading SPA route: %s", r.URL.Path)
+				}
+				return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
+			})}
+			got := a.Run(context.Background(), []Posting{{ID: 1, Source: "appone", ExternalID: externalID, URL: "https://apply.appone.com/job/6af32ead3c3083588ad823e0"}})
+			if len(got) != 1 || got[0].Outcome != Live || detailRequests != 1 {
+				t.Fatalf("live API detail = %+v, detail requests=%d", got, detailRequests)
+			}
+		})
 	}
 }
 
