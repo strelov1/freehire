@@ -66,7 +66,8 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   create and edit — an unfiltered one is a legitimate "show all" view; narrowing and
   the channel are a subscription's gates. What predates a rule — a query saved before it existed, or one a tightened rule
   later invalidates — is caught by `cmd/notify` itself: `pauseUnrunnable` pauses every
-  subscription on a query it cannot parse and does not search it (`paused=` in the run
+  subscription on a query it cannot parse or whose invalid `visa_sponsorship` value
+  would now be dropped, widening the old alert. It does not search it (`paused=` in the run
   log), and only while the saved search still holds the query it judged, so an owner
   who fixed it meanwhile keeps the alert on. Measured 2026-11-05, one such subscription had failed every pass for a week
   while its owner received nothing. Paused, not deleted, so the owner can fix the

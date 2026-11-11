@@ -870,3 +870,17 @@ func TestFilterFromValues_RemoteAnywhereNeedsAPhysicalMode(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 }
+
+func TestFilterFromValues_SeniorityAndIncludesUnspecified(t *testing.T) {
+	for _, mode := range []string{"and", "AND", " And "} {
+		v := url.Values{"seniority": {"intern", "junior"}, "seniority_mode": {mode}, SeniorityIncludeUnspecifiedParam: {"True"}}
+		got := normalizeGroups(t, FilterFromValues(v))
+		want := [][]string{
+			{`enrichment.seniority = "intern"`, `enrichment.seniority NOT EXISTS`},
+			{`enrichment.seniority = "junior"`, `enrichment.seniority NOT EXISTS`},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("mode=%q: got %v, want %v", mode, got, want)
+		}
+	}
+}

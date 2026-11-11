@@ -105,6 +105,21 @@ func TestRestrictionFromTitle(t *testing.T) {
 			[]string{"ba"}, []string{"eu"},
 		},
 		{
+			"compound subdivision after conjunction",
+			"Engineer (Remote - Canada and Tyne and Wear)",
+			[]string{"ca", "gb"}, []string{"north_america", "uk"},
+		},
+		{
+			"compound country before conjunction",
+			"Engineer (Remote - Bosnia and Herzegovina and Canada)",
+			[]string{"ba", "ca"}, []string{"eu", "north_america"},
+		},
+		{
+			"compound country after conjunction",
+			"Engineer (Remote - Canada and Bosnia and Herzegovina)",
+			[]string{"ba", "ca"}, []string{"eu", "north_america"},
+		},
+		{
 			"empty title yields nothing",
 			"",
 			nil, nil,

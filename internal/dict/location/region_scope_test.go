@@ -2,6 +2,7 @@ package location
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -144,6 +145,36 @@ func TestRegionScopeFromDescription(t *testing.T) {
 			"role restriction with country names",
 			"This role is restricted to Canada and the US.",
 			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"compound subdivision after conjunction",
+			"Candidates based in Canada and Tyne and Wear.",
+			[]string{"ca", "gb"}, []string{"north_america", "uk"},
+		},
+		{
+			"compound country before conjunction",
+			"Candidates based in Bosnia and Herzegovina and Canada.",
+			[]string{"ba", "ca"}, []string{"eu", "north_america"},
+		},
+		{
+			"compound country after conjunction",
+			"Candidates based in Canada and Bosnia and Herzegovina.",
+			[]string{"ba", "ca"}, []string{"eu", "north_america"},
+		},
+		{
+			"restriction after long plain text",
+			strings.Repeat("x", 50_000) + ". We are hiring in Canada.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"restriction after long HTML",
+			"<p>" + strings.Repeat("x", 50_000) + "</p><p>We are hiring in <strong>Canada</strong>.</p>",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"restriction across Unicode truncation boundary",
+			"<p>" + strings.Repeat("界", 49_990) + "</p><p>We are hiring in Canada.</p>",
+			[]string{"ca"}, []string{"north_america"},
 		},
 		{
 			"empty description",

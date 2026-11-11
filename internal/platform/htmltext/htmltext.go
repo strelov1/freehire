@@ -1,5 +1,5 @@
 // Package htmltext converts stored job-description HTML into alternative
-// representations for API consumers: plain text and Markdown. Each converter is
+// representations for consumers: plain text and Markdown. Each converter is
 // lenient — a conversion error degrades to returning the input unchanged rather
 // than failing the caller.
 package htmltext
@@ -16,11 +16,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// maxInputRunes bounds the HTML a single call converts. The only caller today
-// (internal/api/handler's AgentSearchJobs) feeds it a job's full, untruncated Postgres
-// description — up to tens of KB for a source that captures full descriptions — and
-// neither third-party converter bounds its own work, so an unbounded input reprocessed
-// on every request is unbounded conversion cost. Truncating first caps it.
+// maxInputRunes bounds request-facing conversions. Callers can supply a full stored
+// description, and neither third-party converter bounds its own work, so truncating
+// before conversion caps the cost of repeatedly rendering it on a request path.
 const maxInputRunes = 50_000
 
 // cacheCapacity bounds the memory each per-format result cache can hold. A description
@@ -38,9 +36,22 @@ var (
 // ToText renders HTML as plain text with tags removed. On a conversion error it
 // returns the (possibly truncated) input unchanged.
 func ToText(html string) string {
-	return convert(html, textCache, func(s string) (string, error) {
-		return html2text.FromString(s, html2text.Options{OmitLinks: true})
-	})
+	return convert(html, textCache, plainText)
+}
+
+// ToTextFull renders all supplied HTML as plain text for derivation that needs the
+// complete description. It neither truncates nor caches potentially large results.
+// On a conversion error it returns the full input unchanged.
+func ToTextFull(html string) string {
+	out, err := plainText(html)
+	if err != nil {
+		return html
+	}
+	return out
+}
+
+func plainText(html string) (string, error) {
+	return html2text.FromString(html, html2text.Options{OmitLinks: true})
 }
 
 // ToMarkdown converts HTML to Markdown, preserving block structure such as lists

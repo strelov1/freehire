@@ -18,6 +18,20 @@ func TestToText_StripsTags(t *testing.T) {
 	}
 }
 
+func TestToTextFull_PreservesContentBeyondRequestLimit(t *testing.T) {
+	input := "<p>" + strings.Repeat("界", maxInputRunes) + "</p><p>Hello <strong>world</strong></p>"
+	got := ToTextFull(input)
+	if strings.Count(got, "界") != maxInputRunes || !strings.Contains(got, "Hello *world*") {
+		t.Error("ToTextFull dropped content from the full description")
+	}
+	if containsAngle(got) {
+		t.Error("ToTextFull left HTML tags")
+	}
+	if strings.Contains(ToText(input), "Hello") {
+		t.Error("ToText no longer caps request-facing conversion")
+	}
+}
+
 func TestToMarkdown_PreservesListStructure(t *testing.T) {
 	got := ToMarkdown("<ul><li>first</li><li>second</li></ul>")
 	if !contains(got, "first") || !contains(got, "second") {

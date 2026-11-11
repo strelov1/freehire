@@ -369,6 +369,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 		for i, val := range included {
 			included[i] = facetValue(param, val)
 		}
+		includeUnspecified := param == "seniority" && isTrue(v, SeniorityIncludeUnspecifiedParam)
 		switch {
 		case param == "work_mode" && remoteAnywhere:
 		case locationFacets[param]:
@@ -378,7 +379,11 @@ func filterFromValues(v url.Values, now time.Time) any {
 		case len(included) > 0 && strings.EqualFold(strings.TrimSpace(v.Get(param+"_mode")), "and"):
 			// Each value its own AND group: a job must match all of them.
 			for _, val := range included {
-				groups = append(groups, []string{facetEq(param, attr, val)})
+				group := []string{facetEq(param, attr, val)}
+				if includeUnspecified {
+					group = append(group, NotExists(attr))
+				}
+				groups = append(groups, group)
 			}
 		case len(included) > 0:
 			group := make([]string, len(included))
@@ -387,7 +392,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 			}
 			// Most postings carry no level, so "intern" alone drops nearly everything an
 			// intern could apply to. The modifier ORs those back into this group only.
-			if param == "seniority" && isTrue(v, SeniorityIncludeUnspecifiedParam) {
+			if includeUnspecified {
 				group = append(group, NotExists(attr))
 			}
 			groups = append(groups, group)

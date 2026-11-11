@@ -65,7 +65,7 @@ const clauseWindow = 200
 // found in a sentence that denies it ("not restricted to the US") is not a match, the
 // same negation handling EligibilityFromDescription uses.
 func RegionScopeFromDescription(desc string) (countries, regions []string) {
-	lower := strings.ToLower(htmltext.ToText(desc))
+	lower := strings.ToLower(htmltext.ToTextFull(desc))
 	lower = strings.NewReplacer("u.s.a.", "usa", "u.s.", "us", "u.k.", "uk").Replace(lower)
 	// Keep phrase priority, but let an unresolved clause yield to a later anchor.
 	for _, p := range regionScopePhrases {
@@ -98,7 +98,8 @@ func regionScopeFromClause(clause string) (countries, regions []string) {
 }
 
 // resolveRestrictionToken keeps names such as "Bosnia and Herzegovina" whole,
-// splitting a conjunction only when the full token names no known place.
+// splitting a conjunction only when the full token names no known place. Each
+// remaining prefix is tried longest-first so a list can contain compound names.
 func resolveRestrictionToken(tok string, countrySet, regionSet map[string]struct{}) {
 	tok = strings.TrimSuffix(strings.Trim(tok, "* "), " only")
 	tok = strings.TrimPrefix(tok, "the ")
@@ -111,9 +112,16 @@ func resolveRestrictionToken(tok string, countrySet, regionSet map[string]struct
 	if len(parts) < 2 {
 		return
 	}
-	for _, part := range parts {
-		part = strings.TrimPrefix(strings.Trim(part, "* "), "the ")
-		resolveGeoToken(part, "", countrySet, regionSet)
+	for len(parts) > 0 {
+		consumed := 1
+		for end := len(parts); end > 0; end-- {
+			part := strings.TrimPrefix(strings.Trim(strings.Join(parts[:end], " and "), "* "), "the ")
+			if resolveGeoToken(part, "", countrySet, regionSet) {
+				consumed = end
+				break
+			}
+		}
+		parts = parts[consumed:]
 	}
 }
 

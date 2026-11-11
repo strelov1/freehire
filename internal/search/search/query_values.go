@@ -156,6 +156,14 @@ func IgnoredValues(v url.Values) map[string][]string {
 			report(param, splitFacetValues(v[param]), known)
 		}
 	}
+	// Mode modifiers are scalars too: a comma-joined pair is not an AND or OR.
+	validMode := oneOf([]string{"and", "or"})
+	for facet := range StringFacets {
+		param := facet + "_mode"
+		if raw, ok := v[param]; ok && len(raw) > 0 {
+			report(param, raw[:1], validMode)
+		}
+	}
 	// A scalar is read whole (v.Get), so its value is checked whole rather than split.
 	for param, valid := range checkedScalars {
 		if raw, ok := v[param]; ok && len(raw) > 0 {

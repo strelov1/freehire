@@ -118,3 +118,21 @@ func TestIgnoredValuesCapsValuesInSortedOrder(t *testing.T) {
 		t.Errorf("reported %v, want sorted prefix %v", got, want)
 	}
 }
+
+func TestIgnoredValuesChecksFacetModesAsWholeScalars(t *testing.T) {
+	for facet := range StringFacets {
+		param := facet + "_mode"
+		for _, value := range []string{"invalid", "and,or", ""} {
+			v := url.Values{param: {value, "and"}}
+			want := map[string][]string{param: {value}}
+			if got := IgnoredValues(v); !reflect.DeepEqual(got, want) {
+				t.Errorf("%s=%q: got %v, want %v", param, value, got, want)
+			}
+		}
+		for _, value := range []string{"and", "OR", " And "} {
+			if got := IgnoredValues(url.Values{param: {value, "invalid"}}); got != nil {
+				t.Errorf("%s=%q: got %v, want no ignored values", param, value, got)
+			}
+		}
+	}
+}
