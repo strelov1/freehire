@@ -28,12 +28,12 @@ func (f *fakeFormerEmployers) Slugs(_ context.Context, userID int64) ([]string, 
 func formerEmployersApp(s searcher, userID int64, lookup formerEmployerLookup) *fiber.App {
 	h := &searchHandlers{search: s, formerEmployers: lookup}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/search", func(c *fiber.Ctx) error {
+	app.Get("/api/v1/jobs/search", func(c *fiber.Ctx) error {
 		if userID != 0 {
 			c.Locals(auth.LocalsUserID, userID)
 		}
-		return h.SearchJobs(c)
-	})
+		return c.Next()
+	}, newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
@@ -42,7 +42,7 @@ func TestFormerEmployers_SignedInNarrowsToTheResolvedCompanies(t *testing.T) {
 	lookup := &fakeFormerEmployers{slugs: []string{"accenture", "globant"}}
 	app := formerEmployersApp(fake, 7, lookup)
 
-	status, body := doGet(t, app, "/jobs/search?former_employers=true&seniority=senior")
+	status, body := doGet(t, app, "/api/v1/jobs/search?former_employers=true&seniority=senior")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -65,7 +65,7 @@ func TestFormerEmployers_NothingResolvedAnswersEmptyNotTheCatalogue(t *testing.T
 	fake := &fakeSearcher{res: search.SearchResult{Total: 999}}
 	app := formerEmployersApp(fake, 7, &fakeFormerEmployers{})
 
-	status, body := doGet(t, app, "/jobs/search?former_employers=true")
+	status, body := doGet(t, app, "/api/v1/jobs/search?former_employers=true")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -85,7 +85,7 @@ func TestFormerEmployers_AnonymousIsReportedAsIgnored(t *testing.T) {
 	lookup := &fakeFormerEmployers{slugs: []string{"accenture"}}
 	app := formerEmployersApp(fake, 0, lookup)
 
-	status, body := doGet(t, app, "/jobs/search?former_employers=true")
+	status, body := doGet(t, app, "/api/v1/jobs/search?former_employers=true")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 — a shared link must not break for a signed-out visitor", status)
 	}
@@ -105,7 +105,7 @@ func TestFormerEmployers_FalseIsNotAFilter(t *testing.T) {
 	lookup := &fakeFormerEmployers{slugs: []string{"accenture"}}
 	app := formerEmployersApp(fake, 7, lookup)
 
-	if status, _ := doGet(t, app, "/jobs/search?former_employers=false"); status != fiber.StatusOK {
+	if status, _ := doGet(t, app, "/api/v1/jobs/search?former_employers=false"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	if lookup.called || fake.got.Filter != nil {
@@ -118,7 +118,7 @@ func TestFormerEmployers_LookupFailureFailsTheRequest(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := formerEmployersApp(fake, 7, &fakeFormerEmployers{err: errors.New("db down")})
 
-	if status, _ := doGet(t, app, "/jobs/search?former_employers=true"); status != fiber.StatusInternalServerError {
+	if status, _ := doGet(t, app, "/api/v1/jobs/search?former_employers=true"); status != fiber.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", status)
 	}
 	if fake.got.Limit != 0 {
@@ -144,7 +144,7 @@ func TestFormerEmployers_SurvivesTheBadFilterDegrade(t *testing.T) {
 	fake := &degradingSearcher{}
 	app := formerEmployersApp(fake, 7, &fakeFormerEmployers{slugs: []string{"accenture"}})
 
-	if status, _ := doGet(t, app, "/jobs/search?former_employers=true&seniority=senior"); status != fiber.StatusOK {
+	if status, _ := doGet(t, app, "/api/v1/jobs/search?former_employers=true&seniority=senior"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	if len(fake.calls) != 2 {
@@ -164,11 +164,11 @@ func TestFormerEmployers_SeenExclusionSurvivesTheBadFilterDegrade(t *testing.T) 
 		seen:            &fakeSeen{ids: []int64{11}},
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/search", func(c *fiber.Ctx) error {
+	app.Get("/api/v1/jobs/search", func(c *fiber.Ctx) error {
 		c.Locals(auth.LocalsUserID, int64(7))
-		return h.SearchJobs(c)
-	})
-	status, body := doGet(t, app, "/jobs/search?former_employers=true&hide_seen=true&seniority=senior")
+		return c.Next()
+	}, newContract(contractHandlers{searchHandlers: h}))
+	status, body := doGet(t, app, "/api/v1/jobs/search?former_employers=true&hide_seen=true&seniority=senior")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -193,11 +193,11 @@ func TestFormerEmployers_AllPersonalFiltersSurviveTheBadFilterDegrade(t *testing
 		appliedCompanies: &fakeAppliedCompanies{slugs: []string{"acme"}},
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/search", func(c *fiber.Ctx) error {
+	app.Get("/api/v1/jobs/search", func(c *fiber.Ctx) error {
 		c.Locals(auth.LocalsUserID, int64(7))
-		return h.SearchJobs(c)
-	})
-	status, body := doGet(t, app, "/jobs/search?former_employers=true&hide_seen=true&hide_applied_companies=true&seniority=senior")
+		return c.Next()
+	}, newContract(contractHandlers{searchHandlers: h}))
+	status, body := doGet(t, app, "/api/v1/jobs/search?former_employers=true&hide_seen=true&hide_applied_companies=true&seniority=senior")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}

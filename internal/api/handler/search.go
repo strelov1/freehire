@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"net/url"
 	"slices"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/api/ojcp"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/dict/skillvec"
@@ -135,16 +137,16 @@ func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries
 // trouble rather than a slow row.
 const searchRecordTimeout = 5 * time.Second
 
-func (h *searchHandlers) register(api fiber.Router, mw middleware) {
+func (h *searchHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Literal routes are registered before the /jobs/:slug param route (see
 	// Register) so they are not read as slugs.
-	api.Get("/jobs/search", mw.optional, h.SearchJobs)
+	api.Get("/jobs/search", mw.optional, contract)
 	// Agent search: same query as /jobs/search, but always full descriptions in a
 	// selectable format for programmatic consumers. Public, like the other reads.
 	api.Get("/agent/jobs/search",
-		agentViews(h.agentViews, agentview.SurfaceAgentAPI), h.AgentSearchJobs)
-	api.Get("/jobs/facets", h.JobFacets)
-	api.Get("/jobs/:slug/similar", h.SimilarJobs)
+		agentViews(h.agentViews, agentview.SurfaceAgentAPI), contract)
+	api.Get("/jobs/facets", contract)
+	api.Get("/jobs/:slug/similar", contract)
 }
 
 // searcher is the search backend the handler depends on. *search.Client
@@ -199,18 +201,18 @@ var agentSearchParams = slices.Concat(jobSearchParams, []string{"description_for
 // being refused: rejecting them would break saved searches and shared links that
 // still carry retired params, while staying silent is what let a mistyped
 // `country=it` pass for a search of Italy.
-func ignoredParams(c *fiber.Ctx, own []string) []search.UnknownParam {
-	return search.UnknownParams(queryValues(c), own)
+func ignoredParams(vals url.Values, own []string) []search.UnknownParam {
+	return search.UnknownParams(vals, own)
 }
 
 // mergedJobSearchIgnored combines runJobSearch's own value-level ignored-param
 // report — q_fields naming a field outside the searchable vocabulary, and/or any
 // filter params the Meilisearch-rejection degrade dropped — with the ordinary
-// name-level ignoredParams(c, own) report, into one sorted, capped list. The same
+// name-level ignoredParams(vals, own) report, into one sorted, capped list. The same
 // merge both job-search endpoints need, named once so neither can apply it
 // slightly differently.
-func mergedJobSearchIgnored(c *fiber.Ctx, own []string, fromSearch []search.UnknownParam) []search.UnknownParam {
-	return search.SortAndCap(append(fromSearch, ignoredParams(c, own)...))
+func mergedJobSearchIgnored(vals url.Values, own []string, fromSearch []search.UnknownParam) []search.UnknownParam {
+	return search.SortAndCap(append(fromSearch, ignoredParams(vals, own)...))
 }
 
 // searchSortable is the allowlist of sort params mapped to their index attribute;
@@ -241,11 +243,6 @@ const sortMatch = "match"
 // link carrying sort=match must never 400 when opened by someone it cannot be served
 // for — the same reason the jobs list ignores unknown filters rather than refusing
 // them.
-func (h *searchHandlers) matchVector(c *fiber.Ctx) []float32 {
-	userID, _ := auth.UserID(c)
-	return h.matchVectorFor(c.Context(), userID, queryValues(c))
-}
-
 func (h *searchHandlers) matchVectorFor(ctx context.Context, userID int64, vals url.Values) []float32 {
 	vector, _ := h.matchProfileFor(ctx, userID, vals)
 	return vector
@@ -275,13 +272,19 @@ func (h *searchHandlers) matchProfileFor(ctx context.Context, userID int64, vals
 // public (unauthenticated) like the other job reads. Response: {"data": [job
 // view...], "meta": {total, limit, offset}} — results carry public_slug and never
 // the internal id.
-func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
-	seen, seenIgnored := h.seenExclusion(c)
-	appliedFrag, appliedIgnored := h.appliedCompanyExclusion(c)
-	match, matchIgnored := h.skillMatchFilter(c)
-	out, err := h.runJobSearch(c, false, seen, appliedFrag, match)
+func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsParams) (*apigen.JobSearchPageHeaders, error) {
+	vals := contractQuery(ctx)
+	userID, _ := auth.UserIDFromContext(ctx)
+	seen, seenIgnored := h.seenExclusionFor(ctx, userID, vals)
+	appliedFrag, appliedIgnored := h.appliedCompanyExclusionFor(ctx, userID, vals)
+	match, matchIgnored := h.skillMatchFilterFor(ctx, userID, vals)
+	// The answer depends on who asked, under a URL that does not say so.
+	private := match != nil ||
+		(userID != 0 && !seenIgnored && wantsParam(vals, hideSeenParam)) ||
+		(userID != 0 && !appliedIgnored && wantsParam(vals, hideAppliedCompaniesParam))
+	out, err := h.runJobSearch(ctx, vals, userID, false, seen, appliedFrag, match)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	res, limit, offset, dropped := out.res, out.limit, out.offset, out.dropped
 	if appliedIgnored {
@@ -298,17 +301,44 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	for i, hit := range res.Hits {
 		views[i] = hit.Job
 	}
-	h.attachGhost(c, res.Hits, views)
-
-	ignored := mergedJobSearchIgnored(c, out.own(publicJobSearchParams), dropped)
-	meta := listMeta(res.Total, limit, offset, ignored, ignoredJobValues(c))
-	if res.TotalIsLowerBound {
-		meta["total_is_lower_bound"] = true
+	h.attachGhost(ctx, res.Hits, views)
+	data, err := marshalRaws(views)
+	if err != nil {
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": views, "meta": meta})
+
+	ignored := mergedJobSearchIgnored(vals, out.own(publicJobSearchParams), dropped)
+	meta := apigen.JobSearchMeta{
+		Total: res.Total, Limit: int64(limit), Offset: int64(offset),
+		IgnoredParams: contractIgnoredParams(ignored),
+		IgnoredValues: contractIgnoredValues(ignoredJobValues(vals)),
+	}
+	if res.TotalIsLowerBound {
+		meta.TotalIsLowerBound = apigen.NewOptBool(true)
+	}
+	return &apigen.JobSearchPageHeaders{
+		CacheControl: optString(privateCacheControl(private || out.private)),
+		Response:     apigen.JobSearchPage{Data: data, Meta: meta},
+	}, nil
 }
 
-// appliedCompanyExclusion resolves ?hide_applied_companies=true into the filter
+// privateCacheControl is the header of an answer that depends on who asked, or "" for one
+// that does not.
+func privateCacheControl(private bool) string {
+	if private {
+		return "private, no-store"
+	}
+	return ""
+}
+
+// wantsParam reads a boolean query param the way Fiber's QueryBool does: the first value,
+// false when it is absent or not a boolean.
+func wantsParam(vals url.Values, key string) bool {
+	want, err := strconv.ParseBool(vals.Get(key))
+	return err == nil && want
+}
+
+// appliedCompanyExclusionFor resolves ?hide_applied_companies=true into the filter
 // fragment that keeps the caller's applied-to employers out of this search, and
 // reports whether the param has to be named in meta.ignored_params instead.
 //
@@ -322,15 +352,6 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 // be read all fall back to the unhidden search and say so, rather than refusing a
 // shared link or quietly widening. A caller with no applications gets "" — nothing to
 // exclude, and nothing ignored either.
-func (h *searchHandlers) appliedCompanyExclusion(c *fiber.Ctx) (frag string, ignored bool) {
-	userID, _ := auth.UserID(c)
-	value, ignored := h.appliedCompanyExclusionFor(c.Context(), userID, queryValues(c))
-	if userID != 0 && !ignored && c.QueryBool(hideAppliedCompaniesParam) {
-		c.Set(fiber.HeaderCacheControl, "private, no-store")
-	}
-	return value, ignored
-}
-
 func (h *searchHandlers) appliedCompanyExclusionFor(ctx context.Context, userID int64, vals url.Values) (frag string, ignored bool) {
 	raw := vals.Get(hideAppliedCompaniesParam)
 	if !vals.Has(hideAppliedCompaniesParam) {
@@ -358,7 +379,7 @@ func (h *searchHandlers) appliedCompanyExclusionFor(ctx context.Context, userID 
 	return search.NotInStrings("company_slug", slugs), false
 }
 
-// seenExclusion resolves ?hide_seen=true into the job ids to keep out of this search,
+// seenExclusionFor resolves ?hide_seen=true into the job ids to keep out of this search,
 // and reports whether the param has to be named in meta.ignored_params instead.
 //
 // The exclusion happens inside the index query rather than over the returned page, so
@@ -369,15 +390,6 @@ func (h *searchHandlers) appliedCompanyExclusionFor(ctx context.Context, userID 
 // what that account opened — the same record the feed dims cards by. An anonymous
 // caller, an unparseable value, or a record that could not be read all fall back to the
 // unhidden search and say so, rather than refusing a shared link or quietly widening.
-func (h *searchHandlers) seenExclusion(c *fiber.Ctx) (ids []int64, ignored bool) {
-	userID, _ := auth.UserID(c)
-	value, ignored := h.seenExclusionFor(c.Context(), userID, queryValues(c))
-	if userID != 0 && !ignored && c.QueryBool(hideSeenParam) {
-		c.Set(fiber.HeaderCacheControl, "private, no-store")
-	}
-	return value, ignored
-}
-
 func (h *searchHandlers) seenExclusionFor(ctx context.Context, userID int64, vals url.Values) (ids []int64, ignored bool) {
 	if !vals.Has(hideSeenParam) {
 		return nil, false
@@ -417,6 +429,9 @@ type jobSearchOutcome struct {
 	formerEmployers bool
 	// watchlist is the same for `watchlist=true`.
 	watchlist bool
+	// private is set by runJobSearch when either of those was applied: the answer is
+	// one person's own.
+	private bool
 }
 
 // own is the endpoint's own params for this request: base, plus former_employers and
@@ -434,24 +449,10 @@ func (o jobSearchOutcome) own(base []string) []string {
 	return out
 }
 
-// formerEmployerSlugs resolves the "Hiring again" filter for this request. applied is false
+// formerEmployerSlugsFor resolves the "Hiring again" filter for this request. applied is false
 // when the param is absent or false, or when nothing can read it — no session, no lookup
 // wired — and the caller then searches as if it were absent (and reports it, see own).
 // Applied with no slugs is a real answer: nothing banked resolves to a hiring company.
-func (h *searchHandlers) formerEmployerSlugs(c *fiber.Ctx) (slugs []string, applied bool, err error) {
-	userID, _ := auth.UserID(c)
-	vals := queryValues(c)
-	// QueryBool historically accepts the alternate strconv boolean spellings.
-	if c.QueryBool(formerEmployersParam) {
-		vals.Set(formerEmployersParam, "true")
-	}
-	slugs, applied, err = h.formerEmployerSlugsFor(c.Context(), userID, vals)
-	if applied {
-		c.Set(fiber.HeaderCacheControl, "private, no-store")
-	}
-	return
-}
-
 func (h *searchHandlers) formerEmployerSlugsFor(ctx context.Context, userID int64, vals url.Values) (slugs []string, applied bool, err error) {
 	if h.formerEmployers == nil || vals.Get(formerEmployersParam) != "true" {
 		return nil, false, nil
@@ -467,19 +468,9 @@ func (h *searchHandlers) formerEmployerSlugsFor(ctx context.Context, userID int6
 	return slugs, true, nil
 }
 
-// watchlistSlugs resolves `watchlist=true` for this request, with formerEmployerSlugs's
+// watchlistSlugsFor resolves `watchlist=true` for this request, with formerEmployerSlugs's
 // contract: applied is false when the param is absent, anonymous or unreadable, and applied
 // with no slugs is a real answer — an empty list — that narrows to nothing.
-func (h *searchHandlers) watchlistSlugs(c *fiber.Ctx) (slugs []string, applied bool, err error) {
-	userID, _ := auth.UserID(c)
-	// Only the spelling search.WantsWatchlist reads, the one Narrows and cmd/notify read too.
-	slugs, applied, err = h.watchlistSlugsFor(c.Context(), userID, queryValues(c))
-	if applied {
-		c.Set(fiber.HeaderCacheControl, "private, no-store")
-	}
-	return
-}
-
 func (h *searchHandlers) watchlistSlugsFor(ctx context.Context, userID int64, vals url.Values) (slugs []string, applied bool, err error) {
 	if h.watchlist == nil || !search.WantsWatchlist(vals) || userID == 0 {
 		return nil, false, nil
@@ -514,32 +505,42 @@ func personalCompanies(former []string, hasFormer bool, watch []string, hasWatch
 // the caller can return directly; on success `dropped` carries q_fields naming a
 // field outside the searchable vocabulary, plus any filter params dropped by the
 // degrade below (nil in the ordinary case), for the caller to merge into its own
-// ignoredParams(c, own) report.
+// ignoredParams(vals, own) report.
 //
 // wantSemantic is the caller's semantic flag, which is never honoured (see
 // semanticOutcome); one with nothing to apply to is reported as a dropped param.
 // exclude names job ids to keep out of the result (hide_seen); nil excludes nothing. personal is the applied-company
 // exclusion fragment; an empty fragment leaves the result unchanged. match, when set, keeps
 // only the postings at or above the caller's minimum skill match (see skillMatchFilter).
-func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude []int64, personal string, match *skillMatchFilter) (jobSearchOutcome, error) {
+func (h *searchHandlers) runJobSearch(ctx context.Context, vals url.Values, userID int64, wantSemantic bool, exclude []int64, personal string, match *skillMatchFilter) (jobSearchOutcome, error) {
 	if h.search == nil {
 		return jobSearchOutcome{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
-	limit, offset, err := pageParams(c)
+	limit, offset, err := contractPageWindowed(ctx, defaultLimit, maxLimit)
 	if err != nil {
 		return jobSearchOutcome{}, err
 	}
 
-	former, formerApplied, err := h.formerEmployerSlugs(c)
+	// QueryBool historically accepts the alternate strconv boolean spellings.
+	formerVals := vals
+	if wantsParam(vals, formerEmployersParam) {
+		formerVals = maps.Clone(vals)
+		formerVals.Set(formerEmployersParam, "true")
+	}
+	former, formerApplied, err := h.formerEmployerSlugsFor(ctx, userID, formerVals)
 	if err != nil {
 		return jobSearchOutcome{}, err
 	}
-	watch, watchApplied, err := h.watchlistSlugs(c)
+	// Only the spelling search.WantsWatchlist reads, the one Narrows and cmd/notify read too.
+	watch, watchApplied, err := h.watchlistSlugsFor(ctx, userID, vals)
 	if err != nil {
 		return jobSearchOutcome{}, err
 	}
-	return h.executeJobSearch(c.Context(), queryValues(c), jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: formerApplied, watch: watch, hasWatch: watchApplied, vector: h.matchVector(c), exclude: exclude, personal: personal, wantSemantic: wantSemantic, match: match})
+	out, err := h.executeJobSearch(ctx, vals, jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: formerApplied, watch: watch, hasWatch: watchApplied, vector: h.matchVectorFor(ctx, userID, vals), exclude: exclude, personal: personal, wantSemantic: wantSemantic, match: match})
+	// Both are one person's own sets; no shared cache may keep the answer.
+	out.private = formerApplied || watchApplied
+	return out, err
 }
 
 type jobSearchInput struct {
@@ -744,19 +745,6 @@ func demandKey(raw string) string {
 	return suggest.Title(raw)
 }
 
-// searchSort builds the Meilisearch sort directive from ?sort=<field>&order=<dir>.
-// Without a valid sort param, a no-text browse defaults to the freshest postings
-// first (posted_at desc) — relevance is meaningless for an empty query — while a
-// text query keeps relevance order (nil).
-//
-// ranked reports that the request carries a match vector. Meilisearch lets an explicit
-// sort directive take precedence over vector ranking, so returning one here would
-// silently discard the match order the caller asked for — not error, just quietly
-// serve something else.
-func searchSort(c *fiber.Ctx, ranked bool) []string {
-	return searchSortValues(queryValues(c), ranked)
-}
-
 // defaultSort is the order when the caller names none: an empty query has no relevance to
 // rank by, so the freshest first; a text query keeps relevance order (nil).
 func defaultSort(query string) []string {
@@ -766,6 +754,15 @@ func defaultSort(query string) []string {
 	return nil
 }
 
+// searchSortValues builds the Meilisearch sort directive from ?sort=<field>&order=<dir>.
+// Without a valid sort param, a no-text browse defaults to the freshest postings
+// first (posted_at desc) — relevance is meaningless for an empty query — while a
+// text query keeps relevance order (nil).
+//
+// ranked reports that the request carries a match vector. Meilisearch lets an explicit
+// sort directive take precedence over vector ranking, so returning one here would
+// silently discard the match order the caller asked for — not error, just quietly
+// serve something else.
 func searchSortValues(vals url.Values, ranked bool) []string {
 	if ranked {
 		return nil
@@ -785,8 +782,8 @@ func searchSortValues(vals url.Values, ranked bool) []string {
 // filter by delegating to the shared, pure search.FilterFromValues — the same
 // translation the notification matcher applies to a saved search's stored query,
 // so the two cannot drift. Returns nil when no facet is set.
-func buildSearchFilter(c *fiber.Ctx) any {
-	return search.FilterFromValues(queryValues(c))
+func buildSearchFilter(vals url.Values) any {
+	return search.FilterFromValues(vals)
 }
 
 // attachGhost attaches the ghost signal to a page of search hits.
@@ -808,7 +805,7 @@ func buildSearchFilter(c *fiber.Ctx) any {
 // so a persistent failure here is the badge disappearing from every search result
 // while the endpoint keeps answering 200; without the log there is nothing to see
 // it by (see logGhostLookup for why cancellation is told apart on the context).
-func (h *searchHandlers) attachGhost(c *fiber.Ctx, hits []search.JobDocument, views []jobview.Job) {
+func (h *searchHandlers) attachGhost(ctx context.Context, hits []search.JobDocument, views []jobview.Job) {
 	if len(hits) == 0 || h.queries == nil {
 		return
 	}
@@ -817,16 +814,16 @@ func (h *searchHandlers) attachGhost(c *fiber.Ctx, hits []search.JobDocument, vi
 		ids[i] = hit.ID
 	}
 
-	stampRows, err := h.queries.ListJobGhostStamps(c.Context(), ids)
+	stampRows, err := h.queries.ListJobGhostStamps(ctx, ids)
 	if err != nil {
-		logGhostLookup(c.Context(), "absence stamps", len(ids), err)
+		logGhostLookup(ctx, "absence stamps", len(ids), err)
 		return
 	}
 	stamps := make(map[int64]db.ListJobGhostStampsRow, len(stampRows))
 	for _, r := range stampRows {
 		stamps[r.ID] = r
 	}
-	evidence := ghostEvidenceFor(c.Context(), h.queries, ids)
+	evidence := ghostEvidenceFor(ctx, h.queries, ids)
 
 	now := time.Now()
 	for i, hit := range hits {

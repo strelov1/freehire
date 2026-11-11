@@ -66,6 +66,22 @@ jobs:
           docker compose logs app --tail=100
           exit 1
 
+      # Search answers 500 while the jobs index does not exist; a real deployment always has
+      # one. Build it (empty) from Postgres, as perf.yml does, so the fuzz meets search the
+      # way production serves it.
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build the search index
+        env:
+          DATABASE_URL: postgres://hire:hire@localhost:5432/hire?sslmode=disable
+          MEILI_URL: http://localhost:7700
+          MEILI_MASTER_KEY: dev-insecure-meili-key
+        run: go run ./cmd/reindex
+
       - name: Fuzz the contract
         run: |
           pipx run schemathesis==4.33.2 run openapi/api.openapi.json \

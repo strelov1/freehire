@@ -358,8 +358,8 @@ func addIgnored(meta fiber.Map, ignored []search.UnknownParam, values map[string
 
 // ignoredJobValues is search.IgnoredValues over this request's query, for the
 // endpoints that build a job filter from it.
-func ignoredJobValues(c *fiber.Ctx) map[string][]string {
-	return search.IgnoredValues(queryValues(c))
+func ignoredJobValues(vals url.Values) map[string][]string {
+	return search.IgnoredValues(vals)
 }
 
 // Config is the dependency bundle Register wires onto the app: the DB pool, the
@@ -1125,12 +1125,13 @@ func Register(app *fiber.App, cfg Config) {
 		planHandlers:                 planH,
 		directApplyHandlers:          directApplyH,
 		jobsHandlers:                 jobsH,
+		searchHandlers:               searchH,
 		companiesHandlers:            companiesH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
-	searchH.register(api, mw)
+	searchH.register(api, mw, contract)
 	suggestH.register(api, contract)
 	dictionaryH.register(api, mw, contract)
 	// Beside the search it builds a filter for, though it shares none of its

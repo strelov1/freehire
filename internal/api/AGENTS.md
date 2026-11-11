@@ -54,5 +54,5 @@ A migrated route is still a Fiber route: it keeps its middleware chain and ends 
   a new one there rather than in a group's file (groups moved in parallel wrote the same
   helper twice and broke the build when they met). Present: `optString`, `nilIfEmpty`,
   `ptrOf`, `intPtrOf`, `optNil`, `optNilInt`, `nilString`, `nilDateTime`, `contractQuery`,
-  `contractIgnoredParams`; in `helpers.go` `requireUserIDFromContext`, `contractPathID`; in
+  `contractIgnoredParams`, `contractIgnoredValues`; in `helpers.go` `requireUserIDFromContext`, `contractPathID`; in
   `handler.go` `contractPageBounded`, `contractPageWindowed`.

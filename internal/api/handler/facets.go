@@ -16,6 +16,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -276,8 +277,8 @@ func facetAttributes(only ...string) []string {
 // already treat a missing one as "Meili's per-facet cap dropped this value", so a
 // typo would hide indefinitely. company_slug is accepted here although it is
 // absent from the default set: naming it is how a caller opts in.
-func requestedFacets(c *fiber.Ctx) ([]string, error) {
-	raw := c.Query("facets")
+func requestedFacets(vals url.Values) ([]string, error) {
+	raw := vals.Get("facets")
 	if raw == "" {
 		return nil, nil
 	}
@@ -366,19 +367,20 @@ var facetsParams = []string{"q", "facets", "disjunctive"}
 // filters (the same query params as SearchJobs), instead of a page of jobs. It
 // is public like the other job reads. The response is keyed by the public facet
 // param names. Response: {"data": {total, facets, stats}}.
-func (h *searchHandlers) JobFacets(c *fiber.Ctx) error {
+func (h *searchHandlers) JobFacets(ctx context.Context, _ apigen.JobFacetsParams) (*apigen.JobFacetsOK, error) {
 	if h.facets == nil {
-		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
-	q := c.Query("q")
-	only, err := requestedFacets(c)
+	vals := contractQuery(ctx)
+	q := vals.Get("q")
+	only, err := requestedFacets(vals)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var res search.FacetResult
-	if c.QueryBool("disjunctive") {
+	if wantsParam(vals, "disjunctive") {
 		// Disjunctive: each facet counted under the full filter minus its own
 		// selection, so a selected facet still shows its siblings (the live-modal
 		// experience). The total stays the full-filter count.
@@ -387,24 +389,34 @@ func (h *searchHandlers) JobFacets(c *fiber.Ctx) error {
 		// facet from the SELECTION, so narrowing the output saves none of them —
 		// full price for a partial answer.
 		if len(only) > 0 {
-			return fiber.NewError(fiber.StatusBadRequest, "facets= cannot be combined with disjunctive")
+			return nil, fiber.NewError(fiber.StatusBadRequest, "facets= cannot be combined with disjunctive")
 		}
-		vals := queryValues(c)
-		res, err = h.facets.DisjunctiveFacetCounts(c.Context(), q, facetReqs(vals), search.FilterFromValues(vals))
+		res, err = h.facets.DisjunctiveFacetCounts(ctx, q, facetReqs(vals), search.FilterFromValues(vals))
 	} else {
-		res, err = h.cachedFacetCounts(c.Context(), search.FacetParams{
+		res, err = h.cachedFacetCounts(ctx, search.FacetParams{
 			Query:  q,
-			Filter: buildSearchFilter(c),
+			Filter: buildSearchFilter(vals),
 			Facets: facetAttributes(only...),
 		})
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	view := facetView(res)
-	h.nameCompanies(c.Context(), view.TopCompanies)
-	return dataResponseWithIgnored(c, view, ignoredParams(c, facetsParams), ignoredJobValues(c))
+	h.nameCompanies(ctx, view.TopCompanies)
+	data, err := json.Marshal(view)
+	if err != nil {
+		return nil, err
+	}
+	out := &apigen.JobFacetsOK{Data: data}
+	ignored, values := ignoredParams(vals, facetsParams), ignoredJobValues(vals)
+	if len(ignored) > 0 || len(values) > 0 {
+		out.Meta = apigen.NewOptIgnoredMeta(apigen.IgnoredMeta{
+			IgnoredParams: contractIgnoredParams(ignored), IgnoredValues: contractIgnoredValues(values),
+		})
+	}
+	return out, nil
 }
 
 // nameCompanies fills each top company's display name from the companies table

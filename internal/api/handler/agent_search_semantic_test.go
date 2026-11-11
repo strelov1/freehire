@@ -9,7 +9,7 @@ import (
 func agentSemanticApp(s searcher) *fiber.App {
 	h := &searchHandlers{search: s, descriptions: &fakeDescriptions{}}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/agent/jobs/search", h.AgentSearchJobs)
+	app.Get("/api/v1/agent/jobs/search", newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
@@ -35,7 +35,7 @@ func ignoredNames(meta map[string]any) []string {
 
 // Without the flag the agent endpoint says nothing about semantic search.
 func TestAgentSearchJobs_SemanticIsNotReportedUnlessAsked(t *testing.T) {
-	status, body := doGet(t, agentSemanticApp(&fakeSearcher{}), "/agent/jobs/search?q=payments")
+	status, body := doGet(t, agentSemanticApp(&fakeSearcher{}), "/api/v1/agent/jobs/search?q=payments")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d", status)
 	}
@@ -48,7 +48,7 @@ func TestAgentSearchJobs_SemanticIsNotReportedUnlessAsked(t *testing.T) {
 // and says it is unavailable, without listing the endpoint's own param as ignored.
 func TestAgentSearchJobs_SemanticIsUnavailable(t *testing.T) {
 	s := &fakeSearcher{}
-	status, body := doGet(t, agentSemanticApp(s), "/agent/jobs/search?q=payments&semantic=true&seniority=senior")
+	status, body := doGet(t, agentSemanticApp(s), "/api/v1/agent/jobs/search?q=payments&semantic=true&seniority=senior")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -67,7 +67,7 @@ func TestAgentSearchJobs_SemanticIsUnavailable(t *testing.T) {
 // With no text the flag has nothing to apply to, so it is reported like any dropped
 // param rather than silently ignored.
 func TestAgentSearchJobs_SemanticWithoutQueryIsReported(t *testing.T) {
-	_, body := doGet(t, agentSemanticApp(&fakeSearcher{}), "/agent/jobs/search?semantic=true&seniority=senior")
+	_, body := doGet(t, agentSemanticApp(&fakeSearcher{}), "/api/v1/agent/jobs/search?semantic=true&seniority=senior")
 
 	meta := agentMeta(t, body)
 	if _, ok := meta["semantic"]; ok {

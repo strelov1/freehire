@@ -3,9 +3,9 @@ package handler
 import (
 	"context"
 
-	"github.com/gofiber/fiber/v2"
-
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/agentview"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/htmltext"
@@ -30,37 +30,49 @@ type jobDescriptions interface {
 // `semantic=true` is still accepted but never honoured (see semanticOutcome):
 // meta.semantic is then "unavailable", the request having been answered by keywords.
 // Omitted when not asked.
-func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
-	out, err := h.runJobSearch(c, c.QueryBool("semantic"), nil, "", nil)
+func (h *searchHandlers) AgentSearchJobs(ctx context.Context, _ apigen.AgentSearchJobsParams) (*apigen.AgentJobSearchPageHeaders, error) {
+	vals := contractQuery(ctx)
+	userID, _ := auth.UserIDFromContext(ctx)
+	out, err := h.runJobSearch(ctx, vals, userID, wantsParam(vals, "semantic"), nil, "", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	res := out.res
 	if len(res.Hits) > 0 {
-		if err := h.hydrateDescriptions(c.Context(), res.Hits); err != nil {
-			return err
+		if err := h.hydrateDescriptions(ctx, res.Hits); err != nil {
+			return nil, err
 		}
 	}
 	// Recorded only once the answer is certain to be served: a failed hydration serves no
 	// postings, so it must not count them as seen.
-	agentview.Record(c.Context(), agentview.KindSearch, hitIDs(res.Hits))
+	agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 
-	format := c.Query("description_format")
+	format := vals.Get("description_format")
 	views := make([]jobview.Job, len(res.Hits))
 	for i, hit := range res.Hits {
 		hit.Description = formatDescription(hit.Description, format)
 		views[i] = hit.Job
 	}
 
-	ignored := mergedJobSearchIgnored(c, out.own(agentSearchParams), out.dropped)
-	meta := listMeta(res.Total, out.limit, out.offset, ignored, ignoredJobValues(c))
-	if out.semantic != "" {
-		meta["semantic"] = out.semantic
+	data, err := marshalRaws(views)
+	if err != nil {
+		return nil, err
+	}
+
+	ignored := mergedJobSearchIgnored(vals, out.own(agentSearchParams), out.dropped)
+	meta := apigen.AgentJobSearchMeta{
+		Total: res.Total, Limit: int64(out.limit), Offset: int64(out.offset),
+		IgnoredParams: contractIgnoredParams(ignored),
+		IgnoredValues: contractIgnoredValues(ignoredJobValues(vals)),
+		Semantic:      optString(out.semantic),
 	}
 	if res.TotalIsLowerBound {
-		meta["total_is_lower_bound"] = true
+		meta.TotalIsLowerBound = apigen.NewOptBool(true)
 	}
-	return c.JSON(fiber.Map{"data": views, "meta": meta})
+	return &apigen.AgentJobSearchPageHeaders{
+		CacheControl: optString(privateCacheControl(out.private)),
+		Response:     apigen.AgentJobSearchPage{Data: data, Meta: meta},
+	}, nil
 }
 
 // hydrateDescriptions replaces each hit's truncated preview description with the

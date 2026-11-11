@@ -37,6 +37,7 @@ model ListMeta {
 
   /** Absent when every param was read. */
   ignored_params?: IgnoredParam[];
+  ignored_values?: unknown;
 }
 
 /** A list: `{"data": [...], "meta": {...}}`. */
@@ -48,6 +49,7 @@ model List<T> {
 /** The meta of a single-item answer, sent only to carry a warning. */
 model IgnoredMeta {
   ignored_params?: IgnoredParam[];
+  ignored_values?: unknown;
 }
 
 /** A single item that read query params: `{"data": ...}`, plus `meta` when one was dropped. */

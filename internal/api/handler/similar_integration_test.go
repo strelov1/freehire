@@ -35,8 +35,8 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 	idx := &similarSearch{keyword: search.SearchResult{Hits: hits}}
 	h := &searchHandlers{search: idx, queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/:slug/similar", h.SimilarJobs)
-	status, body := doGet(t, app, "/jobs/source/similar?limit=1")
+	app.Get("/api/v1/jobs/:slug/similar", newContract(contractHandlers{searchHandlers: h}))
+	status, body := doGet(t, app, "/api/v1/jobs/source/similar?limit=1")
 	if status != 200 {
 		t.Fatalf("status=%d body=%v", status, body)
 	}
@@ -44,11 +44,11 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 	if len(data) != 1 || data[0].(map[string]any)["public_slug"] != "other" {
 		t.Fatalf("data=%v", data)
 	}
-	status, _ = doGet(t, app, "/jobs/missing/similar")
+	status, _ = doGet(t, app, "/api/v1/jobs/missing/similar")
 	if status != 404 {
 		t.Fatalf("unknown slug status=%d", status)
 	}
-	status, _ = doGet(t, app, "/jobs/private/similar")
+	status, _ = doGet(t, app, "/api/v1/jobs/private/similar")
 	if status != 404 {
 		t.Fatalf("private slug status=%d, want 404", status)
 	}

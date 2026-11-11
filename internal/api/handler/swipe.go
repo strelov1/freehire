@@ -38,11 +38,11 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 
 	res, err := h.search.Search(c.Context(), search.SearchParams{
 		Query:  c.Query("q"),
-		Filter: withExcludedIDs(buildSearchFilter(c), excluded),
+		Filter: withExcludedIDs(buildSearchFilter(queryValues(c)), excluded),
 		// false: the deck sends no match vector. It is an obvious candidate for the
 		// match sort — it is already authenticated — but ordering the deck is its own
 		// product decision, so it keeps attribute sorting until that is made.
-		Sort:   searchSort(c, false),
+		Sort:   searchSortValues(queryValues(c), false),
 		Limit:  limit,
 		Offset: offset,
 	})
@@ -54,7 +54,7 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 	for i, hit := range res.Hits {
 		views[i] = hit.Job
 	}
-	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignoredParams(c, searchParams), ignoredJobValues(c))
+	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignoredParams(queryValues(c), searchParams), ignoredJobValues(queryValues(c)))
 }
 
 // withExcludedIDs adds an `id NOT IN [...]` group to the facet filter so the

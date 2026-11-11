@@ -167,9 +167,9 @@ func TestAnAgentSearchIsRecorded(t *testing.T) {
 	fake := &fakeSearcher{res: search.SearchResult{Hits: []search.JobDocument{{ID: 3}}}}
 	h := &searchHandlers{search: fake, descriptions: &fakeDescriptions{}}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/agent/jobs/search", agentViews(sink, agentview.SurfaceAgentAPI), h.AgentSearchJobs)
+	app.Get("/api/v1/agent/jobs/search", agentViews(sink, agentview.SurfaceAgentAPI), newContract(contractHandlers{searchHandlers: h}))
 
-	if status, body := doGet(t, app, "/agent/jobs/search?q=go"); status != fiber.StatusOK {
+	if status, body := doGet(t, app, "/api/v1/agent/jobs/search?q=go"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, body = %v", status, body)
 	}
 

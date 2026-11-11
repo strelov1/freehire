@@ -27,12 +27,12 @@ func (f fakeProfiles) Get(context.Context, int64) (userprofile.Profile, error) {
 func matchSortApp(s searcher, userID int64, profiles profileReader) *fiber.App {
 	h := &searchHandlers{search: s, userProfile: profiles}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/jobs/search", func(c *fiber.Ctx) error {
+	app.Get("/api/v1/jobs/search", func(c *fiber.Ctx) error {
 		if userID != 0 {
 			c.Locals(auth.LocalsUserID, userID)
 		}
-		return h.SearchJobs(c)
-	})
+		return c.Next()
+	}, newContract(contractHandlers{searchHandlers: h}))
 	return app
 }
 
@@ -40,7 +40,7 @@ func TestSearchSortMatch_SignedInCallerIsRankedByVector(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go", "docker"}}})
 
-	status, _ := doGet(t, app, "/jobs/search?sort=match")
+	status, _ := doGet(t, app, "/api/v1/jobs/search?sort=match")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -56,7 +56,7 @@ func TestSearchSortMatch_AnonymousCallerGetsTheDefaultFeed(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := matchSortApp(fake, 0, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go"}}})
 
-	status, _ := doGet(t, app, "/jobs/search?sort=match")
+	status, _ := doGet(t, app, "/api/v1/jobs/search?sort=match")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 — a shared link carrying sort=match must not break for a signed-out visitor", status)
 	}
@@ -72,7 +72,7 @@ func TestSearchSortMatch_ProfileWithNoSkillsGetsTheDefaultFeed(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{}})
 
-	status, _ := doGet(t, app, "/jobs/search?sort=match")
+	status, _ := doGet(t, app, "/api/v1/jobs/search?sort=match")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -88,7 +88,7 @@ func TestSearchSortMatch_MissingProfileGetsTheDefaultFeed(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := matchSortApp(fake, 7, fakeProfiles{err: errors.New("no profile")})
 
-	status, _ := doGet(t, app, "/jobs/search?sort=match")
+	status, _ := doGet(t, app, "/api/v1/jobs/search?sort=match")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 — a caller who never filled a profile is not an error", status)
 	}
@@ -101,7 +101,7 @@ func TestSearchSortMatch_UnrecognisedSkillsGetTheDefaultFeed(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"definitely-not-a-skill"}}})
 
-	status, _ := doGet(t, app, "/jobs/search?sort=match")
+	status, _ := doGet(t, app, "/api/v1/jobs/search?sort=match")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -114,7 +114,7 @@ func TestSearchSortMatch_ComposesWithFacetFilters(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go"}}})
 
-	doGet(t, app, "/jobs/search?sort=match&countries=DE&seniority=senior")
+	doGet(t, app, "/api/v1/jobs/search?sort=match&countries=DE&seniority=senior")
 
 	if len(fake.got.Vector) == 0 {
 		t.Error("the vector was dropped when facets were present")
@@ -130,7 +130,7 @@ func TestSearchSortMatch_AnAttributeSortSendsNoVector(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := matchSortApp(fake, 7, fakeProfiles{profile: userprofile.Profile{Skills: []string{"go"}}})
 
-	doGet(t, app, "/jobs/search?sort=posted_at&order=asc")
+	doGet(t, app, "/api/v1/jobs/search?sort=posted_at&order=asc")
 
 	if len(fake.got.Vector) != 0 {
 		t.Error("an attribute sort still sent a vector")

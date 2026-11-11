@@ -41,7 +41,7 @@ func TestSearchJobs_AFilterRejectionDegradesToAWidenedResult(t *testing.T) {
 	}
 	app := searchApp(seq)
 
-	status, body := doGet(t, app, "/jobs/search?work_mode=remote")
+	status, body := doGet(t, app, "/api/v1/jobs/search?work_mode=remote")
 
 	if status != 200 {
 		t.Fatalf("status = %d, want 200", status)
@@ -69,7 +69,7 @@ func TestSearchJobs_NoFilterNeverRetries(t *testing.T) {
 	seq := &sequencedSearcher{errs: []error{search.ErrBadQuery}}
 	app := searchApp(seq)
 
-	status, _ := doGet(t, app, "/jobs/search")
+	status, _ := doGet(t, app, "/api/v1/jobs/search")
 
 	if status != 400 {
 		t.Errorf("status = %d, want 400 (ErrBadQuery's own mapping)", status)
@@ -85,7 +85,7 @@ func TestSearchJobs_ANonFilterFailureIsNotDegraded(t *testing.T) {
 	seq := &sequencedSearcher{errs: []error{errors.New("meilisearch: connection refused")}}
 	app := searchApp(seq)
 
-	status, _ := doGet(t, app, "/jobs/search?work_mode=remote")
+	status, _ := doGet(t, app, "/api/v1/jobs/search?work_mode=remote")
 
 	if status != 500 {
 		t.Errorf("status = %d, want 500", status)
@@ -101,7 +101,7 @@ func TestSearchJobs_ARetryThatAlsoFailsStillFails(t *testing.T) {
 	seq := &sequencedSearcher{errs: []error{search.ErrBadQuery, errors.New("meilisearch: still down")}}
 	app := searchApp(seq)
 
-	status, _ := doGet(t, app, "/jobs/search?work_mode=remote")
+	status, _ := doGet(t, app, "/api/v1/jobs/search?work_mode=remote")
 
 	if status != 500 {
 		t.Errorf("status = %d, want 500", status)

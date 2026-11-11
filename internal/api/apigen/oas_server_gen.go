@@ -33,6 +33,12 @@ type Handler interface {
 	//
 	// PUT /me/watchlist/{slug}
 	AddToWatchlist(ctx context.Context, params AddToWatchlistParams) (*AddToWatchlistOK, error)
+	// AgentSearchJobs implements agentSearchJobs operation.
+	//
+	// The same query as `/jobs/search`, always with the full description in the chosen format.
+	//
+	// GET /agent/jobs/search
+	AgentSearchJobs(ctx context.Context, params AgentSearchJobsParams) (*AgentJobSearchPageHeaders, error)
 	// ApproveCompanyRelation implements approveCompanyRelation operation.
 	//
 	// Moderators only. Approving again resumes a move that failed part-way.
@@ -597,6 +603,12 @@ type Handler interface {
 	//
 	// GET /jobs/{slug}/copies
 	JobCopies(ctx context.Context, params JobCopiesParams) (*JobCopiesPage, error)
+	// JobFacets implements jobFacets operation.
+	//
+	// The count of postings per facet value under the same filters, keyed by public facet param.
+	//
+	// GET /jobs/facets
+	JobFacets(ctx context.Context, params JobFacetsParams) (*JobFacetsOK, error)
 	// JobsActivity implements jobsActivity operation.
 	//
 	// Added and removed vacancies per period. A bad granularity or date, or a range over 4000 days, is a
@@ -972,6 +984,15 @@ type Handler interface {
 	//
 	// GET /geo/cities
 	SearchCities(ctx context.Context, params SearchCitiesParams) (*SearchCitiesOK, error)
+	// SearchJobs implements searchJobs operation.
+	//
+	// Full-text and faceted search over open postings. Public; a signed-in caller can also use
+	// `hide_seen`, `hide_applied_companies`, `former_employers`, `watchlist`, `min_skill_match` and
+	// `sort=match`, which make the answer private. A filter the endpoint does not read is named in
+	// `meta.ignored_params`, a value outside a closed vocabulary in `meta.ignored_values`.
+	//
+	// GET /jobs/search
+	SearchJobs(ctx context.Context, params SearchJobsParams) (*JobSearchPageHeaders, error)
 	// SendConversationMessage implements sendConversationMessage operation.
 	//
 	// Posts a message into an open conversation.
@@ -1002,6 +1023,12 @@ type Handler interface {
 	//
 	// PUT /me/talent-network
 	SetTalentNetworkVisibility(ctx context.Context, req *TalentNetworkVisibilityUpdate) (*SetTalentNetworkVisibilityOK, error)
+	// SimilarJobs implements similarJobs operation.
+	//
+	// Open postings in the same specialization and place as the job.
+	//
+	// GET /jobs/{slug}/similar
+	SimilarJobs(ctx context.Context, params SimilarJobsParams) (*SimilarJobsOK, error)
 	// SkillNeighbours implements skillNeighbours operation.
 	//
 	// Skills most often listed beside one skill. An unknown skill is an empty list.
