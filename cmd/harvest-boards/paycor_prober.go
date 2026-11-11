@@ -22,14 +22,25 @@ import (
 // internal/ingest/sources/paycor.go for the board format.
 type paycorProber struct{}
 
-// The minimum count avoids rejecting a small board for one or two odd titles; the share
-// threshold avoids rejecting a large employer whose catalogue has a few placeholder posts.
+// Reject only when the complete listing has at least ten distinct placeholder-title postings
+// and those postings reach 2% of the catalogue. The absolute floor protects small employers;
+// the share floor protects large employers with a few incidental QA or test roles.
 const (
 	paycorPlaceholderTitleMinimum = 10
 	paycorPlaceholderTitlePercent = 2
 )
 
-var paycorPlaceholderTitle = regexp.MustCompile(`(?i)(?:\b(?:demo|sample|advertise\d*)\b|\b(?:edge|incognito)test\d*\b|\bstandardnewdemo\d*\b|\btest[-_\s]*(?:job|posting|listing|position|role)(?:\b|_)|^test$|[([][^)\]]*\btest\b[^)\]]*[)\]]|\b(?:immediate|maya|revi)\s+test\b|\btest\s+\d)`)
+var paycorPlaceholderTitle = regexp.MustCompile(strings.Join([]string{
+	`(?i)\badvertise\d*\b`,
+	`\b(?:edge|incognito)test\d*\b`,
+	`\bstandardnewdemo\d*\b`,
+	`\btest[-_\s]*(?:job|posting|listing|position|role)(?:\b|_)`,
+	`^test$`,
+	`[([][^)\]]*\b(?:test|demo)\b[^)\]]*[)]]`,
+	`\b(?:immediate|maya|revi)\s+test\b`,
+	`\btest\s+\d`,
+	`\b(?:demo|sample)[-_\s]*(?:job|posting|listing|position|role)\b`,
+}, "|"))
 
 // paycorJobAction is the last path segment of a posting page, the shape enumeration matches
 // on. It mirrors internal/ingest/sources/paycor.go, whose constants are unexported — this
