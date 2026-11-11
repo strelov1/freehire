@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 	"time"
@@ -124,6 +125,8 @@ func TestDeliver_FailedBundleFailsEveryDigestInIt(t *testing.T) {
 func TestDeliver_UnreadableSubscriptionLeavesTheRestOfTheBundle(t *testing.T) {
 	store := bundleStore()
 	store.claimed = store.claimed[:4]
+	// The pre-claim listing saw subscription 2 deliverable; only its later read fails.
+	store.listed = maps.Clone(store.delivery)
 	delete(store.delivery, 2)
 	notifier := &fakeNotifier{}
 	reads := &missingDeliveryStore{fakeStore: store, missing: 2}

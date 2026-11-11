@@ -646,9 +646,6 @@ ORDER BY date_trunc(sqlc.arg('unit')::text, d);
 -- Per-company hiring signal
 -- ---------------------------------------------------------------------------
 
--- name: DeleteAllInsightsCompanyStats :exec
-DELETE FROM insights_company_stats;
-
 -- name: ComputeInsightsCompanyStats :many
 -- Compute on the read connection; publish the result separately on the writer.
 -- Per-(company, day) hiring velocity with a running open count, from the retained

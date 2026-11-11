@@ -62,7 +62,8 @@ func TestClaimSpreadsAcrossSubscriptionsRatherThanLowestIDFirst(t *testing.T) {
 		PerSubscription: perSubscription,
 		// Deliberately smaller than the hoarder's backlog: under the old query this
 		// bound alone was what the hoarder consumed.
-		BatchSize: 200,
+		BatchSize:       200,
+		SubscriptionIds: candidateIDs(t, queries),
 	})
 	if err != nil {
 		t.Fatalf("ClaimSubscriptionMatches: %v", err)
@@ -102,7 +103,7 @@ func TestASecondClaimTakesTheNextSliceNotTheSameOne(t *testing.T) {
 		insertNotifyPendingMatch(t, pool, subID, jobID)
 	}
 
-	arg := db.ClaimSubscriptionMatchesParams{LeaseSeconds: 600, PerSubscription: 10, BatchSize: 200}
+	arg := db.ClaimSubscriptionMatchesParams{LeaseSeconds: 600, PerSubscription: 10, BatchSize: 200, SubscriptionIds: candidateIDs(t, queries)}
 	first, err := queries.ClaimSubscriptionMatches(ctx, arg)
 	if err != nil {
 		t.Fatalf("first claim: %v", err)

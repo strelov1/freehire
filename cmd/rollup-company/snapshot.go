@@ -17,7 +17,7 @@ func rebuildCompanyRollups(ctx context.Context, readerPool, primary *pgxpool.Poo
 	reader := db.New(readerPool)
 	asOf := pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true}
 	prevTs := pgtype.Timestamptz{Time: asOf.Time.AddDate(0, 0, -growthWindowDays), Valid: true}
-	var rowsInsightsCompanyStats []db.CopyInsightsCompanyStatsParams
+	var rowsInsightsCompanyStats []db.ComputeInsightsCompanyStatsRow
 	{
 		log.Printf("analytics: starting ComputeInsightsCompanyStats")
 		done := worker.Stage("ComputeInsightsCompanyStats")
@@ -26,10 +26,7 @@ func rebuildCompanyRollups(ctx context.Context, readerPool, primary *pgxpool.Poo
 			return fmt.Errorf("ComputeInsightsCompanyStats: %w", err)
 		}
 		done()
-		rowsInsightsCompanyStats = make([]db.CopyInsightsCompanyStatsParams, len(rows))
-		for i, row := range rows {
-			rowsInsightsCompanyStats[i] = db.CopyInsightsCompanyStatsParams(row)
-		}
+		rowsInsightsCompanyStats = rows
 	}
 	var rowsInsightsCompanyGrowth []db.CopyInsightsCompanyGrowthParams
 	{
@@ -93,11 +90,8 @@ func rebuildCompanyRollups(ctx context.Context, readerPool, primary *pgxpool.Poo
 	}
 	defer tx.Rollback(ctx)
 	writer := db.New(tx)
-	if err := writer.DeleteAllInsightsCompanyStats(ctx); err != nil {
-		return fmt.Errorf("DeleteAllInsightsCompanyStats: %w", err)
-	}
-	if _, err := writer.CopyInsightsCompanyStats(ctx, rowsInsightsCompanyStats); err != nil {
-		return fmt.Errorf("CopyInsightsCompanyStats: %w", err)
+	if _, err := publishCompanyStats(ctx, tx, rowsInsightsCompanyStats); err != nil {
+		return err
 	}
 	if err := writer.DeleteAllInsightsCompanyGrowth(ctx); err != nil {
 		return fmt.Errorf("DeleteAllInsightsCompanyGrowth: %w", err)

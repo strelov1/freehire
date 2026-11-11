@@ -19,9 +19,10 @@ import (
 // deliver leases a batch of pending matches, groups them by subscription and the
 // subscriptions by recipient, and sends one message per person and channel, carrying
 // a digest per subscription. On success the included matches are marked
-// notified; on failure the delivery bookkeeping retries/dead-letters them; a
-// subscription that is not currently deliverable (e.g. Telegram unlinked) has its
-// claim released so it is retried promptly rather than waiting out the lease.
+// notified; on failure the delivery bookkeeping retries/dead-letters them. A subscription
+// that is not deliverable now (quiet hours, a daily digest not due, Telegram unlinked) is
+// never leased (deliverableSubscriptions); one that became undeliverable after the lease
+// has its claim released so it is retried promptly rather than waiting out the lease.
 // Stale matches are expired first, so nothing stale is ever claimed.
 func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 	expired, err := r.expireStale(ctx)
@@ -38,10 +39,18 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 	if perSubscription < 1 {
 		perSubscription = 1
 	}
+	eligible, err := r.deliverableSubscriptions(ctx, stats)
+	if err != nil {
+		return err
+	}
+	if len(eligible) == 0 {
+		return nil
+	}
 	claimed, err := r.store.ClaimSubscriptionMatches(ctx, db.ClaimSubscriptionMatchesParams{
 		LeaseSeconds:    r.cfg.LeaseSeconds,
 		PerSubscription: perSubscription,
 		BatchSize:       r.cfg.ClaimBatch,
+		SubscriptionIds: eligible,
 	})
 	if err != nil {
 		return err
@@ -93,11 +102,88 @@ type messageKey struct {
 }
 
 func keyOf(c db.ClaimSubscriptionMatchesRow) messageKey {
-	k := messageKey{userID: c.UserID, channel: c.Channel}
-	if c.Channel == ChannelWebhook {
-		k.subscription = c.SubscriptionID
+	return newMessageKey(c.UserID, c.Channel, c.SubscriptionID)
+}
+
+func newMessageKey(userID int64, channel string, subscriptionID int64) messageKey {
+	k := messageKey{userID: userID, channel: channel}
+	if channel == ChannelWebhook {
+		k.subscription = subscriptionID
 	}
 	return k
+}
+
+// hold says why a message cannot go out right now; holdNone means it can.
+type hold int
+
+const (
+	holdNone hold = iota
+	// holdDeferred: quiet hours, or a daily digest before its time or already sent today.
+	holdDeferred
+	// holdNoRecipient: the channel has nowhere to deliver (Telegram unlinked, no push device).
+	holdNoRecipient
+)
+
+// deliveryHold is the one definition of whether a message to this person on this channel
+// can go out at now, and where to. deliver asks it BEFORE leasing any match, so a held
+// message costs no writes, and deliverMessage asks it again after the lease for the
+// races between the two.
+//
+// A `daily` subscription waits for its own configured time and is exempt from quiet
+// hours — a chosen digest time is itself the user's preference. Everything else defers
+// to quiet hours: `instant`, and `interval` (the default), whose elapsed-interval gate
+// stays in ClaimSubscriptionMatches. personLastSent is when this person was last mailed
+// on this channel, across ALL their alerts on it: a sent message stamps every
+// subscription it carried, and a new alert must wait for tomorrow's digest rather than
+// send its own.
+func deliveryHold(now time.Time, info db.GetSubscriptionForDeliveryRow, personLastSent pgtype.Timestamptz) (dest string, h hold) {
+	tz := info.Timezone.String
+	if info.DigestFrequency == FrequencyDaily {
+		if !deliverywindow.DigestDue(now, tz, pgconv.DurationPtr(info.DigestTime), pgconv.TimePtr(personLastSent)) {
+			return "", holdDeferred
+		}
+	} else if deliverywindow.InQuietHours(now, tz, pgconv.DurationPtr(info.QuietHoursStart), pgconv.DurationPtr(info.QuietHoursEnd)) {
+		return "", holdDeferred
+	}
+	dest, ok := recipient(info)
+	if !ok {
+		return "", holdNoRecipient
+	}
+	return dest, holdNone
+}
+
+// deliverableSubscriptions lists the subscriptions with pending matches whose message
+// can go out now, so only they are leased. Stats count each held message once, as
+// deliverMessage did when it was the one releasing the lease.
+func (r *Runner) deliverableSubscriptions(ctx context.Context, stats *Stats) ([]int64, error) {
+	rows, err := r.store.ListDeliveryCandidates(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list delivery candidates: %w", err)
+	}
+	now := r.now()
+	eligible := make([]int64, 0, len(rows))
+	held := make(map[messageKey]bool)
+	for _, row := range rows {
+		// Same columns as GetSubscriptionForDelivery: the conversion stops compiling if the
+		// two queries drift apart.
+		info := db.GetSubscriptionForDeliveryRow(row)
+		_, h := deliveryHold(now, info, row.PersonLastSentAt)
+		if h == holdNone {
+			eligible = append(eligible, row.ID)
+			continue
+		}
+		key := newMessageKey(row.UserID, row.Channel, row.ID)
+		if held[key] {
+			continue
+		}
+		held[key] = true
+		if h == holdDeferred {
+			stats.Deferred++
+		} else {
+			stats.SoftSkips++
+		}
+	}
+	return eligible, nil
 }
 
 // part is one subscription's digest inside a message being assembled.
@@ -147,32 +233,17 @@ func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[
 		}
 	}
 
-	// Delivery timing: a `daily` subscription waits for its own configured time and
-	// is exempt from quiet hours — a chosen digest time is itself the user's
-	// preference. Everything else defers to quiet hours: `instant`, and `interval`
-	// (the default), whose elapsed-interval gate already ran in the claim — a
-	// message that is not due yet never reaches this point
-	// (ClaimSubscriptionMatches).
-	daily := info.DigestFrequency == FrequencyDaily
+	// The same gate deliver ran before claiming (deliveryHold), repeated here because the
+	// world moves between the two: quiet hours can begin, a Telegram chat can be unlinked.
+	// A message that is not due yet normally never reaches this point.
 	stamped := info.DigestFrequency != FrequencyInstant
-	tz := info.Timezone.String
-	if daily {
-		// When this person was last mailed on this channel, across ALL their alerts on
-		// it (the claim reads it): a sent message stamps every subscription it carried,
-		// and a new alert must wait for tomorrow's digest rather than send its own.
-		if !deliverywindow.DigestDue(r.now(), tz, pgconv.DurationPtr(info.DigestTime), pgconv.TimePtr(parts[0].claim.personLastSent)) {
-			releaseAll()
-			stats.Deferred++
-			return
-		}
-	} else if deliverywindow.InQuietHours(r.now(), tz, pgconv.DurationPtr(info.QuietHoursStart), pgconv.DurationPtr(info.QuietHoursEnd)) {
+	dest, h := deliveryHold(r.now(), info, parts[0].claim.personLastSent)
+	switch h {
+	case holdDeferred:
 		releaseAll()
 		stats.Deferred++
 		return
-	}
-
-	dest, ok := recipient(info)
-	if !ok {
+	case holdNoRecipient:
 		// Not deliverable right now (e.g. Telegram not linked): soft-skip, keep the
 		// matches pending for a later pass, do not count a failed attempt.
 		releaseAll()

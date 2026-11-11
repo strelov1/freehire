@@ -214,6 +214,11 @@ WITH claimable AS (
         FOR UPDATE SKIP LOCKED
     ) m
     WHERE s.active
+      -- Only the subscriptions the caller found deliverable NOW (ListDeliveryCandidates run
+      -- through notify's deliveryHold). Without it a daily digest before its time, quiet
+      -- hours or an unlinked channel were claimed and released again on every pass, one
+      -- UPDATE pair per pending match.
+      AND s.id = ANY(sqlc.arg(subscription_ids)::bigint[])
       -- The account-wide "job alerts by email" switch, the same gate ListActiveSubscriptions
       -- applies when matches are recorded. Recording alone is not enough: matches recorded
       -- BEFORE an opt-out (an RFC 8058 one-click unsubscribe) are still pending, and without
@@ -362,7 +367,13 @@ SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_dige
        COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
        COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
-       ns.quiet_hours_end AS quiet_hours_end
+       ns.quiet_hours_end AS quiet_hours_end,
+       -- When this person was last written to on this channel: the claim's `pl.last_sent`,
+       -- the newest stamp among their active subscriptions on it (a webhook keeps its own).
+       (SELECT max(o.last_digest_sent_at)
+          FROM subscriptions o
+         WHERE o.user_id = s.user_id AND o.channel = s.channel AND o.active
+           AND (s.channel <> 'webhook' OR o.id = s.id))::timestamptz AS person_last_sent_at
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 JOIN users u ON u.id = s.user_id
@@ -370,6 +381,49 @@ LEFT JOIN telegram_links tl ON tl.user_id = s.user_id AND u.banned_at IS NULL
 LEFT JOIN webhook_configs wc ON wc.user_id = s.user_id AND u.banned_at IS NULL
 LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
 WHERE s.id = $1;
+
+-- name: ListDeliveryCandidates :many
+-- Every active subscription that has a pending match, with the SAME delivery context row as
+-- GetSubscriptionForDelivery (column for column: notify converts one into the other, so the
+-- build breaks if they drift). The worker decides from it, with deliverywindow and recipient,
+-- which of them are deliverable now, and only those go to ClaimSubscriptionMatches: a
+-- subscription held by quiet hours, a daily digest time or a missing recipient is never leased.
+-- A superset of what the claim can take (no lease or email opt-out test here: the claim keeps
+-- those), so a row listed and then not claimed costs a read, never a missed delivery.
+SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_digest_sent_at,
+       ss.name AS saved_search_name,
+       ss.query AS saved_search_query,
+       mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS account_email,
+       u.timezone AS timezone,
+       tl.chat_id AS telegram_chat_id,
+       (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id))::boolean AS has_push_device,
+       wc.url AS webhook_url,
+       COALESCE(wc.enabled, false) AS webhook_enabled,
+       COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
+       COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
+       ns.quiet_hours_start AS quiet_hours_start,
+       ns.quiet_hours_end AS quiet_hours_end,
+       -- When this person was last written to on this channel: the claim's `pl.last_sent`,
+       -- the newest stamp among their active subscriptions on it (a webhook keeps its own).
+       (SELECT max(o.last_digest_sent_at)
+          FROM subscriptions o
+         WHERE o.user_id = s.user_id AND o.channel = s.channel AND o.active
+           AND (s.channel <> 'webhook' OR o.id = s.id))::timestamptz AS person_last_sent_at
+FROM subscriptions s
+JOIN saved_searches ss ON ss.id = s.saved_search_id
+JOIN users u ON u.id = s.user_id
+LEFT JOIN telegram_links tl ON tl.user_id = s.user_id AND u.banned_at IS NULL
+LEFT JOIN webhook_configs wc ON wc.user_id = s.user_id AND u.banned_at IS NULL
+LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
+WHERE s.active
+  AND EXISTS (
+      SELECT 1 FROM subscription_matches mm
+      WHERE mm.subscription_id = s.id
+        AND mm.notified_at IS NULL
+        AND mm.failed_at IS NULL
+        AND mm.expired_at IS NULL
+        AND mm.query_revision = ss.query_revision
+  );
 
 -- name: MarkDigestSent :exec
 -- Stamp the subscription's last digest send instant. A `daily` subscription reads it

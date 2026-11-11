@@ -118,6 +118,14 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   `interval` and `daily` stamp `subscriptions.last_digest_sent_at` after a send. The
   interval is measured from that stamp, so on a five-minute timer an hourly digest lands
   every 60-65 minutes rather than on the hour.
+- **Quiet hours, the `daily` time and a missing recipient are decided BEFORE the claim.**
+  `deliver` lists the subscriptions with a pending match (`ListDeliveryCandidates`, the same
+  columns as `GetSubscriptionForDelivery` plus the person's last send, so one converts to the
+  other), asks `deliveryHold` (`deliverywindow` + `recipient`) which can go out now, and passes
+  only those ids to `ClaimSubscriptionMatches`. Before, they were claimed and released again on
+  every pass (~8.5M `subscription_matches` updates in a day, 2026-11-11 audit). `deliverMessage`
+  asks `deliveryHold` again after the lease for the races in between, so a held message still
+  releases rather than sends. The SQL interval gate and the email opt-out stay in the claim.
 - **One message per person and channel, carrying a digest per due subscription.**
   `deliver` groups the claim by `(user_id, channel)` (`ClaimSubscriptionMatches` returns
   both) and sends one `notify.Message`: one mail with a section per alert, one Telegram

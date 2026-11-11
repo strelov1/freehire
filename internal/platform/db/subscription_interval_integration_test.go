@@ -62,7 +62,7 @@ func TestClaimSubscriptionMatches_IntervalGate(t *testing.T) {
 		seed("daily@example.test", "digest_frequency = 'daily', digest_time = '09:00'", "1 minute"),
 	}
 
-	claimed, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 100})
+	claimed, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{SubscriptionIds: allSubscriptionIDs(t, pool), LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestClaimSubscriptionMatches_IntervalGateIsPerPersonAndChannel(t *testing.T
 		sub(elapsed, "email", ""),           // and joins that mail
 	}
 
-	claimed, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 100})
+	claimed, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{SubscriptionIds: allSubscriptionIDs(t, pool), LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 100})
 	if err != nil {
 		t.Fatal(err)
 	}

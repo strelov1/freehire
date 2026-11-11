@@ -223,6 +223,7 @@ func (q *Queries) ComputeInsightsCompanyResponse(ctx context.Context) ([]Compute
 }
 
 const computeInsightsCompanyStats = `-- name: ComputeInsightsCompanyStats :many
+
 SELECT
     (company_slug)::text AS company_slug,
     (day)::date AS day,
@@ -252,6 +253,9 @@ type ComputeInsightsCompanyStatsRow struct {
 	Open        int32       `json:"open"`
 }
 
+// ---------------------------------------------------------------------------
+// Per-company hiring signal
+// ---------------------------------------------------------------------------
 // Compute on the read connection; publish the result separately on the writer.
 // Per-(company, day) hiring velocity with a running open count, from the retained
 // jobs lifecycle. Each canonical, attributable job (company_slug <> ” AND
@@ -1301,19 +1305,6 @@ DELETE FROM insights_company_response
 
 func (q *Queries) DeleteAllInsightsCompanyResponse(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteAllInsightsCompanyResponse)
-	return err
-}
-
-const deleteAllInsightsCompanyStats = `-- name: DeleteAllInsightsCompanyStats :exec
-
-DELETE FROM insights_company_stats
-`
-
-// ---------------------------------------------------------------------------
-// Per-company hiring signal
-// ---------------------------------------------------------------------------
-func (q *Queries) DeleteAllInsightsCompanyStats(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteAllInsightsCompanyStats)
 	return err
 }
 

@@ -93,7 +93,12 @@ type fakeStore struct {
 	recordCalls       int             // how many times RecordSubscriptionMatches was called, not how many pairs
 	claimed           []db.ClaimSubscriptionMatchesRow
 	delivery          map[int64]db.GetSubscriptionForDeliveryRow
-	digestJobs        map[int64]db.GetJobsForDigestRow
+	// listed, when set, is what ListDeliveryCandidates reads instead of delivery: the
+	// state the pre-claim gate saw, for a test where the world moves before the recheck.
+	listed map[int64]db.GetSubscriptionForDeliveryRow
+	// claimParams records every ClaimSubscriptionMatches call.
+	claimParams []db.ClaimSubscriptionMatchesParams
+	digestJobs  map[int64]db.GetJobsForDigestRow
 
 	// excludedSkills maps a user id to their avoid-skills preference; a user id absent from
 	// this map has no profile row, mirroring the real query.
@@ -224,14 +229,18 @@ func (s *fakeStore) RecordSubscriptionMatches(_ context.Context, a db.RecordSubs
 // stands for a subscription of its own person (UserID = SubscriptionID), so a case
 // written before messages were bundled per person still sends one per subscription;
 // the bundling cases set UserID and Channel explicitly.
-func (s *fakeStore) ClaimSubscriptionMatches(context.Context, db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error) {
+func (s *fakeStore) ClaimSubscriptionMatches(_ context.Context, a db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error) {
 	s.calls = append(s.calls, "claim")
-	rows := make([]db.ClaimSubscriptionMatchesRow, len(s.claimed))
-	for i, c := range s.claimed {
+	s.claimParams = append(s.claimParams, a)
+	rows := make([]db.ClaimSubscriptionMatchesRow, 0, len(s.claimed))
+	for _, c := range s.claimed {
 		if c.UserID == 0 {
 			c.UserID = c.SubscriptionID
 		}
-		rows[i] = c
+		// Like the SQL, only the subscriptions the caller named are leased.
+		if slices.Contains(a.SubscriptionIds, c.SubscriptionID) {
+			rows = append(rows, c)
+		}
 	}
 	// Like the SQL, a row unscripted on the point carries the owner's newest stamp on
 	// the channel, read from the delivery rows.
@@ -240,13 +249,60 @@ func (s *fakeStore) ClaimSubscriptionMatches(context.Context, db.ClaimSubscripti
 			continue
 		}
 		for _, o := range rows {
-			if o.UserID != rows[i].UserID || o.Channel != rows[i].Channel {
+			if o.UserID != rows[i].UserID || o.Channel != rows[i].Channel ||
+				(rows[i].Channel == ChannelWebhook && o.SubscriptionID != rows[i].SubscriptionID) {
 				continue
 			}
 			if t := s.delivery[o.SubscriptionID].LastDigestSentAt; t.Valid && (!rows[i].PersonLastSentAt.Valid || t.Time.After(rows[i].PersonLastSentAt.Time)) {
 				rows[i].PersonLastSentAt = t
 			}
 		}
+	}
+	return rows, nil
+}
+
+// ListDeliveryCandidates lists the subscriptions the scripted claim holds matches for,
+// each with its delivery row, in subscription order.
+func (s *fakeStore) ListDeliveryCandidates(context.Context) ([]db.ListDeliveryCandidatesRow, error) {
+	s.calls = append(s.calls, "candidates")
+	src := s.delivery
+	if s.listed != nil {
+		src = s.listed
+	}
+	var rows []db.ListDeliveryCandidatesRow
+	seen := map[int64]bool{}
+	for _, c := range s.claimed {
+		if seen[c.SubscriptionID] {
+			continue
+		}
+		seen[c.SubscriptionID] = true
+		info := src[c.SubscriptionID]
+		info.ID = c.SubscriptionID
+		if info.UserID == 0 {
+			info.UserID = c.UserID
+			if info.UserID == 0 {
+				info.UserID = c.SubscriptionID
+			}
+		}
+		// The owner's newest stamp on the channel, as the SQL reads it.
+		for _, o := range s.claimed {
+			other := src[o.SubscriptionID]
+			ownerID := other.UserID
+			if ownerID == 0 {
+				ownerID = o.UserID
+			}
+			if ownerID == 0 {
+				ownerID = o.SubscriptionID
+			}
+			if ownerID != info.UserID || other.Channel != info.Channel ||
+				(info.Channel == ChannelWebhook && o.SubscriptionID != info.ID) {
+				continue
+			}
+			if t := src[o.SubscriptionID].LastDigestSentAt; t.Valid && (!info.PersonLastSentAt.Valid || t.Time.After(info.PersonLastSentAt.Time)) {
+				info.PersonLastSentAt = t
+			}
+		}
+		rows = append(rows, db.ListDeliveryCandidatesRow(info))
 	}
 	return rows, nil
 }
@@ -825,8 +881,8 @@ func TestDeliver_UnlinkedTelegramIsSoftSkipped(t *testing.T) {
 	if len(notifier.sent) != 0 {
 		t.Errorf("sent = %d, want 0 (unlinked → no send)", len(notifier.sent))
 	}
-	if len(store.released) != 1 {
-		t.Errorf("released = %d, want 1 (claim released for retry)", len(store.released))
+	if len(store.claimParams) != 0 || len(store.released) != 0 {
+		t.Errorf("claims = %d, released = %d, want 0/0 (an undeliverable subscription is never leased)", len(store.claimParams), len(store.released))
 	}
 	if len(store.failures) != 0 {
 		t.Errorf("failures = %d, want 0 (soft-skip is not a failed attempt)", len(store.failures))
@@ -1082,14 +1138,18 @@ func TestDeliverOne_InstantDeferredDuringQuietHours(t *testing.T) {
 	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
 	r.now = func() time.Time { return fixedNow }
 
-	if _, err := r.Run(context.Background()); err != nil {
+	stats, err := r.Run(context.Background())
+	if err != nil {
 		t.Fatal(err)
 	}
 	if len(notifier.sent) != 0 {
 		t.Errorf("sent = %d, want 0 (deferred during quiet hours)", len(notifier.sent))
 	}
-	if len(store.released) != 1 {
-		t.Errorf("released = %d, want 1 (claim released to retry later)", len(store.released))
+	if len(store.claimParams) != 0 || len(store.released) != 0 {
+		t.Errorf("claims = %d, released = %d, want 0/0 (a held message is never leased)", len(store.claimParams), len(store.released))
+	}
+	if stats.Deferred != 1 {
+		t.Errorf("deferred = %d, want 1", stats.Deferred)
 	}
 	if len(store.notified) != 0 || len(store.failures) != 0 {
 		t.Errorf("notified=%d failures=%d, want 0/0 (a deferral is neither)", len(store.notified), len(store.failures))
@@ -1143,8 +1203,8 @@ func TestDeliverOne_DailyDeferredBeforeDigestTime(t *testing.T) {
 	if len(notifier.sent) != 0 {
 		t.Errorf("sent = %d, want 0 (before the daily digest time)", len(notifier.sent))
 	}
-	if len(store.released) != 1 {
-		t.Errorf("released = %d, want 1", len(store.released))
+	if len(store.claimParams) != 0 || len(store.released) != 0 {
+		t.Errorf("claims = %d, released = %d, want 0/0", len(store.claimParams), len(store.released))
 	}
 }
 
@@ -1764,8 +1824,8 @@ func TestDeliverOne_IntervalDeferredDuringQuietHours(t *testing.T) {
 	if _, err := r.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(notifier.sent) != 0 || len(store.released) != 1 {
-		t.Errorf("sent=%d released=%d, want 0/1 (held through quiet hours)", len(notifier.sent), len(store.released))
+	if len(notifier.sent) != 0 || len(store.claimParams) != 0 || len(store.released) != 0 {
+		t.Errorf("sent=%d claims=%d released=%d, want 0/0/0 (held through quiet hours, never leased)", len(notifier.sent), len(store.claimParams), len(store.released))
 	}
 	if len(store.digestSent) != 0 {
 		t.Errorf("digestSent = %v, want none (nothing was sent)", store.digestSent)

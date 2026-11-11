@@ -112,42 +112,6 @@ func (q *Queries) CopyInsightsCompanyResponse(ctx context.Context, arg []CopyIns
 	return q.db.CopyFrom(ctx, []string{"insights_company_response"}, []string{"company_slug", "applications", "answered", "median_reply_days"}, &iteratorForCopyInsightsCompanyResponse{rows: arg})
 }
 
-// iteratorForCopyInsightsCompanyStats implements pgx.CopyFromSource.
-type iteratorForCopyInsightsCompanyStats struct {
-	rows                 []CopyInsightsCompanyStatsParams
-	skippedFirstNextCall bool
-}
-
-func (r *iteratorForCopyInsightsCompanyStats) Next() bool {
-	if len(r.rows) == 0 {
-		return false
-	}
-	if !r.skippedFirstNextCall {
-		r.skippedFirstNextCall = true
-		return true
-	}
-	r.rows = r.rows[1:]
-	return len(r.rows) > 0
-}
-
-func (r iteratorForCopyInsightsCompanyStats) Values() ([]interface{}, error) {
-	return []interface{}{
-		r.rows[0].CompanySlug,
-		r.rows[0].Day,
-		r.rows[0].Added,
-		r.rows[0].Removed,
-		r.rows[0].Open,
-	}, nil
-}
-
-func (r iteratorForCopyInsightsCompanyStats) Err() error {
-	return nil
-}
-
-func (q *Queries) CopyInsightsCompanyStats(ctx context.Context, arg []CopyInsightsCompanyStatsParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"insights_company_stats"}, []string{"company_slug", "day", "added", "removed", "open"}, &iteratorForCopyInsightsCompanyStats{rows: arg})
-}
-
 // iteratorForCopyInsightsCompanyViews implements pgx.CopyFromSource.
 type iteratorForCopyInsightsCompanyViews struct {
 	rows                 []CopyInsightsCompanyViewsParams
