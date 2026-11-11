@@ -29,6 +29,7 @@ import (
 type contractHandlers struct {
 	*emailPrefsHandlers
 	*talentCatalogHandlers
+	*companyWatchHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}

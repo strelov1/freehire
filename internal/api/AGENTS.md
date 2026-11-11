@@ -31,7 +31,8 @@ A migrated route is still a Fiber route: it keeps its middleware chain and ends 
 - Lists are `List<T>` and a single item that reads query params is `DataWithIgnored<T>`
   (`typespec/common.tsp`). A filter param the endpoint cannot read is not refused: declare
   it as a string, parse `contractQuery(ctx)` as before, and pass the report through
-  `contractIgnoredParams`.
+  `contractIgnoredParams`. Page params are strings too, read by `contractPageBounded` (the
+  same clamp as `pageParamsBounded`); a list with no filter report uses `PageMeta`.
 - The generated encoder leaves out only an unset `Opt*` and a nil slice. A Go field that
   was `omitempty` maps through `optString` / `nilIfEmpty`, or the answer changes shape.
 - The wrapper hands the generated router the request as Fiber already accepted it: the

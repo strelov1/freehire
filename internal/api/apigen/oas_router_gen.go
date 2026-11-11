@@ -11,11 +11,14 @@ import (
 )
 
 var (
-	rn1AllowedHeaders = map[string]string{
+	rn4AllowedHeaders = map[string]string{
 		"PATCH": "Content-Type",
 	}
-	rn3AllowedHeaders = map[string]string{
+	rn6AllowedHeaders = map[string]string{
 		"PATCH": "Content-Type",
+	}
+	rn11AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
 	}
 )
 
@@ -87,7 +90,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "GET,PATCH",
-							allowedHeaders: rn1AllowedHeaders,
+							allowedHeaders: rn4AllowedHeaders,
 							acceptPost:     "",
 							acceptPatch:    "application/json",
 						})
@@ -123,31 +126,146 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 				}
 
-			case 'm': // Prefix: "me/email-groups"
+			case 'm': // Prefix: "me/"
 
-				if l := len("me/email-groups"); len(elem) >= l && elem[0:l] == "me/email-groups" {
+				if l := len("me/"); len(elem) >= l && elem[0:l] == "me/" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					// Leaf node.
-					switch r.Method {
-					case "GET":
-						s.handleGetMyEmailGroupsRequest([0]string{}, elemIsEscaped, w, r)
-					case "PATCH":
-						s.handleUpdateMyEmailGroupsRequest([0]string{}, elemIsEscaped, w, r)
-					default:
-						s.notAllowed(w, r, notAllowedParams{
-							allowedMethods: "GET,PATCH",
-							allowedHeaders: rn3AllowedHeaders,
-							acceptPost:     "",
-							acceptPatch:    "application/json",
-						})
+					break
+				}
+				switch elem[0] {
+				case 'e': // Prefix: "email-groups"
+
+					if l := len("email-groups"); len(elem) >= l && elem[0:l] == "email-groups" {
+						elem = elem[l:]
+					} else {
+						break
 					}
 
-					return
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleGetMyEmailGroupsRequest([0]string{}, elemIsEscaped, w, r)
+						case "PATCH":
+							s.handleUpdateMyEmailGroupsRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET,PATCH",
+								allowedHeaders: rn6AllowedHeaders,
+								acceptPost:     "",
+								acceptPatch:    "application/json",
+							})
+						}
+
+						return
+					}
+
+				case 'w': // Prefix: "watchlist"
+
+					if l := len("watchlist"); len(elem) >= l && elem[0:l] == "watchlist" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						switch r.Method {
+						case "GET":
+							s.handleListWatchlistRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+					switch elem[0] {
+					case '/': // Prefix: "/"
+
+						if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							break
+						}
+						switch elem[0] {
+						case 'i': // Prefix: "import"
+							origElem := elem
+							if l := len("import"); len(elem) >= l && elem[0:l] == "import" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch r.Method {
+								case "POST":
+									s.handleImportWatchlistRequest([0]string{}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "POST",
+										allowedHeaders: rn11AllowedHeaders,
+										acceptPost:     "application/json",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+
+							elem = origElem
+						}
+						// Param: "slug"
+						// Leaf parameter, slashes are prohibited
+						idx := strings.IndexByte(elem, '/')
+						if idx >= 0 {
+							break
+						}
+						args[0] = elem
+						elem = ""
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "DELETE":
+								s.handleRemoveFromWatchlistRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							case "GET":
+								s.handleGetWatchingRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							case "PUT":
+								s.handleAddToWatchlistRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "DELETE,GET,PUT",
+									allowedHeaders: nil,
+									acceptPost:     "",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					}
+
 				}
 
 			case 't': // Prefix: "talent"
@@ -431,38 +549,161 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 
 				}
 
-			case 'm': // Prefix: "me/email-groups"
+			case 'm': // Prefix: "me/"
 
-				if l := len("me/email-groups"); len(elem) >= l && elem[0:l] == "me/email-groups" {
+				if l := len("me/"); len(elem) >= l && elem[0:l] == "me/" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					// Leaf node.
-					switch method {
-					case "GET":
-						r.name = GetMyEmailGroupsOperation
-						r.summary = ""
-						r.operationID = "getMyEmailGroups"
-						r.operationGroup = ""
-						r.pathPattern = "/me/email-groups"
-						r.args = args
-						r.count = 0
-						return r, true
-					case "PATCH":
-						r.name = UpdateMyEmailGroupsOperation
-						r.summary = ""
-						r.operationID = "updateMyEmailGroups"
-						r.operationGroup = ""
-						r.pathPattern = "/me/email-groups"
-						r.args = args
-						r.count = 0
-						return r, true
-					default:
-						return
+					break
+				}
+				switch elem[0] {
+				case 'e': // Prefix: "email-groups"
+
+					if l := len("email-groups"); len(elem) >= l && elem[0:l] == "email-groups" {
+						elem = elem[l:]
+					} else {
+						break
 					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = GetMyEmailGroupsOperation
+							r.summary = ""
+							r.operationID = "getMyEmailGroups"
+							r.operationGroup = ""
+							r.pathPattern = "/me/email-groups"
+							r.args = args
+							r.count = 0
+							return r, true
+						case "PATCH":
+							r.name = UpdateMyEmailGroupsOperation
+							r.summary = ""
+							r.operationID = "updateMyEmailGroups"
+							r.operationGroup = ""
+							r.pathPattern = "/me/email-groups"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+				case 'w': // Prefix: "watchlist"
+
+					if l := len("watchlist"); len(elem) >= l && elem[0:l] == "watchlist" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						switch method {
+						case "GET":
+							r.name = ListWatchlistOperation
+							r.summary = ""
+							r.operationID = "listWatchlist"
+							r.operationGroup = ""
+							r.pathPattern = "/me/watchlist"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+					switch elem[0] {
+					case '/': // Prefix: "/"
+
+						if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							break
+						}
+						switch elem[0] {
+						case 'i': // Prefix: "import"
+							origElem := elem
+							if l := len("import"); len(elem) >= l && elem[0:l] == "import" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch method {
+								case "POST":
+									r.name = ImportWatchlistOperation
+									r.summary = ""
+									r.operationID = "importWatchlist"
+									r.operationGroup = ""
+									r.pathPattern = "/me/watchlist/import"
+									r.args = args
+									r.count = 0
+									return r, true
+								default:
+									return
+								}
+							}
+
+							elem = origElem
+						}
+						// Param: "slug"
+						// Leaf parameter, slashes are prohibited
+						idx := strings.IndexByte(elem, '/')
+						if idx >= 0 {
+							break
+						}
+						args[0] = elem
+						elem = ""
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "DELETE":
+								r.name = RemoveFromWatchlistOperation
+								r.summary = ""
+								r.operationID = "removeFromWatchlist"
+								r.operationGroup = ""
+								r.pathPattern = "/me/watchlist/{slug}"
+								r.args = args
+								r.count = 1
+								return r, true
+							case "GET":
+								r.name = GetWatchingOperation
+								r.summary = ""
+								r.operationID = "getWatching"
+								r.operationGroup = ""
+								r.pathPattern = "/me/watchlist/{slug}"
+								r.args = args
+								r.count = 1
+								return r, true
+							case "PUT":
+								r.name = AddToWatchlistOperation
+								r.summary = ""
+								r.operationID = "addToWatchlist"
+								r.operationGroup = ""
+								r.pathPattern = "/me/watchlist/{slug}"
+								r.args = args
+								r.count = 1
+								return r, true
+							default:
+								return
+							}
+						}
+
+					}
+
 				}
 
 			case 't': // Prefix: "talent"

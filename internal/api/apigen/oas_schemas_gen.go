@@ -12,6 +12,21 @@ func (s *ProblemStatusCode) Error() string {
 	return fmt.Sprintf("code %d: %+v", s.StatusCode, s.Response)
 }
 
+// A single item: `{"data": ...}`.
+type AddToWatchlistOK struct {
+	Data WatchedCompany `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *AddToWatchlistOK) GetData() WatchedCompany {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *AddToWatchlistOK) SetData(val WatchedCompany) {
+	s.Data = val
+}
+
 // The preference page's state: the address mail goes to and the three switches.
 // Ref: #/components/schemas/EmailPrefs
 type EmailPrefs struct {
@@ -406,6 +421,47 @@ func (s *GetTalentPhotoOKHeaders) SetResponse(val GetTalentPhotoOK) {
 	s.Response = val
 }
 
+// A single item: `{"data": ...}`.
+type GetWatchingOK struct {
+	Data Watching `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetWatchingOK) GetData() Watching {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetWatchingOK) SetData(val Watching) {
+	s.Data = val
+}
+
+// GetWatchingOKHeaders wraps GetWatchingOK with response headers.
+type GetWatchingOKHeaders struct {
+	CacheControl string
+	Response     GetWatchingOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *GetWatchingOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *GetWatchingOKHeaders) GetResponse() GetWatchingOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *GetWatchingOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *GetWatchingOKHeaders) SetResponse(val GetWatchingOK) {
+	s.Response = val
+}
+
 // The meta of a single-item answer, sent only to carry a warning.
 // Ref: #/components/schemas/IgnoredMeta
 type IgnoredMeta struct {
@@ -450,7 +506,22 @@ func (s *IgnoredParam) SetDidYouMean(val OptString) {
 	s.DidYouMean = val
 }
 
-// A page of a list, with what the filter dropped.
+// A single item: `{"data": ...}`.
+type ImportWatchlistOK struct {
+	Data WatchlistImportResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ImportWatchlistOK) GetData() WatchlistImportResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ImportWatchlistOK) SetData(val WatchlistImportResult) {
+	s.Data = val
+}
+
+// A page of a filtered list, with what the filter dropped.
 // Ref: #/components/schemas/ListMeta
 type ListMeta struct {
 	Total  int64 `json:"total"`
@@ -878,6 +949,9 @@ func (s *ProblemStatusCode) SetResponse(val Problem) {
 	s.Response = val
 }
 
+// RemoveFromWatchlistNoContent is response for RemoveFromWatchlist operation.
+type RemoveFromWatchlistNoContent struct{}
+
 // The anonymised card: only what a dictionary can vouch for.
 // Ref: #/components/schemas/TalentCard
 type TalentCard struct {
@@ -1267,4 +1341,212 @@ func (s *UpdateMyEmailGroupsOK) GetData() EmailPrefs {
 // SetData sets the value of Data.
 func (s *UpdateMyEmailGroupsOK) SetData(val EmailPrefs) {
 	s.Data = val
+}
+
+// Ref: #/components/schemas/WatchedCompany
+type WatchedCompany struct {
+	Slug    string    `json:"slug"`
+	Name    string    `json:"name"`
+	AddedAt time.Time `json:"added_at"`
+}
+
+// GetSlug returns the value of Slug.
+func (s *WatchedCompany) GetSlug() string {
+	return s.Slug
+}
+
+// GetName returns the value of Name.
+func (s *WatchedCompany) GetName() string {
+	return s.Name
+}
+
+// GetAddedAt returns the value of AddedAt.
+func (s *WatchedCompany) GetAddedAt() time.Time {
+	return s.AddedAt
+}
+
+// SetSlug sets the value of Slug.
+func (s *WatchedCompany) SetSlug(val string) {
+	s.Slug = val
+}
+
+// SetName sets the value of Name.
+func (s *WatchedCompany) SetName(val string) {
+	s.Name = val
+}
+
+// SetAddedAt sets the value of AddedAt.
+func (s *WatchedCompany) SetAddedAt(val time.Time) {
+	s.AddedAt = val
+}
+
+// Ref: #/components/schemas/Watching
+type Watching struct {
+	Watched bool `json:"watched"`
+}
+
+// GetWatched returns the value of Watched.
+func (s *Watching) GetWatched() bool {
+	return s.Watched
+}
+
+// SetWatched sets the value of Watched.
+func (s *Watching) SetWatched(val bool) {
+	s.Watched = val
+}
+
+// Ref: #/components/schemas/WatchlistImport
+type WatchlistImport struct {
+	// Company names or slugs, one per entry. An empty list is refused with a 400.
+	Names []string `json:"names"`
+}
+
+// GetNames returns the value of Names.
+func (s *WatchlistImport) GetNames() []string {
+	return s.Names
+}
+
+// SetNames sets the value of Names.
+func (s *WatchlistImport) SetNames(val []string) {
+	s.Names = val
+}
+
+// Ref: #/components/schemas/WatchlistImportResult
+type WatchlistImportResult struct {
+	Added int64 `json:"added"`
+	// Already on the list.
+	Already int64 `json:"already"`
+	// Entries that did not resolve to exactly one company, as typed.
+	Unmatched []string `json:"unmatched"`
+}
+
+// GetAdded returns the value of Added.
+func (s *WatchlistImportResult) GetAdded() int64 {
+	return s.Added
+}
+
+// GetAlready returns the value of Already.
+func (s *WatchlistImportResult) GetAlready() int64 {
+	return s.Already
+}
+
+// GetUnmatched returns the value of Unmatched.
+func (s *WatchlistImportResult) GetUnmatched() []string {
+	return s.Unmatched
+}
+
+// SetAdded sets the value of Added.
+func (s *WatchlistImportResult) SetAdded(val int64) {
+	s.Added = val
+}
+
+// SetAlready sets the value of Already.
+func (s *WatchlistImportResult) SetAlready(val int64) {
+	s.Already = val
+}
+
+// SetUnmatched sets the value of Unmatched.
+func (s *WatchlistImportResult) SetUnmatched(val []string) {
+	s.Unmatched = val
+}
+
+// Ref: #/components/schemas/WatchlistMeta
+type WatchlistMeta struct {
+	Total  int64 `json:"total"`
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+	// How many companies one list may hold.
+	Max int64 `json:"max"`
+}
+
+// GetTotal returns the value of Total.
+func (s *WatchlistMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// GetLimit returns the value of Limit.
+func (s *WatchlistMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetOffset returns the value of Offset.
+func (s *WatchlistMeta) GetOffset() int64 {
+	return s.Offset
+}
+
+// GetMax returns the value of Max.
+func (s *WatchlistMeta) GetMax() int64 {
+	return s.Max
+}
+
+// SetTotal sets the value of Total.
+func (s *WatchlistMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
+// SetLimit sets the value of Limit.
+func (s *WatchlistMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetOffset sets the value of Offset.
+func (s *WatchlistMeta) SetOffset(val int64) {
+	s.Offset = val
+}
+
+// SetMax sets the value of Max.
+func (s *WatchlistMeta) SetMax(val int64) {
+	s.Max = val
+}
+
+// Ref: #/components/schemas/WatchlistPage
+type WatchlistPage struct {
+	Data []WatchedCompany `json:"data"`
+	Meta WatchlistMeta    `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *WatchlistPage) GetData() []WatchedCompany {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *WatchlistPage) GetMeta() WatchlistMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *WatchlistPage) SetData(val []WatchedCompany) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *WatchlistPage) SetMeta(val WatchlistMeta) {
+	s.Meta = val
+}
+
+// WatchlistPageHeaders wraps WatchlistPage with response headers.
+type WatchlistPageHeaders struct {
+	CacheControl string
+	Response     WatchlistPage
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *WatchlistPageHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *WatchlistPageHeaders) GetResponse() WatchlistPage {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *WatchlistPageHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *WatchlistPageHeaders) SetResponse(val WatchlistPage) {
+	s.Response = val
 }

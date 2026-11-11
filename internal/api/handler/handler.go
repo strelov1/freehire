@@ -5,6 +5,8 @@ import (
 	"context"
 	"log"
 	"math"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -208,9 +210,29 @@ type middleware struct {
 // empty page. Naming that in a comment did not stop a second call site re-implementing the
 // parse without it.
 func pageParamsBounded(c *fiber.Ctx, fallback, ceiling int) (limit, offset int) {
-	limit = min(max(c.QueryInt("limit", fallback), 1), ceiling)
-	offset = min(max(c.QueryInt("offset", 0), 0), math.MaxInt32)
-	return limit, offset
+	return clampPage(c.QueryInt("limit", fallback), c.QueryInt("offset", 0), ceiling)
+}
+
+// contractPageBounded is pageParamsBounded for a contract operation, which declares its page
+// params as strings so one that does not read falls back to the default, as Fiber's QueryInt
+// does, rather than being refused.
+func contractPageBounded(ctx context.Context, fallback, ceiling int) (limit, offset int) {
+	query := contractQuery(ctx)
+	return clampPage(queryIntOr(query, "limit", fallback), queryIntOr(query, "offset", 0), ceiling)
+}
+
+func clampPage(limit, offset, ceiling int) (int, int) {
+	return min(max(limit, 1), ceiling), min(max(offset, 0), math.MaxInt32)
+}
+
+// queryIntOr is Fiber's QueryInt over a parsed query: the first value, or fallback when it
+// is absent or not an integer.
+func queryIntOr(query url.Values, key string, fallback int) int {
+	n, err := strconv.Atoi(query.Get(key))
+	if err != nil {
+		return fallback
+	}
+	return n
 }
 
 // pageParamsWindowed is pageParamsBounded plus the deep-pagination refusal: it answers 400
@@ -1064,7 +1086,8 @@ func Register(app *fiber.App, cfg Config) {
 	// The two /me routes beside them are the same switches for a caller the cookie
 	// already identified.
 	emailPrefsH := newEmailPrefsHandlers(mailPrefs)
-	contract := newContract(contractHandlers{emailPrefsHandlers: emailPrefsH, talentCatalogHandlers: talentCatalogH})
+	contract := newContract(contractHandlers{emailPrefsHandlers: emailPrefsH, talentCatalogHandlers: talentCatalogH,
+		companyWatchHandlers: companyWatchH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1119,7 +1142,7 @@ func Register(app *fiber.App, cfg Config) {
 	// segment under /me/tracking — see the comment on its register.
 	timelineH.register(api, mw)
 	votesH.register(api, mw)
-	companyWatchH.register(api, mw)
+	companyWatchH.register(api, mw, contract)
 	companyFeedbackH.register(api, mw)
 	// The manual account ban (see userModerationHandlers).
 	newUserModerationHandlers(queries).register(api, mw)

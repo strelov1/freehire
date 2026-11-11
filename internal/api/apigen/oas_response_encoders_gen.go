@@ -13,6 +13,19 @@ import (
 	"github.com/ogen-go/ogen/uri"
 )
 
+func encodeAddToWatchlistResponse(response *AddToWatchlistOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeGetEmailPrefsResponse(response *GetEmailPrefsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -138,12 +151,83 @@ func encodeGetTalentPhotoResponse(response *GetTalentPhotoOKHeaders, w http.Resp
 	return nil
 }
 
+func encodeGetWatchingResponse(response *GetWatchingOKHeaders, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	// Encoding response headers.
+	{
+		h := uri.NewHeaderEncoder(w.Header())
+		// Encode "Cache-Control" header.
+		{
+			cfg := uri.HeaderParameterEncodingConfig{
+				Name:    "Cache-Control",
+				Explode: false,
+			}
+			if err := h.EncodeParam(cfg, func(e uri.Encoder) error {
+				return e.EncodeValue(conv.StringToString(response.CacheControl))
+			}); err != nil {
+				return errors.Wrap(err, "encode Cache-Control header")
+			}
+		}
+	}
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeImportWatchlistResponse(response *ImportWatchlistOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeListTalentResponse(response *ListTalentOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
 	e := new(jx.Encoder)
 	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeListWatchlistResponse(response *WatchlistPageHeaders, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	// Encoding response headers.
+	{
+		h := uri.NewHeaderEncoder(w.Header())
+		// Encode "Cache-Control" header.
+		{
+			cfg := uri.HeaderParameterEncodingConfig{
+				Name:    "Cache-Control",
+				Explode: false,
+			}
+			if err := h.EncodeParam(cfg, func(e uri.Encoder) error {
+				return e.EncodeValue(conv.StringToString(response.CacheControl))
+			}); err != nil {
+				return errors.Wrap(err, "encode Cache-Control header")
+			}
+		}
+	}
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Response.Encode(e)
 	if _, err := e.WriteTo(w); err != nil {
 		return errors.Wrap(err, "write")
 	}
@@ -160,6 +244,12 @@ func encodeOneClickUnsubscribeResponse(response *OneClickUnsubscribeOK, w http.R
 	if _, err := e.WriteTo(w); err != nil {
 		return errors.Wrap(err, "write")
 	}
+
+	return nil
+}
+
+func encodeRemoveFromWatchlistResponse(response *RemoveFromWatchlistNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
 
 	return nil
 }

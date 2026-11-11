@@ -28,6 +28,99 @@ func (c *codeRecorder) Unwrap() http.ResponseWriter {
 
 func recordError(string, error) {}
 
+// handleAddToWatchlistRequest handles addToWatchlist operation.
+//
+// PUT /me/watchlist/{slug}
+func (s *Server) handleAddToWatchlistRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: AddToWatchlistOperation,
+			ID:   "addToWatchlist",
+		}
+	)
+	params, err := decodeAddToWatchlistParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *AddToWatchlistOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    AddToWatchlistOperation,
+			OperationSummary: "",
+			OperationID:      "addToWatchlist",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = AddToWatchlistParams
+			Response = *AddToWatchlistOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackAddToWatchlistParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.AddToWatchlist(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.AddToWatchlist(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeAddToWatchlistResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleGetEmailPrefsRequest handles getEmailPrefs operation.
 //
 // GET /email-prefs
@@ -502,6 +595,194 @@ func (s *Server) handleGetTalentPhotoRequest(args [1]string, argsEscaped bool, w
 	}
 }
 
+// handleGetWatchingRequest handles getWatching operation.
+//
+// GET /me/watchlist/{slug}
+func (s *Server) handleGetWatchingRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetWatchingOperation,
+			ID:   "getWatching",
+		}
+	)
+	params, err := decodeGetWatchingParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetWatchingOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetWatchingOperation,
+			OperationSummary: "",
+			OperationID:      "getWatching",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetWatchingParams
+			Response = *GetWatchingOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetWatchingParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetWatching(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetWatching(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetWatchingResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleImportWatchlistRequest handles importWatchlist operation.
+//
+// Adds the companies the names identify and reports what it could not resolve.
+//
+// POST /me/watchlist/import
+func (s *Server) handleImportWatchlistRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ImportWatchlistOperation,
+			ID:   "importWatchlist",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeImportWatchlistRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *ImportWatchlistOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ImportWatchlistOperation,
+			OperationSummary: "",
+			OperationID:      "importWatchlist",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *WatchlistImport
+			Params   = struct{}
+			Response = *ImportWatchlistOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ImportWatchlist(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ImportWatchlist(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeImportWatchlistResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleListTalentRequest handles listTalent operation.
 //
 // GET /talent
@@ -627,6 +908,109 @@ func (s *Server) handleListTalentRequest(args [0]string, argsEscaped bool, w htt
 	}
 }
 
+// handleListWatchlistRequest handles listWatchlist operation.
+//
+// One page, newest first. A page param that does not read falls back to its default.
+//
+// GET /me/watchlist
+func (s *Server) handleListWatchlistRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ListWatchlistOperation,
+			ID:   "listWatchlist",
+		}
+	)
+	params, err := decodeListWatchlistParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *WatchlistPageHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListWatchlistOperation,
+			OperationSummary: "",
+			OperationID:      "listWatchlist",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "q",
+					In:   "query",
+				}: params.Q,
+				{
+					Name: "limit",
+					In:   "query",
+				}: params.Limit,
+				{
+					Name: "offset",
+					In:   "query",
+				}: params.Offset,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = ListWatchlistParams
+			Response = *WatchlistPageHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackListWatchlistParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListWatchlist(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListWatchlist(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListWatchlistResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleOneClickUnsubscribeRequest handles oneClickUnsubscribe operation.
 //
 // RFC 8058 one-click unsubscribe: turns off only the group the token names.
@@ -714,6 +1098,101 @@ func (s *Server) handleOneClickUnsubscribeRequest(args [0]string, argsEscaped bo
 	}
 
 	if err := encodeOneClickUnsubscribeResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleRemoveFromWatchlistRequest handles removeFromWatchlist operation.
+//
+// A company that was not on the list is not an error.
+//
+// DELETE /me/watchlist/{slug}
+func (s *Server) handleRemoveFromWatchlistRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: RemoveFromWatchlistOperation,
+			ID:   "removeFromWatchlist",
+		}
+	)
+	params, err := decodeRemoveFromWatchlistParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *RemoveFromWatchlistNoContent
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    RemoveFromWatchlistOperation,
+			OperationSummary: "",
+			OperationID:      "removeFromWatchlist",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = RemoveFromWatchlistParams
+			Response = *RemoveFromWatchlistNoContent
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackRemoveFromWatchlistParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				err = s.h.RemoveFromWatchlist(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		err = s.h.RemoveFromWatchlist(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeRemoveFromWatchlistResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
