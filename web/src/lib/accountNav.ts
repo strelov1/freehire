@@ -56,9 +56,8 @@ export const accountNav = [
   // builder below, nothing meters its spend yet.
   { href: '/my/assistant', label: 'Agent', workspace: 'seeker', group: 'main' },
   // The tailoring workspace's re-open list: CVs already tailored to a vacancy. Open to every
-  // signed-in user (the plan meters the AI spend). Named "CVs", the page's own title: the
-  // sidebar label and the heading it opens must agree ("Tailor" opened a page titled CVs).
-  { href: '/my/cvs', label: 'CVs', workspace: 'seeker', group: 'main' },
+  // signed-in user (the plan meters the AI spend). The label matches the page heading.
+  { href: '/my/cvs', label: 'Tailor CV', workspace: 'seeker', group: 'main' },
   // Being found instead of applying: the anonymous public catalogue's own settings page.
   // It used to be reachable ONLY from the profile layout's invitation card, which made it
   // invisible to anyone who never opened Profile — and that card is dismissible now, so

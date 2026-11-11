@@ -160,9 +160,9 @@ describe('isSectionActive', () => {
 
 describe('the burger menu duplicates what is opened from anywhere', () => {
   it('names the CV section after the page it opens', () => {
-    // The sidebar label and the page heading must agree: "Tailor" opened a page titled CVs.
+    // The sidebar label and the page heading must agree.
     const cvs = accountNav.find((i) => i.href === '/my/cvs');
-    expect(cvs?.label).toBe('CVs');
+    expect(cvs?.label).toBe('Tailor CV');
   });
 });
 

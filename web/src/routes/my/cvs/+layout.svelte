@@ -22,9 +22,7 @@
   // behind them is shared (see cvAppearance.svelte.ts), so a tab switch keeps an
   // unsaved edit.
   //
-  // Starting a tailored CV is an action on the section, not one of its views, so it
-  // stays a button beside the strip — and stays reachable from every tab, which is why
-  // the dialog is mounted here rather than inside the list.
+  // The layout owns the intake dialog for section-wide and base-specific actions.
   const SECTIONS = $derived([
     { id: 'list', label: s.sections.list, href: '/my/cvs', icon: FileText },
     { id: 'template', label: s.sections.template, href: '/my/cvs/template', icon: LayoutTemplate },
@@ -36,17 +34,21 @@
   const tabs = $derived(SECTIONS.map((sec) => ({ ...sec, href: resolve(sec.href) })));
 </script>
 
-<div class="flex flex-col gap-6">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+<div class="flex flex-col gap-4 lg:gap-6">
+  <div class="flex items-start justify-between gap-3">
     <div class="flex flex-col gap-1">
       <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">{s.title}</h1>
       <p class="text-sm text-muted-foreground max-lg:sr-only">
         {s.description}
       </p>
     </div>
-    <div class="shrink-0">
-      <Button variant="outline" onclick={() => openCvIntake()}>{s.tailorForJob}</Button>
-    </div>
+    <Button
+      variant="ghost"
+      onclick={() => openCvIntake()}
+      class="shrink-0 rounded-lg bg-foreground px-3 text-background hover:bg-foreground hover:text-background hover:opacity-90"
+    >
+      {s.tailorForJob}
+    </Button>
   </div>
 
   <TabStrip {tabs} {active} label={s.tabStripLabel} panelId={PANEL_ID} />
