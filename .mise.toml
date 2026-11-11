@@ -24,6 +24,8 @@ shellcheck = "latest"
 "github:rvben/rumdl" = "0.3.2"
 "github:astral-sh/ruff" = "0.17.4"
 "go:golang.org/x/tools/cmd/deadcode" = "0.52.0"
+# The govulncheck CI job (.github/workflows/govulncheck.yml) installs the same version.
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.9.0"
 # psql only: the integration tests' harness migrates through it (internal/platform/testdb).
 # The server itself is docker-compose's pgvector image.
 postgres = "18"

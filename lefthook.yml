@@ -30,7 +30,7 @@ pre-commit:
         - "go.sum"
       run: |
         if ! command -v govulncheck >/dev/null 2>&1; then
-          echo "govulncheck not installed (go install golang.org/x/vuln/cmd/govulncheck@latest) - skipping"
+          echo "govulncheck not installed (mise install) - skipping"
           exit 0
         fi
         govulncheck ./...
