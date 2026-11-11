@@ -21,9 +21,10 @@ import (
 // Germany, but this role is fully remote and open worldwide" — a real, common ATS
 // boilerplate pattern found in code review), and a bare anchor would read the HQ
 // sentence as the restriction regardless of what the actual role statement says
-// elsewhere in the same description. "remote role within"/"restricted to"/"hiring
-// in"/"open to candidates|applicants in" carry no such ambiguity — they can only
-// describe the role, never the employer's office — so they stay bare.
+// elsewhere in the same description. "restricted to" likewise needs a role or
+// candidate subject: access to employee records "restricted to HR and IT" describes
+// departments, whose codes also name countries. "remote role within"/"hiring in"/
+// "open to candidates|applicants in" already qualify the role or its candidates.
 var regionScopePhrases = []string{
 	"remote role within",
 	"candidates based in",
@@ -34,7 +35,8 @@ var regionScopePhrases = []string{
 	"candidates located in",
 	"applicants located in",
 	"role is located in",
-	"restricted to",
+	"role is restricted to",
+	"candidates are restricted to",
 	"open to candidates in",
 	"open to applicants in",
 	"hiring in",

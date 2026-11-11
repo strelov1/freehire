@@ -212,3 +212,38 @@ func nilIfEmpty[T any](s []T) []T {
 	}
 	return s
 }
+
+// contractAllow keeps a 405's Allow header on the contract's matching resource.
+// Fiber combines methods from literal and parameter routes, so /watchlist/import
+// otherwise advertises the methods of /watchlist/:slug too.
+func contractAllow(c *fiber.Ctx) {
+	target, err := url.ParseRequestURI(string(c.Request().RequestURI()))
+	if err != nil {
+		return
+	}
+	path, ok := strings.CutPrefix(strings.ToLower(target.Path), "/api/v1")
+	if !ok {
+		return
+	}
+	target.Path = strings.TrimSuffix(path, "/")
+	if target.RawPath != "" {
+		target.RawPath = strings.TrimSuffix(strings.TrimPrefix(strings.ToLower(target.RawPath), "/api/v1"), "/")
+	}
+	// FindPath only reads the generated routing table and prefix, so it needs no
+	// handler or server initialization. The stripped prefix matches its zero value.
+	var routes apigen.Server
+	var allowed []string
+	for _, value := range strings.Split(c.GetRespHeader(fiber.HeaderAllow), ",") {
+		method := strings.TrimSpace(value)
+		lookup := method
+		if lookup == fiber.MethodHead {
+			lookup = fiber.MethodGet
+		}
+		if _, ok := routes.FindPath(lookup, target); ok {
+			allowed = append(allowed, method)
+		}
+	}
+	if len(allowed) > 0 {
+		c.Set(fiber.HeaderAllow, strings.Join(allowed, ", "))
+	}
+}

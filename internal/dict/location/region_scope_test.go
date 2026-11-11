@@ -121,6 +121,31 @@ func TestRegionScopeFromDescription(t *testing.T) {
 			[]string{"ba"}, []string{"eu"},
 		},
 		{
+			"department access is not a geographic restriction",
+			"Access to employee records is restricted to HR and IT.",
+			nil, nil,
+		},
+		{
+			"department access does not hide hiring geography",
+			"Access to employee records is restricted to HR and IT. We are hiring in Canada.",
+			[]string{"ca"}, []string{"north_america"},
+		},
+		{
+			"role restriction with country codes",
+			"This role is restricted to HR and IT.",
+			[]string{"hr", "it"}, []string{"eu"},
+		},
+		{
+			"candidate restriction with country names",
+			"Candidates are restricted to Canada and the US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
+			"role restriction with country names",
+			"This role is restricted to Canada and the US.",
+			[]string{"ca", "us"}, []string{"north_america"},
+		},
+		{
 			"empty description",
 			"",
 			nil, nil,
