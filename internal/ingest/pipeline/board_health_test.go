@@ -410,3 +410,16 @@ func TestRunWithoutBoardHealth(t *testing.T) {
 		t.Errorf("stats = %+v, want Ingested=1 Cooled=0", stats.Total())
 	}
 }
+
+func TestRecordFailureDoesNotStoreFailureAfterRunContextEnds(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	health := &fakeHealth{cooldowns: map[string]time.Time{}}
+	r := Runner{BoardHealth: health}
+
+	r.recordFailure(ctx, sources.CompanyEntry{Provider: "teamtailor", Board: "acme"}, errors.New("site unavailable"))
+
+	if len(health.failures) != 0 {
+		t.Fatalf("recorded failures = %v, want no board-health mutation after crawl cancellation", health.failures)
+	}
+}

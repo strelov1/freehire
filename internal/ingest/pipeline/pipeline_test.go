@@ -285,6 +285,27 @@ func TestRunStreamsAndPersistsPartialBeforeError(t *testing.T) {
 	}
 }
 
+func TestRunStreamingFailureWithoutProgressRecordsBoardFailure(t *testing.T) {
+	src := fakeStreamingSource{provider: "teamtailor", failAfter: 0, jobs: []sources.Job{
+		{ExternalID: "1", Title: "A", Company: "C", URL: "u"},
+	}}
+	health := &fakeHealth{cooldowns: map[string]time.Time{}}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "C", Provider: "teamtailor", Board: "gone-board"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Total().Failed != 1 || stats.Total().Ingested != 0 {
+		t.Fatalf("stats = %+v, want one failed board with no progress", stats.Total())
+	}
+	if len(health.failures) != 1 || health.failures[0] != "teamtailor/gone-board/" {
+		t.Fatalf("recorded failures = %v, want [teamtailor/gone-board/]", health.failures)
+	}
+}
+
 // TestRunStreamClosesRemovedJobs proves the runner routes a removed posting to the Store's
 // close path (by identity) instead of upserting it: a self-closing stream emits one live ad
 // and one removed ad, and the runner saves the first and closes the second. The closed
