@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"errors"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/vote"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -20,18 +22,13 @@ func newVoteHandlers(queries *db.Queries, pool *pgxpool.Pool) *voteHandlers {
 	return &voteHandlers{votes: vote.New(queries, pool)}
 }
 
-func (h *voteHandlers) register(api fiber.Router, mw middleware) {
+func (h *voteHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Thumbs up/down: a signed-in vote (toggle/flip); the public counters it drives
 	// are read by everyone on the job/company shapes.
-	api.Post("/jobs/:slug/vote", mw.key, h.VoteJob)
-	api.Delete("/jobs/:slug/vote", mw.key, h.ClearJobVote)
-	api.Post("/companies/:slug/vote", mw.key, h.VoteCompany)
-	api.Delete("/companies/:slug/vote", mw.key, h.ClearCompanyVote)
-}
-
-// voteRequest is the cast-vote body: the direction of the thumb tapped.
-type voteRequest struct {
-	Vote string `json:"vote"` // "up" | "down"
+	api.Post("/jobs/:slug/vote", mw.key, contract)
+	api.Delete("/jobs/:slug/vote", mw.key, contract)
+	api.Post("/companies/:slug/vote", mw.key, contract)
+	api.Delete("/companies/:slug/vote", mw.key, contract)
 }
 
 // voteError maps the vote sentinels onto HTTP statuses. Anything else (e.g. a DB
@@ -47,72 +44,67 @@ func voteError(err error) error {
 	}
 }
 
-// parseVoteDirection decodes and validates the cast-vote body before any DB touch.
-func parseVoteDirection(c *fiber.Ctx) (vote.Direction, error) {
-	var in voteRequest
-	if err := c.BodyParser(&in); err != nil {
-		return 0, vote.ErrInvalidDirection
-	}
-	return vote.ParseDirection(in.Vote)
-}
-
 // VoteJob casts the caller's thumbs vote on a job (toggle/flip) and returns the
 // job's resulting public counters and the caller's own vote.
-func (h *voteHandlers) VoteJob(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *voteHandlers) VoteJob(ctx context.Context, req *apigen.VoteRequest, params apigen.VoteJobParams) (*apigen.VoteJobOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	dir, err := parseVoteDirection(c)
+	dir, err := vote.ParseDirection(req.Vote.Value)
 	if err != nil {
-		return voteError(err)
+		return nil, voteError(err)
 	}
-	res, err := h.votes.VoteJob(c.Context(), userID, c.Params("slug"), dir)
+	res, err := h.votes.VoteJob(ctx, userID, params.Slug, dir)
 	if err != nil {
-		return voteError(err)
+		return nil, voteError(err)
 	}
-	return c.JSON(fiber.Map{"data": res})
+	return &apigen.VoteJobOK{Data: voteResultOut(res)}, nil
 }
 
 // ClearJobVote removes the caller's thumbs vote on a job (no-op when none).
-func (h *voteHandlers) ClearJobVote(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *voteHandlers) ClearJobVote(ctx context.Context, params apigen.ClearJobVoteParams) (*apigen.ClearJobVoteOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	res, err := h.votes.ClearJob(c.Context(), userID, c.Params("slug"))
+	res, err := h.votes.ClearJob(ctx, userID, params.Slug)
 	if err != nil {
-		return voteError(err)
+		return nil, voteError(err)
 	}
-	return c.JSON(fiber.Map{"data": res})
+	return &apigen.ClearJobVoteOK{Data: voteResultOut(res)}, nil
 }
 
 // VoteCompany casts the caller's thumbs vote on a company (toggle/flip).
-func (h *voteHandlers) VoteCompany(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *voteHandlers) VoteCompany(ctx context.Context, req *apigen.VoteRequest, params apigen.VoteCompanyParams) (*apigen.VoteCompanyOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	dir, err := parseVoteDirection(c)
+	dir, err := vote.ParseDirection(req.Vote.Value)
 	if err != nil {
-		return voteError(err)
+		return nil, voteError(err)
 	}
-	res, err := h.votes.VoteCompany(c.Context(), userID, c.Params("slug"), dir)
+	res, err := h.votes.VoteCompany(ctx, userID, params.Slug, dir)
 	if err != nil {
-		return voteError(err)
+		return nil, voteError(err)
 	}
-	return c.JSON(fiber.Map{"data": res})
+	return &apigen.VoteCompanyOK{Data: voteResultOut(res)}, nil
 }
 
 // ClearCompanyVote removes the caller's thumbs vote on a company (no-op when none).
-func (h *voteHandlers) ClearCompanyVote(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *voteHandlers) ClearCompanyVote(ctx context.Context, params apigen.ClearCompanyVoteParams) (*apigen.ClearCompanyVoteOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	res, err := h.votes.ClearCompany(c.Context(), userID, c.Params("slug"))
+	res, err := h.votes.ClearCompany(ctx, userID, params.Slug)
 	if err != nil {
-		return voteError(err)
+		return nil, voteError(err)
 	}
-	return c.JSON(fiber.Map{"data": res})
+	return &apigen.ClearCompanyVoteOK{Data: voteResultOut(res)}, nil
+}
+
+func voteResultOut(r vote.Result) apigen.VoteResult {
+	return apigen.VoteResult{UpvoteCount: int64(r.UpvoteCount), DownvoteCount: int64(r.DownvoteCount), MyVote: int64(r.MyVote)}
 }

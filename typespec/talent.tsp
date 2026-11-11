@@ -123,3 +123,32 @@ op getTalentPhoto(@path handle: string): {
   @header("X-Robots-Tag") robotsTag: string;
   @body photo: bytes;
 } | Problem;
+
+/** The caller's own place in the Talent Network. */
+model TalentNetworkMembership {
+  /** `off` or `anonymous`. */
+  talent_network_visibility: string;
+
+  /** The handle in the member's public URL, once they have one. */
+  talent_handle?: string;
+
+  /** Whether the catalogue shows the member right now. */
+  listed: boolean;
+}
+
+model TalentNetworkVisibilityUpdate {
+  /** `off` or `anonymous`; anything else is a 400. */
+  visibility?: string;
+}
+
+/** With a session or an API key. */
+@tag("Talent Network")
+@route("/me/talent-network")
+@get
+op getTalentNetworkMembership(): Data<TalentNetworkMembership> | Problem;
+
+/** Joins or leaves the catalogue. Session cookie only. */
+@tag("Talent Network")
+@route("/me/talent-network")
+@put
+op setTalentNetworkVisibility(@body body: TalentNetworkVisibilityUpdate): Data<TalentNetworkMembership> | Problem;

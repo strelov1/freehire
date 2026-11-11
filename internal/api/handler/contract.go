@@ -39,6 +39,9 @@ type contractHandlers struct {
 	*jdResolveHandlers
 	*screeningAnswersHandlers
 	*surveyHandlers
+	*voteHandlers
+	*ghostReportHandlers
+	*talentNetworkHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}

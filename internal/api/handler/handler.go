@@ -1091,7 +1091,8 @@ func Register(app *fiber.App, cfg Config) {
 		companyWatchHandlers: companyWatchH,
 		geoHandlers:          geoH, suggestHandlers: suggestH, agentPermissionHandlers: agentPermissionsH,
 		usageHandlers: usageH, plansHandlers: plansH, dictionaryHandlers: dictionaryH,
-		jdResolveHandlers: jdResolveH, screeningAnswersHandlers: screeningAnswersH, surveyHandlers: surveyH})
+		jdResolveHandlers: jdResolveH, screeningAnswersHandlers: screeningAnswersH, surveyHandlers: surveyH,
+		voteHandlers: votesH, ghostReportHandlers: ghostReportsH, talentNetworkHandlers: talentNetworkH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1145,7 +1146,7 @@ func Register(app *fiber.App, cfg Config) {
 	// The ledger's dated read, behind the tracking calendar. Its own namespace, not a
 	// segment under /me/tracking — see the comment on its register.
 	timelineH.register(api, mw)
-	votesH.register(api, mw)
+	votesH.register(api, mw, contract)
 	companyWatchH.register(api, mw, contract)
 	companyFeedbackH.register(api, mw)
 	// The manual account ban (see userModerationHandlers).
@@ -1193,7 +1194,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Job reports + review queue (see reportHandlers).
 	reportsH.register(api, mw)
-	ghostReportsH.register(api, mw)
+	ghostReportsH.register(api, mw, contract)
 
 	// Community discussion threads (see communityHandlers).
 	communityH.register(api, mw)
@@ -1218,7 +1219,7 @@ func Register(app *fiber.App, cfg Config) {
 	surveyH.register(api, mw, contract)
 	marketPulseH.register(api, mw)
 	experienceH.register(api, mw)
-	talentNetworkH.register(api, mw)
+	talentNetworkH.register(api, mw, contract)
 	talentCatalogH.register(api, contract)
 
 	// CV builder + AI tailoring (see cvHandlers).
