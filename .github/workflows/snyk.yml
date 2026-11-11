@@ -114,16 +114,17 @@ jobs:
         run: npm install -g snyk@1.1308.3 # zizmor: ignore[adhoc-packages] pinned above
 
       # The root package. It carries pnpm-workspace.yaml (for its overrides) beside its
-      # lockfile, which makes a plain `snyk test` refuse with the 422 below. --file names
-      # the one lockfile instead of --all-projects, which would reach into web/,
-      # design-system/ and the Go module and bill them twice.
+      # lockfile, so Snyk insists on --all-projects (422 otherwise, --file included).
+      # --detection-depth=1 keeps that to the root directory, which web/ and
+      # design-system/ below would otherwise be billed twice for, and the Go module
+      # beside the lockfile is govulncheck's (ci.yml), not this scan's.
       - name: Install root tooling
         run: pnpm install --frozen-lockfile
 
       - name: Test root tooling dependencies
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --file=pnpm-lock.yaml
+        run: snyk test --all-projects --detection-depth=1 --exclude=go.mod
 
       # design-system is a `link:`/`file:` dependency for web/extension and does
       # not install its own deps transitively — same trap as ci.yml and
