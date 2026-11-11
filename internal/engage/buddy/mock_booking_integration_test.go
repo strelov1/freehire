@@ -212,3 +212,48 @@ func TestPausingKeepsBookedMocksConfirmed(t *testing.T) {
 		t.Fatalf("booked mock after pause = %q (err %v), want confirmed", status, err)
 	}
 }
+
+func TestAPausedHostCannotBeBooked(t *testing.T) {
+	pool, svc, mocks, _ := mockSetup(t)
+	host, handle := joined(t, pool, svc, "host@example.test")
+	guest, _ := joined(t, pool, svc, "guest@example.test")
+	openAllWeek(t, mocks, host, "UTC")
+	at := firstSlot(t, mocks, guest, handle)
+	if _, err := mocks.SaveSettings(context.Background(), host, buddy.MockSettings{
+		Timezone: "UTC", MeetingURL: hostLink(host), Topics: buddy.MockTopics, Paused: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := book(mocks, guest, handle, at, buddy.TopicCoding); !errors.Is(err, buddy.ErrSlotUnavailable) {
+		t.Fatalf("booking a paused host: err = %v, want ErrSlotUnavailable", err)
+	}
+}
+
+func TestPastGuestMocksDoNotCountAgainstTheCap(t *testing.T) {
+	pool, svc, mocks, _ := mockSetup(t)
+	host, handle := joined(t, pool, svc, "host@example.test")
+	other, _ := joined(t, pool, svc, "other@example.test")
+	guest, _ := joined(t, pool, svc, "guest@example.test")
+	openAllWeek(t, mocks, host, "UTC")
+	for i := range buddy.MaxGuestMocks {
+		seedMock(t, pool, other, guest, time.Now().Add(-time.Duration(48+24*i)*time.Hour))
+	}
+	if _, err := book(mocks, guest, handle, firstSlot(t, mocks, guest, handle), buddy.TopicCoding); err != nil {
+		t.Fatalf("booking after %d past mocks: %v", buddy.MaxGuestMocks, err)
+	}
+}
+
+func TestBookingFallsBackToUTCForAnInvalidGuestZone(t *testing.T) {
+	pool, svc, mocks, _ := mockSetup(t)
+	host, handle := joined(t, pool, svc, "host@example.test")
+	guest, _ := joined(t, pool, svc, "guest@example.test")
+	openAllWeek(t, mocks, host, "UTC")
+	m, err := mocks.Book(context.Background(), buddy.BookInput{HostHandle: handle, GuestUserID: guest,
+		StartsAt: firstSlot(t, mocks, guest, handle), Topic: buddy.TopicCoding, GuestZone: "not/a-zone"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.GuestTimezone != "UTC" {
+		t.Fatalf("guest zone = %q, want UTC", m.GuestTimezone)
+	}
+}

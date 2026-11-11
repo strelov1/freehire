@@ -13,6 +13,12 @@ func TestIgnoredValues(t *testing.T) {
 		query string
 		want  map[string][]string
 	}{
+		{"invalid visa boolean", "visa_sponsorship=yes", map[string][]string{"visa_sponsorship": {"yes"}}},
+		{"valid visa boolean", "visa_sponsorship=%20TRUE", nil},
+		{"invalid seniority modifier", "seniority_include_unspecified=maybe", map[string][]string{"seniority_include_unspecified": {"maybe"}}},
+		{"invalid experience modifier", "experience_include_unspecified=maybe", map[string][]string{"experience_include_unspecified": {"maybe"}}},
+		{"invalid experience seniority modifier", "experience_only_seniority_unspecified=maybe", map[string][]string{"experience_only_seniority_unspecified": {"maybe"}}},
+		{"valid boolean modifiers", "seniority_include_unspecified=True&experience_include_unspecified=%20TRUE&experience_only_seniority_unspecified=True", nil},
 		{"clean request", "work_mode=remote&seniority=senior", nil},
 		{"unknown value", "work_mode=foo", map[string][]string{"work_mode": {"foo"}}},
 		{"valid and unknown mixed, comma-joined", "work_mode=remote,foo", map[string][]string{"work_mode": {"foo"}}},
@@ -95,6 +101,38 @@ func TestUnknownFacetValue(t *testing.T) {
 	for _, tc := range cases {
 		if got := UnknownFacetValue(tc.param, tc.value); got != tc.want {
 			t.Errorf("UnknownFacetValue(%q, %q) = %v, want %v", tc.param, tc.value, got, tc.want)
+		}
+	}
+}
+
+func TestIgnoredValuesCapsValuesInSortedOrder(t *testing.T) {
+	v := url.Values{}
+	for i := 3 * maxUnknownParamsReported; i >= 0; i-- {
+		v.Add("work_mode", fmt.Sprintf("bad%02d", i))
+	}
+	want := make([]string, maxUnknownParamsReported)
+	for i := range want {
+		want[i] = fmt.Sprintf("bad%02d", i)
+	}
+	if got := IgnoredValues(v)["work_mode"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("reported %v, want sorted prefix %v", got, want)
+	}
+}
+
+func TestIgnoredValuesChecksFacetModesAsWholeScalars(t *testing.T) {
+	for facet := range StringFacets {
+		param := facet + "_mode"
+		for _, value := range []string{"invalid", "and,or", ""} {
+			v := url.Values{param: {value, "and"}}
+			want := map[string][]string{param: {value}}
+			if got := IgnoredValues(v); !reflect.DeepEqual(got, want) {
+				t.Errorf("%s=%q: got %v, want %v", param, value, got, want)
+			}
+		}
+		for _, value := range []string{"and", "OR", " And "} {
+			if got := IgnoredValues(url.Values{param: {value, "invalid"}}); got != nil {
+				t.Errorf("%s=%q: got %v, want no ignored values", param, value, got)
+			}
 		}
 	}
 }

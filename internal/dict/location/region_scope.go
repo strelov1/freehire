@@ -3,6 +3,7 @@ package location
 import (
 	"strings"
 
+	"github.com/strelov1/freehire/internal/platform/htmltext"
 	"github.com/strelov1/freehire/internal/platform/stringset"
 )
 
@@ -20,9 +21,10 @@ import (
 // Germany, but this role is fully remote and open worldwide" — a real, common ATS
 // boilerplate pattern found in code review), and a bare anchor would read the HQ
 // sentence as the restriction regardless of what the actual role statement says
-// elsewhere in the same description. "remote role within"/"restricted to"/"hiring
-// in"/"open to candidates|applicants in" carry no such ambiguity — they can only
-// describe the role, never the employer's office — so they stay bare.
+// elsewhere in the same description. "restricted to" likewise needs a role or
+// candidate subject: access to employee records "restricted to HR and IT" describes
+// departments, whose codes also name countries. "remote role within"/"hiring in"/
+// "open to candidates|applicants in" already qualify the role or its candidates.
 var regionScopePhrases = []string{
 	"remote role within",
 	"candidates based in",
@@ -33,7 +35,8 @@ var regionScopePhrases = []string{
 	"candidates located in",
 	"applicants located in",
 	"role is located in",
-	"restricted to",
+	"role is restricted to",
+	"candidates are restricted to",
 	"open to candidates in",
 	"open to applicants in",
 	"hiring in",
@@ -62,40 +65,9 @@ const clauseWindow = 200
 // found in a sentence that denies it ("not restricted to the US") is not a match, the
 // same negation handling EligibilityFromDescription uses.
 func RegionScopeFromDescription(desc string) (countries, regions []string) {
-	lower := strings.ToLower(desc)
-	countrySet := map[string]struct{}{}
-	regionSet := map[string]struct{}{}
-	end, ok := firstAssertedRegionScopePhrase(lower)
-	if !ok {
-		return nil, nil
-	}
-	clause := clauseAfterPhrase(lower, end)
-	s := separatorReplacer.Replace(clause)
-	for _, tok := range strings.Split(s, ",") {
-		tok = strings.TrimSpace(tok)
-		tok = strings.TrimPrefix(tok, "the ")
-		// A trailing qualifier ("...Brazil only") sits in the same comma segment as
-		// the last country in the list ("hiring in the US, Canada, ... or Brazil
-		// only"), so it is stripped here rather than treated as a separator.
-		tok = strings.TrimSuffix(tok, " only")
-		tok = strings.TrimSpace(tok)
-		if tok == "" {
-			continue
-		}
-		// prevTok is always "" — a colliding subdivision code cannot be
-		// disambiguated by a neighboring token the way Parse's own comma-token
-		// loop does. Deliberate (see title_restriction.go's identical note): a
-		// small, safe recall gap, never a guess.
-		resolveGeoToken(tok, "", countrySet, regionSet)
-	}
-	return stringset.Sorted(countrySet), stringset.Sorted(regionSet)
-}
-
-// firstAssertedRegionScopePhrase reports the end offset of the first
-// regionScopePhrases entry asserted (whole-word, unnegated) in lower, scanning the
-// phrases in order — mirrors eligibility.go's phraseAsserted, but returns a position
-// instead of a boolean since the caller needs to read the clause that follows.
-func firstAssertedRegionScopePhrase(lower string) (end int, ok bool) {
+	lower := strings.ToLower(htmltext.ToTextFull(joinWrappedRegionLists(desc)))
+	lower = strings.NewReplacer("u.s.a.", "usa", "u.s.", "us", "u.k.", "uk").Replace(lower)
+	// Keep phrase priority, but let an unresolved clause yield to a later anchor.
 	for _, p := range regionScopePhrases {
 		for offset := 0; ; {
 			i := strings.Index(lower[offset:], p)
@@ -105,12 +77,85 @@ func firstAssertedRegionScopePhrase(lower string) (end int, ok bool) {
 			start := offset + i
 			end := start + len(p)
 			if wholeWordMatch(lower, start, end) && !negatedSentence(sentenceAround(lower, start, end)) {
-				return end, true
+				countries, regions := regionScopeFromClause(clauseAfterPhrase(lower, end))
+				if len(countries) > 0 || len(regions) > 0 {
+					return countries, regions
+				}
 			}
 			offset = end
 		}
 	}
-	return 0, false
+	return nil, nil
+}
+
+// joinWrappedRegionLists joins source line wraps beside a list connector or after a comma.
+// Running before HTML extraction keeps block-element boundaries distinct from wraps.
+func joinWrappedRegionLists(desc string) string {
+	lines := strings.Split(strings.ReplaceAll(desc, "\r\n", "\n"), "\n")
+	var joined strings.Builder
+	joined.Grow(len(desc))
+	previousNonblank := false
+	previousContinues := false
+	for i, line := range lines {
+		// Inspect visible connector words, but keep the source markup in the output.
+		fields := strings.Fields(htmltext.ToTextFull(line))
+		nonblank := len(fields) > 0
+		if i > 0 {
+			continuation := previousNonblank && nonblank &&
+				(previousContinues || isRegionListConnector(fields[0]))
+			if continuation {
+				joined.WriteByte(' ')
+			} else {
+				joined.WriteByte('\n')
+			}
+		}
+		joined.WriteString(line)
+		previousNonblank = nonblank
+		previousContinues = nonblank && (isRegionListConnector(fields[len(fields)-1]) || strings.HasSuffix(fields[len(fields)-1], ","))
+	}
+	return joined.String()
+}
+
+func isRegionListConnector(word string) bool {
+	return strings.EqualFold(word, "and") || strings.EqualFold(word, "or") || word == "&"
+}
+
+func regionScopeFromClause(clause string) (countries, regions []string) {
+	countrySet := map[string]struct{}{}
+	regionSet := map[string]struct{}{}
+	for _, tok := range strings.Split(separatorReplacer.Replace(clause), ",") {
+		resolveRestrictionToken(tok, countrySet, regionSet)
+	}
+	return stringset.Sorted(countrySet), stringset.Sorted(regionSet)
+}
+
+// resolveRestrictionToken keeps names such as "Bosnia and Herzegovina" whole,
+// splitting a conjunction only when the full token names no known place. Each
+// remaining prefix is tried longest-first so a list can contain compound names.
+func resolveRestrictionToken(tok string, countrySet, regionSet map[string]struct{}) {
+	tok = strings.Join(strings.Fields(tok), " ")
+	tok = strings.TrimSuffix(strings.Trim(tok, "* "), " only")
+	tok = strings.TrimPrefix(tok, "the ")
+	// No neighboring token is supplied: unlike Parse, a restriction list cannot
+	// disambiguate colliding subdivision codes from cross-token context.
+	if resolveGeoToken(tok, "", countrySet, regionSet) {
+		return
+	}
+	parts := strings.Split(strings.ReplaceAll(tok, " & ", " and "), " and ")
+	if len(parts) < 2 {
+		return
+	}
+	for len(parts) > 0 {
+		consumed := 1
+		for end := len(parts); end > 0; end-- {
+			part := strings.TrimPrefix(strings.Trim(strings.Join(parts[:end], " and "), "* "), "the ")
+			if resolveGeoToken(part, "", countrySet, regionSet) {
+				consumed = end
+				break
+			}
+		}
+		parts = parts[consumed:]
+	}
 }
 
 // clauseAfterPhrase returns the text following an asserted anchor phrase, trimmed to

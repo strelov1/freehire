@@ -338,7 +338,7 @@ func withinDays(n int) bool { return n > 0 && n <= maxWithinDays }
 // skill is named by IgnoredValues rather than dropped here).
 func facetValue(param, val string) string {
 	switch param {
-	case "clearance_levels":
+	case "clearance_levels", "regions", "category":
 		return strings.ToLower(strings.TrimSpace(val))
 	case "cities":
 		if name, ok := location.CanonicalCity(val); ok {
@@ -369,16 +369,21 @@ func filterFromValues(v url.Values, now time.Time) any {
 		for i, val := range included {
 			included[i] = facetValue(param, val)
 		}
+		includeUnspecified := param == "seniority" && isTrue(v, SeniorityIncludeUnspecifiedParam)
 		switch {
 		case param == "work_mode" && remoteAnywhere:
 		case locationFacets[param]:
 			for _, val := range included {
 				locationGroup = append(locationGroup, facetEq(param, attr, val))
 			}
-		case len(included) > 0 && v.Get(param+"_mode") == "and":
+		case len(included) > 0 && strings.EqualFold(strings.TrimSpace(v.Get(param+"_mode")), "and"):
 			// Each value its own AND group: a job must match all of them.
 			for _, val := range included {
-				groups = append(groups, []string{facetEq(param, attr, val)})
+				group := []string{facetEq(param, attr, val)}
+				if includeUnspecified {
+					group = append(group, NotExists(attr))
+				}
+				groups = append(groups, group)
 			}
 		case len(included) > 0:
 			group := make([]string, len(included))
@@ -387,7 +392,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 			}
 			// Most postings carry no level, so "intern" alone drops nearly everything an
 			// intern could apply to. The modifier ORs those back into this group only.
-			if param == "seniority" && v.Get(SeniorityIncludeUnspecifiedParam) == "true" {
+			if includeUnspecified {
 				group = append(group, NotExists(attr))
 			}
 			groups = append(groups, group)
@@ -406,7 +411,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 		groups = append(groups, locationGroup)
 	}
 
-	if raw := v.Get("visa_sponsorship"); raw != "" {
+	if raw := strings.ToLower(strings.TrimSpace(v.Get("visa_sponsorship"))); raw == "true" || raw == "false" {
 		groups = append(groups, []string{EqBool("enrichment.visa_sponsorship", raw == "true")})
 	}
 
@@ -429,8 +434,8 @@ func filterFromValues(v url.Values, now time.Time) any {
 	// With the seniority group it composes to `level IN (selected) OR (no level AND
 	// within the bound)`: an internship stating no years stays in, an unlabelled posting
 	// asking for five does not (freehire#3655).
-	includeUnstated := v.Get(ExperienceIncludeUnspecifiedParam) == "true"
-	onlyUnlevelled := v.Get(ExperienceOnlySeniorityUnspecifiedParam) == "true"
+	includeUnstated := isTrue(v, ExperienceIncludeUnspecifiedParam)
+	onlyUnlevelled := isTrue(v, ExperienceOnlySeniorityUnspecifiedParam)
 	experienceGroup := func(bound string) []string {
 		group := []string{bound}
 		if includeUnstated {
@@ -493,8 +498,8 @@ func filterFromValues(v url.Values, now time.Time) any {
 // location the arm would widen past the mode list; `and` is a different filter.
 func remoteAnywhereActive(v url.Values) bool {
 	modes := workModeValues(v)
-	return strings.EqualFold(strings.TrimSpace(v.Get(WorkModeRemoteAnywhereParam)), "true") &&
-		v.Get("work_mode_mode") != "and" &&
+	return isTrue(v, WorkModeRemoteAnywhereParam) &&
+		!strings.EqualFold(strings.TrimSpace(v.Get("work_mode_mode")), "and") &&
 		slices.Contains(modes, "remote") &&
 		slices.ContainsFunc(modes, isPhysicalMode) &&
 		hasLocationInclude(v)
@@ -507,7 +512,7 @@ func remoteAnywhereActive(v url.Values) bool {
 func hasLocationInclude(v url.Values) bool {
 	for param := range locationFacets {
 		for _, val := range splitFacetValues(v[param]) {
-			if !UnknownFacetValue(param, val) {
+			if !UnknownFacetValue(param, facetValue(param, val)) {
 				return true
 			}
 		}

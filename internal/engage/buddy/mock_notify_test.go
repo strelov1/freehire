@@ -2,6 +2,7 @@ package buddy
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -126,4 +127,32 @@ func TestAnUnusableZoneFallsBackToUTCAndSaysSo(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertContains(t, "guest mail", c.to(t, "guest@example.test").Text, "Tuesday 10 November 2026, 18:00", "(UTC)")
+}
+
+func TestMeetingLinksAreEscapedInBookingAndReminderHTML(t *testing.T) {
+	for _, reminder := range []bool{false, true} {
+		t.Run(strconv.FormatBool(reminder), func(t *testing.T) {
+			c := &captureSender{}
+			m := sampleMock()
+			m.MeetingURL = `https://meet.example.test/?room="a"&name=<b>`
+			n := notifier(c)
+			var err error
+			if reminder {
+				err = n.MockReminder(context.Background(), m, time.Hour)
+			} else {
+				err = n.MockBooked(context.Background(), m)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(c.sent) != 2 {
+				t.Fatalf("sent %d mails, want one per participant", len(c.sent))
+			}
+			for _, mail := range c.sent {
+				assertContains(t, "HTML", mail.HTML, `href="https://meet.example.test/?room=&#34;a&#34;&amp;name=&lt;b&gt;"`)
+				assertLacks(t, "HTML", mail.HTML, m.MeetingURL)
+				assertContains(t, "plain text", mail.Text, m.MeetingURL)
+			}
+		})
+	}
 }

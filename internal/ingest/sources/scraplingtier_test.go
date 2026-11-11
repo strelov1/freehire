@@ -1,9 +1,14 @@
 package sources
 
 import (
+	"context"
+	"io"
+	"net/http"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 )
@@ -216,5 +221,38 @@ func TestOCCPostingJSONStaysOffTheTier(t *testing.T) {
 	}
 	if any(split.HTMLGetter) == any(split.JSONGetter) {
 		t.Error("the posting JSON goes through the same client as the listing")
+	}
+}
+
+func TestScraplingClientAllowsTimeForBrowserChallenges(t *testing.T) {
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	for _, tc := range []struct {
+		mode scraplingfetch.Mode
+		want time.Duration
+	}{{scraplingfetch.ModeHTTP, 90 * time.Second}, {scraplingfetch.ModeBrowser, 5 * time.Minute}} {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				deadline, ok := req.Context().Deadline()
+				remaining := time.Until(deadline)
+				if !ok || remaining < tc.want-time.Second || remaining > tc.want {
+					t.Errorf("fetch deadline has %s remaining, want approximately %s", remaining, tc.want)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"status":200,"url":"https://example.com","headers":{},"body":"b2s="}`))}, nil
+			})
+			c, err := newScraplingClient(scraplingfetch.Config{URL: "http://127.0.0.1:8098", Token: "test"}, scraplingRoute{mode: tc.mode})
+			if err != nil {
+				t.Fatal(err)
+			}
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp, err := c.httpClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+		})
 	}
 }

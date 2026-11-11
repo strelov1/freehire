@@ -32,7 +32,20 @@ var scalarFilters = []string{
 const WatchlistParam = "watchlist"
 
 // WantsWatchlist reports whether a parsed query asks for the caller's watchlist.
-func WantsWatchlist(v url.Values) bool { return v.Get(WatchlistParam) == "true" }
+func WantsWatchlist(v url.Values) bool { return isTrue(v, WatchlistParam) }
+
+// HasInvalidVisaSponsorship reports a nonempty visa scalar that the search drops.
+// Alert admission and delivery share this check so a legacy value cannot silently
+// widen a subscription. Inspect the scalar directly, without a capped report.
+func HasInvalidVisaSponsorship(v url.Values) bool {
+	raw := v.Get("visa_sponsorship")
+	return raw != "" && !checkedScalars["visa_sponsorship"](raw)
+}
+
+// isTrue reads boolean modifiers with the same case and whitespace rules as their validator.
+func isTrue(v url.Values, param string) bool {
+	return strings.EqualFold(strings.TrimSpace(v.Get(param)), "true")
+}
 
 // ExperienceIncludeUnspecifiedParam widens the experience bounds to also admit the
 // postings that state no requirement. It is a modifier, not a filter: alone it reads

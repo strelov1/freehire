@@ -66,37 +66,6 @@ func (q *Queries) GetCompanyFeedbackSlug(ctx context.Context, id int64) (string,
 	return company_slug, err
 }
 
-const getMyCompanyFeedback = `-- name: GetMyCompanyFeedback :one
-SELECT id, user_id, company_slug, rating, feedback_type, body, created_at, updated_at, status FROM company_feedback WHERE user_id = $1 AND company_slug = $2 AND feedback_type = $3
-`
-
-type GetMyCompanyFeedbackParams struct {
-	UserID       pgtype.Int8 `json:"user_id"`
-	CompanySlug  string      `json:"company_slug"`
-	FeedbackType string      `json:"feedback_type"`
-}
-
-// The caller's own feedback in one category on a company, for the edit form's
-// prefill and for Upsert to tell an edit from a genuinely new review. No row
-// when they have not left one in that category yet. Not filtered by status:
-// the owner can still see and edit their own review after a moderator hides it.
-func (q *Queries) GetMyCompanyFeedback(ctx context.Context, arg GetMyCompanyFeedbackParams) (CompanyFeedback, error) {
-	row := q.db.QueryRow(ctx, getMyCompanyFeedback, arg.UserID, arg.CompanySlug, arg.FeedbackType)
-	var i CompanyFeedback
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.CompanySlug,
-		&i.Rating,
-		&i.FeedbackType,
-		&i.Body,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Status,
-	)
-	return i, err
-}
-
 const hideCompanyFeedback = `-- name: HideCompanyFeedback :one
 UPDATE company_feedback SET status = 'hidden', updated_at = now()
 WHERE id = $1
@@ -209,7 +178,7 @@ type ListMyCompanyFeedbackParams struct {
 
 // All of the caller's own feedback on a company, across every category they've
 // reviewed it under — the write dialog's "which categories have I already
-// used" read. Not filtered by status, same reasoning as GetMyCompanyFeedback.
+// used" read. Not filtered by status: the owner can still see and edit a hidden review.
 func (q *Queries) ListMyCompanyFeedback(ctx context.Context, arg ListMyCompanyFeedbackParams) ([]CompanyFeedback, error) {
 	rows, err := q.db.Query(ctx, listMyCompanyFeedback, arg.UserID, arg.CompanySlug)
 	if err != nil {

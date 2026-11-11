@@ -1,5 +1,5 @@
 // Package htmltext converts stored job-description HTML into alternative
-// representations for API consumers: plain text and Markdown. Each converter is
+// representations for consumers: plain text and Markdown. Each converter is
 // lenient — a conversion error degrades to returning the input unchanged rather
 // than failing the caller.
 package htmltext
@@ -8,19 +8,20 @@ import (
 	"container/list"
 	"crypto/sha256"
 	"encoding/hex"
+	stdhtml "html"
+	"strings"
 	"sync"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/jaytaylor/html2text"
+	"golang.org/x/net/html"
 
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// maxInputRunes bounds the HTML a single call converts. The only caller today
-// (internal/api/handler's AgentSearchJobs) feeds it a job's full, untruncated Postgres
-// description — up to tens of KB for a source that captures full descriptions — and
-// neither third-party converter bounds its own work, so an unbounded input reprocessed
-// on every request is unbounded conversion cost. Truncating first caps it.
+// maxInputRunes bounds request-facing conversions. Callers can supply a full stored
+// description, and neither third-party converter bounds its own work, so truncating
+// before conversion caps the cost of repeatedly rendering it on a request path.
 const maxInputRunes = 50_000
 
 // cacheCapacity bounds the memory each per-format result cache can hold. A description
@@ -41,6 +42,64 @@ func ToText(html string) string {
 	return convert(html, textCache, func(s string) (string, error) {
 		return html2text.FromString(s, html2text.Options{OmitLinks: true})
 	})
+}
+
+// ToTextFull extracts the complete visible text for derivation, without wrapping,
+// emphasis markers, truncation or caching. Text-node content is preserved and block
+// elements add line boundaries. Plain text keeps its original line boundaries;
+// on a parse error it returns the full input unchanged.
+func ToTextFull(input string) string {
+	if !hasHTMLMarkup(input) {
+		return stdhtml.UnescapeString(input)
+	}
+	doc, err := html.Parse(strings.NewReader(input))
+	if err != nil {
+		return input
+	}
+	var out strings.Builder
+	var visit func(*html.Node)
+	visit = func(node *html.Node) {
+		if node.Type == html.TextNode {
+			out.WriteString(node.Data)
+			return
+		}
+		block := false
+		if node.Type == html.ElementNode {
+			switch node.Data {
+			case "head", "script", "style", "template":
+				return
+			case "address", "article", "aside", "blockquote", "br", "dd", "details", "div", "dl", "dt",
+				"fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6",
+				"header", "hr", "li", "main", "nav", "ol", "p", "pre", "section", "summary", "table",
+				"tbody", "td", "tfoot", "th", "thead", "tr", "ul":
+				block = true
+			}
+		}
+		if block {
+			out.WriteByte('\n')
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+		if block {
+			out.WriteByte('\n')
+		}
+	}
+	visit(doc)
+	return strings.TrimSpace(out.String())
+}
+
+// hasHTMLMarkup distinguishes tags from plain-text comparisons such as "< 5".
+func hasHTMLMarkup(input string) bool {
+	tokens := html.NewTokenizer(strings.NewReader(input))
+	for {
+		switch tokens.Next() {
+		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken, html.CommentToken, html.DoctypeToken:
+			return true
+		case html.ErrorToken:
+			return false
+		}
+	}
 }
 
 // ToMarkdown converts HTML to Markdown, preserving block structure such as lists

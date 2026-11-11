@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -804,6 +805,82 @@ func TestFilterFromValues_SkillsResolveThroughDictionary(t *testing.T) {
 		got := normalizeGroups(t, FilterFromValues(vals(tc.query)))
 		if want := [][]string{{tc.want}}; !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: got %v, want %v", tc.query, got, want)
+		}
+	}
+}
+
+func TestFilterFromValues_CaseInsensitiveSpecialValues(t *testing.T) {
+	for _, query := range []string{
+		"visa_sponsorship=true", "visa_sponsorship=false",
+		"regions=eu", "regions=none", "regions_exclude=eu", "regions_exclude=none",
+		"category=management", "category_exclude=management",
+		"seniority=senior&seniority_include_unspecified=true",
+		"experience_years_max=2&experience_include_unspecified=true",
+		"experience_years_max=2&experience_only_seniority_unspecified=true",
+		"skills=go,rust&skills_mode=and",
+		"work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true",
+		"work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true&work_mode_mode=and",
+		"work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true&work_mode_remote_regions=eu",
+	} {
+		t.Run(query, func(t *testing.T) {
+			canonical := vals(query)
+			// Change every value separately so a modifier cannot hide another branch's failure.
+			for key, values := range canonical {
+				if key == "skills" || key == "work_mode" || key == "countries" || key == "seniority" || key == "experience_years_max" {
+					continue
+				}
+				for _, transform := range []func(string) string{func(s string) string { return strings.ToUpper(s[:1]) + s[1:] }, strings.ToUpper, func(s string) string { return " " + strings.ToUpper(s) + " " }} {
+					mixed := vals(query)
+					for i, value := range values {
+						mixed[key][i] = transform(value)
+					}
+					got := normalizeGroups(t, FilterFromValues(mixed))
+					want := normalizeGroups(t, FilterFromValues(canonical))
+					if !reflect.DeepEqual(got, want) {
+						t.Errorf("%s=%q: got %v, want %v", key, mixed[key], got, want)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestFilterFromValues_InvalidVisaSponsorship(t *testing.T) {
+	for _, value := range []string{"yes", "1"} {
+		if got := FilterFromValues(url.Values{"visa_sponsorship": {value}}); got != nil {
+			t.Errorf("visa_sponsorship=%s: got %v, want no filter", value, got)
+		}
+	}
+}
+
+func TestWantsWatchlistCaseInsensitive(t *testing.T) {
+	for _, value := range []string{"true", "True", " TRUE "} {
+		v := url.Values{WatchlistParam: {value}}
+		if !WantsWatchlist(v) || !Narrows(v) {
+			t.Errorf("watchlist=%q must narrow to the watchlist", value)
+		}
+	}
+}
+
+func TestFilterFromValues_RemoteAnywhereNeedsAPhysicalMode(t *testing.T) {
+	query := "work_mode=remote&countries=de"
+	got := normalizeGroups(t, FilterFromValues(vals(query+"&work_mode_remote_anywhere=true")))
+	want := normalizeGroups(t, FilterFromValues(vals(query)))
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestFilterFromValues_SeniorityAndIncludesUnspecified(t *testing.T) {
+	for _, mode := range []string{"and", "AND", " And "} {
+		v := url.Values{"seniority": {"intern", "junior"}, "seniority_mode": {mode}, SeniorityIncludeUnspecifiedParam: {"True"}}
+		got := normalizeGroups(t, FilterFromValues(v))
+		want := [][]string{
+			{`enrichment.seniority = "intern"`, `enrichment.seniority NOT EXISTS`},
+			{`enrichment.seniority = "junior"`, `enrichment.seniority NOT EXISTS`},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("mode=%q: got %v, want %v", mode, got, want)
 		}
 	}
 }

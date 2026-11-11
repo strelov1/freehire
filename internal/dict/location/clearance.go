@@ -190,13 +190,17 @@ func questionField(text string, end int) (question, yes bool) {
 var questionTail = regexp.MustCompile(`^(?:\s+[a-z]+){0,2}\s*\?([?*\s]*[a-z]*)`)
 
 // clearanceFalseFriends are phrases that carry a clearance word without stating a
-// security clearance, blanked before any rule reads the text. Each was found in the
-// same sample: the Employee Polygraph Protection Act notice US employers must post (67
-// postings) and a tuberculosis "TB clearance" (7) — both read as a clearance through
-// "polygraph" and "clearance required".
+// security clearance, blanked before any rule reads the text. The catalogue sample
+// found the Employee Polygraph Protection Act notice (67 postings) and tuberculosis
+// "TB clearance" (7). Regression examples also cover medical, health, drug-screen
+// and customs fields that use "clearance" without referring to security vetting.
 var clearanceFalseFriends = strings.NewReplacer(
 	"polygraph protection act", "                        ",
 	"tb clearance", "            ",
+	"medical clearance", "                 ",
+	"customs clearance", "                 ",
+	"drug screen clearance", "                     ",
+	"health clearance", "                ",
 )
 
 // labelledClearanceAsserted reports whether a "Clearance: <value>" field asserts a

@@ -50,12 +50,6 @@ SELECT EXISTS (
     SELECT 1 FROM referral_offers WHERE company_slug = $1 AND status = 'approved'
 ) AS exists;
 
--- name: CompaniesWithApprovedReferrer :many
--- The subset of the given company slugs that are referral-eligible — for annotating a
--- job/company list in one round-trip instead of a query per row.
-SELECT DISTINCT company_slug FROM referral_offers
-WHERE status = 'approved' AND company_slug = ANY(sqlc.arg(slugs)::text[]);
-
 -- name: ReferrerApprovedForCompany :one
 -- Whether a specific member is an approved referrer for a company — the authorization
 -- check for acting on / viewing a request in that company's pool.

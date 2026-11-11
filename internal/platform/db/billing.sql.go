@@ -11,32 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deleteBillingEventsForUser = `-- name: DeleteBillingEventsForUser :exec
-
-
-DELETE FROM billing_events WHERE user_id = $1
-`
-
-// ListSubscribersNearProExpiry was removed by the add-store-purchases change, and its absence
-// is worth a line because deleting a query is unusual here.
-//
-// It predicated on users.pro_until, which stopped being a provider's own answer the moment
-// that column became GREATEST of three sources: a subscriber whose OTHER source reaches
-// further would sit outside the window and never be re-checked, and the lost renewal the pass
-// exists to repair would stay lost. Each provider now has its own near-expiry read against its
-// own column — ListSubscribersNearProExpiryStripe in billing_customer.sql, and
-// ListSubscribersNearProExpiryRevenueCat below.
-//
-// Left in place it would have been a generated, callable query that is wrong by construction,
-// sitting where the next provider would reach for it.
-// Erase one user's billing events. Account deletion calls this; the foreign key cascades,
-// but deletion states what it erases explicitly rather than relying on a constraint to
-// mean it.
-func (q *Queries) DeleteBillingEventsForUser(ctx context.Context, userID pgtype.Int8) error {
-	_, err := q.db.Exec(ctx, deleteBillingEventsForUser, userID)
-	return err
-}
-
 const hasRevenueCatFootprint = `-- name: HasRevenueCatFootprint :one
 SELECT EXISTS (
     SELECT 1 FROM billing_events

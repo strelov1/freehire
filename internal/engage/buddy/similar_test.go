@@ -42,3 +42,25 @@ func TestSimilarRefusesNonMember(t *testing.T) {
 		}
 	}
 }
+
+type similarOffsetRepo struct {
+	stubRepo
+	offset int
+}
+
+func (r *similarOffsetRepo) Similar(_ context.Context, _ int64, _, offset int) ([]SimilarRow, error) {
+	r.offset = offset
+	return nil, nil
+}
+
+func TestSimilarClampsNegativeOffsets(t *testing.T) {
+	for _, tc := range []struct{ offset, want int }{{-5, 0}, {0, 0}, {12, 12}} {
+		r := &similarOffsetRepo{stubRepo: stubRepo{member: Member{Active: true}, found: true}}
+		if _, err := New(r, nil).Similar(context.Background(), 1, 10, tc.offset); err != nil {
+			t.Fatal(err)
+		}
+		if r.offset != tc.want {
+			t.Errorf("offset %d reached repository as %d, want %d", tc.offset, r.offset, tc.want)
+		}
+	}
+}

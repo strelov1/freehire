@@ -18,6 +18,52 @@ func TestToText_StripsTags(t *testing.T) {
 	}
 }
 
+func TestToTextFull_PreservesPlainTextLines(t *testing.T) {
+	for _, input := range []string{
+		"We are hiring in Canada\nBenefits include paid leave.",
+		"We are hiring in Canada\nBenefits include < 5 office visits a year.",
+		"1 < 2 and 3 > 1\nNext line",
+	} {
+		if got := ToTextFull(input); got != input {
+			t.Errorf("ToTextFull(%q) = %q, want unchanged plain text", input, got)
+		}
+	}
+}
+
+func TestToTextFull_ExtractsVisibleTextWithoutFormatting(t *testing.T) {
+	tests := []struct {
+		name, input, want string
+	}{
+		{"inline emphasis", "<p>Candidates <strong>based in</strong> Canada.</p>", "Candidates based in Canada."},
+		{"heading", "<h2>Candidates based in Canada.</h2>", "Candidates based in Canada."},
+		{"entities", "<p>Canada &amp; the US &lt; 5 visits.</p>", "Canada & the US < 5 visits."},
+		{"hidden content", "<head><title>Not visible</title></head><script>bad()</script><style>body{}</style><p>Canada</p>", "Canada"},
+		{"text node newlines", "<p>Canada\nBenefits</p>", "Canada\nBenefits"},
+		{"literal asterisks", "<p>Can*ada</p>", "Can*ada"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ToTextFull(tt.input); got != tt.want {
+				t.Errorf("ToTextFull(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestToTextFull_PreservesContentBeyondRequestLimit(t *testing.T) {
+	input := "<p>" + strings.Repeat("界", maxInputRunes) + "</p><p>Hello <strong>world</strong></p>"
+	got := ToTextFull(input)
+	if strings.Count(got, "界") != maxInputRunes || !strings.Contains(got, "Hello world") {
+		t.Error("ToTextFull dropped content from the full description")
+	}
+	if containsAngle(got) {
+		t.Error("ToTextFull left HTML tags")
+	}
+	if strings.Contains(ToText(input), "Hello") {
+		t.Error("ToText no longer caps request-facing conversion")
+	}
+}
+
 func TestToMarkdown_PreservesListStructure(t *testing.T) {
 	got := ToMarkdown("<ul><li>first</li><li>second</li></ul>")
 	if !contains(got, "first") || !contains(got, "second") {
@@ -68,4 +114,10 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+func TestToTextFullDecodesEntitiesWithoutMarkup(t *testing.T) {
+	if got := ToTextFull("Canada &amp; US&#10;Benefits"); got != "Canada & US\nBenefits" {
+		t.Errorf("visible text = %q", got)
+	}
 }

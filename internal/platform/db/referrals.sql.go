@@ -12,33 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const companiesWithApprovedReferrer = `-- name: CompaniesWithApprovedReferrer :many
-SELECT DISTINCT company_slug FROM referral_offers
-WHERE status = 'approved' AND company_slug = ANY($1::text[])
-`
-
-// The subset of the given company slugs that are referral-eligible — for annotating a
-// job/company list in one round-trip instead of a query per row.
-func (q *Queries) CompaniesWithApprovedReferrer(ctx context.Context, slugs []string) ([]string, error) {
-	rows, err := q.db.Query(ctx, companiesWithApprovedReferrer, slugs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var company_slug string
-		if err := rows.Scan(&company_slug); err != nil {
-			return nil, err
-		}
-		items = append(items, company_slug)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const companyHasApprovedReferrer = `-- name: CompanyHasApprovedReferrer :one
 SELECT EXISTS (
     SELECT 1 FROM referral_offers WHERE company_slug = $1 AND status = 'approved'

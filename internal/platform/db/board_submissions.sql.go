@@ -9,20 +9,6 @@ import (
 	"context"
 )
 
-const deleteBoardSubmission = `-- name: DeleteBoardSubmission :execrows
-DELETE FROM board_submissions WHERE id = $1
-`
-
-// Remove a submission once triage has resolved its (provider, board) and inserted the
-// corresponding boards row.
-func (q *Queries) DeleteBoardSubmission(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteBoardSubmission, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const insertBoardSubmission = `-- name: InsertBoardSubmission :one
 INSERT INTO board_submissions (url, submitted_by, surface)
 VALUES ($1, $2, $3)

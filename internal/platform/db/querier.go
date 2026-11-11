@@ -1059,9 +1059,6 @@ type Querier interface {
 	// covers both. Processed in chunks (SuppressAggregatorDuplicatesForCompanies), mirroring
 	// the role-duplicate recompute's batching.
 	CompaniesWithAggregatorPostings(ctx context.Context, aggregators []string) ([]string, error)
-	// The subset of the given company slugs that are referral-eligible — for annotating a
-	// job/company list in one round-trip instead of a query per row.
-	CompaniesWithApprovedReferrer(ctx context.Context, slugs []string) ([]string, error)
 	// The ingest-time aggregator coverage gate: of the companies asked about, which still have an
 	// OPEN posting from a non-aggregator source that was seen recently. A yes makes ingest DISCARD
 	// the aggregator's posting unsaved, so the question has to be about the present tense — "do we
@@ -1530,11 +1527,6 @@ type Querier interface {
 	// rows cascade away with a deleted posting, so it never counts these; this is added
 	// to its "all"/"applied"/"board" totals by the caller.
 	CountOrphanedApplications(ctx context.Context, userID int64) (int64, error)
-	// How many distinct jobs the caller first analyzed within the window (created_at is the
-	// first-analysis time — see UpsertUserJobAnalysis). This is the fit-analysis quota
-	// meter: the PK guarantees one row per (user, job), so the row count is the distinct-job
-	// count. A recompute does not add a row, so it never consumes quota.
-	CountRecentUserJobAnalyses(ctx context.Context, arg CountRecentUserJobAnalysesParams) (int64, error)
 	// How many saved searches a user has — the per-user cap is enforced against this in
 	// the service before a create.
 	CountSavedSearches(ctx context.Context, userID int64) (int64, error)
@@ -1813,30 +1805,11 @@ type Querier interface {
 	// Records the attempt's `submitted` event in the same statement (migration 0196): the
 	// history trigger does not handle DELETE, since it cannot tell a submission from a cancel.
 	DeleteAutoApplyEntry(ctx context.Context, id int64) error
-	// ListSubscribersNearProExpiry was removed by the add-store-purchases change, and its absence
-	// is worth a line because deleting a query is unusual here.
-	//
-	// It predicated on users.pro_until, which stopped being a provider's own answer the moment
-	// that column became GREATEST of three sources: a subscriber whose OTHER source reaches
-	// further would sit outside the window and never be re-checked, and the lost renewal the pass
-	// exists to repair would stay lost. Each provider now has its own near-expiry read against its
-	// own column — ListSubscribersNearProExpiryStripe in billing_customer.sql, and
-	// ListSubscribersNearProExpiryRevenueCat below.
-	//
-	// Left in place it would have been a generated, callable query that is wrong by construction,
-	// sitting where the next provider would reach for it.
-	// Erase one user's billing events. Account deletion calls this; the foreign key cascades,
-	// but deletion states what it erases explicitly rather than relying on a constraint to
-	// mean it.
-	DeleteBillingEventsForUser(ctx context.Context, userID pgtype.Int8) error
 	// Drop a board's health row entirely, for a board just retired from the catalog: it will
 	// never be crawled again, so no cooldown or failure count of its own could ever clear the
 	// normal way (a successful crawl), and leaving the row would show it as permanently
 	// unhealthy on the public /status page (ProviderHealthRollup, ListUnhealthyBoards) forever.
 	DeleteBoardHealth(ctx context.Context, arg DeleteBoardHealthParams) (int64, error)
-	// Remove a submission once triage has resolved its (provider, board) and inserted the
-	// corresponding boards row.
-	DeleteBoardSubmission(ctx context.Context, id int64) (int64, error)
 	// The user_id guard scopes the delete to the owner's own schedule.
 	DeleteBuddyMockAvailabilityRule(ctx context.Context, arg DeleteBuddyMockAvailabilityRuleParams) (int64, error)
 	// Give a claim back after a failed delivery, so the next run retries.
@@ -3053,11 +3026,6 @@ type Querier interface {
 	// nobody has reviewed, so the caller renders "no reviews yet" from a count of 0 instead
 	// of from a null it has to remember to check.
 	GetMentorReviewSummary(ctx context.Context, mentorID int64) (GetMentorReviewSummaryRow, error)
-	// The caller's own feedback in one category on a company, for the edit form's
-	// prefill and for Upsert to tell an edit from a genuinely new review. No row
-	// when they have not left one in that category yet. Not filtered by status:
-	// the owner can still see and edit their own review after a moderator hides it.
-	GetMyCompanyFeedback(ctx context.Context, arg GetMyCompanyFeedbackParams) (CompanyFeedback, error)
 	// One notification, owner-scoped (no row for another user's id, mapped to 404
 	// by the handler) — the direct-link/detail read a bookmarked or freshly
 	// visited /my/notifications/[id]/jobs page needs, since ListUserNotifications
@@ -3278,8 +3246,6 @@ type Querier interface {
 	// wizard, and it rides along here rather than on its own endpoint because the root
 	// layout's gate needs it on the same read it already makes to decide anything at all.
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
-	// OAuth sign-in fast path: resolve a provider identity straight to its user.
-	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)
 	GetUserCandidateContacts(ctx context.Context, id int64) ([]byte, error)
 	// Whether interactive atom creates require a non-empty context. Kept off /auth/me on
 	// purpose — only the experience write path and get_profile's bank summary need it.
@@ -3703,10 +3669,6 @@ type Querier interface {
 	// who accepted an invite discloses that a particular person signed up for a job board, which
 	// is not the referrer's to know.
 	InviteStats(ctx context.Context, referrerID int64) (InviteStatsRow, error)
-	// Whether the account is in the beta group, on its own. GetUserByID answers it too, but
-	// carries nine other columns a gate has no use for — and a gate that reads a whole user
-	// row invites somebody to branch on a second field from it later.
-	IsBetaTester(ctx context.Context, id int64) (bool, error)
 	// Whether some retired slug already redirects here. Such a slug cannot itself retire: the
 	// registry resolves one hop, so its aliases would land on a slug with no jobs.
 	IsCanonicalCompanySlug(ctx context.Context, slug string) (bool, error)
@@ -4773,9 +4735,6 @@ type Querier interface {
 	// never faults) and then fetches each row individually to isolate and skip the
 	// unreadable one.
 	ListJobIDsAfter(ctx context.Context, arg ListJobIDsAfterParams) ([]int64, error)
-	// Id-only projection of ListJobsUpdatedAfter — the corruption-degrade path for the
-	// incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.
-	ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpdatedAfterParams) ([]int64, error)
 	// Resolve job ids to display labels for the credit-history page (match debits). Missing ids
 	// simply do not come back; the handler falls back to a generic label for a deleted job.
 	ListJobLabelsByIDs(ctx context.Context, ids []int64) ([]ListJobLabelsByIDsRow, error)
@@ -4980,7 +4939,7 @@ type Querier interface {
 	ListMessagesForConversations(ctx context.Context, conversationIds []int64) ([]ListMessagesForConversationsRow, error)
 	// All of the caller's own feedback on a company, across every category they've
 	// reviewed it under — the write dialog's "which categories have I already
-	// used" read. Not filtered by status, same reasoning as GetMyCompanyFeedback.
+	// used" read. Not filtered by status: the owner can still see and edit a hidden review.
 	ListMyCompanyFeedback(ctx context.Context, arg ListMyCompanyFeedbackParams) ([]CompanyFeedback, error)
 	// Accounts currently entitled to a paying tier (pro or ultra, per the same
 	// pro_until/ultra_until this whole file resolves everything else from) that have not yet
@@ -5527,8 +5486,7 @@ type Querier interface {
 	// stored staleness stamps (model, cv_uploaded_at, job_content_hash, language) ride
 	// along so the handler can flag rows whose CV, job, model, or profile language has
 	// since changed, and the analysis blob carries the overall score + verdict the list
-	// shows. Capped at 500 — the quota window (see CountRecentUserJobAnalyses) keeps real
-	// usage far below that, and each row drags a full analysis JSONB over the wire.
+	// shows. Capped at 500 because each row carries a full analysis JSONB over the wire.
 	ListUserJobAnalyses(ctx context.Context, userID int64) ([]ListUserJobAnalysesRow, error)
 	// A user's job interactions joined with a CARD of the job — what a list row draws, and no
 	// more. Each subset is ordered by when the job entered *that* list, not by last touch: saved
@@ -8433,9 +8391,8 @@ type Querier interface {
 	// Create-or-replace the cached analysis for a (user, job). The composite PRIMARY KEY
 	// makes it idempotent: a recompute overwrites the analysis and all four staleness stamps
 	// (model, cv_uploaded_at, job_content_hash, language). created_at is deliberately NOT
-	// re-bumped on conflict, so it records the FIRST-analysis time — the fit-analysis quota
-	// counts distinct jobs a user first analyzed within a rolling window, and a recompute
-	// must not re-age its row into it.
+	// re-bumped on conflict, so the tracking list keeps the first-analysis time even
+	// when the caller recomputes the same job.
 	// analysis is the sanitized matchanalysis.Analysis JSON.
 	UpsertUserJobAnalysis(ctx context.Context, arg UpsertUserJobAnalysisParams) error
 	// Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an

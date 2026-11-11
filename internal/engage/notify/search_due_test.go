@@ -178,3 +178,32 @@ func TestMatch_PausesASubscriptionWhoseQueryCannotRun(t *testing.T) {
 		t.Errorf("search calls=%d failed=%d, want only the runnable query searched", len(searcher.calls), stats.FailedQueries)
 	}
 }
+
+func TestMatchPausesLegacyInvalidVisaFiltersInsteadOfWideningThem(t *testing.T) {
+	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
+	store := &fakeStore{active: []db.ListActiveSubscriptionsRow{
+		{ID: 1, UserID: 1, Channel: ChannelEmail, Query: "work_mode=remote&visa_sponsorship=1", StartAt: ts(now)},
+		{ID: 2, UserID: 2, Channel: ChannelTelegram, Query: "work_mode=remote&visa_sponsorship=yes", StartAt: ts(now)},
+		{ID: 3, UserID: 3, Channel: ChannelEmail, Query: "work_mode=remote&visa_sponsorship=false", StartAt: ts(now)},
+		{ID: 4, UserID: 4, Channel: ChannelEmail, Query: "work_mode=remote&visa_sponsorship=%20TRUE", StartAt: ts(now)},
+		{ID: 5, UserID: 5, Channel: ChannelEmail, Query: "work_mode=remote&visa_sponsorship=", StartAt: ts(now)},
+	}}
+	searcher := &fakeSearcher{}
+	r := New(store, searcher, &fakeNotifier{}, DefaultConfig())
+	r.now = func() time.Time { return now }
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.paused) != 2 || stats.Paused != 2 {
+		t.Fatalf("paused=%v stats.Paused=%d, want legacy subscriptions 1 and 2 paused", store.paused, stats.Paused)
+	}
+	for _, id := range store.paused {
+		if id != 1 && id != 2 {
+			t.Errorf("paused valid visa subscription %d", id)
+		}
+	}
+	if len(searcher.calls) != 3 || stats.FailedQueries != 0 {
+		t.Errorf("search calls=%d failed=%d, want only valid or absent boolean queries searched", len(searcher.calls), stats.FailedQueries)
+	}
+}

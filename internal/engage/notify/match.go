@@ -148,19 +148,22 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 }
 
 // pauseUnrunnable pauses every subscription whose saved query the search can no
-// longer parse, and drops its group from this pass. Such a query fails on every pass
-// and never delivers: measured 2026-11-05, one subscription with ten OR alternatives
+// longer honor, and drops its group from this pass. A parse failure repeats on every
+// pass and never delivers: measured 2026-11-05, one subscription with ten OR alternatives
 // had failed every pass for a week while its owner received nothing. New and resumed
 // subscriptions are refused at the door (internal/engage/subscription), so this
 // catches what predates a rule — a query saved before it existed, or one a tightened
 // rule later invalidates. Paused rather than deleted: the owner can fix the search
 // and resume it. A failed pause is logged and retried next pass; the query is not
-// searched either way, since it would only fail.
+// searched either way, since it would fail or silently widen.
 func (r *Runner) pauseUnrunnable(ctx context.Context, groups map[matchGroup][]db.ListActiveSubscriptionsRow, stats *Stats) {
 	for key, gsubs := range groups {
 		query := key.query
 		vals, _ := url.ParseQuery(query)
-		if _, err := search.ParseQuery(vals.Get("q")); err == nil {
+		// Invalid visa values used to mean false. Dropping them now would widen
+		// existing alerts, so pause those queries until their owner fixes them.
+		invalidVisa := search.HasInvalidVisaSponsorship(vals)
+		if _, err := search.ParseQuery(vals.Get("q")); err == nil && !invalidVisa {
 			continue
 		}
 		delete(groups, key)
