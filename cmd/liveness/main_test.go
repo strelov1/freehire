@@ -223,3 +223,32 @@ func TestProviderClassificationDoesNotRequireReedCredential(t *testing.T) {
 		t.Fatal("unrelated source filter was lost")
 	}
 }
+
+func TestUnconfiguredWhatJobsMarketRetainsAgeFallback(t *testing.T) {
+	t.Setenv("WHATJOBS_PUBLISHER_IDS", "us:test-publisher")
+	t.Setenv("ADZUNA_APP_ID", "test-app")
+	t.Setenv("ADZUNA_APP_KEY", "test-key")
+	crawlProviders := providerKeys(sources.All(sources.NewClient()))
+	if slices.Contains(crawlProviders, "whatjobs-uk") {
+		t.Fatal("test setup unexpectedly configures UK crawl")
+	}
+	if missing := unmatchedPrefixes(crawlProviders, expireDespiteRegisteredPrefixes); len(missing) > 0 {
+		t.Fatalf("live-prefix guard fails: %v", missing)
+	}
+	if !slices.Contains(classifiedProviderKeys(), "whatjobs-uk") {
+		t.Fatal("UK must remain excluded from orphan URL probes")
+	}
+	fallback, grace := registeredAgeFallback()
+	selected := filterSources(fallback, "whatjobs-uk")
+	if !slices.Equal(selected, []string{"whatjobs-uk"}) {
+		t.Fatalf("UK has no age fallback: %v", selected)
+	}
+	if got := unseenWindow(selected, grace); got != 14*24*time.Hour {
+		t.Fatalf("UK unseen grace=%v, want 14 days", got)
+	}
+	t.Setenv("WHATJOBS_PUBLISHER_IDS", "")
+	noMarkets := providerKeys(sources.All(sources.NewClient()))
+	if missing := unmatchedPrefixes(noMarkets, expireDespiteRegisteredPrefixes); !slices.Contains(missing, "whatjobs") {
+		t.Fatal("live-prefix guard no longer detects missing publisher configuration")
+	}
+}

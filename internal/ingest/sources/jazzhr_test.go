@@ -3,10 +3,11 @@ package sources
 import (
 	"context"
 	"errors"
-	"html"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 // jazzhrDetailHTML is a JazzHR job page: server-rendered HTML whose only payload we read is
@@ -273,7 +274,11 @@ func TestJazzHRDOMFallbackPreservesEncodedLiteralAngleBrackets(t *testing.T) {
 	if len(read) != 1 {
 		t.Fatalf("got %+v, want one readable posting", jobs)
 	}
-	if !strings.Contains(html.UnescapeString(read[0].Description), "Use <T> and <script> as literal text.") {
+	description, err := html.Parse(strings.NewReader(read[0].Description))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(textContent(description), "Use <T> and <script> as literal text.") {
 		t.Fatalf("literal angle-bracket text was lost: %q", read[0].Description)
 	}
 }
