@@ -29,6 +29,12 @@ func (h *companyWatchHandlers) register(api fiber.Router, mw middleware, contrac
 	// (typespec/watchlist.tsp).
 	api.Get("/me/watchlist", mw.cookie, contract)
 	api.Post("/me/watchlist/import", mw.cookie, contract)
+	// Reserve the literal resource before the slug routes: Fiber otherwise includes
+	// their methods in Allow when probing /import with an unsupported method.
+	api.All("/me/watchlist/import", func(c *fiber.Ctx) error {
+		c.Set(fiber.HeaderAllow, fiber.MethodPost)
+		return fiber.ErrMethodNotAllowed
+	})
 	api.Get("/me/watchlist/:slug", mw.cookie, contract)
 	api.Put("/me/watchlist/:slug", mw.cookie, contract)
 	api.Delete("/me/watchlist/:slug", mw.cookie, contract)
