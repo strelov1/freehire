@@ -719,8 +719,7 @@
      posting is something a reader does in passing, not the thing the page is for. It sits
      with the other quiet ones on the tab row, and beside the apply CTA in the pinned header,
      which has room for one bookmark and not for four. The filled bookmark is the state.
-     `iconOnly` is for the pinned header, whose one line already holds the company, the
-     title and the CTA.
+     `iconOnly` keeps the pinned header and mobile action strip compact.
      The words are JobRow's ("Save to board" / "On your board"), so one action reads the same
      on the card and on the page, and so is the accessible-name rule: the visible label
      already flips with the state, so there is no `aria-pressed` announcing the same fact a
@@ -839,7 +838,7 @@
      the tab row on lg, and directly under the title below it, where the sidebar stacks
      between the title and the description and a strip left on the tab row would put Save
      a whole screen away from the job it saves. -->
-{#snippet actionStrip(className: string)}
+{#snippet actionStrip(className: string, iconOnly = false)}
   <div class={`shrink-0 items-center gap-1.5 ${className}`}>
     <a
       class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -853,7 +852,7 @@
       <span class="sr-only">Discussion</span>{threadCount ? ` · ${threadCount}` : ''}
     </a>
     {@render reportButton()}
-    {@render saveButton()}
+    {@render saveButton(iconOnly ? 'size-11 px-0' : '', iconOnly)}
     <!-- The link out, phone only. Below lg the sticky bottom bar belongs to auto-apply
          whenever auto-apply can be started, so the posting's own page needs a door
          somewhere else — and this strip is where the quiet things already are. On lg the
@@ -1156,23 +1155,11 @@
          badges, so the dates read here instead — a caption under the title rather than
          right-aligned, which on one phone-width column would only look adrift. -->
 
-    <!-- Below lg the strip rides here rather than on the tab row: the sidebar stacks
-         between the title and the description on a phone, so a strip left down there
-         would put Save a full screen of match card and metadata away from the job it
-         saves. Under the title and not above it — these are the quiet things a reader
-         does WITH a posting, and above the title they wedged three tertiary controls
-         between the employer and the role. Right-aligned like the lg copy beside the
-         tabs, so the strip reads the same on both; `-mr-2` cancels the last button's
-         own padding, lining its right edge up with the column's. -->
-    <!-- `flex-wrap` only on this copy: the phone's strip carries a fifth item the tab row's
-         does not (the link out), and five labels do not fit one phone-width line — without
-         it the row simply overflowed its left edge and ate "Discussion". The lg copy shares
-         a line with the TabStrip and must not wrap. -->
-    <!-- On a phone the dates and the strip share one left-aligned line, wrapping when it
-         must: right-aligned, the strip floated under a short date with nothing to its left. -->
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2 lg:hidden">
-      {@render postingMeta('flex flex-wrap')}
-      {@render actionStrip('-ml-2 flex max-w-full flex-wrap')}
+    <!-- Keep the metadata left and the compact actions at the right edge, even when
+         longer metadata wraps onto its own line. -->
+    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border pb-2 lg:hidden">
+      {@render postingMeta('flex min-w-0 flex-wrap')}
+      {@render actionStrip('ml-auto -mr-2 flex max-w-full flex-wrap justify-end', true)}
     </div>
 
     <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
@@ -1193,20 +1180,6 @@
         jobSlug={job.public_slug}
         onTailor={() => void onTailorClick()}
       />
-    {/if}
-
-    {#if job.company?.trim() && !closed}
-      <button
-        type="button"
-        disabled={loadingReferralMessage}
-        onclick={() => void openReferralMessage()}
-        class="w-fit text-sm text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
-      >
-        Draft a referral message
-      </button>
-      {#if referralMessageLoadError}
-        <span role="alert" class="text-sm text-destructive">Could not open the draft form. Please try again.</span>
-      {/if}
     {/if}
 
     <!-- Mentorship is a separate way to get help from someone at this company. -->
@@ -1383,23 +1356,38 @@
         <div class="min-w-0 flex-1 border-b border-border" aria-hidden="true"></div>
       {/if}
       {#if job.company?.trim()}
-        <!-- At the tab row's end, where it reads as one more thing to look at about this job,
-             rather than a sentence of its own under the CTAs. The full wording is the link's
-             name; the visible label stays short so it fits beside the tabs. The company page
-             is resolved only on click, keeping crawler visits cheap. -->
-        <a
-          href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
-          target="_blank"
-          rel="nofollow noopener noreferrer"
-          aria-label="Find people at {job.company.trim()} on LinkedIn"
-          title="Find people at {job.company.trim()} on LinkedIn"
-          class="inline-flex shrink-0 items-center gap-1.5 self-stretch border-b border-border pl-3 text-sm text-muted-foreground hover:text-foreground"
-        >
-          Find people
-          <ProviderIcon provider="linkedin" class="size-3.5 shrink-0" />
-        </a>
+        <div class="flex shrink-0 items-center self-stretch border-b border-border lg:gap-x-4 lg:pl-3">
+          <a
+            href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            aria-label="Find people at {job.company.trim()} on LinkedIn"
+            title="Find people at {job.company.trim()} on LinkedIn"
+            class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground lg:min-w-0"
+          >
+            <span class="hidden lg:inline">Find people</span>
+            <ProviderIcon provider="linkedin" class="size-4 shrink-0 lg:size-3.5" />
+          </a>
+          {#if !closed}
+            <button
+              type="button"
+              disabled={loadingReferralMessage}
+              onclick={() => void openReferralMessage()}
+              aria-label="Draft referral message"
+              title="Draft a referral message"
+              class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50 lg:min-w-0"
+            >
+              <SquarePen class="size-4 shrink-0 lg:size-3.5" aria-hidden="true" />
+              <span class="hidden lg:inline">Draft referral</span>
+            </button>
+          {/if}
+        </div>
       {/if}
     </div>
+
+    {#if job.company?.trim() && !closed && referralMessageLoadError}
+      <span role="alert" class="text-sm text-destructive">Could not open the draft form. Please try again.</span>
+    {/if}
 
     <!-- The three states of one exchange. They sit at the top of the content column rather
          than beside the CTA that raised them: the question follows a click that opened a

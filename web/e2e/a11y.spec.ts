@@ -82,3 +82,35 @@ for (const { name, path, content } of PAGES) {
     expect(report, `${blocking.length} serious/critical rule(s) violated on ${path}`).toBe('');
   });
 }
+
+for (const width of [320, 393]) {
+  test(`mobile job actions fit at ${width}px with a 44px Save target`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await forwardApi(page);
+    await page.goto(`/jobs/${JOB_SLUG}`);
+
+    const save = page.getByRole('button', { name: 'Save to board', exact: true });
+    await expect(save).toBeVisible();
+    const target = await save.boundingBox();
+    expect(target?.width).toBeGreaterThanOrEqual(44);
+    expect(target?.height).toBeGreaterThanOrEqual(44);
+
+    const tabs = page.getByRole('tablist', { name: 'Job details' });
+    const people = page.getByRole('link', { name: /^Find people at .+ on LinkedIn$/ });
+    const draft = page.getByRole('button', { name: 'Draft referral message', exact: true });
+    await expect(tabs).toBeVisible();
+    await expect(people).toBeVisible();
+    await expect(draft).toBeVisible();
+    const tabRow = await tabs.boundingBox();
+    for (const action of [people, draft]) {
+      const bounds = await action.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(tabRow).not.toBeNull();
+      if (bounds && tabRow) {
+        expect(bounds.y).toBeLessThan(tabRow.y + tabRow.height);
+        expect(bounds.y + bounds.height).toBeGreaterThan(tabRow.y);
+      }
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+  });
+}
