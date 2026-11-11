@@ -127,3 +127,16 @@ func TestFacetdRebuildWire(t *testing.T) {
 		t.Errorf("facetd got vectors it does not index: %v", v)
 	}
 }
+
+func TestRetryFacetdRebuildsTheSecondaryAlone(t *testing.T) {
+	f := &fakeRebuilder{}
+	tee := &teeRebuild{primary: &fakeRebuilder{}, secondary: f, secondaryDown: true}
+	var got rebuilder
+	ok := retryFacetd(context.Background(), tee, func(_ context.Context, b rebuilder) error { got = b; return nil })
+	if !ok || got != f {
+		t.Errorf("retry = %v on %v, want true on the facetd rebuilder", ok, got)
+	}
+	if retryFacetd(context.Background(), tee, func(context.Context, rebuilder) error { return errors.New("facetd down") }) {
+		t.Error("a failed retry reported facetd as caught up")
+	}
+}
