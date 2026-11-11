@@ -404,6 +404,136 @@ func decodeDeleteBankedAnswerParams(args [1]string, argsEscaped bool, r *http.Re
 	return params, nil
 }
 
+// DeleteSavedSearchParams is parameters of deleteSavedSearch operation.
+type DeleteSavedSearchParams struct {
+	ID string
+}
+
+func unpackDeleteSavedSearchParams(packed middleware.Parameters) (params DeleteSavedSearchParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeDeleteSavedSearchParams(args [1]string, argsEscaped bool, r *http.Request) (params DeleteSavedSearchParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// DeleteSubscriptionParams is parameters of deleteSubscription operation.
+type DeleteSubscriptionParams struct {
+	ID string
+}
+
+func unpackDeleteSubscriptionParams(packed middleware.Parameters) (params DeleteSubscriptionParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeDeleteSubscriptionParams(args [1]string, argsEscaped bool, r *http.Request) (params DeleteSubscriptionParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // FileProcessReportParams is parameters of fileProcessReport operation.
 type FileProcessReportParams struct {
 	Slug string
@@ -2292,6 +2422,71 @@ func decodeSearchCitiesParams(args [0]string, argsEscaped bool, r *http.Request)
 	return params, nil
 }
 
+// SetSubscriptionActiveParams is parameters of setSubscriptionActive operation.
+type SetSubscriptionActiveParams struct {
+	ID string
+}
+
+func unpackSetSubscriptionActiveParams(packed middleware.Parameters) (params SetSubscriptionActiveParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeSetSubscriptionActiveParams(args [1]string, argsEscaped bool, r *http.Request) (params SetSubscriptionActiveParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // SuggestParams is parameters of suggest operation.
 type SuggestParams struct {
 	Q OptString `json:",omitempty,omitzero"`
@@ -2425,6 +2620,71 @@ func unpackUnbanUserParams(packed middleware.Parameters) (params UnbanUserParams
 }
 
 func decodeUnbanUserParams(args [1]string, argsEscaped bool, r *http.Request) (params UnbanUserParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// UpdateSavedSearchParams is parameters of updateSavedSearch operation.
+type UpdateSavedSearchParams struct {
+	ID string
+}
+
+func unpackUpdateSavedSearchParams(packed middleware.Parameters) (params UpdateSavedSearchParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeUpdateSavedSearchParams(args [1]string, argsEscaped bool, r *http.Request) (params UpdateSavedSearchParams, _ error) {
 	// Decode path: id.
 	if err := func() error {
 		param := args[0]

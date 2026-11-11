@@ -51,10 +51,7 @@ func TestSubscriptionsEndToEnd(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	guard := auth.RequireAuth(iss, testVersions)
-	app.Post("/api/v1/me/subscriptions", guard, h.CreateSubscription)
-	app.Get("/api/v1/me/subscriptions", guard, h.ListSubscriptions)
-	app.Patch("/api/v1/me/subscriptions/:id", guard, h.SetSubscriptionActive)
-	app.Delete("/api/v1/me/subscriptions/:id", guard, h.DeleteSubscription)
+	h.register(app.Group("/api/v1"), middleware{cookie: guard}, newContract(contractHandlers{subscriptionHandlers: h}))
 
 	const path = "/api/v1/me/subscriptions"
 	req := func(method, p, cookie, body string) *http.Request {

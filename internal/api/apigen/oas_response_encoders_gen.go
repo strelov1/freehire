@@ -91,6 +91,32 @@ func encodeCreateGhostReportResponse(response *CreateGhostReportCreated, w http.
 	return nil
 }
 
+func encodeCreateSavedSearchResponse(response *CreateSavedSearchCreated, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeCreateSubscriptionResponse(response *CreateSubscriptionCreated, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeDeleteBankedAnswerResponse(response *DeleteBankedAnswerOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -100,6 +126,18 @@ func encodeDeleteBankedAnswerResponse(response *DeleteBankedAnswerOK, w http.Res
 	if _, err := e.WriteTo(w); err != nil {
 		return errors.Wrap(err, "write")
 	}
+
+	return nil
+}
+
+func encodeDeleteSavedSearchResponse(response *DeleteSavedSearchNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
+func encodeDeleteSubscriptionResponse(response *DeleteSubscriptionNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
 
 	return nil
 }
@@ -440,6 +478,32 @@ func encodeListMyContributionsResponse(response *ListMyContributionsOK, w http.R
 	return nil
 }
 
+func encodeListSavedSearchesResponse(response *SavedSearchList, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeListSubscriptionsResponse(response *SubscriptionList, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeListTalentResponse(response *ListTalentOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -667,6 +731,19 @@ func encodeSetAgentPermissionsResponse(response *SetAgentPermissionsOK, w http.R
 	return nil
 }
 
+func encodeSetSubscriptionActiveResponse(response *SetSubscriptionActiveOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeSetTalentNetworkVisibilityResponse(response *SetTalentNetworkVisibilityOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -720,6 +797,19 @@ func encodeUpdateEmailPrefsResponse(response *UpdateEmailPrefsOK, w http.Respons
 }
 
 func encodeUpdateMyEmailGroupsResponse(response *UpdateMyEmailGroupsOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeUpdateSavedSearchResponse(response *UpdateSavedSearchOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 

@@ -16,6 +16,7 @@ import "./feedback.tsp";
 import "./answer-bank.tsp";
 import "./moderation.tsp";
 import "./contributions.tsp";
+import "./alerts.tsp";
 
 using Http;
 
