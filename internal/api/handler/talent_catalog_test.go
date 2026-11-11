@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/minio/minio-go/v7"
+	"github.com/valyala/fasthttp"
 
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
@@ -76,12 +77,9 @@ func catalogRow(handle, cv string, fresh time.Time) db.ListTalentNetworkMembersR
 func talentCatalogApp(store talentnetwork.Store, photos *headshot.Store) *fiber.App {
 	h := newTalentCatalogHandlers(talentnetwork.NewCatalogue(store, time.Minute, time.Now), photos)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/talent", h.List)
-	// Registered before the parametrised route, exactly as `register` does — a test that
-	// mounted them the other way round would pass while the real router 404s.
-	app.Get("/talent/facets", h.Facets)
-	app.Get("/talent/:handle", h.Get)
-	app.Get("/talent/:handle/photo", h.GetPhoto)
+	// Mounted through the real register and contract, so the routes are the ones the
+	// server serves.
+	h.register(app.Group("/api/v1"), newContract(contractHandlers{talentCatalogHandlers: h}))
 	return app
 }
 
@@ -186,7 +184,7 @@ func forbidSubstrings(t *testing.T, body string, forbidden ...string) {
 
 func doTalent(t *testing.T, app *fiber.App, target string) *http.Response {
 	t.Helper()
-	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, target, nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1"+target, nil))
 	if err != nil {
 		t.Fatalf("request %s: %v", target, err)
 	}
@@ -512,5 +510,44 @@ func TestTalentFacets_ReportsParamsItDidNotRead(t *testing.T) {
 	}
 	if len(out.Meta.IgnoredParams) != 1 || out.Meta.IgnoredParams[0].Param != "countries" {
 		t.Errorf("ignored_params = %+v, want [countries]", out.Meta.IgnoredParams)
+	}
+}
+
+// The generated router refuses what Fiber has always accepted: a trailing slash and a
+// repeated param (Fiber reads the first). Both must keep answering as before.
+func TestTalentCatalog_AnswersFiberShapedURLsAsBefore(t *testing.T) {
+	store := &fakeTalentCatalogStore{rows: []db.ListTalentNetworkMembersRow{
+		catalogRow("backend-aaaa", catalogBackendCV, time.Now()),
+		catalogRow("frontend-bbbb", catalogFrontendCV, time.Now()),
+	}}
+	// backend-aaaa has a photo, so an encoded slash that escaped its handle would be
+	// answered by the photo route with a JPEG instead of the member route's 404.
+	store.ownerHandle, store.ownerID = "backend-aaaa", 7
+	app := talentCatalogApp(store, photoStoreWithOneMember(t, 7))
+	for target, wantTotal := range map[string]string{
+		"/talent/":        `"total":2`,
+		"/talent/facets/": `"total":2`,
+		"/talent?categories=backend&categories=frontend":        `"total":1`,
+		"/talent/facets?categories=backend&categories=frontend": `"total":1`,
+	} {
+		resp := doTalent(t, app, target)
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), wantTotal) {
+			t.Errorf("%s = %d %s, want 200 with %s", target, resp.StatusCode, body, wantTotal)
+		}
+	}
+	// Each of these names no member and must get the handler's own 404, never the router's
+	// plain one or a 500: a trailing slash, an encoded slash that must stay inside the
+	// handle (not reach /photo), and a broken escape the adaptor cannot parse.
+	for _, target := range []string{"/talent/nobody/", "/talent/backend-aaaa%2Fphoto", "/talent/%ZZ"} {
+		// Straight into the handler: net/http and app.Test would rewrite or refuse %ZZ.
+		var fctx fasthttp.RequestCtx
+		fctx.Request.SetRequestURI("/api/v1" + target)
+		app.Handler()(&fctx)
+		status, body := fctx.Response.StatusCode(), fctx.Response.Body()
+		if status != http.StatusNotFound || !strings.Contains(string(body), `"error":"not found"`) {
+			t.Errorf("%s = %d %.80s, want the handler's 404", target, status, body)
+		}
 	}
 }

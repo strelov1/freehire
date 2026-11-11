@@ -4,11 +4,14 @@ package apigen
 
 import (
 	"net/http"
+	"net/url"
 
+	"github.com/go-faster/errors"
 	"github.com/ogen-go/ogen/conv"
 	"github.com/ogen-go/ogen/middleware"
 	"github.com/ogen-go/ogen/ogenerrors"
 	"github.com/ogen-go/ogen/uri"
+	"github.com/ogen-go/ogen/validate"
 )
 
 // GetEmailPrefsParams is parameters of getEmailPrefs operation.
@@ -68,6 +71,978 @@ func decodeGetEmailPrefsParams(args [0]string, argsEscaped bool, r *http.Request
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "t",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// GetTalentFacetsParams is parameters of getTalentFacets operation.
+type GetTalentFacetsParams struct {
+	Categories      OptString `json:",omitempty,omitzero"`
+	Seniorities     OptString `json:",omitempty,omitzero"`
+	Skills          OptString `json:",omitempty,omitzero"`
+	Tz              OptString `json:",omitempty,omitzero"`
+	Cities          OptString `json:",omitempty,omitzero"`
+	Specializations OptString `json:",omitempty,omitzero"`
+	MinYears        OptString `json:",omitempty,omitzero"`
+}
+
+func unpackGetTalentFacetsParams(packed middleware.Parameters) (params GetTalentFacetsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "categories",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Categories = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "seniorities",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Seniorities = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "skills",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Skills = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "tz",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Tz = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "cities",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Cities = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "specializations",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Specializations = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "min_years",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.MinYears = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeGetTalentFacetsParams(args [0]string, argsEscaped bool, r *http.Request) (params GetTalentFacetsParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: categories.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "categories",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotCategoriesVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotCategoriesVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Categories.SetTo(paramsDotCategoriesVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "categories",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: seniorities.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "seniorities",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotSenioritiesVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotSenioritiesVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Seniorities.SetTo(paramsDotSenioritiesVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "seniorities",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: skills.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "skills",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotSkillsVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotSkillsVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Skills.SetTo(paramsDotSkillsVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "skills",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: tz.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "tz",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotTzVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotTzVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Tz.SetTo(paramsDotTzVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "tz",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: cities.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "cities",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotCitiesVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotCitiesVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Cities.SetTo(paramsDotCitiesVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "cities",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: specializations.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "specializations",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotSpecializationsVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotSpecializationsVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Specializations.SetTo(paramsDotSpecializationsVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "specializations",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: min_years.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "min_years",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotMinYearsVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotMinYearsVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.MinYears.SetTo(paramsDotMinYearsVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "min_years",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// GetTalentMemberParams is parameters of getTalentMember operation.
+type GetTalentMemberParams struct {
+	Handle string
+}
+
+func unpackGetTalentMemberParams(packed middleware.Parameters) (params GetTalentMemberParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "handle",
+			In:   "path",
+		}
+		params.Handle = packed[key].(string)
+	}
+	return params
+}
+
+func decodeGetTalentMemberParams(args [1]string, argsEscaped bool, r *http.Request) (params GetTalentMemberParams, _ error) {
+	// Decode path: handle.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "handle",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Handle = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "handle",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// GetTalentPhotoParams is parameters of getTalentPhoto operation.
+type GetTalentPhotoParams struct {
+	Handle string
+}
+
+func unpackGetTalentPhotoParams(packed middleware.Parameters) (params GetTalentPhotoParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "handle",
+			In:   "path",
+		}
+		params.Handle = packed[key].(string)
+	}
+	return params
+}
+
+func decodeGetTalentPhotoParams(args [1]string, argsEscaped bool, r *http.Request) (params GetTalentPhotoParams, _ error) {
+	// Decode path: handle.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "handle",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Handle = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "handle",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// ListTalentParams is parameters of listTalent operation.
+type ListTalentParams struct {
+	Categories      OptString `json:",omitempty,omitzero"`
+	Seniorities     OptString `json:",omitempty,omitzero"`
+	Skills          OptString `json:",omitempty,omitzero"`
+	Tz              OptString `json:",omitempty,omitzero"`
+	Cities          OptString `json:",omitempty,omitzero"`
+	Specializations OptString `json:",omitempty,omitzero"`
+	MinYears        OptString `json:",omitempty,omitzero"`
+	Limit           OptString `json:",omitempty,omitzero"`
+	Offset          OptString `json:",omitempty,omitzero"`
+}
+
+func unpackListTalentParams(packed middleware.Parameters) (params ListTalentParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "categories",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Categories = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "seniorities",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Seniorities = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "skills",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Skills = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "tz",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Tz = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "cities",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Cities = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "specializations",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Specializations = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "min_years",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.MinYears = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "limit",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Limit = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "offset",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Offset = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeListTalentParams(args [0]string, argsEscaped bool, r *http.Request) (params ListTalentParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: categories.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "categories",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotCategoriesVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotCategoriesVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Categories.SetTo(paramsDotCategoriesVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "categories",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: seniorities.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "seniorities",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotSenioritiesVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotSenioritiesVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Seniorities.SetTo(paramsDotSenioritiesVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "seniorities",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: skills.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "skills",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotSkillsVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotSkillsVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Skills.SetTo(paramsDotSkillsVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "skills",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: tz.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "tz",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotTzVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotTzVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Tz.SetTo(paramsDotTzVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "tz",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: cities.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "cities",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotCitiesVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotCitiesVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Cities.SetTo(paramsDotCitiesVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "cities",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: specializations.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "specializations",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotSpecializationsVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotSpecializationsVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Specializations.SetTo(paramsDotSpecializationsVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "specializations",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: min_years.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "min_years",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotMinYearsVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotMinYearsVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.MinYears.SetTo(paramsDotMinYearsVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "min_years",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: limit.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "limit",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotLimitVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotLimitVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Limit.SetTo(paramsDotLimitVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "limit",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: offset.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "offset",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotOffsetVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotOffsetVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Offset.SetTo(paramsDotOffsetVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "offset",
 			In:   "query",
 			Err:  err,
 		}

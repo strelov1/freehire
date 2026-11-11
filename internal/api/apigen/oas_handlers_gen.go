@@ -195,6 +195,438 @@ func (s *Server) handleGetMyEmailGroupsRequest(args [0]string, argsEscaped bool,
 	}
 }
 
+// handleGetTalentFacetsRequest handles getTalentFacets operation.
+//
+// GET /talent/facets
+func (s *Server) handleGetTalentFacetsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetTalentFacetsOperation,
+			ID:   "getTalentFacets",
+		}
+	)
+	params, err := decodeGetTalentFacetsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetTalentFacetsOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetTalentFacetsOperation,
+			OperationSummary: "",
+			OperationID:      "getTalentFacets",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "categories",
+					In:   "query",
+				}: params.Categories,
+				{
+					Name: "seniorities",
+					In:   "query",
+				}: params.Seniorities,
+				{
+					Name: "skills",
+					In:   "query",
+				}: params.Skills,
+				{
+					Name: "tz",
+					In:   "query",
+				}: params.Tz,
+				{
+					Name: "cities",
+					In:   "query",
+				}: params.Cities,
+				{
+					Name: "specializations",
+					In:   "query",
+				}: params.Specializations,
+				{
+					Name: "min_years",
+					In:   "query",
+				}: params.MinYears,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetTalentFacetsParams
+			Response = *GetTalentFacetsOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetTalentFacetsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetTalentFacets(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetTalentFacets(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetTalentFacetsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleGetTalentMemberRequest handles getTalentMember operation.
+//
+// A card is a person: cached privately only, so leaving takes effect at once.
+//
+// GET /talent/{handle}
+func (s *Server) handleGetTalentMemberRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetTalentMemberOperation,
+			ID:   "getTalentMember",
+		}
+	)
+	params, err := decodeGetTalentMemberParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetTalentMemberOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetTalentMemberOperation,
+			OperationSummary: "",
+			OperationID:      "getTalentMember",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "handle",
+					In:   "path",
+				}: params.Handle,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetTalentMemberParams
+			Response = *GetTalentMemberOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetTalentMemberParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetTalentMember(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetTalentMember(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetTalentMemberResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleGetTalentPhotoRequest handles getTalentPhoto operation.
+//
+// The member's photo, blurred past recognition. The original is never served.
+//
+// GET /talent/{handle}/photo
+func (s *Server) handleGetTalentPhotoRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetTalentPhotoOperation,
+			ID:   "getTalentPhoto",
+		}
+	)
+	params, err := decodeGetTalentPhotoParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetTalentPhotoOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetTalentPhotoOperation,
+			OperationSummary: "",
+			OperationID:      "getTalentPhoto",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "handle",
+					In:   "path",
+				}: params.Handle,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetTalentPhotoParams
+			Response = *GetTalentPhotoOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetTalentPhotoParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetTalentPhoto(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetTalentPhoto(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetTalentPhotoResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleListTalentRequest handles listTalent operation.
+//
+// GET /talent
+func (s *Server) handleListTalentRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ListTalentOperation,
+			ID:   "listTalent",
+		}
+	)
+	params, err := decodeListTalentParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *ListTalentOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListTalentOperation,
+			OperationSummary: "",
+			OperationID:      "listTalent",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "categories",
+					In:   "query",
+				}: params.Categories,
+				{
+					Name: "seniorities",
+					In:   "query",
+				}: params.Seniorities,
+				{
+					Name: "skills",
+					In:   "query",
+				}: params.Skills,
+				{
+					Name: "tz",
+					In:   "query",
+				}: params.Tz,
+				{
+					Name: "cities",
+					In:   "query",
+				}: params.Cities,
+				{
+					Name: "specializations",
+					In:   "query",
+				}: params.Specializations,
+				{
+					Name: "min_years",
+					In:   "query",
+				}: params.MinYears,
+				{
+					Name: "limit",
+					In:   "query",
+				}: params.Limit,
+				{
+					Name: "offset",
+					In:   "query",
+				}: params.Offset,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = ListTalentParams
+			Response = *ListTalentOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackListTalentParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListTalent(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListTalent(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListTalentResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleOneClickUnsubscribeRequest handles oneClickUnsubscribe operation.
 //
 // RFC 8058 one-click unsubscribe: turns off only the group the token names.

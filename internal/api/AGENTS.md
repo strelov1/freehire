@@ -28,4 +28,15 @@ A migrated route is still a Fiber route: it keeps its middleware chain and ends 
   user values, and the adaptor passes the RequestCtx on as the request context.
 - Return errors as before (`fiber.NewError`, domain errors); `NewError` renders them
   through `classify`, and faults are reported with the Fiber route's attributes.
-- Streams (SSE), websockets, redirects and raw bodies stay hand-written Fiber.
+- Lists are `List<T>` and a single item that reads query params is `DataWithIgnored<T>`
+  (`typespec/common.tsp`). A filter param the endpoint cannot read is not refused: declare
+  it as a string, parse `contractQuery(ctx)` as before, and pass the report through
+  `contractIgnoredParams`.
+- The generated encoder leaves out only an unset `Opt*` and a nil slice. A Go field that
+  was `omitempty` maps through `optString` / `nilIfEmpty`, or the answer changes shape.
+- The wrapper hands the generated router the request as Fiber already accepted it: the
+  matched route's own path (any letter case, one trailing slash) and repeated params cut to
+  the first value (`fiberTarget`). An exploded array
+  param would be cut too, so that function changes before one is declared.
+- A binary answer (an image) works: `@body photo: bytes` with a fixed `contentType`.
+- Streams (SSE), websockets and redirects stay hand-written Fiber.

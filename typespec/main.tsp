@@ -4,6 +4,7 @@
 import "@typespec/http";
 import "./common.tsp";
 import "./email-prefs.tsp";
+import "./talent.tsp";
 
 using Http;
 

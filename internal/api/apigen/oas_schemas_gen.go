@@ -4,6 +4,8 @@ package apigen
 
 import (
 	"fmt"
+	"io"
+	"time"
 )
 
 func (s *ProblemStatusCode) Error() string {
@@ -219,6 +221,32 @@ func (s *EmailPrefsUpdate) SetDeactivateSearches(val []int64) {
 	s.DeactivateSearches = val
 }
 
+// Ref: #/components/schemas/FacetRange
+type FacetRange struct {
+	Min int32 `json:"min"`
+	Max int32 `json:"max"`
+}
+
+// GetMin returns the value of Min.
+func (s *FacetRange) GetMin() int32 {
+	return s.Min
+}
+
+// GetMax returns the value of Max.
+func (s *FacetRange) GetMax() int32 {
+	return s.Max
+}
+
+// SetMin sets the value of Min.
+func (s *FacetRange) SetMin(val int32) {
+	s.Min = val
+}
+
+// SetMax sets the value of Max.
+func (s *FacetRange) SetMax(val int32) {
+	s.Max = val
+}
+
 // A single item: `{"data": ...}`.
 type GetEmailPrefsOK struct {
 	Data EmailPrefs `json:"data"`
@@ -247,6 +275,255 @@ func (s *GetMyEmailGroupsOK) GetData() EmailPrefs {
 // SetData sets the value of Data.
 func (s *GetMyEmailGroupsOK) SetData(val EmailPrefs) {
 	s.Data = val
+}
+
+// A single item that read query params: `{"data": ...}`, plus `meta` when one was dropped.
+type GetTalentFacetsOK struct {
+	Data TalentFacets   `json:"data"`
+	Meta OptIgnoredMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *GetTalentFacetsOK) GetData() TalentFacets {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *GetTalentFacetsOK) GetMeta() OptIgnoredMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *GetTalentFacetsOK) SetData(val TalentFacets) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *GetTalentFacetsOK) SetMeta(val OptIgnoredMeta) {
+	s.Meta = val
+}
+
+// A single item: `{"data": ...}`.
+type GetTalentMemberOK struct {
+	Data TalentMember `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetTalentMemberOK) GetData() TalentMember {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetTalentMemberOK) SetData(val TalentMember) {
+	s.Data = val
+}
+
+// GetTalentMemberOKHeaders wraps GetTalentMemberOK with response headers.
+type GetTalentMemberOKHeaders struct {
+	CacheControl string
+	XRobotsTag   string
+	Response     GetTalentMemberOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *GetTalentMemberOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetXRobotsTag returns the value of XRobotsTag.
+func (s *GetTalentMemberOKHeaders) GetXRobotsTag() string {
+	return s.XRobotsTag
+}
+
+// GetResponse returns the value of Response.
+func (s *GetTalentMemberOKHeaders) GetResponse() GetTalentMemberOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *GetTalentMemberOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetXRobotsTag sets the value of XRobotsTag.
+func (s *GetTalentMemberOKHeaders) SetXRobotsTag(val string) {
+	s.XRobotsTag = val
+}
+
+// SetResponse sets the value of Response.
+func (s *GetTalentMemberOKHeaders) SetResponse(val GetTalentMemberOK) {
+	s.Response = val
+}
+
+type GetTalentPhotoOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s GetTalentPhotoOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// GetTalentPhotoOKHeaders wraps GetTalentPhotoOK with response headers.
+type GetTalentPhotoOKHeaders struct {
+	CacheControl string
+	XRobotsTag   string
+	Response     GetTalentPhotoOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *GetTalentPhotoOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetXRobotsTag returns the value of XRobotsTag.
+func (s *GetTalentPhotoOKHeaders) GetXRobotsTag() string {
+	return s.XRobotsTag
+}
+
+// GetResponse returns the value of Response.
+func (s *GetTalentPhotoOKHeaders) GetResponse() GetTalentPhotoOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *GetTalentPhotoOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetXRobotsTag sets the value of XRobotsTag.
+func (s *GetTalentPhotoOKHeaders) SetXRobotsTag(val string) {
+	s.XRobotsTag = val
+}
+
+// SetResponse sets the value of Response.
+func (s *GetTalentPhotoOKHeaders) SetResponse(val GetTalentPhotoOK) {
+	s.Response = val
+}
+
+// The meta of a single-item answer, sent only to carry a warning.
+// Ref: #/components/schemas/IgnoredMeta
+type IgnoredMeta struct {
+	IgnoredParams []IgnoredParam `json:"ignored_params"`
+}
+
+// GetIgnoredParams returns the value of IgnoredParams.
+func (s *IgnoredMeta) GetIgnoredParams() []IgnoredParam {
+	return s.IgnoredParams
+}
+
+// SetIgnoredParams sets the value of IgnoredParams.
+func (s *IgnoredMeta) SetIgnoredParams(val []IgnoredParam) {
+	s.IgnoredParams = val
+}
+
+// A query param the endpoint did not read: unknown, or known but unreadable (`min_years=lots`). Either
+// way the answer is wider than the caller asked for.
+// Ref: #/components/schemas/IgnoredParam
+type IgnoredParam struct {
+	Param      string    `json:"param"`
+	DidYouMean OptString `json:"did_you_mean"`
+}
+
+// GetParam returns the value of Param.
+func (s *IgnoredParam) GetParam() string {
+	return s.Param
+}
+
+// GetDidYouMean returns the value of DidYouMean.
+func (s *IgnoredParam) GetDidYouMean() OptString {
+	return s.DidYouMean
+}
+
+// SetParam sets the value of Param.
+func (s *IgnoredParam) SetParam(val string) {
+	s.Param = val
+}
+
+// SetDidYouMean sets the value of DidYouMean.
+func (s *IgnoredParam) SetDidYouMean(val OptString) {
+	s.DidYouMean = val
+}
+
+// A page of a list, with what the filter dropped.
+// Ref: #/components/schemas/ListMeta
+type ListMeta struct {
+	Total  int64 `json:"total"`
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+	// Absent when every param was read.
+	IgnoredParams []IgnoredParam `json:"ignored_params"`
+}
+
+// GetTotal returns the value of Total.
+func (s *ListMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// GetLimit returns the value of Limit.
+func (s *ListMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetOffset returns the value of Offset.
+func (s *ListMeta) GetOffset() int64 {
+	return s.Offset
+}
+
+// GetIgnoredParams returns the value of IgnoredParams.
+func (s *ListMeta) GetIgnoredParams() []IgnoredParam {
+	return s.IgnoredParams
+}
+
+// SetTotal sets the value of Total.
+func (s *ListMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
+// SetLimit sets the value of Limit.
+func (s *ListMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetOffset sets the value of Offset.
+func (s *ListMeta) SetOffset(val int64) {
+	s.Offset = val
+}
+
+// SetIgnoredParams sets the value of IgnoredParams.
+func (s *ListMeta) SetIgnoredParams(val []IgnoredParam) {
+	s.IgnoredParams = val
+}
+
+// A list: `{"data": [...], "meta": {...}}`.
+type ListTalentOK struct {
+	Data []TalentMember `json:"data"`
+	Meta ListMeta       `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *ListTalentOK) GetData() []TalentMember {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *ListTalentOK) GetMeta() ListMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *ListTalentOK) SetData(val []TalentMember) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *ListTalentOK) SetMeta(val ListMeta) {
+	s.Meta = val
 }
 
 // Ref: #/components/schemas/OneClickResult
@@ -336,6 +613,144 @@ func (o OptBool) Or(d bool) bool {
 	return d
 }
 
+// NewOptIgnoredMeta returns new OptIgnoredMeta with value set to v.
+func NewOptIgnoredMeta(v IgnoredMeta) OptIgnoredMeta {
+	return OptIgnoredMeta{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptIgnoredMeta is optional IgnoredMeta.
+type OptIgnoredMeta struct {
+	Value IgnoredMeta
+	Set   bool
+}
+
+// IsSet returns true if OptIgnoredMeta was set.
+func (o OptIgnoredMeta) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptIgnoredMeta) Reset() {
+	var v IgnoredMeta
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptIgnoredMeta) SetTo(v IgnoredMeta) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptIgnoredMeta) Get() (v IgnoredMeta, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptIgnoredMeta) Or(d IgnoredMeta) IgnoredMeta {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptInt32 returns new OptInt32 with value set to v.
+func NewOptInt32(v int32) OptInt32 {
+	return OptInt32{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptInt32 is optional int32.
+type OptInt32 struct {
+	Value int32
+	Set   bool
+}
+
+// IsSet returns true if OptInt32 was set.
+func (o OptInt32) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptInt32) Reset() {
+	var v int32
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptInt32) SetTo(v int32) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptInt32) Get() (v int32, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptInt32) Or(d int32) int32 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptPeriodDate returns new OptPeriodDate with value set to v.
+func NewOptPeriodDate(v PeriodDate) OptPeriodDate {
+	return OptPeriodDate{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptPeriodDate is optional PeriodDate.
+type OptPeriodDate struct {
+	Value PeriodDate
+	Set   bool
+}
+
+// IsSet returns true if OptPeriodDate was set.
+func (o OptPeriodDate) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptPeriodDate) Reset() {
+	var v PeriodDate
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptPeriodDate) SetTo(v PeriodDate) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptPeriodDate) Get() (v PeriodDate, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptPeriodDate) Or(d PeriodDate) PeriodDate {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptString returns new OptString with value set to v.
 func NewOptString(v string) OptString {
 	return OptString{
@@ -380,6 +795,33 @@ func (o OptString) Or(d string) string {
 		return v
 	}
 	return d
+}
+
+// A year, with a month when the CV gives one.
+// Ref: #/components/schemas/PeriodDate
+type PeriodDate struct {
+	Year  int32    `json:"year"`
+	Month OptInt32 `json:"month"`
+}
+
+// GetYear returns the value of Year.
+func (s *PeriodDate) GetYear() int32 {
+	return s.Year
+}
+
+// GetMonth returns the value of Month.
+func (s *PeriodDate) GetMonth() OptInt32 {
+	return s.Month
+}
+
+// SetYear sets the value of Year.
+func (s *PeriodDate) SetYear(val int32) {
+	s.Year = val
+}
+
+// SetMonth sets the value of Month.
+func (s *PeriodDate) SetMonth(val OptInt32) {
+	s.Month = val
 }
 
 // Every refusal, whatever its status: `{"error": msg}`. `code` is set only where a client branches on
@@ -434,6 +876,367 @@ func (s *ProblemStatusCode) SetStatusCode(val int) {
 // SetResponse sets the value of Response.
 func (s *ProblemStatusCode) SetResponse(val Problem) {
 	s.Response = val
+}
+
+// The anonymised card: only what a dictionary can vouch for.
+// Ref: #/components/schemas/TalentCard
+type TalentCard struct {
+	Seniority      OptString         `json:"seniority"`
+	Category       OptString         `json:"category"`
+	TotalYears     OptInt32          `json:"total_years"`
+	Skills         []string          `json:"skills"`
+	Roles          []TalentRole      `json:"roles"`
+	Education      []TalentEducation `json:"education"`
+	Certifications []string          `json:"certifications"`
+}
+
+// GetSeniority returns the value of Seniority.
+func (s *TalentCard) GetSeniority() OptString {
+	return s.Seniority
+}
+
+// GetCategory returns the value of Category.
+func (s *TalentCard) GetCategory() OptString {
+	return s.Category
+}
+
+// GetTotalYears returns the value of TotalYears.
+func (s *TalentCard) GetTotalYears() OptInt32 {
+	return s.TotalYears
+}
+
+// GetSkills returns the value of Skills.
+func (s *TalentCard) GetSkills() []string {
+	return s.Skills
+}
+
+// GetRoles returns the value of Roles.
+func (s *TalentCard) GetRoles() []TalentRole {
+	return s.Roles
+}
+
+// GetEducation returns the value of Education.
+func (s *TalentCard) GetEducation() []TalentEducation {
+	return s.Education
+}
+
+// GetCertifications returns the value of Certifications.
+func (s *TalentCard) GetCertifications() []string {
+	return s.Certifications
+}
+
+// SetSeniority sets the value of Seniority.
+func (s *TalentCard) SetSeniority(val OptString) {
+	s.Seniority = val
+}
+
+// SetCategory sets the value of Category.
+func (s *TalentCard) SetCategory(val OptString) {
+	s.Category = val
+}
+
+// SetTotalYears sets the value of TotalYears.
+func (s *TalentCard) SetTotalYears(val OptInt32) {
+	s.TotalYears = val
+}
+
+// SetSkills sets the value of Skills.
+func (s *TalentCard) SetSkills(val []string) {
+	s.Skills = val
+}
+
+// SetRoles sets the value of Roles.
+func (s *TalentCard) SetRoles(val []TalentRole) {
+	s.Roles = val
+}
+
+// SetEducation sets the value of Education.
+func (s *TalentCard) SetEducation(val []TalentEducation) {
+	s.Education = val
+}
+
+// SetCertifications sets the value of Certifications.
+func (s *TalentCard) SetCertifications(val []string) {
+	s.Certifications = val
+}
+
+// One education entry: the degree level a dictionary resolved, and the year.
+// Ref: #/components/schemas/TalentEducation
+type TalentEducation struct {
+	Level OptString     `json:"level"`
+	Year  OptPeriodDate `json:"year"`
+}
+
+// GetLevel returns the value of Level.
+func (s *TalentEducation) GetLevel() OptString {
+	return s.Level
+}
+
+// GetYear returns the value of Year.
+func (s *TalentEducation) GetYear() OptPeriodDate {
+	return s.Year
+}
+
+// SetLevel sets the value of Level.
+func (s *TalentEducation) SetLevel(val OptString) {
+	s.Level = val
+}
+
+// SetYear sets the value of Year.
+func (s *TalentEducation) SetYear(val OptPeriodDate) {
+	s.Year = val
+}
+
+// How many members stand behind each filter value.
+// Ref: #/components/schemas/TalentFacets
+type TalentFacets struct {
+	Total int32 `json:"total"`
+	// Facet name → value → member count.
+	Facets TalentFacetsFacets `json:"facets"`
+	// Ranged facets. The catalogue has none, so this is always empty.
+	Stats TalentFacetsStats `json:"stats"`
+}
+
+// GetTotal returns the value of Total.
+func (s *TalentFacets) GetTotal() int32 {
+	return s.Total
+}
+
+// GetFacets returns the value of Facets.
+func (s *TalentFacets) GetFacets() TalentFacetsFacets {
+	return s.Facets
+}
+
+// GetStats returns the value of Stats.
+func (s *TalentFacets) GetStats() TalentFacetsStats {
+	return s.Stats
+}
+
+// SetTotal sets the value of Total.
+func (s *TalentFacets) SetTotal(val int32) {
+	s.Total = val
+}
+
+// SetFacets sets the value of Facets.
+func (s *TalentFacets) SetFacets(val TalentFacetsFacets) {
+	s.Facets = val
+}
+
+// SetStats sets the value of Stats.
+func (s *TalentFacets) SetStats(val TalentFacetsStats) {
+	s.Stats = val
+}
+
+// Facet name → value → member count.
+type TalentFacetsFacets map[string]TalentFacetsFacetsItem
+
+func (s *TalentFacetsFacets) init() TalentFacetsFacets {
+	m := *s
+	if m == nil {
+		m = map[string]TalentFacetsFacetsItem{}
+		*s = m
+	}
+	return m
+}
+
+type TalentFacetsFacetsItem map[string]int32
+
+func (s *TalentFacetsFacetsItem) init() TalentFacetsFacetsItem {
+	m := *s
+	if m == nil {
+		m = map[string]int32{}
+		*s = m
+	}
+	return m
+}
+
+// Ranged facets. The catalogue has none, so this is always empty.
+type TalentFacetsStats map[string]FacetRange
+
+func (s *TalentFacetsStats) init() TalentFacetsStats {
+	m := *s
+	if m == nil {
+		m = map[string]FacetRange{}
+		*s = m
+	}
+	return m
+}
+
+// Ref: #/components/schemas/TalentMember
+type TalentMember struct {
+	Handle string     `json:"handle"`
+	Card   TalentCard `json:"card"`
+	// The IANA zone.
+	Timezone OptString `json:"timezone"`
+	// The part of the zone before the slash; the `tz` filter reads it.
+	TimezoneRegion  OptString `json:"timezone_region"`
+	Cities          []string  `json:"cities"`
+	Specializations []string  `json:"specializations"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	// Whether GET /talent/{handle}/photo has something to serve.
+	HasPhoto bool `json:"has_photo"`
+}
+
+// GetHandle returns the value of Handle.
+func (s *TalentMember) GetHandle() string {
+	return s.Handle
+}
+
+// GetCard returns the value of Card.
+func (s *TalentMember) GetCard() TalentCard {
+	return s.Card
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *TalentMember) GetTimezone() OptString {
+	return s.Timezone
+}
+
+// GetTimezoneRegion returns the value of TimezoneRegion.
+func (s *TalentMember) GetTimezoneRegion() OptString {
+	return s.TimezoneRegion
+}
+
+// GetCities returns the value of Cities.
+func (s *TalentMember) GetCities() []string {
+	return s.Cities
+}
+
+// GetSpecializations returns the value of Specializations.
+func (s *TalentMember) GetSpecializations() []string {
+	return s.Specializations
+}
+
+// GetUpdatedAt returns the value of UpdatedAt.
+func (s *TalentMember) GetUpdatedAt() time.Time {
+	return s.UpdatedAt
+}
+
+// GetHasPhoto returns the value of HasPhoto.
+func (s *TalentMember) GetHasPhoto() bool {
+	return s.HasPhoto
+}
+
+// SetHandle sets the value of Handle.
+func (s *TalentMember) SetHandle(val string) {
+	s.Handle = val
+}
+
+// SetCard sets the value of Card.
+func (s *TalentMember) SetCard(val TalentCard) {
+	s.Card = val
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *TalentMember) SetTimezone(val OptString) {
+	s.Timezone = val
+}
+
+// SetTimezoneRegion sets the value of TimezoneRegion.
+func (s *TalentMember) SetTimezoneRegion(val OptString) {
+	s.TimezoneRegion = val
+}
+
+// SetCities sets the value of Cities.
+func (s *TalentMember) SetCities(val []string) {
+	s.Cities = val
+}
+
+// SetSpecializations sets the value of Specializations.
+func (s *TalentMember) SetSpecializations(val []string) {
+	s.Specializations = val
+}
+
+// SetUpdatedAt sets the value of UpdatedAt.
+func (s *TalentMember) SetUpdatedAt(val time.Time) {
+	s.UpdatedAt = val
+}
+
+// SetHasPhoto sets the value of HasPhoto.
+func (s *TalentMember) SetHasPhoto(val bool) {
+	s.HasPhoto = val
+}
+
+// One role of a work history, with everything nameable removed.
+// Ref: #/components/schemas/TalentRole
+type TalentRole struct {
+	Title     OptString     `json:"title"`
+	Seniority OptString     `json:"seniority"`
+	Category  OptString     `json:"category"`
+	Start     OptPeriodDate `json:"start"`
+	End       OptPeriodDate `json:"end"`
+	Current   OptBool       `json:"current"`
+	Stack     []string      `json:"stack"`
+}
+
+// GetTitle returns the value of Title.
+func (s *TalentRole) GetTitle() OptString {
+	return s.Title
+}
+
+// GetSeniority returns the value of Seniority.
+func (s *TalentRole) GetSeniority() OptString {
+	return s.Seniority
+}
+
+// GetCategory returns the value of Category.
+func (s *TalentRole) GetCategory() OptString {
+	return s.Category
+}
+
+// GetStart returns the value of Start.
+func (s *TalentRole) GetStart() OptPeriodDate {
+	return s.Start
+}
+
+// GetEnd returns the value of End.
+func (s *TalentRole) GetEnd() OptPeriodDate {
+	return s.End
+}
+
+// GetCurrent returns the value of Current.
+func (s *TalentRole) GetCurrent() OptBool {
+	return s.Current
+}
+
+// GetStack returns the value of Stack.
+func (s *TalentRole) GetStack() []string {
+	return s.Stack
+}
+
+// SetTitle sets the value of Title.
+func (s *TalentRole) SetTitle(val OptString) {
+	s.Title = val
+}
+
+// SetSeniority sets the value of Seniority.
+func (s *TalentRole) SetSeniority(val OptString) {
+	s.Seniority = val
+}
+
+// SetCategory sets the value of Category.
+func (s *TalentRole) SetCategory(val OptString) {
+	s.Category = val
+}
+
+// SetStart sets the value of Start.
+func (s *TalentRole) SetStart(val OptPeriodDate) {
+	s.Start = val
+}
+
+// SetEnd sets the value of End.
+func (s *TalentRole) SetEnd(val OptPeriodDate) {
+	s.End = val
+}
+
+// SetCurrent sets the value of Current.
+func (s *TalentRole) SetCurrent(val OptBool) {
+	s.Current = val
+}
+
+// SetStack sets the value of Stack.
+func (s *TalentRole) SetStack(val []string) {
+	s.Stack = val
 }
 
 // A single item: `{"data": ...}`.

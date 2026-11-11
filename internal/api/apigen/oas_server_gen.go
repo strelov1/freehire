@@ -16,6 +16,26 @@ type Handler interface {
 	//
 	// GET /me/email-groups
 	GetMyEmailGroups(ctx context.Context) (*GetMyEmailGroupsOK, error)
+	// GetTalentFacets implements getTalentFacets operation.
+	//
+	// GET /talent/facets
+	GetTalentFacets(ctx context.Context, params GetTalentFacetsParams) (*GetTalentFacetsOK, error)
+	// GetTalentMember implements getTalentMember operation.
+	//
+	// A card is a person: cached privately only, so leaving takes effect at once.
+	//
+	// GET /talent/{handle}
+	GetTalentMember(ctx context.Context, params GetTalentMemberParams) (*GetTalentMemberOKHeaders, error)
+	// GetTalentPhoto implements getTalentPhoto operation.
+	//
+	// The member's photo, blurred past recognition. The original is never served.
+	//
+	// GET /talent/{handle}/photo
+	GetTalentPhoto(ctx context.Context, params GetTalentPhotoParams) (*GetTalentPhotoOKHeaders, error)
+	// ListTalent implements listTalent operation.
+	//
+	// GET /talent
+	ListTalent(ctx context.Context, params ListTalentParams) (*ListTalentOK, error)
 	// OneClickUnsubscribe implements oneClickUnsubscribe operation.
 	//
 	// RFC 8058 one-click unsubscribe: turns off only the group the token names.

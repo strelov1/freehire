@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
+	"slices"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/ogen-go/ogen/ogenerrors"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // The contract server is the part of the API that TypeSpec describes
@@ -24,6 +28,7 @@ import (
 // embeds its handlers here, so a group that misses an operation does not compile.
 type contractHandlers struct {
 	*emailPrefsHandlers
+	*talentCatalogHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}
@@ -35,6 +40,11 @@ const localsContractFault = "contract.fault"
 
 type contractFault struct{ err error }
 
+// localsContractQuery carries the raw query into the handlers. The generated server
+// decodes only the params the contract names, and an endpoint that widens on a param it
+// cannot read has to name the rest in meta.ignored_params.
+const localsContractQuery = "contract.query"
+
 // newContract builds the generated server and returns the Fiber handler that ends
 // every contract route.
 func newContract(h contractHandlers) fiber.Handler {
@@ -45,10 +55,23 @@ func newContract(h contractHandlers) fiber.Handler {
 		// Only the static options above can fail it, so this is a programming error.
 		panic("contract server: " + err.Error())
 	}
-	serve := adaptor.HTTPHandler(srv)
+	serve := adaptor.HTTPHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if target, ok := r.Context().Value(localsContractTarget).(*url.URL); ok {
+			r.URL.Path, r.URL.RawPath, r.URL.RawQuery = target.Path, target.RawPath, target.RawQuery
+		}
+		srv.ServeHTTP(w, r)
+	}))
 	return func(c *fiber.Ctx) error {
 		fault := &contractFault{}
 		c.Locals(localsContractFault, fault)
+		// The adaptor parses the request line before anything here runs, and answers one it
+		// cannot parse with an unreported 500. A path with a broken escape names nothing.
+		if _, err := url.ParseRequestURI(string(c.Request().RequestURI())); err != nil {
+			return fiber.NewError(fiber.StatusNotFound, "not found")
+		}
+		query := queryValues(c)
+		c.Locals(localsContractQuery, query)
+		c.Locals(localsContractTarget, fiberTarget(c, query))
 		// Fiber routes HEAD to every Get, but the generated router knows only the
 		// methods the contract names. Serve it as GET and put HEAD back, so fasthttp,
 		// which decides after the handler, still drops the body.
@@ -108,4 +131,83 @@ func recordContractFault(ctx context.Context, err error) {
 	if fault, ok := ctx.Value(localsContractFault).(*contractFault); ok {
 		fault.err = err
 	}
+}
+
+// localsContractTarget is the URL the generated router is given instead of the one sent.
+const localsContractTarget = "contract.target"
+
+// fiberTarget is the request as Fiber already accepted it, for the generated router,
+// which is stricter: Fiber matches a route whatever the letter case and with one trailing
+// slash, and reads the first of repeated params, while the generated router 404s the
+// first two and refuses a repeated scalar param with a 400. The path is the matched
+// route's own, with the request's param values put in.
+//
+// shortcut: every repeated param is cut to its first value, which would also cut an
+// exploded array param; declare one only after this keeps the arrays the contract names.
+func fiberTarget(c *fiber.Ctx, query url.Values) *url.URL {
+	// Path holds the param values decoded and RawPath escaped, which the generated router
+	// reads, so an encoded slash in a value stays inside that param.
+	segments := strings.Split(c.Route().Path, "/")
+	escaped := slices.Clone(segments)
+	for i, seg := range segments {
+		if name, ok := strings.CutPrefix(seg, ":"); ok {
+			value, err := url.PathUnescape(c.Params(name))
+			if err != nil {
+				value = c.Params(name)
+			}
+			segments[i], escaped[i] = value, url.PathEscape(value)
+		}
+	}
+	target := &url.URL{
+		Path:     strings.Join(segments, "/"),
+		RawPath:  strings.Join(escaped, "/"),
+		RawQuery: string(c.Request().URI().QueryString()),
+	}
+	for _, vals := range query {
+		if len(vals) > 1 {
+			first := make(url.Values, len(query))
+			for k, v := range query {
+				first[k] = v[:1]
+			}
+			target.RawQuery = first.Encode()
+			break
+		}
+	}
+	return target
+}
+
+// contractQuery is the request's whole query, for an operation that reports what it did
+// not read.
+func contractQuery(ctx context.Context) url.Values {
+	vals, _ := ctx.Value(localsContractQuery).(url.Values)
+	return vals
+}
+
+// contractIgnoredParams is the wire form of search's report: nil when empty, so the
+// optional field is left out rather than sent as `[]` (see listResponseWithIgnored).
+func contractIgnoredParams(ignored []search.UnknownParam) []apigen.IgnoredParam {
+	if len(ignored) == 0 {
+		return nil
+	}
+	out := make([]apigen.IgnoredParam, len(ignored))
+	for i, p := range ignored {
+		out[i] = apigen.IgnoredParam{Param: p.Param, DidYouMean: optString(p.DidYouMean)}
+	}
+	return out
+}
+
+// optString is an omitempty string: unset when empty.
+func optString(s string) apigen.OptString {
+	if s == "" {
+		return apigen.OptString{}
+	}
+	return apigen.NewOptString(s)
+}
+
+// nilIfEmpty is an omitempty slice: the generated encoder leaves out only a nil one.
+func nilIfEmpty[T any](s []T) []T {
+	if len(s) == 0 {
+		return nil
+	}
+	return s
 }
