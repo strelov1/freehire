@@ -73,6 +73,21 @@ func (s *CityMatch) SetCountry(val string) {
 	s.Country = val
 }
 
+// A single item: `{"data": ...}`.
+type CompleteOnboardingOK struct {
+	Data OnboardingCompleted `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CompleteOnboardingOK) GetData() OnboardingCompleted {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CompleteOnboardingOK) SetData(val OnboardingCompleted) {
+	s.Data = val
+}
+
 // Ref: #/components/schemas/DictionaryGap
 type DictionaryGap struct {
 	// `specialization`, `skill` or `industry`; anything else is a 400.
@@ -434,6 +449,35 @@ func (s *GetPlansOK) GetData() Plans {
 
 // SetData sets the value of Data.
 func (s *GetPlansOK) SetData(val Plans) {
+	s.Data = val
+}
+
+type GetScreeningAnswersOK struct {
+	Data NilScreeningAnswers `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetScreeningAnswersOK) GetData() NilScreeningAnswers {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetScreeningAnswersOK) SetData(val NilScreeningAnswers) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetSurveyOK struct {
+	Data SurveyResponses `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetSurveyOK) GetData() SurveyResponses {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetSurveyOK) SetData(val SurveyResponses) {
 	s.Data = val
 }
 
@@ -803,6 +847,66 @@ func (s *ListTalentOK) SetMeta(val ListMeta) {
 	s.Meta = val
 }
 
+// NewNilScreeningAnswers returns new NilScreeningAnswers with value set to v.
+func NewNilScreeningAnswers(v ScreeningAnswers) NilScreeningAnswers {
+	return NilScreeningAnswers{
+		Value: v,
+	}
+}
+
+// NilScreeningAnswers is nullable ScreeningAnswers.
+type NilScreeningAnswers struct {
+	Value ScreeningAnswers
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilScreeningAnswers) SetTo(v ScreeningAnswers) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilScreeningAnswers) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilScreeningAnswers) SetToNull() {
+	o.Null = true
+	var v ScreeningAnswers
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilScreeningAnswers) Get() (v ScreeningAnswers, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilScreeningAnswers) Or(d ScreeningAnswers) ScreeningAnswers {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// Ref: #/components/schemas/OnboardingCompleted
+type OnboardingCompleted struct {
+	OnboardingComplete bool `json:"onboarding_complete"`
+}
+
+// GetOnboardingComplete returns the value of OnboardingComplete.
+func (s *OnboardingCompleted) GetOnboardingComplete() bool {
+	return s.OnboardingComplete
+}
+
+// SetOnboardingComplete sets the value of OnboardingComplete.
+func (s *OnboardingCompleted) SetOnboardingComplete(val bool) {
+	s.OnboardingComplete = val
+}
+
 // Ref: #/components/schemas/OneClickResult
 type OneClickResult struct {
 	UnsubscribedFrom string `json:"unsubscribed_from"`
@@ -976,6 +1080,278 @@ func (o OptInt32) Get() (v int32, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptInt32) Or(d int32) int32 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptNilBool returns new OptNilBool with value set to v.
+func NewOptNilBool(v bool) OptNilBool {
+	return OptNilBool{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNilBool is optional nullable bool.
+type OptNilBool struct {
+	Value bool
+	Set   bool
+	Null  bool
+}
+
+// IsSet returns true if OptNilBool was set.
+func (o OptNilBool) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNilBool) Reset() {
+	var v bool
+	o.Value = v
+	o.Set = false
+	o.Null = false
+}
+
+// SetTo sets value to v.
+func (o *OptNilBool) SetTo(v bool) {
+	o.Set = true
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o OptNilBool) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *OptNilBool) SetToNull() {
+	o.Set = true
+	o.Null = true
+	var v bool
+	o.Value = v
+}
+
+// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
+func (o OptNilBool) IsEmpty() bool {
+	return !o.Set && !o.Null
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNilBool) Get() (v bool, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNilBool) Or(d bool) bool {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptNilInt64 returns new OptNilInt64 with value set to v.
+func NewOptNilInt64(v int64) OptNilInt64 {
+	return OptNilInt64{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNilInt64 is optional nullable int64.
+type OptNilInt64 struct {
+	Value int64
+	Set   bool
+	Null  bool
+}
+
+// IsSet returns true if OptNilInt64 was set.
+func (o OptNilInt64) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNilInt64) Reset() {
+	var v int64
+	o.Value = v
+	o.Set = false
+	o.Null = false
+}
+
+// SetTo sets value to v.
+func (o *OptNilInt64) SetTo(v int64) {
+	o.Set = true
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o OptNilInt64) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *OptNilInt64) SetToNull() {
+	o.Set = true
+	o.Null = true
+	var v int64
+	o.Value = v
+}
+
+// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
+func (o OptNilInt64) IsEmpty() bool {
+	return !o.Set && !o.Null
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNilInt64) Get() (v int64, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNilInt64) Or(d int64) int64 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptNilString returns new OptNilString with value set to v.
+func NewOptNilString(v string) OptNilString {
+	return OptNilString{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNilString is optional nullable string.
+type OptNilString struct {
+	Value string
+	Set   bool
+	Null  bool
+}
+
+// IsSet returns true if OptNilString was set.
+func (o OptNilString) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNilString) Reset() {
+	var v string
+	o.Value = v
+	o.Set = false
+	o.Null = false
+}
+
+// SetTo sets value to v.
+func (o *OptNilString) SetTo(v string) {
+	o.Set = true
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o OptNilString) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *OptNilString) SetToNull() {
+	o.Set = true
+	o.Null = true
+	var v string
+	o.Value = v
+}
+
+// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
+func (o OptNilString) IsEmpty() bool {
+	return !o.Set && !o.Null
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNilString) Get() (v string, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNilString) Or(d string) string {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptNilStringArray returns new OptNilStringArray with value set to v.
+func NewOptNilStringArray(v []string) OptNilStringArray {
+	return OptNilStringArray{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNilStringArray is optional nullable []string.
+type OptNilStringArray struct {
+	Value []string
+	Set   bool
+	Null  bool
+}
+
+// IsSet returns true if OptNilStringArray was set.
+func (o OptNilStringArray) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNilStringArray) Reset() {
+	var v []string
+	o.Value = v
+	o.Set = false
+	o.Null = false
+}
+
+// SetTo sets value to v.
+func (o *OptNilStringArray) SetTo(v []string) {
+	o.Set = true
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o OptNilStringArray) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *OptNilStringArray) SetToNull() {
+	o.Set = true
+	o.Null = true
+	var v []string
+	o.Value = v
+}
+
+// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
+func (o OptNilStringArray) IsEmpty() bool {
+	return !o.Set && !o.Null
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNilStringArray) Get() (v []string, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNilStringArray) Or(d []string) []string {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -1391,6 +1767,231 @@ func (s *ResolvedJob) SetJobSlug(val string) {
 	s.JobSlug = val
 }
 
+// Answers an application form asks for, saved once and reused. Each field is optional.
+// Ref: #/components/schemas/ScreeningAnswers
+type ScreeningAnswers struct {
+	// ISO 3166-1 alpha-2 codes the candidate may work in.
+	AuthorizedCountries   OptNilStringArray `json:"authorized_countries"`
+	VisaSponsorshipNeeded OptNilBool        `json:"visa_sponsorship_needed"`
+	DesiredSalaryAmount   OptNilInt64       `json:"desired_salary_amount"`
+	// ISO 4217, upper case.
+	DesiredSalaryCurrency OptNilString `json:"desired_salary_currency"`
+	DesiredSalaryPeriod   OptNilString `json:"desired_salary_period"`
+	NoticePeriodDays      OptNilInt64  `json:"notice_period_days"`
+	WillingToRelocate     OptNilBool   `json:"willing_to_relocate"`
+	Age18OrOlder          OptNilBool   `json:"age_18_or_older"`
+	// A standing agreement to an employer form's privacy terms; false asks each time.
+	PrivacyConsent OptNilBool `json:"privacy_consent"`
+}
+
+// GetAuthorizedCountries returns the value of AuthorizedCountries.
+func (s *ScreeningAnswers) GetAuthorizedCountries() OptNilStringArray {
+	return s.AuthorizedCountries
+}
+
+// GetVisaSponsorshipNeeded returns the value of VisaSponsorshipNeeded.
+func (s *ScreeningAnswers) GetVisaSponsorshipNeeded() OptNilBool {
+	return s.VisaSponsorshipNeeded
+}
+
+// GetDesiredSalaryAmount returns the value of DesiredSalaryAmount.
+func (s *ScreeningAnswers) GetDesiredSalaryAmount() OptNilInt64 {
+	return s.DesiredSalaryAmount
+}
+
+// GetDesiredSalaryCurrency returns the value of DesiredSalaryCurrency.
+func (s *ScreeningAnswers) GetDesiredSalaryCurrency() OptNilString {
+	return s.DesiredSalaryCurrency
+}
+
+// GetDesiredSalaryPeriod returns the value of DesiredSalaryPeriod.
+func (s *ScreeningAnswers) GetDesiredSalaryPeriod() OptNilString {
+	return s.DesiredSalaryPeriod
+}
+
+// GetNoticePeriodDays returns the value of NoticePeriodDays.
+func (s *ScreeningAnswers) GetNoticePeriodDays() OptNilInt64 {
+	return s.NoticePeriodDays
+}
+
+// GetWillingToRelocate returns the value of WillingToRelocate.
+func (s *ScreeningAnswers) GetWillingToRelocate() OptNilBool {
+	return s.WillingToRelocate
+}
+
+// GetAge18OrOlder returns the value of Age18OrOlder.
+func (s *ScreeningAnswers) GetAge18OrOlder() OptNilBool {
+	return s.Age18OrOlder
+}
+
+// GetPrivacyConsent returns the value of PrivacyConsent.
+func (s *ScreeningAnswers) GetPrivacyConsent() OptNilBool {
+	return s.PrivacyConsent
+}
+
+// SetAuthorizedCountries sets the value of AuthorizedCountries.
+func (s *ScreeningAnswers) SetAuthorizedCountries(val OptNilStringArray) {
+	s.AuthorizedCountries = val
+}
+
+// SetVisaSponsorshipNeeded sets the value of VisaSponsorshipNeeded.
+func (s *ScreeningAnswers) SetVisaSponsorshipNeeded(val OptNilBool) {
+	s.VisaSponsorshipNeeded = val
+}
+
+// SetDesiredSalaryAmount sets the value of DesiredSalaryAmount.
+func (s *ScreeningAnswers) SetDesiredSalaryAmount(val OptNilInt64) {
+	s.DesiredSalaryAmount = val
+}
+
+// SetDesiredSalaryCurrency sets the value of DesiredSalaryCurrency.
+func (s *ScreeningAnswers) SetDesiredSalaryCurrency(val OptNilString) {
+	s.DesiredSalaryCurrency = val
+}
+
+// SetDesiredSalaryPeriod sets the value of DesiredSalaryPeriod.
+func (s *ScreeningAnswers) SetDesiredSalaryPeriod(val OptNilString) {
+	s.DesiredSalaryPeriod = val
+}
+
+// SetNoticePeriodDays sets the value of NoticePeriodDays.
+func (s *ScreeningAnswers) SetNoticePeriodDays(val OptNilInt64) {
+	s.NoticePeriodDays = val
+}
+
+// SetWillingToRelocate sets the value of WillingToRelocate.
+func (s *ScreeningAnswers) SetWillingToRelocate(val OptNilBool) {
+	s.WillingToRelocate = val
+}
+
+// SetAge18OrOlder sets the value of Age18OrOlder.
+func (s *ScreeningAnswers) SetAge18OrOlder(val OptNilBool) {
+	s.Age18OrOlder = val
+}
+
+// SetPrivacyConsent sets the value of PrivacyConsent.
+func (s *ScreeningAnswers) SetPrivacyConsent(val OptNilBool) {
+	s.PrivacyConsent = val
+}
+
+// Ref: #/components/schemas/ScreeningAnswersUpdate
+type ScreeningAnswersUpdate struct {
+	// ISO 3166-1 alpha-2 codes the candidate may work in.
+	AuthorizedCountries   OptNilStringArray `json:"authorized_countries"`
+	VisaSponsorshipNeeded OptNilBool        `json:"visa_sponsorship_needed"`
+	DesiredSalaryAmount   OptNilInt64       `json:"desired_salary_amount"`
+	// ISO 4217, upper case.
+	DesiredSalaryCurrency OptNilString `json:"desired_salary_currency"`
+	DesiredSalaryPeriod   OptNilString `json:"desired_salary_period"`
+	NoticePeriodDays      OptNilInt64  `json:"notice_period_days"`
+	WillingToRelocate     OptNilBool   `json:"willing_to_relocate"`
+	Age18OrOlder          OptNilBool   `json:"age_18_or_older"`
+	// A standing agreement to an employer form's privacy terms; false asks each time.
+	PrivacyConsent OptNilBool `json:"privacy_consent"`
+	// Field names to clear. An unknown name is a 400.
+	Clear OptNilStringArray `json:"clear"`
+}
+
+// GetAuthorizedCountries returns the value of AuthorizedCountries.
+func (s *ScreeningAnswersUpdate) GetAuthorizedCountries() OptNilStringArray {
+	return s.AuthorizedCountries
+}
+
+// GetVisaSponsorshipNeeded returns the value of VisaSponsorshipNeeded.
+func (s *ScreeningAnswersUpdate) GetVisaSponsorshipNeeded() OptNilBool {
+	return s.VisaSponsorshipNeeded
+}
+
+// GetDesiredSalaryAmount returns the value of DesiredSalaryAmount.
+func (s *ScreeningAnswersUpdate) GetDesiredSalaryAmount() OptNilInt64 {
+	return s.DesiredSalaryAmount
+}
+
+// GetDesiredSalaryCurrency returns the value of DesiredSalaryCurrency.
+func (s *ScreeningAnswersUpdate) GetDesiredSalaryCurrency() OptNilString {
+	return s.DesiredSalaryCurrency
+}
+
+// GetDesiredSalaryPeriod returns the value of DesiredSalaryPeriod.
+func (s *ScreeningAnswersUpdate) GetDesiredSalaryPeriod() OptNilString {
+	return s.DesiredSalaryPeriod
+}
+
+// GetNoticePeriodDays returns the value of NoticePeriodDays.
+func (s *ScreeningAnswersUpdate) GetNoticePeriodDays() OptNilInt64 {
+	return s.NoticePeriodDays
+}
+
+// GetWillingToRelocate returns the value of WillingToRelocate.
+func (s *ScreeningAnswersUpdate) GetWillingToRelocate() OptNilBool {
+	return s.WillingToRelocate
+}
+
+// GetAge18OrOlder returns the value of Age18OrOlder.
+func (s *ScreeningAnswersUpdate) GetAge18OrOlder() OptNilBool {
+	return s.Age18OrOlder
+}
+
+// GetPrivacyConsent returns the value of PrivacyConsent.
+func (s *ScreeningAnswersUpdate) GetPrivacyConsent() OptNilBool {
+	return s.PrivacyConsent
+}
+
+// GetClear returns the value of Clear.
+func (s *ScreeningAnswersUpdate) GetClear() OptNilStringArray {
+	return s.Clear
+}
+
+// SetAuthorizedCountries sets the value of AuthorizedCountries.
+func (s *ScreeningAnswersUpdate) SetAuthorizedCountries(val OptNilStringArray) {
+	s.AuthorizedCountries = val
+}
+
+// SetVisaSponsorshipNeeded sets the value of VisaSponsorshipNeeded.
+func (s *ScreeningAnswersUpdate) SetVisaSponsorshipNeeded(val OptNilBool) {
+	s.VisaSponsorshipNeeded = val
+}
+
+// SetDesiredSalaryAmount sets the value of DesiredSalaryAmount.
+func (s *ScreeningAnswersUpdate) SetDesiredSalaryAmount(val OptNilInt64) {
+	s.DesiredSalaryAmount = val
+}
+
+// SetDesiredSalaryCurrency sets the value of DesiredSalaryCurrency.
+func (s *ScreeningAnswersUpdate) SetDesiredSalaryCurrency(val OptNilString) {
+	s.DesiredSalaryCurrency = val
+}
+
+// SetDesiredSalaryPeriod sets the value of DesiredSalaryPeriod.
+func (s *ScreeningAnswersUpdate) SetDesiredSalaryPeriod(val OptNilString) {
+	s.DesiredSalaryPeriod = val
+}
+
+// SetNoticePeriodDays sets the value of NoticePeriodDays.
+func (s *ScreeningAnswersUpdate) SetNoticePeriodDays(val OptNilInt64) {
+	s.NoticePeriodDays = val
+}
+
+// SetWillingToRelocate sets the value of WillingToRelocate.
+func (s *ScreeningAnswersUpdate) SetWillingToRelocate(val OptNilBool) {
+	s.WillingToRelocate = val
+}
+
+// SetAge18OrOlder sets the value of Age18OrOlder.
+func (s *ScreeningAnswersUpdate) SetAge18OrOlder(val OptNilBool) {
+	s.Age18OrOlder = val
+}
+
+// SetPrivacyConsent sets the value of PrivacyConsent.
+func (s *ScreeningAnswersUpdate) SetPrivacyConsent(val OptNilBool) {
+	s.PrivacyConsent = val
+}
+
+// SetClear sets the value of Clear.
+func (s *ScreeningAnswersUpdate) SetClear(val OptNilStringArray) {
+	s.Clear = val
+}
+
 // A single item: `{"data": ...}`.
 type SearchCitiesOK struct {
 	Data []CityMatch `json:"data"`
@@ -1592,6 +2193,78 @@ func (s *SuggestionPart) SetSlug(val OptString) {
 // SetText sets the value of Text.
 func (s *SuggestionPart) SetText(val string) {
 	s.Text = val
+}
+
+// The onboarding survey. Each field is optional.
+// Ref: #/components/schemas/SurveyResponses
+type SurveyResponses struct {
+	JobSearchStage    OptNilString      `json:"job_search_stage"`
+	BiggestChallenges OptNilStringArray `json:"biggest_challenges"`
+	// Kept only while `other` is among the challenges.
+	BiggestChallengeNote  OptNilString `json:"biggest_challenge_note"`
+	CurrentIncomeAmount   OptNilInt64  `json:"current_income_amount"`
+	CurrentIncomeCurrency OptNilString `json:"current_income_currency"`
+	CurrentIncomePeriod   OptNilString `json:"current_income_period"`
+}
+
+// GetJobSearchStage returns the value of JobSearchStage.
+func (s *SurveyResponses) GetJobSearchStage() OptNilString {
+	return s.JobSearchStage
+}
+
+// GetBiggestChallenges returns the value of BiggestChallenges.
+func (s *SurveyResponses) GetBiggestChallenges() OptNilStringArray {
+	return s.BiggestChallenges
+}
+
+// GetBiggestChallengeNote returns the value of BiggestChallengeNote.
+func (s *SurveyResponses) GetBiggestChallengeNote() OptNilString {
+	return s.BiggestChallengeNote
+}
+
+// GetCurrentIncomeAmount returns the value of CurrentIncomeAmount.
+func (s *SurveyResponses) GetCurrentIncomeAmount() OptNilInt64 {
+	return s.CurrentIncomeAmount
+}
+
+// GetCurrentIncomeCurrency returns the value of CurrentIncomeCurrency.
+func (s *SurveyResponses) GetCurrentIncomeCurrency() OptNilString {
+	return s.CurrentIncomeCurrency
+}
+
+// GetCurrentIncomePeriod returns the value of CurrentIncomePeriod.
+func (s *SurveyResponses) GetCurrentIncomePeriod() OptNilString {
+	return s.CurrentIncomePeriod
+}
+
+// SetJobSearchStage sets the value of JobSearchStage.
+func (s *SurveyResponses) SetJobSearchStage(val OptNilString) {
+	s.JobSearchStage = val
+}
+
+// SetBiggestChallenges sets the value of BiggestChallenges.
+func (s *SurveyResponses) SetBiggestChallenges(val OptNilStringArray) {
+	s.BiggestChallenges = val
+}
+
+// SetBiggestChallengeNote sets the value of BiggestChallengeNote.
+func (s *SurveyResponses) SetBiggestChallengeNote(val OptNilString) {
+	s.BiggestChallengeNote = val
+}
+
+// SetCurrentIncomeAmount sets the value of CurrentIncomeAmount.
+func (s *SurveyResponses) SetCurrentIncomeAmount(val OptNilInt64) {
+	s.CurrentIncomeAmount = val
+}
+
+// SetCurrentIncomeCurrency sets the value of CurrentIncomeCurrency.
+func (s *SurveyResponses) SetCurrentIncomeCurrency(val OptNilString) {
+	s.CurrentIncomeCurrency = val
+}
+
+// SetCurrentIncomePeriod sets the value of CurrentIncomePeriod.
+func (s *SurveyResponses) SetCurrentIncomePeriod(val OptNilString) {
+	s.CurrentIncomePeriod = val
 }
 
 // The anonymised card: only what a dictionary can vouch for.
@@ -1984,6 +2657,36 @@ func (s *UpdateMyEmailGroupsOK) GetData() EmailPrefs {
 
 // SetData sets the value of Data.
 func (s *UpdateMyEmailGroupsOK) SetData(val EmailPrefs) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UpdateScreeningAnswersOK struct {
+	Data ScreeningAnswers `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateScreeningAnswersOK) GetData() ScreeningAnswers {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateScreeningAnswersOK) SetData(val ScreeningAnswers) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UpdateSurveyOK struct {
+	Data SurveyResponses `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateSurveyOK) GetData() SurveyResponses {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateSurveyOK) SetData(val SurveyResponses) {
 	s.Data = val
 }
 

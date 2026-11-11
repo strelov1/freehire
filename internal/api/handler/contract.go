@@ -37,6 +37,8 @@ type contractHandlers struct {
 	*plansHandlers
 	*dictionaryHandlers
 	*jdResolveHandlers
+	*screeningAnswersHandlers
+	*surveyHandlers
 }
 
 var _ apigen.Handler = contractHandlers{}
@@ -218,4 +220,37 @@ func nilIfEmpty[T any](s []T) []T {
 		return nil
 	}
 	return s
+}
+
+// ptrOf is a nullable optional field as the pointer a domain patch reads: nil when the
+// field was absent or null. Pass the field's Get method.
+func ptrOf[T any](get func() (T, bool)) *T {
+	if v, ok := get(); ok {
+		return &v
+	}
+	return nil
+}
+
+// intPtrOf is ptrOf for an integer the domain holds as int.
+func intPtrOf(get func() (int64, bool)) *int {
+	if v, ok := get(); ok {
+		n := int(v)
+		return &n
+	}
+	return nil
+}
+
+// optNil is the generated nullable optional field set from a domain pointer: left unset
+// for nil, so it is omitted from the answer as `omitempty` did. Pass the field's SetTo.
+func optNil[T any](p *T, setTo func(T)) {
+	if p != nil {
+		setTo(*p)
+	}
+}
+
+// optNilInt is optNil for a domain int carried as int64.
+func optNilInt(p *int, setTo func(int64)) {
+	if p != nil {
+		setTo(int64(*p))
+	}
 }

@@ -12,6 +12,10 @@ type Handler interface {
 	//
 	// PUT /me/watchlist/{slug}
 	AddToWatchlist(ctx context.Context, params AddToWatchlistParams) (*AddToWatchlistOK, error)
+	// CompleteOnboarding implements completeOnboarding operation.
+	//
+	// POST /me/onboarding/complete
+	CompleteOnboarding(ctx context.Context) (*CompleteOnboardingOK, error)
 	// GetAgentPermissions implements getAgentPermissions operation.
 	//
 	// Readable with a session or an API key.
@@ -38,6 +42,16 @@ type Handler interface {
 	//
 	// GET /plans
 	GetPlans(ctx context.Context) (*GetPlansOK, error)
+	// GetScreeningAnswers implements getScreeningAnswers operation.
+	//
+	// `data` is null before the first save.
+	//
+	// GET /me/screening-answers
+	GetScreeningAnswers(ctx context.Context) (*GetScreeningAnswersOK, error)
+	// GetSurvey implements getSurvey operation.
+	//
+	// GET /me/survey
+	GetSurvey(ctx context.Context) (*GetSurveyOK, error)
 	// GetTalentFacets implements getTalentFacets operation.
 	//
 	// GET /talent/facets
@@ -125,6 +139,14 @@ type Handler interface {
 	//
 	// PATCH /me/email-groups
 	UpdateMyEmailGroups(ctx context.Context, req *EmailPrefsUpdate) (*UpdateMyEmailGroupsOK, error)
+	// UpdateScreeningAnswers implements updateScreeningAnswers operation.
+	//
+	// PUT /me/screening-answers
+	UpdateScreeningAnswers(ctx context.Context, req *ScreeningAnswersUpdate) (*UpdateScreeningAnswersOK, error)
+	// UpdateSurvey implements updateSurvey operation.
+	//
+	// PUT /me/survey
+	UpdateSurvey(ctx context.Context, req *SurveyResponses) (*UpdateSurveyOK, error)
 	// NewError creates *ProblemStatusCode from error returned by handler.
 	//
 	// Used for common default response.
