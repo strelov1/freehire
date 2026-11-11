@@ -17,6 +17,9 @@ import "./answer-bank.tsp";
 import "./moderation.tsp";
 import "./contributions.tsp";
 import "./alerts.tsp";
+import "./company-feedback.tsp";
+import "./company-relations.tsp";
+import "./reports.tsp";
 
 using Http;
 

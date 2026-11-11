@@ -1,11 +1,12 @@
 package handler
 
 import (
+	"context"
 	"errors"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/report"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -24,74 +25,57 @@ func newReportHandlers(queries *db.Queries) *reportHandlers {
 	return &reportHandlers{report: report.New(repo, repo), queries: queries}
 }
 
-func (h *reportHandlers) register(api fiber.Router, mw middleware) {
+func (h *reportHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Job reports: any authenticated user flags a problem with a live vacancy (cookie or
 	// API key), addressed by the job's public slug. The review actions (the pending queue,
 	// resolve, dismiss) are moderator-gated; resolve may soft-close the reported job.
-	api.Post("/jobs/:slug/reports", mw.key, h.CreateReport)
-	api.Get("/reports", mw.key, mw.moderator, h.ListPendingReports)
-	api.Post("/reports/:id/resolve", mw.key, mw.moderator, h.ResolveReport)
-	api.Post("/reports/:id/dismiss", mw.key, mw.moderator, h.DismissReport)
+	api.Post("/jobs/:slug/reports", mw.key, contract)
+	api.Get("/reports", mw.key, mw.moderator, contract)
+	api.Post("/reports/:id/resolve", mw.key, mw.moderator, contract)
+	api.Post("/reports/:id/dismiss", mw.key, mw.moderator, contract)
 }
 
-// reportResponse is the public shape of a job report. reported_by is omitted (ownership,
-// internal); reporter_email and job_slug/job_title are set only on the moderator queue so
-// the reviewer can judge the report and link to the vacancy.
-type reportResponse struct {
-	ID              int64      `json:"id"`
-	Reason          string     `json:"reason"`
-	Details         string     `json:"details"`
-	ContactTelegram string     `json:"contact_telegram,omitempty"`
-	Status          string     `json:"status"`
-	ReviewReason    string     `json:"review_reason,omitempty"`
-	ReviewedAt      *time.Time `json:"reviewed_at,omitempty"`
-	CreatedAt       *time.Time `json:"created_at"`
-	ReporterEmail   string     `json:"reporter_email,omitempty"`
-	JobSlug         string     `json:"job_slug,omitempty"`
-	JobTitle        string     `json:"job_title,omitempty"`
-	// Notified is set only on a decision response: whether the reporter was actually
-	// told. It is a pointer so the create and queue shapes omit it entirely rather than
-	// claiming a notice was never sent.
-	Notified *bool `json:"notified,omitempty"`
-}
-
-// toDecisionResponse maps a moderator decision, adding whether the reporter was reached.
-func toDecisionResponse(rev report.Review) reportResponse {
-	out := toReportResponse(rev.Report)
-	out.Notified = &rev.Notified
+// toJobReport maps a stored report to its wire shape (no reporter email or job fields).
+// reported_by is never sent (ownership, internal).
+func toJobReport(r report.Report) apigen.JobReport {
+	out := apigen.JobReport{
+		ID:              r.ID,
+		Reason:          r.Reason,
+		Details:         r.Details,
+		ContactTelegram: optString(r.ContactTelegram),
+		Status:          r.Status,
+		ReviewReason:    optString(r.ReviewReason),
+	}
+	if r.ReviewedAt != nil {
+		out.ReviewedAt = apigen.NewOptDateTime(*r.ReviewedAt)
+	}
+	if r.CreatedAt != nil {
+		out.CreatedAt = apigen.NewNilDateTime(*r.CreatedAt)
+	} else {
+		out.CreatedAt.SetToNull()
+	}
 	return out
 }
 
-// toReportResponse maps a stored report to its wire shape (no reporter email or job fields).
-func toReportResponse(r report.Report) reportResponse {
-	return reportResponse{
-		ID:              r.ID,
-		Reason:          r.Reason,
-		Details:         r.Details,
-		ContactTelegram: r.ContactTelegram,
-		Status:          r.Status,
-		ReviewReason:    r.ReviewReason,
-		ReviewedAt:      r.ReviewedAt,
-		CreatedAt:       r.CreatedAt,
-	}
+// toJobReportDetail maps a report with its context, adding the reporter's email and the
+// reported job's slug and title for the moderator queue.
+func toJobReportDetail(r report.ReportDetail) apigen.JobReport {
+	out := toJobReport(report.Report{
+		ID: r.ID, Reason: r.Reason, Details: r.Details, ContactTelegram: r.ContactTelegram,
+		Status: r.Status, ReviewReason: r.ReviewReason, ReviewedAt: r.ReviewedAt, CreatedAt: r.CreatedAt,
+	})
+	out.ReporterEmail = optString(r.ReporterEmail)
+	out.JobSlug = optString(r.JobSlug)
+	out.JobTitle = optString(r.JobTitle)
+	return out
 }
 
-// toReportDetailResponse maps a report with its context, adding the reporter's email and the
-// reported job's slug and title.
-func toReportDetailResponse(r report.ReportDetail) reportResponse {
-	return reportResponse{
-		ID:              r.ID,
-		Reason:          r.Reason,
-		Details:         r.Details,
-		ContactTelegram: r.ContactTelegram,
-		Status:          r.Status,
-		ReviewReason:    r.ReviewReason,
-		ReviewedAt:      r.ReviewedAt,
-		CreatedAt:       r.CreatedAt,
-		ReporterEmail:   r.ReporterEmail,
-		JobSlug:         r.JobSlug,
-		JobTitle:        r.JobTitle,
-	}
+// toJobReportDecision maps a moderator decision, adding whether the reporter was reached. The
+// flag is set only here, so the create and queue shapes omit it rather than claim no notice went out.
+func toJobReportDecision(rev report.Review) apigen.JobReport {
+	out := toJobReport(rev.Report)
+	out.Notified = apigen.NewOptBool(rev.Notified)
+	return out
 }
 
 // reportError maps the report sentinels onto HTTP statuses. report.ErrInvalid carries a
@@ -112,123 +96,89 @@ func reportError(err error) error {
 	}
 }
 
-// createReportRequest is the report body: a reason from the controlled vocabulary, required
-// details, and an optional Telegram contact.
-type createReportRequest struct {
-	Reason          string `json:"reason"`
-	Details         string `json:"details"`
-	ContactTelegram string `json:"contact_telegram"`
-}
-
-// CreateReport files a complaint about the job named by :slug. Authenticated by cookie or
+// CreateJobReport files a complaint about the job named by :slug. Authenticated by cookie or
 // API key; the slug is resolved to the internal id (a miss is a 404 via RenderError) before
 // any write, the content is validated by the service (a bad body is a 400), and a second
 // open report of the same job by the same user is a 409. Returns the pending report with 201.
-func (h *reportHandlers) CreateReport(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *reportHandlers) CreateJobReport(ctx context.Context, req *apigen.JobReportRequest, params apigen.CreateJobReportParams) (*apigen.CreateJobReportCreated, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	jobID, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
+	jobID, err := h.queries.GetJobIDBySlug(ctx, params.Slug)
 	if err != nil {
-		return err // pgx.ErrNoRows → 404 in RenderError
+		return nil, err // pgx.ErrNoRows → 404 in RenderError
 	}
 
-	var in createReportRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-
-	rep, err := h.report.File(c.Context(), userID, jobID, report.FileInput{
-		Reason:          in.Reason,
-		Details:         in.Details,
-		ContactTelegram: in.ContactTelegram,
+	rep, err := h.report.File(ctx, userID, jobID, report.FileInput{
+		Reason:          req.Reason.Value,
+		Details:         req.Details.Value,
+		ContactTelegram: req.ContactTelegram.Value,
 	})
 	if err != nil {
-		return reportError(err)
+		return nil, reportError(err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toReportResponse(rep)})
+	return &apigen.CreateJobReportCreated{Data: toJobReport(rep)}, nil
 }
 
-// ListPendingReports returns the moderator review queue (with reporter email and job
+// ListPendingJobReports returns the moderator review queue (with reporter email and job
 // slug/title). The route is role-gated, so reaching this handler already implies a moderator.
-func (h *reportHandlers) ListPendingReports(c *fiber.Ctx) error {
-	rows, err := h.report.ListPending(c.Context())
+func (h *reportHandlers) ListPendingJobReports(ctx context.Context) (*apigen.ListPendingJobReportsOK, error) {
+	rows, err := h.report.ListPending(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]reportResponse, len(rows))
+	out := make([]apigen.JobReport, len(rows))
 	for i, r := range rows {
-		out[i] = toReportDetailResponse(r)
+		out[i] = toJobReportDetail(r)
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return &apigen.ListPendingJobReportsOK{Data: out}, nil
 }
 
-// resolveReportRequest is the optional resolve body: whether to also close the reported job,
-// the note the reporter is told, and whether to tell them at all. notify_reporter defaults
-// to false on absence, so a caller that wants the reporter contacted says so explicitly.
-type resolveReportRequest struct {
-	CloseJob       bool   `json:"close_job"`
-	Note           string `json:"note"`
-	NotifyReporter bool   `json:"notify_reporter"`
-}
-
-// ResolveReport marks a pending report resolved, optionally soft-closing the reported job.
+// ResolveJobReport marks a pending report resolved, optionally soft-closing the reported job.
 // Role-gated. An unknown id is a 404; a report already decided is a 409. The body is
-// optional (a parse failure leaves close_job false).
-func (h *reportHandlers) ResolveReport(c *fiber.Ctx) error {
-	reviewerID, err := requireUserID(c)
+// optional: close_job and notify_reporter default to false on absence, so a caller that wants
+// the reporter contacted says so explicitly.
+func (h *reportHandlers) ResolveJobReport(ctx context.Context, req apigen.OptResolveJobReportRequest, params apigen.ResolveJobReportParams) (*apigen.ResolveJobReportOK, error) {
+	reviewerID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := pathID(c)
+	id, err := contractPathID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var in resolveReportRequest
-	_ = c.BodyParser(&in)
-
-	rev, err := h.report.Resolve(c.Context(), reviewerID, id, report.ResolveInput{
-		CloseJob:       in.CloseJob,
-		NotifyReporter: in.NotifyReporter,
-		Note:           in.Note,
+	rev, err := h.report.Resolve(ctx, reviewerID, id, report.ResolveInput{
+		CloseJob:       req.Value.CloseJob.Value,
+		NotifyReporter: req.Value.NotifyReporter.Value,
+		Note:           req.Value.Note.Value,
 	})
 	if err != nil {
-		return reportError(err)
+		return nil, reportError(err)
 	}
-	return c.JSON(fiber.Map{"data": toDecisionResponse(rev)})
+	return &apigen.ResolveJobReportOK{Data: toJobReportDecision(rev)}, nil
 }
 
-// dismissReportRequest is the optional dismissal body: the reason the report changed
-// nothing, and whether to tell the reporter (see resolveReportRequest on the default).
-type dismissReportRequest struct {
-	Reason         string `json:"reason"`
-	NotifyReporter bool   `json:"notify_reporter"`
-}
-
-// DismissReport marks a pending report dismissed with an optional reason, leaving the job
-// unchanged. Role-gated. The reason body is optional, so a parse failure leaves it blank.
-func (h *reportHandlers) DismissReport(c *fiber.Ctx) error {
-	reviewerID, err := requireUserID(c)
+// DismissJobReport marks a pending report dismissed with an optional reason, leaving the job
+// unchanged. Role-gated. The body is optional, so a missing one leaves the reason blank.
+func (h *reportHandlers) DismissJobReport(ctx context.Context, req apigen.OptDismissJobReportRequest, params apigen.DismissJobReportParams) (*apigen.DismissJobReportOK, error) {
+	reviewerID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := pathID(c)
+	id, err := contractPathID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var in dismissReportRequest
-	_ = c.BodyParser(&in)
-
-	rev, err := h.report.Dismiss(c.Context(), reviewerID, id, report.DismissInput{
-		NotifyReporter: in.NotifyReporter,
-		Reason:         in.Reason,
+	rev, err := h.report.Dismiss(ctx, reviewerID, id, report.DismissInput{
+		NotifyReporter: req.Value.NotifyReporter.Value,
+		Reason:         req.Value.Reason.Value,
 	})
 	if err != nil {
-		return reportError(err)
+		return nil, reportError(err)
 	}
-	return c.JSON(fiber.Map{"data": toDecisionResponse(rev)})
+	return &apigen.DismissJobReportOK{Data: toJobReportDecision(rev)}, nil
 }

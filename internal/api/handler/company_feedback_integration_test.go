@@ -39,7 +39,7 @@ func newCompanyFeedbackApp(queries *db.Queries, pool *pgxpool.Pool, iss *auth.Is
 		cookie:    auth.RequireAuth(iss, testVersions),
 		moderator: auth.RequireRole(queries, "moderator"),
 	}
-	h.register(app.Group("/api/v1"), mw)
+	h.register(app.Group("/api/v1"), mw, newContract(contractHandlers{companyFeedbackHandlers: h}))
 	return app
 }
 
@@ -209,6 +209,10 @@ func TestCompanyFeedbackEndpoints(t *testing.T) {
 		t.Fatalf("delete remaining category: want 200, got %d", delResp2.StatusCode)
 	}
 	raw2, _ := io.ReadAll(delResp2.Body)
+	// The average is null, not absent: a client reads the key.
+	if !strings.Contains(string(raw2), `"feedback_rating_avg":null`) {
+		t.Fatalf("empty summary must carry feedback_rating_avg:null, got %s", raw2)
+	}
 	var delEnv2 struct {
 		Data struct {
 			Count     int32    `json:"feedback_count"`

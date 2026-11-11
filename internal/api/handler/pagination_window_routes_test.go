@@ -33,7 +33,10 @@ var windowedListRoutes = []struct {
 	{"GET /companies/:slug/closed-jobs", func() *fiber.App { return mountWindowed((&companiesHandlers{}).register) }, "/api/v1/companies/acme/closed-jobs", closedJobsWindow},
 	{"GET /jobs/:slug/copies", func() *fiber.App { return mountWindowed((&jobsHandlers{}).register) }, "/api/v1/jobs/a-job/copies", maxPageWindow},
 	{"GET /companies/:slug/feedback", func() *fiber.App {
-		return mountWindowed((&companyFeedbackHandlers{}).registerPublic)
+		h := &companyFeedbackHandlers{}
+		return mountWindowed(func(api fiber.Router, _ middleware) {
+			h.registerPublic(api, newContract(contractHandlers{companyFeedbackHandlers: h}))
+		})
 	}, "/api/v1/companies/acme/feedback", maxPageWindow},
 }
 
