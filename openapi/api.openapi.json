@@ -58,6 +58,9 @@
     },
     {
       "name": "Reports"
+    },
+    {
+      "name": "Tracking"
     }
   ],
   "paths": {
@@ -1862,6 +1865,72 @@
         }
       }
     },
+    "/me/interviews": {
+      "get": {
+        "operationId": "getInterviews",
+        "description": "The caller's arranged meetings whose start falls in the range.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ScheduledInterview"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/TimelineMeta"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Tracking"
+        ]
+      }
+    },
     "/me/invite": {
       "get": {
         "operationId": "getInvite",
@@ -2064,6 +2133,125 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/me/profile": {
+      "get": {
+        "operationId": "getProfile",
+        "description": "`data` is null before the first save.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/Profile"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      },
+      "put": {
+        "operationId": "putProfile",
+        "description": "Creates or replaces the profile.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Profile"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteProfile",
+        "description": "Clears the profile. Idempotent: deleting when none exists is still a 204.",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful. "
           },
           "default": {
             "description": "An unexpected error response.",
@@ -2795,6 +2983,72 @@
             }
           }
         }
+      }
+    },
+    "/me/timeline": {
+      "get": {
+        "operationId": "getTimeline",
+        "description": "The caller's events between `from` and `to` inclusive, oldest first.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TimelineEvent"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/TimelineMeta"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Tracking"
+        ]
       }
     },
     "/me/usage": {
@@ -3928,6 +4182,32 @@
         },
         "description": "An answer to a free-text screening question, saved for the next form that asks it."
       },
+      "BaseLocation": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "The current single place: an ISO country code and a free-text city."
+      },
       "CityMatch": {
         "type": "object",
         "required": [
@@ -4193,6 +4473,56 @@
           }
         }
       },
+      "DerivedLocation": {
+        "type": "object",
+        "required": [
+          "countries",
+          "regions",
+          "cities"
+        ],
+        "properties": {
+          "countries": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "regions": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cities": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "Where the CV says the caller IS, as the location dictionary resolved it. Read-only."
+      },
       "DictionaryGap": {
         "type": "object",
         "properties": {
@@ -4348,6 +4678,38 @@
             "format": "int32"
           }
         }
+      },
+      "GeoSet": {
+        "type": "object",
+        "properties": {
+          "regions": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "countries": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "A geographic reach: regions and/or ISO country codes. Empty means worldwide."
       },
       "GhostReport": {
         "type": "object",
@@ -4564,6 +4926,55 @@
           }
         },
         "description": "A page of a filtered list, with what the filter dropped."
+      },
+      "LocationPreferences": {
+        "type": "object",
+        "properties": {
+          "work_modes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "remote": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeoSet"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BaseLocation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relocation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Relocation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "Where and how the caller wants to work. Every member is optional on a save; an\nentirely empty block clears it. Echoed back normalised, with `remote`, `base` and\n`relocation` always present."
       },
       "MarketPulseMeta": {
         "type": "object",
@@ -4937,6 +5348,380 @@
           }
         }
       },
+      "Profile": {
+        "type": "object",
+        "required": [
+          "specializations",
+          "skills",
+          "seniorities",
+          "excluded_skills",
+          "excluded_sources",
+          "job_languages",
+          "excluded_companies",
+          "location_preferences",
+          "derived_location",
+          "cv",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "specializations": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seniorities": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excluded_skills": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excluded_sources": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "job_languages": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excluded_companies": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location_preferences": {
+            "description": "What the caller asserted, shaped like LocationPreferences, sent exactly as stored;\nnull when they set none."
+          },
+          "derived_location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DerivedLocation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What was derived from their CV; null when there is no current structured CV."
+          },
+          "cv": {
+            "description": "The contact-free CV, shaped like ProfileCV, sent exactly as the CV store writes it;\nnull when no current structure exists."
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ProfileCV": {
+        "type": "object",
+        "properties": {
+          "headline": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "total_years": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "experience": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileExperience"
+            }
+          },
+          "education": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileEducation"
+            }
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "certifications": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "projects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileProject"
+            }
+          }
+        },
+        "description": "The caller's CV without contacts: what they have done."
+      },
+      "ProfileEducation": {
+        "type": "object",
+        "properties": {
+          "degree": {
+            "type": "string"
+          },
+          "institution": {
+            "type": "string"
+          },
+          "year": {
+            "$ref": "#/components/schemas/PeriodDate"
+          }
+        }
+      },
+      "ProfileExperience": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "start": {
+            "$ref": "#/components/schemas/PeriodDate"
+          },
+          "end": {
+            "$ref": "#/components/schemas/PeriodDate"
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "highlights": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stack": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "One work-history entry of the contact-free CV."
+      },
+      "ProfileProject": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "link": {
+            "type": "string"
+          },
+          "highlights": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ProfileUpdate": {
+        "type": "object",
+        "properties": {
+          "specializations": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seniorities": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excluded_skills": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excluded_sources": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "job_languages": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excluded_companies": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location_preferences": {
+            "description": "Shaped like LocationPreferences; null or absent keeps none."
+          }
+        },
+        "description": "The profile as saved."
+      },
       "PromoCode": {
         "type": "object",
         "properties": {
@@ -4956,6 +5741,61 @@
             "format": "int64"
           }
         }
+      },
+      "Relocation": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "regions": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "countries": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cities": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "The willingness to move. Open with empty targets means anywhere."
       },
       "ReportedCompanyFeedback": {
         "type": "object",
@@ -5214,6 +6054,55 @@
           }
         },
         "description": "A partial update: an absent or null field is kept; an empty query is a real \"show all\"."
+      },
+      "ScheduledInterview": {
+        "type": "object",
+        "required": [
+          "id",
+          "application_id",
+          "starts_at",
+          "status",
+          "company_slug"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "application_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Absent for an all-day entry."
+          },
+          "title": {
+            "type": "string"
+          },
+          "join_url": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "suggested, confirmed or cancelled. A cancelled meeting is served."
+          },
+          "company_slug": {
+            "type": "string"
+          },
+          "role_title": {
+            "type": "string"
+          },
+          "job_slug": {
+            "type": "string"
+          }
+        },
+        "description": "One arranged meeting. Unlike an event it can move or be called off."
       },
       "ScreeningAnswers": {
         "type": "object",
@@ -5903,6 +6792,84 @@
           }
         },
         "description": "One role of a work history, with everything nameable removed."
+      },
+      "TimelineEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "source",
+          "observed",
+          "occurred_at",
+          "company_slug"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "signal": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "observed": {
+            "type": "boolean",
+            "description": "The server's verdict on whether somebody other than the candidate set the date."
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "An instant, not a day: which day it falls on depends on the reader's clock."
+          },
+          "company_slug": {
+            "type": "string"
+          },
+          "role_title": {
+            "type": "string"
+          },
+          "application_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "job_slug": {
+            "type": "string"
+          },
+          "email_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "email_subject": {
+            "type": "string"
+          }
+        },
+        "description": "One ledger event. An event happened and cannot change."
+      },
+      "TimelineMeta": {
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "count"
+        ],
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "Usage": {
         "type": "object",

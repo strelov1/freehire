@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-faster/errors"
+	"github.com/go-faster/jx"
 )
 
 func (s *ProblemStatusCode) Error() string {
@@ -785,6 +786,9 @@ func (s *DeleteCompanyFeedbackOK) SetData(val CompanyFeedbackSummary) {
 	s.Data = val
 }
 
+// DeleteProfileNoContent is response for DeleteProfile operation.
+type DeleteProfileNoContent struct{}
+
 // DeleteSavedSearchNoContent is response for DeleteSavedSearch operation.
 type DeleteSavedSearchNoContent struct{}
 
@@ -804,6 +808,44 @@ func (s *Deleted) GetDeleted() bool {
 // SetDeleted sets the value of Deleted.
 func (s *Deleted) SetDeleted(val bool) {
 	s.Deleted = val
+}
+
+// Where the CV says the caller IS, as the location dictionary resolved it. Read-only.
+// Ref: #/components/schemas/DerivedLocation
+type DerivedLocation struct {
+	Countries []string `json:"countries"`
+	Regions   []string `json:"regions"`
+	Cities    []string `json:"cities"`
+}
+
+// GetCountries returns the value of Countries.
+func (s *DerivedLocation) GetCountries() []string {
+	return s.Countries
+}
+
+// GetRegions returns the value of Regions.
+func (s *DerivedLocation) GetRegions() []string {
+	return s.Regions
+}
+
+// GetCities returns the value of Cities.
+func (s *DerivedLocation) GetCities() []string {
+	return s.Cities
+}
+
+// SetCountries sets the value of Countries.
+func (s *DerivedLocation) SetCountries(val []string) {
+	s.Countries = val
+}
+
+// SetRegions sets the value of Regions.
+func (s *DerivedLocation) SetRegions(val []string) {
+	s.Regions = val
+}
+
+// SetCities sets the value of Cities.
+func (s *DerivedLocation) SetCities(val []string) {
+	s.Cities = val
 }
 
 // Ref: #/components/schemas/DictionaryGap
@@ -1196,6 +1238,31 @@ func (s *GetEmailPrefsOK) SetData(val EmailPrefs) {
 	s.Data = val
 }
 
+type GetInterviewsOK struct {
+	Data []ScheduledInterview `json:"data"`
+	Meta TimelineMeta         `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *GetInterviewsOK) GetData() []ScheduledInterview {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *GetInterviewsOK) GetMeta() TimelineMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *GetInterviewsOK) SetData(val []ScheduledInterview) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *GetInterviewsOK) SetMeta(val TimelineMeta) {
+	s.Meta = val
+}
+
 // A single item: `{"data": ...}`.
 type GetInviteOK struct {
 	Data Invite `json:"data"`
@@ -1293,6 +1360,20 @@ func (s *GetPlansOK) GetData() Plans {
 
 // SetData sets the value of Data.
 func (s *GetPlansOK) SetData(val Plans) {
+	s.Data = val
+}
+
+type GetProfileOK struct {
+	Data NilProfile `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetProfileOK) GetData() NilProfile {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetProfileOK) SetData(val NilProfile) {
 	s.Data = val
 }
 
@@ -1467,6 +1548,31 @@ func (s *GetTalentPhotoOKHeaders) SetXRobotsTag(val string) {
 // SetResponse sets the value of Response.
 func (s *GetTalentPhotoOKHeaders) SetResponse(val GetTalentPhotoOK) {
 	s.Response = val
+}
+
+type GetTimelineOK struct {
+	Data []TimelineEvent `json:"data"`
+	Meta TimelineMeta    `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *GetTimelineOK) GetData() []TimelineEvent {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *GetTimelineOK) GetMeta() TimelineMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *GetTimelineOK) SetData(val []TimelineEvent) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *GetTimelineOK) SetMeta(val TimelineMeta) {
+	s.Meta = val
 }
 
 // A single item: `{"data": ...}`.
@@ -2328,6 +2434,51 @@ func (o NilDateTime) Or(d time.Time) time.Time {
 	return d
 }
 
+// NewNilDerivedLocation returns new NilDerivedLocation with value set to v.
+func NewNilDerivedLocation(v DerivedLocation) NilDerivedLocation {
+	return NilDerivedLocation{
+		Value: v,
+	}
+}
+
+// NilDerivedLocation is nullable DerivedLocation.
+type NilDerivedLocation struct {
+	Value DerivedLocation
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilDerivedLocation) SetTo(v DerivedLocation) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilDerivedLocation) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilDerivedLocation) SetToNull() {
+	o.Null = true
+	var v DerivedLocation
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilDerivedLocation) Get() (v DerivedLocation, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilDerivedLocation) Or(d DerivedLocation) DerivedLocation {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewNilFloat32 returns new NilFloat32 with value set to v.
 func NewNilFloat32(v float32) NilFloat32 {
 	return NilFloat32{
@@ -2412,6 +2563,51 @@ func (o NilFloat64) Get() (v float64, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o NilFloat64) Or(d float64) float64 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewNilProfile returns new NilProfile with value set to v.
+func NewNilProfile(v Profile) NilProfile {
+	return NilProfile{
+		Value: v,
+	}
+}
+
+// NilProfile is nullable Profile.
+type NilProfile struct {
+	Value Profile
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilProfile) SetTo(v Profile) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilProfile) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilProfile) SetToNull() {
+	o.Null = true
+	var v Profile
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilProfile) Get() (v Profile, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilProfile) Or(d Profile) Profile {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -3787,6 +3983,241 @@ func (s *ProcessReportRequest) SetKind(val OptString) {
 	s.Kind = val
 }
 
+// Ref: #/components/schemas/Profile
+type Profile struct {
+	Specializations   []string `json:"specializations"`
+	Skills            []string `json:"skills"`
+	Seniorities       []string `json:"seniorities"`
+	ExcludedSkills    []string `json:"excluded_skills"`
+	ExcludedSources   []string `json:"excluded_sources"`
+	JobLanguages      []string `json:"job_languages"`
+	ExcludedCompanies []string `json:"excluded_companies"`
+	// What the caller asserted, shaped like LocationPreferences, sent exactly as stored; null when they
+	// set none.
+	LocationPreferences jx.Raw `json:"location_preferences"`
+	// What was derived from their CV; null when there is no current structured CV.
+	DerivedLocation NilDerivedLocation `json:"derived_location"`
+	// The contact-free CV, shaped like ProfileCV, sent exactly as the CV store writes it; null when no
+	// current structure exists.
+	Cv        jx.Raw      `json:"cv"`
+	CreatedAt NilDateTime `json:"created_at"`
+	UpdatedAt NilDateTime `json:"updated_at"`
+}
+
+// GetSpecializations returns the value of Specializations.
+func (s *Profile) GetSpecializations() []string {
+	return s.Specializations
+}
+
+// GetSkills returns the value of Skills.
+func (s *Profile) GetSkills() []string {
+	return s.Skills
+}
+
+// GetSeniorities returns the value of Seniorities.
+func (s *Profile) GetSeniorities() []string {
+	return s.Seniorities
+}
+
+// GetExcludedSkills returns the value of ExcludedSkills.
+func (s *Profile) GetExcludedSkills() []string {
+	return s.ExcludedSkills
+}
+
+// GetExcludedSources returns the value of ExcludedSources.
+func (s *Profile) GetExcludedSources() []string {
+	return s.ExcludedSources
+}
+
+// GetJobLanguages returns the value of JobLanguages.
+func (s *Profile) GetJobLanguages() []string {
+	return s.JobLanguages
+}
+
+// GetExcludedCompanies returns the value of ExcludedCompanies.
+func (s *Profile) GetExcludedCompanies() []string {
+	return s.ExcludedCompanies
+}
+
+// GetLocationPreferences returns the value of LocationPreferences.
+func (s *Profile) GetLocationPreferences() jx.Raw {
+	return s.LocationPreferences
+}
+
+// GetDerivedLocation returns the value of DerivedLocation.
+func (s *Profile) GetDerivedLocation() NilDerivedLocation {
+	return s.DerivedLocation
+}
+
+// GetCv returns the value of Cv.
+func (s *Profile) GetCv() jx.Raw {
+	return s.Cv
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *Profile) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// GetUpdatedAt returns the value of UpdatedAt.
+func (s *Profile) GetUpdatedAt() NilDateTime {
+	return s.UpdatedAt
+}
+
+// SetSpecializations sets the value of Specializations.
+func (s *Profile) SetSpecializations(val []string) {
+	s.Specializations = val
+}
+
+// SetSkills sets the value of Skills.
+func (s *Profile) SetSkills(val []string) {
+	s.Skills = val
+}
+
+// SetSeniorities sets the value of Seniorities.
+func (s *Profile) SetSeniorities(val []string) {
+	s.Seniorities = val
+}
+
+// SetExcludedSkills sets the value of ExcludedSkills.
+func (s *Profile) SetExcludedSkills(val []string) {
+	s.ExcludedSkills = val
+}
+
+// SetExcludedSources sets the value of ExcludedSources.
+func (s *Profile) SetExcludedSources(val []string) {
+	s.ExcludedSources = val
+}
+
+// SetJobLanguages sets the value of JobLanguages.
+func (s *Profile) SetJobLanguages(val []string) {
+	s.JobLanguages = val
+}
+
+// SetExcludedCompanies sets the value of ExcludedCompanies.
+func (s *Profile) SetExcludedCompanies(val []string) {
+	s.ExcludedCompanies = val
+}
+
+// SetLocationPreferences sets the value of LocationPreferences.
+func (s *Profile) SetLocationPreferences(val jx.Raw) {
+	s.LocationPreferences = val
+}
+
+// SetDerivedLocation sets the value of DerivedLocation.
+func (s *Profile) SetDerivedLocation(val NilDerivedLocation) {
+	s.DerivedLocation = val
+}
+
+// SetCv sets the value of Cv.
+func (s *Profile) SetCv(val jx.Raw) {
+	s.Cv = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *Profile) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
+// SetUpdatedAt sets the value of UpdatedAt.
+func (s *Profile) SetUpdatedAt(val NilDateTime) {
+	s.UpdatedAt = val
+}
+
+// The profile as saved.
+// Ref: #/components/schemas/ProfileUpdate
+type ProfileUpdate struct {
+	Specializations   OptNilStringArray `json:"specializations"`
+	Skills            OptNilStringArray `json:"skills"`
+	Seniorities       OptNilStringArray `json:"seniorities"`
+	ExcludedSkills    OptNilStringArray `json:"excluded_skills"`
+	ExcludedSources   OptNilStringArray `json:"excluded_sources"`
+	JobLanguages      OptNilStringArray `json:"job_languages"`
+	ExcludedCompanies OptNilStringArray `json:"excluded_companies"`
+	// Shaped like LocationPreferences; null or absent keeps none.
+	LocationPreferences jx.Raw `json:"location_preferences"`
+}
+
+// GetSpecializations returns the value of Specializations.
+func (s *ProfileUpdate) GetSpecializations() OptNilStringArray {
+	return s.Specializations
+}
+
+// GetSkills returns the value of Skills.
+func (s *ProfileUpdate) GetSkills() OptNilStringArray {
+	return s.Skills
+}
+
+// GetSeniorities returns the value of Seniorities.
+func (s *ProfileUpdate) GetSeniorities() OptNilStringArray {
+	return s.Seniorities
+}
+
+// GetExcludedSkills returns the value of ExcludedSkills.
+func (s *ProfileUpdate) GetExcludedSkills() OptNilStringArray {
+	return s.ExcludedSkills
+}
+
+// GetExcludedSources returns the value of ExcludedSources.
+func (s *ProfileUpdate) GetExcludedSources() OptNilStringArray {
+	return s.ExcludedSources
+}
+
+// GetJobLanguages returns the value of JobLanguages.
+func (s *ProfileUpdate) GetJobLanguages() OptNilStringArray {
+	return s.JobLanguages
+}
+
+// GetExcludedCompanies returns the value of ExcludedCompanies.
+func (s *ProfileUpdate) GetExcludedCompanies() OptNilStringArray {
+	return s.ExcludedCompanies
+}
+
+// GetLocationPreferences returns the value of LocationPreferences.
+func (s *ProfileUpdate) GetLocationPreferences() jx.Raw {
+	return s.LocationPreferences
+}
+
+// SetSpecializations sets the value of Specializations.
+func (s *ProfileUpdate) SetSpecializations(val OptNilStringArray) {
+	s.Specializations = val
+}
+
+// SetSkills sets the value of Skills.
+func (s *ProfileUpdate) SetSkills(val OptNilStringArray) {
+	s.Skills = val
+}
+
+// SetSeniorities sets the value of Seniorities.
+func (s *ProfileUpdate) SetSeniorities(val OptNilStringArray) {
+	s.Seniorities = val
+}
+
+// SetExcludedSkills sets the value of ExcludedSkills.
+func (s *ProfileUpdate) SetExcludedSkills(val OptNilStringArray) {
+	s.ExcludedSkills = val
+}
+
+// SetExcludedSources sets the value of ExcludedSources.
+func (s *ProfileUpdate) SetExcludedSources(val OptNilStringArray) {
+	s.ExcludedSources = val
+}
+
+// SetJobLanguages sets the value of JobLanguages.
+func (s *ProfileUpdate) SetJobLanguages(val OptNilStringArray) {
+	s.JobLanguages = val
+}
+
+// SetExcludedCompanies sets the value of ExcludedCompanies.
+func (s *ProfileUpdate) SetExcludedCompanies(val OptNilStringArray) {
+	s.ExcludedCompanies = val
+}
+
+// SetLocationPreferences sets the value of LocationPreferences.
+func (s *ProfileUpdate) SetLocationPreferences(val jx.Raw) {
+	s.LocationPreferences = val
+}
+
 // Ref: #/components/schemas/PromoCode
 type PromoCode struct {
 	Code OptString `json:"code"`
@@ -3829,6 +4260,21 @@ func (s *ProposeCompanyRelationCreated) GetData() CompanyRelationProposal {
 
 // SetData sets the value of Data.
 func (s *ProposeCompanyRelationCreated) SetData(val CompanyRelationProposal) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type PutProfileOK struct {
+	Data Profile `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PutProfileOK) GetData() Profile {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PutProfileOK) SetData(val Profile) {
 	s.Data = val
 }
 
@@ -4447,6 +4893,123 @@ func (s *SavedSearchUpdate) SetName(val OptNilString) {
 // SetQuery sets the value of Query.
 func (s *SavedSearchUpdate) SetQuery(val OptNilString) {
 	s.Query = val
+}
+
+// One arranged meeting. Unlike an event it can move or be called off.
+// Ref: #/components/schemas/ScheduledInterview
+type ScheduledInterview struct {
+	ID            int64     `json:"id"`
+	ApplicationID int64     `json:"application_id"`
+	StartsAt      time.Time `json:"starts_at"`
+	// Absent for an all-day entry.
+	EndsAt  OptDateTime `json:"ends_at"`
+	Title   OptString   `json:"title"`
+	JoinURL OptString   `json:"join_url"`
+	// Suggested, confirmed or cancelled. A cancelled meeting is served.
+	Status      string    `json:"status"`
+	CompanySlug string    `json:"company_slug"`
+	RoleTitle   OptString `json:"role_title"`
+	JobSlug     OptString `json:"job_slug"`
+}
+
+// GetID returns the value of ID.
+func (s *ScheduledInterview) GetID() int64 {
+	return s.ID
+}
+
+// GetApplicationID returns the value of ApplicationID.
+func (s *ScheduledInterview) GetApplicationID() int64 {
+	return s.ApplicationID
+}
+
+// GetStartsAt returns the value of StartsAt.
+func (s *ScheduledInterview) GetStartsAt() time.Time {
+	return s.StartsAt
+}
+
+// GetEndsAt returns the value of EndsAt.
+func (s *ScheduledInterview) GetEndsAt() OptDateTime {
+	return s.EndsAt
+}
+
+// GetTitle returns the value of Title.
+func (s *ScheduledInterview) GetTitle() OptString {
+	return s.Title
+}
+
+// GetJoinURL returns the value of JoinURL.
+func (s *ScheduledInterview) GetJoinURL() OptString {
+	return s.JoinURL
+}
+
+// GetStatus returns the value of Status.
+func (s *ScheduledInterview) GetStatus() string {
+	return s.Status
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *ScheduledInterview) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// GetRoleTitle returns the value of RoleTitle.
+func (s *ScheduledInterview) GetRoleTitle() OptString {
+	return s.RoleTitle
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *ScheduledInterview) GetJobSlug() OptString {
+	return s.JobSlug
+}
+
+// SetID sets the value of ID.
+func (s *ScheduledInterview) SetID(val int64) {
+	s.ID = val
+}
+
+// SetApplicationID sets the value of ApplicationID.
+func (s *ScheduledInterview) SetApplicationID(val int64) {
+	s.ApplicationID = val
+}
+
+// SetStartsAt sets the value of StartsAt.
+func (s *ScheduledInterview) SetStartsAt(val time.Time) {
+	s.StartsAt = val
+}
+
+// SetEndsAt sets the value of EndsAt.
+func (s *ScheduledInterview) SetEndsAt(val OptDateTime) {
+	s.EndsAt = val
+}
+
+// SetTitle sets the value of Title.
+func (s *ScheduledInterview) SetTitle(val OptString) {
+	s.Title = val
+}
+
+// SetJoinURL sets the value of JoinURL.
+func (s *ScheduledInterview) SetJoinURL(val OptString) {
+	s.JoinURL = val
+}
+
+// SetStatus sets the value of Status.
+func (s *ScheduledInterview) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *ScheduledInterview) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
+// SetRoleTitle sets the value of RoleTitle.
+func (s *ScheduledInterview) SetRoleTitle(val OptString) {
+	s.RoleTitle = val
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *ScheduledInterview) SetJobSlug(val OptString) {
+	s.JobSlug = val
 }
 
 // Answers an application form asks for, saved once and reused. Each field is optional.
@@ -5614,6 +6177,182 @@ func (s *TalentRole) SetCurrent(val OptBool) {
 // SetStack sets the value of Stack.
 func (s *TalentRole) SetStack(val []string) {
 	s.Stack = val
+}
+
+// One ledger event. An event happened and cannot change.
+// Ref: #/components/schemas/TimelineEvent
+type TimelineEvent struct {
+	ID     int64     `json:"id"`
+	Kind   string    `json:"kind"`
+	Signal OptString `json:"signal"`
+	Source string    `json:"source"`
+	// The server's verdict on whether somebody other than the candidate set the date.
+	Observed bool `json:"observed"`
+	// An instant, not a day: which day it falls on depends on the reader's clock.
+	OccurredAt    time.Time `json:"occurred_at"`
+	CompanySlug   string    `json:"company_slug"`
+	RoleTitle     OptString `json:"role_title"`
+	ApplicationID OptInt64  `json:"application_id"`
+	JobSlug       OptString `json:"job_slug"`
+	EmailID       OptInt64  `json:"email_id"`
+	EmailSubject  OptString `json:"email_subject"`
+}
+
+// GetID returns the value of ID.
+func (s *TimelineEvent) GetID() int64 {
+	return s.ID
+}
+
+// GetKind returns the value of Kind.
+func (s *TimelineEvent) GetKind() string {
+	return s.Kind
+}
+
+// GetSignal returns the value of Signal.
+func (s *TimelineEvent) GetSignal() OptString {
+	return s.Signal
+}
+
+// GetSource returns the value of Source.
+func (s *TimelineEvent) GetSource() string {
+	return s.Source
+}
+
+// GetObserved returns the value of Observed.
+func (s *TimelineEvent) GetObserved() bool {
+	return s.Observed
+}
+
+// GetOccurredAt returns the value of OccurredAt.
+func (s *TimelineEvent) GetOccurredAt() time.Time {
+	return s.OccurredAt
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *TimelineEvent) GetCompanySlug() string {
+	return s.CompanySlug
+}
+
+// GetRoleTitle returns the value of RoleTitle.
+func (s *TimelineEvent) GetRoleTitle() OptString {
+	return s.RoleTitle
+}
+
+// GetApplicationID returns the value of ApplicationID.
+func (s *TimelineEvent) GetApplicationID() OptInt64 {
+	return s.ApplicationID
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *TimelineEvent) GetJobSlug() OptString {
+	return s.JobSlug
+}
+
+// GetEmailID returns the value of EmailID.
+func (s *TimelineEvent) GetEmailID() OptInt64 {
+	return s.EmailID
+}
+
+// GetEmailSubject returns the value of EmailSubject.
+func (s *TimelineEvent) GetEmailSubject() OptString {
+	return s.EmailSubject
+}
+
+// SetID sets the value of ID.
+func (s *TimelineEvent) SetID(val int64) {
+	s.ID = val
+}
+
+// SetKind sets the value of Kind.
+func (s *TimelineEvent) SetKind(val string) {
+	s.Kind = val
+}
+
+// SetSignal sets the value of Signal.
+func (s *TimelineEvent) SetSignal(val OptString) {
+	s.Signal = val
+}
+
+// SetSource sets the value of Source.
+func (s *TimelineEvent) SetSource(val string) {
+	s.Source = val
+}
+
+// SetObserved sets the value of Observed.
+func (s *TimelineEvent) SetObserved(val bool) {
+	s.Observed = val
+}
+
+// SetOccurredAt sets the value of OccurredAt.
+func (s *TimelineEvent) SetOccurredAt(val time.Time) {
+	s.OccurredAt = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *TimelineEvent) SetCompanySlug(val string) {
+	s.CompanySlug = val
+}
+
+// SetRoleTitle sets the value of RoleTitle.
+func (s *TimelineEvent) SetRoleTitle(val OptString) {
+	s.RoleTitle = val
+}
+
+// SetApplicationID sets the value of ApplicationID.
+func (s *TimelineEvent) SetApplicationID(val OptInt64) {
+	s.ApplicationID = val
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *TimelineEvent) SetJobSlug(val OptString) {
+	s.JobSlug = val
+}
+
+// SetEmailID sets the value of EmailID.
+func (s *TimelineEvent) SetEmailID(val OptInt64) {
+	s.EmailID = val
+}
+
+// SetEmailSubject sets the value of EmailSubject.
+func (s *TimelineEvent) SetEmailSubject(val OptString) {
+	s.EmailSubject = val
+}
+
+// Ref: #/components/schemas/TimelineMeta
+type TimelineMeta struct {
+	From  time.Time `json:"from"`
+	To    time.Time `json:"to"`
+	Count int64     `json:"count"`
+}
+
+// GetFrom returns the value of From.
+func (s *TimelineMeta) GetFrom() time.Time {
+	return s.From
+}
+
+// GetTo returns the value of To.
+func (s *TimelineMeta) GetTo() time.Time {
+	return s.To
+}
+
+// GetCount returns the value of Count.
+func (s *TimelineMeta) GetCount() int64 {
+	return s.Count
+}
+
+// SetFrom sets the value of From.
+func (s *TimelineMeta) SetFrom(val time.Time) {
+	s.From = val
+}
+
+// SetTo sets the value of To.
+func (s *TimelineMeta) SetTo(val time.Time) {
+	s.To = val
+}
+
+// SetCount sets the value of Count.
+func (s *TimelineMeta) SetCount(val int64) {
+	s.Count = val
 }
 
 // A single item: `{"data": ...}`.

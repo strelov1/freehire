@@ -85,7 +85,7 @@ func profileAppWithResume(t *testing.T, repo *fakeProfileRepo, cv structuredResu
 	}
 	h := &profileHandlers{userProfile: userprofile.New(repo), resume: cv}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/profile", auth.RequireAuth(iss, testVersions), h.GetProfile)
+	app.Get("/api/v1/me/profile", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{profileHandlers: h}))
 	return app, token
 }
 
@@ -236,7 +236,7 @@ func TestProfileRead_DerivedLocationNullWhenNothingResolved(t *testing.T) {
 // profileDerived reads the response's derived_location block, nil when the key is null.
 func profileDerived(t *testing.T, app *fiber.App, token string) *derivedLocation {
 	t.Helper()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/profile", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/profile", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {

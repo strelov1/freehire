@@ -20,6 +20,8 @@ import "./alerts.tsp";
 import "./company-feedback.tsp";
 import "./company-relations.tsp";
 import "./reports.tsp";
+import "./timeline.tsp";
+import "./profile.tsp";
 
 using Http;
 

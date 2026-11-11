@@ -8,8 +8,10 @@ import (
 	"log"
 	"time"
 
+	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
@@ -45,7 +47,7 @@ func newProfileHandlers(userProfile *userprofile.Service, resume structuredResum
 	return &profileHandlers{userProfile: userProfile, resume: resume, bank: bank}
 }
 
-func (h *profileHandlers) register(api fiber.Router, mw middleware) {
+func (h *profileHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// The user profile is a singleton — one per user, keyed by the authenticated caller,
 	// no id in the path. GET returns the profile or null; PUT upserts (create-or-replace);
 	// DELETE clears it (idempotent).
@@ -55,34 +57,9 @@ func (h *profileHandlers) register(api fiber.Router, mw middleware) {
 	// key that leaks out of a script's environment must not rewrite or clear a profile.
 	// (The in-app assistant does not come through here at all — its tools run in-process
 	// with the user id in hand, no credential.)
-	api.Get("/me/profile", mw.key, h.GetProfile)
-	api.Put("/me/profile", mw.cookie, h.PutProfile)
-	api.Delete("/me/profile", mw.cookie, h.DeleteProfile)
-}
-
-// profileResponse is the public shape of the user's single profile. user_id is omitted
-// (ownership, internal); there is no id or name. specializations are zero or more job
-// categories; skills are canonical lowercase tokens; location_preferences is the stored
-// location block echoed verbatim, or null when the user set none.
-//
-// cv is the caller's structured résumé projected onto its contact-free view, so one
-// authenticated read gives a programmatic consumer both what the user is looking for and
-// what they have done. Null when no current structure exists. Contacts are served only
-// by GET /me/resume — a profile is a professional self, and the agents that read this
-// have no business knowing the candidate's name.
-type profileResponse struct {
-	Specializations     []string                    `json:"specializations"`
-	Skills              []string                    `json:"skills"`
-	Seniorities         []string                    `json:"seniorities"`
-	ExcludedSkills      []string                    `json:"excluded_skills"`
-	ExcludedSources     []string                    `json:"excluded_sources"`
-	JobLanguages        []string                    `json:"job_languages"`
-	ExcludedCompanies   []string                    `json:"excluded_companies"`
-	LocationPreferences json.RawMessage             `json:"location_preferences"`
-	DerivedLocation     *derivedLocation            `json:"derived_location"`
-	CV                  *resumeextract.Professional `json:"cv"`
-	CreatedAt           *time.Time                  `json:"created_at"`
-	UpdatedAt           *time.Time                  `json:"updated_at"`
+	api.Get("/me/profile", mw.key, contract)
+	api.Put("/me/profile", mw.cookie, contract)
+	api.Delete("/me/profile", mw.cookie, contract)
 }
 
 // derivedLocation is where the caller's CV says they ARE, as resolved by the location
@@ -100,24 +77,60 @@ type derivedLocation struct {
 	Cities    []string `json:"cities"`
 }
 
-// toProfileResponse maps a stored profile to its wire shape (no user id). The location
-// block is the raw JSONB (json.RawMessage), which marshals through unchanged — a NULL
-// column stays null.
-func toProfileResponse(p userprofile.Profile, cv *resumeextract.Professional, loc *derivedLocation) profileResponse {
-	return profileResponse{
-		Specializations:     p.Specializations,
-		Skills:              p.Skills,
-		Seniorities:         p.Seniorities,
-		ExcludedSkills:      p.ExcludedSkills,
-		ExcludedSources:     p.ExcludedSources,
-		ExcludedCompanies:   p.ExcludedCompanies,
-		JobLanguages:        p.JobLanguages,
-		LocationPreferences: p.LocationPreferences,
-		DerivedLocation:     loc,
-		CV:                  cv,
-		CreatedAt:           p.CreatedAt,
-		UpdatedAt:           p.UpdatedAt,
+// profileOut maps a stored profile to its wire shape (no user id; user_id is ownership,
+// internal, and there is no id or name). specializations are zero or more job categories;
+// skills are canonical lowercase tokens; location_preferences is the stored block, or null
+// when the user set none.
+//
+// cv is the caller's structured résumé projected onto its contact-free view, so one
+// authenticated read gives a programmatic consumer both what the user is looking for and
+// what they have done. Null when no current structure exists. Contacts are served only
+// by GET /me/resume — a profile is a professional self, and the agents that read this
+// have no business knowing the candidate's name.
+//
+// The cv and location blocks are mapped through their JSON, so the wire form stays what
+// the domain types already marshal; the assistant's profile tool shares them and keeps its
+// own types.
+func profileOut(p userprofile.Profile, cv *resumeextract.Professional, loc *derivedLocation) (apigen.Profile, error) {
+	out := apigen.Profile{
+		Specializations:   p.Specializations,
+		Skills:            p.Skills,
+		Seniorities:       p.Seniorities,
+		ExcludedSkills:    p.ExcludedSkills,
+		ExcludedSources:   p.ExcludedSources,
+		ExcludedCompanies: p.ExcludedCompanies,
+		JobLanguages:      p.JobLanguages,
+		CreatedAt:         nilDateTime(p.CreatedAt),
+		UpdatedAt:         nilDateTime(p.UpdatedAt),
 	}
+	// Both blocks travel as raw JSON, exactly as before the contract: the stored JSONB as
+	// written, and the CV as its Go type marshals. Decoding them into generated types would
+	// turn an old stored shape into a 500 and drop any field the contract does not name.
+	out.LocationPreferences = jx.Raw("null")
+	if len(p.LocationPreferences) > 0 {
+		out.LocationPreferences = jx.Raw(p.LocationPreferences)
+	}
+	if loc == nil {
+		out.DerivedLocation.SetToNull()
+	} else {
+		out.DerivedLocation.SetTo(apigen.DerivedLocation{Countries: loc.Countries, Regions: loc.Regions, Cities: loc.Cities})
+	}
+	out.Cv = jx.Raw("null")
+	if cv != nil {
+		raw, err := json.Marshal(cv)
+		if err != nil {
+			return apigen.Profile{}, err
+		}
+		out.Cv = raw
+	}
+	return out, nil
+}
+
+func nilDateTime(t *time.Time) apigen.NilDateTime {
+	if t == nil {
+		return apigen.NilDateTime{Null: true}
+	}
+	return apigen.NewNilDateTime(*t)
 }
 
 // structuredCV reads the caller's structured résumé as its contact-free projection, or
@@ -205,79 +218,73 @@ func profileError(err error) error {
 	}
 }
 
-// saveProfileRequest is the upsert body: a non-empty set of specializations (job
-// categories), a non-empty set of skills, and an optional location_preferences block. The
-// whole profile is replaced on each save; an omitted/null location block clears it.
-type saveProfileRequest struct {
-	Specializations     []string                         `json:"specializations"`
-	Skills              []string                         `json:"skills"`
-	Seniorities         []string                         `json:"seniorities"`
-	ExcludedSkills      []string                         `json:"excluded_skills"`
-	ExcludedSources     []string                         `json:"excluded_sources"`
-	JobLanguages        []string                         `json:"job_languages"`
-	ExcludedCompanies   []string                         `json:"excluded_companies"`
-	LocationPreferences *userprofile.LocationPreferences `json:"location_preferences"`
-}
-
 // GetProfile returns the authenticated user's single profile, or {"data": null} when they
 // have not saved one yet.
-func (h *profileHandlers) GetProfile(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *profileHandlers) GetProfile(ctx context.Context) (*apigen.GetProfileOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	profile, err := h.userProfile.Get(c.Context(), userID)
+	profile, err := h.userProfile.Get(ctx, userID)
 	if errors.Is(err, userprofile.ErrNotFound) {
-		return c.JSON(fiber.Map{"data": nil})
+		return &apigen.GetProfileOK{Data: apigen.NilProfile{Null: true}}, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": toProfileResponse(profile, h.structuredCV(c.Context(), userID), h.derivedLocation(c.Context(), userID))})
+	out, err := profileOut(profile, h.structuredCV(ctx, userID), h.derivedLocation(ctx, userID))
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetProfileOK{Data: apigen.NewNilProfile(out)}, nil
 }
 
 // PutProfile creates-or-replaces the authenticated user's profile (specializations +
 // skills + optional excluded skills + optional location preferences). A bad/empty
 // specialization set, empty skills, or an out-of-vocabulary location value is a 400.
 // Cookie-only.
-func (h *profileHandlers) PutProfile(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *profileHandlers) PutProfile(ctx context.Context, req *apigen.ProfileUpdate) (*apigen.PutProfileOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var in saveProfileRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
 	// Empty lists support progressive autosave; omitted/null lists are still malformed
 	// replacement requests and must not silently clear an existing profile.
-	if in.Specializations == nil || in.Skills == nil {
-		return fiber.NewError(fiber.StatusBadRequest, "specializations and skills must be arrays; use [] for an empty list")
+	if req.Specializations.Value == nil || req.Skills.Value == nil {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "specializations and skills must be arrays; use [] for an empty list")
+	}
+	// Decoded straight into the domain type, as the body parser did: absent and null keep none.
+	var loc *userprofile.LocationPreferences
+	if raw := req.LocationPreferences; len(raw) > 0 && string(raw) != "null" {
+		loc = &userprofile.LocationPreferences{}
+		if err := json.Unmarshal(raw, loc); err != nil {
+			return nil, fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
 	}
 
-	profile, err := h.userProfile.Save(c.Context(), userID, in.Specializations, in.Skills, in.Seniorities, in.ExcludedSkills, in.ExcludedSources, in.ExcludedCompanies, in.LocationPreferences, in.JobLanguages...)
+	profile, err := h.userProfile.Save(ctx, userID, req.Specializations.Value, req.Skills.Value, req.Seniorities.Value, req.ExcludedSkills.Value, req.ExcludedSources.Value, req.ExcludedCompanies.Value, loc, req.JobLanguages.Value...)
 	if err != nil {
-		return profileError(err)
+		return nil, profileError(err)
 	}
 	// The same representation the read serves — one resource, one shape, so a client that
 	// saves and a client that fetches see the same profile.
-	return c.JSON(fiber.Map{"data": toProfileResponse(profile, h.structuredCV(c.Context(), userID), h.derivedLocation(c.Context(), userID))})
+	out, err := profileOut(profile, h.structuredCV(ctx, userID), h.derivedLocation(ctx, userID))
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.PutProfileOK{Data: out}, nil
 }
 
 // DeleteProfile clears the authenticated user's profile. Idempotent: deleting when none
 // exists is still a 204. Cookie-only.
-func (h *profileHandlers) DeleteProfile(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *profileHandlers) DeleteProfile(ctx context.Context) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-
-	if err := h.userProfile.Delete(c.Context(), userID); err != nil {
-		return err
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return h.userProfile.Delete(ctx, userID)
 }
 
 // derivedLocation reads the geography derived from the caller's CV, or nil when there is
