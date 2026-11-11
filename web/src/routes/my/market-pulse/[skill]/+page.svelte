@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { ArrowLeft } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
@@ -138,7 +139,7 @@
     {:else}
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 class="text-2xl font-semibold tracking-tight">{label}</h1>
+          <AccountPageHeading>{label}</AccountPageHeading>
           <div class="mt-1 flex items-baseline gap-2">
             <span class="text-3xl font-semibold tabular-nums">{skill.open_count}</span>
             <span class="text-sm text-muted-foreground">{plural(locale(), skill.open_count, s.openRoles)}</span>

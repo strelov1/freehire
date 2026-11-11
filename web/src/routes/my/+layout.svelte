@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { setContext } from 'svelte';
+  import { accountHeaderActions } from '#lib/accountHeader.js';
   import { onMount } from 'svelte';
   import { browser } from '$app/env';
   import { page } from '$app/state';
@@ -63,9 +65,44 @@
   let drawerOpen = $state(false);
   const activeItem = $derived(activeSection(path, accountNav));
 
+  setContext(accountHeaderActions, mobileActions);
+
   let helpOpen = $state(false);
   const helpLabel = $derived(t(supportMessages, locale()).title);
 </script>
+
+{#snippet mobileActions()}
+  <div class="-mr-3 flex max-w-3/5 shrink-0 items-center gap-1 lg:hidden">
+    <button
+      type="button"
+      onclick={() => (helpOpen = !helpOpen)}
+      aria-haspopup="dialog"
+      aria-expanded={helpOpen}
+      title={helpLabel}
+      class="flex min-h-8 w-fit items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+    >
+      <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
+      <span class="hidden min-[390px]:inline">{helpLabel}</span>
+    </button>
+    <button
+      type="button"
+      onclick={() => (drawerOpen = true)}
+      aria-haspopup="dialog"
+      aria-expanded={drawerOpen}
+      class="flex min-h-8 min-w-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
+    >
+      <span class="sr-only">{s.shell.accountSections}:</span>
+      {#if activeItem}
+        {@const Icon = accountNavIcons[activeItem.href]}
+        <Icon class="size-4 shrink-0" aria-hidden="true" />
+        <span class="truncate">{navLabel(s, activeItem.href, activeItem.label)}</span>
+      {:else}
+        {s.rail.menu}
+      {/if}
+      <ChevronDown class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+    </button>
+  </div>
+{/snippet}
 
 <svelte:head>
   <!-- Personal pages: keep the whole section out of search results, set once here. -->
@@ -83,45 +120,6 @@
     <!-- No signed-out branch here: +layout.server.ts redirects an anonymous visitor to
          /signin before this renders, so the shell only ever draws for a session. -->
 
-    <!-- Below lg: a section switcher naming where you are, opening the drawer. A chevron,
-         not a burger: the site header already carries one, and two identical icons a row
-         apart read as the same control. The accessible name keeps the visible label in it
-         (WCAG 2.5.3), prefixed so a screen reader hears what the button switches. The
-         negative right margin aligns the control with the content's right edge.
-
-         Each section still shows its own heading below lg (a size smaller), and hides only
-         its description there: with the heading gone too, a phone screen had no visible
-         title at all. -->
-    <!-- lg and up, Help lives in the sidebar's top row; this row held nothing else there. -->
-    <div class="-mr-3 mb-3 flex items-center justify-end gap-1 lg:hidden">
-      <button
-        type="button"
-        onclick={() => (helpOpen = !helpOpen)}
-        aria-haspopup="dialog"
-        aria-expanded={helpOpen}
-        class="flex min-h-8 w-fit items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-      >
-        <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
-        {helpLabel}
-      </button>
-      <button
-        type="button"
-        onclick={() => (drawerOpen = true)}
-        aria-haspopup="dialog"
-        aria-expanded={drawerOpen}
-        class="flex min-h-8 w-fit items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
-      >
-        <span class="sr-only">{s.shell.accountSections}:</span>
-        {#if activeItem}
-          {@const Icon = accountNavIcons[activeItem.href]}
-          <Icon class="size-4 shrink-0" aria-hidden="true" />
-          {navLabel(s, activeItem.href, activeItem.label)}
-        {:else}
-          {s.rail.menu}
-        {/if}
-        <ChevronDown class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </button>
-    </div>
     <AccountNavDrawer bind:open={drawerOpen} />
     <SupportPanel open={helpOpen} onClose={() => (helpOpen = false)} />
 

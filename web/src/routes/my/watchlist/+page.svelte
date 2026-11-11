@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { onDestroy, onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { X } from '@lucide/svelte';
@@ -105,9 +106,9 @@
 </svelte:head>
 
 <div class="flex max-w-3xl flex-col gap-6">
-  <div class="flex flex-col gap-1 max-lg:sr-only">
-    <h1 class="text-2xl font-semibold tracking-tight">Watchlist</h1>
-    <p class="text-sm text-muted-foreground">
+  <div class="flex flex-col gap-1">
+    <AccountPageHeading>Watchlist</AccountPageHeading>
+    <p class="text-sm text-muted-foreground max-lg:sr-only">
       Companies you follow. Filter the job list down to them, or get an alert when they post.
     </p>
   </div>

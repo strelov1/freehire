@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { Briefcase, Building2, Globe, MapPin, Plus } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
@@ -269,7 +270,9 @@
 <div class="flex flex-col gap-6">
   <header class="flex items-center gap-2 border-b border-border pb-4">
     <Building2 class="size-5 text-muted-foreground" />
-    <h1 class="text-2xl font-semibold tracking-tight">{format(s.dashboardTitle, { company: company.company_name })}</h1>
+    <AccountPageHeading class="min-w-0 flex-1"
+      >{format(s.dashboardTitle, { company: company.company_name })}</AccountPageHeading
+    >
   </header>
 
   {#if tab === 'profile'}

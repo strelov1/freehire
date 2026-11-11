@@ -40,7 +40,7 @@
     mounted &&
       !answered &&
       !bannerVisible() &&
-      // One ask at a time: the MCP strip on the home page asks first.
+      // One ask at a time: the MCP strip asks first.
       !cliBannerPending(currentUser()?.agent_connected ?? false) &&
       !suppressesToast(page.url.pathname) &&
       dockCorner !== 'open',

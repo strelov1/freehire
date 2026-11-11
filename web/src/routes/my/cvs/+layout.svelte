@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import type { Snippet } from 'svelte';
   import { FileText, LayoutTemplate, Type } from '@lucide/svelte';
   import { page } from '$app/state';
@@ -35,9 +36,9 @@
 </script>
 
 <div class="flex flex-col gap-4 lg:gap-6">
-  <div class="flex items-start justify-between gap-3">
-    <div class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">{s.title}</h1>
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div class="min-w-0 flex-1 flex flex-col gap-1">
+      <AccountPageHeading>{s.title}</AccountPageHeading>
       <p class="text-sm text-muted-foreground max-lg:sr-only">
         {s.description}
       </p>

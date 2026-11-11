@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import type { Snippet } from 'svelte';
   import { Bookmark, Eye, EyeOff } from '@lucide/svelte';
   import { page } from '$app/state';
@@ -38,7 +39,7 @@
 </svelte:head>
 
 <div class="flex flex-col gap-4">
-  <h1 class="text-2xl max-lg:text-xl font-semibold tracking-tight">{s.title}</h1>
+  <AccountPageHeading>{s.title}</AccountPageHeading>
 
   <TabStrip {tabs} {active} label={s.tablistLabel} panelId={PANEL_ID} />
 

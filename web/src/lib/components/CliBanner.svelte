@@ -1,10 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
-  import { page } from '$app/state';
   import { ArrowRight, X } from '@lucide/svelte';
   import { currentUser } from '#lib/auth.svelte.js';
-  import { dismissCliBanner, loadCliBannerDismissed, cliBannerShown } from '#lib/cliBanner.svelte.js';
+  import { dismissCliBanner, loadCliBannerDismissed, cliBannerPending } from '#lib/cliBanner.svelte.js';
   import { buttonVariants, cn } from '#lib/ui/index.js';
 
   // A strip under the header pointing at /mcp (it pointed at /cli until the hosted MCP
@@ -32,10 +31,9 @@
   // lines on a phone. One file rather than four proxied logos: the marks are fixed brand
   // art, and the lift animation runs inside the SVG with no script.
 
-  // Home page only, and gone for good once the account holds an API key or MCP grant
+  // Shown across the site, and gone once the account holds an API key or MCP grant
   // (resolved in the root layout's server load, so the server leaves the strip out too).
-  // The URL decides it, so the server-rendered markup and the hydrated one agree.
-  const shown = $derived(cliBannerShown(page.url.pathname, currentUser()?.agent_connected ?? false));
+  const shown = $derived(cliBannerPending(currentUser()?.agent_connected ?? false));
 </script>
 
 {#if shown}

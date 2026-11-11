@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import type { Snippet } from 'svelte';
   import { Calendar, Columns3, Flame, List, Workflow } from '@lucide/svelte';
   import { page } from '$app/state';
@@ -50,7 +51,7 @@
 </svelte:head>
 
 <div class="flex flex-col gap-4 pt-4 lg:pt-0">
-  <h1 class="text-2xl max-lg:text-xl font-semibold tracking-tight">{s.title}</h1>
+  <AccountPageHeading>{s.title}</AccountPageHeading>
 
   <TabStrip {tabs} {active} label={s.tabStripLabel} panelId={PANEL_ID} />
 

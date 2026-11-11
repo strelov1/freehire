@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { Building2, Mail, ShieldAlert } from '@lucide/svelte';
   import { api, ApiError } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -120,7 +121,7 @@
         <Building2 class="size-3.5" />
         {s.headTitle}
       </p>
-      <h1 class="text-3xl font-semibold tracking-tight">{s.claimTitle}</h1>
+      <AccountPageHeading>{s.claimTitle}</AccountPageHeading>
       <p class="max-w-2xl text-sm text-muted-foreground">{s.claimIntro}</p>
     </header>
 
@@ -148,7 +149,7 @@
 {:else if phase === 'confirm'}
   <div class="flex max-w-sm flex-col gap-6">
     <header class="flex flex-col gap-2 border-b border-border pb-6">
-      <h1 class="text-2xl font-semibold tracking-tight">{s.confirmTitle}</h1>
+      <AccountPageHeading>{s.confirmTitle}</AccountPageHeading>
       <p class="text-sm text-muted-foreground">{format(s.confirmIntro, { email: company?.work_email ?? '' })}</p>
     </header>
     <form onsubmit={submitConfirm} class="flex flex-col gap-4">

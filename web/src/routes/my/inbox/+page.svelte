@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import InboxView from '#lib/components/InboxView.svelte';
   import { messages } from './messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -17,7 +18,7 @@
   <!-- The title sits here rather than inside InboxView so it is present while the view
        is still loading, the way every other /my/* section titles itself. -->
   <div class="mb-6 flex flex-col gap-1">
-    <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">{s.title}</h1>
+    <AccountPageHeading>{s.title}</AccountPageHeading>
     <p class="text-sm text-muted-foreground max-lg:sr-only">
       {s.description}
     </p>
