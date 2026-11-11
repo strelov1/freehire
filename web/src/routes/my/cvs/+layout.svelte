@@ -46,7 +46,7 @@
     <Button
       variant="ghost"
       onclick={() => openCvIntake()}
-      class="shrink-0 rounded-lg bg-foreground px-3 text-background hover:bg-foreground hover:text-background hover:opacity-90"
+      class="self-start shrink-0 rounded-lg bg-foreground px-3 text-background hover:bg-foreground hover:text-background hover:opacity-90"
     >
       {s.tailorForJob}
     </Button>

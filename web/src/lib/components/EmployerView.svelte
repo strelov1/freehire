@@ -108,6 +108,12 @@
 
 <svelte:head><title>{s.headTitle}</title></svelte:head>
 
+{#if status !== 'ready' || phase === 'pending' || phase === 'revoked'}
+  <AccountPageHeading class="mb-6">
+    {company ? format(s.dashboardTitle, { company: company.company_name }) : s.claimTitle}
+  </AccountPageHeading>
+{/if}
+
 {#if !isAuthenticated()}
   <p class="py-12 text-center text-sm text-muted-foreground">{s.signedOut}</p>
 {:else if status === 'loading'}
