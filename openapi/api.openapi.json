@@ -121,6 +121,12 @@
     },
     {
       "name": "Support"
+    },
+    {
+      "name": "Assistant"
+    },
+    {
+      "name": "Auto-apply"
     }
   ],
   "paths": {
@@ -236,6 +242,398 @@
         "tags": [
           "Search"
         ]
+      }
+    },
+    "/assistant/sessions": {
+      "post": {
+        "operationId": "createAssistantSession",
+        "description": "Starts a conversation. `preset` picks the kind; `job` names the application an\ninterview, debrief or apply session is held against. A session already held for the\nsame application, or the same search request, is handed back (200); a new one is a 201.",
+        "parameters": [
+          {
+            "name": "preset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "job",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AssistantSession"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AssistantSession"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantSessionRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listAssistantSessions",
+        "description": "The caller's chat conversations, newest activity first.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantSessionList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}": {
+      "get": {
+        "operationId": "getAssistantSession",
+        "description": "One owned conversation with its transcript.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AssistantSessionDetail"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteAssistantSession",
+        "description": "Removes an owned conversation and its transcript.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful. "
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/cancel": {
+      "post": {
+        "operationId": "cancelAssistantTurn",
+        "description": "Stops the turn running in the session; a session with nothing running is not an error.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful. "
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/extend": {
+      "post": {
+        "operationId": "postAssistantExtend",
+        "description": "Buys a tailoring session another ceiling's worth of turns. 204 when plan limits are\nnot wired.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AssistantExtension"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful. "
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantPlanRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/voice-token": {
+      "post": {
+        "operationId": "postAssistantVoiceToken",
+        "description": "Mints the short-lived credential for a voice call on an interview session.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AssistantVoiceToken"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/voice-turns": {
+      "post": {
+        "operationId": "postAssistantVoiceTurn",
+        "description": "Appends one completed spoken turn to an interview session's transcript.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful. "
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantVoiceTurn"
+              }
+            }
+          }
+        }
       }
     },
     "/billing/checkout": {
@@ -3509,6 +3907,164 @@
         ]
       }
     },
+    "/jobs/{slug}/auto-apply": {
+      "post": {
+        "operationId": "postJobAutoApply",
+        "description": "Starts an auto-apply attempt for the job; a repeat for a live attempt succeeds too.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutoApplyQueued"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantPlanRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auto-apply"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteJobAutoApply",
+        "description": "Withdraws the caller's attempt on the job.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutoApplyCancelled"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auto-apply"
+        ]
+      }
+    },
+    "/jobs/{slug}/auto-apply/retry": {
+      "post": {
+        "operationId": "postJobAutoApplyRetry",
+        "description": "Re-arms a stuck attempt, or refreshes the answer preview of one awaiting review.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutoApplyRetried"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auto-apply"
+        ]
+      }
+    },
     "/jobs/{slug}/copies": {
       "get": {
         "operationId": "jobCopies",
@@ -5059,6 +5615,66 @@
         "tags": [
           "Tracking"
         ]
+      }
+    },
+    "/me/auto-apply/{queueId}/review": {
+      "post": {
+        "operationId": "postAutoApplyReview",
+        "description": "Records the approve or decline decision for a tailored queue entry.",
+        "parameters": [
+          {
+            "name": "queueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutoApplyDecision"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auto-apply"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoApplyReviewRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/me/autofill-profile": {
@@ -15797,6 +16413,221 @@
               }
             ],
             "description": "The day the application was sent, `2026-07-29`. Absent, null or empty means now."
+          }
+        }
+      },
+      "AssistantExtension": {
+        "type": "object",
+        "required": [
+          "turns",
+          "ceiling",
+          "unlimited",
+          "allowance"
+        ],
+        "properties": {
+          "turns": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ceiling": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unlimited": {
+            "type": "boolean"
+          },
+          "allowance": {}
+        }
+      },
+      "AssistantPlanRefusal": {
+        "type": "object",
+        "required": [
+          "error",
+          "allowance"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "allowance": {},
+          "upgrade_url": {
+            "type": "string",
+            "description": "Absent for a fair-use refusal and for a caller already on the top plan."
+          }
+        },
+        "description": "The 402 a spent or missing allowance answers with."
+      },
+      "AssistantSession": {
+        "type": "object",
+        "required": [
+          "id",
+          "preset",
+          "label"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "preset": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "search_context": {},
+          "cv_id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "One conversation."
+      },
+      "AssistantSessionDetail": {
+        "type": "object",
+        "required": [
+          "session",
+          "messages"
+        ],
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/AssistantSession"
+          },
+          "messages": {}
+        },
+        "description": "A conversation with its full transcript; `messages` is the stored transcript as is."
+      },
+      "AssistantSessionList": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssistantSession"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/AssistantSessionListMeta"
+          }
+        }
+      },
+      "AssistantSessionListMeta": {
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "AssistantSessionRequest": {
+        "type": "object",
+        "properties": {
+          "search_query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "description": "Optional body of a session create: binds a general chat to a fixed search."
+      },
+      "AssistantVoiceToken": {
+        "type": "object",
+        "required": [
+          "value",
+          "model",
+          "calls_url"
+        ],
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "calls_url": {
+            "type": "string"
+          }
+        }
+      },
+      "AssistantVoiceTurn": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "AutoApplyCancelled": {
+        "type": "object",
+        "required": [
+          "cancelled"
+        ],
+        "properties": {
+          "cancelled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AutoApplyDecision": {
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string"
+          }
+        }
+      },
+      "AutoApplyQueued": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "AutoApplyRetried": {
+        "type": "object",
+        "required": [
+          "retried"
+        ],
+        "properties": {
+          "retried": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AutoApplyReviewRequest": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "description": "`approved` or `declined`."
           }
         }
       },

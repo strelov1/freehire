@@ -109,7 +109,7 @@ func newAutoApplyTailorAppFull(pool *pgxpool.Pool, iss *auth.Issuer, model assis
 		key:           keyAuth,
 		autoApplyGate: autoApplyOrchestratorGate(orchestratorSecret, keyAuth),
 	}
-	h.register(api, mw)
+	h.register(api, mw, newContract(contractHandlers{assistantHandlers: h}))
 	h.cv.register(api, mw, cvContract(h.cv))
 	return app, h, mw
 }
@@ -170,6 +170,11 @@ func autoApplyTailorUser(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, ema
 		t.Fatalf("issue token: %v", err)
 	}
 	return id, token
+}
+
+// autoApplyReviewRequest is the review body as a client sends it.
+type autoApplyReviewRequest struct {
+	Decision string `json:"decision"`
 }
 
 func autoApplyRequest(t *testing.T, app *fiber.App, method, path, cookie string, body any) *http.Response {

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/subtle"
 	"strings"
 
@@ -16,8 +17,8 @@ const localsAutoApplySystemCaller = "auto_apply.system_caller"
 
 // isAutoApplySystemCaller reports whether this request authenticated via the shared
 // orchestrator secret rather than as the entry's own owner.
-func isAutoApplySystemCaller(c *fiber.Ctx) bool {
-	v, _ := c.Locals(localsAutoApplySystemCaller).(bool)
+func isAutoApplySystemCaller(ctx context.Context) bool {
+	v, _ := ctx.Value(localsAutoApplySystemCaller).(bool)
 	return v
 }
 
