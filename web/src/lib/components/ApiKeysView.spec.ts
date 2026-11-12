@@ -17,7 +17,9 @@ const {
   expiry,
   forget,
   user,
+  invalidateAll,
 } = vi.hoisted(() => ({
+  invalidateAll: vi.fn(),
   listApiKeys: vi.fn(),
   revokeApiKey: vi.fn(),
   createApiKey: vi.fn(),
@@ -42,6 +44,7 @@ const { StubApiError } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock('$app/navigation', () => ({ invalidateAll }));
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('#lib/api.js', () => ({
@@ -90,6 +93,7 @@ function openDialog(): HTMLElement {
 }
 
 beforeEach(() => {
+  invalidateAll.mockReset().mockResolvedValue(undefined);
   draft.next = null;
   begin.mockReset();
   forget.mockReset();
@@ -129,6 +133,7 @@ describe('ApiKeysView — revoking', () => {
 
     expect(reauthenticatePassword).toHaveBeenCalledWith('hunter2');
     expect(revokeApiKey).toHaveBeenCalledWith(7);
+    await vi.waitFor(() => expect(invalidateAll).toHaveBeenCalledOnce());
   });
 
   it('offers a provider confirmation inside the dialog to an account with no password', async () => {
@@ -179,6 +184,7 @@ describe('ApiKeysView — revoking', () => {
     await fireEvent.click(within(openDialog()).getByRole('button', { name: 'Revoke' }));
 
     expect(forget).toHaveBeenCalled();
+    expect(invalidateAll).not.toHaveBeenCalled();
     expect(screen.getByText('CI bot')).toBeTruthy();
   });
 });
@@ -212,6 +218,7 @@ describe('ApiKeysView — creating', () => {
     await fireEvent.click(within(openDialog()).getByRole('button', { name: 'Create key' }));
 
     expect(await screen.findByText('plaintext-token-shown-once')).toBeTruthy();
+    await vi.waitFor(() => expect(invalidateAll).toHaveBeenCalledOnce());
   });
 });
 

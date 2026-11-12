@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { invalidateAll } from '$app/navigation';
   import { api } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -90,6 +91,7 @@
       await api.revokeOAuthGrant(grant.id);
       grantsData.value = grantsData.value.filter((g) => g.id !== grant.id);
       revokePassword = '';
+      await invalidateAll();
     } catch (error) {
       throw new Error(revokeIdentity?.handleRefusal(error) ?? s.errors.revokeFailed, {
         cause: error,
