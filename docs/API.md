@@ -68,13 +68,21 @@ The bound is a refusal rather than a clamp, deliberately: a clamped page would a
 
 ## Errors
 
-Errors use standard HTTP status codes: 400 (bad request / invalid value), 401 (missing or invalid credentials), 403 (authenticated but not allowed, e.g. a non-moderator), 404 (no such job, company, or owned resource), and 503 (search temporarily unavailable). The body is always `{ "error": ... }`.
+Errors use standard HTTP status codes: 400 (bad request / invalid value), 401 (missing or invalid credentials), 403 (authenticated but not allowed, e.g. a non-moderator), 404 (no such job, company, or owned resource), 429 (request limit exceeded), and 503 (service temporarily unavailable). Application errors use `{ "error": ... }`. nginx rate-limit rejections can return a non-JSON body; see API plans below.
 
 ## API plans
 
 The public read endpoints answer without a key for personal and non-commercial use. Showing the postings in a product you offer to others needs an [API plan](https://freehire.me/jobs-api), under the [data licence](https://freehire.me/terms#data-licence).
 
 Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.
+
+The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000. Neither paid API plan has a daily request cap. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
+
+The limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.
+
+Pagination returns 20 listings by default and up to 100 with `limit=100`. Requests carrying `offset` or `company_slug` also pass through separate per-IP nginx limits of 2 requests per second each, including paid requests. The `offset` limit allows a burst of 50 excess requests; the `company_slug` limit allows 30. A request carrying both parameters draws on both limits. For sustained pagination or company-filtered reads, keep the combined traffic from one IP within the applicable 2-request-per-second limit.
+
+The gateway returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). A window starts with its first request. Exceeding a request limit returns HTTP 429. Gateway rejections include `Retry-After` in seconds; nginx rejections can omit these headers and return a non-JSON body. Pause for `Retry-After` when present; otherwise back off before retrying.
 
 ## Authentication model
 
