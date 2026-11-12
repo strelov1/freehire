@@ -242,6 +242,69 @@ func TestStore_PutIfAbsentStoresOnlyAFirstResume(t *testing.T) {
 	}
 }
 
+// racingRepo lands another upload's pointer the moment the lock is taken: what a concurrent
+// upload that won the lock first looks like to the one waiting behind it.
+type racingRepo struct {
+	*fakeRepo
+	blobs *fakeBlobs
+}
+
+func (r racingRepo) WithUploadLock(ctx context.Context, userID int64, fn func(Repository) error) error {
+	r.blobs.objs["resumes/7-winner"] = []byte("winner")
+	if err := r.fakeRepo.Set(ctx, userID, "resumes/7-winner"); err != nil {
+		return err
+	}
+	return fn(r.fakeRepo)
+}
+
+// The refusal that decides is the one under the lock, after this upload's object is written:
+// it must leave the winner's object untouched and delete its own, so nothing is orphaned.
+func TestStore_PutIfAbsentRefusedUnderTheLockLeavesNoOrphan(t *testing.T) {
+	blobs := newFakeBlobs()
+	s := New(blobs, racingRepo{fakeRepo: newFakeRepo(), blobs: blobs})
+	if _, err := s.PutIfAbsent(context.Background(), 7, "text/plain", []byte("loser")); !errors.Is(err, ErrAlreadyStored) {
+		t.Fatalf("PutIfAbsent err = %v, want ErrAlreadyStored", err)
+	}
+	if len(blobs.objs) != 1 || string(blobs.objs["resumes/7-winner"]) != "winner" {
+		t.Errorf("objects = %v, want only the winner's, untouched", blobs.objs)
+	}
+}
+
+// Each upload has its own object; replacing one deletes the object the pointer left, and a
+// delete removes the one it names — including a row still on the old fixed key.
+func TestStore_ObjectsFollowThePointer(t *testing.T) {
+	blobs, repo := newFakeBlobs(), newFakeRepo()
+	blobs.objs["resumes/7"] = []byte("legacy")
+	repo.ptr[7] = "resumes/7"
+	s := New(blobs, repo)
+	ctx := context.Background()
+
+	if _, err := s.Put(ctx, 7, "text/plain", []byte("new")); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, legacy := blobs.objs["resumes/7"]; legacy || len(blobs.objs) != 1 || string(blobs.objs[repo.ptr[7]]) != "new" {
+		t.Fatalf("after replace objects = %v, pointer %q; want only the new object", blobs.objs, repo.ptr[7])
+	}
+	if err := s.Delete(ctx, 7); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if len(blobs.objs) != 0 {
+		t.Errorf("after delete objects = %v, want none", blobs.objs)
+	}
+}
+
+// A pointer write that fails leaves no object behind: the one just written is deleted.
+func TestStore_FailedPointerWriteDeletesTheNewObject(t *testing.T) {
+	blobs := newFakeBlobs()
+	s := New(blobs, failingUploadRepo{newFakeRepo()})
+	if _, err := s.Put(context.Background(), 7, "text/plain", []byte("CV")); err == nil {
+		t.Fatal("Put succeeded with a failing pointer write")
+	}
+	if len(blobs.objs) != 0 {
+		t.Errorf("objects = %v, want the orphan deleted", blobs.objs)
+	}
+}
+
 func TestStore_TextNotStored(t *testing.T) {
 	s := New(newFakeBlobs(), newFakeRepo())
 	if _, err := s.Text(context.Background(), 42); !errors.Is(err, ErrNotStored) {

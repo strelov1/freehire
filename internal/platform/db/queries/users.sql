@@ -197,8 +197,9 @@ FROM users
 WHERE id = $1;
 
 -- name: LockUserResumeUpload :exec
--- Serializes one user's CV uploads for the transaction, so a first-CV-only upload cannot
--- see no CV while another upload is between its blob write and its pointer write.
+-- Serializes one user's CV pointer writes (uploads and deletes) for the transaction, so a
+-- first-CV-only upload's presence check and pointer write are one step. Never held across
+-- the object upload itself.
 SELECT pg_advisory_xact_lock(hashtextextended('resume_upload:' || sqlc.arg(user_id)::bigint::text, 0));
 
 -- name: SetUserResume :exec

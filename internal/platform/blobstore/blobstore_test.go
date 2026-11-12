@@ -3,14 +3,20 @@ package blobstore
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 )
 
-func TestResumeKey_DerivedFromUserID(t *testing.T) {
-	if got := ResumeKey(7); got != "resumes/7" {
-		t.Errorf("ResumeKey(7) = %q, want resumes/7", got)
+func TestResumeUploadKey_DerivedFromUserIDAndInstant(t *testing.T) {
+	at := time.Unix(1_700_000_000, 5)
+	if got := ResumeUploadKey(7, at); got != "resumes/7-1700000000000000005" {
+		t.Errorf("ResumeUploadKey = %q, want resumes/7-1700000000000000005", got)
+	}
+	if ResumeUploadKey(7, at) == ResumeUploadKey(7, at.Add(time.Nanosecond)) {
+		t.Error("two uploads share one key")
 	}
 }
 
@@ -23,8 +29,8 @@ func TestPhotoKey_DerivedFromUserID(t *testing.T) {
 func TestPhotoKey_DoesNotCollideWithResumeKey(t *testing.T) {
 	// The two per-user objects share a bucket, so their prefixes must differ — a
 	// collision would have an upload silently overwrite the stored CV.
-	if PhotoKey(7) == ResumeKey(7) {
-		t.Errorf("PhotoKey and ResumeKey collide at %q", PhotoKey(7))
+	if key := ResumeUploadKey(7, time.Unix(0, 0)); strings.HasPrefix(key, "photos/") {
+		t.Errorf("a résumé key %q shares the photos prefix", key)
 	}
 }
 

@@ -55,7 +55,7 @@ func TestAddCV_StoresTheTextAndSuggestsProfileValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("add_cv: %v", err)
 	}
-	if got := string(blobs.objs[blobstore.ResumeKey(1)]); got != addCVText {
+	if got := string(blobs.objs[repo.key]); got != addCVText || len(blobs.objs) != 1 {
 		t.Fatalf("stored CV = %q, want the text verbatim", got)
 	}
 	if !res.Stored || res.UploadedAt == nil {
@@ -78,8 +78,8 @@ func TestAddCV_StoresTheTextAndSuggestsProfileValues(t *testing.T) {
 // The tool is for a first setup only: a stored CV is never replaced from a chat.
 func TestAddCV_RefusesWhenTheAccountHasACV(t *testing.T) {
 	blobs := newFakeResumeBlobs()
-	blobs.objs[blobstore.ResumeKey(1)] = []byte("the PDF they chose")
-	repo := &fakeResumeRepo{key: blobstore.ResumeKey(1), set: true}
+	blobs.objs["resumes/1"] = []byte("the PDF they chose")
+	repo := &fakeResumeRepo{key: "resumes/1", set: true}
 	_, err := runAddCV(t, addCVHandlers(blobs, repo), addCVText)
 	if fiberStatus(err) != fiber.StatusConflict {
 		t.Fatalf("err = %v, want a 409", err)
@@ -87,7 +87,7 @@ func TestAddCV_RefusesWhenTheAccountHasACV(t *testing.T) {
 	if !strings.Contains(err.Error(), testMCPOrigin+"/my/profile") {
 		t.Errorf("refusal %q does not name where a CV is replaced", err)
 	}
-	if got := string(blobs.objs[blobstore.ResumeKey(1)]); got != "the PDF they chose" {
+	if got := string(blobs.objs["resumes/1"]); got != "the PDF they chose" || len(blobs.objs) != 1 || repo.key != "resumes/1" {
 		t.Errorf("stored CV changed to %q", got)
 	}
 }

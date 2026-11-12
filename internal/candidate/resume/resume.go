@@ -1,6 +1,7 @@
 // Package resume is the per-user stored-résumé use case: a signed-in user keeps at
-// most one résumé, the original file living in S3 (internal/platform/blobstore) under a per-user
-// key, with a pointer (object key + upload time) recorded on the users row. It stores,
+// most one résumé, the original file living in S3 (internal/platform/blobstore) under a
+// per-upload key, with a pointer (object key + upload time) recorded on the users row — the
+// one source of which object is current. It stores,
 // reports, deletes, and derives the plain text of that résumé, so the one upload feeds
 // both skill extraction and the verdict's coherence check without a second upload. When
 // object storage is unconfigured the service is disabled (Enabled reports false) and
@@ -14,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -87,8 +89,9 @@ type Repository interface {
 	SetExtractFailed(ctx context.Context, userID int64, detail string, uploadedAt time.Time) error
 	SetExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error
 	// WithUploadLock runs fn holding the user's CV-upload lock, passing the repository fn's
-	// reads and writes must go through so they share it. Every upload takes it, which is
-	// what makes PutIfAbsent's presence check and the write after it one step.
+	// reads and writes must go through so they share it. Every pointer write (upload, delete)
+	// takes it, which makes PutIfAbsent's presence check and pointer write one step. Keep it short:
+	// it holds a pooled connection, so never put an object-store call inside fn.
 	WithUploadLock(ctx context.Context, userID int64, fn func(Repository) error) error
 }
 
@@ -146,49 +149,74 @@ func (s *Store) Enabled() bool {
 	return s != nil && s.blobs != nil
 }
 
-// Put stores (or replaces) the user's résumé: the original bytes go to S3 under the
-// user's key and the pointer is stamped with the upload time. contentType is recorded on
+// Put stores (or replaces) the user's résumé: the original bytes go to S3 under a key of
+// this upload's own and the pointer is moved to it and stamped with the upload time. contentType is recorded on
 // the object for a correct future download. Returns the resulting metadata.
 func (s *Store) Put(ctx context.Context, userID int64, contentType string, data []byte) (Meta, error) {
 	return s.put(ctx, userID, contentType, data, false)
 }
 
 // PutIfAbsent stores the user's résumé only when none is stored, and returns
-// ErrAlreadyStored otherwise. The check and the write hold the same per-user lock every
-// upload takes, so two first uploads cannot both see no résumé.
+// ErrAlreadyStored otherwise. The check and the pointer write hold the same per-user lock
+// every pointer write takes, so two first uploads cannot both see no résumé.
 func (s *Store) PutIfAbsent(ctx context.Context, userID int64, contentType string, data []byte) (Meta, error) {
 	return s.put(ctx, userID, contentType, data, true)
 }
 
+// put writes the bytes to an object of their own OUTSIDE any transaction — an object-store
+// round trip must never hold a pooled connection — and then, briefly under the per-user upload
+// lock, checks presence (firstOnly) and moves the pointer to it. The object the pointer left is
+// deleted after commit; the new one is deleted when the pointer did not move to it, so neither
+// a refusal nor a failure leaves an orphan behind.
 func (s *Store) put(ctx context.Context, userID int64, contentType string, data []byte, firstOnly bool) (Meta, error) {
 	if !s.Enabled() {
 		return Meta{}, ErrStorageDisabled
 	}
-	err := s.repo.WithUploadLock(ctx, userID, func(repo Repository) error {
-		if firstOnly {
-			ptr, err := repo.Get(ctx, userID)
-			if err != nil {
-				return err
-			}
-			if metaFromPointer(ptr).Present {
-				return ErrAlreadyStored
-			}
+	if firstOnly {
+		// A cheap early answer that spares the upload; the check that decides is under the lock.
+		if meta, err := s.Status(ctx, userID); err != nil {
+			return Meta{}, err
+		} else if meta.Present {
+			return Meta{}, ErrAlreadyStored
 		}
-		key := blobstore.ResumeKey(userID)
-		if err := s.blobs.Put(ctx, key, contentType, bytes.NewReader(data), int64(len(data))); err != nil {
-			return err
-		}
-		return repo.Set(ctx, userID, key)
-	})
-	if errors.Is(err, ErrAlreadyStored) {
-		return Meta{}, err
 	}
-	if err != nil {
+	key := blobstore.ResumeUploadKey(userID, time.Now())
+	if err := s.blobs.Put(ctx, key, contentType, bytes.NewReader(data), int64(len(data))); err != nil {
 		observability.RecordCVUpload(false)
 		return Meta{}, err
 	}
+	var superseded string
+	err := s.repo.WithUploadLock(ctx, userID, func(repo Repository) error {
+		ptr, err := repo.Get(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if firstOnly && metaFromPointer(ptr).Present {
+			return ErrAlreadyStored
+		}
+		superseded = ptr.ResumeObjectKey.String
+		return repo.Set(ctx, userID, key)
+	})
+	if err != nil {
+		s.discard(ctx, key)
+		if !errors.Is(err, ErrAlreadyStored) {
+			observability.RecordCVUpload(false)
+		}
+		return Meta{}, err
+	}
+	if superseded != "" && superseded != key {
+		s.discard(ctx, superseded)
+	}
 	observability.RecordCVUpload(true)
 	return s.Status(ctx, userID)
+}
+
+// discard deletes an object no pointer refers to. Best-effort: the write it follows has
+// already succeeded or failed on its own terms, so a failure here is logged, not returned.
+func (s *Store) discard(ctx context.Context, key string) {
+	if err := s.blobs.Delete(context.WithoutCancel(ctx), key); err != nil {
+		log.Printf("resume: deleting unreferenced object %s: %v", key, err)
+	}
 }
 
 // SetStructured persists the user's derived structured résumé, stamped with the
@@ -456,15 +484,26 @@ func (s *Store) read(ctx context.Context, userID int64) ([]byte, time.Time, erro
 	return data, ptr.ResumeUploadedAt.Time, nil
 }
 
-// Delete removes the stored object and clears the pointer.
+// Delete clears the pointer under the per-user upload lock, so it cannot interleave with an
+// upload, and then removes the object the pointer named. The object goes after the commit, like
+// a superseded upload's: a pointer must never name an object that is already gone.
 func (s *Store) Delete(ctx context.Context, userID int64) error {
 	if !s.Enabled() {
 		return ErrStorageDisabled
 	}
-	if err := s.blobs.Delete(ctx, blobstore.ResumeKey(userID)); err != nil {
+	var key string
+	err := s.repo.WithUploadLock(ctx, userID, func(repo Repository) error {
+		ptr, err := repo.Get(ctx, userID)
+		if err != nil {
+			return err
+		}
+		key = ptr.ResumeObjectKey.String
+		return repo.Clear(ctx, userID)
+	})
+	if err != nil || key == "" {
 		return err
 	}
-	return s.repo.Clear(ctx, userID)
+	return s.blobs.Delete(ctx, key)
 }
 
 func metaFromPointer(ptr db.GetUserResumeRow) Meta {

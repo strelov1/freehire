@@ -24,7 +24,6 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
-	"github.com/strelov1/freehire/internal/platform/blobstore"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
@@ -39,25 +38,64 @@ type setupFixture struct {
 	token  string
 }
 
-// lockedResumeBlobs is fakeResumeBlobs made safe for concurrent writers, with a write as slow as
-// an object-store round trip: that is the window between the presence check and the pointer
-// write two first uploads would both slip through without the upload lock.
+// slowCheckRepo widens the window between the presence check and the pointer write, the one two
+// first uploads would both slip through without the upload lock: the check inside the lock is
+// slowed, so only the lock keeps the second upload from reading "no CV" too.
+type slowCheckRepo struct{ resume.Repository }
+
+func (r slowCheckRepo) WithUploadLock(ctx context.Context, userID int64, fn func(resume.Repository) error) error {
+	return r.Repository.WithUploadLock(ctx, userID, func(locked resume.Repository) error {
+		return fn(slowGet{locked})
+	})
+}
+
+type slowGet struct{ resume.Repository }
+
+func (r slowGet) Get(ctx context.Context, userID int64) (db.GetUserResumeRow, error) {
+	row, err := r.Repository.Get(ctx, userID)
+	time.Sleep(100 * time.Millisecond)
+	return row, err
+}
+
+// lockedResumeBlobs is fakeResumeBlobs made safe for concurrent callers.
 type lockedResumeBlobs struct {
 	mu sync.Mutex
 	*fakeResumeBlobs
 }
 
 func (b *lockedResumeBlobs) Put(ctx context.Context, key, ct string, r io.Reader, n int64) error {
-	time.Sleep(100 * time.Millisecond)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.fakeResumeBlobs.Put(ctx, key, ct, r, n)
 }
 
-func (b *lockedResumeBlobs) object(key string) string {
+func (b *lockedResumeBlobs) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return string(b.objs[key])
+	return b.fakeResumeBlobs.Get(ctx, key)
+}
+
+func (b *lockedResumeBlobs) Delete(ctx context.Context, key string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.fakeResumeBlobs.Delete(ctx, key)
+}
+
+// count is how many objects the bucket holds: one per stored CV, so anything more is an orphan.
+func (b *lockedResumeBlobs) count() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.objs)
+}
+
+// current is the stored CV as its pointer names it.
+func (b *lockedResumeBlobs) current(t *testing.T, store *resume.Store, userID int64) string {
+	t.Helper()
+	data, err := store.File(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("reading the stored CV: %v", err)
+	}
+	return string(data)
 }
 
 func newSetupFixture(t *testing.T, email string) setupFixture {
@@ -81,7 +119,7 @@ func newSetupFixture(t *testing.T, email string) setupFixture {
 	}
 
 	blobs := &lockedResumeBlobs{fakeResumeBlobs: newFakeResumeBlobs()}
-	store := resume.New(blobs, resume.NewQueriesRepository(queries).WithUploadLocks(pool))
+	store := resume.New(blobs, slowCheckRepo{resume.NewQueriesRepository(queries).WithUploadLocks(pool)})
 	profiles := userprofile.New(userprofile.NewQueriesRepository(queries))
 	assistants := &assistantHandlers{
 		queries: queries,
@@ -190,7 +228,7 @@ func TestMCPAccountSetup_AddsAFirstCVAndRefusesAReplacement(t *testing.T) {
 	if !res.IsError {
 		t.Fatal("a second add_cv replaced the stored CV")
 	}
-	if got := blobs.object(blobstore.ResumeKey(userID)); got != addCVText {
+	if got := blobs.current(t, store, userID); got != addCVText || blobs.count() != 1 {
 		t.Errorf("stored CV = %q, want the first text", got)
 	}
 }
@@ -238,7 +276,7 @@ func TestMCPAccountSetup_ConcurrentFirstCVsStoreExactlyOne(t *testing.T) {
 	if !strings.Contains(refused, "already has a CV") {
 		t.Errorf("refusal = %q, want the already-has-a-CV answer", refused)
 	}
-	if got := f.blobs.object(blobstore.ResumeKey(f.userID)); got != texts[stored] {
+	if got := f.blobs.current(t, f.store, f.userID); got != texts[stored] || f.blobs.count() != 1 {
 		t.Errorf("stored CV = %q, want the winner's text %q", got, texts[stored])
 	}
 }

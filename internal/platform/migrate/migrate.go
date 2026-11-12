@@ -69,6 +69,11 @@ const noTxMarker = "migrate: no-transaction"
 //	            internal/api/handler — a blocking pg_advisory_xact_lock per account; one
 //	                                   support-session create at a time, so reusing the
 //	                                   empty session is not a check-then-insert race
+//	hashtextextended('resume_upload:<user id>')
+//	            internal/candidate/resume — a blocking pg_advisory_xact_lock per account
+//	                                   around the CV pointer write (never the object
+//	                                   upload); a first-CV-only upload cannot interleave
+//	                                   with another upload or a delete
 //
 // The comment here used to say "the project has none", which stopped being true when those two
 // arrived and left the only place anyone would look asserting there was nothing to collide with.

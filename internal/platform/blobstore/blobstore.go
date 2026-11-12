@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -49,13 +50,16 @@ func (c Config) configured() bool {
 	return c.Endpoint != "" && c.Bucket != "" && c.AccessKey != "" && c.SecretKey != ""
 }
 
-// ResumeKey is the per-user object key for a stored résumé. It is derived from the
-// authenticated user id, never from client input.
-func ResumeKey(userID int64) string {
-	return fmt.Sprintf("resumes/%d", userID)
+// ResumeUploadKey is the object key one résumé upload is written under: the authenticated user
+// id (never client input) and the upload's instant, so each upload has its own object and the
+// pointer on the users row decides which is current. A reader always takes the key from that
+// pointer — rows written before 2026-11 point at the old fixed `resumes/<id>`. The instant is
+// joined with "-", not "/": MinIO refuses an object under a prefix that is itself an object.
+func ResumeUploadKey(userID int64, at time.Time) string {
+	return fmt.Sprintf("resumes/%d-%d", userID, at.UnixNano())
 }
 
-// PhotoKey is the per-user object key for a stored headshot. Like ResumeKey it is
+// PhotoKey is the per-user object key for a stored headshot. Like ResumeUploadKey it is
 // derived from the authenticated user id, never from client input; the distinct
 // prefix keeps the two per-user objects apart in the shared bucket.
 func PhotoKey(userID int64) string {

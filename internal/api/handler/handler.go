@@ -950,7 +950,7 @@ func Register(app *fiber.App, cfg Config) {
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals/incoming"
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})
-	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore, queries)
+	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore, queries, resumeStore)
 	// Conversations are the messaging core's; each persona a participant may speak as is
 	// registered here.
 	buddyRepo := buddy.NewQueriesRepository(queries, cfg.Pool)

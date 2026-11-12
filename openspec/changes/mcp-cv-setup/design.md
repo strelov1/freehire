@@ -21,9 +21,13 @@ If the account already has a CV the tool refuses (409) and names `/my/profile`. 
 `Put` REPLACES the stored document and re-derives its structure, so an agent could overwrite a
 PDF the person chose with chat text; replacing is a deliberate act the website keeps in the
 person's own session (`PUT /me/resume` is cookie-only). It also bounds the free extraction to
-one per account over this channel. The check is `resume.Store.PutIfAbsent`: presence check,
-blob write and pointer write run under a per-user `pg_advisory_xact_lock`, which `Put` takes
-too, so two `add_cv` calls or an `add_cv` racing a website upload serialise.
+one per account over this channel. The check is `resume.Store.PutIfAbsent`. Each upload
+writes its bytes to an object of its own (`resumes/<id>-<unix nanos>`) OUTSIDE any transaction
+— an object-store round trip must never hold a pooled connection — then, in a short
+transaction under a per-user `pg_advisory_xact_lock` that `Put` and `Delete` take too, checks
+presence and moves the pointer. The superseded object is deleted after commit; on a refusal
+or failure the just-written one is. Every reader takes the key from the pointer (the referral
+CV view used to derive it from the user id and now reads through the store).
 
 ### Only the person's own CV; provenance `cv_import`
 `add_cv` accepts a CV the person supplied — pasted CV text, or the content of a CV file they
