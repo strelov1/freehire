@@ -30,8 +30,9 @@ const accountProfileInstructions = " and keeps the job-search profile. Call get_
 const accountAutoApplyInstructions = "Auto-apply prepares applications for review; saved answers may be sent to employers. "
 
 // accountPlanInstructions is kept to one clause: the tool's own description says what the
-// plan carries and that the free plan includes no AI.
-const accountPlanInstructions = "Call get_plan before AI work. "
+// plan carries and that the free plan includes no AI. Only for a session served auto-apply,
+// the one metered action an MCP tool starts; elsewhere there is nothing to check it before.
+const accountPlanInstructions = "Call get_plan before auto-apply. "
 
 const accountAlertInstructions = "Alerts use configured channels. "
 
@@ -95,7 +96,7 @@ func accountInstructions(tools []assistant.Tool) string {
 	if served("auto_apply_start") {
 		out += accountAutoApplyInstructions
 	}
-	if served("get_plan") {
+	if served("get_plan") && served("auto_apply_start") {
 		out += accountPlanInstructions
 	}
 	if served("subscribe") {

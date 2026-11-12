@@ -4,7 +4,7 @@
 The signed-in MCP server SHALL offer a read-only `get_plan` tool, to OAuth grants and
 full-scope API keys alike, reporting the account's tier, when its paid entitlement ends,
 when today's allowances reset, and for every metered AI feature today's limit, use,
-remaining amount, and whether the limit is enforced. It SHALL read the same use case as
+whether the limit is enforced, and — for an enforced limit — the remaining amount. It SHALL read the same use case as
 `GET /me/plan` and SHALL carry no prices, invoices or payment source, pointing at the
 website's plan page instead.
 
@@ -14,7 +14,11 @@ website's plan page instead.
 
 #### Scenario: A free account is told it has no AI
 - **WHEN** a free account calls `get_plan`
-- **THEN** the result names the `free` plan with nothing remaining on any metered feature and carries the plan page URL to upgrade from
+- **THEN** the result names the `free` plan with nothing remaining on any enforced limit and carries the plan page URL to upgrade from
+
+#### Scenario: A shadow limit claims no remainder
+- **WHEN** a feature's limit is not enforced
+- **THEN** its allowance carries the limit and use but no remaining amount
 
 #### Scenario: No payment details reach the agent
 - **WHEN** any account calls `get_plan`

@@ -1,18 +1,23 @@
 //go:build integration
 
 // Integration test for get_plan over the signed-in MCP server
-// (openspec/changes/mcp-plan-standing): what an agent reads agrees with GET /me/plan's use
-// case, for a paid account with usage and for a free one.
+// (openspec/changes/mcp-plan-standing): what an agent reads agrees with what GET /me/plan
+// answers on the wire, for a paid account with usage and for a free one.
 package handler
 
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -33,22 +38,20 @@ func TestMCPGetPlan_AgreesWithThePlanEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	mcpc := newMCPToolCaller(t, h, userID)
+	rest := planEndpointReader(t, plans, queries, userID)
 
-	got := decodeMCPPlan(t, mcpc)
-	want, err := loadPlan(ctx, plans, queries, userID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Plan != "pro" || got.Plan != want.Plan || got.PaidUntil == nil || !got.PaidUntil.Equal(*want.ProUntil) ||
-		!got.ResetsAt.Equal(want.ResetsAt) {
-		t.Fatalf("get_plan = %+v, want the plan endpoint's %+v", got, want)
+	got, want := decodeMCPPlan(t, mcpc), rest()
+	if got.Plan != "pro" || got.Plan != want.Plan || got.PaidUntil == nil || want.ProUntil == nil ||
+		!got.PaidUntil.Equal(*want.ProUntil) || !got.ResetsAt.Equal(want.ResetsAt) {
+		t.Fatalf("get_plan = %+v, want GET /me/plan's %+v", got, want)
 	}
 	if len(got.Allowances) != len(want.Allowances) {
 		t.Fatalf("allowances = %+v, want %+v", got.Allowances, want.Allowances)
 	}
 	for i, a := range got.Allowances {
 		w := want.Allowances[i]
-		if a.Feature != w.Feature || a.Used != w.Used || a.Unlimited != w.Unlimited || a.Enforced != w.Enforced {
+		if a.Feature != w.Feature || a.Used != w.Used || a.Unlimited != w.Unlimited || a.Enforced != w.Enforced ||
+			!sameInt(a.Limit, w.Limit) {
 			t.Errorf("allowance %d = %+v, want %+v", i, a, w)
 		}
 		if a.Feature == string(plan.FeatureAutoApply) &&
@@ -57,16 +60,66 @@ func TestMCPGetPlan_AgreesWithThePlanEndpoint(t *testing.T) {
 		}
 	}
 
-	// A free account: nothing remains anywhere, and the agent has the page to send them to.
+	// A free account: nothing remains on any enforced limit, and the agent has the page to
+	// send them to.
 	endPro(t, pool, userID)
 	free := decodeMCPPlan(t, mcpc)
-	if free.Plan != "free" || free.PaidUntil != nil || free.PlanURL != testMCPOrigin+"/my/plan" {
+	if free.Plan != "free" || free.Plan != rest().Plan || free.PaidUntil != nil || free.PlanURL != testMCPOrigin+"/my/plan" {
 		t.Fatalf("free get_plan = %+v", free)
 	}
 	for _, a := range free.Allowances {
-		if a.Unlimited || a.Remaining == nil || *a.Remaining != 0 {
+		if a.Enforced && (a.Remaining == nil || *a.Remaining != 0) {
 			t.Errorf("free allowance %+v, want nothing remaining", a)
 		}
+	}
+}
+
+// planWire is the part of GET /me/plan's body get_plan restates.
+type planWire struct {
+	Plan       string     `json:"plan"`
+	ResetsAt   time.Time  `json:"resets_at"`
+	ProUntil   *time.Time `json:"pro_until"`
+	Allowances []struct {
+		Feature   string `json:"feature"`
+		Used      int    `json:"used"`
+		Limit     *int   `json:"limit"`
+		Unlimited bool   `json:"unlimited"`
+		Enforced  bool   `json:"enforced"`
+	} `json:"allowances"`
+}
+
+// planEndpointReader serves GET /me/plan through its real route and contract and returns a
+// reader of the caller's answer.
+func planEndpointReader(t *testing.T, plans *plan.Store, queries *db.Queries, userID int64) func() planWire {
+	t.Helper()
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	planH := newPlanHandlers(plans, queries)
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	planH.register(app.Group("/api/v1"), middleware{key: auth.RequireAuth(iss, testVersions)},
+		newContract(contractHandlers{planHandlers: planH}))
+	token, err := iss.Issue(userID, testTokenVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return func() planWire {
+		t.Helper()
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/plan", nil)
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		resp, err := app.Test(req, 15000)
+		if err != nil {
+			t.Fatalf("GET /me/plan: %v", err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET /me/plan = %d", resp.StatusCode)
+		}
+		var out struct {
+			Data planWire `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatalf("decode GET /me/plan: %v", err)
+		}
+		return out.Data
 	}
 }
 

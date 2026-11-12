@@ -23,7 +23,8 @@ import (
 // is the website's, and PlanURL is where the agent sends the person for it.
 type mcpPlan struct {
 	Plan string `json:"plan"`
-	// PaidUntil is when the paid plan the caller is on runs out; absent on the free plan.
+	// PaidUntil is the end of the current paid period — for an auto-renewing subscription the
+	// renewal date, not an end of service. Absent on the free plan.
 	PaidUntil  *time.Time     `json:"paid_until,omitempty"`
 	ResetsAt   time.Time      `json:"resets_at"`
 	Allowances []mcpAllowance `json:"allowances_today"`
@@ -32,7 +33,7 @@ type mcpPlan struct {
 
 // mcpAllowance is one feature's standing today. Limit and Remaining are omitted for an
 // unlimited feature, for the reason allowanceView omits Limit: the fair-use guard is not
-// what the person bought. Every allowance resets at mcpPlan.ResetsAt, so it is stated once.
+// what the person bought. Remaining is also omitted for a limit that is not enforced. Every allowance resets at mcpPlan.ResetsAt, so it is stated once.
 type mcpAllowance struct {
 	Feature   string `json:"feature"`
 	Used      int    `json:"used"`
@@ -52,8 +53,14 @@ func mcpPlanFrom(p planResponse, origin string) mcpPlan {
 	for _, a := range p.Allowances {
 		v := mcpAllowance{Feature: a.Feature, Used: a.Used, Unlimited: a.Unlimited, Enforced: a.Enforced}
 		if !a.Unlimited {
-			limit, remaining := a.Limit, max(a.Limit-a.Used, 0)
-			v.Limit, v.Remaining = &limit, &remaining
+			limit := a.Limit
+			v.Limit = &limit
+			// A remainder is only a stop sign where the limit refuses; under a shadow limit a
+			// paid plan goes on past zero, and "0 remaining" would tell the agent otherwise.
+			if a.Enforced {
+				remaining := max(a.Limit-a.Used, 0)
+				v.Remaining = &remaining
+			}
 		}
 		out.Allowances = append(out.Allowances, v)
 	}
@@ -68,14 +75,22 @@ func (h *assistantHandlers) planMCPTool(origin string) assistant.Tool {
 		Title:      "Read my plan and today's AI allowances",
 		Effect:     assistant.EffectReads,
 		Idempotent: true,
-		Description: "Read the signed-in account's plan (free, pro or ultra), when a paid plan runs out, and for " +
-			"each metered AI feature what today's allowance is, how much is used and how much remains. " +
-			"Features: tailor (CV tailoring sessions), match (job fit analyses), cover-letter, assistant, " +
-			"dictation, auto-apply (applications prepared for review). All reset together at resets_at (UTC). " +
-			"A limit that is not enforced is only being measured and refuses nothing yet. " +
-			"Read it before starting AI work for the person. The free plan includes no AI features: on free, " +
-			"or with nothing remaining, do not retry — tell the person to upgrade at plan_url. " +
-			"Prices and payments are not shown here; they are on plan_url too. Takes no arguments.",
+		// Phrased around auto-apply, the one metered feature an MCP tool spends; the rest are
+		// listed so the agent can read the result, not as something it can start here. The
+		// stop rule is the plan's own (internal/ai/plan/decide.go): free is refused whatever
+		// the allowance, an unlimited plan's fair-use guard ignores enforcement, and a charge
+		// is per posting, so retrying or reviewing an attempt is never charged.
+		Description: "Read the signed-in account's plan (\"free\", \"pro\" or \"ultra\") and today's allowance of " +
+			"each metered AI feature: limit, used and remaining, all resetting at resets_at (UTC). " +
+			"paid_until is the end of the current paid period (it may renew; see plan_url). " +
+			"Here the metered feature is \"auto-apply\" (applications prepared for review): starting one for a new " +
+			"posting uses one; retrying, reviewing or cancelling an existing attempt, or starting the same posting " +
+			"again, uses nothing. The others (\"tailor\", \"match\", \"cover-letter\", \"assistant\", \"dictation\") " +
+			"are used on the website. The free plan includes no AI features and is refused every new auto-apply: " +
+			"tell the person to upgrade at plan_url rather than retrying. On a paid plan, an enforced limit with " +
+			"nothing remaining refuses new starts until resets_at; an unenforced limit is only measured, so it " +
+			"carries no remaining. An unlimited feature still has a high fair-use cap. " +
+			"Prices and payments are not shown; they are on plan_url. Takes no arguments.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
 			if h.plans == nil || h.queries == nil {

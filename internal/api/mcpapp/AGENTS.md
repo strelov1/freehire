@@ -320,7 +320,7 @@ An answer saved here is the CANDIDATE's (`answerbank.AuthorCandidate`, so it is 
 server only ever acts for the person who approved the connection. `accountInstructions`
 describes the account boundary and the tool groups actually served, opens with one line on what
 freehire can do (search, save/track, alerts, auto-apply prepared for review) and says to call
-`get_profile` before the first search and `get_plan` before AI work. Its budget is 720 characters (the public server keeps 512);
+`get_profile` before the first search and, with auto-apply served, `get_plan` before auto-apply. Its budget is 720 characters (the public server keeps 512);
 Claude Code cuts server instructions at 2048. Search and application
 workflows belong to the packaged skill; initialization describes capabilities and result
 states without prescribing a call sequence or presentation.

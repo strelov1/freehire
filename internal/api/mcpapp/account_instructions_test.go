@@ -27,15 +27,20 @@ func TestAccountInstructions_SayWhatFreehireCanDo(t *testing.T) {
 	}
 }
 
-// get_plan is named, so an agent checks the plan before metered work rather than learning it
-// from a refusal; only where it is served.
+// get_plan is named, so an agent checks the plan before auto-apply rather than learning it
+// from a refusal; only for a session that has both, since an API key has no metered tool.
 func TestAccountInstructions_PointAtThePlanBeforeMeteredWork(t *testing.T) {
-	got := accountInstructions([]assistant.Tool{{Name: "get_plan"}})
-	if !strings.Contains(got, "Call get_plan before AI work") {
+	got := accountInstructions([]assistant.Tool{{Name: "get_plan"}, {Name: "auto_apply_start"}})
+	if !strings.Contains(got, "Call get_plan before auto-apply") {
 		t.Errorf("instructions omit the plan check: %q", got)
 	}
-	if strings.Contains(accountInstructions(nil), "get_plan") {
-		t.Error("instructions name get_plan on a server that does not serve it")
+	for name, tools := range map[string][]assistant.Tool{
+		"no get_plan":   {{Name: "auto_apply_start"}},
+		"no auto-apply": {{Name: "get_plan"}},
+	} {
+		if strings.Contains(accountInstructions(tools), "get_plan") {
+			t.Errorf("%s: instructions name get_plan: %q", name, accountInstructions(tools))
+		}
 	}
 }
 

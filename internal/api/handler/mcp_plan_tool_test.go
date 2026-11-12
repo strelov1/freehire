@@ -19,6 +19,7 @@ func TestMCPPlanFrom_ReportsRemainingPerFeature(t *testing.T) {
 		Plan: "pro", ResetsAt: resets, ProUntil: &until, ProSource: "stripe",
 		Allowances: []allowanceView{
 			{Feature: "auto-apply", Used: 2, Limit: 5, Enforced: true, ResetsAt: resets},
+			{Feature: "cover-letter", Used: 7, Limit: 5, Enforced: true, ResetsAt: resets},
 			{Feature: "match", Used: 7, Limit: 5, Enforced: false, ResetsAt: resets},
 			{Feature: "assistant", Used: 40, Unlimited: true, Enforced: true, ResetsAt: resets},
 		},
@@ -36,8 +37,10 @@ func TestMCPPlanFrom_ReportsRemainingPerFeature(t *testing.T) {
 		enforced         bool
 	}{
 		{"auto-apply", ptr(5), ptr(3), true},
-		// Over a shadow limit: nothing remains, and it is never negative.
-		{"match", ptr(5), ptr(0), false},
+		// Over an enforced limit: nothing remains, never a negative number.
+		{"cover-letter", ptr(5), ptr(0), true},
+		// A shadow limit refuses no paid plan, so it claims no remainder.
+		{"match", ptr(5), nil, false},
 		{"assistant", nil, nil, true},
 	}
 	if len(got.Allowances) != len(want) {
@@ -56,7 +59,7 @@ func TestMCPPlanFrom_ReportsRemainingPerFeature(t *testing.T) {
 func TestMCPPlanFrom_CarriesNoPaymentDetails(t *testing.T) {
 	got := mcpPlanFrom(planResponse{
 		Plan: "free", ProSource: "stripe",
-		Allowances: []allowanceView{{Feature: "auto-apply", Used: 0, Limit: 0}},
+		Allowances: []allowanceView{{Feature: "auto-apply", Used: 0, Limit: 0, Enforced: true}},
 	}, testMCPOrigin)
 	raw, err := json.Marshal(got)
 	if err != nil {
@@ -78,11 +81,12 @@ func TestMCPPlanTool_IsAReadThatExplainsThePaidGate(t *testing.T) {
 	if tool.Name != "get_plan" || tool.Effect != assistant.EffectReads || tool.Title == "" {
 		t.Fatalf("tool = %s effect=%d title=%q", tool.Name, tool.Effect, tool.Title)
 	}
-	wants := []string{"free plan includes no AI", "upgrade", "Takes no arguments"}
-	// Every metered feature is named, so a feature added to the plan cannot reach the result
-	// under an id the description never explained.
+	wants := []string{"free plan includes no AI", "upgrade", "it may renew", "Takes no arguments"}
+	// Every metered feature is named, quoted so that one id inside another ("tailor" in a
+	// future "tailor-turns") does not pass for it: a feature added to the plan cannot reach
+	// the result under an id the description never explained.
 	for _, f := range plan.AllFeatures() {
-		wants = append(wants, string(f))
+		wants = append(wants, `"`+string(f)+`"`)
 	}
 	for _, want := range wants {
 		if !strings.Contains(tool.Description, want) {

@@ -19,8 +19,14 @@ as `GET /me/plan`) but offers it to no agent.
   to upgrade rather than retrying.
 - Served to OAuth grants and full-scope API keys alike (`mcpKeyTools`): `GET /me/plan` is
   open to a key over REST.
-- The account server's instructions gain one short line: check `get_plan` before starting
-  metered AI work.
+- `remaining` is given only for an enforced limit: a shadow limit refuses no paid plan, so a
+  "0 remaining" there would be a false stop sign. `paid_until` is the end of the current paid
+  period, which an auto-renewing subscription renews.
+- The description is phrased around auto-apply, the one metered feature an MCP tool spends,
+  and states the charging rule: a new posting uses one; retrying, reviewing or restarting
+  the same posting uses nothing.
+- The account server's instructions gain one short line, only for a session that is served
+  auto-apply: call `get_plan` before auto-apply.
 
 ## Non-goals
 

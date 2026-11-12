@@ -161,9 +161,6 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 	}
 }
 
-// present_jobs renders cards only inside freehire's own chat and forbids the model from
-// writing job links; served to Claude or ChatGPT it would leave the person seeing no
-// vacancies at all.
 // get_plan is read-only and GET /me/plan is open to a key over REST, so a full-scope key
 // reads it too.
 func TestMCPKeyTools_ServeGetPlan(t *testing.T) {
@@ -175,6 +172,9 @@ func TestMCPKeyTools_ServeGetPlan(t *testing.T) {
 	t.Fatal("get_plan is not served to a full-scope API key")
 }
 
+// present_jobs renders cards only inside freehire's own chat and forbids the model from
+// writing job links; served to Claude or ChatGPT it would leave the person seeing no
+// vacancies at all.
 func TestMCPAccountTools_LeavesOutPresentJobs(t *testing.T) {
 	tools := mcpAccountTools(&assistantHandlers{}, testMCPOrigin)
 	for _, tool := range tools {
