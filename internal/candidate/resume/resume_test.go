@@ -262,7 +262,7 @@ type racingRepo struct {
 
 func (r racingRepo) WithUploadLock(ctx context.Context, userID int64, fn func(Repository) error) error {
 	r.blobs.objs["resumes/7-winner"] = []byte("winner")
-	if err := r.fakeRepo.Set(ctx, userID, "resumes/7-winner"); err != nil {
+	if err := r.Set(ctx, userID, "resumes/7-winner"); err != nil {
 		return err
 	}
 	return fn(r.fakeRepo)
