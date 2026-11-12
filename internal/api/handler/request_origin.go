@@ -33,25 +33,33 @@ const codeCrossSiteRefusal = "cross_site_refused"
 // Every refusal is 403 with code cross_site_refused BEFORE the handler runs, so
 // a refused login never verifies credentials and never sets a cookie.
 func (h *authHandlers) requireSameOrigin() func(*fiber.Ctx) error {
-	browserOrigins := h.browserOrigins
 	return func(c *fiber.Ctx) error {
-		if origin := strings.TrimSpace(c.Get(fiber.HeaderOrigin)); origin != "" {
-			if originAllowed(origin, browserOrigins) {
-				return c.Next()
-			}
-			return authError(fiber.StatusForbidden, codeCrossSiteRefusal, "cross-site request refused")
-		}
-		if referer := strings.TrimSpace(c.Get(fiber.HeaderReferer)); referer != "" {
-			if refererAllowed(referer, browserOrigins) {
-				return c.Next()
-			}
-			return authError(fiber.StatusForbidden, codeCrossSiteRefusal, "cross-site request refused")
-		}
-		if requestIsCrossSite(c) {
-			return authError(fiber.StatusForbidden, codeCrossSiteRefusal, "cross-site request refused")
+		if err := h.checkSameOrigin(c); err != nil {
+			return err
 		}
 		return c.Next()
 	}
+}
+
+// checkSameOrigin is the gate's verdict alone, for a handler that must apply it to
+// one branch of its own (the consent screens' "switch account").
+func (h *authHandlers) checkSameOrigin(c *fiber.Ctx) error {
+	if origin := strings.TrimSpace(c.Get(fiber.HeaderOrigin)); origin != "" {
+		if originAllowed(origin, h.browserOrigins) {
+			return nil
+		}
+		return authError(fiber.StatusForbidden, codeCrossSiteRefusal, "cross-site request refused")
+	}
+	if referer := strings.TrimSpace(c.Get(fiber.HeaderReferer)); referer != "" {
+		if refererAllowed(referer, h.browserOrigins) {
+			return nil
+		}
+		return authError(fiber.StatusForbidden, codeCrossSiteRefusal, "cross-site request refused")
+	}
+	if requestIsCrossSite(c) {
+		return authError(fiber.StatusForbidden, codeCrossSiteRefusal, "cross-site request refused")
+	}
+	return nil
 }
 
 // requestIsCrossSite reports whether the request's Sec-Fetch-Site header says

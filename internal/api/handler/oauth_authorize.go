@@ -120,6 +120,9 @@ func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 		return err
 	}
 
+	if c.FormValue("decision") == decisionSwitch {
+		return h.switchAccount(c, h.oauthSignInURL(params))
+	}
 	userID, err := requireUserID(c)
 	if err != nil {
 		return c.Redirect(h.oauthSignInURL(params), fiber.StatusFound)

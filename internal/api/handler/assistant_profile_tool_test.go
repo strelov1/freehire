@@ -79,3 +79,28 @@ func TestGetProfileTool_TellsTheAgentToSendTheUserToTheProfilePage(t *testing.T)
 		t.Errorf("result should point the agent at the profile page:\n%s", blob)
 	}
 }
+
+func TestMaskAccountEmail(t *testing.T) {
+	cases := map[string]string{
+		"jane@gmail.com": "j***@gmail.com",
+		"a@x.io":         "a***@x.io",
+		"élan@mail.ru":   "é***@mail.ru",
+		"@x.io":          "",
+		"no-at-sign":     "",
+		"":               "",
+	}
+	for in, want := range cases {
+		if got := maskAccountEmail(in); got != want {
+			t.Errorf("maskAccountEmail(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestNoProfileNextNamesTheAccountOnlyWhenKnown(t *testing.T) {
+	if got := noProfileNext("j***@gmail.com"); !strings.Contains(got, "j***@gmail.com") || !strings.Contains(got, "reconnect") || !strings.Contains(got, "/my/profile") {
+		t.Errorf("next = %q", got)
+	}
+	if got := noProfileNext(""); strings.Contains(got, "connected as") {
+		t.Errorf("next names an account it does not know: %q", got)
+	}
+}

@@ -531,6 +531,14 @@ func (h *authHandlers) Login(c *fiber.Ctx) error {
 // Logout clears the auth cookie. It is public and idempotent: clearing an
 // absent or already-expired cookie is a no-op.
 func (h *authHandlers) Logout(c *fiber.Ctx) error {
+	if err := h.endSession(c); err != nil {
+		return err
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// endSession revokes the recent-auth grant and clears both cookies.
+func (h *authHandlers) endSession(c *fiber.Ctx) error {
 	var revokeErr error
 	if h.recentAuth != nil {
 		revokeErr = h.recentAuth.Revoke(c.Context(), c.Cookies(recentauth.CookieName))
@@ -541,7 +549,7 @@ func (h *authHandlers) Logout(c *fiber.Ctx) error {
 	if revokeErr != nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
 	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return nil
 }
 
 // LogoutAll revokes every session for the caller's account — including this one — by

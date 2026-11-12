@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -23,8 +25,37 @@ import (
 // durable, where the profile page's values persist and drive the ranked feed,
 // subscriptions and fit analysis.
 type noProfileResult struct {
-	Profile any    `json:"profile"`
+	Profile any `json:"profile"`
+	// Account is the connected account's email, masked: which account the agent is bound
+	// to is the one thing a person cannot see from inside the agent, and the full address
+	// never reaches the model.
+	Account string `json:"account,omitempty"`
 	Next    string `json:"next"`
+}
+
+// maskAccountEmail keeps the first character of the local part and the domain: j***@gmail.com.
+// A value without a usable "@" is fully hidden.
+func maskAccountEmail(email string) string {
+	at := strings.LastIndex(email, "@")
+	if at < 1 {
+		return ""
+	}
+	first, _ := utf8.DecodeRuneInString(email)
+	return string(first) + "***" + email[at:]
+}
+
+// noProfileNext tells the agent which account it is connected as, so a person who saved
+// their profile under another account is sent to reconnect instead of re-entering it.
+func noProfileNext(masked string) string {
+	next := "The user has not saved a profile yet. Point them at /my/profile to " +
+		"fill it in — it persists and drives their recommendations — rather than " +
+		"collecting the same answers in this conversation."
+	if masked == "" {
+		return next
+	}
+	return "This agent is connected as " + masked + ", and that account has no saved profile. " +
+		"If it is not the account the user signs in with on the site, tell them to reconnect " +
+		"while signed in to the right one. Otherwise: " + next
 }
 
 // getProfileTool reads the caller's own saved profile: the specializations, skills
@@ -57,11 +88,13 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 			}
 			profile, err := h.profile.userProfile.Get(ctx, userID)
 			if errors.Is(err, userprofile.ErrNotFound) {
-				return noProfileResult{
-					Next: "The user has not saved a profile yet. Point them at /my/profile to " +
-						"fill it in — it persists and drives their recommendations — rather than " +
-						"collecting the same answers in this conversation.",
-				}, nil
+				masked := ""
+				if h.queries != nil {
+					if user, uerr := h.queries.GetUserByID(ctx, userID); uerr == nil {
+						masked = maskAccountEmail(user.Email)
+					}
+				}
+				return noProfileResult{Account: masked, Next: noProfileNext(masked)}, nil
 			}
 			if err != nil {
 				return nil, err

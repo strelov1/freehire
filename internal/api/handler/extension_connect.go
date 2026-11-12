@@ -125,6 +125,9 @@ func (h *authHandlers) ExtensionConnectSubmit(c *fiber.Ctx) error {
 	if err := validateExtensionRedirect(redirectURI, h.extensionRedirectAllowlist); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid redirect_uri")
 	}
+	if c.FormValue("decision") == decisionSwitch {
+		return h.switchAccount(c, h.signInURL(redirectURI, state))
+	}
 	userID, err := requireUserID(c)
 	if err != nil {
 		// The session can lapse between the consent screen and the decision. Restart the
