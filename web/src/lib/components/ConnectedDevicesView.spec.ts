@@ -109,6 +109,13 @@ describe('ConnectedDevicesView', () => {
     await screen.findByText(/no connected/i);
   });
 
+  it('suggests what to ask a connected agent', async () => {
+    signedIn(true);
+    render(ConnectedDevicesView);
+    await screen.findByText('What to ask your agent');
+    screen.getByText('Find jobs for my profile.');
+  });
+
   it('lists a grant by its client name', async () => {
     signedIn(true);
     render(ConnectedDevicesView);

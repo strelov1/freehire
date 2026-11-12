@@ -107,6 +107,16 @@
       <p class="text-sm text-muted-foreground">{s.intro}</p>
     </div>
 
+    <div class="flex flex-col gap-1.5 rounded-lg border border-border px-4 py-3">
+      <span class="text-sm font-medium">{s.ask.title}</span>
+      <span class="text-xs text-muted-foreground">{s.ask.intro}</span>
+      <ul class="flex list-disc flex-col gap-0.5 pl-5 text-sm">
+        {#each s.ask.examples as example (example)}
+          <li>{example}</li>
+        {/each}
+      </ul>
+    </div>
+
     <div class="flex items-start justify-between gap-4 rounded-lg border border-border px-4 py-3">
       <div class="flex min-w-0 flex-col gap-0.5">
         <span class="text-sm font-medium">{s.agentsMayApply.label}</span>

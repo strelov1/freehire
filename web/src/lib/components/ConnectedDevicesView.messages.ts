@@ -4,6 +4,16 @@ export const messages = defineMessages(
   {
     title: 'Connected devices',
     intro: 'MCP clients — like Claude, Cursor, or ChatGPT — you have approved to act as your freehire account.',
+    ask: {
+      title: 'What to ask your agent',
+      intro: 'Once a client is connected, try one of these.',
+      examples: [
+        'Find jobs for my profile.',
+        "What's new in my job alerts?",
+        'Apply to my saved jobs and prepare the applications for my review.',
+        'Help me set up my job-search profile.',
+      ],
+    },
     agentsMayApply: {
       label: 'Let connected agents apply for me',
       detail:
@@ -37,6 +47,16 @@ export const messages = defineMessages(
       title: 'Подключённые устройства',
       intro:
         'MCP-клиенты — например, Claude, Cursor или ChatGPT — которым вы разрешили действовать от имени вашего аккаунта freehire.',
+      ask: {
+        title: 'Что попросить у агента',
+        intro: 'Когда клиент подключён, попробуйте один из запросов.',
+        examples: [
+          'Найди вакансии под мой профиль.',
+          'Что нового в моих подписках на вакансии?',
+          'Откликнись на сохранённые вакансии и подготовь отклики мне на проверку.',
+          'Помоги заполнить мой профиль для поиска работы.',
+        ],
+      },
       agentsMayApply: {
         label: 'Разрешить подключённым агентам откликаться за меня',
         detail:
