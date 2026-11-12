@@ -49,11 +49,13 @@ func signedInNext(tools []assistant.Tool) nextHints {
 	return nextHints{
 		search: pick(
 			[2]string{"get_profile", "get_profile first if not read yet"},
-			[2]string{"save_job", "save_job or track_job to keep a posting"},
+			[2]string{"save_job", "save_job to keep a posting"},
+			[2]string{"track_job", "track_job to follow its stage"},
 			[2]string{"subscribe", "subscribe for alerts on this search"},
 		),
 		job: pick(
-			[2]string{"save_job", "save_job or track_job to keep it"},
+			[2]string{"save_job", "save_job to keep it"},
+			[2]string{"track_job", "track_job to follow its stage"},
 			[2]string{"auto_apply_start", "auto_apply_start to prepare an application for review"},
 			[2]string{"subscribe", "subscribe for alerts on similar searches"},
 		),

@@ -89,6 +89,10 @@ func TestNextHint_OnTheAccountServerFollowsServedTools(t *testing.T) {
 	if got := nextOf(t, granted, "get_job", map[string]any{}); !strings.Contains(got, "auto_apply_start") {
 		t.Errorf("a grant is offered auto-apply: %q", got)
 	}
+	// save_job alone must not drag track_job into the hint.
+	if got := nextOf(t, session, "get_job", map[string]any{}); strings.Contains(got, "track_job") {
+		t.Errorf("a session without track_job is offered it: %q", got)
+	}
 	// Only the two result-bearing tools carry a hint.
 	other := connectAccountCatalogue(t, namedTools("my_jobs", "save_job"), nil)
 	if got := nextOf(t, other, "my_jobs", map[string]any{}); got != "" {
