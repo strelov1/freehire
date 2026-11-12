@@ -56,6 +56,15 @@ would actually reach (`GetAlertChannelState`). Digest timing is account-wide on 
 website, so it is shown but not changed here. "What is new" reads `subscription_matches`,
 the ledger the digests are built from, rather than re-running the search.
 
+## `next` on `search_jobs` and `get_job`
+
+Both results carry one short `next` sentence (`next.go`): signed in, the follow-ups among the
+tools the session is actually served (an API key has no auto-apply); signed out, a pointer at
+signing in instead of tools it cannot call. It is the same text for every call of a session
+and once per response, never per job: the result is replayed into the model's context every
+turn. On the typed catalogue tools it is a plain struct field; on the account server's untyped
+tools `withNext` adds it to the JSON object.
+
 ## Why there are two MCP servers
 
 `internal/api/ojcpmcp` serves the Open Job Context Protocol. This one serves OpenAI's Apps

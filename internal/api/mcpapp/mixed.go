@@ -54,7 +54,11 @@ func newMixedServer(tools []assistant.Tool, userID int64, origin string, reader 
 	if userID == 0 {
 		reader = forAnonymous(reader)
 	}
-	server := newCatalogueServer(reader, origin, instructions, "mixed")
+	next := signedOutNext(origin)
+	if userID != 0 {
+		next = signedInNext(tools)
+	}
+	server := newCatalogueServer(reader, origin, instructions, "mixed", next)
 	server.AddReceivingMiddleware(stampsAccount(userID != 0))
 	for _, tool := range tools {
 		// Preserve the public schemas, previews and widgets on the canonical endpoint.

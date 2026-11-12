@@ -92,10 +92,10 @@ func Handler(r Reader, origin string) http.Handler {
 }
 
 func newServer(r Reader, origin string) *mcp.Server {
-	return newCatalogueServer(forAnonymous(r), origin, serverInstructions, "public")
+	return newCatalogueServer(forAnonymous(r), origin, serverInstructions, "public", signedOutNext(origin))
 }
 
-func newCatalogueServer(r Reader, origin, instructions, surface string) *mcp.Server {
+func newCatalogueServer(r Reader, origin, instructions, surface string, next nextHints) *mcp.Server {
 	server := mcp.NewServer(Identity("freehire", Version, origin),
 		&mcp.ServerOptions{
 			Instructions:      instructions,
@@ -128,7 +128,12 @@ func newCatalogueServer(r Reader, origin, instructions, surface string) *mcp.Ser
 		Annotations: readOnly(),
 		Meta:        rendersInWidget(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchJobsResult, error) {
-		return toolResult(r.SearchJobs(ctx, in))
+		out, err := r.SearchJobs(ctx, in)
+		// The anonymous cap notice already says to connect an account; say it once.
+		if err == nil && out.Notice == "" {
+			out.Next = next.search
+		}
+		return toolResult(out, err)
 	})
 
 	AddObservedTool(server, surface, &mcp.Tool{
@@ -142,7 +147,11 @@ func newCatalogueServer(r Reader, origin, instructions, surface string) *mcp.Ser
 		Annotations: readOnly(),
 		Meta:        rendersInWidget(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in JobDetailInput) (*mcp.CallToolResult, JobResult, error) {
-		return toolResult(r.JobDetail(ctx, in.Slug))
+		out, err := r.JobDetail(ctx, in.Slug)
+		if err == nil {
+			out.Next = next.job
+		}
+		return toolResult(out, err)
 	})
 
 	AddObservedTool(server, surface, &mcp.Tool{
