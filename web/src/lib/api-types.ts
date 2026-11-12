@@ -1,7 +1,7 @@
 // The wire shapes the API client (api.ts) returns that no other module declares.
 // Re-exported from api.ts, so callers keep importing them from there.
 
-import type { ATSReport, Company, CompanyRef, CompanyResponse, EmailLinking, Job, ListMeta, Verdict } from './types';
+import type { ATSReport, Company, CompanyRef, CompanyResponse, Job, ListMeta, Verdict } from './types';
 import type { JobMatch } from '#lib/generated/contracts.js';
 import type { components } from '#lib/generated/api.js';
 
