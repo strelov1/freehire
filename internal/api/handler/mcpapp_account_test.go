@@ -115,6 +115,9 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"answer_bank_delete":    assistant.EffectOverwrites,
 		"screening_answers_set": assistant.EffectOverwrites,
 
+		// Lists headers without touching read_at.
+		"list_unread_mail": assistant.EffectReads,
+
 		"list_subscriptions":   assistant.EffectReads,
 		"subscription_updates": assistant.EffectReads,
 		// Adds a saved search (or reuses one) and a subscription; removes nothing.
