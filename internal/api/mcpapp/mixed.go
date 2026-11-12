@@ -51,6 +51,9 @@ func newMixedServer(tools []assistant.Tool, userID int64, origin string, reader 
 		"Geography filters form a union. "
 	account := accountInstructions(tools)
 	instructions += strings.TrimPrefix(account, accountServerInstructions)
+	if userID == 0 {
+		reader = forAnonymous(reader)
+	}
 	server := newCatalogueServer(reader, origin, instructions, "mixed")
 	server.AddReceivingMiddleware(stampsAccount(userID != 0))
 	for _, tool := range tools {
