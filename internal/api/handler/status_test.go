@@ -250,9 +250,9 @@ func TestSiteHistoryFromRows(t *testing.T) {
 		}
 		got := siteHistoryFromRows(rows)
 		want := []apigen.SiteHistoryEntry{
-			{Day: "2026-09-01", Status: string(statusOperational)},
-			{Day: "2026-09-02", Status: string(statusDown)},
-			{Day: "2026-09-03", Status: string(statusDegraded)},
+			{Day: "2026-09-01", Status: apigen.HealthStatus(statusOperational)},
+			{Day: "2026-09-02", Status: apigen.HealthStatus(statusDown)},
+			{Day: "2026-09-03", Status: apigen.HealthStatus(statusDegraded)},
 		}
 		if len(got) != len(want) {
 			t.Fatalf("len = %d, want %d", len(got), len(want))

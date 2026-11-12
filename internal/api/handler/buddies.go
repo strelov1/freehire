@@ -190,7 +190,7 @@ func (h *buddyHandlers) BuddyFeed(ctx context.Context, params apigen.BuddyFeedPa
 			Company:  apigen.BuddyCompany{Slug: e.Company.Slug, Name: e.Company.Name},
 			JobTitle: nilString(e.JobTitle), JobSlug: nilString(e.JobSlug), JobLocation: nilString(e.JobLocation),
 			Reactions: buddyReactionsOut(e.Reactions),
-			Type:      e.Type, Day: e.Day,
+			Type:      apigen.BuddyFeedEntryType(e.Type), Day: e.Day,
 		}
 	}
 	var next *string
@@ -286,20 +286,7 @@ func (h *buddyHandlers) BuddyInvite(ctx context.Context, req *apigen.BuddyInvite
 	if err != nil {
 		return nil, buddyError(err)
 	}
-	out := apigen.BuddyConversation{
-		ID: conv.ID, Kind: conv.Kind, StatusForMe: conv.StatusForMe, Unread: int64(conv.Unread), CreatedAt: conv.CreatedAt,
-		Counterpart: apigen.BuddyConversationCounterpart{Persona: conv.Counterpart.Persona, Reachable: conv.Counterpart.Reachable},
-	}
-	if d, ok := conv.Counterpart.Detail.(buddy.Counterpart); ok {
-		out.Counterpart.Detail.SetTo(apigen.BuddyCounterpartDetail{Handle: d.Handle, CardSummary: buddyCardSummaryOut(d.Card)})
-	} else {
-		out.Counterpart.Detail.SetToNull()
-	}
-	if conv.LastMessageAt.IsZero() {
-		out.LastMessageAt.SetToNull()
-	} else {
-		out.LastMessageAt.SetTo(conv.LastMessageAt)
-	}
+	out := toContractConversation(conv)
 	return &apigen.BuddyInviteCreated{Data: out}, nil
 }
 
@@ -310,7 +297,7 @@ func buddyReactionsOut(r buddy.Reactions) apigen.BuddyReactions {
 	for kind, n := range r.Counts {
 		counts[kind] = int64(n)
 	}
-	return apigen.BuddyReactions{Counts: counts, Mine: r.Mine}
+	return apigen.BuddyReactions{Counts: counts, Mine: apigen.BuddyReactionChoice(r.Mine)}
 }
 
 // BuddyReact sets the caller's one reaction to a feed event they can see, replacing any other.

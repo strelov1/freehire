@@ -275,10 +275,26 @@ model SalaryAnswer {
   meta: SalaryMeta;
 }
 
+/** The derived health verdict for a provider, the fleet or the site. */
+union HealthStatus {
+  "operational",
+  "degraded",
+  "down",
+}
+
+/** How a source is shaped. */
+union ProviderKind {
+  "ats",
+  "aggregator",
+  "company",
+  "social",
+  "other",
+}
+
 model StatusProvider {
   provider: string;
-  kind: string;
-  status: string;
+  kind: ProviderKind;
+  status: HealthStatus;
   total_boards: int64;
   healthy_boards: int64;
   cooled_boards: int64;
@@ -289,16 +305,13 @@ model StatusProvider {
 
 model SiteHistoryEntry {
   day: string;
-  status: string;
+  status: HealthStatus;
 }
 
 /** The site's own verdict, independent of the ingest fleet's `overall`. */
 model SiteHealth {
-  /** operational, degraded or down. */
-  status: string;
-
-  /** "up" or "down". */
-  database: string;
+  status: HealthStatus;
+  database: "up" | "down";
 
   /** Fraction of 5xx responses over the trailing `window_minutes`, from the process's own traffic. */
   error_rate: float64;
@@ -310,7 +323,7 @@ model SiteHealth {
 }
 
 model IngestStatus {
-  overall: string;
+  overall: HealthStatus;
   generated_at: string;
   last_job_added_at: string | null;
   providers: StatusProvider[];
@@ -331,7 +344,7 @@ model SourceJobs {
 }
 
 model SourceHealth {
-  status: string;
+  status: HealthStatus;
   total_boards: int64;
   healthy_boards: int64;
   cooled_boards: int64;
@@ -342,7 +355,7 @@ model SourceHealth {
 
 model SourceEntry {
   source: string;
-  kind: string;
+  kind: ProviderKind;
 
   /** Whether the source is a crawl adapter at all. */
   adapter: boolean;

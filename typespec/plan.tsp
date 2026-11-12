@@ -17,17 +17,30 @@ model PlanAllowance {
   resets_at: utcDateTime;
 }
 
+/** The tiers a caller can be on. */
+union PlanTier {
+  "free",
+  "pro",
+  "ultra",
+}
+
+/** Where a paid plan was bought. */
+union PlanSource {
+  "stripe",
+  "revenuecat",
+  "granted",
+}
+
 model PlanStanding {
-  /** The tier name: `free`, `pro`, `ultra`. */
-  plan: string;
+  plan: PlanTier;
 
   resets_at: utcDateTime;
 
   /** When the paid plan lapses, absent on the free plan. */
   pro_until?: utcDateTime;
 
-  /** Where the plan was bought: `stripe`, `revenuecat` or `granted`. Absent on the free plan. */
-  pro_source?: string;
+  /** Where the plan was bought. Absent on the free plan. */
+  pro_source?: PlanSource;
 
   allowances: PlanAllowance[];
 }

@@ -164,7 +164,16 @@ type buddyBookMockBody struct {
 // the MCP tools, which the SDK validates against the Go type.
 
 func buddyMockSettingsOut(s buddy.MockSettings) apigen.BuddyMockSettingsOut {
-	return apigen.BuddyMockSettingsOut{Timezone: s.Timezone, MeetingURL: s.MeetingURL, Topics: s.Topics, Paused: s.Paused}
+	return apigen.BuddyMockSettingsOut{Timezone: s.Timezone, MeetingURL: s.MeetingURL, Topics: buddyMockTopics(s.Topics), Paused: s.Paused}
+}
+
+// buddyMockTopics types the service's topic strings, which its own check keeps inside the vocabulary.
+func buddyMockTopics(topics []string) []apigen.BuddyMockTopic {
+	out := make([]apigen.BuddyMockTopic, len(topics))
+	for i, t := range topics {
+		out[i] = apigen.BuddyMockTopic(t)
+	}
+	return out
 }
 
 // BuddyMockSettingsGet is the caller's own settings, or null before the first save.
@@ -299,8 +308,8 @@ func buddyMockReviewOut(r *buddy.MockReview) apigen.NilBuddyMockReview {
 
 func buddyMockOut(e buddy.MockEntry) apigen.BuddyMock {
 	return apigen.BuddyMock{
-		ID: e.ID.String(), Role: e.Role, StartsAt: e.StartsAt.UTC(), EndsAt: e.EndsAt.UTC(),
-		Topic: e.Topic, Status: e.Status, CanCancel: e.CanCancel, CanReview: e.CanReview,
+		ID: e.ID.String(), Role: apigen.BuddyMockRole(e.Role), StartsAt: e.StartsAt.UTC(), EndsAt: e.EndsAt.UTC(),
+		Topic: apigen.BuddyMockTopic(e.Topic), Status: apigen.BuddyMockStatus(e.Status), CanCancel: e.CanCancel, CanReview: e.CanReview,
 		Counterpart: nilString(nilIfEmptyPtr(e.Counterpart)), MeetingURL: nilString(nilIfEmptyPtr(e.MeetingURL)),
 		MyReview: buddyMockReviewOut(e.MyReview), TheirReview: buddyMockReviewOut(e.TheirReview),
 	}
@@ -359,7 +368,7 @@ func (h *buddyHandlers) BuddyMockSlots(ctx context.Context, params apigen.BuddyM
 	}
 	return &apigen.BuddyMockSlotsPage{
 		Data: out,
-		Meta: apigen.BuddyMockSlotsMeta{Timezone: res.Zone, Count: int64(len(out)), Topics: res.Topics},
+		Meta: apigen.BuddyMockSlotsMeta{Timezone: res.Zone, Count: int64(len(out)), Topics: buddyMockTopics(res.Topics)},
 	}, nil
 }
 
@@ -377,7 +386,7 @@ func (h *buddyHandlers) BuddyMockHosts(ctx context.Context, params apigen.BuddyM
 	for _, host := range res.Hosts {
 		slot := slotResponses([]slots.Interval{host.NextSlot})[0]
 		out = append(out, apigen.BuddyMockHost{
-			Handle: host.Handle, CardSummary: buddyCardSummaryOut(host.Card), Topics: host.Topics,
+			Handle: host.Handle, CardSummary: buddyCardSummaryOut(host.Card), Topics: buddyMockTopics(host.Topics),
 			NextSlot:  apigen.BuddyMockNextSlot{StartsAt: slot.StartsAt, LocalStart: slot.LocalStart, UtcOffset: slot.UTCOffset},
 			RatingAvg: host.Summary.RatingAvg, RatingCount: int64(host.Summary.RatingCount), Completed: int64(host.Summary.Completed),
 		})
@@ -455,7 +464,7 @@ func (h *buddyHandlers) BuddyMockReviews(ctx context.Context, params apigen.Budd
 		Recent: make([]apigen.BuddyRevealedReview, 0, len(sum.Recent)),
 	}
 	for _, r := range sum.Recent {
-		out.Recent = append(out.Recent, apigen.BuddyRevealedReview{Rating: int64(r.Rating), Comment: r.Comment, Topic: r.Topic, Day: r.Day})
+		out.Recent = append(out.Recent, apigen.BuddyRevealedReview{Rating: int64(r.Rating), Comment: r.Comment, Topic: apigen.BuddyMockTopic(r.Topic), Day: r.Day})
 	}
 	return &apigen.BuddyMockReviewsOK{Data: out}, nil
 }

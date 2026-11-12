@@ -167,7 +167,7 @@ func (h *authHandlers) GetApiPlan(ctx context.Context) (*apigen.GetApiPlanOK, er
 		return nil, err
 	}
 	plan := apiPlanFrom(row, time.Now())
-	out := apigen.ApiKeyPlan{Tier: string(plan.Tier)}
+	out := apigen.ApiKeyPlan{Tier: apigen.ApiKeyPlanTier(plan.Tier)}
 	optNil(plan.Until, out.Until.SetTo)
 	return &apigen.GetApiPlanOK{Data: out}, nil
 }

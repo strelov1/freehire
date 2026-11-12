@@ -860,13 +860,13 @@ func (s *ApiKeyCreated) SetToken(val string) {
 
 // Ref: #/components/schemas/ApiKeyPlan
 type ApiKeyPlan struct {
-	// The API product tier the account holds.
-	Tier  string      `json:"tier"`
-	Until OptDateTime `json:"until"`
+	// The API product tier the account holds; empty for none.
+	Tier  ApiKeyPlanTier `json:"tier"`
+	Until OptDateTime    `json:"until"`
 }
 
 // GetTier returns the value of Tier.
-func (s *ApiKeyPlan) GetTier() string {
+func (s *ApiKeyPlan) GetTier() ApiKeyPlanTier {
 	return s.Tier
 }
 
@@ -876,13 +876,62 @@ func (s *ApiKeyPlan) GetUntil() OptDateTime {
 }
 
 // SetTier sets the value of Tier.
-func (s *ApiKeyPlan) SetTier(val string) {
+func (s *ApiKeyPlan) SetTier(val ApiKeyPlanTier) {
 	s.Tier = val
 }
 
 // SetUntil sets the value of Until.
 func (s *ApiKeyPlan) SetUntil(val OptDateTime) {
 	s.Until = val
+}
+
+// The API product tier the account holds; empty for none.
+type ApiKeyPlanTier string
+
+const (
+	ApiKeyPlanTierEmpty   ApiKeyPlanTier = ""
+	ApiKeyPlanTierAPI     ApiKeyPlanTier = "api"
+	ApiKeyPlanTierAPIData ApiKeyPlanTier = "api_data"
+)
+
+// AllValues returns all ApiKeyPlanTier values.
+func (ApiKeyPlanTier) AllValues() []ApiKeyPlanTier {
+	return []ApiKeyPlanTier{
+		ApiKeyPlanTierEmpty,
+		ApiKeyPlanTierAPI,
+		ApiKeyPlanTierAPIData,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ApiKeyPlanTier) MarshalText() ([]byte, error) {
+	switch s {
+	case ApiKeyPlanTierEmpty:
+		return []byte(s), nil
+	case ApiKeyPlanTierAPI:
+		return []byte(s), nil
+	case ApiKeyPlanTierAPIData:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ApiKeyPlanTier) UnmarshalText(data []byte) error {
+	switch ApiKeyPlanTier(data) {
+	case ApiKeyPlanTierEmpty:
+		*s = ApiKeyPlanTierEmpty
+		return nil
+	case ApiKeyPlanTierAPI:
+		*s = ApiKeyPlanTierAPI
+		return nil
+	case ApiKeyPlanTierAPIData:
+		*s = ApiKeyPlanTierAPIData
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/ApplyJob
@@ -2092,129 +2141,11 @@ func (s *BuddyCompany) SetName(val string) {
 	s.Name = val
 }
 
-// Ref: #/components/schemas/BuddyConversation
-type BuddyConversation struct {
-	ID            int64                        `json:"id"`
-	Kind          string                       `json:"kind"`
-	StatusForMe   string                       `json:"status_for_me"`
-	Counterpart   BuddyConversationCounterpart `json:"counterpart"`
-	Unread        int64                        `json:"unread"`
-	LastMessageAt NilDateTime                  `json:"last_message_at"`
-	CreatedAt     time.Time                    `json:"created_at"`
-}
-
-// GetID returns the value of ID.
-func (s *BuddyConversation) GetID() int64 {
-	return s.ID
-}
-
-// GetKind returns the value of Kind.
-func (s *BuddyConversation) GetKind() string {
-	return s.Kind
-}
-
-// GetStatusForMe returns the value of StatusForMe.
-func (s *BuddyConversation) GetStatusForMe() string {
-	return s.StatusForMe
-}
-
-// GetCounterpart returns the value of Counterpart.
-func (s *BuddyConversation) GetCounterpart() BuddyConversationCounterpart {
-	return s.Counterpart
-}
-
-// GetUnread returns the value of Unread.
-func (s *BuddyConversation) GetUnread() int64 {
-	return s.Unread
-}
-
-// GetLastMessageAt returns the value of LastMessageAt.
-func (s *BuddyConversation) GetLastMessageAt() NilDateTime {
-	return s.LastMessageAt
-}
-
-// GetCreatedAt returns the value of CreatedAt.
-func (s *BuddyConversation) GetCreatedAt() time.Time {
-	return s.CreatedAt
-}
-
-// SetID sets the value of ID.
-func (s *BuddyConversation) SetID(val int64) {
-	s.ID = val
-}
-
-// SetKind sets the value of Kind.
-func (s *BuddyConversation) SetKind(val string) {
-	s.Kind = val
-}
-
-// SetStatusForMe sets the value of StatusForMe.
-func (s *BuddyConversation) SetStatusForMe(val string) {
-	s.StatusForMe = val
-}
-
-// SetCounterpart sets the value of Counterpart.
-func (s *BuddyConversation) SetCounterpart(val BuddyConversationCounterpart) {
-	s.Counterpart = val
-}
-
-// SetUnread sets the value of Unread.
-func (s *BuddyConversation) SetUnread(val int64) {
-	s.Unread = val
-}
-
-// SetLastMessageAt sets the value of LastMessageAt.
-func (s *BuddyConversation) SetLastMessageAt(val NilDateTime) {
-	s.LastMessageAt = val
-}
-
-// SetCreatedAt sets the value of CreatedAt.
-func (s *BuddyConversation) SetCreatedAt(val time.Time) {
-	s.CreatedAt = val
-}
-
-// Ref: #/components/schemas/BuddyConversationCounterpart
-type BuddyConversationCounterpart struct {
-	Persona   string                    `json:"persona"`
-	Reachable bool                      `json:"reachable"`
-	Detail    NilBuddyCounterpartDetail `json:"detail"`
-}
-
-// GetPersona returns the value of Persona.
-func (s *BuddyConversationCounterpart) GetPersona() string {
-	return s.Persona
-}
-
-// GetReachable returns the value of Reachable.
-func (s *BuddyConversationCounterpart) GetReachable() bool {
-	return s.Reachable
-}
-
-// GetDetail returns the value of Detail.
-func (s *BuddyConversationCounterpart) GetDetail() NilBuddyCounterpartDetail {
-	return s.Detail
-}
-
-// SetPersona sets the value of Persona.
-func (s *BuddyConversationCounterpart) SetPersona(val string) {
-	s.Persona = val
-}
-
-// SetReachable sets the value of Reachable.
-func (s *BuddyConversationCounterpart) SetReachable(val bool) {
-	s.Reachable = val
-}
-
-// SetDetail sets the value of Detail.
-func (s *BuddyConversationCounterpart) SetDetail(val NilBuddyCounterpartDetail) {
-	s.Detail = val
-}
-
 // The buddy persona's own shape. Nothing here names the account behind it.
 // Ref: #/components/schemas/BuddyCounterpart
 type BuddyCounterpart struct {
-	Handle      string                  `json:"handle"`
-	CardSummary ConversationCardSummary `json:"card_summary"`
+	Handle      string           `json:"handle"`
+	CardSummary BuddyCardSummary `json:"card_summary"`
 }
 
 // GetHandle returns the value of Handle.
@@ -2223,7 +2154,7 @@ func (s *BuddyCounterpart) GetHandle() string {
 }
 
 // GetCardSummary returns the value of CardSummary.
-func (s *BuddyCounterpart) GetCardSummary() ConversationCardSummary {
+func (s *BuddyCounterpart) GetCardSummary() BuddyCardSummary {
 	return s.CardSummary
 }
 
@@ -2233,49 +2164,22 @@ func (s *BuddyCounterpart) SetHandle(val string) {
 }
 
 // SetCardSummary sets the value of CardSummary.
-func (s *BuddyCounterpart) SetCardSummary(val ConversationCardSummary) {
-	s.CardSummary = val
-}
-
-// The persona's own detail; null when the other side is not reachable.
-// Ref: #/components/schemas/BuddyCounterpartDetail
-type BuddyCounterpartDetail struct {
-	Handle      string           `json:"handle"`
-	CardSummary BuddyCardSummary `json:"card_summary"`
-}
-
-// GetHandle returns the value of Handle.
-func (s *BuddyCounterpartDetail) GetHandle() string {
-	return s.Handle
-}
-
-// GetCardSummary returns the value of CardSummary.
-func (s *BuddyCounterpartDetail) GetCardSummary() BuddyCardSummary {
-	return s.CardSummary
-}
-
-// SetHandle sets the value of Handle.
-func (s *BuddyCounterpartDetail) SetHandle(val string) {
-	s.Handle = val
-}
-
-// SetCardSummary sets the value of CardSummary.
-func (s *BuddyCounterpartDetail) SetCardSummary(val BuddyCardSummary) {
+func (s *BuddyCounterpart) SetCardSummary(val BuddyCardSummary) {
 	s.CardSummary = val
 }
 
 // Ref: #/components/schemas/BuddyFeedEntry
 type BuddyFeedEntry struct {
-	ID          int64            `json:"id"`
-	Handle      string           `json:"handle"`
-	CardSummary BuddyCardSummary `json:"card_summary"`
-	Company     BuddyCompany     `json:"company"`
-	JobTitle    NilString        `json:"job_title"`
-	JobSlug     NilString        `json:"job_slug"`
-	JobLocation NilString        `json:"job_location"`
-	Reactions   BuddyReactions   `json:"reactions"`
-	Type        string           `json:"type"`
-	Day         string           `json:"day"`
+	ID          int64              `json:"id"`
+	Handle      string             `json:"handle"`
+	CardSummary BuddyCardSummary   `json:"card_summary"`
+	Company     BuddyCompany       `json:"company"`
+	JobTitle    NilString          `json:"job_title"`
+	JobSlug     NilString          `json:"job_slug"`
+	JobLocation NilString          `json:"job_location"`
+	Reactions   BuddyReactions     `json:"reactions"`
+	Type        BuddyFeedEntryType `json:"type"`
+	Day         string             `json:"day"`
 }
 
 // GetID returns the value of ID.
@@ -2319,7 +2223,7 @@ func (s *BuddyFeedEntry) GetReactions() BuddyReactions {
 }
 
 // GetType returns the value of Type.
-func (s *BuddyFeedEntry) GetType() string {
+func (s *BuddyFeedEntry) GetType() BuddyFeedEntryType {
 	return s.Type
 }
 
@@ -2369,13 +2273,61 @@ func (s *BuddyFeedEntry) SetReactions(val BuddyReactions) {
 }
 
 // SetType sets the value of Type.
-func (s *BuddyFeedEntry) SetType(val string) {
+func (s *BuddyFeedEntry) SetType(val BuddyFeedEntryType) {
 	s.Type = val
 }
 
 // SetDay sets the value of Day.
 func (s *BuddyFeedEntry) SetDay(val string) {
 	s.Day = val
+}
+
+type BuddyFeedEntryType string
+
+const (
+	BuddyFeedEntryTypeApplied   BuddyFeedEntryType = "applied"
+	BuddyFeedEntryTypeInterview BuddyFeedEntryType = "interview"
+	BuddyFeedEntryTypeOffer     BuddyFeedEntryType = "offer"
+)
+
+// AllValues returns all BuddyFeedEntryType values.
+func (BuddyFeedEntryType) AllValues() []BuddyFeedEntryType {
+	return []BuddyFeedEntryType{
+		BuddyFeedEntryTypeApplied,
+		BuddyFeedEntryTypeInterview,
+		BuddyFeedEntryTypeOffer,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s BuddyFeedEntryType) MarshalText() ([]byte, error) {
+	switch s {
+	case BuddyFeedEntryTypeApplied:
+		return []byte(s), nil
+	case BuddyFeedEntryTypeInterview:
+		return []byte(s), nil
+	case BuddyFeedEntryTypeOffer:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *BuddyFeedEntryType) UnmarshalText(data []byte) error {
+	switch BuddyFeedEntryType(data) {
+	case BuddyFeedEntryTypeApplied:
+		*s = BuddyFeedEntryTypeApplied
+		return nil
+	case BuddyFeedEntryTypeInterview:
+		*s = BuddyFeedEntryTypeInterview
+		return nil
+	case BuddyFeedEntryTypeOffer:
+		*s = BuddyFeedEntryTypeOffer
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/BuddyFeedMeta
@@ -2465,16 +2417,16 @@ func (s *BuddyInviteBody) SetBody(val OptString) {
 
 // A single item: `{"data": ...}`.
 type BuddyInviteCreated struct {
-	Data BuddyConversation `json:"data"`
+	Data Conversation `json:"data"`
 }
 
 // GetData returns the value of Data.
-func (s *BuddyInviteCreated) GetData() BuddyConversation {
+func (s *BuddyInviteCreated) GetData() Conversation {
 	return s.Data
 }
 
 // SetData sets the value of Data.
-func (s *BuddyInviteCreated) SetData(val BuddyConversation) {
+func (s *BuddyInviteCreated) SetData(val Conversation) {
 	s.Data = val
 }
 
@@ -2499,12 +2451,12 @@ type BuddyLeaveNoContent struct{}
 // Ref: #/components/schemas/BuddyMock
 type BuddyMock struct {
 	ID          string             `json:"id"`
-	Role        string             `json:"role"`
+	Role        BuddyMockRole      `json:"role"`
 	Counterpart NilString          `json:"counterpart"`
 	StartsAt    time.Time          `json:"starts_at"`
 	EndsAt      time.Time          `json:"ends_at"`
-	Topic       string             `json:"topic"`
-	Status      string             `json:"status"`
+	Topic       BuddyMockTopic     `json:"topic"`
+	Status      BuddyMockStatus    `json:"status"`
 	MeetingURL  NilString          `json:"meeting_url"`
 	CanCancel   bool               `json:"can_cancel"`
 	CanReview   bool               `json:"can_review"`
@@ -2518,7 +2470,7 @@ func (s *BuddyMock) GetID() string {
 }
 
 // GetRole returns the value of Role.
-func (s *BuddyMock) GetRole() string {
+func (s *BuddyMock) GetRole() BuddyMockRole {
 	return s.Role
 }
 
@@ -2538,12 +2490,12 @@ func (s *BuddyMock) GetEndsAt() time.Time {
 }
 
 // GetTopic returns the value of Topic.
-func (s *BuddyMock) GetTopic() string {
+func (s *BuddyMock) GetTopic() BuddyMockTopic {
 	return s.Topic
 }
 
 // GetStatus returns the value of Status.
-func (s *BuddyMock) GetStatus() string {
+func (s *BuddyMock) GetStatus() BuddyMockStatus {
 	return s.Status
 }
 
@@ -2578,7 +2530,7 @@ func (s *BuddyMock) SetID(val string) {
 }
 
 // SetRole sets the value of Role.
-func (s *BuddyMock) SetRole(val string) {
+func (s *BuddyMock) SetRole(val BuddyMockRole) {
 	s.Role = val
 }
 
@@ -2598,12 +2550,12 @@ func (s *BuddyMock) SetEndsAt(val time.Time) {
 }
 
 // SetTopic sets the value of Topic.
-func (s *BuddyMock) SetTopic(val string) {
+func (s *BuddyMock) SetTopic(val BuddyMockTopic) {
 	s.Topic = val
 }
 
 // SetStatus sets the value of Status.
-func (s *BuddyMock) SetStatus(val string) {
+func (s *BuddyMock) SetStatus(val BuddyMockStatus) {
 	s.Status = val
 }
 
@@ -2706,7 +2658,7 @@ type BuddyMockCancelNoContent struct{}
 type BuddyMockHost struct {
 	Handle      string            `json:"handle"`
 	CardSummary BuddyCardSummary  `json:"card_summary"`
-	Topics      []string          `json:"topics"`
+	Topics      []BuddyMockTopic  `json:"topics"`
 	NextSlot    BuddyMockNextSlot `json:"next_slot"`
 	RatingAvg   float64           `json:"rating_avg"`
 	RatingCount int64             `json:"rating_count"`
@@ -2724,7 +2676,7 @@ func (s *BuddyMockHost) GetCardSummary() BuddyCardSummary {
 }
 
 // GetTopics returns the value of Topics.
-func (s *BuddyMockHost) GetTopics() []string {
+func (s *BuddyMockHost) GetTopics() []BuddyMockTopic {
 	return s.Topics
 }
 
@@ -2759,7 +2711,7 @@ func (s *BuddyMockHost) SetCardSummary(val BuddyCardSummary) {
 }
 
 // SetTopics sets the value of Topics.
-func (s *BuddyMockHost) SetTopics(val []string) {
+func (s *BuddyMockHost) SetTopics(val []BuddyMockTopic) {
 	s.Topics = val
 }
 
@@ -2998,6 +2950,47 @@ func (s *BuddyMockReviewsOK) SetData(val BuddyMockSummary) {
 	s.Data = val
 }
 
+type BuddyMockRole string
+
+const (
+	BuddyMockRoleHost  BuddyMockRole = "host"
+	BuddyMockRoleGuest BuddyMockRole = "guest"
+)
+
+// AllValues returns all BuddyMockRole values.
+func (BuddyMockRole) AllValues() []BuddyMockRole {
+	return []BuddyMockRole{
+		BuddyMockRoleHost,
+		BuddyMockRoleGuest,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s BuddyMockRole) MarshalText() ([]byte, error) {
+	switch s {
+	case BuddyMockRoleHost:
+		return []byte(s), nil
+	case BuddyMockRoleGuest:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *BuddyMockRole) UnmarshalText(data []byte) error {
+	switch BuddyMockRole(data) {
+	case BuddyMockRoleHost:
+		*s = BuddyMockRoleHost
+		return nil
+	case BuddyMockRoleGuest:
+		*s = BuddyMockRoleGuest
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 // Ref: #/components/schemas/BuddyMockRule
 type BuddyMockRule struct {
 	// 0 (Sunday) through 6; null for a dated override.
@@ -3188,10 +3181,10 @@ func (s *BuddyMockSettingsGetOK) SetData(val NilBuddyMockSettingsOut) {
 
 // Ref: #/components/schemas/BuddyMockSettingsOut
 type BuddyMockSettingsOut struct {
-	Timezone   string   `json:"timezone"`
-	MeetingURL string   `json:"meeting_url"`
-	Topics     []string `json:"topics"`
-	Paused     bool     `json:"paused"`
+	Timezone   string           `json:"timezone"`
+	MeetingURL string           `json:"meeting_url"`
+	Topics     []BuddyMockTopic `json:"topics"`
+	Paused     bool             `json:"paused"`
 }
 
 // GetTimezone returns the value of Timezone.
@@ -3205,7 +3198,7 @@ func (s *BuddyMockSettingsOut) GetMeetingURL() string {
 }
 
 // GetTopics returns the value of Topics.
-func (s *BuddyMockSettingsOut) GetTopics() []string {
+func (s *BuddyMockSettingsOut) GetTopics() []BuddyMockTopic {
 	return s.Topics
 }
 
@@ -3225,7 +3218,7 @@ func (s *BuddyMockSettingsOut) SetMeetingURL(val string) {
 }
 
 // SetTopics sets the value of Topics.
-func (s *BuddyMockSettingsOut) SetTopics(val []string) {
+func (s *BuddyMockSettingsOut) SetTopics(val []BuddyMockTopic) {
 	s.Topics = val
 }
 
@@ -3310,9 +3303,9 @@ func (s *BuddyMockSlot) SetUtcOffset(val string) {
 
 // Ref: #/components/schemas/BuddyMockSlotsMeta
 type BuddyMockSlotsMeta struct {
-	Timezone string   `json:"timezone"`
-	Count    int64    `json:"count"`
-	Topics   []string `json:"topics"`
+	Timezone string           `json:"timezone"`
+	Count    int64            `json:"count"`
+	Topics   []BuddyMockTopic `json:"topics"`
 }
 
 // GetTimezone returns the value of Timezone.
@@ -3326,7 +3319,7 @@ func (s *BuddyMockSlotsMeta) GetCount() int64 {
 }
 
 // GetTopics returns the value of Topics.
-func (s *BuddyMockSlotsMeta) GetTopics() []string {
+func (s *BuddyMockSlotsMeta) GetTopics() []BuddyMockTopic {
 	return s.Topics
 }
 
@@ -3341,7 +3334,7 @@ func (s *BuddyMockSlotsMeta) SetCount(val int64) {
 }
 
 // SetTopics sets the value of Topics.
-func (s *BuddyMockSlotsMeta) SetTopics(val []string) {
+func (s *BuddyMockSlotsMeta) SetTopics(val []BuddyMockTopic) {
 	s.Topics = val
 }
 
@@ -3369,6 +3362,47 @@ func (s *BuddyMockSlotsPage) SetData(val []BuddyMockSlot) {
 // SetMeta sets the value of Meta.
 func (s *BuddyMockSlotsPage) SetMeta(val BuddyMockSlotsMeta) {
 	s.Meta = val
+}
+
+type BuddyMockStatus string
+
+const (
+	BuddyMockStatusConfirmed BuddyMockStatus = "confirmed"
+	BuddyMockStatusCancelled BuddyMockStatus = "cancelled"
+)
+
+// AllValues returns all BuddyMockStatus values.
+func (BuddyMockStatus) AllValues() []BuddyMockStatus {
+	return []BuddyMockStatus{
+		BuddyMockStatusConfirmed,
+		BuddyMockStatusCancelled,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s BuddyMockStatus) MarshalText() ([]byte, error) {
+	switch s {
+	case BuddyMockStatusConfirmed:
+		return []byte(s), nil
+	case BuddyMockStatusCancelled:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *BuddyMockStatus) UnmarshalText(data []byte) error {
+	switch BuddyMockStatus(data) {
+	case BuddyMockStatusConfirmed:
+		*s = BuddyMockStatusConfirmed
+		return nil
+	case BuddyMockStatusCancelled:
+		*s = BuddyMockStatusCancelled
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/BuddyMockSummary
@@ -3417,6 +3451,56 @@ func (s *BuddyMockSummary) SetRatingAvg(val float64) {
 // SetRecent sets the value of Recent.
 func (s *BuddyMockSummary) SetRecent(val []BuddyRevealedReview) {
 	s.Recent = val
+}
+
+// The mock-interview topics.
+// Ref: #/components/schemas/BuddyMockTopic
+type BuddyMockTopic string
+
+const (
+	BuddyMockTopicCoding       BuddyMockTopic = "coding"
+	BuddyMockTopicSystemDesign BuddyMockTopic = "system_design"
+	BuddyMockTopicBehavioral   BuddyMockTopic = "behavioral"
+)
+
+// AllValues returns all BuddyMockTopic values.
+func (BuddyMockTopic) AllValues() []BuddyMockTopic {
+	return []BuddyMockTopic{
+		BuddyMockTopicCoding,
+		BuddyMockTopicSystemDesign,
+		BuddyMockTopicBehavioral,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s BuddyMockTopic) MarshalText() ([]byte, error) {
+	switch s {
+	case BuddyMockTopicCoding:
+		return []byte(s), nil
+	case BuddyMockTopicSystemDesign:
+		return []byte(s), nil
+	case BuddyMockTopicBehavioral:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *BuddyMockTopic) UnmarshalText(data []byte) error {
+	switch BuddyMockTopic(data) {
+	case BuddyMockTopicCoding:
+		*s = BuddyMockTopicCoding
+		return nil
+	case BuddyMockTopicSystemDesign:
+		*s = BuddyMockTopicSystemDesign
+		return nil
+	case BuddyMockTopicBehavioral:
+		*s = BuddyMockTopicBehavioral
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/BuddyMockWeekly
@@ -3530,11 +3614,82 @@ func (s *BuddyReactOK) SetData(val BuddyReactions) {
 	s.Data = val
 }
 
+// The reactions a member may give a feed event; "" is none.
+// Ref: #/components/schemas/BuddyReactionChoice
+type BuddyReactionChoice string
+
+const (
+	BuddyReactionChoiceEmpty    BuddyReactionChoice = ""
+	BuddyReactionChoiceCongrats BuddyReactionChoice = "congrats"
+	BuddyReactionChoiceLuck     BuddyReactionChoice = "luck"
+	BuddyReactionChoiceRooting  BuddyReactionChoice = "rooting"
+	BuddyReactionChoiceSame     BuddyReactionChoice = "same"
+	BuddyReactionChoiceInsight  BuddyReactionChoice = "insight"
+)
+
+// AllValues returns all BuddyReactionChoice values.
+func (BuddyReactionChoice) AllValues() []BuddyReactionChoice {
+	return []BuddyReactionChoice{
+		BuddyReactionChoiceEmpty,
+		BuddyReactionChoiceCongrats,
+		BuddyReactionChoiceLuck,
+		BuddyReactionChoiceRooting,
+		BuddyReactionChoiceSame,
+		BuddyReactionChoiceInsight,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s BuddyReactionChoice) MarshalText() ([]byte, error) {
+	switch s {
+	case BuddyReactionChoiceEmpty:
+		return []byte(s), nil
+	case BuddyReactionChoiceCongrats:
+		return []byte(s), nil
+	case BuddyReactionChoiceLuck:
+		return []byte(s), nil
+	case BuddyReactionChoiceRooting:
+		return []byte(s), nil
+	case BuddyReactionChoiceSame:
+		return []byte(s), nil
+	case BuddyReactionChoiceInsight:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *BuddyReactionChoice) UnmarshalText(data []byte) error {
+	switch BuddyReactionChoice(data) {
+	case BuddyReactionChoiceEmpty:
+		*s = BuddyReactionChoiceEmpty
+		return nil
+	case BuddyReactionChoiceCongrats:
+		*s = BuddyReactionChoiceCongrats
+		return nil
+	case BuddyReactionChoiceLuck:
+		*s = BuddyReactionChoiceLuck
+		return nil
+	case BuddyReactionChoiceRooting:
+		*s = BuddyReactionChoiceRooting
+		return nil
+	case BuddyReactionChoiceSame:
+		*s = BuddyReactionChoiceSame
+		return nil
+	case BuddyReactionChoiceInsight:
+		*s = BuddyReactionChoiceInsight
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 // Count per kind (no key for a kind nobody chose) and the viewer's own choice, "" for none.
 // Ref: #/components/schemas/BuddyReactions
 type BuddyReactions struct {
 	Counts BuddyReactionsCounts `json:"counts"`
-	Mine   string               `json:"mine"`
+	Mine   BuddyReactionChoice  `json:"mine"`
 }
 
 // GetCounts returns the value of Counts.
@@ -3543,7 +3698,7 @@ func (s *BuddyReactions) GetCounts() BuddyReactionsCounts {
 }
 
 // GetMine returns the value of Mine.
-func (s *BuddyReactions) GetMine() string {
+func (s *BuddyReactions) GetMine() BuddyReactionChoice {
 	return s.Mine
 }
 
@@ -3553,7 +3708,7 @@ func (s *BuddyReactions) SetCounts(val BuddyReactionsCounts) {
 }
 
 // SetMine sets the value of Mine.
-func (s *BuddyReactions) SetMine(val string) {
+func (s *BuddyReactions) SetMine(val BuddyReactionChoice) {
 	s.Mine = val
 }
 
@@ -3570,10 +3725,10 @@ func (s *BuddyReactionsCounts) init() BuddyReactionsCounts {
 
 // Ref: #/components/schemas/BuddyRevealedReview
 type BuddyRevealedReview struct {
-	Rating  int64  `json:"rating"`
-	Comment string `json:"comment"`
-	Topic   string `json:"topic"`
-	Day     string `json:"day"`
+	Rating  int64          `json:"rating"`
+	Comment string         `json:"comment"`
+	Topic   BuddyMockTopic `json:"topic"`
+	Day     string         `json:"day"`
 }
 
 // GetRating returns the value of Rating.
@@ -3587,7 +3742,7 @@ func (s *BuddyRevealedReview) GetComment() string {
 }
 
 // GetTopic returns the value of Topic.
-func (s *BuddyRevealedReview) GetTopic() string {
+func (s *BuddyRevealedReview) GetTopic() BuddyMockTopic {
 	return s.Topic
 }
 
@@ -3607,7 +3762,7 @@ func (s *BuddyRevealedReview) SetComment(val string) {
 }
 
 // SetTopic sets the value of Topic.
-func (s *BuddyRevealedReview) SetTopic(val string) {
+func (s *BuddyRevealedReview) SetTopic(val BuddyMockTopic) {
 	s.Topic = val
 }
 
@@ -4782,8 +4937,8 @@ func (s *Contribution) SetCreatedAt(val NilDateTime) {
 // Ref: #/components/schemas/Conversation
 type Conversation struct {
 	ID            int64                   `json:"id"`
-	Kind          string                  `json:"kind"`
-	StatusForMe   string                  `json:"status_for_me"`
+	Kind          ConversationKind        `json:"kind"`
+	StatusForMe   ConversationStatusForMe `json:"status_for_me"`
 	Counterpart   ConversationCounterpart `json:"counterpart"`
 	Unread        int64                   `json:"unread"`
 	LastMessageAt NilDateTime             `json:"last_message_at"`
@@ -4796,12 +4951,12 @@ func (s *Conversation) GetID() int64 {
 }
 
 // GetKind returns the value of Kind.
-func (s *Conversation) GetKind() string {
+func (s *Conversation) GetKind() ConversationKind {
 	return s.Kind
 }
 
 // GetStatusForMe returns the value of StatusForMe.
-func (s *Conversation) GetStatusForMe() string {
+func (s *Conversation) GetStatusForMe() ConversationStatusForMe {
 	return s.StatusForMe
 }
 
@@ -4831,12 +4986,12 @@ func (s *Conversation) SetID(val int64) {
 }
 
 // SetKind sets the value of Kind.
-func (s *Conversation) SetKind(val string) {
+func (s *Conversation) SetKind(val ConversationKind) {
 	s.Kind = val
 }
 
 // SetStatusForMe sets the value of StatusForMe.
-func (s *Conversation) SetStatusForMe(val string) {
+func (s *Conversation) SetStatusForMe(val ConversationStatusForMe) {
 	s.StatusForMe = val
 }
 
@@ -4860,54 +5015,16 @@ func (s *Conversation) SetCreatedAt(val time.Time) {
 	s.CreatedAt = val
 }
 
-// A buddy's card, reduced to what an invitation shows.
-// Ref: #/components/schemas/ConversationCardSummary
-type ConversationCardSummary struct {
-	Category  string `json:"category"`
-	Seniority string `json:"seniority"`
-	Country   string `json:"country"`
-}
-
-// GetCategory returns the value of Category.
-func (s *ConversationCardSummary) GetCategory() string {
-	return s.Category
-}
-
-// GetSeniority returns the value of Seniority.
-func (s *ConversationCardSummary) GetSeniority() string {
-	return s.Seniority
-}
-
-// GetCountry returns the value of Country.
-func (s *ConversationCardSummary) GetCountry() string {
-	return s.Country
-}
-
-// SetCategory sets the value of Category.
-func (s *ConversationCardSummary) SetCategory(val string) {
-	s.Category = val
-}
-
-// SetSeniority sets the value of Seniority.
-func (s *ConversationCardSummary) SetSeniority(val string) {
-	s.Seniority = val
-}
-
-// SetCountry sets the value of Country.
-func (s *ConversationCardSummary) SetCountry(val string) {
-	s.Country = val
-}
-
 // The other side, as the persona they speak as draws them. `detail` is null when not reachable.
 // Ref: #/components/schemas/ConversationCounterpart
 type ConversationCounterpart struct {
-	Persona   string              `json:"persona"`
-	Reachable bool                `json:"reachable"`
-	Detail    NilBuddyCounterpart `json:"detail"`
+	Persona   ConversationCounterpartPersona `json:"persona"`
+	Reachable bool                           `json:"reachable"`
+	Detail    NilBuddyCounterpart            `json:"detail"`
 }
 
 // GetPersona returns the value of Persona.
-func (s *ConversationCounterpart) GetPersona() string {
+func (s *ConversationCounterpart) GetPersona() ConversationCounterpartPersona {
 	return s.Persona
 }
 
@@ -4922,7 +5039,7 @@ func (s *ConversationCounterpart) GetDetail() NilBuddyCounterpart {
 }
 
 // SetPersona sets the value of Persona.
-func (s *ConversationCounterpart) SetPersona(val string) {
+func (s *ConversationCounterpart) SetPersona(val ConversationCounterpartPersona) {
 	s.Persona = val
 }
 
@@ -4934,6 +5051,74 @@ func (s *ConversationCounterpart) SetReachable(val bool) {
 // SetDetail sets the value of Detail.
 func (s *ConversationCounterpart) SetDetail(val NilBuddyCounterpart) {
 	s.Detail = val
+}
+
+type ConversationCounterpartPersona string
+
+const (
+	ConversationCounterpartPersonaBuddy ConversationCounterpartPersona = "buddy"
+)
+
+// AllValues returns all ConversationCounterpartPersona values.
+func (ConversationCounterpartPersona) AllValues() []ConversationCounterpartPersona {
+	return []ConversationCounterpartPersona{
+		ConversationCounterpartPersonaBuddy,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ConversationCounterpartPersona) MarshalText() ([]byte, error) {
+	switch s {
+	case ConversationCounterpartPersonaBuddy:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ConversationCounterpartPersona) UnmarshalText(data []byte) error {
+	switch ConversationCounterpartPersona(data) {
+	case ConversationCounterpartPersonaBuddy:
+		*s = ConversationCounterpartPersonaBuddy
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+type ConversationKind string
+
+const (
+	ConversationKindBuddy ConversationKind = "buddy"
+)
+
+// AllValues returns all ConversationKind values.
+func (ConversationKind) AllValues() []ConversationKind {
+	return []ConversationKind{
+		ConversationKindBuddy,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ConversationKind) MarshalText() ([]byte, error) {
+	switch s {
+	case ConversationKindBuddy:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ConversationKind) UnmarshalText(data []byte) error {
+	switch ConversationKind(data) {
+	case ConversationKindBuddy:
+		*s = ConversationKindBuddy
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/ConversationMessage
@@ -5005,8 +5190,8 @@ func (s *ConversationReadRequest) SetUpTo(val OptInt64) {
 type ConversationReport struct {
 	ID             int64                       `json:"id"`
 	ConversationID int64                       `json:"conversation_id"`
-	Kind           string                      `json:"kind"`
-	Reason         string                      `json:"reason"`
+	Kind           ConversationReportKind      `json:"kind"`
+	Reason         ConversationReportReason    `json:"reason"`
 	Note           string                      `json:"note"`
 	CreatedAt      time.Time                   `json:"created_at"`
 	ResolvedAt     NilDateTime                 `json:"resolved_at"`
@@ -5026,12 +5211,12 @@ func (s *ConversationReport) GetConversationID() int64 {
 }
 
 // GetKind returns the value of Kind.
-func (s *ConversationReport) GetKind() string {
+func (s *ConversationReport) GetKind() ConversationReportKind {
 	return s.Kind
 }
 
 // GetReason returns the value of Reason.
-func (s *ConversationReport) GetReason() string {
+func (s *ConversationReport) GetReason() ConversationReportReason {
 	return s.Reason
 }
 
@@ -5076,12 +5261,12 @@ func (s *ConversationReport) SetConversationID(val int64) {
 }
 
 // SetKind sets the value of Kind.
-func (s *ConversationReport) SetKind(val string) {
+func (s *ConversationReport) SetKind(val ConversationReportKind) {
 	s.Kind = val
 }
 
 // SetReason sets the value of Reason.
-func (s *ConversationReport) SetReason(val string) {
+func (s *ConversationReport) SetReason(val ConversationReportReason) {
 	s.Reason = val
 }
 
@@ -5113,6 +5298,40 @@ func (s *ConversationReport) SetReported(val string) {
 // SetMessages sets the value of Messages.
 func (s *ConversationReport) SetMessages(val []ConversationReportMessage) {
 	s.Messages = val
+}
+
+type ConversationReportKind string
+
+const (
+	ConversationReportKindBuddy ConversationReportKind = "buddy"
+)
+
+// AllValues returns all ConversationReportKind values.
+func (ConversationReportKind) AllValues() []ConversationReportKind {
+	return []ConversationReportKind{
+		ConversationReportKindBuddy,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ConversationReportKind) MarshalText() ([]byte, error) {
+	switch s {
+	case ConversationReportKindBuddy:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ConversationReportKind) UnmarshalText(data []byte) error {
+	switch ConversationReportKind(data) {
+	case ConversationReportKindBuddy:
+		*s = ConversationReportKindBuddy
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/ConversationReportMessage
@@ -5150,6 +5369,61 @@ func (s *ConversationReportMessage) SetBody(val string) {
 // SetCreatedAt sets the value of CreatedAt.
 func (s *ConversationReportMessage) SetCreatedAt(val time.Time) {
 	s.CreatedAt = val
+}
+
+type ConversationReportReason string
+
+const (
+	ConversationReportReasonSpam       ConversationReportReason = "spam"
+	ConversationReportReasonHarassment ConversationReportReason = "harassment"
+	ConversationReportReasonScam       ConversationReportReason = "scam"
+	ConversationReportReasonOther      ConversationReportReason = "other"
+)
+
+// AllValues returns all ConversationReportReason values.
+func (ConversationReportReason) AllValues() []ConversationReportReason {
+	return []ConversationReportReason{
+		ConversationReportReasonSpam,
+		ConversationReportReasonHarassment,
+		ConversationReportReasonScam,
+		ConversationReportReasonOther,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ConversationReportReason) MarshalText() ([]byte, error) {
+	switch s {
+	case ConversationReportReasonSpam:
+		return []byte(s), nil
+	case ConversationReportReasonHarassment:
+		return []byte(s), nil
+	case ConversationReportReasonScam:
+		return []byte(s), nil
+	case ConversationReportReasonOther:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ConversationReportReason) UnmarshalText(data []byte) error {
+	switch ConversationReportReason(data) {
+	case ConversationReportReasonSpam:
+		*s = ConversationReportReasonSpam
+		return nil
+	case ConversationReportReasonHarassment:
+		*s = ConversationReportReasonHarassment
+		return nil
+	case ConversationReportReasonScam:
+		*s = ConversationReportReasonScam
+		return nil
+	case ConversationReportReasonOther:
+		*s = ConversationReportReasonOther
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/ConversationReportRequest
@@ -5243,6 +5517,61 @@ func (s *ConversationSendRequest) GetBody() OptString {
 // SetBody sets the value of Body.
 func (s *ConversationSendRequest) SetBody(val OptString) {
 	s.Body = val
+}
+
+type ConversationStatusForMe string
+
+const (
+	ConversationStatusForMeIncoming ConversationStatusForMe = "incoming"
+	ConversationStatusForMeOutgoing ConversationStatusForMe = "outgoing"
+	ConversationStatusForMeOpen     ConversationStatusForMe = "open"
+	ConversationStatusForMeClosed   ConversationStatusForMe = "closed"
+)
+
+// AllValues returns all ConversationStatusForMe values.
+func (ConversationStatusForMe) AllValues() []ConversationStatusForMe {
+	return []ConversationStatusForMe{
+		ConversationStatusForMeIncoming,
+		ConversationStatusForMeOutgoing,
+		ConversationStatusForMeOpen,
+		ConversationStatusForMeClosed,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ConversationStatusForMe) MarshalText() ([]byte, error) {
+	switch s {
+	case ConversationStatusForMeIncoming:
+		return []byte(s), nil
+	case ConversationStatusForMeOutgoing:
+		return []byte(s), nil
+	case ConversationStatusForMeOpen:
+		return []byte(s), nil
+	case ConversationStatusForMeClosed:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ConversationStatusForMe) UnmarshalText(data []byte) error {
+	switch ConversationStatusForMe(data) {
+	case ConversationStatusForMeIncoming:
+		*s = ConversationStatusForMeIncoming
+		return nil
+	case ConversationStatusForMeOutgoing:
+		*s = ConversationStatusForMeOutgoing
+		return nil
+	case ConversationStatusForMeOpen:
+		*s = ConversationStatusForMeOpen
+		return nil
+	case ConversationStatusForMeClosed:
+		*s = ConversationStatusForMeClosed
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // A single item: `{"data": ...}`.
@@ -7404,6 +7733,99 @@ func (s *EmailPrefsUpdate) SetDeactivateSearches(val []int64) {
 	s.DeactivateSearches = val
 }
 
+// Every figure is null until it has been measured.
+// Ref: #/components/schemas/EmbeddingProgress
+type EmbeddingProgress struct {
+	Eligible        NilInt64    `json:"eligible"`
+	Covered         NilInt64    `json:"covered"`
+	SnapshotCovered NilInt64    `json:"snapshot_covered"`
+	Queued          NilInt64    `json:"queued"`
+	RatePerMinute   NilFloat64  `json:"rate_per_minute"`
+	EtaSeconds      NilInt64    `json:"eta_seconds"`
+	SnapshotAt      NilDateTime `json:"snapshot_at"`
+	MeasuredAt      NilDateTime `json:"measured_at"`
+}
+
+// GetEligible returns the value of Eligible.
+func (s *EmbeddingProgress) GetEligible() NilInt64 {
+	return s.Eligible
+}
+
+// GetCovered returns the value of Covered.
+func (s *EmbeddingProgress) GetCovered() NilInt64 {
+	return s.Covered
+}
+
+// GetSnapshotCovered returns the value of SnapshotCovered.
+func (s *EmbeddingProgress) GetSnapshotCovered() NilInt64 {
+	return s.SnapshotCovered
+}
+
+// GetQueued returns the value of Queued.
+func (s *EmbeddingProgress) GetQueued() NilInt64 {
+	return s.Queued
+}
+
+// GetRatePerMinute returns the value of RatePerMinute.
+func (s *EmbeddingProgress) GetRatePerMinute() NilFloat64 {
+	return s.RatePerMinute
+}
+
+// GetEtaSeconds returns the value of EtaSeconds.
+func (s *EmbeddingProgress) GetEtaSeconds() NilInt64 {
+	return s.EtaSeconds
+}
+
+// GetSnapshotAt returns the value of SnapshotAt.
+func (s *EmbeddingProgress) GetSnapshotAt() NilDateTime {
+	return s.SnapshotAt
+}
+
+// GetMeasuredAt returns the value of MeasuredAt.
+func (s *EmbeddingProgress) GetMeasuredAt() NilDateTime {
+	return s.MeasuredAt
+}
+
+// SetEligible sets the value of Eligible.
+func (s *EmbeddingProgress) SetEligible(val NilInt64) {
+	s.Eligible = val
+}
+
+// SetCovered sets the value of Covered.
+func (s *EmbeddingProgress) SetCovered(val NilInt64) {
+	s.Covered = val
+}
+
+// SetSnapshotCovered sets the value of SnapshotCovered.
+func (s *EmbeddingProgress) SetSnapshotCovered(val NilInt64) {
+	s.SnapshotCovered = val
+}
+
+// SetQueued sets the value of Queued.
+func (s *EmbeddingProgress) SetQueued(val NilInt64) {
+	s.Queued = val
+}
+
+// SetRatePerMinute sets the value of RatePerMinute.
+func (s *EmbeddingProgress) SetRatePerMinute(val NilFloat64) {
+	s.RatePerMinute = val
+}
+
+// SetEtaSeconds sets the value of EtaSeconds.
+func (s *EmbeddingProgress) SetEtaSeconds(val NilInt64) {
+	s.EtaSeconds = val
+}
+
+// SetSnapshotAt sets the value of SnapshotAt.
+func (s *EmbeddingProgress) SetSnapshotAt(val NilDateTime) {
+	s.SnapshotAt = val
+}
+
+// SetMeasuredAt sets the value of MeasuredAt.
+func (s *EmbeddingProgress) SetMeasuredAt(val NilDateTime) {
+	s.MeasuredAt = val
+}
+
 // A company account. `user_id` is the address the moderator and admin actions take.
 // Ref: #/components/schemas/EmployerAccount
 type EmployerAccount struct {
@@ -8971,16 +9393,16 @@ func (s *GetEmailPrefsOK) SetData(val EmailPrefs) {
 
 // A single item: `{"data": ...}`.
 type GetEmbeddingProgressOK struct {
-	Data jx.Raw `json:"data"`
+	Data EmbeddingProgress `json:"data"`
 }
 
 // GetData returns the value of Data.
-func (s *GetEmbeddingProgressOK) GetData() jx.Raw {
+func (s *GetEmbeddingProgressOK) GetData() EmbeddingProgress {
 	return s.Data
 }
 
 // SetData sets the value of Data.
-func (s *GetEmbeddingProgressOK) SetData(val jx.Raw) {
+func (s *GetEmbeddingProgressOK) SetData(val EmbeddingProgress) {
 	s.Data = val
 }
 
@@ -9822,6 +10244,56 @@ func (s *GrowthPoint) SetTotal(val int64) {
 // SetNew sets the value of New.
 func (s *GrowthPoint) SetNew(val int64) {
 	s.New = val
+}
+
+// The derived health verdict for a provider, the fleet or the site.
+// Ref: #/components/schemas/HealthStatus
+type HealthStatus string
+
+const (
+	HealthStatusOperational HealthStatus = "operational"
+	HealthStatusDegraded    HealthStatus = "degraded"
+	HealthStatusDown        HealthStatus = "down"
+)
+
+// AllValues returns all HealthStatus values.
+func (HealthStatus) AllValues() []HealthStatus {
+	return []HealthStatus{
+		HealthStatusOperational,
+		HealthStatusDegraded,
+		HealthStatusDown,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s HealthStatus) MarshalText() ([]byte, error) {
+	switch s {
+	case HealthStatusOperational:
+		return []byte(s), nil
+	case HealthStatusDegraded:
+		return []byte(s), nil
+	case HealthStatusDown:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *HealthStatus) UnmarshalText(data []byte) error {
+	switch HealthStatus(data) {
+	case HealthStatusOperational:
+		*s = HealthStatusOperational
+		return nil
+	case HealthStatusDegraded:
+		*s = HealthStatusDegraded
+		return nil
+	case HealthStatusDown:
+		*s = HealthStatusDown
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // HideCompanyFeedbackNoContent is response for HideCompanyFeedback operation.
@@ -10680,7 +11152,7 @@ func (s *IngestEmailsOK) SetData(val InboxIngested) {
 
 // Ref: #/components/schemas/IngestStatus
 type IngestStatus struct {
-	Overall        string           `json:"overall"`
+	Overall        HealthStatus     `json:"overall"`
 	GeneratedAt    string           `json:"generated_at"`
 	LastJobAddedAt NilString        `json:"last_job_added_at"`
 	Providers      []StatusProvider `json:"providers"`
@@ -10688,7 +11160,7 @@ type IngestStatus struct {
 }
 
 // GetOverall returns the value of Overall.
-func (s *IngestStatus) GetOverall() string {
+func (s *IngestStatus) GetOverall() HealthStatus {
 	return s.Overall
 }
 
@@ -10713,7 +11185,7 @@ func (s *IngestStatus) GetSite() SiteHealth {
 }
 
 // SetOverall sets the value of Overall.
-func (s *IngestStatus) SetOverall(val string) {
+func (s *IngestStatus) SetOverall(val HealthStatus) {
 	s.Overall = val
 }
 
@@ -14300,51 +14772,6 @@ func (o NilBuddyCounterpart) Or(d BuddyCounterpart) BuddyCounterpart {
 	return d
 }
 
-// NewNilBuddyCounterpartDetail returns new NilBuddyCounterpartDetail with value set to v.
-func NewNilBuddyCounterpartDetail(v BuddyCounterpartDetail) NilBuddyCounterpartDetail {
-	return NilBuddyCounterpartDetail{
-		Value: v,
-	}
-}
-
-// NilBuddyCounterpartDetail is nullable BuddyCounterpartDetail.
-type NilBuddyCounterpartDetail struct {
-	Value BuddyCounterpartDetail
-	Null  bool
-}
-
-// SetTo sets value to v.
-func (o *NilBuddyCounterpartDetail) SetTo(v BuddyCounterpartDetail) {
-	o.Null = false
-	o.Value = v
-}
-
-// IsNull returns true if value is Null.
-func (o NilBuddyCounterpartDetail) IsNull() bool { return o.Null }
-
-// SetToNull sets value to null.
-func (o *NilBuddyCounterpartDetail) SetToNull() {
-	o.Null = true
-	var v BuddyCounterpartDetail
-	o.Value = v
-}
-
-// Get returns value and boolean that denotes whether value was set.
-func (o NilBuddyCounterpartDetail) Get() (v BuddyCounterpartDetail, ok bool) {
-	if o.Null {
-		return v, false
-	}
-	return o.Value, true
-}
-
-// Or returns value if set, or given parameter if does not.
-func (o NilBuddyCounterpartDetail) Or(d BuddyCounterpartDetail) BuddyCounterpartDetail {
-	if v, ok := o.Get(); ok {
-		return v
-	}
-	return d
-}
-
 // NewNilBuddyMockReview returns new NilBuddyMockReview with value set to v.
 func NewNilBuddyMockReview(v BuddyMockReview) NilBuddyMockReview {
 	return NilBuddyMockReview{
@@ -16588,6 +17015,52 @@ func (o OptPeriodDate) Or(d PeriodDate) PeriodDate {
 	return d
 }
 
+// NewOptPlanSource returns new OptPlanSource with value set to v.
+func NewOptPlanSource(v PlanSource) OptPlanSource {
+	return OptPlanSource{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptPlanSource is optional PlanSource.
+type OptPlanSource struct {
+	Value PlanSource
+	Set   bool
+}
+
+// IsSet returns true if OptPlanSource was set.
+func (o OptPlanSource) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptPlanSource) Reset() {
+	var v PlanSource
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptPlanSource) SetTo(v PlanSource) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptPlanSource) Get() (v PlanSource, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptPlanSource) Or(d PlanSource) PlanSource {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptRejectSubmissionRequest returns new OptRejectSubmissionRequest with value set to v.
 func NewOptRejectSubmissionRequest(v RejectSubmissionRequest) OptRejectSubmissionRequest {
 	return OptRejectSubmissionRequest{
@@ -17141,14 +17614,13 @@ func (s *PlanHistoryEntry) SetCreatedAt(val time.Time) {
 type PlanPrice struct {
 	ID string `json:"id"`
 	// The smallest currency unit, as the payment provider stores it.
-	AmountCents int64  `json:"amount_cents"`
-	Currency    string `json:"currency"`
-	// `month` or `year`.
-	Interval string `json:"interval"`
+	AmountCents int64             `json:"amount_cents"`
+	Currency    string            `json:"currency"`
+	Interval    PlanPriceInterval `json:"interval"`
 	// The price a new subscriber is sold unless they choose another.
 	Default bool `json:"default"`
-	// The plan the price buys: `pro`, `ultra`, `api` or `api_data`.
-	Tier string `json:"tier"`
+	// The plan the price buys.
+	Tier PlanPriceTier `json:"tier"`
 }
 
 // GetID returns the value of ID.
@@ -17167,7 +17639,7 @@ func (s *PlanPrice) GetCurrency() string {
 }
 
 // GetInterval returns the value of Interval.
-func (s *PlanPrice) GetInterval() string {
+func (s *PlanPrice) GetInterval() PlanPriceInterval {
 	return s.Interval
 }
 
@@ -17177,7 +17649,7 @@ func (s *PlanPrice) GetDefault() bool {
 }
 
 // GetTier returns the value of Tier.
-func (s *PlanPrice) GetTier() string {
+func (s *PlanPrice) GetTier() PlanPriceTier {
 	return s.Tier
 }
 
@@ -17197,7 +17669,7 @@ func (s *PlanPrice) SetCurrency(val string) {
 }
 
 // SetInterval sets the value of Interval.
-func (s *PlanPrice) SetInterval(val string) {
+func (s *PlanPrice) SetInterval(val PlanPriceInterval) {
 	s.Interval = val
 }
 
@@ -17207,24 +17679,171 @@ func (s *PlanPrice) SetDefault(val bool) {
 }
 
 // SetTier sets the value of Tier.
-func (s *PlanPrice) SetTier(val string) {
+func (s *PlanPrice) SetTier(val PlanPriceTier) {
 	s.Tier = val
+}
+
+// Ref: #/components/schemas/PlanPriceInterval
+type PlanPriceInterval string
+
+const (
+	PlanPriceIntervalMonth PlanPriceInterval = "month"
+	PlanPriceIntervalYear  PlanPriceInterval = "year"
+)
+
+// AllValues returns all PlanPriceInterval values.
+func (PlanPriceInterval) AllValues() []PlanPriceInterval {
+	return []PlanPriceInterval{
+		PlanPriceIntervalMonth,
+		PlanPriceIntervalYear,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s PlanPriceInterval) MarshalText() ([]byte, error) {
+	switch s {
+	case PlanPriceIntervalMonth:
+		return []byte(s), nil
+	case PlanPriceIntervalYear:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *PlanPriceInterval) UnmarshalText(data []byte) error {
+	switch PlanPriceInterval(data) {
+	case PlanPriceIntervalMonth:
+		*s = PlanPriceIntervalMonth
+		return nil
+	case PlanPriceIntervalYear:
+		*s = PlanPriceIntervalYear
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/PlanPriceTier
+type PlanPriceTier string
+
+const (
+	PlanPriceTierPro     PlanPriceTier = "pro"
+	PlanPriceTierUltra   PlanPriceTier = "ultra"
+	PlanPriceTierAPI     PlanPriceTier = "api"
+	PlanPriceTierAPIData PlanPriceTier = "api_data"
+)
+
+// AllValues returns all PlanPriceTier values.
+func (PlanPriceTier) AllValues() []PlanPriceTier {
+	return []PlanPriceTier{
+		PlanPriceTierPro,
+		PlanPriceTierUltra,
+		PlanPriceTierAPI,
+		PlanPriceTierAPIData,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s PlanPriceTier) MarshalText() ([]byte, error) {
+	switch s {
+	case PlanPriceTierPro:
+		return []byte(s), nil
+	case PlanPriceTierUltra:
+		return []byte(s), nil
+	case PlanPriceTierAPI:
+		return []byte(s), nil
+	case PlanPriceTierAPIData:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *PlanPriceTier) UnmarshalText(data []byte) error {
+	switch PlanPriceTier(data) {
+	case PlanPriceTierPro:
+		*s = PlanPriceTierPro
+		return nil
+	case PlanPriceTierUltra:
+		*s = PlanPriceTierUltra
+		return nil
+	case PlanPriceTierAPI:
+		*s = PlanPriceTierAPI
+		return nil
+	case PlanPriceTierAPIData:
+		*s = PlanPriceTierAPIData
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Where a paid plan was bought.
+// Ref: #/components/schemas/PlanSource
+type PlanSource string
+
+const (
+	PlanSourceStripe     PlanSource = "stripe"
+	PlanSourceRevenuecat PlanSource = "revenuecat"
+	PlanSourceGranted    PlanSource = "granted"
+)
+
+// AllValues returns all PlanSource values.
+func (PlanSource) AllValues() []PlanSource {
+	return []PlanSource{
+		PlanSourceStripe,
+		PlanSourceRevenuecat,
+		PlanSourceGranted,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s PlanSource) MarshalText() ([]byte, error) {
+	switch s {
+	case PlanSourceStripe:
+		return []byte(s), nil
+	case PlanSourceRevenuecat:
+		return []byte(s), nil
+	case PlanSourceGranted:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *PlanSource) UnmarshalText(data []byte) error {
+	switch PlanSource(data) {
+	case PlanSourceStripe:
+		*s = PlanSourceStripe
+		return nil
+	case PlanSourceRevenuecat:
+		*s = PlanSourceRevenuecat
+		return nil
+	case PlanSourceGranted:
+		*s = PlanSourceGranted
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/PlanStanding
 type PlanStanding struct {
-	// The tier name: `free`, `pro`, `ultra`.
-	Plan     string    `json:"plan"`
+	Plan     PlanTier  `json:"plan"`
 	ResetsAt time.Time `json:"resets_at"`
 	// When the paid plan lapses, absent on the free plan.
 	ProUntil OptDateTime `json:"pro_until"`
-	// Where the plan was bought: `stripe`, `revenuecat` or `granted`. Absent on the free plan.
-	ProSource  OptString       `json:"pro_source"`
+	// Where the plan was bought. Absent on the free plan.
+	ProSource  OptPlanSource   `json:"pro_source"`
 	Allowances []PlanAllowance `json:"allowances"`
 }
 
 // GetPlan returns the value of Plan.
-func (s *PlanStanding) GetPlan() string {
+func (s *PlanStanding) GetPlan() PlanTier {
 	return s.Plan
 }
 
@@ -17239,7 +17858,7 @@ func (s *PlanStanding) GetProUntil() OptDateTime {
 }
 
 // GetProSource returns the value of ProSource.
-func (s *PlanStanding) GetProSource() OptString {
+func (s *PlanStanding) GetProSource() OptPlanSource {
 	return s.ProSource
 }
 
@@ -17249,7 +17868,7 @@ func (s *PlanStanding) GetAllowances() []PlanAllowance {
 }
 
 // SetPlan sets the value of Plan.
-func (s *PlanStanding) SetPlan(val string) {
+func (s *PlanStanding) SetPlan(val PlanTier) {
 	s.Plan = val
 }
 
@@ -17264,13 +17883,63 @@ func (s *PlanStanding) SetProUntil(val OptDateTime) {
 }
 
 // SetProSource sets the value of ProSource.
-func (s *PlanStanding) SetProSource(val OptString) {
+func (s *PlanStanding) SetProSource(val OptPlanSource) {
 	s.ProSource = val
 }
 
 // SetAllowances sets the value of Allowances.
 func (s *PlanStanding) SetAllowances(val []PlanAllowance) {
 	s.Allowances = val
+}
+
+// The tiers a caller can be on.
+// Ref: #/components/schemas/PlanTier
+type PlanTier string
+
+const (
+	PlanTierFree  PlanTier = "free"
+	PlanTierPro   PlanTier = "pro"
+	PlanTierUltra PlanTier = "ultra"
+)
+
+// AllValues returns all PlanTier values.
+func (PlanTier) AllValues() []PlanTier {
+	return []PlanTier{
+		PlanTierFree,
+		PlanTierPro,
+		PlanTierUltra,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s PlanTier) MarshalText() ([]byte, error) {
+	switch s {
+	case PlanTierFree:
+		return []byte(s), nil
+	case PlanTierPro:
+		return []byte(s), nil
+	case PlanTierUltra:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *PlanTier) UnmarshalText(data []byte) error {
+	switch PlanTier(data) {
+	case PlanTierFree:
+		*s = PlanTierFree
+		return nil
+	case PlanTierPro:
+		*s = PlanTierPro
+		return nil
+	case PlanTierUltra:
+		*s = PlanTierUltra
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // What one tier allows for one feature in a UTC day.
@@ -17861,6 +18530,70 @@ func (s *ProposeCompanyRelationCreated) GetData() CompanyRelationProposal {
 // SetData sets the value of Data.
 func (s *ProposeCompanyRelationCreated) SetData(val CompanyRelationProposal) {
 	s.Data = val
+}
+
+// How a source is shaped.
+// Ref: #/components/schemas/ProviderKind
+type ProviderKind string
+
+const (
+	ProviderKindAts        ProviderKind = "ats"
+	ProviderKindAggregator ProviderKind = "aggregator"
+	ProviderKindCompany    ProviderKind = "company"
+	ProviderKindSocial     ProviderKind = "social"
+	ProviderKindOther      ProviderKind = "other"
+)
+
+// AllValues returns all ProviderKind values.
+func (ProviderKind) AllValues() []ProviderKind {
+	return []ProviderKind{
+		ProviderKindAts,
+		ProviderKindAggregator,
+		ProviderKindCompany,
+		ProviderKindSocial,
+		ProviderKindOther,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ProviderKind) MarshalText() ([]byte, error) {
+	switch s {
+	case ProviderKindAts:
+		return []byte(s), nil
+	case ProviderKindAggregator:
+		return []byte(s), nil
+	case ProviderKindCompany:
+		return []byte(s), nil
+	case ProviderKindSocial:
+		return []byte(s), nil
+	case ProviderKindOther:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ProviderKind) UnmarshalText(data []byte) error {
+	switch ProviderKind(data) {
+	case ProviderKindAts:
+		*s = ProviderKindAts
+		return nil
+	case ProviderKindAggregator:
+		*s = ProviderKindAggregator
+		return nil
+	case ProviderKindCompany:
+		*s = ProviderKindCompany
+		return nil
+	case ProviderKindSocial:
+		*s = ProviderKindSocial
+		return nil
+	case ProviderKindOther:
+		*s = ProviderKindOther
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/PulseCompetition
@@ -20985,10 +21718,8 @@ func (s *SimilarJobsOK) SetData(val []jx.Raw) {
 // The site's own verdict, independent of the ingest fleet's `overall`.
 // Ref: #/components/schemas/SiteHealth
 type SiteHealth struct {
-	// Operational, degraded or down.
-	Status string `json:"status"`
-	// "up" or "down".
-	Database string `json:"database"`
+	Status   HealthStatus       `json:"status"`
+	Database SiteHealthDatabase `json:"database"`
 	// Fraction of 5xx responses over the trailing `window_minutes`, from the process's own traffic.
 	ErrorRate float64 `json:"error_rate"`
 	// Fraction of the database pool held at once, 0..1. Reported, never judged: it says what the error
@@ -20999,12 +21730,12 @@ type SiteHealth struct {
 }
 
 // GetStatus returns the value of Status.
-func (s *SiteHealth) GetStatus() string {
+func (s *SiteHealth) GetStatus() HealthStatus {
 	return s.Status
 }
 
 // GetDatabase returns the value of Database.
-func (s *SiteHealth) GetDatabase() string {
+func (s *SiteHealth) GetDatabase() SiteHealthDatabase {
 	return s.Database
 }
 
@@ -21029,12 +21760,12 @@ func (s *SiteHealth) GetHistory() []SiteHistoryEntry {
 }
 
 // SetStatus sets the value of Status.
-func (s *SiteHealth) SetStatus(val string) {
+func (s *SiteHealth) SetStatus(val HealthStatus) {
 	s.Status = val
 }
 
 // SetDatabase sets the value of Database.
-func (s *SiteHealth) SetDatabase(val string) {
+func (s *SiteHealth) SetDatabase(val SiteHealthDatabase) {
 	s.Database = val
 }
 
@@ -21058,10 +21789,51 @@ func (s *SiteHealth) SetHistory(val []SiteHistoryEntry) {
 	s.History = val
 }
 
+type SiteHealthDatabase string
+
+const (
+	SiteHealthDatabaseUp   SiteHealthDatabase = "up"
+	SiteHealthDatabaseDown SiteHealthDatabase = "down"
+)
+
+// AllValues returns all SiteHealthDatabase values.
+func (SiteHealthDatabase) AllValues() []SiteHealthDatabase {
+	return []SiteHealthDatabase{
+		SiteHealthDatabaseUp,
+		SiteHealthDatabaseDown,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s SiteHealthDatabase) MarshalText() ([]byte, error) {
+	switch s {
+	case SiteHealthDatabaseUp:
+		return []byte(s), nil
+	case SiteHealthDatabaseDown:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *SiteHealthDatabase) UnmarshalText(data []byte) error {
+	switch SiteHealthDatabase(data) {
+	case SiteHealthDatabaseUp:
+		*s = SiteHealthDatabaseUp
+		return nil
+	case SiteHealthDatabaseDown:
+		*s = SiteHealthDatabaseDown
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 // Ref: #/components/schemas/SiteHistoryEntry
 type SiteHistoryEntry struct {
-	Day    string `json:"day"`
-	Status string `json:"status"`
+	Day    string       `json:"day"`
+	Status HealthStatus `json:"status"`
 }
 
 // GetDay returns the value of Day.
@@ -21070,7 +21842,7 @@ func (s *SiteHistoryEntry) GetDay() string {
 }
 
 // GetStatus returns the value of Status.
-func (s *SiteHistoryEntry) GetStatus() string {
+func (s *SiteHistoryEntry) GetStatus() HealthStatus {
 	return s.Status
 }
 
@@ -21080,7 +21852,7 @@ func (s *SiteHistoryEntry) SetDay(val string) {
 }
 
 // SetStatus sets the value of Status.
-func (s *SiteHistoryEntry) SetStatus(val string) {
+func (s *SiteHistoryEntry) SetStatus(val HealthStatus) {
 	s.Status = val
 }
 
@@ -21342,8 +22114,8 @@ func (s *SkillsMeta) SetLimit(val int64) {
 
 // Ref: #/components/schemas/SourceEntry
 type SourceEntry struct {
-	Source string `json:"source"`
-	Kind   string `json:"kind"`
+	Source string       `json:"source"`
+	Kind   ProviderKind `json:"kind"`
 	// Whether the source is a crawl adapter at all.
 	Adapter bool `json:"adapter"`
 	// Null until a snapshot has been taken for this source.
@@ -21358,7 +22130,7 @@ func (s *SourceEntry) GetSource() string {
 }
 
 // GetKind returns the value of Kind.
-func (s *SourceEntry) GetKind() string {
+func (s *SourceEntry) GetKind() ProviderKind {
 	return s.Kind
 }
 
@@ -21383,7 +22155,7 @@ func (s *SourceEntry) SetSource(val string) {
 }
 
 // SetKind sets the value of Kind.
-func (s *SourceEntry) SetKind(val string) {
+func (s *SourceEntry) SetKind(val ProviderKind) {
 	s.Kind = val
 }
 
@@ -21404,17 +22176,17 @@ func (s *SourceEntry) SetHealth(val NilSourceHealth) {
 
 // Ref: #/components/schemas/SourceHealth
 type SourceHealth struct {
-	Status        string    `json:"status"`
-	TotalBoards   int64     `json:"total_boards"`
-	HealthyBoards int64     `json:"healthy_boards"`
-	CooledBoards  int64     `json:"cooled_boards"`
-	LastRun       NilString `json:"last_run"`
-	LastSuccess   NilString `json:"last_success"`
-	IngestedTotal int64     `json:"ingested_total"`
+	Status        HealthStatus `json:"status"`
+	TotalBoards   int64        `json:"total_boards"`
+	HealthyBoards int64        `json:"healthy_boards"`
+	CooledBoards  int64        `json:"cooled_boards"`
+	LastRun       NilString    `json:"last_run"`
+	LastSuccess   NilString    `json:"last_success"`
+	IngestedTotal int64        `json:"ingested_total"`
 }
 
 // GetStatus returns the value of Status.
-func (s *SourceHealth) GetStatus() string {
+func (s *SourceHealth) GetStatus() HealthStatus {
 	return s.Status
 }
 
@@ -21449,7 +22221,7 @@ func (s *SourceHealth) GetIngestedTotal() int64 {
 }
 
 // SetStatus sets the value of Status.
-func (s *SourceHealth) SetStatus(val string) {
+func (s *SourceHealth) SetStatus(val HealthStatus) {
 	s.Status = val
 }
 
@@ -21591,15 +22363,15 @@ func (s *StatsFacetsOK) SetData(val FacetStats) {
 
 // Ref: #/components/schemas/StatusProvider
 type StatusProvider struct {
-	Provider      string    `json:"provider"`
-	Kind          string    `json:"kind"`
-	Status        string    `json:"status"`
-	TotalBoards   int64     `json:"total_boards"`
-	HealthyBoards int64     `json:"healthy_boards"`
-	CooledBoards  int64     `json:"cooled_boards"`
-	LastRun       NilString `json:"last_run"`
-	LastSuccess   NilString `json:"last_success"`
-	IngestedTotal int64     `json:"ingested_total"`
+	Provider      string       `json:"provider"`
+	Kind          ProviderKind `json:"kind"`
+	Status        HealthStatus `json:"status"`
+	TotalBoards   int64        `json:"total_boards"`
+	HealthyBoards int64        `json:"healthy_boards"`
+	CooledBoards  int64        `json:"cooled_boards"`
+	LastRun       NilString    `json:"last_run"`
+	LastSuccess   NilString    `json:"last_success"`
+	IngestedTotal int64        `json:"ingested_total"`
 }
 
 // GetProvider returns the value of Provider.
@@ -21608,12 +22380,12 @@ func (s *StatusProvider) GetProvider() string {
 }
 
 // GetKind returns the value of Kind.
-func (s *StatusProvider) GetKind() string {
+func (s *StatusProvider) GetKind() ProviderKind {
 	return s.Kind
 }
 
 // GetStatus returns the value of Status.
-func (s *StatusProvider) GetStatus() string {
+func (s *StatusProvider) GetStatus() HealthStatus {
 	return s.Status
 }
 
@@ -21653,12 +22425,12 @@ func (s *StatusProvider) SetProvider(val string) {
 }
 
 // SetKind sets the value of Kind.
-func (s *StatusProvider) SetKind(val string) {
+func (s *StatusProvider) SetKind(val ProviderKind) {
 	s.Kind = val
 }
 
 // SetStatus sets the value of Status.
-func (s *StatusProvider) SetStatus(val string) {
+func (s *StatusProvider) SetStatus(val HealthStatus) {
 	s.Status = val
 }
 

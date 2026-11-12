@@ -30,10 +30,20 @@ model BuddySimilar {
   shared_companies: BuddyCompany[];
 }
 
+/** The reactions a member may give a feed event; "" is none. */
+union BuddyReactionChoice {
+  "",
+  "congrats",
+  "luck",
+  "rooting",
+  "same",
+  "insight",
+}
+
 /** Count per kind (no key for a kind nobody chose) and the viewer's own choice, "" for none. */
 model BuddyReactions {
   counts: Record<int64>;
-  mine: string;
+  mine: BuddyReactionChoice;
 }
 
 model BuddyFeedEntry {
@@ -45,7 +55,7 @@ model BuddyFeedEntry {
   job_slug: string | null;
   job_location: string | null;
   reactions: BuddyReactions;
-  type: string;
+  type: "applied" | "interview" | "offer";
   day: string;
 }
 
@@ -84,28 +94,6 @@ model BuddyReactBody {
 model BuddyInviteBody {
   handle?: string;
   body?: string;
-}
-
-/** The persona's own detail; null when the other side is not reachable. */
-model BuddyCounterpartDetail {
-  handle: string;
-  card_summary: BuddyCardSummary;
-}
-
-model BuddyConversationCounterpart {
-  persona: string;
-  reachable: boolean;
-  detail: BuddyCounterpartDetail | null;
-}
-
-model BuddyConversation {
-  id: int64;
-  kind: string;
-  status_for_me: string;
-  counterpart: BuddyConversationCounterpart;
-  unread: int64;
-  last_message_at: utcDateTime | null;
-  created_at: utcDateTime;
 }
 
 model BuddySimilarMeta {
@@ -188,7 +176,7 @@ op buddyShowApplication(@path id: string): NoContentResponse | Problem;
 @post
 op buddyInvite(@body body: BuddyInviteBody): {
   @statusCode _: 201;
-  @body body: Data<BuddyConversation>;
+  @body body: Data<Conversation>;
 } | Problem;
 
 // Mock interviews.
@@ -200,10 +188,17 @@ model BuddyMockSettings {
   paused?: boolean;
 }
 
+/** The mock-interview topics. */
+union BuddyMockTopic {
+  "coding",
+  "system_design",
+  "behavioral",
+}
+
 model BuddyMockSettingsOut {
   timezone: string;
   meeting_url: string;
-  topics: string[] | null;
+  topics: BuddyMockTopic[];
   paused: boolean;
 }
 
@@ -241,12 +236,12 @@ model BuddyMockReview {
 
 model BuddyMock {
   id: string;
-  role: string;
+  role: "host" | "guest";
   counterpart: string | null;
   starts_at: utcDateTime;
   ends_at: utcDateTime;
-  topic: string;
-  status: string;
+  topic: BuddyMockTopic;
+  status: "confirmed" | "cancelled";
   meeting_url: string | null;
   can_cancel: boolean;
   can_review: boolean;
@@ -270,7 +265,7 @@ model BuddyMockSlot {
 model BuddyMockSlotsMeta {
   timezone: string;
   count: int64;
-  topics: string[] | null;
+  topics: BuddyMockTopic[];
 }
 
 model BuddyMockSlotsPage {
@@ -287,7 +282,7 @@ model BuddyMockNextSlot {
 model BuddyMockHost {
   handle: string;
   card_summary: BuddyCardSummary;
-  topics: string[] | null;
+  topics: BuddyMockTopic[];
   next_slot: BuddyMockNextSlot;
   rating_avg: float64;
   rating_count: int64;
@@ -318,7 +313,7 @@ model BuddyMockReviewBody {
 model BuddyRevealedReview {
   rating: int64;
   comment: string;
-  topic: string;
+  topic: BuddyMockTopic;
   day: string;
 }
 

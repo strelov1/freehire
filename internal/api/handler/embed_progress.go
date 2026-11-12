@@ -3,7 +3,6 @@ package handler
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -43,11 +42,17 @@ func (h *embedProgressHandlers) GetEmbeddingProgress(context.Context) (*apigen.G
 	if h.source == nil {
 		return nil, fiber.ErrServiceUnavailable
 	}
-	raw, err := json.Marshal(h.source.Current())
-	if err != nil {
-		return nil, err
+	p := h.source.Current()
+	out := apigen.EmbeddingProgress{
+		Eligible: nilInt64(p.Eligible), Covered: nilInt64(p.Covered), SnapshotCovered: nilInt64(p.SnapshotCovered),
+		Queued: nilInt64(p.Queued), EtaSeconds: nilInt64(p.ETASeconds),
+		SnapshotAt: nilDateTime(p.SnapshotAt), MeasuredAt: nilDateTime(p.MeasuredAt),
+		RatePerMinute: apigen.NilFloat64{Null: true},
 	}
-	return &apigen.GetEmbeddingProgressOK{Data: raw}, nil
+	if p.RatePerMinute != nil {
+		out.RatePerMinute = apigen.NewNilFloat64(*p.RatePerMinute)
+	}
+	return &apigen.GetEmbeddingProgressOK{Data: out}, nil
 }
 
 // Stream sends the current document at once (once one has been sampled) and then one

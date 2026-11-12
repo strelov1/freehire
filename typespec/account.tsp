@@ -110,8 +110,8 @@ model ApiKeyCreate {
 }
 
 model ApiKeyPlan {
-  /** The API product tier the account holds. */
-  tier: string;
+  /** The API product tier the account holds; empty for none. */
+  tier: "" | "api" | "api_data";
 
   until?: utcDateTime;
 }
