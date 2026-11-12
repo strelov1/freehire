@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/minio/minio-go/v7"
 
@@ -337,6 +338,30 @@ func TestStore_AmbiguousCommitKeepsTheObjectThePointerNames(t *testing.T) {
 	}
 	if got := string(blobs.objs[repo.ptr[7]]); got != "CV" {
 		t.Errorf("the object the pointer names = %q, want it kept", got)
+	}
+}
+
+// deletedAccountRepo is an upload racing account deletion: the user row is gone by the time
+// the pointer is written, so the write fails and the account no longer exists to read.
+type deletedAccountRepo struct{ *fakeRepo }
+
+func (deletedAccountRepo) WithUploadLock(context.Context, int64, func(Repository) error) error {
+	return pgx.ErrNoRows
+}
+
+func (deletedAccountRepo) Get(context.Context, int64) (db.GetUserResumeRow, error) {
+	return db.GetUserResumeRow{}, pgx.ErrNoRows
+}
+
+// An upload whose account was deleted meanwhile leaves no object behind: no row is left that
+// could ever name it.
+func TestStore_UploadAfterAccountDeletionDiscardsTheObject(t *testing.T) {
+	blobs := newFakeBlobs()
+	if _, err := New(blobs, deletedAccountRepo{newFakeRepo()}).Put(context.Background(), 7, "text/plain", []byte("CV")); err == nil {
+		t.Fatal("Put succeeded for a deleted account")
+	}
+	if len(blobs.objs) != 0 {
+		t.Errorf("objects left = %v, want none", blobs.objs)
 	}
 }
 

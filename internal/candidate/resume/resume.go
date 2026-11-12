@@ -213,9 +213,11 @@ func (s *Store) put(ctx context.Context, userID int64, contentType string, data 
 	}
 	if err != nil {
 		// A failed COMMIT can still have committed on the server. Discard the object only once
-		// a fresh read shows the pointer does not name it; an unreadable pointer keeps it, and
-		// account deletion is the backstop for that.
-		if ptr, readErr := s.repo.Get(context.WithoutCancel(ctx), userID); readErr == nil && ptr.ResumeObjectKey.String != key {
+		// a fresh read shows the pointer does not name it; an otherwise unreadable pointer keeps
+		// it, and account deletion is the backstop for that.
+		// No account row means account deletion won the race: nothing can name the object.
+		ptr, readErr := s.repo.Get(context.WithoutCancel(ctx), userID)
+		if errors.Is(readErr, pgx.ErrNoRows) || (readErr == nil && ptr.ResumeObjectKey.String != key) {
 			s.discard(ctx, key)
 		}
 		observability.RecordCVUpload(false)

@@ -472,9 +472,19 @@ func (h *referralHandlers) streamUploadedCV(c *fiber.Ctx, seekerID int64) error 
 	if err != nil {
 		return err
 	}
-	c.Set(fiber.HeaderContentType, "application/pdf")
-	c.Set(fiber.HeaderContentDisposition, `inline; filename="cv.pdf"`)
+	contentType, filename := uploadedCVType(data)
+	c.Set(fiber.HeaderContentType, contentType)
+	c.Set(fiber.HeaderContentDisposition, `inline; filename="`+filename+`"`)
 	return c.Send(data)
+}
+
+// uploadedCVType names a stored CV's type the way the store reads it (resume.extractText): a
+// PDF by its magic number, otherwise the pasted text it was stored as.
+func uploadedCVType(data []byte) (contentType, filename string) {
+	if bytes.HasPrefix(data, []byte("%PDF")) {
+		return "application/pdf", "cv.pdf"
+	}
+	return "text/plain; charset=utf-8", "cv.txt"
 }
 
 // renderOwnerCV renders a builder CV owned by ownerID to PDF. cvStore.Get is owner-scoped,
