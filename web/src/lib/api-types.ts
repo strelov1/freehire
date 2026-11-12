@@ -163,6 +163,8 @@ export interface InsightSalaryBand {
   p25: number;
   p50: number;
   p75: number;
+  /** The salary at every 5th percentile from 5 to 95; [] until the rollup computed it. */
+  quantiles: number[];
 }
 
 export interface InsightCompany {

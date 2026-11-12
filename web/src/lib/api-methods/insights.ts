@@ -61,11 +61,15 @@ export function insightsApi({ request, requestData }: Http) {
   /** Every seniority's salary bands for one category, in a single call (the
    *  per-category salary page). Rows carry their own `seniority` ('' = the
    *  category-wide band). */
-  /** One category's monthly salary history, every (currency, period) it has. */
-  async function insightsSalaryHistory(category: string): Promise<InsightSalaryMonth[]> {
-    return requestData<InsightSalaryMonth[]>(
-      `/api/v1/insights/salary/history?category=${encodeURIComponent(category)}`,
-    );
+  /** One role × grade × country scope's monthly salary history, every (currency,
+   *  period) it has; an empty part means every value. */
+  async function insightsSalaryHistory(scope: {
+    category: string;
+    seniority: string;
+    country: string;
+  }): Promise<InsightSalaryMonth[]> {
+    const q = new URLSearchParams(Object.entries(scope).filter(([, v]) => v));
+    return requestData<InsightSalaryMonth[]>(`/api/v1/insights/salary/history?${q}`);
   }
 
   async function insightsSalaryByCategory(category: string): Promise<InsightSalaryBand[]> {
