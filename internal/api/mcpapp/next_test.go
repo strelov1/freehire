@@ -59,13 +59,13 @@ func namedTools(names ...string) []assistant.Tool {
 func TestNextHint_OnTheCatalogueTools(t *testing.T) {
 	signedIn := namedTools("get_profile", "save_job", "track_job", "subscribe", "auto_apply_start")
 
-	anon := connectServer(t, newMixedServer(signedIn, 0, testOrigin, readerThatFinds(t)))
+	anon := connectServer(t, newMixedServer(signedIn, 0, testOrigin, readerThatFinds(t), false))
 	got := nextOf(t, anon, "search_jobs", map[string]any{"query": "Go"})
 	if !strings.Contains(got, "Sign in") || strings.Contains(got, "save_job") {
 		t.Errorf("anonymous hint must point at signing in, not at tools it cannot call: %q", got)
 	}
 
-	user := connectServer(t, newMixedServer(signedIn, 42, testOrigin, readerThatFinds(t)))
+	user := connectServer(t, newMixedServer(signedIn, 42, testOrigin, readerThatFinds(t), false))
 	for tool, args := range map[string]map[string]any{
 		"search_jobs": {"query": "Go"},
 		"get_job":     {"slug": "senior-go-engineer-acme-abc123"},
@@ -103,7 +103,7 @@ func TestNextHint_OnTheAccountServerFollowsServedTools(t *testing.T) {
 // An anonymous answer shortened by the cap carries the cap notice, which already says to
 // connect the account; the next hint stays out so the agent is told once.
 func TestNextHint_NotRepeatedByTheAnonymousCapNotice(t *testing.T) {
-	anon := connectServer(t, newMixedServer(nil, 0, testOrigin, readerThatFinds(t)))
+	anon := connectServer(t, newMixedServer(nil, 0, testOrigin, readerThatFinds(t), false))
 	res, err := anon.CallTool(t.Context(), &mcp.CallToolParams{Name: "search_jobs", Arguments: map[string]any{"query": "Go", "limit": 50}})
 	if err != nil || res.IsError {
 		t.Fatal(err, res)
