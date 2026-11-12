@@ -95,3 +95,20 @@ func TestNextHint_OnTheAccountServerFollowsServedTools(t *testing.T) {
 		t.Errorf("my_jobs carries a hint: %q", got)
 	}
 }
+
+// An anonymous answer shortened by the cap carries the cap notice, which already says to
+// connect the account; the next hint stays out so the agent is told once.
+func TestNextHint_NotRepeatedByTheAnonymousCapNotice(t *testing.T) {
+	anon := connectServer(t, newMixedServer(nil, 0, testOrigin, readerThatFinds(t)))
+	res, err := anon.CallTool(t.Context(), &mcp.CallToolParams{Name: "search_jobs", Arguments: map[string]any{"query": "Go", "limit": 50}})
+	if err != nil || res.IsError {
+		t.Fatal(err, res)
+	}
+	var body struct{ Notice, Next string }
+	if err := json.Unmarshal([]byte(res.Content[0].(*mcp.TextContent).Text), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Notice == "" || body.Next != "" {
+		t.Errorf("notice=%q next=%q, want the notice alone", body.Notice, body.Next)
+	}
+}
