@@ -412,12 +412,9 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 	// an offer they were shown is worse than asking them to try again.
 	var couponID string
 	if !discount.none() {
-		couponID, err = s.spendableCoupon(ctx, discount, customerID)
+		couponID, err = s.spendableCoupon(ctx, discount)
 		if err != nil {
 			return "", Discount{}, fmt.Errorf("billing: minting a discount for user %d: %w", userID, err)
-		}
-		if couponID == "" {
-			discount = Discount{}
 		}
 	}
 
@@ -430,36 +427,39 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 	return url, discount, nil
 }
 
-// spendableCoupon is the coupon this checkout may carry, or "" when the discount is used up.
+// spendableCoupon is the coupon this checkout may carry.
 //
 // The provider spends a coupon's one redemption on the first checkout that TRIES to pay,
 // declined or not. A buyer whose card was refused once would otherwise be handed the same
 // spent coupon by the idempotent create, and every checkout after it would fail outright.
 //
-// Who has never had an invoice paid did not use the offer, so they get a fresh coupon. A bound
-// customer alone is not proof: referral credit binds one before any purchase. Who has paid,
-// used it: their checkout goes ahead at the plain price.
-func (s *Service) spendableCoupon(ctx context.Context, discount Discount, customerID string) (string, error) {
-	id, err := s.client.createCoupon(ctx, discount.PercentOff, discount.Label, discount.Key)
-	if err != nil {
-		return "", err
-	}
-	valid, err := s.client.couponValid(ctx, id)
-	if err != nil || valid {
-		return id, err
-	}
-	if customerID != "" {
-		paid, err := s.client.hasPaidInvoice(ctx, customerID)
+// A spent coupon is replaced by the coupon keyed on it, so the replacements form one chain
+// and at most one link is usable at a time: two open checkouts carry the same replacement,
+// and its single redemption lets only one of them be discounted.
+//
+// shortcut: a spent coupon may also be one a SUCCESSFUL purchase used, and this replaces it
+// all the same. That re-offer is no wider than before: the stable key's 24-hour idempotency
+// window already re-mints a fresh coupon for a past buyer the day after. Close both together
+// by recording when an offer is consumed, if repeat discounted purchases show up.
+func (s *Service) spendableCoupon(ctx context.Context, discount Discount) (string, error) {
+	key := discount.Key
+	for range maxCouponChain {
+		id, err := s.client.createCoupon(ctx, discount.PercentOff, discount.Label, key)
 		if err != nil {
 			return "", err
 		}
-		if paid {
-			return "", nil
+		valid, err := s.client.couponValid(ctx, id)
+		if err != nil || valid {
+			return id, err
 		}
+		key = discount.Key + "_after_" + id
 	}
-	// A fresh key per call: the stable key is exactly what keeps returning the spent coupon.
-	return s.client.createCoupon(ctx, discount.PercentOff, discount.Label, discount.Key+"_"+uuid.NewString())
+	return "", fmt.Errorf("billing: %d coupons in a row were spent for key %q", maxCouponChain, discount.Key)
 }
+
+// maxCouponChain bounds how many spent replacements one checkout walks past: each link is a
+// declined payment, and a dozen of them in a day is a card being tested, not a buyer.
+const maxCouponChain = 12
 
 // HasCollectedAtLeast reports whether this customer has had an invoice collecting at least
 // minCents.
