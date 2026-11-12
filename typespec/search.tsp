@@ -15,9 +15,6 @@ namespace Freehire;
 
 model JobSearchMeta {
   ...ListMeta;
-
-  /** True when `total` counts only what was read, not the whole match. */
-  total_is_lower_bound?: boolean;
 }
 
 model JobSearchPage {

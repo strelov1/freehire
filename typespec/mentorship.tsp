@@ -8,11 +8,7 @@ namespace Freehire;
 // the mentor's own cabinet, and the moderation queue. The two photo routes (images) stay
 // on Fiber. The schedule rows and slots reuse the models buddies.tsp declares.
 
-/**
- * A mentor as the public, the owner and a moderator see them. The owner and moderator
- * views add status, paused and created_at; the owner alone gets meeting_url and the
- * session parameters.
- */
+/** A mentor as the PUBLIC sees them: the directory card and the profile read are one shape. */
 model MentorshipMentor {
   slug: string;
   name: string;
@@ -20,27 +16,50 @@ model MentorshipMentor {
   company_name: string;
   headline: string;
   bio: string;
-  topics: string[] | null;
-  languages: string[] | null;
+  topics: string[];
+  languages: string[];
   timezone: string;
   session_minutes: int64;
   rating_count: int64;
   rating_avg: float64;
   show_photo: boolean;
+
+  /** Absent when the mentor left it unset. */
   seniority?: string;
-  status?: string;
-  paused?: boolean;
+}
+
+/** The moderation status of a profile. `withdrawn` is a mentor who has left; the row survives it. */
+enum MentorshipProfileStatus {
+  pending,
+  approved,
+  rejected,
+  withdrawn,
+}
+
+/** A mentor as a moderator sees them: the public shape plus the moderation state, never the meeting link. */
+model MentorshipModeratedMentor {
+  ...MentorshipMentor;
+  status: MentorshipProfileStatus;
+  paused: boolean;
+  created_at: utcDateTime;
+}
+
+/** A mentor as their owner sees them: the moderated shape plus the room and the session parameters. */
+model MentorshipOwnMentor {
+  ...MentorshipModeratedMentor;
+
+  /** Absent while the mentor has not set one. */
   meeting_url?: string;
-  created_at?: utcDateTime;
-  buffer_before_minutes?: int64;
-  buffer_after_minutes?: int64;
-  notice_minutes?: int64;
-  horizon_days?: int64;
+
+  buffer_before_minutes: int64;
+  buffer_after_minutes: int64;
+  notice_minutes: int64;
+  horizon_days: int64;
 }
 
 /** A pending profile in the moderation queue. */
 model MentorshipPendingMentor {
-  ...MentorshipMentor;
+  ...MentorshipModeratedMentor;
   id: int64;
   has_approved_referral_offer: boolean;
 }
@@ -70,6 +89,12 @@ model MentorshipSlotsPage {
   meta: MentorshipTimezoneMeta;
 }
 
+/** A booked session is `confirmed` or `cancelled`. */
+enum MentorshipBookingStatus {
+  confirmed,
+  cancelled,
+}
+
 /** One session as a party to it sees it; seeker_email only for the mentor. */
 model MentorshipBooking {
   id: string;
@@ -77,7 +102,7 @@ model MentorshipBooking {
   headline: string;
   starts_at: utcDateTime;
   ends_at: utcDateTime;
-  status: string;
+  status: MentorshipBookingStatus;
   note: string;
   meeting_url: string;
   seeker_email?: string;
@@ -100,12 +125,18 @@ model MentorshipReview {
   comment: string;
 }
 
+/** `booked`: a confirmed session; `busy`: a synced interval from the mentor's calendar; `free`: offered to seekers; `closed`: outside the stated availability. */
+enum MentorshipCalendarStatus {
+  booked,
+  busy,
+  free,
+  closed,
+}
+
 model MentorshipCalendarInterval {
   starts_at: utcDateTime;
   ends_at: utcDateTime;
-
-  /** One of booked, busy, free or closed. */
-  status: string;
+  status: MentorshipCalendarStatus;
 }
 
 model MentorshipCalendarPage {
@@ -225,20 +256,20 @@ op reviewSession(@path id: string, @body body: MentorshipReviewBody): Data<Mento
 @tag("Mentorship")
 @route("/me/mentorship/profile")
 @get
-op getMyMentorProfile(): Data<MentorshipMentor | null> | Problem;
+op getMyMentorProfile(): Data<MentorshipOwnMentor | null> | Problem;
 
 @tag("Mentorship")
 @route("/me/mentorship/profile")
 @post
 op submitMentorProfile(@body body: MentorshipProfileBody): {
   @statusCode _: 201;
-  @body body: Data<MentorshipMentor>;
+  @body body: Data<MentorshipOwnMentor>;
 } | Problem;
 
 @tag("Mentorship")
 @route("/me/mentorship/profile")
 @put
-op updateMentorProfile(@body body: MentorshipProfileBody): Data<MentorshipMentor> | Problem;
+op updateMentorProfile(@body body: MentorshipProfileBody): Data<MentorshipOwnMentor> | Problem;
 
 @tag("Mentorship")
 @route("/me/mentorship/profile")
@@ -248,12 +279,12 @@ op withdrawMentorProfile(): NoContentResponse | Problem;
 @tag("Mentorship")
 @route("/me/mentorship/profile/pause")
 @post
-op pauseMentorProfile(@body body: MentorshipPauseBody): Data<MentorshipMentor> | Problem;
+op pauseMentorProfile(@body body: MentorshipPauseBody): Data<MentorshipOwnMentor> | Problem;
 
 @tag("Mentorship")
 @route("/me/mentorship/profile/reactivate")
 @post
-op reactivateMentorProfile(): Data<MentorshipMentor> | Problem;
+op reactivateMentorProfile(): Data<MentorshipOwnMentor> | Problem;
 
 /** The mentor's whole schedule, weekly rows and dated overrides together. */
 @tag("Mentorship")
@@ -305,4 +336,4 @@ op listPendingMentorProfiles(): {
 @tag("Mentorship")
 @route("/mentorship/profiles/{id}/decide")
 @post
-op decideMentorProfile(@path id: string, @body body: MentorshipDecideBody): Data<MentorshipMentor> | Problem;
+op decideMentorProfile(@path id: string, @body body: MentorshipDecideBody): Data<MentorshipModeratedMentor> | Problem;

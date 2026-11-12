@@ -19,7 +19,7 @@ import (
 func toBookingResponse(b mentorship.Booking, now time.Time) apigen.MentorshipBooking {
 	return apigen.MentorshipBooking{
 		ID: b.ID.String(), MentorSlug: b.MentorSlug, Headline: b.MentorHeadline,
-		StartsAt: b.StartsAt.UTC(), EndsAt: b.EndsAt.UTC(), Status: b.Status,
+		StartsAt: b.StartsAt.UTC(), EndsAt: b.EndsAt.UTC(), Status: apigen.MentorshipBookingStatus(b.Status),
 		Note: b.Note, MeetingURL: b.MeetingURL, Completed: b.Completed(now),
 	}
 }
@@ -236,9 +236,9 @@ func (h *mentorshipHandlers) GetMyMentorProfile(ctx context.Context) (*apigen.Ge
 		return nil, mentorshipError(err)
 	}
 	if !found {
-		return &apigen.GetMyMentorProfileOK{Data: apigen.NilMentorshipMentor{Null: true}}, nil
+		return &apigen.GetMyMentorProfileOK{Data: apigen.NilMentorshipOwnMentor{Null: true}}, nil
 	}
-	return &apigen.GetMyMentorProfileOK{Data: apigen.NewNilMentorshipMentor(toOwnMentorResponse(profile))}, nil
+	return &apigen.GetMyMentorProfileOK{Data: apigen.NewNilMentorshipOwnMentor(toOwnMentorResponse(profile))}, nil
 }
 
 func (h *mentorshipHandlers) SubmitMentorProfile(ctx context.Context, req *apigen.MentorshipProfileBody) (*apigen.SubmitMentorProfileCreated, error) {
@@ -346,13 +346,10 @@ func (h *mentorshipHandlers) ListPendingMentorProfiles(ctx context.Context) (*ap
 			Headline: m.Headline, Bio: m.Bio, Topics: m.Topics, Languages: m.Languages,
 			Timezone: m.Timezone, SessionMinutes: m.SessionMinutes,
 			RatingCount: m.RatingCount, RatingAvg: m.RatingAvg, ShowPhoto: m.ShowPhoto,
-			Seniority: m.Seniority, Status: m.Status, Paused: m.Paused, MeetingURL: m.MeetingURL,
-			CreatedAt:           m.CreatedAt,
-			BufferBeforeMinutes: m.BufferBeforeMinutes, BufferAfterMinutes: m.BufferAfterMinutes,
-			NoticeMinutes: m.NoticeMinutes, HorizonDays: m.HorizonDays,
+			Seniority: m.Seniority, Status: m.Status, Paused: m.Paused, CreatedAt: m.CreatedAt,
 			ID: p.ID,
-			// Evidence for the human deciding — this account is already an approved
-			// referrer for the same company — and never a gate.
+			// Evidence for the human deciding: this account is already an approved
+			// referrer for the same company. Never a gate.
 			HasApprovedReferralOffer: p.HasApprovedReferralOffer,
 		})
 	}

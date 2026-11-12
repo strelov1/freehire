@@ -7,6 +7,18 @@ namespace Freehire;
 // Corrections people propose about two companies (the same employer, or one the
 // subsidiary of another) and the moderator queue that decides them.
 
+/** `same`: one employer under two names; `subsidiary`: the page's company is owned by the target. */
+enum CompanyRelationKind {
+  same,
+  subsidiary,
+}
+
+/** `approved` marks a merge whose job move stopped part-way; approving again resumes it. */
+enum PendingCompanyRelationStatus {
+  pending,
+  approved,
+}
+
 model CompanyRelationRequest {
   /** `same` or `subsidiary`. */
   kind?: string;
@@ -27,7 +39,7 @@ model CompanyRelationProposal {
 
 model PendingCompanyRelation {
   id: int64;
-  kind: string;
+  kind: CompanyRelationKind;
   company_slug: string;
   company_name: string;
   company_job_count: int64;
@@ -37,8 +49,7 @@ model PendingCompanyRelation {
   note: string;
   created_at: utcDateTime;
 
-  /** `pending`, or `approved` for a merge whose job move stopped part-way. */
-  status: string;
+  status: PendingCompanyRelationStatus;
 }
 
 model CompanyRelationApproval {

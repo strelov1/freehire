@@ -13,6 +13,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
@@ -97,27 +98,6 @@ func (h *experienceHandlers) register(api fiber.Router, mw middleware, contract 
 // each belongs to. Achievements belonging to no place come back under `unplaced` rather than
 // being hidden — they are usually the ones volunteered in conversation, which makes them the
 // most important ones to be able to check.
-type employmentWithAtoms struct {
-	experience.Employment
-	Atoms []atomView `json:"atoms"`
-}
-
-// MarshalJSON flattens the employment wire shape with atoms. Employment's own
-// MarshalJSON would otherwise replace the whole object and drop atoms (Go embeds a
-// Marshaler as the sole encoded value for the outer struct).
-func (w employmentWithAtoms) MarshalJSON() ([]byte, error) {
-	base, err := json.Marshal(w.Employment)
-	if err != nil {
-		return nil, err
-	}
-	var m map[string]any
-	if err := json.Unmarshal(base, &m); err != nil {
-		return nil, err
-	}
-	m["atoms"] = w.Atoms
-	return json.Marshal(m)
-}
-
 // atomView is an atom plus read-time richness / soft-dup flags. Those flags are not
 // fields on experience.Atom — the client must not POST them back.
 type atomView struct {
@@ -163,23 +143,65 @@ func (h *experienceHandlers) ListExperience(ctx context.Context) (*apigen.ListEx
 	}
 
 	views := projectAtomViews(atoms)
-	unplacedRaw, err := marshalRaws(atomViewsFor(unplaced, views))
-	if err != nil {
-		return nil, err
-	}
 	resp := apigen.ExperienceBank{
-		Employments: make([]jx.Raw, 0, len(employments)),
-		Unplaced:    unplacedRaw,
+		Employments: make([]apigen.ExperienceEmploymentWithAtoms, 0, len(employments)),
+		Unplaced:    atomsOut(atomViewsFor(unplaced, views)),
 	}
 	for _, e := range employments {
-		entry := employmentWithAtoms{Employment: e, Atoms: atomViewsFor(grouped[e.ID], views)}
-		raw, err := json.Marshal(entry)
-		if err != nil {
-			return nil, err
-		}
-		resp.Employments = append(resp.Employments, raw)
+		resp.Employments = append(resp.Employments, employmentOut(e, atomsOut(atomViewsFor(grouped[e.ID], views))))
 	}
 	return &apigen.ListExperienceOK{Data: resp}, nil
+}
+
+// employmentOut is the kind-aware wire shape of a place: jobs keep `company`, projects
+// expose the same stored label as `name`.
+func employmentOut(e experience.Employment, atoms []apigen.ExperienceAtom) apigen.ExperienceEmploymentWithAtoms {
+	out := apigen.ExperienceEmploymentWithAtoms{
+		ID: e.ID.String(), Kind: apigen.ExperienceEmploymentKind(e.Kind),
+		Role: optString(e.Role), Location: optString(e.Location),
+		Summary: optString(e.Summary), Link: optString(e.Link), Stack: nilIfEmpty(e.Stack),
+		Atoms: atoms,
+	}
+	if e.Current {
+		out.Current = apigen.NewOptBool(true)
+	}
+	if e.Start != nil {
+		out.Start = apigen.NewOptPeriodDate(periodDateOut(*e.Start))
+	}
+	if e.End != nil {
+		out.End = apigen.NewOptPeriodDate(periodDateOut(*e.End))
+	}
+	if e.Kind == experience.KindProject {
+		out.Name = optString(e.Company)
+	} else {
+		out.Company = optString(e.Company)
+	}
+	return out
+}
+
+func periodDateOut(d perioddate.PeriodDate) apigen.PeriodDate {
+	out := apigen.PeriodDate{Year: int32(d.Year)}
+	if d.Month != 0 {
+		out.Month = apigen.NewOptInt32(int32(d.Month))
+	}
+	return out
+}
+
+func atomsOut(views []atomView) []apigen.ExperienceAtom {
+	out := make([]apigen.ExperienceAtom, 0, len(views))
+	for _, v := range views {
+		a := apigen.ExperienceAtom{
+			ID: v.ID.String(), Claim: v.Claim, Context: optString(v.Context),
+			Metrics: nilIfEmpty(v.Metrics), Skills: nilIfEmpty(v.Skills),
+			Provenance: apigen.ExperienceProvenance(v.Provenance), SourceRef: optString(v.SourceRef),
+			NeedsContext: v.NeedsContext, NeedsMetrics: v.NeedsMetrics, ClusterID: optString(v.ClusterID),
+		}
+		if v.EmploymentID != nil {
+			a.EmploymentID = apigen.NewOptString(v.EmploymentID.String())
+		}
+		out = append(out, a)
+	}
+	return out
 }
 
 // marshalRaws writes each value as the JSON its type marshals to, for an entry whose shape

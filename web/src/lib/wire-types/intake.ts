@@ -5,29 +5,7 @@ import type { components } from '#lib/generated/api.js';
  *  single vacancy; the ingest side later scrapes all its vacancies. `pending` means
  *  recorded but not yet proven by a crawl; `active` means its first crawl succeeded —
  *  there is no separate manual onboarding step. */
-type ContributionStatus = 'pending' | 'active' | 'rejected' | 'review';
-
-export interface Contribution {
-  id: number;
-  url: string;
-  // Empty for a `review` row (an unrecognized link awaiting manual triage); set once a board is
-  // recognized or a maintainer promotes the review row.
-  source: string;
-  board: string;
-  status: ContributionStatus;
-  /** Which door the link came through — web, telegram, extension, cli, or unknown for a row
-   *  recorded before surfaces were tracked (or by a client that sends no tag). */
-  surface: string;
-  created_at: string | null;
-}
-
-/** What became of the BOARD behind a link handed to the intake.
- *  - `found`    the catalog already carried the posting
- *  - `tracked`  imported, and we already crawl this company's board
- *  - `imported` imported, and the board behind it is now queued for onboarding
- *  - `review`   imported, but its careers site names no board we can crawl, so it went to triage
- *  - `queued`   nothing could read the page, so the link went to manual triage */
-type IntakeStatus = 'found' | 'tracked' | 'imported' | 'review' | 'queued';
+export type Contribution = components['schemas']['Contribution'];
 
 /** A job page in the wild recognised as one the catalog already carries. The lookup that
  *  produces it is public and read-only, so this is deliberately narrower than ResolvedLink:
@@ -36,58 +14,26 @@ export interface FoundJob {
   public_slug: string;
 }
 
-export interface ResolvedLink {
-  public_slug: string | null;
-  status: IntakeStatus;
-  /** The employer, when the catalog already carries it — through any source, not just the one
-   *  this link came from. Whether we know the COMPANY is a separate question from what became
-   *  of its BOARD, so this rides along with every outcome, not just `tracked`. */
-  company_slug?: string;
-}
+/** What became of the BOARD behind a link handed to the intake.
+ *  - `found`    the catalog already carried the posting
+ *  - `tracked`  imported, and we already crawl this company's board
+ *  - `imported` imported, and the board behind it is now queued for onboarding
+ *  - `review`   imported, but its careers site names no board we can crawl, so it went to triage
+ *  - `queued`   nothing could read the page, so the link went to manual triage */
+export type ResolvedLink = components['schemas']['ResolvedJobPage'];
 
 /** Employee referrals. An offer is a member's moderated "I can refer into company X". */
-type ReferralOfferStatus = 'pending' | 'approved' | 'rejected';
+export type ReferralRequestStatus = components['schemas']['ReferralRequestStatus'];
 
-export type ReferralRequestStatus = 'sent' | 'contacted' | 'declined';
+type ReferralCvKind = components['schemas']['ReferralCvKind'];
 
-type ReferralCvKind = 'original' | 'built';
-
-export interface ReferralOffer {
-  id: string;
-  company_slug: string;
-  company_name: string;
-  linkedin_url: string;
-  status: ReferralOfferStatus;
-  decided_at: string | null;
-  created_at: string | null;
-}
+export type ReferralOffer = components['schemas']['ReferralOffer'];
 
 /** What a seeker sees of their own request — no referrer identity (the request targets a pool). */
-export interface SeekerReferralRequest {
-  id: string;
-  company_slug: string;
-  company_name: string;
-  job_id: number | null;
-  cv_kind: ReferralCvKind;
-  cv_id: string | null;
-  status: ReferralRequestStatus;
-  created_at: string | null;
-}
+export type SeekerReferralRequest = components['schemas']['ReferralSeekerRequest'];
 
 /** What a referrer sees of an incoming request — the seeker's chosen contact and CV, no identity. */
-export interface IncomingReferralRequest {
-  id: string;
-  company_slug: string;
-  company_name: string;
-  job_id: number | null;
-  cv_kind: ReferralCvKind;
-  linkedin_url?: string;
-  contact_telegram?: string;
-  contact_email?: string;
-  note?: string;
-  status: ReferralRequestStatus;
-  created_at: string | null;
-}
+export type IncomingReferralRequest = components['schemas']['ReferralIncomingRequest'];
 
 /** The seeker's referral-request payload. Exactly one CV field is meaningful per cv_kind. */
 export interface ReferralRequestInput {
@@ -110,36 +56,7 @@ export type ReferralCvOptions = components['schemas']['ReferralCVOptions'];
 /** A job submitted for moderation. `status` is the review lifecycle; `review_reason`
  *  carries an optional rejection note. `submitter_email` is present only on the
  *  moderator review queue, never on a submitter's own view. */
-export interface Submission {
-  id: number;
-  url: string;
-  source?: string;
-  title: string;
-  company: string;
-  location?: string;
-  remote: boolean;
-  description?: string;
-  posted_at?: string | null;
-  status: 'pending' | 'approved' | 'rejected';
-  review_reason?: string;
-  reviewed_at?: string | null;
-  created_at: string | null;
-  submitter_email?: string;
-  // Public slug of the minted live vacancy, present on an approved submission in the
-  // caller's own list, so the UI can link to /jobs/<job_slug>.
-  job_slug?: string;
-  // The structured facets the submitter stated, echoed back by the server.
-  skills?: string[];
-  regions?: string[];
-  cities?: string[];
-  work_mode?: string;
-  employment_type?: string;
-  seniority?: string;
-  salary_min?: number;
-  salary_max?: number;
-  salary_currency?: string;
-  salary_period?: string;
-}
+export type Submission = components['schemas']['Submission'];
 
 /** The content a user submits for review (mirrors the moderator create body). */
 export interface SubmissionInput {
@@ -181,23 +98,10 @@ export interface CompanyRef {
 /** What a person can claim about two companies: `same` (one employer under two names, the
  *  page's company retires into the target) or `subsidiary` (the page's company is owned by
  *  the target, both stay). */
-export type CompanyRelationKind = 'same' | 'subsidiary';
+export type CompanyRelationKind = components['schemas']['CompanyRelationKind'];
 
 /** One row of the moderator queue of proposed company relations. */
-export interface PendingCompanyRelation {
-  id: number;
-  kind: CompanyRelationKind;
-  company_slug: string;
-  company_name: string;
-  company_job_count: number;
-  target_slug: string;
-  target_name: string;
-  target_job_count: number;
-  note: string;
-  created_at: string;
-  /** `approved` marks a merge whose job move stopped part-way; approving again resumes it. */
-  status: 'pending' | 'approved';
-}
+export type PendingCompanyRelation = components['schemas']['PendingCompanyRelation'];
 
 /** An account as the moderator's user lookup shows it: who it is and whether a moderator
  *  banned it (with the reason they left). */

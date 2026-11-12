@@ -104,7 +104,7 @@ func toSubmissionResponse(s submission.Submission) apigen.Submission {
 		Remote:       s.Remote,
 		Description:  optString(s.Description),
 		PostedAt:     timeString(s.PostedAt),
-		Status:       s.Status,
+		Status:       apigen.SubmissionStatus(s.Status),
 		ReviewReason: optString(s.ReviewReason),
 		ReviewedAt:   timeString(s.ReviewedAt),
 		CreatedAt:    created,

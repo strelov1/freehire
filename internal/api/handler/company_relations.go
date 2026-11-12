@@ -87,7 +87,7 @@ func (h *companyRelationHandlers) ListPendingCompanyRelations(ctx context.Contex
 	for i, r := range rows {
 		out[i] = apigen.PendingCompanyRelation{
 			ID:              r.ID,
-			Kind:            r.Kind,
+			Kind:            apigen.CompanyRelationKind(r.Kind),
 			CompanySlug:     r.CompanySlug,
 			CompanyName:     r.CompanyName,
 			CompanyJobCount: int64(r.CompanyJobCount),
@@ -96,7 +96,7 @@ func (h *companyRelationHandlers) ListPendingCompanyRelations(ctx context.Contex
 			TargetJobCount:  int64(r.TargetJobCount),
 			Note:            r.Note,
 			CreatedAt:       r.CreatedAt.Time,
-			Status:          r.Status,
+			Status:          apigen.PendingCompanyRelationStatus(r.Status),
 		}
 	}
 	return &apigen.ListPendingCompanyRelationsOK{Data: out}, nil

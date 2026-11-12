@@ -80,38 +80,17 @@ export interface Company {
 /** A company's recomputed materialized feedback counters, carried alongside a
  *  write response (upsert/delete) so the caller can update its own view of the
  *  company without a second round trip. */
-export interface CompanyFeedbackSummary {
-  feedback_count: number;
-  /** How many people have reported that this company screens with an AI interviewer
-   *  (internal/engage/processreport). Absent when nobody has: the label is required to
-   *  be shown with its count, so no reports is the absence of the field rather than a
-   *  zero a badge could render beside. */
-  ai_interview_reports?: number;
-  feedback_rating_avg: number | null;
-}
+export type CompanyFeedbackSummary = components['schemas']['CompanyFeedbackSummary'];
 
 /** One user's rating + category + text about a company (internal/companyfeedback).
  *  The author is a pseudonymous persona handle, the same one CommunityThread uses —
  *  the backend never sends the real user id. `company` is set only on the
  *  upsert response (see CompanyFeedbackDialog's submit). */
-export interface CompanyFeedback {
-  id: number;
-  author: string;
-  rating: number;
-  feedback_type: string;
-  body: string;
-  created_at: string;
-  updated_at: string;
-  company?: CompanyFeedbackSummary;
-}
+export type CompanyFeedback = components['schemas']['CompanyFeedback'];
 
 /** The moderator queue's shape for a reported review (internal/companyfeedback):
  *  the review itself plus which company it's on and the aggregated report info. */
-export interface ReportedCompanyFeedback extends CompanyFeedback {
-  company_slug: string;
-  report_count: number;
-  report_reasons: string[];
-}
+export type ReportedCompanyFeedback = components['schemas']['ReportedCompanyFeedback'];
 
 /** The result of casting or clearing a thumbs vote: the target's resulting public
  *  counters and the caller's own vote (-1, 0, 1). Returned by the vote endpoints
@@ -127,35 +106,10 @@ export type WatchlistImportResult = components['schemas']['WatchlistImportResult
 
 /** A row of the companies catalog: company plus its computed job count and a few
  *  company-info facts for the card (present-only — absent on unenriched rows). */
-export interface CompanyListItem {
-  slug: string;
-  name: string;
-  job_count: number;
-  tagline?: string | null;
-  industries?: string[] | null;
-  hq_country?: string | null;
-  /** Curated company tags — the catalogue card renders the backer marks from these. */
-  collections?: string[] | null;
-  /** Materialized feedback counters (internal/companyfeedback), the same fields
-   *  the single-company detail view serves. */
-  feedback_count: number;
-  /** How many people have reported that this company screens with an AI interviewer
-   *  (internal/engage/processreport). Absent when nobody has: the label is required to
-   *  be shown with its count, so no reports is the absence of the field rather than a
-   *  zero a badge could render beside. */
-  ai_interview_reports?: number;
-  feedback_rating_avg: number | null;
-}
+export type CompanyListItem = components['schemas']['CompanyListItem'];
 
 /** Pagination metadata returned alongside list responses. */
-export interface ListMeta {
-  total: number;
-  /** The total is "at least this many": the read stopped before the whole result was seen
-   *  (the minimum-skill-match scan). Absent for an ordinary count. */
-  total_is_lower_bound?: boolean;
-  limit: number;
-  offset: number;
-}
+export type ListMeta = components['schemas']['ListMeta'];
 
 /** Facet-distribution counts from GET /api/v1/jobs/facets, for the analytics
  *  page. `total` is the estimated vacancy count under the current filters;

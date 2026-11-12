@@ -95,18 +95,23 @@ func toMentorResponse(p mentorship.Profile) apigen.MentorshipMentor {
 
 // toOwnMentorResponse is the profile as its OWNER sees it: with the moderation status,
 // the pause switch and the meeting link they configured.
-func toOwnMentorResponse(p mentorship.Profile) apigen.MentorshipMentor {
-	out := toModeratorMentorResponse(p)
-	out.MeetingURL = optString(p.MeetingURL)
-	// The parameters the cabinet edits, for the OWNER alone. Read back so a mentor
-	// correcting one field re-submits what they actually chose rather than this
-	// endpoint's defaults. Optional rather than zero-omitted: a zero buffer is a real
-	// setting.
-	out.BufferBeforeMinutes = apigen.NewOptInt64(int64(p.Session.BufferBefore / time.Minute))
-	out.BufferAfterMinutes = apigen.NewOptInt64(int64(p.Session.BufferAfter / time.Minute))
-	out.NoticeMinutes = apigen.NewOptInt64(int64(p.Session.MinimumNotice / time.Minute))
-	out.HorizonDays = apigen.NewOptInt64(int64(p.Session.Horizon / (24 * time.Hour)))
-	return out
+func toOwnMentorResponse(p mentorship.Profile) apigen.MentorshipOwnMentor {
+	m := toModeratorMentorResponse(p)
+	return apigen.MentorshipOwnMentor{
+		Slug: m.Slug, Name: m.Name, CompanySlug: m.CompanySlug, CompanyName: m.CompanyName,
+		Headline: m.Headline, Bio: m.Bio, Topics: m.Topics, Languages: m.Languages,
+		Timezone: m.Timezone, SessionMinutes: m.SessionMinutes,
+		RatingCount: m.RatingCount, RatingAvg: m.RatingAvg, ShowPhoto: m.ShowPhoto, Seniority: m.Seniority,
+		Status: m.Status, Paused: m.Paused, CreatedAt: m.CreatedAt,
+		MeetingURL: optString(p.MeetingURL),
+		// The parameters the cabinet edits, for the OWNER alone. Read back so a mentor
+		// correcting one field re-submits what they actually chose rather than this
+		// endpoint's defaults. A zero buffer is a real setting, so these are always sent.
+		BufferBeforeMinutes: int64(p.Session.BufferBefore / time.Minute),
+		BufferAfterMinutes:  int64(p.Session.BufferAfter / time.Minute),
+		NoticeMinutes:       int64(p.Session.MinimumNotice / time.Minute),
+		HorizonDays:         int64(p.Session.Horizon / (24 * time.Hour)),
+	}
 }
 
 // toModeratorMentorResponse is the profile as a MODERATOR sees it: everything the owner
@@ -119,12 +124,15 @@ func toOwnMentorResponse(p mentorship.Profile) apigen.MentorshipMentor {
 //
 // created_at is when the profile was submitted — moderator and owner views only. A
 // visitor deciding whether to book has no use for it.
-func toModeratorMentorResponse(p mentorship.Profile) apigen.MentorshipMentor {
-	out := toMentorResponse(p)
-	out.Status = optString(p.Status)
-	out.Paused = apigen.OptBool{Value: true, Set: p.Paused}
-	out.CreatedAt = apigen.NewOptDateTime(p.CreatedAt)
-	return out
+func toModeratorMentorResponse(p mentorship.Profile) apigen.MentorshipModeratedMentor {
+	m := toMentorResponse(p)
+	return apigen.MentorshipModeratedMentor{
+		Slug: m.Slug, Name: m.Name, CompanySlug: m.CompanySlug, CompanyName: m.CompanyName,
+		Headline: m.Headline, Bio: m.Bio, Topics: m.Topics, Languages: m.Languages,
+		Timezone: m.Timezone, SessionMinutes: m.SessionMinutes,
+		RatingCount: m.RatingCount, RatingAvg: m.RatingAvg, ShowPhoto: m.ShowPhoto, Seniority: m.Seniority,
+		Status: apigen.MentorshipProfileStatus(p.Status), Paused: p.Paused, CreatedAt: p.CreatedAt,
+	}
 }
 
 // ListMentors serves the public directory.

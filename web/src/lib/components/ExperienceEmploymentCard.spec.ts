@@ -15,6 +15,10 @@ const ringCentral: CompanyListItem = {
   slug: 'ringcentral',
   name: 'RingCentral',
   job_count: 57,
+  tagline: null,
+  industries: [],
+  hq_country: null,
+  collections: [],
   feedback_count: 0,
   feedback_rating_avg: null,
 };
@@ -157,7 +161,7 @@ describe('ExperienceEmploymentCard focus', () => {
   it('moves focus into an achievement editor and back to its Edit button', async () => {
     const withAtom: ExperienceEmploymentWithAtoms = {
       ...projectEmployment,
-      atoms: [{ id: 'a1', claim: 'Shipped things', provenance: 'manual' }],
+      atoms: [{ id: 'a1', claim: 'Shipped things', provenance: 'manual', needs_context: false, needs_metrics: false }],
     };
     render(ExperienceEmploymentCard, { props: baseProps(withAtom) });
     await fireEvent.click(screen.getByRole('button', { name: /1 achievement/ }));

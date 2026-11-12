@@ -223,7 +223,7 @@ func (h *mentorshipHandlers) GetMyCalendar(ctx context.Context, params apigen.Ge
 		out = append(out, apigen.MentorshipCalendarInterval{
 			StartsAt: iv.Start.UTC(),
 			EndsAt:   iv.End.UTC(),
-			Status:   string(iv.Status),
+			Status:   apigen.MentorshipCalendarStatus(iv.Status),
 		})
 	}
 	return &apigen.MentorshipCalendarPage{

@@ -313,8 +313,8 @@ func TestMentorshipContractFlow(t *testing.T) {
 	}
 	st, body = call(mentorID, "POST", "/me/mentorship/profile/pause", `{"paused":false}`)
 	expect(st, 200, "unpause", body)
-	if _, has := data(body)["paused"]; has {
-		t.Errorf("a profile that is not paused must omit the flag: %v", body)
+	if data(body)["paused"] != false {
+		t.Errorf("unpause answer = %v", body)
 	}
 	st, body = call(0, "GET", "/me/mentorship/profile", "")
 	expect(st, 401, "own profile signed out", body)

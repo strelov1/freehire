@@ -84,7 +84,7 @@ func (h *referralHandlers) register(api fiber.Router, mw middleware, contract fi
 func referralOfferOut(o referral.Offer) apigen.ReferralOffer {
 	return apigen.ReferralOffer{
 		ID: o.ID.String(), CompanySlug: o.CompanySlug, CompanyName: o.CompanyName,
-		LinkedinURL: o.LinkedInURL, Status: o.Status,
+		LinkedinURL: o.LinkedInURL, Status: apigen.ReferralOfferStatus(o.Status),
 		DecidedAt: nilDateTime(o.DecidedAt), CreatedAt: nilDateTime(o.CreatedAt),
 	}
 }
@@ -109,7 +109,7 @@ func nilInt64(p *int64) apigen.NilInt64 {
 func seekerRequestOut(r referral.Request) apigen.ReferralSeekerRequest {
 	return apigen.ReferralSeekerRequest{
 		ID: r.ID.String(), CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: nilInt64(r.JobID),
-		CvKind: r.CVKind, CvID: nilString(cvIDString(r.CVID)), Status: r.Status, CreatedAt: nilDateTime(r.CreatedAt),
+		CvKind: apigen.ReferralCvKind(r.CVKind), CvID: nilString(cvIDString(r.CVID)), Status: apigen.ReferralRequestStatus(r.Status), CreatedAt: nilDateTime(r.CreatedAt),
 	}
 }
 
@@ -119,9 +119,9 @@ func seekerRequestOut(r referral.Request) apigen.ReferralSeekerRequest {
 func incomingRequestOut(r referral.Request) apigen.ReferralIncomingRequest {
 	return apigen.ReferralIncomingRequest{
 		ID: r.ID.String(), CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: nilInt64(r.JobID),
-		CvKind: r.CVKind, LinkedinURL: optString(r.LinkedInURL),
+		CvKind: apigen.ReferralCvKind(r.CVKind), LinkedinURL: optString(r.LinkedInURL),
 		ContactTelegram: optString(r.ContactTelegram), ContactEmail: optString(r.ContactEmail), Note: optString(r.Note),
-		Status: r.Status, CreatedAt: nilDateTime(r.CreatedAt),
+		Status: apigen.ReferralRequestStatus(r.Status), CreatedAt: nilDateTime(r.CreatedAt),
 	}
 }
 

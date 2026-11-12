@@ -9,56 +9,24 @@ export type PeriodDate = components['schemas']['PeriodDate'];
 /** One place where evidence was produced: a job or a project. Start/end are a structured
  *  PeriodDate, matching the Go domain type — no parsing needed on this side either.
  *  Jobs expose `company`; projects expose the place label as `name` (same storage column). */
-export type ExperienceEmployment = {
-  id: string;
-  kind: 'job' | 'project';
-  /** Employer name — present for `kind: 'job'`. */
-  company?: string;
-  /** Project title — present for `kind: 'project'` (not a company). */
-  name?: string;
-  role?: string;
-  location?: string;
-  start?: PeriodDate;
-  end?: PeriodDate;
-  current?: boolean;
-  summary?: string;
-  /** Portfolio URL — typically set on projects. */
-  link?: string;
-  stack?: string[];
-};
+export type ExperienceEmployment = components['schemas']['ExperienceEmployment'];
 
 /** How the bank came to hold an achievement. Only the first three may be written into a
  *  CV: they are the candidate speaking. `agent_inferred` is the assistant's own reading,
  *  kept so it can be asked about and barred from the page until confirmed. */
-export type ExperienceProvenance = 'cv_import' | 'stated_in_chat' | 'manual' | 'agent_inferred';
+export type ExperienceProvenance = components['schemas']['ExperienceProvenance'];
 
 /** One piece of evidence, at the grain of a CV bullet.
  *
  *  `needs_context`, `needs_metrics`, and `cluster_id` arrive only on the list
  *  projection — they are computed at read time and must not be POSTed back. */
-export type ExperienceAtom = {
-  id: string;
-  employment_id?: string;
-  claim: string;
-  context?: string;
-  metrics?: string[];
-  skills?: string[];
-  provenance: ExperienceProvenance;
-  source_ref?: string;
-  needs_context?: boolean;
-  needs_metrics?: boolean;
-  /** Shared id of a soft-duplicate group (first member), when the list clustered this atom. */
-  cluster_id?: string;
-};
+export type ExperienceAtom = components['schemas']['ExperienceAtom'];
 
-export type ExperienceEmploymentWithAtoms = ExperienceEmployment & { atoms: ExperienceAtom[] };
+export type ExperienceEmploymentWithAtoms = components['schemas']['ExperienceEmploymentWithAtoms'];
 
 /** The bank as its owner sees it. `unplaced` carries achievements belonging to no role —
  *  usually the ones volunteered in conversation, so they are shown rather than hidden. */
-export type ExperienceBank = {
-  employments: ExperienceEmploymentWithAtoms[];
-  unplaced: ExperienceAtom[];
-};
+export type ExperienceBank = components['schemas']['ExperienceBank'];
 
 /** One thing that happened to one application, as GET /me/timeline serves it.
  *
