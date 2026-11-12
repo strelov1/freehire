@@ -32,11 +32,11 @@ func (h *agentPermissionHandlers) GetAgentPermissions(ctx context.Context) (*api
 	if err != nil {
 		return nil, err
 	}
-	return &apigen.GetAgentPermissionsOK{Data: apigen.AgentPermissions{AgentsMayApply: apigen.NewOptBool(allowed)}}, nil
+	return &apigen.GetAgentPermissionsOK{Data: apigen.AgentPermissions{AgentsMayApply: allowed}}, nil
 }
 
 // SetAgentPermissions stores the switch. An absent field turns it off, as it always did.
-func (h *agentPermissionHandlers) SetAgentPermissions(ctx context.Context, req *apigen.AgentPermissions) (*apigen.SetAgentPermissionsOK, error) {
+func (h *agentPermissionHandlers) SetAgentPermissions(ctx context.Context, req *apigen.AgentPermissionsUpdate) (*apigen.SetAgentPermissionsOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -45,5 +45,5 @@ func (h *agentPermissionHandlers) SetAgentPermissions(ctx context.Context, req *
 	if err := h.queries.SetAgentsMayApply(ctx, db.SetAgentsMayApplyParams{ID: userID, AgentsMayApply: allowed}); err != nil {
 		return nil, err
 	}
-	return &apigen.SetAgentPermissionsOK{Data: apigen.AgentPermissions{AgentsMayApply: apigen.NewOptBool(allowed)}}, nil
+	return &apigen.SetAgentPermissionsOK{Data: apigen.AgentPermissions{AgentsMayApply: allowed}}, nil
 }

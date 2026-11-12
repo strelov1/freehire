@@ -23,6 +23,7 @@ const baseProfile: UserProfile = {
   excluded_skills: [],
   excluded_sources: [],
   excluded_companies: [],
+  job_languages: [],
   location_preferences: null,
   derived_location: null,
   cv: null,

@@ -66,9 +66,9 @@ func personaOrDeleted(handle string) string {
 
 func toThread(t community.Thread) apigen.Thread {
 	return apigen.Thread{
-		ID: t.ID, SubjectType: t.SubjectType, SubjectSlug: t.SubjectRef, Title: t.Title,
+		ID: t.ID, SubjectType: apigen.ThreadSubjectType(t.SubjectType), SubjectSlug: t.SubjectRef, Title: t.Title,
 		Body: t.Body, Author: personaOrDeleted(t.AuthorHandle), ReplyCount: int64(t.ReplyCount),
-		Status: t.Status, CreatedAt: t.CreatedAt,
+		Status: apigen.ThreadStatus(t.Status), CreatedAt: t.CreatedAt,
 	}
 }
 

@@ -1,137 +1,55 @@
 import type { components } from '../generated/api.js';
 import type { Education as ResumeEducation, Professional } from '../generated/contracts';
 
-/** An authenticated account, as returned by the auth endpoints. */
-export interface User {
-  id: number;
-  email: string;
-  // Authorization role ('user' | 'moderator' | 'admin'). A UI affordance only —
-  // the server re-checks it on every privileged request.
-  role: string;
-  // Beta-tester group membership, independent of `role`. Gates the agent
-  // assistant (/my/assistant) in the UI.
-  beta_tester: boolean;
-  // Whether the account has proven control of its email address. Drives the
-  // "confirm your email" prompt; a UI affordance only, re-checked server-side.
-  email_verified: boolean;
-  // Whether a password is set at all. False for an OAuth-only account, which has
-  // nothing to change and must use the reset flow to set one.
-  has_password: boolean;
-  created_at: string | null;
-  // IANA timezone name (e.g. "Europe/Moscow"), null until set. Read by the
-  // profile page's timezone field and the notification-settings missing-timezone hint.
-  timezone: string | null;
-  // Preferred interface language, one of 'en' | 'ru' | 'es' | 'pt' | 'de' | 'fr'.
-  // Never empty ('en' until changed). No UI translation ships yet — this only
-  // records the preference for the profile page's language field.
-  language: string;
-  // When this account was walked through the onboarding wizard, null if it never has been.
-  // The root layout's gate reads exactly this: null routes the account to /onboarding, a
-  // timestamp never does. It replaced "does this account have a CV", which was a fair
-  // stand-in while the wizard was about the CV and stopped being one the moment it grew
-  // questions a CV cannot answer.
-  onboarding_completed_at: string | null;
-  // The caller's resolved plan tier, same values as PlanState['plan']. Rides along on
-  // this same response so the header's tier badge needs no second request to
-  // GET /api/v1/me/plan just to learn what api.myPlan() would answer anyway.
-  tier: 'free' | 'pro' | 'ultra';
-  // Whether the account holds a live API key or MCP grant. The "connect your agent" strip
-  // stops asking once it is true.
-  agent_connected: boolean;
-}
-
-/** A geographic reach: controlled regions and/or ISO country codes. Empty = anywhere. */
-interface LocationGeoSet {
-  regions?: string[];
-  countries?: string[];
-}
-
-/** The user's current single base: an ISO country code and a free-text city. */
-interface LocationBase {
-  country?: string;
-  city?: string;
-}
-
-/** Willingness to relocate: an open flag plus acceptable destinations (open + empty
- *  targets = anywhere). */
-interface LocationRelocation {
-  open: boolean;
-  regions?: string[];
-  countries?: string[];
-  cities?: string[];
-}
+/** An authenticated account, as returned by the auth endpoints. `role` ('user' | 'moderator'
+ *  | 'admin') and `email_verified` are UI affordances only; the server re-checks both on
+ *  every privileged request. `tier` rides along so the header's badge needs no second
+ *  request, `agent_connected` stops the "connect your agent" strip asking once true, and a
+ *  null `onboarding_completed_at` routes the account to /onboarding. */
+export type User = components['schemas']['AuthUser'];
 
 /** Optional "where & how I want to work" block: accepted work arrangements plus three
  *  geographic parts (remote reach, current base, relocation), freely combined. Mirrors the
  *  backend userprofile.LocationPreferences; null on a profile means the user set none. */
-export interface LocationPreferences {
-  work_modes?: string[];
-  remote: LocationGeoSet;
-  base: LocationBase;
-  relocation: LocationRelocation;
-}
+export type LocationPreferences = components['schemas']['LocationPreferences'];
 
 /** Where the CV says the candidate IS, resolved by the location dictionary. Read-only:
  *  it is produced by the CV derivation alone and no profile write can set it. Deliberately
  *  a sibling of location_preferences rather than part of it — that block is what the user
  *  ASSERTED, this is what was DERIVED for them, and only the former may be saved back. */
-export interface DerivedLocation {
-  countries: string[];
-  regions: string[];
-  cities: string[];
-}
+export type DerivedLocation = components['schemas']['DerivedLocation'];
 
 /** A user's single profile: their professional self — a non-empty set of
  *  `specializations` (job categories) and a non-empty set of canonical skill tokens. One
  *  per user (no id, no name); the foundation for finding relevant work. Timestamps are
  *  RFC3339 strings or null. */
-export interface UserProfile {
-  /** Preferred posting languages; empty means any language. */
-  job_languages?: string[];
-  specializations: string[];
-  skills: string[];
-  /** Desired seniority levels (drawn from the seniority vocabulary). Empty when the user has stated none. */
-  seniorities: string[];
-  /** Canonical skill tokens the user wants to avoid; seeded into the jobs filter's skills exclude set by "Apply my profile". Empty when the user excludes nothing. */
-  excluded_skills: string[];
-  /** `jobs.source` values (the crawl adapter/board) the user wants to avoid. Empty when the user excludes none. */
-  excluded_sources: string[];
-  /** Company slugs the user wants to avoid. Empty when the user excludes none. */
-  excluded_companies: string[];
+export type UserProfile = Omit<components['schemas']['Profile'], 'location_preferences' | 'cv'> & {
+  /** What the user asserted, sent exactly as stored; null when they set none. The contract
+   *  leaves it raw (an old stored shape must still read), so the precise type is kept here. */
   location_preferences: LocationPreferences | null;
-  /** Null when nothing was derived (no CV, no current structure, or a location the
-   *  dictionary could not resolve). Used to pre-fill "where you're based" for a user who
-   *  has stated no base, so they confirm a fact already on their CV instead of retyping it. */
-  derived_location: DerivedLocation | null;
   /** The caller's structured CV without its contact fields — served beside the profile so
    *  one read covers both what the user wants and what they have done. Null when no current
    *  structure exists. Contacts come from GET /me/resume instead (the profile page's contact
-   *  card reads them there). */
+   *  card reads them there). Raw in the contract for the same reason as above. */
   cv: Professional | null;
-  created_at: string | null;
-  updated_at: string | null;
-}
+};
 
 /** Talent Network membership: in, or not. Two values, not three — `public` was retired
  *  with the mode picker itself (migration 0148), because the product should answer how
  *  much of a candidate to disclose rather than ask them. Mirrors the CHECK constraint on
  *  `users.talent_network_visibility`. */
-export type TalentNetworkVisibility = 'off' | 'anonymous';
+export type TalentNetworkVisibility = components['schemas']['TalentNetworkVisibility'];
 
 /** The caller's own Talent Network membership.
  *
  *  `talent_handle` is ABSENT until the first join: it is minted then and kept forever
  *  after, so an empty one means "not a member yet", never "waiting for one". A surface
- *  reading it must show no link rather than build one that would 404. */
-export interface TalentNetworkSetting {
-  talent_network_visibility: TalentNetworkVisibility;
-  talent_handle?: string;
-  /** Whether a visitor can actually SEE them — not the same as membership. A candidate
-   *  who joins before uploading a CV is a member, holds a handle, and is still excluded
-   *  from the catalogue by the stamp gate, so their card 404s. Any surface that offers
-   *  "view your public profile" must read this and not `talent_network_visibility`. */
-  listed: boolean;
-}
+ *  reading it must show no link rather than build one that would 404. `listed` is whether
+ *  a visitor can actually SEE them — not the same as membership. A candidate who joins
+ *  before uploading a CV is a member, holds a handle, and is still excluded from the
+ *  catalogue by the stamp gate, so their card 404s. Any surface that offers "view your
+ *  public profile" must read this and not `talent_network_visibility`. */
+export type TalentNetworkSetting = components['schemas']['TalentNetworkMembership'];
 
 /** A notification subscription on a saved search. */
 export type Subscription = components['schemas']['Subscription'];

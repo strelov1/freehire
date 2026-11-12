@@ -35,6 +35,71 @@ model TrackJob {
   notes?: string | null;
 }
 
+/** Where an application sits against the silence thresholds of its stage (internal/job/silence). */
+enum SilenceState {
+  active,
+  silent,
+  unconfirmed,
+}
+
+/** The candidate-facing status of a live auto-apply attempt (autoapply.Status). */
+enum AutoApplyReviewStatus {
+  tailoring,
+  pending_review,
+  approved,
+  blocked,
+  declined,
+  failed,
+
+  /** The tailoring run gave up without a CV; `failed` is a submission that gave up with one. */
+  tailor_failed,
+}
+
+/** One resolved question and answer in an auto-apply answer preview. */
+model AutoApplyPreviewField {
+  label: string;
+  value: string;
+}
+
+/** A required question the preview has no answer for yet. */
+model AutoApplyPreviewPending {
+  label: string;
+
+  /** Whether the real submission will fill it in on its own. */
+  will_draft_at_submission: boolean;
+}
+
+/** What an unattended submission would send, computed once before review. */
+model AutoApplyResolvedPreview {
+  fields: AutoApplyPreviewField[];
+  pending?: AutoApplyPreviewPending[];
+}
+
+/** A question the attempt could not answer. The attempt's internal error text is never here. */
+model AutoApplyUnmappedField {
+  id: string;
+  label: string;
+  required: boolean;
+  reason: string;
+}
+
+/** The live auto-apply attempt of one job, as the application drawer reads it. */
+model AutoApplyReviewInfo {
+  status: AutoApplyReviewStatus;
+
+  /** Addresses the attempt for the review call. */
+  queue_id: int64;
+
+  /** Only when `status` is `pending_review`. */
+  resolved_preview?: AutoApplyResolvedPreview;
+
+  /** Only when `status` is `blocked`. */
+  unmapped?: AutoApplyUnmappedField[];
+
+  /** Only on a `failed` attempt the employer may already hold; such an attempt is never retried. */
+  may_have_reached_employer?: boolean;
+}
+
 model TrackedJob {
   added_to_board_at: utcDateTime | null;
 
@@ -58,12 +123,12 @@ model TrackedJob {
   last_activity_at: utcDateTime | null;
 
   days_silent: int64 | null;
-  silence_state: string | null;
+  silence_state: SilenceState | null;
   followed_up_at: utcDateTime | null;
   cv_opened_at: utcDateTime | null;
 
   /** The status of this job's live auto-apply attempt; absent when it has none. */
-  auto_apply_status?: string;
+  auto_apply_status?: AutoApplyReviewStatus;
 }
 
 /** Rows per tab. */

@@ -35,7 +35,7 @@ describe('notificationTarget', () => {
   });
 
   it('sends a digest with neither a slug nor a jobs snapshot nowhere (defensive)', () => {
-    expect(notificationTarget({ id: 42, kind: 'subscription_digest', public_slug: null, jobs: null })).toEqual({
+    expect(notificationTarget({ id: 42, kind: 'subscription_digest', public_slug: null })).toEqual({
       kind: 'none',
     });
   });

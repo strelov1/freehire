@@ -75,12 +75,12 @@ func (h *trackingHandlers) ListTrackedJobs(ctx context.Context, params apigen.Li
 			CvOpenedAt:     nilDateTime(it.CVOpenedAt),
 		}
 		if it.AutoApplyStatus != nil {
-			item.AutoApplyStatus = apigen.NewOptString(string(*it.AutoApplyStatus))
+			item.AutoApplyStatus = apigen.NewOptAutoApplyReviewStatus(apigen.AutoApplyReviewStatus(*it.AutoApplyStatus))
 		}
 		if s := it.Silence(now); s != nil {
 			item.LastActivityAt = apigen.NewNilDateTime(s.LastActivityAt)
 			item.DaysSilent = apigen.NewNilInt64(int64(s.DaysSilent))
-			item.SilenceState = apigen.NewNilString(s.State)
+			item.SilenceState = apigen.NewNilSilenceState(apigen.SilenceState(s.State))
 		} else {
 			item.LastActivityAt.SetToNull()
 			item.DaysSilent.SetToNull()

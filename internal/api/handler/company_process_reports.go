@@ -50,7 +50,7 @@ func (h *companyProcessReportHandlers) FileProcessReport(ctx context.Context, re
 	if err != nil {
 		return nil, companyProcessReportError(err)
 	}
-	return &apigen.FileProcessReportCreated{Data: apigen.ProcessReport{Kind: kind, Count: int64(count)}}, nil
+	return &apigen.FileProcessReportCreated{Data: apigen.ProcessReport{Kind: apigen.ProcessReportKind(kind), Count: int64(count)}}, nil
 }
 
 // RetractProcessReport withdraws the caller's own report. The kind rides as a query
@@ -66,7 +66,7 @@ func (h *companyProcessReportHandlers) RetractProcessReport(ctx context.Context,
 	if err != nil {
 		return nil, companyProcessReportError(err)
 	}
-	return &apigen.RetractProcessReportOK{Data: apigen.ProcessReport{Kind: kind, Count: int64(count)}}, nil
+	return &apigen.RetractProcessReportOK{Data: apigen.ProcessReport{Kind: apigen.ProcessReportKind(kind), Count: int64(count)}}, nil
 }
 
 // MyProcessReports lists the kinds the caller currently has live against this company,

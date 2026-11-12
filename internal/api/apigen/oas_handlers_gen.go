@@ -27641,7 +27641,7 @@ func (s *Server) handleSetAgentPermissionsRequest(args [0]string, argsEscaped bo
 		}
 
 		type (
-			Request  = *AgentPermissions
+			Request  = *AgentPermissionsUpdate
 			Params   = struct{}
 			Response = *SetAgentPermissionsOK
 		)

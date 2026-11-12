@@ -3,13 +3,7 @@ import type { Stage } from '../generated/contracts';
 
 /** Per-tab row counts for the my-jobs page, from the listing's meta. `viewed`
  *  is the view-only subset: rows neither saved nor applied. */
-export interface MyJobCounts {
-  all: number;
-  viewed: number;
-  saved: number;
-  applied: number;
-  dismissed: number;
-}
+export type MyJobCounts = components['schemas']['TrackingCounts'];
 
 /** The caller's application count at each stage of the vocabulary. Every stage is
  *  present, zero included, and the counts always sum to the application total —

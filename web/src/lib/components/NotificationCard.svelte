@@ -42,6 +42,7 @@
     nudge_auto_apply_failed: XCircle,
     auto_apply_tailor_ready: FileText,
     auto_apply_ready_for_review: FileText,
+    auto_apply_tailoring_failed: AlertTriangle,
     buddy_mock_booked: CalendarClock,
     buddy_mock_cancelled: CalendarClock,
     buddy_mock_reminder: CalendarClock,

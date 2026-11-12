@@ -11,6 +11,7 @@ const getTrackedApplication = vi.hoisted(() => vi.fn());
 vi.mock('#lib/api.js', () => ({ api: { getTrackedApplication } }));
 const item: MyJob = {
   id: 'track-1',
+  added_to_board_at: null,
   company_slug: 'acme',
   role_title: 'Engineer',
   job: { public_slug: 'engineer-acme', company: 'Acme', title: 'Engineer', closed_at: undefined },

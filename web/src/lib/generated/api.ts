@@ -4964,7 +4964,11 @@ export interface components {
             meta: components["schemas"]["AgentJobSearchMeta"];
         };
         AgentPermissions: {
-            /** @description Whether an agent acting for the account may submit applications. Absent reads as false. */
+            /** @description Whether an agent acting for the account may submit applications. */
+            agents_may_apply: boolean;
+        };
+        AgentPermissionsUpdate: {
+            /** @description Absent reads as false. */
             agents_may_apply?: boolean;
         };
         AlertListMeta: {
@@ -5105,26 +5109,71 @@ export interface components {
             language: string;
             /** @description Null for an account that never finished (or declined) the onboarding wizard. */
             onboarding_completed_at: string | null;
-            /** @description The resolved plan: `free`, `pro` or `ultra`. */
-            tier: string;
+            /** @description The resolved plan. */
+            tier: components["schemas"]["AuthUserTier"];
             /** @description Whether the account holds a live API key or MCP grant. */
             agent_connected: boolean;
         };
+        /** @enum {string} */
+        AuthUserTier: "free" | "pro" | "ultra";
         AutoApplyCancelled: {
             cancelled: boolean;
         };
         AutoApplyDecision: {
             decision: string;
         };
+        /** @description One resolved question and answer in an auto-apply answer preview. */
+        AutoApplyPreviewField: {
+            label: string;
+            value: string;
+        };
+        /** @description A required question the preview has no answer for yet. */
+        AutoApplyPreviewPending: {
+            label: string;
+            /** @description Whether the real submission will fill it in on its own. */
+            will_draft_at_submission: boolean;
+        };
         AutoApplyQueued: {
             status: string;
+        };
+        /** @description What an unattended submission would send, computed once before review. */
+        AutoApplyResolvedPreview: {
+            fields: components["schemas"]["AutoApplyPreviewField"][];
+            pending?: components["schemas"]["AutoApplyPreviewPending"][];
         };
         AutoApplyRetried: {
             retried: boolean;
         };
+        /** @description The live auto-apply attempt of one job, as the application drawer reads it. */
+        AutoApplyReviewInfo: {
+            status: components["schemas"]["AutoApplyReviewStatus"];
+            /**
+             * Format: int64
+             * @description Addresses the attempt for the review call.
+             */
+            queue_id: number;
+            /** @description Only when `status` is `pending_review`. */
+            resolved_preview?: components["schemas"]["AutoApplyResolvedPreview"];
+            /** @description Only when `status` is `blocked`. */
+            unmapped?: components["schemas"]["AutoApplyUnmappedField"][];
+            /** @description Only on a `failed` attempt the employer may already hold; such an attempt is never retried. */
+            may_have_reached_employer?: boolean;
+        };
         AutoApplyReviewRequest: {
             /** @description `approved` or `declined`. */
             decision?: string;
+        };
+        /**
+         * @description The candidate-facing status of a live auto-apply attempt (autoapply.Status).
+         * @enum {string}
+         */
+        AutoApplyReviewStatus: "tailoring" | "pending_review" | "approved" | "blocked" | "declined" | "failed" | "tailor_failed";
+        /** @description A question the attempt could not answer. The attempt's internal error text is never here. */
+        AutoApplyUnmappedField: {
+            id: string;
+            label: string;
+            required: boolean;
+            reason: string;
         };
         BanRequest: {
             /** @description 1 to 500 characters. */
@@ -5144,8 +5193,8 @@ export interface components {
         };
         /** @description The current single place: an ISO country code and a free-text city. */
         BaseLocation: {
-            country?: string | null;
-            city?: string | null;
+            country?: string;
+            city?: string;
         };
         /** @description The checkout link and which offer was applied to it. */
         BillingCheckout: {
@@ -5821,9 +5870,9 @@ export interface components {
         };
         /** @description Where the CV says the caller IS, as the location dictionary resolved it. Read-only. */
         DerivedLocation: {
-            countries: string[] | null;
-            regions: string[] | null;
-            cities: string[] | null;
+            countries: string[];
+            regions: string[];
+            cities: string[];
         };
         DictionaryGap: {
             /** @description `specialization`, `skill` or `industry`; anything else is a 400. */
@@ -6115,8 +6164,8 @@ export interface components {
         };
         /** @description A geographic reach: regions and/or ISO country codes. Empty means worldwide. */
         GeoSet: {
-            regions?: string[] | null;
-            countries?: string[] | null;
+            regions?: string[];
+            countries?: string[];
         };
         GhostReport: {
             /** Format: int64 */
@@ -6195,9 +6244,9 @@ export interface components {
             /** @description The ledger, newest first. */
             events: components["schemas"]["TimelineEvent"][];
             /** @description The stage the newest classified message implies; absent when there is nothing to offer. */
-            stage_suggestion?: unknown;
+            stage_suggestion?: components["schemas"]["StageSuggestion"];
             /** @description The caller's live auto-apply attempt for this job; absent when none exists. */
-            auto_apply?: unknown;
+            auto_apply?: components["schemas"]["AutoApplyReviewInfo"];
         };
         InboxApplicationEmail: {
             /** Format: int64 */
@@ -6400,10 +6449,10 @@ export interface components {
         JobReport: {
             /** Format: int64 */
             id: number;
-            reason: string;
+            reason: components["schemas"]["JobReportReason"];
             details: string;
             contact_telegram?: string;
-            status: string;
+            status: components["schemas"]["JobReportStatus"];
             review_reason?: string;
             /** Format: date-time */
             reviewed_at?: string;
@@ -6415,12 +6464,19 @@ export interface components {
             /** @description Only on a decision: whether the reporter was actually told. */
             notified?: boolean;
         };
+        /**
+         * @description The closed reason vocabulary (internal/engage/report validReasons and the CHECK on job_reports).
+         * @enum {string}
+         */
+        JobReportReason: "no_response" | "not_relevant" | "spam" | "fraud" | "other";
         JobReportRequest: {
             /** @description From the controlled vocabulary. */
             reason?: string;
             details?: string;
             contact_telegram?: string;
         };
+        /** @enum {string} */
+        JobReportStatus: "pending" | "resolved" | "dismissed";
         JobSearchMeta: {
             /** Format: int64 */
             total: number;
@@ -6464,15 +6520,15 @@ export interface components {
             ignored_values?: unknown;
         };
         /**
-         * @description Where and how the caller wants to work. Every member is optional on a save; an
-         *     entirely empty block clears it. Echoed back normalised, with `remote`, `base` and
-         *     `relocation` always present.
+         * @description Where and how the caller wants to work, as it is stored and echoed back: normalised,
+         *     with `remote`, `base` and `relocation` always present and empty lists left out. Every
+         *     member is optional on a save, and an entirely empty block clears it.
          */
         LocationPreferences: {
-            work_modes?: string[] | null;
-            remote?: components["schemas"]["GeoSet"] | null;
-            base?: components["schemas"]["BaseLocation"] | null;
-            relocation?: components["schemas"]["Relocation"] | null;
+            work_modes?: string[];
+            remote: components["schemas"]["GeoSet"];
+            base: components["schemas"]["BaseLocation"];
+            relocation: components["schemas"]["Relocation"];
         };
         /** @description A chase the candidate sends themselves; `recipient` is absent when nobody ever replied. */
         MailFollowUpDraft: {
@@ -6727,15 +6783,28 @@ export interface components {
         Notification: {
             /** Format: int64 */
             id: number;
-            kind: string;
+            kind: components["schemas"]["NotificationKind"];
             title: string;
             body: string;
             public_slug: string | null;
             /** @description The stored snapshot of a multi-job digest; left out for every other kind. */
-            jobs?: unknown;
+            jobs?: components["schemas"]["NotificationDigestJob"][];
             created_at: string | null;
             read_at: string | null;
         };
+        /** @description One job of a multi-job digest, as recorded at delivery (notify.SnapshotJob). */
+        NotificationDigestJob: {
+            title: string;
+            company: string;
+            slug: string;
+        };
+        /**
+         * @description What a `user_notifications` row can be about. The column is free text; these are the kinds
+         *     the engines write (notify, reminder, nudge, buddy, messaging, auto-apply), plus
+         *     `auto_apply_tailor_ready`, which only historical rows carry.
+         * @enum {string}
+         */
+        NotificationKind: "subscription_digest" | "reminder" | "nudge_follow_up" | "nudge_interview_prep" | "nudge_job_closed" | "nudge_auto_apply_submitted" | "nudge_auto_apply_blocked" | "nudge_auto_apply_failed" | "auto_apply_tailor_ready" | "auto_apply_ready_for_review" | "auto_apply_tailoring_failed" | "buddy_mock_booked" | "buddy_mock_cancelled" | "buddy_mock_reminder" | "buddy_reaction" | "buddy_message" | "buddy_invitation";
         NotificationListMeta: {
             /** Format: int64 */
             total: number;
@@ -6915,24 +6984,29 @@ export interface components {
         };
         /** @description What a person reported about a company's hiring process. */
         ProcessReport: {
-            kind: string;
+            kind: components["schemas"]["ProcessReportKind"];
             /**
              * Format: int64
              * @description How many people have reported this kind for the company.
              */
             count: number;
         };
+        /**
+         * @description What a candidate can report about a company's hiring (vocab.CompanyProcessReportKindValues).
+         * @enum {string}
+         */
+        ProcessReportKind: "ai_interview";
         ProcessReportRequest: {
             kind?: string;
         };
         Profile: {
-            specializations: string[] | null;
-            skills: string[] | null;
-            seniorities: string[] | null;
-            excluded_skills: string[] | null;
-            excluded_sources: string[] | null;
-            job_languages: string[] | null;
-            excluded_companies: string[] | null;
+            specializations: string[];
+            skills: string[];
+            seniorities: string[];
+            excluded_skills: string[];
+            excluded_sources: string[];
+            job_languages: string[];
+            excluded_companies: string[];
             /**
              * @description What the caller asserted, shaped like LocationPreferences, sent exactly as stored;
              *     null when they set none.
@@ -7060,14 +7134,14 @@ export interface components {
         RecentThread: {
             /** Format: int64 */
             id: number;
-            subject_type: string;
+            subject_type: components["schemas"]["ThreadSubjectType"];
             subject_slug: string;
             title: string;
             body: string;
             author: string;
             /** Format: int64 */
             reply_count: number;
-            status: string;
+            status: components["schemas"]["ThreadStatus"];
             /** Format: date-time */
             created_at: string;
             subject_title: string;
@@ -7145,10 +7219,10 @@ export interface components {
         };
         /** @description The willingness to move. Open with empty targets means anywhere. */
         Relocation: {
-            open?: boolean | null;
-            regions?: string[] | null;
-            countries?: string[] | null;
-            cities?: string[] | null;
+            open: boolean;
+            regions?: string[];
+            countries?: string[];
+            cities?: string[];
         };
         /** @description A review with what a moderator triages by. */
         ReportedCompanyFeedback: {
@@ -7399,6 +7473,11 @@ export interface components {
             /** @description The result being refined, echoed back from a prior answer. */
             previous?: unknown;
         };
+        /**
+         * @description Where an application sits against the silence thresholds of its stage (internal/job/silence).
+         * @enum {string}
+         */
+        SilenceState: "active" | "silent" | "unconfirmed";
         /** @description The site's own verdict, independent of the ingest fleet's `overall`. */
         SiteHealth: {
             status: components["schemas"]["HealthStatus"];
@@ -7504,6 +7583,13 @@ export interface components {
             /** Format: int64 */
             ats_unmatched?: number;
             measured_at: string;
+        };
+        /** @description An offer to move the application to the stage its newest classified message implies. */
+        StageSuggestion: {
+            stage: string;
+            signal: string;
+            /** Format: int64 */
+            email_id: number;
         };
         StatusProvider: {
             provider: string;
@@ -7708,15 +7794,18 @@ export interface components {
             /** @description Whether GET /talent/{handle}/photo has something to serve. */
             has_photo: boolean;
         };
-        /** @description The caller's own place in the Talent Network. */
         TalentNetworkMembership: {
-            /** @description `off` or `anonymous`. */
-            talent_network_visibility: string;
+            talent_network_visibility: components["schemas"]["TalentNetworkVisibility"];
             /** @description The handle in the member's public URL, once they have one. */
             talent_handle?: string;
             /** @description Whether the catalogue shows the member right now. */
             listed: boolean;
         };
+        /**
+         * @description The caller's own place in the Talent Network.
+         * @enum {string}
+         */
+        TalentNetworkVisibility: "off" | "anonymous";
         TalentNetworkVisibilityUpdate: {
             /** @description `off` or `anonymous`; anything else is a 400. */
             visibility?: string;
@@ -7731,25 +7820,24 @@ export interface components {
             current?: boolean;
             stack?: string[];
         };
-        /** @description The author is the persona handle, "AI" for a system reply or "[deleted]" once the account is gone. */
         Thread: {
             /** Format: int64 */
             id: number;
-            subject_type: string;
+            subject_type: components["schemas"]["ThreadSubjectType"];
             subject_slug: string;
             title: string;
             body: string;
             author: string;
             /** Format: int64 */
             reply_count: number;
-            status: string;
+            status: components["schemas"]["ThreadStatus"];
             /** Format: date-time */
             created_at: string;
         };
         ThreadClosed: {
             /** Format: int64 */
             id: number;
-            status: string;
+            status: components["schemas"]["ThreadStatus"];
         };
         ThreadCount: {
             /** Format: int64 */
@@ -7779,6 +7867,16 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description A thread is open until a moderator closes it.
+         * @enum {string}
+         */
+        ThreadStatus: "open" | "closed";
+        /**
+         * @description The author is the persona handle, "AI" for a system reply or "[deleted]" once the account is gone.
+         * @enum {string}
+         */
+        ThreadSubjectType: "company" | "job";
         ThreadWithReplies: {
             thread: components["schemas"]["Thread"];
             replies: components["schemas"]["ThreadReply"][];
@@ -7837,11 +7935,11 @@ export interface components {
             /** @description The silence fields are null together on any row that is not awaiting a reply. */
             last_activity_at: string | null;
             days_silent: number | null;
-            silence_state: string | null;
+            silence_state: components["schemas"]["SilenceState"] | null;
             followed_up_at: string | null;
             cv_opened_at: string | null;
             /** @description The status of this job's live auto-apply attempt; absent when it has none. */
-            auto_apply_status?: string;
+            auto_apply_status?: components["schemas"]["AutoApplyReviewStatus"];
         };
         TrackedJobPage: {
             data: components["schemas"]["TrackedJob"][];
@@ -11506,7 +11604,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AgentPermissions"];
+                "application/json": components["schemas"]["AgentPermissionsUpdate"];
             };
         };
         responses: {

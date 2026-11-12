@@ -40,10 +40,10 @@ func (h *reportHandlers) register(api fiber.Router, mw middleware, contract fibe
 func toJobReport(r report.Report) apigen.JobReport {
 	out := apigen.JobReport{
 		ID:              r.ID,
-		Reason:          r.Reason,
+		Reason:          apigen.JobReportReason(r.Reason),
 		Details:         r.Details,
 		ContactTelegram: optString(r.ContactTelegram),
-		Status:          r.Status,
+		Status:          apigen.JobReportStatus(r.Status),
 		ReviewReason:    optString(r.ReviewReason),
 	}
 	if r.ReviewedAt != nil {

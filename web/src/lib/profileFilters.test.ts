@@ -19,6 +19,7 @@ function mkProfile(
     excluded_skills: excludedSkills,
     excluded_sources: excludedSources,
     excluded_companies: excludedCompanies,
+    job_languages: [],
     location_preferences: location,
     derived_location: null,
     cv: null,
@@ -476,9 +477,7 @@ describe('profile job languages', () => {
   });
 
   it('keeps every language when no preference is set or the choice is cleared', () => {
-    for (const job_languages of [undefined, []]) {
-      const p = filtersToParams(filtersFromProfile({ ...mkProfile([], []), job_languages }));
-      expect(p.has('posting_language')).toBe(false);
-    }
+    const p = filtersToParams(filtersFromProfile({ ...mkProfile([], []), job_languages: [] }));
+    expect(p.has('posting_language')).toBe(false);
   });
 });

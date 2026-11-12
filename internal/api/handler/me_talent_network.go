@@ -58,7 +58,7 @@ func (h *talentNetworkHandlers) register(api fiber.Router, mw middleware, contra
 
 func talentNetworkMembershipOut(row db.GetTalentNetworkVisibilityRow) apigen.TalentNetworkMembership {
 	return apigen.TalentNetworkMembership{
-		TalentNetworkVisibility: row.TalentNetworkVisibility,
+		TalentNetworkVisibility: apigen.TalentNetworkVisibility(row.TalentNetworkVisibility),
 		TalentHandle:            optString(row.TalentHandle.String),
 		Listed:                  row.Listed,
 	}

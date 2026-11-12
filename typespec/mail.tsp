@@ -118,6 +118,13 @@ model InboxApplicationEmail {
   read: boolean;
 }
 
+/** An offer to move the application to the stage its newest classified message implies. */
+model StageSuggestion {
+  stage: string;
+  signal: string;
+  email_id: int64;
+}
+
 /** The job, the caller's interaction with it, the linked mail and the history. */
 model InboxApplicationDetail {
   /** The job in the shared wire shape. */
@@ -135,10 +142,10 @@ model InboxApplicationDetail {
   events: TimelineEvent[];
 
   /** The stage the newest classified message implies; absent when there is nothing to offer. */
-  stage_suggestion?: unknown;
+  stage_suggestion?: StageSuggestion;
 
   /** The caller's live auto-apply attempt for this job; absent when none exists. */
-  auto_apply?: unknown;
+  auto_apply?: AutoApplyReviewInfo;
 }
 
 /** A chase the candidate sends themselves; `recipient` is absent when nobody ever replied. */

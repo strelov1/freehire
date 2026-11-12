@@ -73,35 +73,16 @@ export interface InsightRoleCountries {
  *  page's figures and decides which are too thin to show. */
 export type InsightRolePulse = components['schemas']['RolePulse'];
 
-export interface InsightRole {
-  category: string;
-  seniority: string;
-  open_count: number;
-  growth: number;
-  /** The three below are present only when a SINGLE role was named (both category
-   *  and seniority). Absent on the ranked list, so `skills === undefined` means "this
-   *  answer carries no distribution" while `skills: []` means "this role's every skill
-   *  fell below the sample floor" — two different facts. */
-  sample_size?: number;
-  skills?: InsightRoleSkill[];
+export type InsightRole = Omit<components['schemas']['RoleInsight'], 'coverage'> & {
   /** Present only for a signed-in caller. Zeroed rather than absent when they hold no
    *  skills, so it can be told apart from being signed out.
    *
    *  The GENERATED JobMatch, not a local copy: the handler serialises
    *  internal/candidate/jobmatch.JobMatch verbatim, and cmd/gen-contracts already emits
-   *  it. A hand-written twin would drift the moment the Go type gained a field, and
-   *  nothing would report it. */
+   *  it. The contract leaves it raw because that type is generated from Go, not from
+   *  the contract. */
   coverage?: JobMatch;
-}
-
-/** One skill inside a role's distribution. `share` divides by the role's `sample_size`
- *  (its postings carrying any tagged skill), NEVER by `open_count`. Reached through
- *  InsightRole rather than exported by name, so there is one way in. */
-interface InsightRoleSkill {
-  skill: string;
-  open_count: number;
-  share: number;
-}
+};
 
 export type InsightSkill = components['schemas']['SkillInsight'];
 

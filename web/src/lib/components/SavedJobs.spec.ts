@@ -45,6 +45,7 @@ function item(id: number): MyJob {
   } as JobCard;
   return {
     id: String(id),
+    added_to_board_at: null,
     job,
     company_slug: 'company-' + id,
     role_title: 'Role ' + id,

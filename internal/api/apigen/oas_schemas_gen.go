@@ -610,17 +610,33 @@ func (s *AgentJobSearchPageHeaders) SetResponse(val AgentJobSearchPage) {
 
 // Ref: #/components/schemas/AgentPermissions
 type AgentPermissions struct {
-	// Whether an agent acting for the account may submit applications. Absent reads as false.
-	AgentsMayApply OptBool `json:"agents_may_apply"`
+	// Whether an agent acting for the account may submit applications.
+	AgentsMayApply bool `json:"agents_may_apply"`
 }
 
 // GetAgentsMayApply returns the value of AgentsMayApply.
-func (s *AgentPermissions) GetAgentsMayApply() OptBool {
+func (s *AgentPermissions) GetAgentsMayApply() bool {
 	return s.AgentsMayApply
 }
 
 // SetAgentsMayApply sets the value of AgentsMayApply.
-func (s *AgentPermissions) SetAgentsMayApply(val OptBool) {
+func (s *AgentPermissions) SetAgentsMayApply(val bool) {
+	s.AgentsMayApply = val
+}
+
+// Ref: #/components/schemas/AgentPermissionsUpdate
+type AgentPermissionsUpdate struct {
+	// Absent reads as false.
+	AgentsMayApply OptBool `json:"agents_may_apply"`
+}
+
+// GetAgentsMayApply returns the value of AgentsMayApply.
+func (s *AgentPermissionsUpdate) GetAgentsMayApply() OptBool {
+	return s.AgentsMayApply
+}
+
+// SetAgentsMayApply sets the value of AgentsMayApply.
+func (s *AgentPermissionsUpdate) SetAgentsMayApply(val OptBool) {
 	s.AgentsMayApply = val
 }
 
@@ -1428,8 +1444,8 @@ type AuthUser struct {
 	Language string    `json:"language"`
 	// Null for an account that never finished (or declined) the onboarding wizard.
 	OnboardingCompletedAt NilDateTime `json:"onboarding_completed_at"`
-	// The resolved plan: `free`, `pro` or `ultra`.
-	Tier string `json:"tier"`
+	// The resolved plan.
+	Tier AuthUserTier `json:"tier"`
 	// Whether the account holds a live API key or MCP grant.
 	AgentConnected bool `json:"agent_connected"`
 }
@@ -1485,7 +1501,7 @@ func (s *AuthUser) GetOnboardingCompletedAt() NilDateTime {
 }
 
 // GetTier returns the value of Tier.
-func (s *AuthUser) GetTier() string {
+func (s *AuthUser) GetTier() AuthUserTier {
 	return s.Tier
 }
 
@@ -1545,13 +1561,62 @@ func (s *AuthUser) SetOnboardingCompletedAt(val NilDateTime) {
 }
 
 // SetTier sets the value of Tier.
-func (s *AuthUser) SetTier(val string) {
+func (s *AuthUser) SetTier(val AuthUserTier) {
 	s.Tier = val
 }
 
 // SetAgentConnected sets the value of AgentConnected.
 func (s *AuthUser) SetAgentConnected(val bool) {
 	s.AgentConnected = val
+}
+
+// Ref: #/components/schemas/AuthUserTier
+type AuthUserTier string
+
+const (
+	AuthUserTierFree  AuthUserTier = "free"
+	AuthUserTierPro   AuthUserTier = "pro"
+	AuthUserTierUltra AuthUserTier = "ultra"
+)
+
+// AllValues returns all AuthUserTier values.
+func (AuthUserTier) AllValues() []AuthUserTier {
+	return []AuthUserTier{
+		AuthUserTierFree,
+		AuthUserTierPro,
+		AuthUserTierUltra,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s AuthUserTier) MarshalText() ([]byte, error) {
+	switch s {
+	case AuthUserTierFree:
+		return []byte(s), nil
+	case AuthUserTierPro:
+		return []byte(s), nil
+	case AuthUserTierUltra:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *AuthUserTier) UnmarshalText(data []byte) error {
+	switch AuthUserTier(data) {
+	case AuthUserTierFree:
+		*s = AuthUserTierFree
+		return nil
+	case AuthUserTierPro:
+		*s = AuthUserTierPro
+		return nil
+	case AuthUserTierUltra:
+		*s = AuthUserTierUltra
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/AutoApplyCancelled
@@ -1584,6 +1649,61 @@ func (s *AutoApplyDecision) SetDecision(val string) {
 	s.Decision = val
 }
 
+// One resolved question and answer in an auto-apply answer preview.
+// Ref: #/components/schemas/AutoApplyPreviewField
+type AutoApplyPreviewField struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// GetLabel returns the value of Label.
+func (s *AutoApplyPreviewField) GetLabel() string {
+	return s.Label
+}
+
+// GetValue returns the value of Value.
+func (s *AutoApplyPreviewField) GetValue() string {
+	return s.Value
+}
+
+// SetLabel sets the value of Label.
+func (s *AutoApplyPreviewField) SetLabel(val string) {
+	s.Label = val
+}
+
+// SetValue sets the value of Value.
+func (s *AutoApplyPreviewField) SetValue(val string) {
+	s.Value = val
+}
+
+// A required question the preview has no answer for yet.
+// Ref: #/components/schemas/AutoApplyPreviewPending
+type AutoApplyPreviewPending struct {
+	Label string `json:"label"`
+	// Whether the real submission will fill it in on its own.
+	WillDraftAtSubmission bool `json:"will_draft_at_submission"`
+}
+
+// GetLabel returns the value of Label.
+func (s *AutoApplyPreviewPending) GetLabel() string {
+	return s.Label
+}
+
+// GetWillDraftAtSubmission returns the value of WillDraftAtSubmission.
+func (s *AutoApplyPreviewPending) GetWillDraftAtSubmission() bool {
+	return s.WillDraftAtSubmission
+}
+
+// SetLabel sets the value of Label.
+func (s *AutoApplyPreviewPending) SetLabel(val string) {
+	s.Label = val
+}
+
+// SetWillDraftAtSubmission sets the value of WillDraftAtSubmission.
+func (s *AutoApplyPreviewPending) SetWillDraftAtSubmission(val bool) {
+	s.WillDraftAtSubmission = val
+}
+
 // Ref: #/components/schemas/AutoApplyQueued
 type AutoApplyQueued struct {
 	Status string `json:"status"`
@@ -1597,6 +1717,33 @@ func (s *AutoApplyQueued) GetStatus() string {
 // SetStatus sets the value of Status.
 func (s *AutoApplyQueued) SetStatus(val string) {
 	s.Status = val
+}
+
+// What an unattended submission would send, computed once before review.
+// Ref: #/components/schemas/AutoApplyResolvedPreview
+type AutoApplyResolvedPreview struct {
+	Fields  []AutoApplyPreviewField   `json:"fields"`
+	Pending []AutoApplyPreviewPending `json:"pending"`
+}
+
+// GetFields returns the value of Fields.
+func (s *AutoApplyResolvedPreview) GetFields() []AutoApplyPreviewField {
+	return s.Fields
+}
+
+// GetPending returns the value of Pending.
+func (s *AutoApplyResolvedPreview) GetPending() []AutoApplyPreviewPending {
+	return s.Pending
+}
+
+// SetFields sets the value of Fields.
+func (s *AutoApplyResolvedPreview) SetFields(val []AutoApplyPreviewField) {
+	s.Fields = val
+}
+
+// SetPending sets the value of Pending.
+func (s *AutoApplyResolvedPreview) SetPending(val []AutoApplyPreviewPending) {
+	s.Pending = val
 }
 
 // Ref: #/components/schemas/AutoApplyRetried
@@ -1614,6 +1761,70 @@ func (s *AutoApplyRetried) SetRetried(val bool) {
 	s.Retried = val
 }
 
+// The live auto-apply attempt of one job, as the application drawer reads it.
+// Ref: #/components/schemas/AutoApplyReviewInfo
+type AutoApplyReviewInfo struct {
+	Status AutoApplyReviewStatus `json:"status"`
+	// Addresses the attempt for the review call.
+	QueueID int64 `json:"queue_id"`
+	// Only when `status` is `pending_review`.
+	ResolvedPreview OptAutoApplyResolvedPreview `json:"resolved_preview"`
+	// Only when `status` is `blocked`.
+	Unmapped []AutoApplyUnmappedField `json:"unmapped"`
+	// Only on a `failed` attempt the employer may already hold; such an attempt is never retried.
+	MayHaveReachedEmployer OptBool `json:"may_have_reached_employer"`
+}
+
+// GetStatus returns the value of Status.
+func (s *AutoApplyReviewInfo) GetStatus() AutoApplyReviewStatus {
+	return s.Status
+}
+
+// GetQueueID returns the value of QueueID.
+func (s *AutoApplyReviewInfo) GetQueueID() int64 {
+	return s.QueueID
+}
+
+// GetResolvedPreview returns the value of ResolvedPreview.
+func (s *AutoApplyReviewInfo) GetResolvedPreview() OptAutoApplyResolvedPreview {
+	return s.ResolvedPreview
+}
+
+// GetUnmapped returns the value of Unmapped.
+func (s *AutoApplyReviewInfo) GetUnmapped() []AutoApplyUnmappedField {
+	return s.Unmapped
+}
+
+// GetMayHaveReachedEmployer returns the value of MayHaveReachedEmployer.
+func (s *AutoApplyReviewInfo) GetMayHaveReachedEmployer() OptBool {
+	return s.MayHaveReachedEmployer
+}
+
+// SetStatus sets the value of Status.
+func (s *AutoApplyReviewInfo) SetStatus(val AutoApplyReviewStatus) {
+	s.Status = val
+}
+
+// SetQueueID sets the value of QueueID.
+func (s *AutoApplyReviewInfo) SetQueueID(val int64) {
+	s.QueueID = val
+}
+
+// SetResolvedPreview sets the value of ResolvedPreview.
+func (s *AutoApplyReviewInfo) SetResolvedPreview(val OptAutoApplyResolvedPreview) {
+	s.ResolvedPreview = val
+}
+
+// SetUnmapped sets the value of Unmapped.
+func (s *AutoApplyReviewInfo) SetUnmapped(val []AutoApplyUnmappedField) {
+	s.Unmapped = val
+}
+
+// SetMayHaveReachedEmployer sets the value of MayHaveReachedEmployer.
+func (s *AutoApplyReviewInfo) SetMayHaveReachedEmployer(val OptBool) {
+	s.MayHaveReachedEmployer = val
+}
+
 // Ref: #/components/schemas/AutoApplyReviewRequest
 type AutoApplyReviewRequest struct {
 	// `approved` or `declined`.
@@ -1628,6 +1839,133 @@ func (s *AutoApplyReviewRequest) GetDecision() OptString {
 // SetDecision sets the value of Decision.
 func (s *AutoApplyReviewRequest) SetDecision(val OptString) {
 	s.Decision = val
+}
+
+// The candidate-facing status of a live auto-apply attempt (autoapply.Status).
+// Ref: #/components/schemas/AutoApplyReviewStatus
+type AutoApplyReviewStatus string
+
+const (
+	AutoApplyReviewStatusTailoring     AutoApplyReviewStatus = "tailoring"
+	AutoApplyReviewStatusPendingReview AutoApplyReviewStatus = "pending_review"
+	AutoApplyReviewStatusApproved      AutoApplyReviewStatus = "approved"
+	AutoApplyReviewStatusBlocked       AutoApplyReviewStatus = "blocked"
+	AutoApplyReviewStatusDeclined      AutoApplyReviewStatus = "declined"
+	AutoApplyReviewStatusFailed        AutoApplyReviewStatus = "failed"
+	AutoApplyReviewStatusTailorFailed  AutoApplyReviewStatus = "tailor_failed"
+)
+
+// AllValues returns all AutoApplyReviewStatus values.
+func (AutoApplyReviewStatus) AllValues() []AutoApplyReviewStatus {
+	return []AutoApplyReviewStatus{
+		AutoApplyReviewStatusTailoring,
+		AutoApplyReviewStatusPendingReview,
+		AutoApplyReviewStatusApproved,
+		AutoApplyReviewStatusBlocked,
+		AutoApplyReviewStatusDeclined,
+		AutoApplyReviewStatusFailed,
+		AutoApplyReviewStatusTailorFailed,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s AutoApplyReviewStatus) MarshalText() ([]byte, error) {
+	switch s {
+	case AutoApplyReviewStatusTailoring:
+		return []byte(s), nil
+	case AutoApplyReviewStatusPendingReview:
+		return []byte(s), nil
+	case AutoApplyReviewStatusApproved:
+		return []byte(s), nil
+	case AutoApplyReviewStatusBlocked:
+		return []byte(s), nil
+	case AutoApplyReviewStatusDeclined:
+		return []byte(s), nil
+	case AutoApplyReviewStatusFailed:
+		return []byte(s), nil
+	case AutoApplyReviewStatusTailorFailed:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *AutoApplyReviewStatus) UnmarshalText(data []byte) error {
+	switch AutoApplyReviewStatus(data) {
+	case AutoApplyReviewStatusTailoring:
+		*s = AutoApplyReviewStatusTailoring
+		return nil
+	case AutoApplyReviewStatusPendingReview:
+		*s = AutoApplyReviewStatusPendingReview
+		return nil
+	case AutoApplyReviewStatusApproved:
+		*s = AutoApplyReviewStatusApproved
+		return nil
+	case AutoApplyReviewStatusBlocked:
+		*s = AutoApplyReviewStatusBlocked
+		return nil
+	case AutoApplyReviewStatusDeclined:
+		*s = AutoApplyReviewStatusDeclined
+		return nil
+	case AutoApplyReviewStatusFailed:
+		*s = AutoApplyReviewStatusFailed
+		return nil
+	case AutoApplyReviewStatusTailorFailed:
+		*s = AutoApplyReviewStatusTailorFailed
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// A question the attempt could not answer. The attempt's internal error text is never here.
+// Ref: #/components/schemas/AutoApplyUnmappedField
+type AutoApplyUnmappedField struct {
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Required bool   `json:"required"`
+	Reason   string `json:"reason"`
+}
+
+// GetID returns the value of ID.
+func (s *AutoApplyUnmappedField) GetID() string {
+	return s.ID
+}
+
+// GetLabel returns the value of Label.
+func (s *AutoApplyUnmappedField) GetLabel() string {
+	return s.Label
+}
+
+// GetRequired returns the value of Required.
+func (s *AutoApplyUnmappedField) GetRequired() bool {
+	return s.Required
+}
+
+// GetReason returns the value of Reason.
+func (s *AutoApplyUnmappedField) GetReason() string {
+	return s.Reason
+}
+
+// SetID sets the value of ID.
+func (s *AutoApplyUnmappedField) SetID(val string) {
+	s.ID = val
+}
+
+// SetLabel sets the value of Label.
+func (s *AutoApplyUnmappedField) SetLabel(val string) {
+	s.Label = val
+}
+
+// SetRequired sets the value of Required.
+func (s *AutoApplyUnmappedField) SetRequired(val bool) {
+	s.Required = val
+}
+
+// SetReason sets the value of Reason.
+func (s *AutoApplyUnmappedField) SetReason(val string) {
+	s.Reason = val
 }
 
 // Ref: #/components/schemas/BanRequest
@@ -10384,9 +10722,9 @@ type InboxApplicationDetail struct {
 	// The ledger, newest first.
 	Events []TimelineEvent `json:"events"`
 	// The stage the newest classified message implies; absent when there is nothing to offer.
-	StageSuggestion jx.Raw `json:"stage_suggestion"`
+	StageSuggestion OptStageSuggestion `json:"stage_suggestion"`
 	// The caller's live auto-apply attempt for this job; absent when none exists.
-	AutoApply jx.Raw `json:"auto_apply"`
+	AutoApply OptAutoApplyReviewInfo `json:"auto_apply"`
 }
 
 // GetJob returns the value of Job.
@@ -10435,12 +10773,12 @@ func (s *InboxApplicationDetail) GetEvents() []TimelineEvent {
 }
 
 // GetStageSuggestion returns the value of StageSuggestion.
-func (s *InboxApplicationDetail) GetStageSuggestion() jx.Raw {
+func (s *InboxApplicationDetail) GetStageSuggestion() OptStageSuggestion {
 	return s.StageSuggestion
 }
 
 // GetAutoApply returns the value of AutoApply.
-func (s *InboxApplicationDetail) GetAutoApply() jx.Raw {
+func (s *InboxApplicationDetail) GetAutoApply() OptAutoApplyReviewInfo {
 	return s.AutoApply
 }
 
@@ -10490,12 +10828,12 @@ func (s *InboxApplicationDetail) SetEvents(val []TimelineEvent) {
 }
 
 // SetStageSuggestion sets the value of StageSuggestion.
-func (s *InboxApplicationDetail) SetStageSuggestion(val jx.Raw) {
+func (s *InboxApplicationDetail) SetStageSuggestion(val OptStageSuggestion) {
 	s.StageSuggestion = val
 }
 
 // SetAutoApply sets the value of AutoApply.
-func (s *InboxApplicationDetail) SetAutoApply(val jx.Raw) {
+func (s *InboxApplicationDetail) SetAutoApply(val OptAutoApplyReviewInfo) {
 	s.AutoApply = val
 }
 
@@ -11841,14 +12179,14 @@ func (s *JobFoundPosting) SetPublicSlug(val string) {
 
 // Ref: #/components/schemas/JobReport
 type JobReport struct {
-	ID              int64       `json:"id"`
-	Reason          string      `json:"reason"`
-	Details         string      `json:"details"`
-	ContactTelegram OptString   `json:"contact_telegram"`
-	Status          string      `json:"status"`
-	ReviewReason    OptString   `json:"review_reason"`
-	ReviewedAt      OptDateTime `json:"reviewed_at"`
-	CreatedAt       NilDateTime `json:"created_at"`
+	ID              int64           `json:"id"`
+	Reason          JobReportReason `json:"reason"`
+	Details         string          `json:"details"`
+	ContactTelegram OptString       `json:"contact_telegram"`
+	Status          JobReportStatus `json:"status"`
+	ReviewReason    OptString       `json:"review_reason"`
+	ReviewedAt      OptDateTime     `json:"reviewed_at"`
+	CreatedAt       NilDateTime     `json:"created_at"`
 	// Only on the moderator queue.
 	ReporterEmail OptString `json:"reporter_email"`
 	JobSlug       OptString `json:"job_slug"`
@@ -11863,7 +12201,7 @@ func (s *JobReport) GetID() int64 {
 }
 
 // GetReason returns the value of Reason.
-func (s *JobReport) GetReason() string {
+func (s *JobReport) GetReason() JobReportReason {
 	return s.Reason
 }
 
@@ -11878,7 +12216,7 @@ func (s *JobReport) GetContactTelegram() OptString {
 }
 
 // GetStatus returns the value of Status.
-func (s *JobReport) GetStatus() string {
+func (s *JobReport) GetStatus() JobReportStatus {
 	return s.Status
 }
 
@@ -11923,7 +12261,7 @@ func (s *JobReport) SetID(val int64) {
 }
 
 // SetReason sets the value of Reason.
-func (s *JobReport) SetReason(val string) {
+func (s *JobReport) SetReason(val JobReportReason) {
 	s.Reason = val
 }
 
@@ -11938,7 +12276,7 @@ func (s *JobReport) SetContactTelegram(val OptString) {
 }
 
 // SetStatus sets the value of Status.
-func (s *JobReport) SetStatus(val string) {
+func (s *JobReport) SetStatus(val JobReportStatus) {
 	s.Status = val
 }
 
@@ -11977,6 +12315,70 @@ func (s *JobReport) SetNotified(val OptBool) {
 	s.Notified = val
 }
 
+// The closed reason vocabulary (internal/engage/report validReasons and the CHECK on job_reports).
+// Ref: #/components/schemas/JobReportReason
+type JobReportReason string
+
+const (
+	JobReportReasonNoResponse  JobReportReason = "no_response"
+	JobReportReasonNotRelevant JobReportReason = "not_relevant"
+	JobReportReasonSpam        JobReportReason = "spam"
+	JobReportReasonFraud       JobReportReason = "fraud"
+	JobReportReasonOther       JobReportReason = "other"
+)
+
+// AllValues returns all JobReportReason values.
+func (JobReportReason) AllValues() []JobReportReason {
+	return []JobReportReason{
+		JobReportReasonNoResponse,
+		JobReportReasonNotRelevant,
+		JobReportReasonSpam,
+		JobReportReasonFraud,
+		JobReportReasonOther,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s JobReportReason) MarshalText() ([]byte, error) {
+	switch s {
+	case JobReportReasonNoResponse:
+		return []byte(s), nil
+	case JobReportReasonNotRelevant:
+		return []byte(s), nil
+	case JobReportReasonSpam:
+		return []byte(s), nil
+	case JobReportReasonFraud:
+		return []byte(s), nil
+	case JobReportReasonOther:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *JobReportReason) UnmarshalText(data []byte) error {
+	switch JobReportReason(data) {
+	case JobReportReasonNoResponse:
+		*s = JobReportReasonNoResponse
+		return nil
+	case JobReportReasonNotRelevant:
+		*s = JobReportReasonNotRelevant
+		return nil
+	case JobReportReasonSpam:
+		*s = JobReportReasonSpam
+		return nil
+	case JobReportReasonFraud:
+		*s = JobReportReasonFraud
+		return nil
+	case JobReportReasonOther:
+		*s = JobReportReasonOther
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 // Ref: #/components/schemas/JobReportRequest
 type JobReportRequest struct {
 	// From the controlled vocabulary.
@@ -12013,6 +12415,55 @@ func (s *JobReportRequest) SetDetails(val OptString) {
 // SetContactTelegram sets the value of ContactTelegram.
 func (s *JobReportRequest) SetContactTelegram(val OptString) {
 	s.ContactTelegram = val
+}
+
+// Ref: #/components/schemas/JobReportStatus
+type JobReportStatus string
+
+const (
+	JobReportStatusPending   JobReportStatus = "pending"
+	JobReportStatusResolved  JobReportStatus = "resolved"
+	JobReportStatusDismissed JobReportStatus = "dismissed"
+)
+
+// AllValues returns all JobReportStatus values.
+func (JobReportStatus) AllValues() []JobReportStatus {
+	return []JobReportStatus{
+		JobReportStatusPending,
+		JobReportStatusResolved,
+		JobReportStatusDismissed,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s JobReportStatus) MarshalText() ([]byte, error) {
+	switch s {
+	case JobReportStatusPending:
+		return []byte(s), nil
+	case JobReportStatusResolved:
+		return []byte(s), nil
+	case JobReportStatusDismissed:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *JobReportStatus) UnmarshalText(data []byte) error {
+	switch JobReportStatus(data) {
+	case JobReportStatusPending:
+		*s = JobReportStatusPending
+		return nil
+	case JobReportStatusResolved:
+		*s = JobReportStatusResolved
+		return nil
+	case JobReportStatusDismissed:
+		*s = JobReportStatusDismissed
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/JobSearchMeta
@@ -15312,6 +15763,51 @@ func (o NilScreeningAnswers) Or(d ScreeningAnswers) ScreeningAnswers {
 	return d
 }
 
+// NewNilSilenceState returns new NilSilenceState with value set to v.
+func NewNilSilenceState(v SilenceState) NilSilenceState {
+	return NilSilenceState{
+		Value: v,
+	}
+}
+
+// NilSilenceState is nullable SilenceState.
+type NilSilenceState struct {
+	Value SilenceState
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilSilenceState) SetTo(v SilenceState) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilSilenceState) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilSilenceState) SetToNull() {
+	o.Null = true
+	var v SilenceState
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilSilenceState) Get() (v SilenceState, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilSilenceState) Or(d SilenceState) SilenceState {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewNilSourceHealth returns new NilSourceHealth with value set to v.
 func NewNilSourceHealth(v SourceHealth) NilSourceHealth {
 	return NilSourceHealth{
@@ -15449,15 +15945,15 @@ func (o NilString) Or(d string) string {
 
 // Ref: #/components/schemas/Notification
 type Notification struct {
-	ID         int64     `json:"id"`
-	Kind       string    `json:"kind"`
-	Title      string    `json:"title"`
-	Body       string    `json:"body"`
-	PublicSlug NilString `json:"public_slug"`
+	ID         int64            `json:"id"`
+	Kind       NotificationKind `json:"kind"`
+	Title      string           `json:"title"`
+	Body       string           `json:"body"`
+	PublicSlug NilString        `json:"public_slug"`
 	// The stored snapshot of a multi-job digest; left out for every other kind.
-	Jobs      jx.Raw      `json:"jobs"`
-	CreatedAt NilDateTime `json:"created_at"`
-	ReadAt    NilDateTime `json:"read_at"`
+	Jobs      []NotificationDigestJob `json:"jobs"`
+	CreatedAt NilDateTime             `json:"created_at"`
+	ReadAt    NilDateTime             `json:"read_at"`
 }
 
 // GetID returns the value of ID.
@@ -15466,7 +15962,7 @@ func (s *Notification) GetID() int64 {
 }
 
 // GetKind returns the value of Kind.
-func (s *Notification) GetKind() string {
+func (s *Notification) GetKind() NotificationKind {
 	return s.Kind
 }
 
@@ -15486,7 +15982,7 @@ func (s *Notification) GetPublicSlug() NilString {
 }
 
 // GetJobs returns the value of Jobs.
-func (s *Notification) GetJobs() jx.Raw {
+func (s *Notification) GetJobs() []NotificationDigestJob {
 	return s.Jobs
 }
 
@@ -15506,7 +16002,7 @@ func (s *Notification) SetID(val int64) {
 }
 
 // SetKind sets the value of Kind.
-func (s *Notification) SetKind(val string) {
+func (s *Notification) SetKind(val NotificationKind) {
 	s.Kind = val
 }
 
@@ -15526,7 +16022,7 @@ func (s *Notification) SetPublicSlug(val NilString) {
 }
 
 // SetJobs sets the value of Jobs.
-func (s *Notification) SetJobs(val jx.Raw) {
+func (s *Notification) SetJobs(val []NotificationDigestJob) {
 	s.Jobs = val
 }
 
@@ -15538,6 +16034,194 @@ func (s *Notification) SetCreatedAt(val NilDateTime) {
 // SetReadAt sets the value of ReadAt.
 func (s *Notification) SetReadAt(val NilDateTime) {
 	s.ReadAt = val
+}
+
+// One job of a multi-job digest, as recorded at delivery (notify.SnapshotJob).
+// Ref: #/components/schemas/NotificationDigestJob
+type NotificationDigestJob struct {
+	Title   string `json:"title"`
+	Company string `json:"company"`
+	Slug    string `json:"slug"`
+}
+
+// GetTitle returns the value of Title.
+func (s *NotificationDigestJob) GetTitle() string {
+	return s.Title
+}
+
+// GetCompany returns the value of Company.
+func (s *NotificationDigestJob) GetCompany() string {
+	return s.Company
+}
+
+// GetSlug returns the value of Slug.
+func (s *NotificationDigestJob) GetSlug() string {
+	return s.Slug
+}
+
+// SetTitle sets the value of Title.
+func (s *NotificationDigestJob) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetCompany sets the value of Company.
+func (s *NotificationDigestJob) SetCompany(val string) {
+	s.Company = val
+}
+
+// SetSlug sets the value of Slug.
+func (s *NotificationDigestJob) SetSlug(val string) {
+	s.Slug = val
+}
+
+// What a `user_notifications` row can be about. The column is free text; these are the kinds the
+// engines write (notify, reminder, nudge, buddy, messaging, auto-apply), plus
+// `auto_apply_tailor_ready`, which only historical rows carry.
+// Ref: #/components/schemas/NotificationKind
+type NotificationKind string
+
+const (
+	NotificationKindSubscriptionDigest       NotificationKind = "subscription_digest"
+	NotificationKindReminder                 NotificationKind = "reminder"
+	NotificationKindNudgeFollowUp            NotificationKind = "nudge_follow_up"
+	NotificationKindNudgeInterviewPrep       NotificationKind = "nudge_interview_prep"
+	NotificationKindNudgeJobClosed           NotificationKind = "nudge_job_closed"
+	NotificationKindNudgeAutoApplySubmitted  NotificationKind = "nudge_auto_apply_submitted"
+	NotificationKindNudgeAutoApplyBlocked    NotificationKind = "nudge_auto_apply_blocked"
+	NotificationKindNudgeAutoApplyFailed     NotificationKind = "nudge_auto_apply_failed"
+	NotificationKindAutoApplyTailorReady     NotificationKind = "auto_apply_tailor_ready"
+	NotificationKindAutoApplyReadyForReview  NotificationKind = "auto_apply_ready_for_review"
+	NotificationKindAutoApplyTailoringFailed NotificationKind = "auto_apply_tailoring_failed"
+	NotificationKindBuddyMockBooked          NotificationKind = "buddy_mock_booked"
+	NotificationKindBuddyMockCancelled       NotificationKind = "buddy_mock_cancelled"
+	NotificationKindBuddyMockReminder        NotificationKind = "buddy_mock_reminder"
+	NotificationKindBuddyReaction            NotificationKind = "buddy_reaction"
+	NotificationKindBuddyMessage             NotificationKind = "buddy_message"
+	NotificationKindBuddyInvitation          NotificationKind = "buddy_invitation"
+)
+
+// AllValues returns all NotificationKind values.
+func (NotificationKind) AllValues() []NotificationKind {
+	return []NotificationKind{
+		NotificationKindSubscriptionDigest,
+		NotificationKindReminder,
+		NotificationKindNudgeFollowUp,
+		NotificationKindNudgeInterviewPrep,
+		NotificationKindNudgeJobClosed,
+		NotificationKindNudgeAutoApplySubmitted,
+		NotificationKindNudgeAutoApplyBlocked,
+		NotificationKindNudgeAutoApplyFailed,
+		NotificationKindAutoApplyTailorReady,
+		NotificationKindAutoApplyReadyForReview,
+		NotificationKindAutoApplyTailoringFailed,
+		NotificationKindBuddyMockBooked,
+		NotificationKindBuddyMockCancelled,
+		NotificationKindBuddyMockReminder,
+		NotificationKindBuddyReaction,
+		NotificationKindBuddyMessage,
+		NotificationKindBuddyInvitation,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s NotificationKind) MarshalText() ([]byte, error) {
+	switch s {
+	case NotificationKindSubscriptionDigest:
+		return []byte(s), nil
+	case NotificationKindReminder:
+		return []byte(s), nil
+	case NotificationKindNudgeFollowUp:
+		return []byte(s), nil
+	case NotificationKindNudgeInterviewPrep:
+		return []byte(s), nil
+	case NotificationKindNudgeJobClosed:
+		return []byte(s), nil
+	case NotificationKindNudgeAutoApplySubmitted:
+		return []byte(s), nil
+	case NotificationKindNudgeAutoApplyBlocked:
+		return []byte(s), nil
+	case NotificationKindNudgeAutoApplyFailed:
+		return []byte(s), nil
+	case NotificationKindAutoApplyTailorReady:
+		return []byte(s), nil
+	case NotificationKindAutoApplyReadyForReview:
+		return []byte(s), nil
+	case NotificationKindAutoApplyTailoringFailed:
+		return []byte(s), nil
+	case NotificationKindBuddyMockBooked:
+		return []byte(s), nil
+	case NotificationKindBuddyMockCancelled:
+		return []byte(s), nil
+	case NotificationKindBuddyMockReminder:
+		return []byte(s), nil
+	case NotificationKindBuddyReaction:
+		return []byte(s), nil
+	case NotificationKindBuddyMessage:
+		return []byte(s), nil
+	case NotificationKindBuddyInvitation:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *NotificationKind) UnmarshalText(data []byte) error {
+	switch NotificationKind(data) {
+	case NotificationKindSubscriptionDigest:
+		*s = NotificationKindSubscriptionDigest
+		return nil
+	case NotificationKindReminder:
+		*s = NotificationKindReminder
+		return nil
+	case NotificationKindNudgeFollowUp:
+		*s = NotificationKindNudgeFollowUp
+		return nil
+	case NotificationKindNudgeInterviewPrep:
+		*s = NotificationKindNudgeInterviewPrep
+		return nil
+	case NotificationKindNudgeJobClosed:
+		*s = NotificationKindNudgeJobClosed
+		return nil
+	case NotificationKindNudgeAutoApplySubmitted:
+		*s = NotificationKindNudgeAutoApplySubmitted
+		return nil
+	case NotificationKindNudgeAutoApplyBlocked:
+		*s = NotificationKindNudgeAutoApplyBlocked
+		return nil
+	case NotificationKindNudgeAutoApplyFailed:
+		*s = NotificationKindNudgeAutoApplyFailed
+		return nil
+	case NotificationKindAutoApplyTailorReady:
+		*s = NotificationKindAutoApplyTailorReady
+		return nil
+	case NotificationKindAutoApplyReadyForReview:
+		*s = NotificationKindAutoApplyReadyForReview
+		return nil
+	case NotificationKindAutoApplyTailoringFailed:
+		*s = NotificationKindAutoApplyTailoringFailed
+		return nil
+	case NotificationKindBuddyMockBooked:
+		*s = NotificationKindBuddyMockBooked
+		return nil
+	case NotificationKindBuddyMockCancelled:
+		*s = NotificationKindBuddyMockCancelled
+		return nil
+	case NotificationKindBuddyMockReminder:
+		*s = NotificationKindBuddyMockReminder
+		return nil
+	case NotificationKindBuddyReaction:
+		*s = NotificationKindBuddyReaction
+		return nil
+	case NotificationKindBuddyMessage:
+		*s = NotificationKindBuddyMessage
+		return nil
+	case NotificationKindBuddyInvitation:
+		*s = NotificationKindBuddyInvitation
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/NotificationListMeta
@@ -15935,6 +16619,144 @@ func (o OptAssistantSessionRequest) Get() (v AssistantSessionRequest, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptAssistantSessionRequest) Or(d AssistantSessionRequest) AssistantSessionRequest {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptAutoApplyResolvedPreview returns new OptAutoApplyResolvedPreview with value set to v.
+func NewOptAutoApplyResolvedPreview(v AutoApplyResolvedPreview) OptAutoApplyResolvedPreview {
+	return OptAutoApplyResolvedPreview{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptAutoApplyResolvedPreview is optional AutoApplyResolvedPreview.
+type OptAutoApplyResolvedPreview struct {
+	Value AutoApplyResolvedPreview
+	Set   bool
+}
+
+// IsSet returns true if OptAutoApplyResolvedPreview was set.
+func (o OptAutoApplyResolvedPreview) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptAutoApplyResolvedPreview) Reset() {
+	var v AutoApplyResolvedPreview
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptAutoApplyResolvedPreview) SetTo(v AutoApplyResolvedPreview) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptAutoApplyResolvedPreview) Get() (v AutoApplyResolvedPreview, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptAutoApplyResolvedPreview) Or(d AutoApplyResolvedPreview) AutoApplyResolvedPreview {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptAutoApplyReviewInfo returns new OptAutoApplyReviewInfo with value set to v.
+func NewOptAutoApplyReviewInfo(v AutoApplyReviewInfo) OptAutoApplyReviewInfo {
+	return OptAutoApplyReviewInfo{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptAutoApplyReviewInfo is optional AutoApplyReviewInfo.
+type OptAutoApplyReviewInfo struct {
+	Value AutoApplyReviewInfo
+	Set   bool
+}
+
+// IsSet returns true if OptAutoApplyReviewInfo was set.
+func (o OptAutoApplyReviewInfo) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptAutoApplyReviewInfo) Reset() {
+	var v AutoApplyReviewInfo
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptAutoApplyReviewInfo) SetTo(v AutoApplyReviewInfo) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptAutoApplyReviewInfo) Get() (v AutoApplyReviewInfo, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptAutoApplyReviewInfo) Or(d AutoApplyReviewInfo) AutoApplyReviewInfo {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptAutoApplyReviewStatus returns new OptAutoApplyReviewStatus with value set to v.
+func NewOptAutoApplyReviewStatus(v AutoApplyReviewStatus) OptAutoApplyReviewStatus {
+	return OptAutoApplyReviewStatus{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptAutoApplyReviewStatus is optional AutoApplyReviewStatus.
+type OptAutoApplyReviewStatus struct {
+	Value AutoApplyReviewStatus
+	Set   bool
+}
+
+// IsSet returns true if OptAutoApplyReviewStatus was set.
+func (o OptAutoApplyReviewStatus) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptAutoApplyReviewStatus) Reset() {
+	var v AutoApplyReviewStatus
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptAutoApplyReviewStatus) SetTo(v AutoApplyReviewStatus) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptAutoApplyReviewStatus) Get() (v AutoApplyReviewStatus, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptAutoApplyReviewStatus) Or(d AutoApplyReviewStatus) AutoApplyReviewStatus {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -17153,6 +17975,52 @@ func (o OptResolveJobReportRequest) Or(d ResolveJobReportRequest) ResolveJobRepo
 	return d
 }
 
+// NewOptStageSuggestion returns new OptStageSuggestion with value set to v.
+func NewOptStageSuggestion(v StageSuggestion) OptStageSuggestion {
+	return OptStageSuggestion{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptStageSuggestion is optional StageSuggestion.
+type OptStageSuggestion struct {
+	Value StageSuggestion
+	Set   bool
+}
+
+// IsSet returns true if OptStageSuggestion was set.
+func (o OptStageSuggestion) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptStageSuggestion) Reset() {
+	var v StageSuggestion
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptStageSuggestion) SetTo(v StageSuggestion) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptStageSuggestion) Get() (v StageSuggestion, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptStageSuggestion) Or(d StageSuggestion) StageSuggestion {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptString returns new OptString with value set to v.
 func NewOptString(v string) OptString {
 	return OptString{
@@ -18212,13 +19080,13 @@ func (s *ProblemStatusCode) SetResponse(val Problem) {
 // What a person reported about a company's hiring process.
 // Ref: #/components/schemas/ProcessReport
 type ProcessReport struct {
-	Kind string `json:"kind"`
+	Kind ProcessReportKind `json:"kind"`
 	// How many people have reported this kind for the company.
 	Count int64 `json:"count"`
 }
 
 // GetKind returns the value of Kind.
-func (s *ProcessReport) GetKind() string {
+func (s *ProcessReport) GetKind() ProcessReportKind {
 	return s.Kind
 }
 
@@ -18228,13 +19096,49 @@ func (s *ProcessReport) GetCount() int64 {
 }
 
 // SetKind sets the value of Kind.
-func (s *ProcessReport) SetKind(val string) {
+func (s *ProcessReport) SetKind(val ProcessReportKind) {
 	s.Kind = val
 }
 
 // SetCount sets the value of Count.
 func (s *ProcessReport) SetCount(val int64) {
 	s.Count = val
+}
+
+// What a candidate can report about a company's hiring (vocab.CompanyProcessReportKindValues).
+// Ref: #/components/schemas/ProcessReportKind
+type ProcessReportKind string
+
+const (
+	ProcessReportKindAiInterview ProcessReportKind = "ai_interview"
+)
+
+// AllValues returns all ProcessReportKind values.
+func (ProcessReportKind) AllValues() []ProcessReportKind {
+	return []ProcessReportKind{
+		ProcessReportKindAiInterview,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ProcessReportKind) MarshalText() ([]byte, error) {
+	switch s {
+	case ProcessReportKindAiInterview:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ProcessReportKind) UnmarshalText(data []byte) error {
+	switch ProcessReportKind(data) {
+	case ProcessReportKindAiInterview:
+		*s = ProcessReportKindAiInterview
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/ProcessReportRequest
@@ -18923,17 +19827,17 @@ func (s *RecallApplicationMailOK) SetData(val MailRecallResult) {
 // A feed row: the thread plus the subject's display names, empty when the subject no longer exists.
 // Ref: #/components/schemas/RecentThread
 type RecentThread struct {
-	ID             int64     `json:"id"`
-	SubjectType    string    `json:"subject_type"`
-	SubjectSlug    string    `json:"subject_slug"`
-	Title          string    `json:"title"`
-	Body           string    `json:"body"`
-	Author         string    `json:"author"`
-	ReplyCount     int64     `json:"reply_count"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"created_at"`
-	SubjectTitle   string    `json:"subject_title"`
-	SubjectCompany string    `json:"subject_company"`
+	ID             int64             `json:"id"`
+	SubjectType    ThreadSubjectType `json:"subject_type"`
+	SubjectSlug    string            `json:"subject_slug"`
+	Title          string            `json:"title"`
+	Body           string            `json:"body"`
+	Author         string            `json:"author"`
+	ReplyCount     int64             `json:"reply_count"`
+	Status         ThreadStatus      `json:"status"`
+	CreatedAt      time.Time         `json:"created_at"`
+	SubjectTitle   string            `json:"subject_title"`
+	SubjectCompany string            `json:"subject_company"`
 }
 
 // GetID returns the value of ID.
@@ -18942,7 +19846,7 @@ func (s *RecentThread) GetID() int64 {
 }
 
 // GetSubjectType returns the value of SubjectType.
-func (s *RecentThread) GetSubjectType() string {
+func (s *RecentThread) GetSubjectType() ThreadSubjectType {
 	return s.SubjectType
 }
 
@@ -18972,7 +19876,7 @@ func (s *RecentThread) GetReplyCount() int64 {
 }
 
 // GetStatus returns the value of Status.
-func (s *RecentThread) GetStatus() string {
+func (s *RecentThread) GetStatus() ThreadStatus {
 	return s.Status
 }
 
@@ -18997,7 +19901,7 @@ func (s *RecentThread) SetID(val int64) {
 }
 
 // SetSubjectType sets the value of SubjectType.
-func (s *RecentThread) SetSubjectType(val string) {
+func (s *RecentThread) SetSubjectType(val ThreadSubjectType) {
 	s.SubjectType = val
 }
 
@@ -19027,7 +19931,7 @@ func (s *RecentThread) SetReplyCount(val int64) {
 }
 
 // SetStatus sets the value of Status.
-func (s *RecentThread) SetStatus(val string) {
+func (s *RecentThread) SetStatus(val ThreadStatus) {
 	s.Status = val
 }
 
@@ -21700,6 +22604,56 @@ func (s *SetTalentNetworkVisibilityOK) SetData(val TalentNetworkMembership) {
 	s.Data = val
 }
 
+// Where an application sits against the silence thresholds of its stage (internal/job/silence).
+// Ref: #/components/schemas/SilenceState
+type SilenceState string
+
+const (
+	SilenceStateActive      SilenceState = "active"
+	SilenceStateSilent      SilenceState = "silent"
+	SilenceStateUnconfirmed SilenceState = "unconfirmed"
+)
+
+// AllValues returns all SilenceState values.
+func (SilenceState) AllValues() []SilenceState {
+	return []SilenceState{
+		SilenceStateActive,
+		SilenceStateSilent,
+		SilenceStateUnconfirmed,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s SilenceState) MarshalText() ([]byte, error) {
+	switch s {
+	case SilenceStateActive:
+		return []byte(s), nil
+	case SilenceStateSilent:
+		return []byte(s), nil
+	case SilenceStateUnconfirmed:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *SilenceState) UnmarshalText(data []byte) error {
+	switch SilenceState(data) {
+	case SilenceStateActive:
+		*s = SilenceStateActive
+		return nil
+	case SilenceStateSilent:
+		*s = SilenceStateSilent
+		return nil
+	case SilenceStateUnconfirmed:
+		*s = SilenceStateUnconfirmed
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 // A single item: `{"data": ...}`.
 type SimilarJobsOK struct {
 	Data []jx.Raw `json:"data"`
@@ -22314,6 +23268,44 @@ func (s *SourceJobs) SetAtsUnmatched(val OptInt64) {
 // SetMeasuredAt sets the value of MeasuredAt.
 func (s *SourceJobs) SetMeasuredAt(val string) {
 	s.MeasuredAt = val
+}
+
+// An offer to move the application to the stage its newest classified message implies.
+// Ref: #/components/schemas/StageSuggestion
+type StageSuggestion struct {
+	Stage   string `json:"stage"`
+	Signal  string `json:"signal"`
+	EmailID int64  `json:"email_id"`
+}
+
+// GetStage returns the value of Stage.
+func (s *StageSuggestion) GetStage() string {
+	return s.Stage
+}
+
+// GetSignal returns the value of Signal.
+func (s *StageSuggestion) GetSignal() string {
+	return s.Signal
+}
+
+// GetEmailID returns the value of EmailID.
+func (s *StageSuggestion) GetEmailID() int64 {
+	return s.EmailID
+}
+
+// SetStage sets the value of Stage.
+func (s *StageSuggestion) SetStage(val string) {
+	s.Stage = val
+}
+
+// SetSignal sets the value of Signal.
+func (s *StageSuggestion) SetSignal(val string) {
+	s.Signal = val
+}
+
+// SetEmailID sets the value of EmailID.
+func (s *StageSuggestion) SetEmailID(val int64) {
+	s.EmailID = val
 }
 
 // A single item: `{"data": ...}`.
@@ -23882,11 +24874,9 @@ func (s *TalentMember) SetHasPhoto(val bool) {
 	s.HasPhoto = val
 }
 
-// The caller's own place in the Talent Network.
 // Ref: #/components/schemas/TalentNetworkMembership
 type TalentNetworkMembership struct {
-	// `off` or `anonymous`.
-	TalentNetworkVisibility string `json:"talent_network_visibility"`
+	TalentNetworkVisibility TalentNetworkVisibility `json:"talent_network_visibility"`
 	// The handle in the member's public URL, once they have one.
 	TalentHandle OptString `json:"talent_handle"`
 	// Whether the catalogue shows the member right now.
@@ -23894,7 +24884,7 @@ type TalentNetworkMembership struct {
 }
 
 // GetTalentNetworkVisibility returns the value of TalentNetworkVisibility.
-func (s *TalentNetworkMembership) GetTalentNetworkVisibility() string {
+func (s *TalentNetworkMembership) GetTalentNetworkVisibility() TalentNetworkVisibility {
 	return s.TalentNetworkVisibility
 }
 
@@ -23909,7 +24899,7 @@ func (s *TalentNetworkMembership) GetListed() bool {
 }
 
 // SetTalentNetworkVisibility sets the value of TalentNetworkVisibility.
-func (s *TalentNetworkMembership) SetTalentNetworkVisibility(val string) {
+func (s *TalentNetworkMembership) SetTalentNetworkVisibility(val TalentNetworkVisibility) {
 	s.TalentNetworkVisibility = val
 }
 
@@ -23921,6 +24911,49 @@ func (s *TalentNetworkMembership) SetTalentHandle(val OptString) {
 // SetListed sets the value of Listed.
 func (s *TalentNetworkMembership) SetListed(val bool) {
 	s.Listed = val
+}
+
+// The caller's own place in the Talent Network.
+// Ref: #/components/schemas/TalentNetworkVisibility
+type TalentNetworkVisibility string
+
+const (
+	TalentNetworkVisibilityOff       TalentNetworkVisibility = "off"
+	TalentNetworkVisibilityAnonymous TalentNetworkVisibility = "anonymous"
+)
+
+// AllValues returns all TalentNetworkVisibility values.
+func (TalentNetworkVisibility) AllValues() []TalentNetworkVisibility {
+	return []TalentNetworkVisibility{
+		TalentNetworkVisibilityOff,
+		TalentNetworkVisibilityAnonymous,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s TalentNetworkVisibility) MarshalText() ([]byte, error) {
+	switch s {
+	case TalentNetworkVisibilityOff:
+		return []byte(s), nil
+	case TalentNetworkVisibilityAnonymous:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *TalentNetworkVisibility) UnmarshalText(data []byte) error {
+	switch TalentNetworkVisibility(data) {
+	case TalentNetworkVisibilityOff:
+		*s = TalentNetworkVisibilityOff
+		return nil
+	case TalentNetworkVisibilityAnonymous:
+		*s = TalentNetworkVisibilityAnonymous
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/TalentNetworkVisibilityUpdate
@@ -24036,18 +25069,17 @@ func (s *TestPushTokenOK) SetData(val PushTokenTestResult) {
 	s.Data = val
 }
 
-// The author is the persona handle, "AI" for a system reply or "[deleted]" once the account is gone.
 // Ref: #/components/schemas/Thread
 type Thread struct {
-	ID          int64     `json:"id"`
-	SubjectType string    `json:"subject_type"`
-	SubjectSlug string    `json:"subject_slug"`
-	Title       string    `json:"title"`
-	Body        string    `json:"body"`
-	Author      string    `json:"author"`
-	ReplyCount  int64     `json:"reply_count"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          int64             `json:"id"`
+	SubjectType ThreadSubjectType `json:"subject_type"`
+	SubjectSlug string            `json:"subject_slug"`
+	Title       string            `json:"title"`
+	Body        string            `json:"body"`
+	Author      string            `json:"author"`
+	ReplyCount  int64             `json:"reply_count"`
+	Status      ThreadStatus      `json:"status"`
+	CreatedAt   time.Time         `json:"created_at"`
 }
 
 // GetID returns the value of ID.
@@ -24056,7 +25088,7 @@ func (s *Thread) GetID() int64 {
 }
 
 // GetSubjectType returns the value of SubjectType.
-func (s *Thread) GetSubjectType() string {
+func (s *Thread) GetSubjectType() ThreadSubjectType {
 	return s.SubjectType
 }
 
@@ -24086,7 +25118,7 @@ func (s *Thread) GetReplyCount() int64 {
 }
 
 // GetStatus returns the value of Status.
-func (s *Thread) GetStatus() string {
+func (s *Thread) GetStatus() ThreadStatus {
 	return s.Status
 }
 
@@ -24101,7 +25133,7 @@ func (s *Thread) SetID(val int64) {
 }
 
 // SetSubjectType sets the value of SubjectType.
-func (s *Thread) SetSubjectType(val string) {
+func (s *Thread) SetSubjectType(val ThreadSubjectType) {
 	s.SubjectType = val
 }
 
@@ -24131,7 +25163,7 @@ func (s *Thread) SetReplyCount(val int64) {
 }
 
 // SetStatus sets the value of Status.
-func (s *Thread) SetStatus(val string) {
+func (s *Thread) SetStatus(val ThreadStatus) {
 	s.Status = val
 }
 
@@ -24142,8 +25174,8 @@ func (s *Thread) SetCreatedAt(val time.Time) {
 
 // Ref: #/components/schemas/ThreadClosed
 type ThreadClosed struct {
-	ID     int64  `json:"id"`
-	Status string `json:"status"`
+	ID     int64        `json:"id"`
+	Status ThreadStatus `json:"status"`
 }
 
 // GetID returns the value of ID.
@@ -24152,7 +25184,7 @@ func (s *ThreadClosed) GetID() int64 {
 }
 
 // GetStatus returns the value of Status.
-func (s *ThreadClosed) GetStatus() string {
+func (s *ThreadClosed) GetStatus() ThreadStatus {
 	return s.Status
 }
 
@@ -24162,7 +25194,7 @@ func (s *ThreadClosed) SetID(val int64) {
 }
 
 // SetStatus sets the value of Status.
-func (s *ThreadClosed) SetStatus(val string) {
+func (s *ThreadClosed) SetStatus(val ThreadStatus) {
 	s.Status = val
 }
 
@@ -24317,6 +25349,92 @@ func (s *ThreadReply) SetBody(val string) {
 // SetCreatedAt sets the value of CreatedAt.
 func (s *ThreadReply) SetCreatedAt(val time.Time) {
 	s.CreatedAt = val
+}
+
+// A thread is open until a moderator closes it.
+// Ref: #/components/schemas/ThreadStatus
+type ThreadStatus string
+
+const (
+	ThreadStatusOpen   ThreadStatus = "open"
+	ThreadStatusClosed ThreadStatus = "closed"
+)
+
+// AllValues returns all ThreadStatus values.
+func (ThreadStatus) AllValues() []ThreadStatus {
+	return []ThreadStatus{
+		ThreadStatusOpen,
+		ThreadStatusClosed,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ThreadStatus) MarshalText() ([]byte, error) {
+	switch s {
+	case ThreadStatusOpen:
+		return []byte(s), nil
+	case ThreadStatusClosed:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ThreadStatus) UnmarshalText(data []byte) error {
+	switch ThreadStatus(data) {
+	case ThreadStatusOpen:
+		*s = ThreadStatusOpen
+		return nil
+	case ThreadStatusClosed:
+		*s = ThreadStatusClosed
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// The author is the persona handle, "AI" for a system reply or "[deleted]" once the account is gone.
+// Ref: #/components/schemas/ThreadSubjectType
+type ThreadSubjectType string
+
+const (
+	ThreadSubjectTypeCompany ThreadSubjectType = "company"
+	ThreadSubjectTypeJob     ThreadSubjectType = "job"
+)
+
+// AllValues returns all ThreadSubjectType values.
+func (ThreadSubjectType) AllValues() []ThreadSubjectType {
+	return []ThreadSubjectType{
+		ThreadSubjectTypeCompany,
+		ThreadSubjectTypeJob,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ThreadSubjectType) MarshalText() ([]byte, error) {
+	switch s {
+	case ThreadSubjectTypeCompany:
+		return []byte(s), nil
+	case ThreadSubjectTypeJob:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ThreadSubjectType) UnmarshalText(data []byte) error {
+	switch ThreadSubjectType(data) {
+	case ThreadSubjectTypeCompany:
+		*s = ThreadSubjectTypeCompany
+		return nil
+	case ThreadSubjectTypeJob:
+		*s = ThreadSubjectTypeJob
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/ThreadWithReplies
@@ -24594,13 +25712,13 @@ type TrackedJob struct {
 	Notes      NilString   `json:"notes"`
 	EmailCount int64       `json:"email_count"`
 	// The silence fields are null together on any row that is not awaiting a reply.
-	LastActivityAt NilDateTime `json:"last_activity_at"`
-	DaysSilent     NilInt64    `json:"days_silent"`
-	SilenceState   NilString   `json:"silence_state"`
-	FollowedUpAt   NilDateTime `json:"followed_up_at"`
-	CvOpenedAt     NilDateTime `json:"cv_opened_at"`
+	LastActivityAt NilDateTime     `json:"last_activity_at"`
+	DaysSilent     NilInt64        `json:"days_silent"`
+	SilenceState   NilSilenceState `json:"silence_state"`
+	FollowedUpAt   NilDateTime     `json:"followed_up_at"`
+	CvOpenedAt     NilDateTime     `json:"cv_opened_at"`
 	// The status of this job's live auto-apply attempt; absent when it has none.
-	AutoApplyStatus OptString `json:"auto_apply_status"`
+	AutoApplyStatus OptAutoApplyReviewStatus `json:"auto_apply_status"`
 }
 
 // GetAddedToBoardAt returns the value of AddedToBoardAt.
@@ -24669,7 +25787,7 @@ func (s *TrackedJob) GetDaysSilent() NilInt64 {
 }
 
 // GetSilenceState returns the value of SilenceState.
-func (s *TrackedJob) GetSilenceState() NilString {
+func (s *TrackedJob) GetSilenceState() NilSilenceState {
 	return s.SilenceState
 }
 
@@ -24684,7 +25802,7 @@ func (s *TrackedJob) GetCvOpenedAt() NilDateTime {
 }
 
 // GetAutoApplyStatus returns the value of AutoApplyStatus.
-func (s *TrackedJob) GetAutoApplyStatus() OptString {
+func (s *TrackedJob) GetAutoApplyStatus() OptAutoApplyReviewStatus {
 	return s.AutoApplyStatus
 }
 
@@ -24754,7 +25872,7 @@ func (s *TrackedJob) SetDaysSilent(val NilInt64) {
 }
 
 // SetSilenceState sets the value of SilenceState.
-func (s *TrackedJob) SetSilenceState(val NilString) {
+func (s *TrackedJob) SetSilenceState(val NilSilenceState) {
 	s.SilenceState = val
 }
 
@@ -24769,7 +25887,7 @@ func (s *TrackedJob) SetCvOpenedAt(val NilDateTime) {
 }
 
 // SetAutoApplyStatus sets the value of AutoApplyStatus.
-func (s *TrackedJob) SetAutoApplyStatus(val OptString) {
+func (s *TrackedJob) SetAutoApplyStatus(val OptAutoApplyReviewStatus) {
 	s.AutoApplyStatus = val
 }
 

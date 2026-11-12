@@ -51,6 +51,7 @@ vi.mock('#lib/api.js', () => ({
 // No posting: the panel then fetches nothing of its own, which keeps the test on the board.
 const application: MyJob = {
   id: 'app-1',
+  added_to_board_at: null,
   company_slug: 'acme',
   role_title: 'Backend Engineer',
   job: null,

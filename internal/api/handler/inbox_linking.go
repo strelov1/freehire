@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/appevent"
+	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/job/jobview"
@@ -106,18 +107,38 @@ func (h *inboxHandlers) GetTrackedApplication(ctx context.Context, params apigen
 		Emails:       emails,
 		Events:       timelineWire(events),
 	}
-	// Both are Go types from the application layer, passed through as they marshal.
-	if suggestion := jobtracking.SuggestStage(pgStr(app.Stage), forSuggestion, lastStageSet.Time); suggestion != nil {
-		if detail.StageSuggestion, err = json.Marshal(suggestion); err != nil {
-			return nil, err
-		}
+	if s := jobtracking.SuggestStage(pgStr(app.Stage), forSuggestion, lastStageSet.Time); s != nil {
+		detail.StageSuggestion = apigen.NewOptStageSuggestion(apigen.StageSuggestion{Stage: s.Stage, Signal: s.Signal, EmailID: s.EmailID})
 	}
 	if autoApply != nil {
-		if detail.AutoApply, err = json.Marshal(autoApply); err != nil {
-			return nil, err
-		}
+		detail.AutoApply = apigen.NewOptAutoApplyReviewInfo(autoApplyReviewInfoOut(autoApply))
 	}
 	return &apigen.GetTrackedApplicationOK{Data: detail}, nil
+}
+
+// autoApplyReviewInfoOut maps the application layer's view of an attempt onto the contract's.
+func autoApplyReviewInfoOut(info *autoapply.AutoApplyReviewInfo) apigen.AutoApplyReviewInfo {
+	out := apigen.AutoApplyReviewInfo{
+		Status:  apigen.AutoApplyReviewStatus(info.Status),
+		QueueID: info.QueueID,
+	}
+	if info.MayHaveReachedEmployer {
+		out.MayHaveReachedEmployer = apigen.NewOptBool(true)
+	}
+	if p := info.ResolvedPreview; p != nil {
+		preview := apigen.AutoApplyResolvedPreview{Fields: make([]apigen.AutoApplyPreviewField, len(p.Fields))}
+		for i, f := range p.Fields {
+			preview.Fields[i] = apigen.AutoApplyPreviewField{Label: f.Label, Value: f.Value}
+		}
+		for _, q := range p.Pending {
+			preview.Pending = append(preview.Pending, apigen.AutoApplyPreviewPending{Label: q.Label, WillDraftAtSubmission: q.WillDraftAtSubmission})
+		}
+		out.ResolvedPreview = apigen.NewOptAutoApplyResolvedPreview(preview)
+	}
+	for _, u := range info.Unmapped {
+		out.Unmapped = append(out.Unmapped, apigen.AutoApplyUnmappedField{ID: u.ID, Label: u.Label, Required: u.Required, Reason: u.Reason})
+	}
+	return out
 }
 
 // ConfirmEmailLink promotes an email's pending suggestion to a confirmed manual

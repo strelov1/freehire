@@ -1,3 +1,5 @@
+import type { components } from '#lib/generated/api.js';
+
 /** Why a job was reported. A closed vocabulary mirroring the backend's
  *  internal/report reasons; labels live in #lib/reports. */
 export type ReportReason = 'no_response' | 'not_relevant' | 'spam' | 'fraud' | 'other';
@@ -19,30 +21,14 @@ export type ReportPickerValue = ReportReason | ProcessReportKind;
 /** What a process-report write answers with: the kind acted on and the company's
  *  resulting count. The count comes back on every write so a caller renders the badge
  *  from this response rather than re-reading the company. */
-export interface ProcessReportResult {
-  kind: ProcessReportKind;
-  count: number;
-}
+export type ProcessReportResult = components['schemas']['ProcessReport'];
 
 /** A user's report of a problem with a live vacancy. `reporter_email` and the
  *  `job_*` fields are present only on the moderator review queue, never on the
- *  reporter's own create response (which also never carries the reporter id). */
-export interface Report {
-  id: number;
-  reason: ReportReason;
-  details: string;
-  contact_telegram?: string;
-  status: 'pending' | 'resolved' | 'dismissed';
-  review_reason?: string;
-  reviewed_at?: string | null;
-  created_at: string | null;
-  reporter_email?: string;
-  job_slug?: string;
-  job_title?: string;
-  /** Present only on a decision response: whether the reporter was actually emailed.
-   *  A decision always stands, so `false` means "recorded, nobody told". */
-  notified?: boolean;
-}
+ *  reporter's own create response (which also never carries the reporter id). `notified`
+ *  is present only on a decision response: whether the reporter was actually emailed. A
+ *  decision always stands, so `false` means "recorded, nobody told". */
+export type Report = components['schemas']['JobReport'];
 
 /** The content a user submits when reporting a job. */
 export interface ReportInput {

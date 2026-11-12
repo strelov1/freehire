@@ -19,9 +19,14 @@ model BanRequest {
   reason?: string;
 }
 
+/** What a candidate can report about a company's hiring (vocab.CompanyProcessReportKindValues). */
+enum ProcessReportKind {
+  ai_interview,
+}
+
 /** What a person reported about a company's hiring process. */
 model ProcessReport {
-  kind: string;
+  kind: ProcessReportKind;
 
   /** How many people have reported this kind for the company. */
   count: int64;
