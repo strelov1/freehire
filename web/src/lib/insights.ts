@@ -150,6 +150,38 @@ export function formatSalary(amount: number, currency: string): string {
   }
 }
 
+/** The role × grade × country scope the salary rollup is stored at; '' is every value. */
+export interface SalaryScope {
+  category: string;
+  seniority: string;
+  country: string;
+}
+
+/** Read the salary scope off search filter params (/analytics). The rollup holds one
+ *  value per part, so two values in a part, or an exclusion, have no figure: null.
+ *  `partial` says other filters are set that the figure does not reflect. */
+export function salaryScopeFromParams(p: URLSearchParams): { scope: SalaryScope; partial: boolean } | null {
+  const parts = { category: 'category', seniority: 'seniority', country: 'countries' } as const;
+  const scope: SalaryScope = { category: '', seniority: '', country: '' };
+  for (const [key, param] of Object.entries(parts) as [keyof SalaryScope, string][]) {
+    const values = (p.get(param) ?? '').split(',').filter(Boolean);
+    if (values.length > 1 || p.has(`${param}_exclude`)) return null;
+    scope[key] = (values[0] ?? '').toLowerCase();
+  }
+  const own = new Set([...Object.values(parts), 'sort']);
+  const partial = [...p.keys()].some((k) => !own.has(k));
+  return { scope, partial };
+}
+
+/** The scope's own bands, richest sample first: a category-only answer also carries
+ *  per-seniority rows, which belong to narrower scopes. */
+export function scopeBands(bands: InsightSalaryBand[], scope: SalaryScope, limit = 3): InsightSalaryBand[] {
+  return bands
+    .filter((b) => b.seniority === scope.seniority)
+    .sort((a, b) => b.sample_size - a.sample_size)
+    .slice(0, limit);
+}
+
 // --- Deterministic auto-intro sentences (no LLM) -----------------------------
 
 /** Pick the richest yearly band for the intro figure, preferring the category-wide

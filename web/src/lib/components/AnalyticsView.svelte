@@ -5,8 +5,11 @@
   import { api } from '#lib/api.js';
   import { FilterStore, filtersToParams } from '#lib/filters.js';
   import { syncOnNavigation } from '#lib/urlSynced.svelte.js';
-  import { FACETS } from '#lib/facets.js';
+  import { FACETS, countryLabel } from '#lib/facets.js';
   import type { FacetCounts } from '#lib/types.js';
+  import type { InsightSalaryBand } from '#lib/api.js';
+  import { formatSalary, salaryScopeFromParams, scopeBands, seniorityLabel } from '#lib/insights.js';
+  import { categoryLabel } from '#lib/labels.js';
   import FilterSummary from './filters/FilterSummary.svelte';
   import FilterModal from './filters/FilterModal.svelte';
   import FilterEdgeTab from './FilterEdgeTab.svelte';
@@ -16,7 +19,7 @@
   // The first counts are server-rendered (route `load`) and arrive as `initial`,
   // so the breakdowns are in the initial HTML. Filters live in the URL; changing
   // one re-fetches the counts client-side over the same filter model as /jobs.
-  let { initial }: { initial: FacetCounts } = $props();
+  let { initial, initialSalary }: { initial: FacetCounts; initialSalary: InsightSalaryBand[] } = $props();
 
   // Seed filters from the URL so server and hydrated client render the same view.
   const filters = new FilterStore(new URLSearchParams(page.url.search));
@@ -25,6 +28,7 @@
   // proxying a large object we never mutate in place. Seeded once from the SSR
   // prop (untrack marks it an intentional snapshot, not a live binding).
   let counts = $state.raw<FacetCounts>(untrack(() => initial));
+  let salaryBands = $state.raw<InsightSalaryBand[]>(untrack(() => initialSalary));
   let status = $state<'ready' | 'loading' | 'error'>('ready');
   let modalOpen = $state(false);
   let started = false;
@@ -61,17 +65,32 @@
       status = 'loading';
       const params = filtersToParams(filters.applied);
       const gen = ++generation;
-      api
-        .facetCounts(params)
-        .then((next) => {
+      const sal = salaryScopeFromParams(params);
+      // A salary read failing leaves the counts standing: no figure, not an error page.
+      Promise.all([api.facetCounts(params), sal ? api.insightsSalary(sal.scope).catch(() => []) : []])
+        .then(([next, bands]) => {
           if (gen !== generation) return; // a newer fetch superseded this one
           counts = next;
+          salaryBands = bands;
           status = 'ready';
         })
         .catch(() => {
           if (gen === generation) status = 'error';
         });
     });
+  });
+
+  // Median pay comes from the role × grade × country rollup, so only those three
+  // filters shape it; the note says so when other filters narrow the counts.
+  const salaryScope = $derived(salaryScopeFromParams(filtersToParams(filters.applied)));
+  const medianBands = $derived(salaryScope ? scopeBands(salaryBands, salaryScope.scope) : []);
+  const scopeName = $derived.by(() => {
+    const s = salaryScope?.scope;
+    if (!s) return '';
+    const parts = [s.category ? categoryLabel(s.category) : 'All roles'];
+    if (s.seniority) parts.push(seniorityLabel(s.seniority));
+    if (s.country) parts.push(countryLabel(s.country));
+    return parts.join(' · ');
   });
 
   // The salary range is only meaningful within a single currency — the stats
@@ -118,6 +137,41 @@
         </p>
       {/if}
     </div>
+
+    <section class="mb-4 rounded-xl border border-border bg-card p-4" aria-labelledby="median-pay">
+      <h2 id="median-pay" class="text-sm font-semibold">Median advertised salary</h2>
+      {#if !salaryScope}
+        <p class="mt-1 text-sm text-muted-foreground">
+          Pick at most one specialization, one seniority and one country, with no exclusions, to see pay.
+        </p>
+      {:else if medianBands.length === 0}
+        <p class="mt-1 text-sm text-muted-foreground">
+          {scopeName}: too few open postings state a salary to show one.
+        </p>
+      {:else}
+        <p class="mt-0.5 text-xs text-muted-foreground">{scopeName}, open postings that state pay</p>
+        <ul class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {#each medianBands as b (`${b.currency}-${b.period}`)}
+            <li>
+              <p class="text-xl font-semibold tracking-tight tabular-nums">
+                {formatSalary(b.p50, b.currency)}<span class="text-sm font-normal text-muted-foreground">
+                  / {b.period}</span
+                >
+              </p>
+              <p class="text-xs text-muted-foreground tabular-nums">
+                middle half {formatSalary(b.p25, b.currency)}–{formatSalary(b.p75, b.currency)} · {b.sample_size.toLocaleString()}
+                postings
+              </p>
+            </li>
+          {/each}
+        </ul>
+        {#if salaryScope.partial}
+          <p class="mt-3 text-xs text-muted-foreground">
+            Only specialization, seniority and country shape this figure; your other filters do not.
+          </p>
+        {/if}
+      {/if}
+    </section>
 
     {#if status === 'error'}
       <States state="error" message="Failed to load analytics." />

@@ -4,6 +4,8 @@ import {
   coveredCategories,
   isCovered,
   sortBandsBySeniority,
+  salaryScopeFromParams,
+  scopeBands,
   formatSalary,
   salaryIntro,
   skillsIntro,
@@ -228,5 +230,54 @@ describe('roleSkillsIntro', () => {
     const intro = roleSkillsIntro({ ...role('backend', 'senior', 40), sample_size: 0, skills: [] });
 
     expect(intro).toContain('Not enough');
+  });
+});
+
+describe('salaryScopeFromParams', () => {
+  const read = (q: string) => salaryScopeFromParams(new URLSearchParams(q));
+
+  it('reads one value per part, lowercasing the country', () => {
+    expect(read('category=backend&seniority=senior&countries=DE')).toEqual({
+      scope: { category: 'backend', seniority: 'senior', country: 'de' },
+      partial: false,
+    });
+  });
+
+  it('treats no filters as the whole catalogue', () => {
+    expect(read('')).toEqual({ scope: { category: '', seniority: '', country: '' }, partial: false });
+  });
+
+  it('has no scope for two values in a part or an exclusion', () => {
+    expect(read('category=backend,frontend')).toBeNull();
+    expect(read('countries_exclude=us')).toBeNull();
+  });
+
+  it('flags other filters as not reflected, but not the sort', () => {
+    expect(read('category=backend&sort=salary')?.partial).toBe(false);
+    expect(read('category=backend&skills=go')?.partial).toBe(true);
+  });
+});
+
+describe('scopeBands', () => {
+  const band = (seniority: string, currency: string, sample_size: number): InsightSalaryBand => ({
+    seniority,
+    currency,
+    period: 'year',
+    sample_size,
+    p25: 1,
+    p50: 2,
+    p75: 3,
+  });
+
+  it("keeps only the scope's own seniority, richest first, capped", () => {
+    const bands = [
+      band('senior', 'USD', 900),
+      band('', 'EUR', 50),
+      band('', 'USD', 400),
+      band('', 'GBP', 70),
+      band('', 'INR', 10),
+    ];
+    const got = scopeBands(bands, { category: 'backend', seniority: '', country: '' });
+    expect(got.map((b) => b.currency)).toEqual(['USD', 'GBP', 'EUR']);
   });
 });

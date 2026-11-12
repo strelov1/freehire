@@ -81,6 +81,18 @@ export function insightsApi({ request, requestData }: Http) {
     return requestData<InsightSalaryBand[]>(`/api/v1/insights/salary?${q}`);
   }
 
+  /** The salary bands for any role × grade × country scope (/analytics); an empty
+   *  part means every value. A category-only scope also returns its per-seniority
+   *  bands, each row tagged with its own `seniority`. */
+  async function insightsSalary(scope: {
+    category: string;
+    seniority: string;
+    country: string;
+  }): Promise<InsightSalaryBand[]> {
+    const q = new URLSearchParams(Object.entries(scope).filter(([, v]) => v));
+    return requestData<InsightSalaryBand[]>(`/api/v1/insights/salary?${q}`);
+  }
+
   /** Company hiring-signal leaderboard: companies ranked by 30-day open-job growth
    *  (`growth` ramping, `-growth` freezing) or `open` size. `minOpen` floors the
    *  current open-count to blunt ingest-artifact spikes. */
@@ -148,6 +160,7 @@ export function insightsApi({ request, requestData }: Http) {
     insightsSalaryHistory,
     insightsSalaryByCategory,
     insightsSalaryByCategoryInCountry,
+    insightsSalary,
     insightsCompanies,
     marketPulse,
     sitemapJobs,
