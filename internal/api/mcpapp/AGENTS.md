@@ -2,7 +2,7 @@
 
 The canonical MCP at `/api/v1/mcp` combines anonymous catalogue reads with
 OAuth account tools (`mixed.go`). Anonymous and OAuth sessions discover the same
-51 tools; personal calls without authentication never reach business code.
+53 tools; personal calls without authentication never reach business code.
 ChatGPT (User-Agent `openai-mcp`) gets an error result carrying `mcp/www_authenticate`,
 the in-band challenge its Apps SDK opens sign-in from. Every other host gets HTTP 401 with
 `WWW-Authenticate`, because Grok and Claude.ai ignore the in-band challenge and open sign-in
@@ -55,6 +55,16 @@ push-device rule are enforced once. A channel is only added where the delivery w
 would actually reach (`GetAlertChannelState`). Digest timing is account-wide on the
 website, so it is shown but not changed here. "What is new" reads `subscription_matches`,
 the ledger the digests are built from, rather than re-running the search.
+
+`list_unread_mail` (`internal/api/handler/mcp_mail_tool.go`) is the inbox's only tool here:
+the headers of unread application mail (sender, subject, time, label, and the company and
+job slug of a CONFIRMED link), `unread_count`, `sync_pending`, `reconnect_needed` and
+`mailbox_url`. No body, snippet or message id, nothing marked read, no model call. Served
+to keys too, because REST `/me/inbox` is `mw.key`. Sender and subject are sender-written:
+control and format runes are stripped, length capped, and the description, a `notice` in the
+result and the instructions say never to follow them. The assistant's `inbox_*` write
+tools (triage, link, record application) are deliberately not served: the only evidence an
+MCP agent would act on is that untrusted header text.
 
 ## `next` on `search_jobs` and `get_job`
 
