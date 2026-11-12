@@ -31,7 +31,7 @@
   const rowBase =
     'flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground';
   const iconButton =
-    'size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+    'h-9 min-w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   function closeSelf() {
     open = false;
@@ -84,17 +84,15 @@
         e.stopPropagation();
         open = !open;
       }}
-      class={cn('relative inline-flex', iconButton)}
+      class={cn('inline-flex gap-1.5', tier !== 'free' && 'px-2', iconButton)}
     >
-      <CircleUser class="size-5" />
+      <CircleUser class="size-5 shrink-0" />
       {#if tier !== 'free'}
-        <!-- In the same corner, at the same height and weight, as NotificationBell's unread
-             count (h-4, bold, ring against the background), so the two corner badges read
-             with equal prominence. At the bottom it sat across the icon and read as a glitch;
-             the 8px/py-px version before that was easy to miss. -->
+        <!-- Keep the tier in flow so its width cannot overlap the profile icon or
+             the neighbouring notification count. -->
         <span
           aria-hidden="true"
-          class="absolute -right-1 -top-1 flex h-4 items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-bold uppercase leading-none text-brand-foreground ring-2 ring-background"
+          class="flex h-4 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-bold uppercase leading-none text-brand-foreground"
         >
           {tier}
         </span>

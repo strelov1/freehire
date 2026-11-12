@@ -136,7 +136,7 @@
              LINKS_BELOW_LG). The cut is by width, not by rank; the burger a thumb away
              still lists all five with the same glyph and a full label, which is also why
              bare icons here would trade a legible row for guesses. -->
-        <nav aria-label="Site" class="flex items-center gap-3 sm:gap-5 lg:gap-6">
+        <nav aria-label="Site" class="flex items-center gap-3 sm:gap-5 lg:gap-3 xl:gap-6">
           <!-- Divides the nav from the wordmark, the same rule the search box draws
                between its Location scope and the field. Without it the first link sat
                one word-gap from "freehire" and read as part of it. -->
