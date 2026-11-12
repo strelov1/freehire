@@ -64,6 +64,8 @@ func mcpAccountTools(assistants *assistantHandlers, origin string) []assistant.T
 	// Dictionary suggestions are cookie-only over REST; keep the corresponding
 	// account tool with OAuth grants rather than widening full-scope API keys.
 	all = append(all, assistants.dictionaryMCPTools()...)
+	// Profile writes are cookie-only over REST (PUT /me/profile), so grant-only here too.
+	all = append(all, assistants.profileMCPTools()...)
 	all = append(all, assistants.buddies.mcpTools()...)
 	return append(all, assistants.problemMCPTools()...)
 }

@@ -79,3 +79,23 @@ func TestGetProfileTool_TellsTheAgentToSendTheUserToTheProfilePage(t *testing.T)
 		t.Errorf("result should point the agent at the profile page:\n%s", blob)
 	}
 }
+
+func TestGetProfileTool_ReturnsSenioritiesAndJobLanguages(t *testing.T) {
+	repo := savedProfile()
+	repo.getRet.Seniorities = []string{"senior"}
+	repo.getRet.JobLanguages = []string{"en", "pt"}
+	h := assistantWithProfile(repo, nil)
+
+	out, err := toolByName(t, h.assistantDiscoveryTools(), "get_profile").
+		Run(context.Background(), 1, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("get_profile: %v", err)
+	}
+	blob, _ := json.Marshal(out)
+	// update_profile replaces these lists whole, so the agent must be able to read them first.
+	for _, want := range []string{`"seniorities":["senior"]`, `"job_languages":["en","pt"]`} {
+		if !strings.Contains(string(blob), want) {
+			t.Errorf("get_profile is missing %s:\n%s", want, blob)
+		}
+	}
+}

@@ -58,9 +58,10 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 			profile, err := h.profile.userProfile.Get(ctx, userID)
 			if errors.Is(err, userprofile.ErrNotFound) {
 				return noProfileResult{
-					Next: "The user has not saved a profile yet. Point them at /my/profile to " +
-						"fill it in — it persists and drives their recommendations — rather than " +
-						"collecting the same answers in this conversation.",
+					Next: "The user has not saved a profile yet. If you have update_profile, offer to " +
+						"save what they tell you and call it once they agree; otherwise point them at " +
+						"/my/profile to fill it in. Either way it persists and drives their " +
+						"recommendations, which answers given only in this conversation do not.",
 				}, nil
 			}
 			if err != nil {
@@ -82,6 +83,8 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 type profileToolResult struct {
 	Specializations     []string                    `json:"specializations"`
 	Skills              []string                    `json:"skills"`
+	Seniorities         []string                    `json:"seniorities,omitempty"`
+	JobLanguages        []string                    `json:"job_languages,omitempty"`
 	ExcludedSkills      []string                    `json:"excluded_skills,omitempty"`
 	LocationPreferences any                         `json:"location_preferences,omitempty"`
 	CV                  *resumeextract.Professional `json:"cv,omitempty"`
@@ -122,6 +125,8 @@ func (h *assistantHandlers) profileToolResult(ctx context.Context, userID int64,
 	out := profileToolResult{
 		Specializations:     profile.Specializations,
 		Skills:              profile.Skills,
+		Seniorities:         profile.Seniorities,
+		JobLanguages:        profile.JobLanguages,
 		ExcludedSkills:      profile.ExcludedSkills,
 		LocationPreferences: profile.LocationPreferences,
 		CV:                  h.profile.structuredCV(ctx, userID),
