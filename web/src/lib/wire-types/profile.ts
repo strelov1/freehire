@@ -1,3 +1,4 @@
+import type { components } from '../generated/api.js';
 import type { Education as ResumeEducation, Professional } from '../generated/contracts';
 
 /** An authenticated account, as returned by the auth endpoints. */
@@ -133,14 +134,7 @@ export interface TalentNetworkSetting {
 }
 
 /** A notification subscription on a saved search. */
-export interface Subscription {
-  id: number;
-  saved_search_id: number;
-  saved_search_name?: string;
-  channel: string;
-  active: boolean;
-  created_at: string | null;
-}
+export type Subscription = components['schemas']['Subscription'];
 
 /** Telegram link status for the current user. `enabled` is whether the feature is
  *  configured server-side at all (so the UI can hide it); `linked` is whether this

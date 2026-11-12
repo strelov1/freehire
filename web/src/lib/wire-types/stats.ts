@@ -1,3 +1,4 @@
+import type { components } from '../generated/api.js';
 import type { Stage } from '../generated/contracts';
 
 /** Per-tab row counts for the my-jobs page, from the listing's meta. `viewed`
@@ -47,11 +48,7 @@ export type ActivityGranularity = 'day' | 'week' | 'month';
 /** One period on the job-activity dashboard: the ISO date labelling the bucket
  *  and the counts of vacancies added vs. removed within it. The backend returns a
  *  dense, gap-free series (empty periods carry zeros). */
-export interface ActivityPoint {
-  period: string;
-  added: number;
-  removed: number;
-}
+export type ActivityPoint = components['schemas']['ActivityPoint'];
 
 /** How many of a company's OBSERVABLE applications were answered — the applicant had a
  *  connected mailbox, so a reply would have been seen. Absent from the company payload
@@ -83,11 +80,7 @@ export interface CompanyHiring {
  *  new-signup count. The backend returns a dense, gap-free series (days with no
  *  new signups repeat the running total and carry `new: 0`); `total` is
  *  monotonically non-decreasing. */
-export interface UserGrowthPoint {
-  date: string;
-  total: number;
-  new: number;
-}
+export type UserGrowthPoint = components['schemas']['GrowthPoint'];
 
 /** Aggregate engagement counts across all users: jobs saved, applications marked,
  *  jobs viewed, and what people build on top — CVs uploaded and tailored, people with
@@ -104,17 +97,7 @@ export interface UserGrowthPoint {
  *  underlying column carries a count (null before the first rollup): the column shipped
  *  without a backfill and the nginx history to recover is past logrotate's window, so
  *  render the two together — the number alone reads as the life of the site. */
-export interface EngagementStats {
-  saved: number;
-  applied: number;
-  viewed: number;
-  viewed_since: string | null;
-  cvs_uploaded: number;
-  cvs_tailored: number;
-  alert_subscribers: number;
-  inboxes_connected: number;
-  saved_searches: number;
-}
+export type EngagementStats = components['schemas']['Engagement'];
 
 /** How big the catalogue is, as one snapshot.
  *
@@ -129,16 +112,7 @@ export interface EngagementStats {
  *  `exact` is false when the backend had no published snapshot and fell back to an
  *  approximate open-job count. On that path only `open_jobs`, `sources` and
  *  `ats_platforms` are meaningful; the rest are zero. */
-export interface CatalogScale {
-  open_jobs: number;
-  unique_open_jobs: number;
-  companies: number;
-  sources: number;
-  ats_platforms: number;
-  telegram_channels: number;
-  computed_at: string;
-  exact: boolean;
-}
+export type CatalogScale = components['schemas']['CatalogScale'];
 
 /** Semantic-embedding coverage of the catalogue, behind the public /semantic-search
  *  page (`GET /api/v1/stats/embeddings` and its stream). Every figure is `null`

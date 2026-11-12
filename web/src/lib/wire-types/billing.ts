@@ -1,3 +1,4 @@
+import type { components } from '../generated/api.js';
 import type { Analysis as MatchAnalysisContract } from '../generated/contracts';
 
 /** Where the caller stands on one metered feature today. Usage against a limit, never a
@@ -8,14 +9,7 @@ import type { Analysis as MatchAnalysisContract } from '../generated/contracts';
  *  `enforced` says whether the ceiling turns anybody away yet. It is false through the
  *  shadow run, when the server counts a spent allowance and lets the action through anyway,
  *  so nothing here may block on `used >= limit` alone — see `refuses` in #lib/allowance. */
-export interface Allowance {
-  feature: string;
-  used: number;
-  limit?: number;
-  unlimited: boolean;
-  enforced: boolean;
-  resets_at: string;
-}
+export type Allowance = components['schemas']['PlanAllowance'];
 
 /** The caller's plan and every metered feature's standing today (`GET /api/v1/me/plan`).
  *  Every feature is listed, including untouched ones: the surface shows what the plan IS,
@@ -43,35 +37,20 @@ export interface PublicPrice {
  *  A session carries at most one discount, so this is a single percentage rather than a
  *  list: the provider admits one coupon, and stacking two offers is how a subscription
  *  becomes free by accident. `discount_percent` is 0 when there was none. */
-export interface CheckoutSession {
-  url: string;
-  discount_percent: number;
-  /** `'promo'` or `'invite'`, or empty when nothing was applied. */
-  discount_source: string;
-}
+export type CheckoutSession = components['schemas']['BillingCheckout'];
 
 /** This account's invite link and what it has earned (`GET /api/v1/me/invite`).
  *
  *  Counts and a total, naming nobody. Telling a referrer which of their contacts signed up
  *  would disclose that a particular person is looking for work, which is not theirs to
  *  know — so there is no field here that could carry it. */
-export interface InviteSummary {
-  link: string;
-  invitees: number;
-  rewarded: number;
-  credit_cents: number;
-  /** What both sides of an invite are worth, so the page states one number from one place. */
-  percent_off: number;
-}
+export type InviteSummary = components['schemas']['Invite'];
 
 /** What one tier allows for one feature in a day. `unlimited` makes `limit` the fair-use
  *  guard behind it rather than a ceiling — the same two field names, in the same meaning,
  *  that every allowance response uses, so a page never has to learn a second vocabulary for
  *  one idea. */
-export interface PlanTierAllowance {
-  limit: number;
-  unlimited: boolean;
-}
+export type PlanTierAllowance = components['schemas']['PlanTierAllowance'];
 
 /** What each plan allows and what Pro costs (`GET /api/v1/plans`). Public and
  *  unauthenticated — a pricing page that needs an account cannot do a pricing page's job.
@@ -93,42 +72,13 @@ export interface ApiPlan {
   until?: string;
 }
 
-/** One charge as the receipt list shows it (`GET /api/v1/billing/subscription`).
- *
- *  Not exported: it is reached through `BillingOverview.invoices`, and nothing outside
- *  this module names it on its own — which is the line knip.config.js draws. */
-interface BillingInvoice {
-  /** The provider's invoice id. Carried so a list can key on it: two invoices can share a
-   *  second, and a duplicate key in an `{#each}` throws and kills the block. */
-  id: string;
-  date: string;
-  amount_cents: number;
-  currency: string;
-  /** The provider's word: paid, open, void, uncollectible. A failed charge stays visible —
-   *  hiding it leaves a subscriber wondering why their card was declined. */
-  status: string;
-  receipt_url?: string;
-}
-
 /** What the caller is paying and what has been taken. Read through to the payment provider
  *  on every request rather than mirrored: a receipt list that has quietly missed a refund is
  *  worse than no receipt list.
  *
  *  `ends_at` replaces `renews_at` after a cancellation — "renews on the 4th" beside "you
  *  cancelled" is the kind of contradiction that generates support mail. */
-export interface BillingOverview {
-  status: string;
-  amount_cents: number;
-  currency: string;
-  interval: string;
-  renews_at?: string;
-  ends_at?: string;
-  invoices: BillingInvoice[];
-  /** True when the provider reports more than one active entitling subscription for this
-   *  customer at once — the duplicate-subscription bug, for a customer it already happened
-   *  to. Absent (never `false`) for the ordinary case. */
-  multiple_subscriptions?: boolean;
-}
+export type BillingOverview = components['schemas']['BillingOverview'];
 
 export interface PlanState {
   plan: 'free' | 'pro' | 'ultra';
@@ -148,26 +98,13 @@ export interface PlanState {
  *  gateway. Counts, never currency: the gateway's cost figure is a list price against a
  *  mixed upstream pool, so it is neither what we pay nor what the caller pays — what they
  *  spend is a plan allowance, over this same UTC day. */
-export interface AiUsage {
-  requests: number;
-  failed: number;
-  tokens: number;
-  period: string;
-  resets_at: string;
-}
+export type AiUsage = components['schemas']['Usage'];
 
 /** One row of the plan's usage history (`GET /api/v1/me/plan/history`), newest first.
  *  `kind` is 'consume' | 'release' | 'grant'; `feature` names what it was spent on; `label`
  *  is the display name (e.g. "Job analysis") and `subtitle`, when present, names the
  *  vacancy. `day` is the UTC day it counted against; `created_at` is ISO. */
-export interface UsageHistoryEntry {
-  feature: string;
-  day: string;
-  kind: string;
-  label: string;
-  subtitle?: string;
-  created_at: string;
-}
+export type UsageHistoryEntry = components['schemas']['PlanHistoryEntry'];
 
 /** The job-match analysis response: `has_cv` is false when the caller has no stored CV
  *  (the block prompts an upload); `analysis` is null when none is cached yet or the LLM
@@ -188,13 +125,4 @@ export interface MatchAnalysisResponse {
 /** One row of the Activity → Matches tab: a compact projection of a cached match analysis
  *  (not the full analysis). `closed` marks a job that has since closed; `stale` marks an
  *  analysis whose CV/job/model changed since it ran. `analysed_at` is an ISO timestamp. */
-export interface MyAnalysisItem {
-  slug: string;
-  title: string;
-  company: string;
-  closed: boolean;
-  overall_score: number;
-  verdict: string;
-  analysed_at: string;
-  stale: boolean;
-}
+export type MyAnalysisItem = components['schemas']['FitAnalysedJob'];

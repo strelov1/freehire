@@ -1,4 +1,5 @@
 import type { Http } from '../api-core';
+import type { components } from '../generated/api.js';
 import type {
   BuddyActivity,
   BuddyFeedPage,
@@ -54,7 +55,10 @@ export function buddiesApi({ call, request, requestData }: Http) {
 
   /** Sets the caller's one reaction to a feed event (replacing another); the event's reactions after it. */
   async function reactToBuddyEvent(id: number, kind: ReactionKind): Promise<BuddyReactions> {
-    return requestData(`/api/v1/me/buddies/feed/${id}/reaction`, jsonBody('PUT', { kind }));
+    return requestData(
+      `/api/v1/me/buddies/feed/${id}/reaction`,
+      jsonBody('PUT', { kind } satisfies components['schemas']['BuddyReactBody']),
+    );
   }
 
   async function clearBuddyReaction(id: number): Promise<BuddyReactions> {
@@ -80,7 +84,10 @@ export function buddiesApi({ call, request, requestData }: Http) {
   }
 
   async function inviteBuddy(handle: string, body: string): Promise<Conversation> {
-    return requestData('/api/v1/me/buddies/invite', jsonBody('POST', { handle, body }));
+    return requestData(
+      '/api/v1/me/buddies/invite',
+      jsonBody('POST', { handle, body } satisfies components['schemas']['BuddyInviteBody']),
+    );
   }
 
   // ── Buddy mock interviews ────────────────────────────────────────────────
@@ -155,7 +162,10 @@ export function buddiesApi({ call, request, requestData }: Http) {
   }
 
   async function reviewBuddyMock(id: string, rating: number, comment: string): Promise<void> {
-    await call(`/api/v1/me/buddies/mocks/${encodeURIComponent(id)}/review`, jsonBody('POST', { rating, comment }));
+    await call(
+      `/api/v1/me/buddies/mocks/${encodeURIComponent(id)}/review`,
+      jsonBody('POST', { rating, comment } satisfies components['schemas']['BuddyMockReviewBody']),
+    );
   }
 
   async function getBuddyMockSummary(handle: string): Promise<BuddyMockSummary> {
