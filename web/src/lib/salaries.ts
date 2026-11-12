@@ -7,7 +7,7 @@ import type { SalaryScope } from './insights';
 import { historySeries, nextMonth } from './salaryHistoryChart';
 
 /** One comparison line: a role and a country, the grade shared with the main scope. */
-export interface SalaryLine {
+interface SalaryLine {
   category: string;
   country: string;
 }
@@ -125,7 +125,7 @@ export function lineMonths(rows: InsightSalaryMonth[] | null, unit: string): Ins
   return historySeries(rows ?? []).find((s) => unitOf(s) === unit)?.months ?? [];
 }
 
-export interface ComparePoint {
+interface ComparePoint {
   x: number;
   y: number;
   month: string;
