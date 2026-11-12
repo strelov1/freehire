@@ -242,6 +242,17 @@
   const initialTab = (): ContentTab =>
     page.url.searchParams.get('tab') === 'discussion' ? 'discussion' : 'description';
   let contentTab = $state<ContentTab>(initialTab());
+  // Discussion is mirrored into the URL so Back from a topic, and the return from sign-in,
+  // land on the tab again. The other tabs leave the URL clean.
+  function selectTab(id: ContentTab) {
+    contentTab = id;
+    const url = new URL(page.url.href);
+    if (id === 'discussion') url.searchParams.set('tab', 'discussion');
+    else url.searchParams.delete('tab');
+    // A shallow replace: the address changes, nothing reloads and Back is not doubled.
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- the current page's own URL, only its query changed
+    if (url.href !== page.url.href) void goto(url, { replace: true, shallow: true, state: page.state });
+  }
   // Per-instance so a second JobView on one page can't claim the same panel, which
   // would leave both strips' aria-controls pointing at the first one's panel.
   const panelId = $props.id();
@@ -1354,7 +1365,7 @@
       <TabStrip
         tabs={contentTabs}
         active={contentTab}
-        onSelect={(id) => (contentTab = id)}
+        onSelect={selectTab}
         label="Job details"
         {panelId}
         class="min-w-0 flex-1"

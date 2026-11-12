@@ -18,7 +18,8 @@ vi.mock('$app/state', () => ({
   page: { data: { locale: 'en' }, url: new URL('http://localhost/jobs/acme-job'), state: {} },
 }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+const { goto } = vi.hoisted(() => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', () => ({ goto }));
 const session = vi.hoisted(() => ({ userID: 7 as number | null }));
 vi.mock('#lib/auth.svelte.js', () => ({
   isAuthenticated: () => session.userID !== null,
@@ -385,10 +386,20 @@ describe('content tabs', () => {
     }
   });
 
+  it('puts the Discussion tab in the address so Back returns to it', async () => {
+    render(JobView, { job });
+    await fireEvent.click(screen.getByRole('tab', { name: 'Discussion' }));
+    const [target, options] = goto.mock.calls.at(-1) ?? [];
+    expect(String(target)).toBe('http://localhost/jobs/acme-job?tab=discussion');
+    expect(options).toMatchObject({ replace: true, shallow: true });
+  });
+
   it('asks a signed-out reader to sign in on the Discussion tab', async () => {
     session.userID = null; // beforeEach restores the signed-in session
     render(JobView, { job });
     await fireEvent.click(screen.getByRole('tab', { name: 'Discussion' }));
     expect(screen.getByText('Sign in to read and join the discussion.')).not.toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(String(goto.mock.calls.at(-1)?.[0])).toContain(encodeURIComponent('?tab=discussion'));
   });
 });

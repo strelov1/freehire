@@ -1,7 +1,9 @@
 <script lang="ts">
   import { api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
+  import { signinUrl } from '#lib/signin.js';
   import type { CommunityThread } from '#lib/types.js';
   import { Button, EmptyState, Skeleton } from '#lib/ui/index.js';
   import DiscussionIndex from './community/DiscussionIndex.svelte';
@@ -17,11 +19,23 @@
   let cursor = $state<string | undefined>();
   let failed = $state(false);
   // Plain, not $state: the effect writes it, and a reactive read would make the effect
-  // its own dependency.
+  // its own dependency. Retry clears it together with `failed`, which re-runs the effect.
   let requested = false;
 
+  // Back to this tab after sign-in, not to the job's Description.
+  function signInHere() {
+    const returnTo = `${resolve('/jobs/[slug]', { slug })}?tab=discussion`;
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
+    void goto(signinUrl({ returnTo, mode: 'login' }));
+  }
+
+  function retry() {
+    requested = false;
+    failed = false;
+  }
+
   $effect(() => {
-    if (!active || requested || !isAuthenticated()) return;
+    if (!active || requested || failed || !isAuthenticated()) return;
     requested = true;
     api
       .listThreads('job', slug)
@@ -34,13 +48,17 @@
 </script>
 
 {#snippet signIn()}
-  <Button onclick={promptSignIn}>Sign in</Button>
+  <Button onclick={signInHere}>Sign in</Button>
+{/snippet}
+
+{#snippet retryButton()}
+  <Button variant="secondary" onclick={retry}>Retry</Button>
 {/snippet}
 
 {#if !isAuthenticated()}
   <EmptyState title="Sign in to read and join the discussion." variant="muted" action={signIn} />
 {:else if failed}
-  <EmptyState title="Couldn't load the discussion." variant="destructive" />
+  <EmptyState title="Couldn't load the discussion." variant="destructive" action={retryButton} />
 {:else if threads}
   <DiscussionIndex subjectType="job" subjectSlug={slug} initialThreads={threads} initialCursor={cursor} />
 {:else if active}
