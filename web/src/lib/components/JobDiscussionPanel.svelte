@@ -35,7 +35,9 @@
   }
 
   $effect(() => {
-    if (!active || requested || failed || !isAuthenticated()) return;
+    // `failed` is read before `requested` so it stays tracked after a failure: with
+    // `requested` first the guard short-circuits and Retry would never re-run this.
+    if (!active || failed || requested || !isAuthenticated()) return;
     requested = true;
     api
       .listThreads('job', slug)
