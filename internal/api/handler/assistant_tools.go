@@ -135,8 +135,9 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 	if !full {
 		description = "List the live filter vocabulary. Without `facet`: every filter's name with how many values it " +
 			"has, plus numeric ranges. With `facet`: that filter's values with a vacancy count each, optionally only " +
-			"those containing `contains`. Filter values are the market's own; an invented one matches nothing."
-		properties["facet"] = map[string]any{"type": "string", "description": "A filter name to list the values of, e.g. skills, cities, metros."}
+			"those containing `contains`. Filter values are the market's own; an invented one matches nothing. " +
+			"`company_slug` lists the 50 busiest companies (slug, name, count) under the filters."
+		properties["facet"] = map[string]any{"type": "string", "description": "A filter name to list the values of, e.g. skills, cities, metros, company_slug."}
 		properties["contains"] = map[string]any{"type": "string", "description": "With facet: keep only values containing this text, e.g. berlin; for skills a known alias also finds its value, e.g. golang finds go."}
 	}
 	return assistant.Tool{
@@ -177,6 +178,9 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 			if err != nil {
 				return nil, searchToolError(err)
 			}
+			if !full && facet == companyFacetParam {
+				return h.companyIndex(ctx, res, in.Contains), nil
+			}
 			view := facetView(res)
 			if full {
 				return view, nil
@@ -187,11 +191,27 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 }
 
 // listableFacet reports whether the MCP facets can list a facet's values by name: every
-// public facet but the company one, whose distribution is millions long.
+// public facet. company_slug is answered as the busiest companies, not all of its values.
 func listableFacet(name string) bool {
 	_, isString := search.StringFacets[name]
 	_, isExtra := facetExtraParams[name]
-	return (isString || isExtra) && name != companyFacetParam
+	return isString || isExtra
+}
+
+// companyIndex answers facet=company_slug: the companies whose slug contains the text, busiest
+// first and capped at topCompaniesLimit, each with its display name. A space in the text
+// matches the slug's hyphen, so "acme corp" finds acme-corp.
+func (h *assistantHandlers) companyIndex(ctx context.Context, res search.FacetResult, contains string) map[string]any {
+	needle := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(contains)), " ", "-")
+	kept := map[string]int64{}
+	for slug, n := range res.Facets[companyAttr] {
+		if strings.Contains(slug, needle) {
+			kept[slug] = n
+		}
+	}
+	top := topCompanies(kept)
+	h.search.nameCompanies(ctx, top)
+	return map[string]any{"total": res.Total, "facet": companyFacetParam, "companies": top, "matching_companies": len(kept)}
 }
 
 // listableFacets is every name listableFacet accepts, sorted so the error a model reads is stable.
@@ -217,7 +237,7 @@ func facetIndex(view facetPayload, facet, contains string) map[string]any {
 		// it, so a narrow filter does not hide that the facet exists. Numeric ones are in stats.
 		sizes := map[string]int{}
 		for _, name := range listableFacets() {
-			if !facetExtraParams[name].statOnly {
+			if !facetExtraParams[name].statOnly && name != companyFacetParam {
 				sizes[name] = 0
 			}
 		}
