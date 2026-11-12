@@ -2,26 +2,17 @@ name: snyk
 
 # Go dependencies are already covered by govulncheck.yml (reachability-based, no token
 # needed) — scoped here to the JS lockfiles to avoid duplicate coverage and stay inside
-# Snyk's free-tier monthly test quota.
+# Snyk's free-tier monthly test quota. Run once a day over the default branch,
+# rather than spending tests on every PR update. Manual runs also consume tests;
+# the daily schedule reduces usage but does not bypass an exhausted quota.
 #
-# FOUR LOCKFILES, NOT THREE. The repository root grew one when the repo-wide tooling
-# (knip, squawk) landed, and it was covered by nothing: this job named the three package
-# directories, and the paths filter below meant a change to the root lockfile did not even
-# start the job. Those are dev dependencies, but they run in CI and on every laptop, which
-# is the same trust boundary as anything else here.
+# Scan all four JS lockfiles, including the repository root's tooling dependencies:
+# those run in CI and on developer laptops, so they need the same coverage.
 #
 # THE SCAN NEEDS A CREDENTIAL, AND SAYS SO WHEN IT HAS NONE. Without `SNYK_TOKEN` the CLI
 # exits 2 on its first call, which painted a red cross on every dependency PR — a standing
 # failure nobody reads is how a real one gets waved through. The `credentials` job below
 # decides, and the scan skips rather than fails when there is nothing to authenticate with.
-#
-# WHICH IS ALMOST ALWAYS DEPENDABOT, NOT A MISSING SECRET. A run started from a Dependabot
-# pull request reads a SEPARATE store — repository secrets are not visible to it, only the
-# ones added under Settings › Secrets › Dependabot. `SNYK_TOKEN` is set as a repository
-# secret and the scan passes on an ordinary PR; it was empty on all thirteen open
-# Dependabot PRs at once, which is what made it look like the secret was missing. Adding
-# the same token to the Dependabot store is what restores coverage on exactly the PRs that
-# change a lockfile — the ones this scan exists for.
 #
 # That skip is deliberately LOUD: a warning annotation on the run and a note in the job
 # summary, both naming what went unscanned. A scanner that quietly opts out makes a commit
@@ -36,15 +27,6 @@ name: snyk
 on:
   schedule:
     - cron: '41 6 * * *'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'web/**'
-      - 'extension/**'
-      - 'design-system/**'
-      - 'pnpm-lock.yaml'
-      - 'package.json'
-      - '.github/workflows/snyk.yml'
   workflow_dispatch:
 
 permissions:
@@ -77,9 +59,8 @@ jobs:
           `design-system/`, `web/`, `extension/`) were **not scanned** for known
           vulnerabilities.
 
-          On a Dependabot pull request that usually does not mean the secret is missing:
-          such runs read their own store, so a repository secret is invisible to them.
-          Adding the token under **Settings › Secrets › Dependabot** restores the scan.
+          Scheduled runs use the default branch. Add or restore the repository secret
+          **SNYK_TOKEN** under **Settings › Secrets and variables › Actions**.
 
           Go dependencies are unaffected: `govulncheck` covers those and needs no credential.
           SUMMARY
