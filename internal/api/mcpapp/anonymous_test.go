@@ -29,7 +29,7 @@ func TestAnonymousCapsListTools(t *testing.T) {
 			}
 			ctx := context.Background()
 			ct, st := mcp.NewInMemoryTransports()
-			ss, err := newMixedServer(nil, tc.userID, testOrigin, r).Connect(ctx, st, nil)
+			ss, err := newMixedServer(nil, tc.userID, testOrigin, r, false).Connect(ctx, st, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

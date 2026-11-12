@@ -47,7 +47,14 @@ func stampsAccount(signedIn bool) mcp.Middleware {
 	}
 }
 
-func newMixedServer(tools []assistant.Tool, userID int64, origin string, reader Reader) *mcp.Server {
+// cliSessionInstructions ends the instructions of a session the freehire CLI opened
+// (`freehire mcp`). Such an agent has a shell, so work that would flood its context —
+// whole result sets, a PDF — can go to disk through the CLI instead; nothing else tells
+// the agent the CLI is there. It names CLI commands, not tools, and grants nothing.
+const cliSessionInstructions = "The freehire CLI is on this shell: `freehire search <query> --json > jobs.json` " +
+	"saves whole results with full descriptions to grep; `freehire cv render <id> --out cv.pdf` writes the CV PDF."
+
+func newMixedServer(tools []assistant.Tool, userID int64, origin string, reader Reader, viaCLI bool) *mcp.Server {
 	instructions := "Public catalogue tools work without signing in. Personal tools require OAuth for this account. " +
 		"Geography filters form a union. "
 	// An anonymous connection must not be told to call get_profile first: the call would
@@ -59,6 +66,9 @@ func newMixedServer(tools []assistant.Tool, userID int64, origin string, reader 
 	}
 	account := accountInstructions(described)
 	instructions += strings.TrimPrefix(account, accountServerInstructions)
+	if viaCLI {
+		instructions += cliSessionInstructions
+	}
 	if userID == 0 {
 		reader = forAnonymous(reader)
 	}
@@ -153,8 +163,9 @@ func MixedHandler(tools []assistant.Tool, origin string, reader Reader) http.Han
 			}
 			userID = parsed
 		}
+		viaCLI := strings.HasPrefix(r.Header.Get("User-Agent"), "freehire-cli/")
 		mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
-			return newMixedServer(tools, userID, origin, reader)
+			return newMixedServer(tools, userID, origin, reader, viaCLI)
 		}, &mcp.StreamableHTTPOptions{Stateless: true}).ServeHTTP(w, r)
 	})
 }

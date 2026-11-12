@@ -100,6 +100,18 @@ and once per response, never per job: the result is replayed into the model's co
 turn. On the typed catalogue tools it is a plain struct field; on the account server's untyped
 tools `withNext` adds it to the JSON object.
 
+## A session the freehire CLI opened
+
+`freehire mcp` (in the `freehire-cli` repository) runs the canonical endpoint over stdio
+for local hosts, and the CLI's client sends `User-Agent: freehire-cli/<version>`. For that
+User-Agent alone `MixedHandler` appends `cliSessionInstructions`: the CLI is on the agent's
+shell, so whole result sets (`freehire search … --json`, which reads `/agent/jobs/search`
+with full descriptions) and the CV PDF go to disk rather than into context. That is why
+the MCP results here can stay bounded. It lives in the instructions, not in `next`: having
+a shell is a fact about the session, and `next` is replayed with every result. It names
+CLI commands, never a tool, so the directory policy below does not apply; it has its own
+256-character budget, outside the 720 every host reads.
+
 ## Why there are two MCP servers
 
 `internal/api/ojcpmcp` serves the Open Job Context Protocol. This one serves OpenAI's Apps

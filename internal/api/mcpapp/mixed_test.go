@@ -26,7 +26,7 @@ func TestMixedAuthenticationBeforeAccountExecution(t *testing.T) {
 			}}}
 			clientTransport, serverTransport := mcp.NewInMemoryTransports()
 			ctx := context.Background()
-			ss, err := newMixedServer(tools, userID, testOrigin, readerThatFinds(t)).Connect(ctx, serverTransport, nil)
+			ss, err := newMixedServer(tools, userID, testOrigin, readerThatFinds(t), false).Connect(ctx, serverTransport, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -124,10 +124,68 @@ func TestMixedAnonymousPersonalCallStatus(t *testing.T) {
 func TestMixedInstructions_AnonymousIsNotSentToGetProfile(t *testing.T) {
 	tools := []assistant.Tool{{Name: "get_profile", Schema: map[string]any{"type": "object"}}}
 	for userID, wantLine := range map[int64]bool{0: false, 42: true} {
-		session := connectServer(t, newMixedServer(tools, userID, testOrigin, readerThatFinds(t)))
+		session := connectServer(t, newMixedServer(tools, userID, testOrigin, readerThatFinds(t), false))
 		got := strings.Contains(session.InitializeResult().Instructions, "Call get_profile before the first search")
 		if got != wantLine {
 			t.Errorf("user %d: profile-first line present = %v, want %v", userID, got, wantLine)
 		}
+	}
+}
+
+// headerTransport stamps fixed headers on every request, as the freehire CLI's HTTP client
+// does with its User-Agent and as the authentication middleware does with the account id.
+type headerTransport map[string]string
+
+func (h headerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	for k, v := range h {
+		r.Header.Set(k, v)
+	}
+	return http.DefaultTransport.RoundTrip(r)
+}
+
+func mixedInstructionsOver(t *testing.T, headers headerTransport) string {
+	t.Helper()
+	tools := []assistant.Tool{{Name: "get_profile", Schema: map[string]any{"type": "object"}}}
+	srv := httptest.NewServer(MixedHandler(tools, testOrigin, readerThatFinds(t)))
+	defer srv.Close()
+	transport := &mcp.StreamableClientTransport{Endpoint: srv.URL, HTTPClient: &http.Client{Transport: headers}}
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(context.Background(), transport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = session.Close() }()
+	return session.InitializeResult().Instructions
+}
+
+func TestMixedInstructions_TheCLIIsToldItIsOnTheShell(t *testing.T) {
+	if len(cliSessionInstructions) > 256 {
+		t.Fatalf("CLI sentence is %d chars, budget 256", len(cliSessionInstructions))
+	}
+	for _, want := range []string{"freehire search", "--json", "freehire cv render", "--out"} {
+		if !strings.Contains(cliSessionInstructions, want) {
+			t.Errorf("CLI sentence does not name %q: %s", want, cliSessionInstructions)
+		}
+	}
+	for name, headers := range map[string]headerTransport{
+		"anonymous": {"User-Agent": "freehire-cli/1.4.0"},
+		"signed in": {"User-Agent": "freehire-cli/1.4.0", AccountUserIDHeader: "42"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := mixedInstructionsOver(t, headers); !strings.HasSuffix(got, cliSessionInstructions) {
+				t.Fatalf("instructions do not end with the CLI sentence: %q", got)
+			}
+		})
+	}
+}
+
+func TestMixedInstructions_OtherHostsDoNotHearOfTheCLI(t *testing.T) {
+	for _, agent := range []string{"", "openai-mcp/1.0.0", "codex-mcp-client/0.167.0", "Go-http-client/1.1"} {
+		t.Run(agent, func(t *testing.T) {
+			got := mixedInstructionsOver(t, headerTransport{"User-Agent": agent, AccountUserIDHeader: "42"})
+			if strings.Contains(got, "freehire CLI") || strings.Contains(got, cliSessionInstructions) {
+				t.Fatalf("instructions mention the CLI: %q", got)
+			}
+		})
 	}
 }
