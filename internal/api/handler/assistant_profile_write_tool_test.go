@@ -3,10 +3,13 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 )
 
@@ -18,8 +21,9 @@ func runUpdateProfile(t *testing.T, repo *fakeProfileRepo, args string) (any, er
 }
 
 func TestUpdateProfile_OmittedFieldsStayAsTheyWere(t *testing.T) {
+	stamp := time.Now() // a stored row takes the guarded write
 	repo := &fakeProfileRepo{getRet: userprofile.Profile{
-		UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"},
+		UserID: 1, UpdatedAt: &stamp, Specializations: []string{"backend"}, Skills: []string{"go"},
 		Seniorities: []string{"senior"}, ExcludedSkills: []string{"php"},
 		ExcludedSources: []string{"hh"}, ExcludedCompanies: []string{"acme"},
 		JobLanguages:        []string{"en"},
@@ -73,8 +77,10 @@ func TestUpdateProfile_ReplaceWithEmptyListClears(t *testing.T) {
 
 func TestUpdateProfile_RefusesAnEmptyOrContradictoryCall(t *testing.T) {
 	for _, args := range []string{`{}`, `{"skills":["go"],"add_skills":["rust"]}`, `{"nope":1}`} {
-		if _, err := runUpdateProfile(t, savedProfile(), args); err == nil {
-			t.Errorf("%s: want an error", args)
+		_, err := runUpdateProfile(t, savedProfile(), args)
+		// The MCP server shows the agent only invalid-argument and fiber errors.
+		if !errors.Is(err, assistant.ErrInvalidArguments) {
+			t.Errorf("%s: err = %v, want ErrInvalidArguments", args, err)
 		}
 	}
 }

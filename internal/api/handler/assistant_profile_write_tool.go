@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -114,16 +115,29 @@ func (h *assistantHandlers) updateProfileTool() assistant.Tool {
 	}
 }
 
+// updateProfileAttempts bounds the read-modify-write retry when a concurrent profile write
+// (the profile page, an experience-bank skill merge) lands between our read and our write.
+const updateProfileAttempts = 3
+
 func (h *assistantHandlers) updateProfile(ctx context.Context, userID int64, in updateProfileArgs) (any, error) {
+	for attempt := 1; ; attempt++ {
+		out, err := h.updateProfileOnce(ctx, userID, in)
+		if !errors.Is(err, userprofile.ErrConflict) || attempt == updateProfileAttempts {
+			return out, err
+		}
+	}
+}
+
+func (h *assistantHandlers) updateProfileOnce(ctx context.Context, userID int64, in updateProfileArgs) (any, error) {
 	if h.profile == nil || h.profile.userProfile == nil {
 		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "the saved profile is not available")
 	}
 	if in.Skills != nil && in.AddSkills != nil {
-		return nil, errors.New("send either skills (replace) or add_skills (add), not both")
+		return nil, fmt.Errorf("%w: send either skills (replace) or add_skills (add), not both", assistant.ErrInvalidArguments)
 	}
 	if in.Specializations == nil && in.Skills == nil && in.AddSkills == nil && in.ExcludedSkills == nil &&
 		in.Seniorities == nil && in.JobLanguages == nil && in.LocationPreferences == nil {
-		return nil, errors.New("nothing to change: send at least one field")
+		return nil, fmt.Errorf("%w: nothing to change, send at least one field", assistant.ErrInvalidArguments)
 	}
 
 	cur, err := h.profile.userProfile.Get(ctx, userID)
@@ -152,9 +166,20 @@ func (h *assistantHandlers) updateProfile(ctx context.Context, userID int64, in 
 		excluded = dictionarySkills(in.ExcludedSkills, &unknown)
 	}
 
-	saved, err := h.profile.userProfile.Save(ctx, userID,
-		pick(in.Specializations, cur.Specializations), skills, pick(in.Seniorities, cur.Seniorities),
-		excluded, cur.ExcludedSources, cur.ExcludedCompanies, loc, pick(in.JobLanguages, cur.JobLanguages)...)
+	specs, levels, languages := pick(in.Specializations, cur.Specializations),
+		pick(in.Seniorities, cur.Seniorities), pick(in.JobLanguages, cur.JobLanguages)
+	var saved userprofile.Profile
+	if cur.UpdatedAt == nil {
+		// No stored profile (or no version to guard on): a plain create-or-replace.
+		saved, err = h.profile.userProfile.Save(ctx, userID, specs, skills, levels,
+			excluded, cur.ExcludedSources, cur.ExcludedCompanies, loc, languages...)
+	} else {
+		saved, err = h.profile.userProfile.SaveIfUnchanged(ctx, userID, *cur.UpdatedAt, specs, skills, levels,
+			excluded, cur.ExcludedSources, cur.ExcludedCompanies, loc, languages...)
+	}
+	if errors.Is(err, userprofile.ErrConflict) {
+		return nil, err
+	}
 	if err != nil {
 		return nil, profileError(err)
 	}
