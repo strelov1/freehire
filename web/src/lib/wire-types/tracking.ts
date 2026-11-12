@@ -1,3 +1,5 @@
+import type { components } from '#lib/generated/api.js';
+
 import type { Card as JobCard } from '../generated/contracts';
 
 /** A signed-in user's interaction with one job: when they viewed it, saved it
@@ -129,11 +131,4 @@ export interface AgentPermissions {
 }
 
 /** One answer the candidate has banked for a screening question. */
-export interface BankedAnswer {
-  id: number;
-  topic: string;
-  question: string;
-  answer: string;
-  provenance: string;
-  updated_at: string;
-}
+export type BankedAnswer = components['schemas']['BankedAnswer'];

@@ -1,8 +1,10 @@
+import type { components } from '#lib/generated/api.js';
+
 /** A work-history/CV period boundary: a year, and optionally a month (1-12; absent means
  *  the CV gave no month). Named PeriodDate, not Date, so it never shadows the language's
  *  own global `Date` wherever this file's types are imported — mirrors the Go type
  *  (internal/candidate/perioddate.PeriodDate) this is the wire shape of. */
-export type PeriodDate = { year: number; month?: number };
+export type PeriodDate = components['schemas']['PeriodDate'];
 
 /** One place where evidence was produced: a job or a project. Start/end are a structured
  *  PeriodDate, matching the Go domain type — no parsing needed on this side either.
@@ -72,22 +74,7 @@ export type ExperienceBank = {
  *  somebody other than the candidate set, a stage they moved themselves carries the date
  *  they got around to recording it. Never re-derive this from `source` here; the rule
  *  lives in Go and a second copy would drift from it. */
-export interface TimelineEvent {
-  id: number;
-  kind: string;
-  signal?: string;
-  source: string;
-  observed: boolean;
-  occurred_at: string;
-  company_slug: string;
-  role_title?: string;
-  application_id?: number;
-  job_slug?: string;
-  /** Absent for an event with no message, and for one whose message was deleted — the
-   *  deletion hides the content and leaves the event standing. */
-  email_id?: number;
-  email_subject?: string;
-}
+export type TimelineEvent = components['schemas']['TimelineEvent'];
 
 /** One interview arranged for an application, as GET /me/interviews serves it.
  *
@@ -102,37 +89,11 @@ export interface TimelineEvent {
  *  when the invitation's own identifier attached it, and `cancelled` when the organiser
  *  called it off. A cancelled meeting is still shown: an interview that vanished from a
  *  Thursday cannot be told apart from a calendar that failed to load. */
-export interface ScheduledInterview {
-  id: number;
-  application_id: number;
-  starts_at: string;
-  /** Absent when the meeting has no end — an all-day entry has none. Never a zero
-   *  timestamp: the server omits the field rather than sending the year 1. */
-  ends_at?: string;
-  title?: string;
-  join_url?: string;
-  status: string;
-  company_slug: string;
-  role_title?: string;
-  job_slug?: string;
-}
+export type ScheduledInterview = components['schemas']['ScheduledInterview'];
 
 /** One row the suggestions endpoint offers. It completes a PHRASE, so `parts` can
  *  name more than one thing at once — "Senior Software Engineer Google" carries the
  *  role and the company, and applying only one of them discards what was typed. */
-export interface ApiSuggestion {
-  /** The whole phrase: the recognised prefix plus the completion. */
-  text: string;
-  parts: ApiSuggestionPart[];
-  /** Open postings behind it. Never zero — a suggestion leading to an empty page is
-   *  withheld server-side. */
-  jobs: number;
-}
+export type ApiSuggestion = components['schemas']['Suggestion'];
 
-export interface ApiSuggestionPart {
-  kind: 'title' | 'skill' | 'category' | 'company';
-  /** The facet value to apply. Absent for a `title`, which names no facet and is
-   *  applied as the free-text query instead. */
-  slug?: string;
-  text: string;
-}
+export type ApiSuggestionPart = components['schemas']['SuggestionPart'];

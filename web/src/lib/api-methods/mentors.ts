@@ -12,6 +12,7 @@ import type {
   OwnMentorProfile,
   PendingMentorProfile,
 } from '../types';
+import type { components } from '#lib/generated/api.js';
 import { ApiError, jsonBody } from '../api-core';
 
 export function mentorsApi({ call, request, requestData }: Http) {
@@ -74,7 +75,10 @@ export function mentorsApi({ call, request, requestData }: Http) {
     slug: string,
     body: { starts_at: string; timezone: string; note?: string; job_id?: number },
   ): Promise<MentorSession> {
-    return requestData<MentorSession>(`/api/v1/mentors/${slug}/bookings`, jsonBody('POST', body));
+    return requestData<MentorSession>(
+      `/api/v1/mentors/${slug}/bookings`,
+      jsonBody('POST', body satisfies components['schemas']['MentorshipProfileBody']),
+    );
   }
 
   /** The caller's own sessions, split by the server against one clock. */
@@ -128,7 +132,10 @@ export function mentorsApi({ call, request, requestData }: Http) {
   }
 
   async function updateMentorProfile(body: MentorProfileInput): Promise<OwnMentorProfile> {
-    return requestData<OwnMentorProfile>('/api/v1/me/mentorship/profile', jsonBody('PUT', body));
+    return requestData<OwnMentorProfile>(
+      '/api/v1/me/mentorship/profile',
+      jsonBody('PUT', body satisfies components['schemas']['MentorshipProfileBody']),
+    );
   }
 
   /** Leave the directory without moderation, keeping confirmed bookings standing. */

@@ -1,3 +1,5 @@
+import type { components } from '#lib/generated/api.js';
+
 /** A crowdsourced board contribution: a job link a user pasted for a company board we do
  *  not crawl yet. The unit is the board — `source` (ATS) + `board` (company slug) — not a
  *  single vacancy; the ingest side later scrapes all its vacancies. `pending` means
@@ -103,10 +105,7 @@ export interface ReferralRequestInput {
 /** What a seeker can attach to a referral request into one company: the CVs tailored for
  *  the vacancy it is made from (or, from the company page, for any of its vacancies),
  *  newest first, and whether they uploaded a CV file. */
-export interface ReferralCvOptions {
-  tailored: { id: string; title: string }[];
-  has_resume: boolean;
-}
+export type ReferralCvOptions = components['schemas']['ReferralCVOptions'];
 
 /** A job submitted for moderation. `status` is the review lifecycle; `review_reason`
  *  carries an optional rejection note. `submitter_email` is present only on the
@@ -169,19 +168,7 @@ export interface SubmissionInput {
 /** What freehire could parse from a pasted job URL, for the submit form to prefill —
  *  never persisted. A field freehire's own dictionaries derive better than any source
  *  page states it (skills, cities) is not included. */
-export interface PrefillResult {
-  title?: string;
-  company?: string;
-  location?: string;
-  description?: string;
-  work_mode?: string;
-  employment_type?: string;
-  seniority?: string;
-  skills?: string[];
-  source?: string;
-  /** Set, with every other field empty, when the catalogue already carries the URL. */
-  existing_job_slug?: string;
-}
+export type PrefillResult = components['schemas']['SubmissionPrefill'];
 
 /** A related company on a company page: the parent that owns it, or a subsidiary it owns.
  *  A separate employer with its own page and jobs (freehire#3895). */
@@ -214,12 +201,4 @@ export interface PendingCompanyRelation {
 
 /** An account as the moderator's user lookup shows it: who it is and whether a moderator
  *  banned it (with the reason they left). */
-export interface ModeratedUser {
-  id: number;
-  email: string;
-  username: string | null;
-  role: string;
-  banned: boolean;
-  banned_at: string | null;
-  ban_reason: string | null;
-}
+export type ModeratedUser = components['schemas']['ModeratedUser'];

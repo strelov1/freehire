@@ -19,6 +19,7 @@ import type {
 } from '../types';
 import type { Display } from '#lib/generated/contracts.js';
 import type { JobCopy, Page, Slice } from '../api-types';
+import type { components } from '#lib/generated/api.js';
 import { ApiError, jsonBody, query, toSlice } from '../api-core';
 
 export function jobsApi({ call, request, requestData, baseUrl }: Http) {
@@ -62,7 +63,10 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
 
   /** Apply on freehire: the employer receives the CV and answers by email. */
   async function sendDirectApplication(slug: string, input: DirectApplication): Promise<void> {
-    await call(`/api/v1/jobs/${encodeURIComponent(slug)}/direct-apply`, jsonBody('POST', input));
+    await call(
+      `/api/v1/jobs/${encodeURIComponent(slug)}/direct-apply`,
+      jsonBody('POST', input satisfies components['schemas']['DirectApplyRequest']),
+    );
   }
 
   /** The open postings sharing this job's role cluster — the "openings across cities"
