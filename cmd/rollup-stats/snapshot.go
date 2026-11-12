@@ -219,6 +219,20 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 			rowsInsightsSalaryMonthly[i] = db.CopyInsightsSalaryMonthlyParams(row)
 		}
 	}
+	var rowsInsightsSalaryMonthlyByCountry []db.CopyInsightsSalaryMonthlyParams
+	{
+		log.Printf("analytics: starting ComputeInsightsSalaryMonthlyByCountry")
+		done := worker.Stage("ComputeInsightsSalaryMonthlyByCountry")
+		rows, err := reader.ComputeInsightsSalaryMonthlyByCountry(ctx, db.ComputeInsightsSalaryMonthlyByCountryParams{AsOf: asOf, MinSample: minSalaryMonthSample})
+		if err != nil {
+			return fmt.Errorf("ComputeInsightsSalaryMonthlyByCountry: %w", err)
+		}
+		done()
+		rowsInsightsSalaryMonthlyByCountry = make([]db.CopyInsightsSalaryMonthlyParams, len(rows))
+		for i, row := range rows {
+			rowsInsightsSalaryMonthlyByCountry[i] = db.CopyInsightsSalaryMonthlyParams(row)
+		}
+	}
 	var rowsInsightsVelocityDaily []db.CopyInsightsVelocityDailyParams
 	{
 		log.Printf("analytics: starting ComputeInsightsVelocityDaily")
@@ -306,6 +320,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 		return fmt.Errorf("DeleteAllInsightsSalaryMonthly: %w", err)
 	}
 	if _, err := writer.CopyInsightsSalaryMonthly(ctx, rowsInsightsSalaryMonthly); err != nil {
+		return fmt.Errorf("CopyInsightsSalaryMonthly: %w", err)
+	}
+	if _, err := writer.CopyInsightsSalaryMonthly(ctx, rowsInsightsSalaryMonthlyByCountry); err != nil {
 		return fmt.Errorf("CopyInsightsSalaryMonthly: %w", err)
 	}
 	if err := writer.DeleteAllInsightsVelocityDaily(ctx); err != nil {

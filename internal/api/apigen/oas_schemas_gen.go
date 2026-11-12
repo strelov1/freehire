@@ -18602,6 +18602,9 @@ type SalaryBand struct {
 	P25        int64  `json:"p25"`
 	P50        int64  `json:"p50"`
 	P75        int64  `json:"p75"`
+	// The salary at every 5th percentile from 5 to 95 (19 values); empty until the rollup has computed
+	// them.
+	Quantiles []int64 `json:"quantiles"`
 }
 
 // GetSeniority returns the value of Seniority.
@@ -18639,6 +18642,11 @@ func (s *SalaryBand) GetP75() int64 {
 	return s.P75
 }
 
+// GetQuantiles returns the value of Quantiles.
+func (s *SalaryBand) GetQuantiles() []int64 {
+	return s.Quantiles
+}
+
 // SetSeniority sets the value of Seniority.
 func (s *SalaryBand) SetSeniority(val string) {
 	s.Seniority = val
@@ -18674,10 +18682,15 @@ func (s *SalaryBand) SetP75(val int64) {
 	s.P75 = val
 }
 
+// SetQuantiles sets the value of Quantiles.
+func (s *SalaryBand) SetQuantiles(val []int64) {
+	s.Quantiles = val
+}
+
 // Ref: #/components/schemas/SalaryHistoryAnswer
 type SalaryHistoryAnswer struct {
 	Data []SalaryMonth `json:"data"`
-	Meta CategoryMeta  `json:"meta"`
+	Meta SalaryMeta    `json:"meta"`
 }
 
 // GetData returns the value of Data.
@@ -18686,7 +18699,7 @@ func (s *SalaryHistoryAnswer) GetData() []SalaryMonth {
 }
 
 // GetMeta returns the value of Meta.
-func (s *SalaryHistoryAnswer) GetMeta() CategoryMeta {
+func (s *SalaryHistoryAnswer) GetMeta() SalaryMeta {
 	return s.Meta
 }
 
@@ -18696,7 +18709,7 @@ func (s *SalaryHistoryAnswer) SetData(val []SalaryMonth) {
 }
 
 // SetMeta sets the value of Meta.
-func (s *SalaryHistoryAnswer) SetMeta(val CategoryMeta) {
+func (s *SalaryHistoryAnswer) SetMeta(val SalaryMeta) {
 	s.Meta = val
 }
 

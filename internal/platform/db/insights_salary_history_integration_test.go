@@ -88,6 +88,10 @@ func TestInsightsSalaryBandsReadTheEffectiveSalary(t *testing.T) {
 		if b.Currency != "USD" || b.Period != "year" || b.SampleSize != 4 || b.P50 != 85000 {
 			t.Errorf("country %q: band = %+v, want USD/year n=4 p50=85000", country, b)
 		}
+		// The distribution: 19 points, the 50th percentile (index 9) equal to p50, rising.
+		if len(b.Quantiles) != 19 || b.Quantiles[9] != b.P50 || b.Quantiles[0] > b.Quantiles[18] {
+			t.Errorf("country %q: quantiles = %v, want 19 rising values with [9] = p50 %d", country, b.Quantiles, b.P50)
+		}
 	}
 }
 
@@ -95,7 +99,8 @@ func TestInsightsSalaryBandsReadTheEffectiveSalary(t *testing.T) {
 // offsets from the current month rather than days, so the test cannot straddle a
 // month boundary the way "N days ago" would on the 1st.
 type monthPosting struct {
-	category               string
+	category, seniority    string
+	countries              []string
 	publishedAgo, foundAgo int // months before the current one
 	amount                 int
 	currency, period       string
@@ -106,7 +111,7 @@ func seedMonthPostings(t *testing.T, ctx context.Context, q *Queries, pool *pgxp
 	t.Helper()
 	for i := range n {
 		ext := fmt.Sprintf("%s-%d", prefix, i)
-		seedInsightsJob(t, ctx, q, pool, ext, insightSeed{category: p.category, createdAgo: 1})
+		seedInsightsJob(t, ctx, q, pool, ext, insightSeed{category: p.category, seniority: p.seniority, countries: p.countries, createdAgo: 1})
 		setSalaryTier(t, ctx, pool, ext, "source", p.amount+i, p.currency, p.period)
 		if _, err := pool.Exec(ctx, `
 			UPDATE jobs SET
@@ -174,7 +179,7 @@ func TestInsightsSalaryMonthlyRollup(t *testing.T) {
 	if _, err := materializeInsightsSalaryMonthly(q)(ctx, 30); err != nil {
 		t.Fatalf("rebuild monthly: %v", err)
 	}
-	rows, err := q.ListInsightsSalaryHistory(ctx, "backend")
+	rows, err := q.ListInsightsSalaryHistory(ctx, ListInsightsSalaryHistoryParams{Category: "backend"})
 	if err != nil {
 		t.Fatalf("list history: %v", err)
 	}
@@ -197,6 +202,65 @@ func TestInsightsSalaryMonthlyRollup(t *testing.T) {
 	}
 	if e := got["EUR/month"]; e.SampleSize != 30 {
 		t.Errorf("EUR/month = %+v, want sample 30", e)
+	}
+}
+
+// TestInsightsSalaryMonthlyScopes pins the role × grade × country history behind
+// /salaries: every scope is a row of its own (” = every value), a posting without a
+// grade counts toward its role but has no grade row of its own (which would collide
+// with the all-grades row), and a posting counts once per country it is in.
+func TestInsightsSalaryMonthlyScopes(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	base := monthPosting{amount: 100000, currency: "USD", period: "year", publishedAgo: 1, foundAgo: 1}
+	seniorDE := base
+	seniorDE.category, seniorDE.seniority, seniorDE.countries = "backend", "senior", []string{"de"}
+	seedMonthPostings(t, ctx, q, pool, "be-sr-de", 3, seniorDE)
+	// In two countries: counts in DE and in PL, once in the country-agnostic rows.
+	seniorDEPL := seniorDE
+	seniorDEPL.countries = []string{"de", "pl"}
+	seedMonthPostings(t, ctx, q, pool, "be-sr-depl", 2, seniorDEPL)
+	// No grade: in backend's all-grades rows only.
+	ungraded := seniorDE
+	ungraded.seniority = ""
+	seedMonthPostings(t, ctx, q, pool, "be-none-de", 4, ungraded)
+	frontend := seniorDE
+	frontend.category = "frontend"
+	seedMonthPostings(t, ctx, q, pool, "fe-sr-de", 1, frontend)
+
+	if err := q.DeleteAllInsightsSalaryMonthly(ctx); err != nil {
+		t.Fatalf("delete monthly: %v", err)
+	}
+	if _, err := materializeInsightsSalaryMonthly(q)(ctx, 1); err != nil {
+		t.Fatalf("rebuild monthly: %v", err)
+	}
+	if _, err := materializeInsightsSalaryMonthlyByCountry(q)(ctx, 1); err != nil {
+		t.Fatalf("rebuild monthly by country: %v", err)
+	}
+
+	for _, c := range []struct {
+		scope ListInsightsSalaryHistoryParams
+		want  int32 // the one USD/year month's sample; 0 = no row
+	}{
+		{ListInsightsSalaryHistoryParams{Category: "backend"}, 9},
+		{ListInsightsSalaryHistoryParams{Category: "backend", Seniority: "senior"}, 5},
+		{ListInsightsSalaryHistoryParams{Category: "backend", Seniority: "senior", Country: "de"}, 5},
+		{ListInsightsSalaryHistoryParams{Category: "backend", Seniority: "senior", Country: "pl"}, 2},
+		{ListInsightsSalaryHistoryParams{Category: "backend", Country: "de"}, 9},
+		{ListInsightsSalaryHistoryParams{}, 10},
+		{ListInsightsSalaryHistoryParams{Seniority: "senior"}, 6},
+		{ListInsightsSalaryHistoryParams{Country: "pl"}, 2},
+	} {
+		rows, err := q.ListInsightsSalaryHistory(ctx, c.scope)
+		if err != nil {
+			t.Fatalf("list %+v: %v", c.scope, err)
+		}
+		if len(rows) != 1 || rows[0].SampleSize != c.want {
+			t.Errorf("scope %+v: rows = %+v, want one month of %d postings", c.scope, rows, c.want)
+		}
 	}
 }
 

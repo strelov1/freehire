@@ -825,7 +825,9 @@ func (q *Queries) ComputeInsightsRoleStatsGlobal(ctx context.Context, prevTs pgt
 
 const computeInsightsSalaryMonthly = `-- name: ComputeInsightsSalaryMonthly :many
 SELECT
-    (category)::text AS category,
+    (coalesce(category, ''))::text AS category,
+    (coalesce(seniority, ''))::text AS seniority,
+    ('')::text AS country,
     (currency)::text AS currency,
     (period)::text AS period,
     (month)::date AS month,
@@ -834,18 +836,16 @@ SELECT
     (percentile_cont(0.50) WITHIN GROUP (ORDER BY amount)::int)::integer AS p50,
     (percentile_cont(0.75) WITHIN GROUP (ORDER BY amount)::int)::integer AS p75
 FROM (
-
-
-
-    SELECT category, currency, period, amount,
+    SELECT category, seniority, currency, period, amount,
            date_trunc('month', LEAST(posted_at, created_at) AT TIME ZONE 'UTC')::date AS month
     FROM jobs_effective_salary
     WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
       AND LEAST(posted_at, created_at) AT TIME ZONE 'UTC' >= date_trunc('month', $1::timestamptz AT TIME ZONE 'UTC') - interval '11 months'
       AND LEAST(posted_at, created_at) <= $1::timestamptz
 ) s
-GROUP BY category, currency, period, month
+GROUP BY currency, period, month, CUBE(category, seniority)
 HAVING count(*) >= $2::int
+   AND (grouping(seniority) = 1 OR seniority <> '')
 `
 
 type ComputeInsightsSalaryMonthlyParams struct {
@@ -855,6 +855,8 @@ type ComputeInsightsSalaryMonthlyParams struct {
 
 type ComputeInsightsSalaryMonthlyRow struct {
 	Category   string      `json:"category"`
+	Seniority  string      `json:"seniority"`
+	Country    string      `json:"country"`
 	Currency   string      `json:"currency"`
 	Period     string      `json:"period"`
 	Month      pgtype.Date `json:"month"`
@@ -865,13 +867,18 @@ type ComputeInsightsSalaryMonthlyRow struct {
 }
 
 // Compute on the read connection; publish the result separately on the writer.
-// The salary history: effective-salary percentiles per (category, currency, period,
-// month a posting was PUBLISHED), the current month and the eleven before it. Open and
-// closed postings alike — a posting closed since still records what was offered that
-// month — and canonical, public ones only. A month a posting belongs to is its
-// existence date (see the file header), so one found in June but published in March
-// counts in March. Months under @min_sample are not stored: a line through a handful
-// of postings a month is noise drawn as a trend.
+// The salary history: effective-salary percentiles per (currency, period, month a
+// posting was PUBLISHED), the current month and the eleven before it, for every role ×
+// grade scope — CUBE(category, seniority), ” meaning every value, so "all roles" and
+// "all grades" are rows of their own. Country-agnostic: the per-country history is
+// ComputeInsightsSalaryMonthlyByCountry, kept apart because unnesting countries would
+// count a posting once per country here. Open and closed postings alike — a posting
+// closed since still records what was offered that month — and canonical, public ones
+// only. A month a posting belongs to is its existence date (see the file header), so
+// one found in June but published in March counts in March. A posting without a grade
+// counts toward its role's all-grades row but has no grade row: grouping(seniority) = 0
+// with seniority ” would collide with the all-grades row. Months under @min_sample
+// are not stored: a line through a handful of postings a month is noise drawn as a trend.
 func (q *Queries) ComputeInsightsSalaryMonthly(ctx context.Context, arg ComputeInsightsSalaryMonthlyParams) ([]ComputeInsightsSalaryMonthlyRow, error) {
 	rows, err := q.db.Query(ctx, computeInsightsSalaryMonthly, arg.AsOf, arg.MinSample)
 	if err != nil {
@@ -883,6 +890,85 @@ func (q *Queries) ComputeInsightsSalaryMonthly(ctx context.Context, arg ComputeI
 		var i ComputeInsightsSalaryMonthlyRow
 		if err := rows.Scan(
 			&i.Category,
+			&i.Seniority,
+			&i.Country,
+			&i.Currency,
+			&i.Period,
+			&i.Month,
+			&i.SampleSize,
+			&i.P25,
+			&i.P50,
+			&i.P75,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const computeInsightsSalaryMonthlyByCountry = `-- name: ComputeInsightsSalaryMonthlyByCountry :many
+SELECT
+    (coalesce(category, ''))::text AS category,
+    (coalesce(seniority, ''))::text AS seniority,
+    (country)::text AS country,
+    (currency)::text AS currency,
+    (period)::text AS period,
+    (month)::date AS month,
+    (count(*)::int)::integer AS sample_size,
+    (percentile_cont(0.25) WITHIN GROUP (ORDER BY amount)::int)::integer AS p25,
+    (percentile_cont(0.50) WITHIN GROUP (ORDER BY amount)::int)::integer AS p50,
+    (percentile_cont(0.75) WITHIN GROUP (ORDER BY amount)::int)::integer AS p75
+FROM (
+    SELECT category, seniority, country, currency, period, amount,
+           date_trunc('month', LEAST(posted_at, created_at) AT TIME ZONE 'UTC')::date AS month
+    FROM jobs_effective_salary, unnest(countries) AS country
+    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
+      AND LEAST(posted_at, created_at) AT TIME ZONE 'UTC' >= date_trunc('month', $1::timestamptz AT TIME ZONE 'UTC') - interval '11 months'
+      AND LEAST(posted_at, created_at) <= $1::timestamptz
+) s
+GROUP BY country, currency, period, month, CUBE(category, seniority)
+HAVING count(*) >= $2::int
+   AND (grouping(seniority) = 1 OR seniority <> '')
+`
+
+type ComputeInsightsSalaryMonthlyByCountryParams struct {
+	AsOf      pgtype.Timestamptz `json:"as_of"`
+	MinSample int32              `json:"min_sample"`
+}
+
+type ComputeInsightsSalaryMonthlyByCountryRow struct {
+	Category   string      `json:"category"`
+	Seniority  string      `json:"seniority"`
+	Country    string      `json:"country"`
+	Currency   string      `json:"currency"`
+	Period     string      `json:"period"`
+	Month      pgtype.Date `json:"month"`
+	SampleSize int32       `json:"sample_size"`
+	P25        int32       `json:"p25"`
+	P50        int32       `json:"p50"`
+	P75        int32       `json:"p75"`
+}
+
+// Compute on the read connection; publish the result separately on the writer.
+// The per-country salary history: ComputeInsightsSalaryMonthly's scopes and rules with
+// the country each posting is in (unnest), so a posting in two countries counts in both.
+func (q *Queries) ComputeInsightsSalaryMonthlyByCountry(ctx context.Context, arg ComputeInsightsSalaryMonthlyByCountryParams) ([]ComputeInsightsSalaryMonthlyByCountryRow, error) {
+	rows, err := q.db.Query(ctx, computeInsightsSalaryMonthlyByCountry, arg.AsOf, arg.MinSample)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComputeInsightsSalaryMonthlyByCountryRow{}
+	for rows.Next() {
+		var i ComputeInsightsSalaryMonthlyByCountryRow
+		if err := rows.Scan(
+			&i.Category,
+			&i.Seniority,
+			&i.Country,
 			&i.Currency,
 			&i.Period,
 			&i.Month,
@@ -911,7 +997,10 @@ SELECT
     (count(*)::int)::integer AS sample_size,
     (percentile_cont(0.25) WITHIN GROUP (ORDER BY sal)::int)::integer AS p25,
     (percentile_cont(0.50) WITHIN GROUP (ORDER BY sal)::int)::integer AS p50,
-    (percentile_cont(0.75) WITHIN GROUP (ORDER BY sal)::int)::integer AS p75
+    (percentile_cont(0.75) WITHIN GROUP (ORDER BY sal)::int)::integer AS p75,
+    (percentile_cont(ARRAY[0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50,
+                           0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95])
+        WITHIN GROUP (ORDER BY sal))::integer[] AS quantiles
 FROM (
     SELECT category, seniority, country, currency, period, amount AS sal
     FROM jobs_effective_salary, unnest(countries) AS country
@@ -924,15 +1013,16 @@ HAVING count(*) >= $1::int
 `
 
 type ComputeInsightsSalaryStatsByCountryRow struct {
-	Category   string `json:"category"`
-	Seniority  string `json:"seniority"`
-	Country    string `json:"country"`
-	Currency   string `json:"currency"`
-	Period     string `json:"period"`
-	SampleSize int32  `json:"sample_size"`
-	P25        int32  `json:"p25"`
-	P50        int32  `json:"p50"`
-	P75        int32  `json:"p75"`
+	Category   string  `json:"category"`
+	Seniority  string  `json:"seniority"`
+	Country    string  `json:"country"`
+	Currency   string  `json:"currency"`
+	Period     string  `json:"period"`
+	SampleSize int32   `json:"sample_size"`
+	P25        int32   `json:"p25"`
+	P50        int32   `json:"p50"`
+	P75        int32   `json:"p75"`
+	Quantiles  []int32 `json:"quantiles"`
 }
 
 // Compute on the read connection; publish the result separately on the writer.
@@ -956,6 +1046,7 @@ func (q *Queries) ComputeInsightsSalaryStatsByCountry(ctx context.Context, minSa
 			&i.P25,
 			&i.P50,
 			&i.P75,
+			&i.Quantiles,
 		); err != nil {
 			return nil, err
 		}
@@ -977,7 +1068,10 @@ SELECT
     (count(*)::int)::integer AS sample_size,
     (percentile_cont(0.25) WITHIN GROUP (ORDER BY sal)::int)::integer AS p25,
     (percentile_cont(0.50) WITHIN GROUP (ORDER BY sal)::int)::integer AS p50,
-    (percentile_cont(0.75) WITHIN GROUP (ORDER BY sal)::int)::integer AS p75
+    (percentile_cont(0.75) WITHIN GROUP (ORDER BY sal)::int)::integer AS p75,
+    (percentile_cont(ARRAY[0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50,
+                           0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95])
+        WITHIN GROUP (ORDER BY sal))::integer[] AS quantiles
 FROM (
     SELECT category, seniority, currency, period, amount AS sal
     FROM jobs_effective_salary
@@ -990,15 +1084,16 @@ HAVING count(*) >= $1::int
 `
 
 type ComputeInsightsSalaryStatsGlobalRow struct {
-	Category   string `json:"category"`
-	Seniority  string `json:"seniority"`
-	Country    string `json:"country"`
-	Currency   string `json:"currency"`
-	Period     string `json:"period"`
-	SampleSize int32  `json:"sample_size"`
-	P25        int32  `json:"p25"`
-	P50        int32  `json:"p50"`
-	P75        int32  `json:"p75"`
+	Category   string  `json:"category"`
+	Seniority  string  `json:"seniority"`
+	Country    string  `json:"country"`
+	Currency   string  `json:"currency"`
+	Period     string  `json:"period"`
+	SampleSize int32   `json:"sample_size"`
+	P25        int32   `json:"p25"`
+	P50        int32   `json:"p50"`
+	P75        int32   `json:"p75"`
+	Quantiles  []int32 `json:"quantiles"`
 }
 
 // Compute on the read connection; publish the result separately on the writer.
@@ -1028,6 +1123,7 @@ func (q *Queries) ComputeInsightsSalaryStatsGlobal(ctx context.Context, minSampl
 			&i.P25,
 			&i.P50,
 			&i.P75,
+			&i.Quantiles,
 		); err != nil {
 			return nil, err
 		}
@@ -1965,7 +2061,7 @@ func (q *Queries) ListInsightsRoles(ctx context.Context, arg ListInsightsRolesPa
 }
 
 const listInsightsSalary = `-- name: ListInsightsSalary :many
-SELECT currency, period, sample_size, p25, p50, p75
+SELECT currency, period, sample_size, p25, p50, p75, quantiles
 FROM insights_salary_stats
 WHERE category = $1
   AND seniority = $2
@@ -1980,12 +2076,13 @@ type ListInsightsSalaryParams struct {
 }
 
 type ListInsightsSalaryRow struct {
-	Currency   string `json:"currency"`
-	Period     string `json:"period"`
-	SampleSize int32  `json:"sample_size"`
-	P25        int32  `json:"p25"`
-	P50        int32  `json:"p50"`
-	P75        int32  `json:"p75"`
+	Currency   string  `json:"currency"`
+	Period     string  `json:"period"`
+	SampleSize int32   `json:"sample_size"`
+	P25        int32   `json:"p25"`
+	P50        int32   `json:"p50"`
+	P75        int32   `json:"p75"`
+	Quantiles  []int32 `json:"quantiles"`
 }
 
 // Salary bands for one role × country scope, one row per (currency, period),
@@ -2006,6 +2103,7 @@ func (q *Queries) ListInsightsSalary(ctx context.Context, arg ListInsightsSalary
 			&i.P25,
 			&i.P50,
 			&i.P75,
+			&i.Quantiles,
 		); err != nil {
 			return nil, err
 		}
@@ -2018,7 +2116,7 @@ func (q *Queries) ListInsightsSalary(ctx context.Context, arg ListInsightsSalary
 }
 
 const listInsightsSalaryByCategory = `-- name: ListInsightsSalaryByCategory :many
-SELECT seniority, currency, period, sample_size, p25, p50, p75
+SELECT seniority, currency, period, sample_size, p25, p50, p75, quantiles
 FROM insights_salary_stats
 WHERE category = $1
   AND country = ''
@@ -2026,13 +2124,14 @@ ORDER BY seniority, sample_size DESC
 `
 
 type ListInsightsSalaryByCategoryRow struct {
-	Seniority  string `json:"seniority"`
-	Currency   string `json:"currency"`
-	Period     string `json:"period"`
-	SampleSize int32  `json:"sample_size"`
-	P25        int32  `json:"p25"`
-	P50        int32  `json:"p50"`
-	P75        int32  `json:"p75"`
+	Seniority  string  `json:"seniority"`
+	Currency   string  `json:"currency"`
+	Period     string  `json:"period"`
+	SampleSize int32   `json:"sample_size"`
+	P25        int32   `json:"p25"`
+	P50        int32   `json:"p50"`
+	P75        int32   `json:"p75"`
+	Quantiles  []int32 `json:"quantiles"`
 }
 
 // All-seniority salary bands for one category (country-agnostic ” bucket), so a
@@ -2057,6 +2156,7 @@ func (q *Queries) ListInsightsSalaryByCategory(ctx context.Context, category str
 			&i.P25,
 			&i.P50,
 			&i.P75,
+			&i.Quantiles,
 		); err != nil {
 			return nil, err
 		}
@@ -2072,8 +2172,16 @@ const listInsightsSalaryHistory = `-- name: ListInsightsSalaryHistory :many
 SELECT currency, period, month, sample_size, p25, p50, p75
 FROM insights_salary_monthly
 WHERE category = $1::text
+  AND seniority = $2::text
+  AND country = $3::text
 ORDER BY currency, period, month
 `
+
+type ListInsightsSalaryHistoryParams struct {
+	Category  string `json:"category"`
+	Seniority string `json:"seniority"`
+	Country   string `json:"country"`
+}
 
 type ListInsightsSalaryHistoryRow struct {
 	Currency   string      `json:"currency"`
@@ -2085,9 +2193,10 @@ type ListInsightsSalaryHistoryRow struct {
 	P75        int32       `json:"p75"`
 }
 
-// One category's stored months, every (currency, period) it has.
-func (q *Queries) ListInsightsSalaryHistory(ctx context.Context, category string) ([]ListInsightsSalaryHistoryRow, error) {
-	rows, err := q.db.Query(ctx, listInsightsSalaryHistory, category)
+// One role × grade × country scope's stored months (” = every value), every
+// (currency, period) it has.
+func (q *Queries) ListInsightsSalaryHistory(ctx context.Context, arg ListInsightsSalaryHistoryParams) ([]ListInsightsSalaryHistoryRow, error) {
+	rows, err := q.db.Query(ctx, listInsightsSalaryHistory, arg.Category, arg.Seniority, arg.Country)
 	if err != nil {
 		return nil, err
 	}

@@ -14516,7 +14516,7 @@ func (s *Server) handleInsightsSalaryRequest(args [0]string, argsEscaped bool, w
 
 // handleInsightsSalaryHistoryRequest handles insightsSalaryHistory operation.
 //
-// The category is required.
+// One role × grade × country scope's monthly history; an absent part means every value.
 //
 // GET /insights/salary/history
 func (s *Server) handleInsightsSalaryHistoryRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -14558,6 +14558,14 @@ func (s *Server) handleInsightsSalaryHistoryRequest(args [0]string, argsEscaped 
 					Name: "category",
 					In:   "query",
 				}: params.Category,
+				{
+					Name: "seniority",
+					In:   "query",
+				}: params.Seniority,
+				{
+					Name: "country",
+					In:   "query",
+				}: params.Country,
 			},
 			Raw: r,
 		}

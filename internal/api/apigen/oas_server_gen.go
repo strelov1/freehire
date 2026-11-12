@@ -854,7 +854,7 @@ type Handler interface {
 	InsightsSalary(ctx context.Context, params InsightsSalaryParams) (*SalaryAnswer, error)
 	// InsightsSalaryHistory implements insightsSalaryHistory operation.
 	//
-	// The category is required.
+	// One role × grade × country scope's monthly history; an absent part means every value.
 	//
 	// GET /insights/salary/history
 	InsightsSalaryHistory(ctx context.Context, params InsightsSalaryHistoryParams) (*SalaryHistoryAnswer, error)

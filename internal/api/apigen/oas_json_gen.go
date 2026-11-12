@@ -59947,9 +59947,17 @@ func (s *SalaryBand) encodeFields(e *jx.Encoder) {
 		e.FieldStart("p75")
 		e.Int64(s.P75)
 	}
+	{
+		e.FieldStart("quantiles")
+		e.ArrStart()
+		for _, elem := range s.Quantiles {
+			e.Int64(elem)
+		}
+		e.ArrEnd()
+	}
 }
 
-var jsonFieldsNameOfSalaryBand = [7]string{
+var jsonFieldsNameOfSalaryBand = [8]string{
 	0: "seniority",
 	1: "currency",
 	2: "period",
@@ -59957,6 +59965,7 @@ var jsonFieldsNameOfSalaryBand = [7]string{
 	4: "p25",
 	5: "p50",
 	6: "p75",
+	7: "quantiles",
 }
 
 // Decode decodes SalaryBand from json.
@@ -60052,6 +60061,26 @@ func (s *SalaryBand) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"p75\"")
 			}
+		case "quantiles":
+			requiredBitSet[0] |= 1 << 7
+			if err := func() error {
+				s.Quantiles = make([]int64, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem int64
+					v, err := d.Int64()
+					elem = int64(v)
+					if err != nil {
+						return err
+					}
+					s.Quantiles = append(s.Quantiles, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"quantiles\"")
+			}
 		default:
 			return d.Skip()
 		}
@@ -60062,7 +60091,7 @@ func (s *SalaryBand) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b01111111,
+		0b11111111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

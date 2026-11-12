@@ -948,18 +948,21 @@ type InsightsSalaryMonthly struct {
 	P25        int32       `json:"p25"`
 	P50        int32       `json:"p50"`
 	P75        int32       `json:"p75"`
+	Seniority  string      `json:"seniority"`
+	Country    string      `json:"country"`
 }
 
 type InsightsSalaryStat struct {
-	Category   string `json:"category"`
-	Seniority  string `json:"seniority"`
-	Country    string `json:"country"`
-	Currency   string `json:"currency"`
-	Period     string `json:"period"`
-	SampleSize int32  `json:"sample_size"`
-	P25        int32  `json:"p25"`
-	P50        int32  `json:"p50"`
-	P75        int32  `json:"p75"`
+	Category   string  `json:"category"`
+	Seniority  string  `json:"seniority"`
+	Country    string  `json:"country"`
+	Currency   string  `json:"currency"`
+	Period     string  `json:"period"`
+	SampleSize int32   `json:"sample_size"`
+	P25        int32   `json:"p25"`
+	P50        int32   `json:"p50"`
+	P75        int32   `json:"p75"`
+	Quantiles  []int32 `json:"quantiles"`
 }
 
 type InsightsSkillHistory struct {
