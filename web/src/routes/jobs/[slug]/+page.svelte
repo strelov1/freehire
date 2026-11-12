@@ -106,16 +106,16 @@
 <div class="mx-auto w-full max-w-6xl px-5 py-6 sm:px-4">
   <JobView job={data.job} applyForm={data.applyForm} hasSimilar={similar.length > 0} />
 
-  <!-- Everything below the posting stays in its content column from lg (the 20rem rail plus
-       the grid's 1.5rem gap), so the page keeps one grid instead of widening halfway down. -->
-  <div class="lg:pl-86">
-    <!-- `#similar-jobs` is where a closed posting's notice points its reader. JobRelated opens
-         on the Similar tab whenever there are similar postings, which is the only case in
-         which JobView offers the link. -->
-    <div id="similar-jobs">
-      <JobRelated {similar} copies={data.copies} copiesTotal={data.copiesTotal} slug={data.job.public_slug} />
-    </div>
+  <!-- `#similar-jobs` is where a closed posting's notice points its reader. JobRelated opens
+       on the Similar tab whenever there are similar postings, which is the only case in
+       which JobView offers the link. Full page width: the rail above has ended by here. -->
+  <div id="similar-jobs">
+    <JobRelated {similar} copies={data.copies} copiesTotal={data.copiesTotal} slug={data.job.public_slug} />
+  </div>
 
+  <!-- The rest stays in the posting's content column from lg (the 20rem rail plus the
+       grid's 1.5rem gap). -->
+  <div class="lg:pl-86">
     <!-- Below the related postings and right above "See also" on every width: at the top
          of the page it sat far from the title/apply button on a phone, and it stole space
          from the match card and provenance line above the title on a wide screen too. -->

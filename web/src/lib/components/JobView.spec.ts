@@ -18,7 +18,8 @@ vi.mock('$app/state', () => ({
   page: { data: { locale: 'en' }, url: new URL('http://localhost/jobs/acme-job'), state: {} },
 }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+const { goto } = vi.hoisted(() => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', () => ({ goto }));
 const session = vi.hoisted(() => ({ userID: 7 as number | null }));
 vi.mock('#lib/auth.svelte.js', () => ({
   isAuthenticated: () => session.userID !== null,
@@ -26,13 +27,15 @@ vi.mock('#lib/auth.svelte.js', () => ({
 }));
 vi.mock('#lib/analytics.js', () => ({ track() {} }));
 
-const { markJobApplied, listAppliedCompanySlugs, listSavedSlugs, getProfile, getDirectApplyForm } = vi.hoisted(() => ({
-  markJobApplied: vi.fn(),
-  listAppliedCompanySlugs: vi.fn(),
-  listSavedSlugs: vi.fn(),
-  getProfile: vi.fn(),
-  getDirectApplyForm: vi.fn(),
-}));
+const { markJobApplied, listAppliedCompanySlugs, listSavedSlugs, getProfile, getDirectApplyForm, getCompany } =
+  vi.hoisted(() => ({
+    getCompany: vi.fn(async () => ({ company: null as unknown })),
+    markJobApplied: vi.fn(),
+    listAppliedCompanySlugs: vi.fn(),
+    listSavedSlugs: vi.fn(),
+    getProfile: vi.fn(),
+    getDirectApplyForm: vi.fn(),
+  }));
 vi.mock('#lib/api.js', () => ({
   ApiError: class extends Error {},
   RESUME_MAX_MB: 10,
@@ -46,6 +49,8 @@ vi.mock('#lib/api.js', () => ({
     myPlan: async () => null,
     recordJobView: async () => null,
     getMatchAnalysis: async () => null,
+    getCompany,
+    listThreads: async () => ({ threads: [], nextCursor: undefined }),
   },
 }));
 
@@ -350,5 +355,51 @@ describe('JobRow meta and geography lines', () => {
     expect(geoLine?.textContent).not.toContain('Full-time');
     expect(geoLine?.querySelector('img, svg, [aria-label]')).toBeTruthy();
     expect(view.container.textContent).toContain('Full-time');
+  });
+});
+
+describe('content tabs', () => {
+  it('offers the Company tab only when the company has details to show', async () => {
+    getCompany.mockResolvedValueOnce({ company: { slug: 'acme', name: 'Acme' } });
+    const bare = render(JobView, { job });
+    await tick();
+    await tick();
+    expect(screen.queryByRole('tab', { name: 'Company' })).toBeNull();
+    bare.unmount();
+
+    getCompany.mockResolvedValueOnce({
+      company: { slug: 'acme', name: 'Acme', company_info: { description: 'Acme builds anvils.' } },
+    });
+    render(JobView, { job });
+    expect(await screen.findByRole('tab', { name: 'Company' })).not.toBeNull();
+  });
+
+  it('opens on the Discussion tab when the URL asks for it', async () => {
+    const { page } = await import('$app/state');
+    const url = page.url;
+    page.url = new URL('http://localhost/jobs/acme-job?tab=discussion');
+    try {
+      render(JobView, { job });
+      expect(screen.getByRole('tab', { name: 'Discussion' }).getAttribute('aria-selected')).toBe('true');
+    } finally {
+      page.url = url;
+    }
+  });
+
+  it('puts the Discussion tab in the address so Back returns to it', async () => {
+    render(JobView, { job });
+    await fireEvent.click(screen.getByRole('tab', { name: 'Discussion' }));
+    const [target, options] = goto.mock.calls.at(-1) ?? [];
+    expect(String(target)).toBe('http://localhost/jobs/acme-job?tab=discussion');
+    expect(options).toMatchObject({ replace: true, shallow: true });
+  });
+
+  it('asks a signed-out reader to sign in on the Discussion tab', async () => {
+    session.userID = null; // beforeEach restores the signed-in session
+    render(JobView, { job });
+    await fireEvent.click(screen.getByRole('tab', { name: 'Discussion' }));
+    expect(screen.getByText('Sign in to read and join the discussion.')).not.toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(String(goto.mock.calls.at(-1)?.[0])).toContain(encodeURIComponent('?tab=discussion'));
   });
 });

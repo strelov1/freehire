@@ -13,7 +13,6 @@
     ExternalLink,
     Eye,
     Flag,
-    MessageSquare,
     RefreshCw,
     SquarePen,
   } from '@lucide/svelte';
@@ -39,7 +38,8 @@
   import { roleAddressExists, seniorityLabel } from '#lib/insights.js';
   import { categoryLabel } from '#lib/labels.js';
   import type { Display } from '#lib/generated/contracts.js';
-  import type { Job, MatchAnalysisResponse, PlanState, UserJob } from '#lib/types.js';
+  import type { Company, Job, MatchAnalysisResponse, PlanState, UserJob } from '#lib/types.js';
+  import { hasCompanyDetails } from '#lib/companyDetails.js';
   import { companyLogoUrl } from '#lib/logo.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { Button, Chip, EntityLogo, ProviderIcon, TabStrip, tabStripId } from '#lib/ui/index.js';
@@ -49,6 +49,7 @@
   import CountryFlagStack from './CountryFlagStack.svelte';
   import JobApplyForm, { applyFormWorthShowing } from './JobApplyForm.svelte';
   import JobCompanyPanel from './JobCompanyPanel.svelte';
+  import JobDiscussionPanel from './JobDiscussionPanel.svelte';
   import JobSourceRow from './JobSourceRow.svelte';
   import JobDescription from './JobDescription.svelte';
   import JobMatch from './JobMatch.svelte';
@@ -107,6 +108,9 @@
   let threadCount = $state<number | null>(null);
   $effect(() => {
     let alive = true;
+    // Cleared first: on a client-side move to another job the tab would keep the last
+    // job's count until the new one arrives.
+    threadCount = null;
     api
       .countThreads('job', job.public_slug)
       .then((n) => alive && (threadCount = n))
@@ -196,21 +200,59 @@
   // company copy already has a canonical home at /companies/<slug>, and a second URL
   // serving it would be a thin duplicate we'd then have to keep out of the index.
   //
-  // Built per job rather than fixed, because neither of the two extra tabs is always
-  // there: a posting can arrive without a company slug, and only a few ATS platforms
-  // publish a form we can read. A tab is offered only when its panel has something in
-  // it — `applyFormWorthShowing` is the same predicate the panel itself renders on, so
-  // the two cannot disagree about whether there is anything to show.
-  type ContentTab = 'description' | 'company' | 'application';
+  // Built per job rather than fixed, because neither Company nor Application is always
+  // there: we may know nothing about the employer, and only a few ATS platforms publish a
+  // form we can read. A tab is offered only when its panel has something in it —
+  // `applyFormWorthShowing` is the same predicate the panel itself renders on, so the two
+  // cannot disagree about whether there is anything to show. Discussion is always there.
+  type ContentTab = 'description' | 'company' | 'application' | 'discussion';
 
   const companySlug = $derived(job.company_slug ?? '');
+  // The company behind the Company tab, read in the browser only (see JobCompanyPanel for
+  // why it is not server-rendered). The tab appears once the read shows there is
+  // something to put in it: an empty "no details yet" tab was a click to nowhere. A failed
+  // read leaves the tab out too; the company row's link still reaches the company page.
+  let companyProfile = $state.raw<Company | null>(null);
+  $effect(() => {
+    const slug = companySlug;
+    companyProfile = null;
+    if (!slug) return;
+    let stale = false;
+    // `limit=1` is the endpoint's floor; the one job that comes back is discarded.
+    api
+      .getCompany(slug, 1, 0)
+      .then((r) => {
+        if (!stale) companyProfile = r.company;
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  });
+  const companyWithDetails = $derived(companyProfile && hasCompanyDetails(companyProfile) ? companyProfile : null);
   const contentTabs: { id: ContentTab; label: string }[] = $derived([
     { id: 'description', label: 'Description' },
-    ...(companySlug ? [{ id: 'company' as const, label: 'Company' }] : []),
+    ...(companyWithDetails ? [{ id: 'company' as const, label: 'Company' }] : []),
     // The screening form is pointless once the posting stops taking applications.
     ...(!closed && applyFormWorthShowing(applyForm) ? [{ id: 'application' as const, label: 'Application' }] : []),
+    { id: 'discussion', label: threadCount ? `Discussion · ${threadCount}` : 'Discussion' },
   ]);
-  let contentTab = $state<ContentTab>('description');
+  // `?tab=discussion` is where the old /jobs/<slug>/discussion page redirects, so its
+  // links (a thread's "Back to discussion") land on the tab they meant.
+  const initialTab = (): ContentTab =>
+    page.url.searchParams.get('tab') === 'discussion' ? 'discussion' : 'description';
+  let contentTab = $state<ContentTab>(initialTab());
+  // Discussion is mirrored into the URL so Back from a topic, and the return from sign-in,
+  // land on the tab again. The other tabs leave the URL clean.
+  function selectTab(id: ContentTab) {
+    contentTab = id;
+    const url = new URL(page.url.href);
+    if (id === 'discussion') url.searchParams.set('tab', 'discussion');
+    else url.searchParams.delete('tab');
+    // A shallow replace: the address changes, nothing reloads and Back is not doubled.
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- the current page's own URL, only its query changed
+    if (url.href !== page.url.href) void goto(url, { replace: true, shallow: true, state: page.state });
+  }
   // Per-instance so a second JobView on one page can't claim the same panel, which
   // would leave both strips' aria-controls pointing at the first one's panel.
   const panelId = $props.id();
@@ -219,7 +261,7 @@
   // over a company they never asked about.
   $effect(() => {
     void job.public_slug;
-    contentTab = 'description';
+    contentTab = untrack(initialTab);
   });
 
   // The pinned header. Once the posting's own header has scrolled under the top bar,
@@ -474,16 +516,6 @@
       return;
     }
     showReport = true;
-  }
-
-  // The discussion is members-only: a signed-out click is held back (the link
-  // does not navigate) and the sign-in page opens instead. The href stays put
-  // so the route is still SSR-linkable for signed-in visitors.
-  function onDiscussionClick(event: MouseEvent) {
-    if (!isAuthenticated()) {
-      event.preventDefault();
-      promptSignIn();
-    }
   }
 
   // The toggle flips on the server's answer, not optimistically: both endpoints
@@ -840,17 +872,6 @@
      a whole screen away from the job it saves. -->
 {#snippet actionStrip(className: string, iconOnly = false)}
   <div class={`shrink-0 items-center gap-1.5 ${className}`}>
-    <a
-      class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-      href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
-      title="Discussion"
-      onclick={onDiscussionClick}
-    >
-      <MessageSquare class="size-4 shrink-0" aria-hidden="true" />
-      <!-- Icon (and count) only, like Report; the title names it on hover and the name
-           stays for screen readers. -->
-      <span class="sr-only">Discussion</span>{threadCount ? ` · ${threadCount}` : ''}
-    </a>
     {@render reportButton()}
     {@render saveButton(iconOnly ? 'size-11 px-0' : '', iconOnly)}
     <!-- The link out, phone only. Below lg the sticky bottom bar belongs to auto-apply
@@ -1143,7 +1164,7 @@
          the middle of the page and a long one pushed them down anyway. Left-aligned under
          the title they read as its next step; right-aligned they floated with nothing to
          their left. -->
-    <!-- From lg the quiet actions (Discussion, Report, Save) share the CTAs' row, at its far
+    <!-- From lg the quiet actions (Report, Save) share the CTAs' row, at its far
          end, rather than the tab row: there they read as more tabs, and every pixel they
          took came out of the tab labels. -->
     <div class="hidden items-center justify-between gap-4 lg:flex">
@@ -1340,34 +1361,17 @@
       </div>
     </div>
 
-    <!-- The tab row. Rendered whether or not there are tabs to put in it: a posting from an
-         unknown employer has only the description, and the rule then closes the header. -->
     <div class="flex items-end justify-between">
-      {#if contentTabs.length > 1}
-        <TabStrip
-          tabs={contentTabs}
-          active={contentTab}
-          onSelect={(id) => (contentTab = id)}
-          label="Job details"
-          {panelId}
-          class="min-w-0 flex-1"
-        />
-      {:else}
-        <div class="min-w-0 flex-1 border-b border-border" aria-hidden="true"></div>
-      {/if}
+      <TabStrip
+        tabs={contentTabs}
+        active={contentTab}
+        onSelect={selectTab}
+        label="Job details"
+        {panelId}
+        class="min-w-0 flex-1"
+      />
       {#if job.company?.trim()}
         <div class="flex shrink-0 items-center self-stretch border-b border-border lg:gap-x-4 lg:pl-3">
-          <a
-            href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
-            target="_blank"
-            rel="nofollow noopener noreferrer"
-            aria-label="Find people at {job.company.trim()} on LinkedIn"
-            title="Find people at {job.company.trim()} on LinkedIn"
-            class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground lg:min-w-0"
-          >
-            <span class="hidden lg:inline">Find people</span>
-            <ProviderIcon provider="linkedin" class="size-4 shrink-0 lg:size-3.5" />
-          </a>
           {#if !closed}
             <button
               type="button"
@@ -1381,6 +1385,19 @@
               <span class="hidden lg:inline">Draft referral</span>
             </button>
           {/if}
+          <a
+            href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            aria-label="Find people at {job.company.trim()} on LinkedIn"
+            title="Find people at {job.company.trim()} on LinkedIn"
+            class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground lg:min-w-0"
+          >
+            <span class="hidden lg:inline">Find people</span>
+            <ProviderIcon provider="linkedin" class="size-4 shrink-0 lg:size-3.5" />
+            <!-- Opens LinkedIn in a new tab: the arrow says the reader leaves the site. -->
+            <ExternalLink class="hidden size-3 shrink-0 lg:inline" aria-hidden="true" />
+          </a>
         </div>
       {/if}
     </div>
@@ -1459,34 +1476,31 @@
          doubled the space between the tab row and the description. -->
     <div class="hidden lg:contents">{@render signInFeedback()}</div>
 
-    {#if contentTabs.length > 1}
-      <!-- One panel for every tab, its contents toggled by class rather than {#if}.
-           Unmounting the inactive one would throw away the company the visitor already
-           waited for, and re-render the description on every switch back. It also keeps
-           every panel in the server-rendered HTML, so a crawler reads what a visitor
-           would have to click for. -->
-      <div id={panelId} role="tabpanel" aria-labelledby={tabStripId(panelId, contentTab)}>
-        <div class={contentTab === 'description' ? 'flex flex-col gap-6' : 'hidden'}>
-          {@render descriptionContent()}
-        </div>
-        {#if companySlug}
-          <div class={contentTab === 'company' ? 'block' : 'hidden'}>
-            {#key companySlug}
-              <JobCompanyPanel
-                slug={companySlug}
-                name={job.company || 'this company'}
-                active={contentTab === 'company'}
-              />
-            {/key}
-          </div>
-        {/if}
-        <div class={contentTab === 'application' ? 'block' : 'hidden'}>
-          <JobApplyForm form={applyForm} />
-        </div>
+    <!-- One panel for every tab, its contents toggled by class rather than {#if}.
+         Unmounting the inactive one would throw away the company the visitor already
+         waited for, and re-render the description on every switch back. It also keeps
+         every panel in the server-rendered HTML, so a crawler reads what a visitor
+         would have to click for. -->
+    <div id={panelId} role="tabpanel" aria-labelledby={tabStripId(panelId, contentTab)}>
+      <div class={contentTab === 'description' ? 'flex flex-col gap-6' : 'hidden'}>
+        {@render descriptionContent()}
       </div>
-    {:else}
-      {@render descriptionContent()}
-    {/if}
+      {#if companyWithDetails}
+        <div class={contentTab === 'company' ? 'block' : 'hidden'}>
+          {#key companySlug}
+            <JobCompanyPanel company={companyWithDetails} slug={companySlug} name={job.company || 'this company'} />
+          {/key}
+        </div>
+      {/if}
+      <div class={contentTab === 'application' ? 'block' : 'hidden'}>
+        <JobApplyForm form={applyForm} />
+      </div>
+      <div class={contentTab === 'discussion' ? 'block' : 'hidden'}>
+        {#key job.public_slug}
+          <JobDiscussionPanel slug={job.public_slug} active={contentTab === 'discussion'} />
+        {/key}
+      </div>
+    </div>
   </div>
 
   <!-- Mobile apply CTA. It sticks to the bottom of the viewport while the job
