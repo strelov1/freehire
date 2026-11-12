@@ -132,7 +132,7 @@ func (r *fakeRepo) Get(_ context.Context, userID int64) (db.GetUserResumeRow, er
 	}
 	return db.GetUserResumeRow{
 		ResumeObjectKey:  pgtype.Text{String: key, Valid: true},
-		ResumeUploadedAt: pgtype.Timestamptz{Valid: true},
+		ResumeUploadedAt: r.uploadedAt[userID],
 	}, nil
 }
 

@@ -187,6 +187,7 @@ func (s *Store) put(ctx context.Context, userID int64, contentType string, data 
 		return Meta{}, err
 	}
 	var superseded string
+	var written Meta
 	err := s.repo.WithUploadLock(ctx, userID, func(repo Repository) error {
 		ptr, err := repo.Get(ctx, userID)
 		if err != nil {
@@ -196,7 +197,15 @@ func (s *Store) put(ctx context.Context, userID int64, contentType string, data 
 			return ErrAlreadyStored
 		}
 		superseded = ptr.ResumeObjectKey.String
-		return repo.Set(ctx, userID, key)
+		if err := repo.Set(ctx, userID, key); err != nil {
+			return err
+		}
+		// Read the stamp under the lock: after commit another upload may already have
+		// replaced it, and pairing this upload's text with that stamp would let its
+		// extraction pass the stamp guard as the other upload's.
+		ptr, err = repo.Get(ctx, userID)
+		written = metaFromPointer(ptr)
+		return err
 	})
 	if errors.Is(err, ErrAlreadyStored) {
 		s.discard(ctx, key)
@@ -216,7 +225,7 @@ func (s *Store) put(ctx context.Context, userID int64, contentType string, data 
 		s.discard(ctx, superseded)
 	}
 	observability.RecordCVUpload(true)
-	return s.Status(ctx, userID)
+	return written, nil
 }
 
 // discard deletes an object no pointer refers to. Best-effort: the write it follows has
