@@ -160,7 +160,7 @@ func TestTimeline_AQuietRangeAnswersEmptyAndNamesItsBounds(t *testing.T) {
 		t.Fatalf("status = %d, want 200 (body %s)", status, body)
 	}
 	var got struct {
-		Data []timelineEvent `json:"data"`
+		Data []json.RawMessage `json:"data"`
 		Meta struct {
 			From  time.Time `json:"from"`
 			To    time.Time `json:"to"`

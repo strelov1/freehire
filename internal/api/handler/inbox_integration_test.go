@@ -57,11 +57,11 @@ func TestInboxReadSideEndToEnd(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	ra := auth.RequireAuth(iss, testVersions)
-	app.Get("/api/v1/me/inbox", ra, h.GetInbox)
-	app.Get("/api/v1/me/emails/:id", ra, h.GetEmail)
-	app.Post("/api/v1/me/inbox/read-all", ra, h.MarkAllReadInbox)
-	app.Post("/api/v1/me/emails/:id/delete", ra, h.DeleteEmail)
-	app.Post("/api/v1/me/emails/:id/restore", ra, h.RestoreEmail)
+	app.Get("/api/v1/me/inbox", ra, newContract(contractHandlers{inboxHandlers: h}))
+	app.Get("/api/v1/me/emails/:id", ra, newContract(contractHandlers{inboxHandlers: h}))
+	app.Post("/api/v1/me/inbox/read-all", ra, newContract(contractHandlers{inboxHandlers: h}))
+	app.Post("/api/v1/me/emails/:id/delete", ra, newContract(contractHandlers{inboxHandlers: h}))
+	app.Post("/api/v1/me/emails/:id/restore", ra, newContract(contractHandlers{inboxHandlers: h}))
 
 	do := func(method, path string) (int, map[string]any) {
 		r := httptest.NewRequest(method, path, nil)
@@ -170,8 +170,8 @@ func TestSoftDeleteAndRestoreReturnNoBody(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	ra := auth.RequireAuth(iss, testVersions)
-	app.Post("/api/v1/me/emails/:id/delete", ra, h.DeleteEmail)
-	app.Post("/api/v1/me/emails/:id/restore", ra, h.RestoreEmail)
+	app.Post("/api/v1/me/emails/:id/delete", ra, newContract(contractHandlers{inboxHandlers: h}))
+	app.Post("/api/v1/me/emails/:id/restore", ra, newContract(contractHandlers{inboxHandlers: h}))
 
 	for _, action := range []string{"delete", "restore"} {
 		r := httptest.NewRequest("POST", "/api/v1/me/emails/"+strconv.FormatInt(id, 10)+"/"+action, nil)
@@ -270,7 +270,7 @@ func TestMarkAllReadHonoursEveryFilterTheListingDoes(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	ra := auth.RequireAuth(iss, testVersions)
-	app.Post("/api/v1/me/inbox/read-all", ra, h.MarkAllReadInbox)
+	app.Post("/api/v1/me/inbox/read-all", ra, newContract(contractHandlers{inboxHandlers: h}))
 
 	markAll := func(query string) int64 {
 		t.Helper()

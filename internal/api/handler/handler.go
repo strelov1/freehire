@@ -291,22 +291,6 @@ func pageParams(c *fiber.Ctx) (limit, offset int, err error) {
 	return pageParamsWindowed(c, defaultLimit, maxLimit)
 }
 
-// listResponseWithHidden is the shared list envelope plus the count a default filter suppressed.
-//
-// Separate from the plain envelope rather than a widened one: every other listing hides nothing,
-// and a `hidden: 0` on all of them would be a field readers have to learn to ignore.
-func listResponseWithHidden(c *fiber.Ctx, data any, total, hidden int64, limit, offset int) error {
-	return c.JSON(fiber.Map{
-		"data": data,
-		"meta": fiber.Map{
-			"total":  total,
-			"limit":  limit,
-			"offset": offset,
-			"hidden": hidden,
-		},
-	})
-}
-
 // listResponseWithIgnored is the shared list envelope plus the query params the filter did
 // not read and the facet values outside their closed vocabulary (values: see
 // search.IgnoredValues; nil for an endpoint that builds no job filter), each
@@ -1129,7 +1113,8 @@ func Register(app *fiber.App, cfg Config) {
 		jobsHandlers:                 jobsH,
 		searchHandlers:               searchH,
 		companiesHandlers:            companiesH,
-		cvHandlers:                   cvH})
+		cvHandlers:                   cvH,
+		inboxHandlers:                inboxH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1264,7 +1249,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Mail inbox (Gmail connect + hosted mailbox) and email ↔ application linking
 	// (see inboxHandlers). Registered after the static /me/tracking/* routes so
 	// /me/tracking/:slug does not shadow them.
-	inboxH.register(api, mw)
+	inboxH.register(api, mw, contract)
 	// Résumé/CV surfaces: verdict, ATS report, extraction, storage (see
 	// resumeHandlers).
 	resumeH.register(api, mw, contract)

@@ -2783,6 +2783,21 @@ func (s *ClaimEmployerCompanyCreated) SetData(val EmployerAccount) {
 }
 
 // A single item: `{"data": ...}`.
+type ClaimMailboxOK struct {
+	Data MailboxStatus `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ClaimMailboxOK) GetData() MailboxStatus {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ClaimMailboxOK) SetData(val MailboxStatus) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ClearApplicationStageOK struct {
 	Data Interaction `json:"data"`
 }
@@ -3414,6 +3429,21 @@ func (s *CompleteOnboardingOK) SetData(val OnboardingCompleted) {
 }
 
 // A single item: `{"data": ...}`.
+type ConfirmEmailLinkOK struct {
+	Data InboxEmail `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ConfirmEmailLinkOK) GetData() InboxEmail {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ConfirmEmailLinkOK) SetData(val InboxEmail) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ConfirmEmployerClaimOK struct {
 	Data EmployerAccount `json:"data"`
 }
@@ -3989,6 +4019,21 @@ func (s *CountThreadsOK) GetData() ThreadCount {
 
 // SetData sets the value of Data.
 func (s *CountThreadsOK) SetData(val ThreadCount) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type CreateApplicationFromEmailOK struct {
+	Data InboxEmail `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateApplicationFromEmailOK) GetData() InboxEmail {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateApplicationFromEmailOK) SetData(val InboxEmail) {
 	s.Data = val
 }
 
@@ -5328,6 +5373,9 @@ func (s *DeleteCompanyFeedbackOK) GetData() CompanyFeedbackSummary {
 func (s *DeleteCompanyFeedbackOK) SetData(val CompanyFeedbackSummary) {
 	s.Data = val
 }
+
+// DeleteEmailNoContent is response for DeleteEmail operation.
+type DeleteEmailNoContent struct{}
 
 // DeleteEmploymentNoContent is response for DeleteEmployment operation.
 type DeleteEmploymentNoContent struct{}
@@ -7026,6 +7074,21 @@ func (s *GetAgentPermissionsOK) SetData(val AgentPermissions) {
 }
 
 // A single item: `{"data": ...}`.
+type GetApplicationFollowUpOK struct {
+	Data MailFollowUpDraft `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetApplicationFollowUpOK) GetData() MailFollowUpDraft {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetApplicationFollowUpOK) SetData(val MailFollowUpDraft) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type GetAtsReportOK struct {
 	Data jx.Raw `json:"data"`
 }
@@ -7191,6 +7254,21 @@ func (s *GetDirectApplyFormOK) SetData(val DirectApplyForm) {
 }
 
 // A single item: `{"data": ...}`.
+type GetEmailOK struct {
+	Data InboxEmail `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetEmailOK) GetData() InboxEmail {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetEmailOK) SetData(val InboxEmail) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type GetEmailPrefsOK struct {
 	Data EmailPrefs `json:"data"`
 }
@@ -7272,6 +7350,21 @@ func (s *GetJobOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *GetJobOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetMailboxOK struct {
+	Data MailboxStatus `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetMailboxOK) GetData() MailboxStatus {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetMailboxOK) SetData(val MailboxStatus) {
 	s.Data = val
 }
 
@@ -7693,6 +7786,21 @@ func (s *GetTimelineOK) SetMeta(val TimelineMeta) {
 }
 
 // A single item: `{"data": ...}`.
+type GetTrackedApplicationOK struct {
+	Data InboxApplicationDetail `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetTrackedApplicationOK) GetData() InboxApplicationDetail {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetTrackedApplicationOK) SetData(val InboxApplicationDetail) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type GetWatchingOK struct {
 	Data Watching `json:"data"`
 }
@@ -7785,6 +7893,149 @@ func (s *GhostReportRequest) GetAppliedOn() OptString {
 // SetAppliedOn sets the value of AppliedOn.
 func (s *GhostReportRequest) SetAppliedOn(val OptString) {
 	s.AppliedOn = val
+}
+
+// A single item: `{"data": ...}`.
+type GmailDisconnectOK struct {
+	Data GmailDisconnected `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GmailDisconnectOK) GetData() GmailDisconnected {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GmailDisconnectOK) SetData(val GmailDisconnected) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/GmailDisconnected
+type GmailDisconnected struct {
+	Connected bool `json:"connected"`
+}
+
+// GetConnected returns the value of Connected.
+func (s *GmailDisconnected) GetConnected() bool {
+	return s.Connected
+}
+
+// SetConnected sets the value of Connected.
+func (s *GmailDisconnected) SetConnected(val bool) {
+	s.Connected = val
+}
+
+// Whether Gmail is connected. `email` and `status` are sent only when a connection row exists;
+// `available` says whether the connect flow is configured on this deployment.
+// Ref: #/components/schemas/GmailStatus
+type GmailStatus struct {
+	Connected               bool      `json:"connected"`
+	Email                   OptString `json:"email"`
+	Status                  OptString `json:"status"`
+	Available               bool      `json:"available"`
+	CalendarConnected       bool      `json:"calendar_connected"`
+	MentorCalendarConnected bool      `json:"mentor_calendar_connected"`
+	MentorBusySyncConnected bool      `json:"mentor_busy_sync_connected"`
+}
+
+// GetConnected returns the value of Connected.
+func (s *GmailStatus) GetConnected() bool {
+	return s.Connected
+}
+
+// GetEmail returns the value of Email.
+func (s *GmailStatus) GetEmail() OptString {
+	return s.Email
+}
+
+// GetStatus returns the value of Status.
+func (s *GmailStatus) GetStatus() OptString {
+	return s.Status
+}
+
+// GetAvailable returns the value of Available.
+func (s *GmailStatus) GetAvailable() bool {
+	return s.Available
+}
+
+// GetCalendarConnected returns the value of CalendarConnected.
+func (s *GmailStatus) GetCalendarConnected() bool {
+	return s.CalendarConnected
+}
+
+// GetMentorCalendarConnected returns the value of MentorCalendarConnected.
+func (s *GmailStatus) GetMentorCalendarConnected() bool {
+	return s.MentorCalendarConnected
+}
+
+// GetMentorBusySyncConnected returns the value of MentorBusySyncConnected.
+func (s *GmailStatus) GetMentorBusySyncConnected() bool {
+	return s.MentorBusySyncConnected
+}
+
+// SetConnected sets the value of Connected.
+func (s *GmailStatus) SetConnected(val bool) {
+	s.Connected = val
+}
+
+// SetEmail sets the value of Email.
+func (s *GmailStatus) SetEmail(val OptString) {
+	s.Email = val
+}
+
+// SetStatus sets the value of Status.
+func (s *GmailStatus) SetStatus(val OptString) {
+	s.Status = val
+}
+
+// SetAvailable sets the value of Available.
+func (s *GmailStatus) SetAvailable(val bool) {
+	s.Available = val
+}
+
+// SetCalendarConnected sets the value of CalendarConnected.
+func (s *GmailStatus) SetCalendarConnected(val bool) {
+	s.CalendarConnected = val
+}
+
+// SetMentorCalendarConnected sets the value of MentorCalendarConnected.
+func (s *GmailStatus) SetMentorCalendarConnected(val bool) {
+	s.MentorCalendarConnected = val
+}
+
+// SetMentorBusySyncConnected sets the value of MentorBusySyncConnected.
+func (s *GmailStatus) SetMentorBusySyncConnected(val bool) {
+	s.MentorBusySyncConnected = val
+}
+
+// A single item: `{"data": ...}`.
+type GmailStatusOK struct {
+	Data GmailStatus `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GmailStatusOK) GetData() GmailStatus {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GmailStatusOK) SetData(val GmailStatus) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/GmailSyncStarted
+type GmailSyncStarted struct {
+	Started bool `json:"started"`
+}
+
+// GetStarted returns the value of Started.
+func (s *GmailSyncStarted) GetStarted() bool {
+	return s.Started
+}
+
+// SetStarted sets the value of Started.
+func (s *GmailSyncStarted) SetStarted(val bool) {
+	s.Started = val
 }
 
 // Ref: #/components/schemas/GrowthPoint
@@ -7897,6 +8148,787 @@ func (s *ImportWatchlistOK) GetData() WatchlistImportResult {
 
 // SetData sets the value of Data.
 func (s *ImportWatchlistOK) SetData(val WatchlistImportResult) {
+	s.Data = val
+}
+
+// The job, the caller's interaction with it, the linked mail and the history.
+// Ref: #/components/schemas/InboxApplicationDetail
+type InboxApplicationDetail struct {
+	// The job in the shared wire shape.
+	Job          jx.Raw                  `json:"job"`
+	ViewedAt     NilDateTime             `json:"viewed_at"`
+	SavedAt      NilDateTime             `json:"saved_at"`
+	AppliedAt    NilDateTime             `json:"applied_at"`
+	Stage        OptString               `json:"stage"`
+	Notes        OptString               `json:"notes"`
+	FollowedUpAt NilDateTime             `json:"followed_up_at"`
+	Emails       []InboxApplicationEmail `json:"emails"`
+	// The ledger, newest first.
+	Events []TimelineEvent `json:"events"`
+	// The stage the newest classified message implies; absent when there is nothing to offer.
+	StageSuggestion jx.Raw `json:"stage_suggestion"`
+	// The caller's live auto-apply attempt for this job; absent when none exists.
+	AutoApply jx.Raw `json:"auto_apply"`
+}
+
+// GetJob returns the value of Job.
+func (s *InboxApplicationDetail) GetJob() jx.Raw {
+	return s.Job
+}
+
+// GetViewedAt returns the value of ViewedAt.
+func (s *InboxApplicationDetail) GetViewedAt() NilDateTime {
+	return s.ViewedAt
+}
+
+// GetSavedAt returns the value of SavedAt.
+func (s *InboxApplicationDetail) GetSavedAt() NilDateTime {
+	return s.SavedAt
+}
+
+// GetAppliedAt returns the value of AppliedAt.
+func (s *InboxApplicationDetail) GetAppliedAt() NilDateTime {
+	return s.AppliedAt
+}
+
+// GetStage returns the value of Stage.
+func (s *InboxApplicationDetail) GetStage() OptString {
+	return s.Stage
+}
+
+// GetNotes returns the value of Notes.
+func (s *InboxApplicationDetail) GetNotes() OptString {
+	return s.Notes
+}
+
+// GetFollowedUpAt returns the value of FollowedUpAt.
+func (s *InboxApplicationDetail) GetFollowedUpAt() NilDateTime {
+	return s.FollowedUpAt
+}
+
+// GetEmails returns the value of Emails.
+func (s *InboxApplicationDetail) GetEmails() []InboxApplicationEmail {
+	return s.Emails
+}
+
+// GetEvents returns the value of Events.
+func (s *InboxApplicationDetail) GetEvents() []TimelineEvent {
+	return s.Events
+}
+
+// GetStageSuggestion returns the value of StageSuggestion.
+func (s *InboxApplicationDetail) GetStageSuggestion() jx.Raw {
+	return s.StageSuggestion
+}
+
+// GetAutoApply returns the value of AutoApply.
+func (s *InboxApplicationDetail) GetAutoApply() jx.Raw {
+	return s.AutoApply
+}
+
+// SetJob sets the value of Job.
+func (s *InboxApplicationDetail) SetJob(val jx.Raw) {
+	s.Job = val
+}
+
+// SetViewedAt sets the value of ViewedAt.
+func (s *InboxApplicationDetail) SetViewedAt(val NilDateTime) {
+	s.ViewedAt = val
+}
+
+// SetSavedAt sets the value of SavedAt.
+func (s *InboxApplicationDetail) SetSavedAt(val NilDateTime) {
+	s.SavedAt = val
+}
+
+// SetAppliedAt sets the value of AppliedAt.
+func (s *InboxApplicationDetail) SetAppliedAt(val NilDateTime) {
+	s.AppliedAt = val
+}
+
+// SetStage sets the value of Stage.
+func (s *InboxApplicationDetail) SetStage(val OptString) {
+	s.Stage = val
+}
+
+// SetNotes sets the value of Notes.
+func (s *InboxApplicationDetail) SetNotes(val OptString) {
+	s.Notes = val
+}
+
+// SetFollowedUpAt sets the value of FollowedUpAt.
+func (s *InboxApplicationDetail) SetFollowedUpAt(val NilDateTime) {
+	s.FollowedUpAt = val
+}
+
+// SetEmails sets the value of Emails.
+func (s *InboxApplicationDetail) SetEmails(val []InboxApplicationEmail) {
+	s.Emails = val
+}
+
+// SetEvents sets the value of Events.
+func (s *InboxApplicationDetail) SetEvents(val []TimelineEvent) {
+	s.Events = val
+}
+
+// SetStageSuggestion sets the value of StageSuggestion.
+func (s *InboxApplicationDetail) SetStageSuggestion(val jx.Raw) {
+	s.StageSuggestion = val
+}
+
+// SetAutoApply sets the value of AutoApply.
+func (s *InboxApplicationDetail) SetAutoApply(val jx.Raw) {
+	s.AutoApply = val
+}
+
+// Ref: #/components/schemas/InboxApplicationEmail
+type InboxApplicationEmail struct {
+	ID           int64     `json:"id"`
+	Source       string    `json:"source"`
+	FromAddr     string    `json:"from_addr"`
+	FromName     string    `json:"from_name"`
+	Subject      string    `json:"subject"`
+	StatusSignal OptString `json:"status_signal"`
+	LinkSource   OptString `json:"link_source"`
+	ReceivedAt   time.Time `json:"received_at"`
+	Read         bool      `json:"read"`
+}
+
+// GetID returns the value of ID.
+func (s *InboxApplicationEmail) GetID() int64 {
+	return s.ID
+}
+
+// GetSource returns the value of Source.
+func (s *InboxApplicationEmail) GetSource() string {
+	return s.Source
+}
+
+// GetFromAddr returns the value of FromAddr.
+func (s *InboxApplicationEmail) GetFromAddr() string {
+	return s.FromAddr
+}
+
+// GetFromName returns the value of FromName.
+func (s *InboxApplicationEmail) GetFromName() string {
+	return s.FromName
+}
+
+// GetSubject returns the value of Subject.
+func (s *InboxApplicationEmail) GetSubject() string {
+	return s.Subject
+}
+
+// GetStatusSignal returns the value of StatusSignal.
+func (s *InboxApplicationEmail) GetStatusSignal() OptString {
+	return s.StatusSignal
+}
+
+// GetLinkSource returns the value of LinkSource.
+func (s *InboxApplicationEmail) GetLinkSource() OptString {
+	return s.LinkSource
+}
+
+// GetReceivedAt returns the value of ReceivedAt.
+func (s *InboxApplicationEmail) GetReceivedAt() time.Time {
+	return s.ReceivedAt
+}
+
+// GetRead returns the value of Read.
+func (s *InboxApplicationEmail) GetRead() bool {
+	return s.Read
+}
+
+// SetID sets the value of ID.
+func (s *InboxApplicationEmail) SetID(val int64) {
+	s.ID = val
+}
+
+// SetSource sets the value of Source.
+func (s *InboxApplicationEmail) SetSource(val string) {
+	s.Source = val
+}
+
+// SetFromAddr sets the value of FromAddr.
+func (s *InboxApplicationEmail) SetFromAddr(val string) {
+	s.FromAddr = val
+}
+
+// SetFromName sets the value of FromName.
+func (s *InboxApplicationEmail) SetFromName(val string) {
+	s.FromName = val
+}
+
+// SetSubject sets the value of Subject.
+func (s *InboxApplicationEmail) SetSubject(val string) {
+	s.Subject = val
+}
+
+// SetStatusSignal sets the value of StatusSignal.
+func (s *InboxApplicationEmail) SetStatusSignal(val OptString) {
+	s.StatusSignal = val
+}
+
+// SetLinkSource sets the value of LinkSource.
+func (s *InboxApplicationEmail) SetLinkSource(val OptString) {
+	s.LinkSource = val
+}
+
+// SetReceivedAt sets the value of ReceivedAt.
+func (s *InboxApplicationEmail) SetReceivedAt(val time.Time) {
+	s.ReceivedAt = val
+}
+
+// SetRead sets the value of Read.
+func (s *InboxApplicationEmail) SetRead(val bool) {
+	s.Read = val
+}
+
+// One message with its body. The internal raw-MIME pointer is not exposed.
+// Ref: #/components/schemas/InboxEmail
+type InboxEmail struct {
+	ID               int64     `json:"id"`
+	Source           string    `json:"source"`
+	ExternalID       string    `json:"external_id"`
+	FromAddr         string    `json:"from_addr"`
+	FromName         string    `json:"from_name"`
+	Subject          string    `json:"subject"`
+	BodyText         string    `json:"body_text"`
+	BodyHTML         string    `json:"body_html"`
+	ReceivedAt       time.Time `json:"received_at"`
+	Read             bool      `json:"read"`
+	StatusSignal     OptString `json:"status_signal"`
+	LinkSource       OptString `json:"link_source"`
+	LinkedSlug       OptString `json:"linked_slug"`
+	LinkedCompany    OptString `json:"linked_company"`
+	SuggestedSlug    OptString `json:"suggested_slug"`
+	SuggestedCompany OptString `json:"suggested_company"`
+}
+
+// GetID returns the value of ID.
+func (s *InboxEmail) GetID() int64 {
+	return s.ID
+}
+
+// GetSource returns the value of Source.
+func (s *InboxEmail) GetSource() string {
+	return s.Source
+}
+
+// GetExternalID returns the value of ExternalID.
+func (s *InboxEmail) GetExternalID() string {
+	return s.ExternalID
+}
+
+// GetFromAddr returns the value of FromAddr.
+func (s *InboxEmail) GetFromAddr() string {
+	return s.FromAddr
+}
+
+// GetFromName returns the value of FromName.
+func (s *InboxEmail) GetFromName() string {
+	return s.FromName
+}
+
+// GetSubject returns the value of Subject.
+func (s *InboxEmail) GetSubject() string {
+	return s.Subject
+}
+
+// GetBodyText returns the value of BodyText.
+func (s *InboxEmail) GetBodyText() string {
+	return s.BodyText
+}
+
+// GetBodyHTML returns the value of BodyHTML.
+func (s *InboxEmail) GetBodyHTML() string {
+	return s.BodyHTML
+}
+
+// GetReceivedAt returns the value of ReceivedAt.
+func (s *InboxEmail) GetReceivedAt() time.Time {
+	return s.ReceivedAt
+}
+
+// GetRead returns the value of Read.
+func (s *InboxEmail) GetRead() bool {
+	return s.Read
+}
+
+// GetStatusSignal returns the value of StatusSignal.
+func (s *InboxEmail) GetStatusSignal() OptString {
+	return s.StatusSignal
+}
+
+// GetLinkSource returns the value of LinkSource.
+func (s *InboxEmail) GetLinkSource() OptString {
+	return s.LinkSource
+}
+
+// GetLinkedSlug returns the value of LinkedSlug.
+func (s *InboxEmail) GetLinkedSlug() OptString {
+	return s.LinkedSlug
+}
+
+// GetLinkedCompany returns the value of LinkedCompany.
+func (s *InboxEmail) GetLinkedCompany() OptString {
+	return s.LinkedCompany
+}
+
+// GetSuggestedSlug returns the value of SuggestedSlug.
+func (s *InboxEmail) GetSuggestedSlug() OptString {
+	return s.SuggestedSlug
+}
+
+// GetSuggestedCompany returns the value of SuggestedCompany.
+func (s *InboxEmail) GetSuggestedCompany() OptString {
+	return s.SuggestedCompany
+}
+
+// SetID sets the value of ID.
+func (s *InboxEmail) SetID(val int64) {
+	s.ID = val
+}
+
+// SetSource sets the value of Source.
+func (s *InboxEmail) SetSource(val string) {
+	s.Source = val
+}
+
+// SetExternalID sets the value of ExternalID.
+func (s *InboxEmail) SetExternalID(val string) {
+	s.ExternalID = val
+}
+
+// SetFromAddr sets the value of FromAddr.
+func (s *InboxEmail) SetFromAddr(val string) {
+	s.FromAddr = val
+}
+
+// SetFromName sets the value of FromName.
+func (s *InboxEmail) SetFromName(val string) {
+	s.FromName = val
+}
+
+// SetSubject sets the value of Subject.
+func (s *InboxEmail) SetSubject(val string) {
+	s.Subject = val
+}
+
+// SetBodyText sets the value of BodyText.
+func (s *InboxEmail) SetBodyText(val string) {
+	s.BodyText = val
+}
+
+// SetBodyHTML sets the value of BodyHTML.
+func (s *InboxEmail) SetBodyHTML(val string) {
+	s.BodyHTML = val
+}
+
+// SetReceivedAt sets the value of ReceivedAt.
+func (s *InboxEmail) SetReceivedAt(val time.Time) {
+	s.ReceivedAt = val
+}
+
+// SetRead sets the value of Read.
+func (s *InboxEmail) SetRead(val bool) {
+	s.Read = val
+}
+
+// SetStatusSignal sets the value of StatusSignal.
+func (s *InboxEmail) SetStatusSignal(val OptString) {
+	s.StatusSignal = val
+}
+
+// SetLinkSource sets the value of LinkSource.
+func (s *InboxEmail) SetLinkSource(val OptString) {
+	s.LinkSource = val
+}
+
+// SetLinkedSlug sets the value of LinkedSlug.
+func (s *InboxEmail) SetLinkedSlug(val OptString) {
+	s.LinkedSlug = val
+}
+
+// SetLinkedCompany sets the value of LinkedCompany.
+func (s *InboxEmail) SetLinkedCompany(val OptString) {
+	s.LinkedCompany = val
+}
+
+// SetSuggestedSlug sets the value of SuggestedSlug.
+func (s *InboxEmail) SetSuggestedSlug(val OptString) {
+	s.SuggestedSlug = val
+}
+
+// SetSuggestedCompany sets the value of SuggestedCompany.
+func (s *InboxEmail) SetSuggestedCompany(val OptString) {
+	s.SuggestedCompany = val
+}
+
+// Ref: #/components/schemas/InboxIngested
+type InboxIngested struct {
+	Inserted int64 `json:"inserted"`
+	Updated  int64 `json:"updated"`
+}
+
+// GetInserted returns the value of Inserted.
+func (s *InboxIngested) GetInserted() int64 {
+	return s.Inserted
+}
+
+// GetUpdated returns the value of Updated.
+func (s *InboxIngested) GetUpdated() int64 {
+	return s.Updated
+}
+
+// SetInserted sets the value of Inserted.
+func (s *InboxIngested) SetInserted(val int64) {
+	s.Inserted = val
+}
+
+// SetUpdated sets the value of Updated.
+func (s *InboxIngested) SetUpdated(val int64) {
+	s.Updated = val
+}
+
+// Names the application: a catalogue job's slug. Required, 400 when empty.
+// Ref: #/components/schemas/InboxLinkTarget
+type InboxLinkTarget struct {
+	Slug OptNilString `json:"slug"`
+}
+
+// GetSlug returns the value of Slug.
+func (s *InboxLinkTarget) GetSlug() OptNilString {
+	return s.Slug
+}
+
+// SetSlug sets the value of Slug.
+func (s *InboxLinkTarget) SetSlug(val OptNilString) {
+	s.Slug = val
+}
+
+// Ref: #/components/schemas/InboxMarked
+type InboxMarked struct {
+	Marked int64 `json:"marked"`
+}
+
+// GetMarked returns the value of Marked.
+func (s *InboxMarked) GetMarked() int64 {
+	return s.Marked
+}
+
+// SetMarked sets the value of Marked.
+func (s *InboxMarked) SetMarked(val int64) {
+	s.Marked = val
+}
+
+// One row of the listing. `body_text` is sent only when the listing asked for bodies.
+// Ref: #/components/schemas/InboxMessage
+type InboxMessage struct {
+	ID               int64     `json:"id"`
+	Source           string    `json:"source"`
+	ExternalID       string    `json:"external_id"`
+	FromAddr         string    `json:"from_addr"`
+	FromName         string    `json:"from_name"`
+	Subject          string    `json:"subject"`
+	Snippet          string    `json:"snippet"`
+	BodyText         OptString `json:"body_text"`
+	ReceivedAt       time.Time `json:"received_at"`
+	Read             bool      `json:"read"`
+	StatusSignal     OptString `json:"status_signal"`
+	LinkSource       OptString `json:"link_source"`
+	LinkedSlug       OptString `json:"linked_slug"`
+	LinkedCompany    OptString `json:"linked_company"`
+	SuggestedSlug    OptString `json:"suggested_slug"`
+	SuggestedCompany OptString `json:"suggested_company"`
+}
+
+// GetID returns the value of ID.
+func (s *InboxMessage) GetID() int64 {
+	return s.ID
+}
+
+// GetSource returns the value of Source.
+func (s *InboxMessage) GetSource() string {
+	return s.Source
+}
+
+// GetExternalID returns the value of ExternalID.
+func (s *InboxMessage) GetExternalID() string {
+	return s.ExternalID
+}
+
+// GetFromAddr returns the value of FromAddr.
+func (s *InboxMessage) GetFromAddr() string {
+	return s.FromAddr
+}
+
+// GetFromName returns the value of FromName.
+func (s *InboxMessage) GetFromName() string {
+	return s.FromName
+}
+
+// GetSubject returns the value of Subject.
+func (s *InboxMessage) GetSubject() string {
+	return s.Subject
+}
+
+// GetSnippet returns the value of Snippet.
+func (s *InboxMessage) GetSnippet() string {
+	return s.Snippet
+}
+
+// GetBodyText returns the value of BodyText.
+func (s *InboxMessage) GetBodyText() OptString {
+	return s.BodyText
+}
+
+// GetReceivedAt returns the value of ReceivedAt.
+func (s *InboxMessage) GetReceivedAt() time.Time {
+	return s.ReceivedAt
+}
+
+// GetRead returns the value of Read.
+func (s *InboxMessage) GetRead() bool {
+	return s.Read
+}
+
+// GetStatusSignal returns the value of StatusSignal.
+func (s *InboxMessage) GetStatusSignal() OptString {
+	return s.StatusSignal
+}
+
+// GetLinkSource returns the value of LinkSource.
+func (s *InboxMessage) GetLinkSource() OptString {
+	return s.LinkSource
+}
+
+// GetLinkedSlug returns the value of LinkedSlug.
+func (s *InboxMessage) GetLinkedSlug() OptString {
+	return s.LinkedSlug
+}
+
+// GetLinkedCompany returns the value of LinkedCompany.
+func (s *InboxMessage) GetLinkedCompany() OptString {
+	return s.LinkedCompany
+}
+
+// GetSuggestedSlug returns the value of SuggestedSlug.
+func (s *InboxMessage) GetSuggestedSlug() OptString {
+	return s.SuggestedSlug
+}
+
+// GetSuggestedCompany returns the value of SuggestedCompany.
+func (s *InboxMessage) GetSuggestedCompany() OptString {
+	return s.SuggestedCompany
+}
+
+// SetID sets the value of ID.
+func (s *InboxMessage) SetID(val int64) {
+	s.ID = val
+}
+
+// SetSource sets the value of Source.
+func (s *InboxMessage) SetSource(val string) {
+	s.Source = val
+}
+
+// SetExternalID sets the value of ExternalID.
+func (s *InboxMessage) SetExternalID(val string) {
+	s.ExternalID = val
+}
+
+// SetFromAddr sets the value of FromAddr.
+func (s *InboxMessage) SetFromAddr(val string) {
+	s.FromAddr = val
+}
+
+// SetFromName sets the value of FromName.
+func (s *InboxMessage) SetFromName(val string) {
+	s.FromName = val
+}
+
+// SetSubject sets the value of Subject.
+func (s *InboxMessage) SetSubject(val string) {
+	s.Subject = val
+}
+
+// SetSnippet sets the value of Snippet.
+func (s *InboxMessage) SetSnippet(val string) {
+	s.Snippet = val
+}
+
+// SetBodyText sets the value of BodyText.
+func (s *InboxMessage) SetBodyText(val OptString) {
+	s.BodyText = val
+}
+
+// SetReceivedAt sets the value of ReceivedAt.
+func (s *InboxMessage) SetReceivedAt(val time.Time) {
+	s.ReceivedAt = val
+}
+
+// SetRead sets the value of Read.
+func (s *InboxMessage) SetRead(val bool) {
+	s.Read = val
+}
+
+// SetStatusSignal sets the value of StatusSignal.
+func (s *InboxMessage) SetStatusSignal(val OptString) {
+	s.StatusSignal = val
+}
+
+// SetLinkSource sets the value of LinkSource.
+func (s *InboxMessage) SetLinkSource(val OptString) {
+	s.LinkSource = val
+}
+
+// SetLinkedSlug sets the value of LinkedSlug.
+func (s *InboxMessage) SetLinkedSlug(val OptString) {
+	s.LinkedSlug = val
+}
+
+// SetLinkedCompany sets the value of LinkedCompany.
+func (s *InboxMessage) SetLinkedCompany(val OptString) {
+	s.LinkedCompany = val
+}
+
+// SetSuggestedSlug sets the value of SuggestedSlug.
+func (s *InboxMessage) SetSuggestedSlug(val OptString) {
+	s.SuggestedSlug = val
+}
+
+// SetSuggestedCompany sets the value of SuggestedCompany.
+func (s *InboxMessage) SetSuggestedCompany(val OptString) {
+	s.SuggestedCompany = val
+}
+
+// Ref: #/components/schemas/InboxMeta
+type InboxMeta struct {
+	Total  int64 `json:"total"`
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+	// How many messages the default filter suppressed.
+	Hidden int64 `json:"hidden"`
+}
+
+// GetTotal returns the value of Total.
+func (s *InboxMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// GetLimit returns the value of Limit.
+func (s *InboxMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetOffset returns the value of Offset.
+func (s *InboxMeta) GetOffset() int64 {
+	return s.Offset
+}
+
+// GetHidden returns the value of Hidden.
+func (s *InboxMeta) GetHidden() int64 {
+	return s.Hidden
+}
+
+// SetTotal sets the value of Total.
+func (s *InboxMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
+// SetLimit sets the value of Limit.
+func (s *InboxMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetOffset sets the value of Offset.
+func (s *InboxMeta) SetOffset(val int64) {
+	s.Offset = val
+}
+
+// SetHidden sets the value of Hidden.
+func (s *InboxMeta) SetHidden(val int64) {
+	s.Hidden = val
+}
+
+// Ref: #/components/schemas/InboxPage
+type InboxPage struct {
+	Data []InboxMessage `json:"data"`
+	Meta InboxMeta      `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *InboxPage) GetData() []InboxMessage {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *InboxPage) GetMeta() InboxMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *InboxPage) SetData(val []InboxMessage) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *InboxPage) SetMeta(val InboxMeta) {
+	s.Meta = val
+}
+
+// The verdict an agent records for one message. Left-out fields read as empty.
+// Ref: #/components/schemas/InboxTriage
+type InboxTriage struct {
+	Signal OptNilString `json:"signal"`
+	Slug   OptNilString `json:"slug"`
+	// Stored for display; gates nothing.
+	Confidence OptNilFloat32 `json:"confidence"`
+}
+
+// GetSignal returns the value of Signal.
+func (s *InboxTriage) GetSignal() OptNilString {
+	return s.Signal
+}
+
+// GetSlug returns the value of Slug.
+func (s *InboxTriage) GetSlug() OptNilString {
+	return s.Slug
+}
+
+// GetConfidence returns the value of Confidence.
+func (s *InboxTriage) GetConfidence() OptNilFloat32 {
+	return s.Confidence
+}
+
+// SetSignal sets the value of Signal.
+func (s *InboxTriage) SetSignal(val OptNilString) {
+	s.Signal = val
+}
+
+// SetSlug sets the value of Slug.
+func (s *InboxTriage) SetSlug(val OptNilString) {
+	s.Slug = val
+}
+
+// SetConfidence sets the value of Confidence.
+func (s *InboxTriage) SetConfidence(val OptNilFloat32) {
+	s.Confidence = val
+}
+
+// A single item: `{"data": ...}`.
+type IngestEmailsOK struct {
+	Data InboxIngested `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *IngestEmailsOK) GetData() InboxIngested {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *IngestEmailsOK) SetData(val InboxIngested) {
 	s.Data = val
 }
 
@@ -8972,6 +10004,36 @@ func (s *JobsActivity) SetMeta(val ActivityMeta) {
 }
 
 // A single item: `{"data": ...}`.
+type LinkEmailOK struct {
+	Data InboxEmail `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *LinkEmailOK) GetData() InboxEmail {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *LinkEmailOK) SetData(val InboxEmail) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type LinkRecalledMailOK struct {
+	Data InboxEmail `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *LinkRecalledMailOK) GetData() InboxEmail {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *LinkRecalledMailOK) SetData(val InboxEmail) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ListAppliedCompanySlugsOK struct {
 	Data []string `json:"data"`
 }
@@ -9552,6 +10614,242 @@ func (s *ListViewedSlugsOK) GetData() []string {
 
 // SetData sets the value of Data.
 func (s *ListViewedSlugsOK) SetData(val []string) {
+	s.Data = val
+}
+
+// A chase the candidate sends themselves; `recipient` is absent when nobody ever replied.
+// Ref: #/components/schemas/MailFollowUpDraft
+type MailFollowUpDraft struct {
+	Subject       string    `json:"subject"`
+	Body          string    `json:"body"`
+	Recipient     OptString `json:"recipient"`
+	RecipientName OptString `json:"recipient_name"`
+	DaysSilent    int64     `json:"days_silent"`
+}
+
+// GetSubject returns the value of Subject.
+func (s *MailFollowUpDraft) GetSubject() string {
+	return s.Subject
+}
+
+// GetBody returns the value of Body.
+func (s *MailFollowUpDraft) GetBody() string {
+	return s.Body
+}
+
+// GetRecipient returns the value of Recipient.
+func (s *MailFollowUpDraft) GetRecipient() OptString {
+	return s.Recipient
+}
+
+// GetRecipientName returns the value of RecipientName.
+func (s *MailFollowUpDraft) GetRecipientName() OptString {
+	return s.RecipientName
+}
+
+// GetDaysSilent returns the value of DaysSilent.
+func (s *MailFollowUpDraft) GetDaysSilent() int64 {
+	return s.DaysSilent
+}
+
+// SetSubject sets the value of Subject.
+func (s *MailFollowUpDraft) SetSubject(val string) {
+	s.Subject = val
+}
+
+// SetBody sets the value of Body.
+func (s *MailFollowUpDraft) SetBody(val string) {
+	s.Body = val
+}
+
+// SetRecipient sets the value of Recipient.
+func (s *MailFollowUpDraft) SetRecipient(val OptString) {
+	s.Recipient = val
+}
+
+// SetRecipientName sets the value of RecipientName.
+func (s *MailFollowUpDraft) SetRecipientName(val OptString) {
+	s.RecipientName = val
+}
+
+// SetDaysSilent sets the value of DaysSilent.
+func (s *MailFollowUpDraft) SetDaysSilent(val int64) {
+	s.DaysSilent = val
+}
+
+// Ref: #/components/schemas/MailRecallResult
+type MailRecallResult struct {
+	Scanned     int64               `json:"scanned"`
+	Suggested   []MailRecalledEmail `json:"suggested"`
+	Invitations int64               `json:"invitations"`
+}
+
+// GetScanned returns the value of Scanned.
+func (s *MailRecallResult) GetScanned() int64 {
+	return s.Scanned
+}
+
+// GetSuggested returns the value of Suggested.
+func (s *MailRecallResult) GetSuggested() []MailRecalledEmail {
+	return s.Suggested
+}
+
+// GetInvitations returns the value of Invitations.
+func (s *MailRecallResult) GetInvitations() int64 {
+	return s.Invitations
+}
+
+// SetScanned sets the value of Scanned.
+func (s *MailRecallResult) SetScanned(val int64) {
+	s.Scanned = val
+}
+
+// SetSuggested sets the value of Suggested.
+func (s *MailRecallResult) SetSuggested(val []MailRecalledEmail) {
+	s.Suggested = val
+}
+
+// SetInvitations sets the value of Invitations.
+func (s *MailRecallResult) SetInvitations(val int64) {
+	s.Invitations = val
+}
+
+// One message the recall sweep proposes. `id` is 0 for a message the search found.
+// Ref: #/components/schemas/MailRecalledEmail
+type MailRecalledEmail struct {
+	ID         int64     `json:"id"`
+	ProviderID OptString `json:"provider_id"`
+	FromAddr   string    `json:"from_addr"`
+	FromName   string    `json:"from_name"`
+	Subject    string    `json:"subject"`
+	ReceivedAt time.Time `json:"received_at"`
+	Invitation bool      `json:"invitation"`
+}
+
+// GetID returns the value of ID.
+func (s *MailRecalledEmail) GetID() int64 {
+	return s.ID
+}
+
+// GetProviderID returns the value of ProviderID.
+func (s *MailRecalledEmail) GetProviderID() OptString {
+	return s.ProviderID
+}
+
+// GetFromAddr returns the value of FromAddr.
+func (s *MailRecalledEmail) GetFromAddr() string {
+	return s.FromAddr
+}
+
+// GetFromName returns the value of FromName.
+func (s *MailRecalledEmail) GetFromName() string {
+	return s.FromName
+}
+
+// GetSubject returns the value of Subject.
+func (s *MailRecalledEmail) GetSubject() string {
+	return s.Subject
+}
+
+// GetReceivedAt returns the value of ReceivedAt.
+func (s *MailRecalledEmail) GetReceivedAt() time.Time {
+	return s.ReceivedAt
+}
+
+// GetInvitation returns the value of Invitation.
+func (s *MailRecalledEmail) GetInvitation() bool {
+	return s.Invitation
+}
+
+// SetID sets the value of ID.
+func (s *MailRecalledEmail) SetID(val int64) {
+	s.ID = val
+}
+
+// SetProviderID sets the value of ProviderID.
+func (s *MailRecalledEmail) SetProviderID(val OptString) {
+	s.ProviderID = val
+}
+
+// SetFromAddr sets the value of FromAddr.
+func (s *MailRecalledEmail) SetFromAddr(val string) {
+	s.FromAddr = val
+}
+
+// SetFromName sets the value of FromName.
+func (s *MailRecalledEmail) SetFromName(val string) {
+	s.FromName = val
+}
+
+// SetSubject sets the value of Subject.
+func (s *MailRecalledEmail) SetSubject(val string) {
+	s.Subject = val
+}
+
+// SetReceivedAt sets the value of ReceivedAt.
+func (s *MailRecalledEmail) SetReceivedAt(val time.Time) {
+	s.ReceivedAt = val
+}
+
+// SetInvitation sets the value of Invitation.
+func (s *MailRecalledEmail) SetInvitation(val bool) {
+	s.Invitation = val
+}
+
+// The message the caller picked out of a sweep. Required, 400 when empty.
+// Ref: #/components/schemas/MailRecalledPick
+type MailRecalledPick struct {
+	ProviderID OptNilString `json:"provider_id"`
+}
+
+// GetProviderID returns the value of ProviderID.
+func (s *MailRecalledPick) GetProviderID() OptNilString {
+	return s.ProviderID
+}
+
+// SetProviderID sets the value of ProviderID.
+func (s *MailRecalledPick) SetProviderID(val OptNilString) {
+	s.ProviderID = val
+}
+
+// Ref: #/components/schemas/MailboxStatus
+type MailboxStatus struct {
+	Available bool      `json:"available"`
+	Address   NilString `json:"address"`
+}
+
+// GetAvailable returns the value of Available.
+func (s *MailboxStatus) GetAvailable() bool {
+	return s.Available
+}
+
+// GetAddress returns the value of Address.
+func (s *MailboxStatus) GetAddress() NilString {
+	return s.Address
+}
+
+// SetAvailable sets the value of Available.
+func (s *MailboxStatus) SetAvailable(val bool) {
+	s.Available = val
+}
+
+// SetAddress sets the value of Address.
+func (s *MailboxStatus) SetAddress(val NilString) {
+	s.Address = val
+}
+
+// A single item: `{"data": ...}`.
+type MarkAllReadInboxOK struct {
+	Data InboxMarked `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *MarkAllReadInboxOK) GetData() InboxMarked {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *MarkAllReadInboxOK) SetData(val InboxMarked) {
 	s.Data = val
 }
 
@@ -12377,6 +13675,52 @@ func (o OptIgnoredMeta) Or(d IgnoredMeta) IgnoredMeta {
 	return d
 }
 
+// NewOptInboxLinkTarget returns new OptInboxLinkTarget with value set to v.
+func NewOptInboxLinkTarget(v InboxLinkTarget) OptInboxLinkTarget {
+	return OptInboxLinkTarget{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptInboxLinkTarget is optional InboxLinkTarget.
+type OptInboxLinkTarget struct {
+	Value InboxLinkTarget
+	Set   bool
+}
+
+// IsSet returns true if OptInboxLinkTarget was set.
+func (o OptInboxLinkTarget) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptInboxLinkTarget) Reset() {
+	var v InboxLinkTarget
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptInboxLinkTarget) SetTo(v InboxLinkTarget) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptInboxLinkTarget) Get() (v InboxLinkTarget, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptInboxLinkTarget) Or(d InboxLinkTarget) InboxLinkTarget {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptInt32 returns new OptInt32 with value set to v.
 func NewOptInt32(v int32) OptInt32 {
 	return OptInt32{
@@ -12509,6 +13853,52 @@ func (o OptJobFindMeta) Get() (v JobFindMeta, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptJobFindMeta) Or(d JobFindMeta) JobFindMeta {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptMailRecalledPick returns new OptMailRecalledPick with value set to v.
+func NewOptMailRecalledPick(v MailRecalledPick) OptMailRecalledPick {
+	return OptMailRecalledPick{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptMailRecalledPick is optional MailRecalledPick.
+type OptMailRecalledPick struct {
+	Value MailRecalledPick
+	Set   bool
+}
+
+// IsSet returns true if OptMailRecalledPick was set.
+func (o OptMailRecalledPick) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptMailRecalledPick) Reset() {
+	var v MailRecalledPick
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptMailRecalledPick) SetTo(v MailRecalledPick) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptMailRecalledPick) Get() (v MailRecalledPick, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptMailRecalledPick) Or(d MailRecalledPick) MailRecalledPick {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -12759,6 +14149,74 @@ func (o OptNilEmployerQuestionArray) Get() (v []EmployerQuestion, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptNilEmployerQuestionArray) Or(d []EmployerQuestion) []EmployerQuestion {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptNilFloat32 returns new OptNilFloat32 with value set to v.
+func NewOptNilFloat32(v float32) OptNilFloat32 {
+	return OptNilFloat32{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNilFloat32 is optional nullable float32.
+type OptNilFloat32 struct {
+	Value float32
+	Set   bool
+	Null  bool
+}
+
+// IsSet returns true if OptNilFloat32 was set.
+func (o OptNilFloat32) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNilFloat32) Reset() {
+	var v float32
+	o.Value = v
+	o.Set = false
+	o.Null = false
+}
+
+// SetTo sets value to v.
+func (o *OptNilFloat32) SetTo(v float32) {
+	o.Set = true
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o OptNilFloat32) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *OptNilFloat32) SetToNull() {
+	o.Set = true
+	o.Null = true
+	var v float32
+	o.Value = v
+}
+
+// IsEmpty returns true if the field was omitted from the payload (not Set and not Null).
+func (o OptNilFloat32) IsEmpty() bool {
+	return !o.Set && !o.Null
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNilFloat32) Get() (v float32, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNilFloat32) Or(d float32) float32 {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -14370,6 +15828,21 @@ func (s *ReactivateMentorProfileOK) SetData(val MentorshipMentor) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type RecallApplicationMailOK struct {
+	Data MailRecallResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RecallApplicationMailOK) GetData() MailRecallResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RecallApplicationMailOK) SetData(val MailRecallResult) {
+	s.Data = val
+}
+
 // A feed row: the thread plus the subject's display names, empty when the subject no longer exists.
 // Ref: #/components/schemas/RecentThread
 type RecentThread struct {
@@ -14521,6 +15994,9 @@ func (s *RecentThreadPage) SetData(val []RecentThread) {
 func (s *RecentThreadPage) SetMeta(val ThreadCursorMeta) {
 	s.Meta = val
 }
+
+// RecordApplicationFollowUpNoContent is response for RecordApplicationFollowUp operation.
+type RecordApplicationFollowUpNoContent struct{}
 
 // A single item: `{"data": ...}`.
 type RecordDictionaryGapOK struct {
@@ -15070,6 +16546,21 @@ func (s *RejectCompanyRelationOK) SetData(val CompanyRelationRejection) {
 }
 
 // A single item: `{"data": ...}`.
+type RejectEmailLinkOK struct {
+	Data InboxEmail `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RejectEmailLinkOK) GetData() InboxEmail {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RejectEmailLinkOK) SetData(val InboxEmail) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type RejectEmployerClaimOK struct {
 	Data EmployerRejected `json:"data"`
 }
@@ -15124,6 +16615,21 @@ func (s *RejectSubmissionRequest) SetReason(val OptString) {
 // SetBlockDomain sets the value of BlockDomain.
 func (s *RejectSubmissionRequest) SetBlockDomain(val OptBool) {
 	s.BlockDomain = val
+}
+
+// A single item: `{"data": ...}`.
+type ReleaseMailboxOK struct {
+	Data MailboxStatus `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ReleaseMailboxOK) GetData() MailboxStatus {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ReleaseMailboxOK) SetData(val MailboxStatus) {
+	s.Data = val
 }
 
 // RemoveFromWatchlistNoContent is response for RemoveFromWatchlist operation.
@@ -15558,6 +17064,9 @@ func (s *ResolvedJobPage) SetStatus(val string) {
 func (s *ResolvedJobPage) SetCompanySlug(val OptString) {
 	s.CompanySlug = val
 }
+
+// RestoreEmailNoContent is response for RestoreEmail operation.
+type RestoreEmailNoContent struct{}
 
 // The skill list a coverage reading scores against the market.
 // Ref: #/components/schemas/ResumeCoverageRequest
@@ -18758,6 +20267,21 @@ func (s *SyncBillingStoreOK) SetData(val BillingStoreSync) {
 }
 
 // A single item: `{"data": ...}`.
+type SyncGmailOK struct {
+	Data GmailSyncStarted `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SyncGmailOK) GetData() GmailSyncStarted {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SyncGmailOK) SetData(val GmailSyncStarted) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type TailorCVCreated struct {
 	Data CvTailorResult `json:"data"`
 }
@@ -20142,6 +21666,21 @@ func (s *TrackingPipelineStages) init() TrackingPipelineStages {
 }
 
 // A single item: `{"data": ...}`.
+type TriageEmailOK struct {
+	Data InboxEmail `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *TriageEmailOK) GetData() InboxEmail {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *TriageEmailOK) SetData(val InboxEmail) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type UnbanUserOK struct {
 	Data ModeratedUser `json:"data"`
 }
@@ -20198,6 +21737,21 @@ func (s *UndoCVRevisionOK) GetData() CvRevisionUndo {
 
 // SetData sets the value of Data.
 func (s *UndoCVRevisionOK) SetData(val CvRevisionUndo) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UnlinkEmailOK struct {
+	Data InboxEmail `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UnlinkEmailOK) GetData() InboxEmail {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UnlinkEmailOK) SetData(val InboxEmail) {
 	s.Data = val
 }
 
