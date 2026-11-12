@@ -85,6 +85,7 @@ func TestMCPAccountMount_UnauthorizedNamesResourceMetadata(t *testing.T) {
 func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 	want := map[string]assistant.Effect{
 		"get_profile": assistant.EffectReads,
+		"get_plan":    assistant.EffectReads,
 		"facets":      assistant.EffectReads,
 		"search_jobs": assistant.EffectReads,
 		"get_job":     assistant.EffectReads,
@@ -158,6 +159,17 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 			t.Errorf("%s: served on the MCP account server without a Title", tool.Name)
 		}
 	}
+}
+
+// get_plan is read-only and GET /me/plan is open to a key over REST, so a full-scope key
+// reads it too.
+func TestMCPKeyTools_ServeGetPlan(t *testing.T) {
+	for _, tool := range mcpKeyTools(&assistantHandlers{}, testMCPOrigin) {
+		if tool.Name == "get_plan" {
+			return
+		}
+	}
+	t.Fatal("get_plan is not served to a full-scope API key")
 }
 
 // present_jobs renders cards only inside freehire's own chat and forbids the model from

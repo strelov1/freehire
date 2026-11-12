@@ -2,7 +2,7 @@
 
 The canonical MCP at `/api/v1/mcp` combines anonymous catalogue reads with
 OAuth account tools (`mixed.go`). Anonymous and OAuth sessions discover the same
-53 tools; personal calls without authentication never reach business code.
+54 tools; personal calls without authentication never reach business code.
 ChatGPT (User-Agent `openai-mcp`) gets an error result carrying `mcp/www_authenticate`,
 the in-band challenge its Apps SDK opens sign-in from. Every other host gets HTTP 401 with
 `WWW-Authenticate`, because Grok and Claude.ai ignore the in-band challenge and open sign-in
@@ -320,10 +320,16 @@ An answer saved here is the CANDIDATE's (`answerbank.AuthorCandidate`, so it is 
 server only ever acts for the person who approved the connection. `accountInstructions`
 describes the account boundary and the tool groups actually served, opens with one line on what
 freehire can do (search, save/track, alerts, auto-apply prepared for review) and says to call
-`get_profile` before the first search. Its budget is 720 characters (the public server keeps 512);
+`get_profile` before the first search and, with auto-apply served, `get_plan` before auto-apply. Its budget is 720 characters (the public server keeps 512);
 Claude Code cuts server instructions at 2048. Search and application
 workflows belong to the packaged skill; initialization describes capabilities and result
 states without prescribing a call sequence or presentation.
+
+`get_plan` (`internal/api/handler/mcp_plan_tool.go`, openspec/changes/mcp-plan-standing) lets
+an agent read the tier and today's per-feature allowances before it queues metered work,
+instead of learning them from a 402. It reads `loadPlan`, the use case `GET /me/plan` serves,
+so the two cannot disagree; it is an allowlist carrying no price or payment source (those are
+the support agent's `my_account`, not a third-party model's). Grants and full-scope keys alike.
 
 `present_jobs` is NOT served there (`mcpAccountTools`). It draws cards in our own chat UI and
 its description tells the model never to write a job link; in a client with no card renderer
