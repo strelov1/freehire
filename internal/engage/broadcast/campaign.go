@@ -39,6 +39,10 @@ type Campaign struct {
 	// links into freehire itself cannot spell the URL as a constant, and the previews
 	// render against a relative base. Campaigns that only link outward ignore it.
 	text func(base string) string
+	// Timezones limits the audience to accounts whose stored timezone is one of these. Empty
+	// sends to everyone. There is no country column; the timezone the browser reported is
+	// the nearest thing, and an account that never reported one is never reached by it.
+	Timezones []string
 	// Half limits a run to one side of a split test, "a" or "b". Empty sends to everyone.
 	// Lookup returns a copy, so setting it for one run leaves the registry alone.
 	Half string
@@ -107,6 +111,7 @@ type assets struct {
 	LinkedInURL    string
 	BuddiesURL     string
 	BuddiesDemoURL string
+	PricingURL     string
 }
 
 func (m *Mailer) assets() assets {
@@ -118,6 +123,7 @@ func (m *Mailer) assets() assets {
 		LinkedInURL:    mailtpl.LinkedInURL,
 		BuddiesURL:     m.baseURL + "/features/interview-buddies",
 		BuddiesDemoURL: m.baseURL + "/email-buddies-demo.gif",
+		PricingURL:     m.baseURL + "/pricing",
 	}
 }
 

@@ -4020,7 +4020,8 @@ type Querier interface {
 	ListBookingsDueForReminder(ctx context.Context, arg ListBookingsDueForReminderParams) ([]ListBookingsDueForReminderRow, error)
 	// Audience reader and ledger writer for one-off campaigns (internal/engage/broadcast).
 	// Everyone who can be mailed and has not received this campaign yet. A non-empty half ('a' or
-	// 'b') narrows that to one side of a split test.
+	// 'b') narrows that to one side of a split test, and a non-empty timezones list to the
+	// accounts whose stored timezone is one of them (how a campaign reaches one country).
 	//
 	// No signup window, unlike the onboarding queries: a campaign is addressed to the
 	// whole audience by definition, and the launch it announces matters as much to
