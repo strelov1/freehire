@@ -22,7 +22,10 @@ type checkoutRouter struct {
 	subscriptions http.HandlerFunc // GET /subscriptions
 
 	checkoutCalled bool
+	checkoutForm   string
 	couponCalled   bool
+	couponSpent    bool     // GET /coupons/{id} answers valid=false for the first coupon
+	couponKeys     []string // Idempotency-Key of every POST /coupons, in order
 	updateCalled   bool
 	updatePath     string
 	updateForm     string
@@ -35,10 +38,16 @@ func (r *checkoutRouter) handler() http.HandlerFunc {
 			r.subscriptions(w, req)
 		case req.URL.Path == "/checkout/sessions":
 			r.checkoutCalled = true
+			_ = req.ParseForm()
+			r.checkoutForm = req.Form.Encode()
 			_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_123"}`))
 		case req.URL.Path == "/coupons":
 			r.couponCalled = true
-			_, _ = w.Write([]byte(`{"id":"co_test"}`))
+			r.couponKeys = append(r.couponKeys, req.Header.Get("Idempotency-Key"))
+			_, _ = fmt.Fprintf(w, `{"id":"co_test%d"}`, len(r.couponKeys))
+		case strings.HasPrefix(req.URL.Path, "/coupons/"):
+			spent := r.couponSpent && req.URL.Path == "/coupons/co_test1"
+			_, _ = fmt.Fprintf(w, `{"valid":%t}`, !spent)
 		case strings.HasPrefix(req.URL.Path, "/subscriptions/"):
 			r.updateCalled = true
 			r.updatePath = req.URL.Path
@@ -232,5 +241,57 @@ func TestCheckoutURLAppliesNoDiscountToTheAPIProduct(t *testing.T) {
 	}
 	if applied != (Discount{}) {
 		t.Fatalf("applied discount = %+v, want none", applied)
+	}
+}
+
+// A declined card spends the coupon's one redemption at the provider. An account that never
+// completed a purchase must get a fresh coupon, not the spent one the idempotent create
+// replays — which made every later checkout fail outright.
+func TestCheckoutURLRemintsACouponADeclinedAttemptSpent(t *testing.T) {
+	router := &checkoutRouter{couponSpent: true}
+	s, pool := newTieredService(t, router.handler())
+	userID := insertUser(t, pool, "declined-once@example.com")
+
+	offer := Discount{PercentOff: 90, Label: "promo", Key: "promo_k"}
+	_, applied, err := s.CheckoutURL(context.Background(), userID, "", offer)
+	if err != nil {
+		t.Fatalf("CheckoutURL: %v", err)
+	}
+	if len(router.couponKeys) != 2 || router.couponKeys[0] != "promo_k" || router.couponKeys[1] == "promo_k" {
+		t.Fatalf("coupon keys = %v, want the stable key then a fresh one", router.couponKeys)
+	}
+	if !strings.Contains(router.checkoutForm, "co_test2") {
+		t.Fatalf("checkout carried %q, want the fresh coupon co_test2", router.checkoutForm)
+	}
+	if applied != offer {
+		t.Fatalf("applied = %+v, want %+v", applied, offer)
+	}
+}
+
+// An account bound to a customer has bought before, so a spent coupon means the offer was
+// used: the checkout goes ahead without one and says no discount was applied.
+func TestCheckoutURLDropsASpentCouponForAPastBuyer(t *testing.T) {
+	router := &checkoutRouter{
+		couponSpent: true,
+		subscriptions: func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		},
+	}
+	s, pool := newTieredService(t, router.handler())
+	userID := insertUser(t, pool, "past-buyer@example.com")
+	bindCustomer(t, pool, userID, "cus_past")
+
+	_, applied, err := s.CheckoutURL(context.Background(), userID, "", Discount{PercentOff: 90, Label: "promo", Key: "promo_p"})
+	if err != nil {
+		t.Fatalf("CheckoutURL: %v", err)
+	}
+	if len(router.couponKeys) != 1 {
+		t.Fatalf("coupon keys = %v, want no second mint", router.couponKeys)
+	}
+	if strings.Contains(router.checkoutForm, "coupon") {
+		t.Fatalf("checkout carried a coupon: %q", router.checkoutForm)
+	}
+	if applied != (Discount{}) {
+		t.Fatalf("applied = %+v, want none", applied)
 	}
 }

@@ -412,9 +412,12 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 	// an offer they were shown is worse than asking them to try again.
 	var couponID string
 	if !discount.none() {
-		couponID, err = s.client.createCoupon(ctx, discount.PercentOff, discount.Label, discount.Key)
+		couponID, err = s.spendableCoupon(ctx, discount, customerID)
 		if err != nil {
 			return "", Discount{}, fmt.Errorf("billing: minting a discount for user %d: %w", userID, err)
+		}
+		if couponID == "" {
+			discount = Discount{}
 		}
 	}
 
@@ -425,6 +428,30 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 		return "", Discount{}, err
 	}
 	return url, discount, nil
+}
+
+// spendableCoupon is the coupon this checkout may carry, or "" when the discount is used up.
+//
+// The provider spends a coupon's one redemption on the first checkout that TRIES to pay,
+// declined or not. A buyer whose card was refused once would otherwise be handed the same
+// spent coupon by the idempotent create, and every checkout after it would fail outright.
+//
+// Who has never completed a purchase (no customer bound) did not use the offer, so they get
+// a fresh coupon. Who has, did: their checkout goes ahead at the plain price.
+func (s *Service) spendableCoupon(ctx context.Context, discount Discount, customerID string) (string, error) {
+	id, err := s.client.createCoupon(ctx, discount.PercentOff, discount.Label, discount.Key)
+	if err != nil {
+		return "", err
+	}
+	valid, err := s.client.couponValid(ctx, id)
+	if err != nil || valid {
+		return id, err
+	}
+	if customerID != "" {
+		return "", nil
+	}
+	// A fresh key per call: the stable key is exactly what keeps returning the spent coupon.
+	return s.client.createCoupon(ctx, discount.PercentOff, discount.Label, discount.Key+"_"+uuid.NewString())
 }
 
 // HasCollectedAtLeast reports whether this customer has had an invoice collecting at least
