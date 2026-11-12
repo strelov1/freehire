@@ -1,14 +1,19 @@
 package handler
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/engage/subscription"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/strelov1/freehire/internal/search/savedsearch"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -100,5 +105,29 @@ func TestUpdatesSince(t *testing.T) {
 	}
 	if _, err := updatesSince(now, "yesterday", 0); err == nil {
 		t.Error("a non-RFC 3339 since must be refused")
+	}
+}
+
+// A refusal the caller caused must reach the agent as invalid_request / conflict with words it
+// can act on; subscribe answered internal_error for a q with too many OR alternatives (the
+// saved-search parser refuses it) and for a push subscription with no device.
+func TestAlertSavedSearchError_GivesUserCausedRefusalsACode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		code string
+	}{
+		{"too many OR alternatives", search.ErrTooManyAlternatives, "invalid_request"},
+		{"malformed query", fmt.Errorf("%w: visa_sponsorship must be true or false", search.ErrBadQuery), "invalid_request"},
+		{"no push device", subscription.ErrNoPushDevice, "conflict"},
+		{"unsupported channel", subscription.ErrInvalidChannel, "invalid_request"},
+		{"duplicate name", savedsearch.ErrDuplicateName, "conflict"},
+		{"a real fault", errors.New("connection reset"), "internal_error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := observability.ErrorCode(alertSavedSearchError(tc.err, "x")); got != tc.code {
+				t.Errorf("code = %q, want %q", got, tc.code)
+			}
+		})
 	}
 }

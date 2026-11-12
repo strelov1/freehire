@@ -190,3 +190,56 @@ func TestToolLogClassifiesFailuresWithoutErrorText(t *testing.T) {
 		})
 	}
 }
+
+// A rejected call names the arguments it got wrong, never their values; a search that drops
+// filters names the filters, never what was asked for in them.
+func TestToolLogNamesBadArgumentsAndIgnoredFilters(t *testing.T) {
+	const private = "private-value@example.invalid"
+	records := captureToolLogs(t)
+	reader := readerThatFinds(t)
+	reader.searchJobs = func(context.Context, SearchInput) (SearchJobsResult, error) {
+		return SearchJobsResult{Jobs: []JobSummary{{Slug: "a"}}, IgnoredParams: []string{"skills=" + private, "work_mode=" + private}}, nil
+	}
+	session := connect(t, reader)
+
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+		key  string
+		want string
+	}{
+		{"wrong type", map[string]any{"limit": private}, "bad_args", "limit"},
+		{"unknown arguments", map[string]any{"work_mode_x": private, "salary_min_x": private}, "bad_args", "salary_min_x,work_mode_x"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: toolSearchJobs, Arguments: tc.args}); err != nil {
+				t.Fatal(err)
+			}
+			nextToolLog(t, records)
+			finish := nextToolLog(t, records)
+			raw, _ := json.Marshal(finish)
+			if finish["outcome"] != "rejected" || finish[tc.key] != tc.want || strings.Contains(string(raw), private) {
+				t.Fatalf("unexpected log (want %s=%s, no value): %s", tc.key, tc.want, raw)
+			}
+		})
+	}
+
+	t.Run("ignored filters", func(t *testing.T) {
+		if _, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: toolSearchJobs, Arguments: map[string]any{"query": "go"}}); err != nil {
+			t.Fatal(err)
+		}
+		nextToolLog(t, records)
+		finish := nextToolLog(t, records)
+		raw, _ := json.Marshal(finish)
+		if finish["ignored"] != "skills,work_mode" || strings.Contains(string(raw), private) {
+			t.Fatalf("unexpected log: %s", raw)
+		}
+	})
+}
+
+func TestLoggableNamesAreBounded(t *testing.T) {
+	got := loggableNames([]string{"a", "a", "b c", strings.Repeat("x", 41), "ok.name-1", "c", "d", "e", "f", "g"})
+	if strings.Join(got, ",") != "a,ok.name-1,c,d,e" {
+		t.Errorf("names = %v", got)
+	}
+}
