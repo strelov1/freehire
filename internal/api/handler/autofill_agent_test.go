@@ -43,7 +43,7 @@ func (s stubValidKey) AuthenticateAPIKey(_ context.Context, hash string) (auth.A
 func autofillRunApp(iss *auth.Issuer, keys auth.APIKeyAuthenticator) *fiber.App {
 	app := fiber.New()
 	h := &autofillHandlers{}
-	app.Post("/api/v1/me/autofill/run", auth.RequireAuthOrKey(iss, testVersions, keys), markPaidAI(unmeteredAI), h.RunAgentAutofill)
+	app.Post("/api/v1/me/autofill/run", auth.RequireAuthOrKey(iss, testVersions, keys), markPaidAI(unmeteredAI), newContract(contractHandlers{autofillHandlers: h}))
 	return app
 }
 
@@ -165,7 +165,7 @@ func TestRunAgentAutofillAnswersEachFailureAsWhatItIs(t *testing.T) {
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		app.Post("/api/v1/me/autofill/run",
-			auth.RequireAuthOrKey(iss, testVersions, stubValidKey{}), markPaidAI(unmeteredAI), h.RunAgentAutofill)
+			auth.RequireAuthOrKey(iss, testVersions, stubValidKey{}), markPaidAI(unmeteredAI), newContract(contractHandlers{autofillHandlers: h}))
 
 		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/autofill/run", nil)
 		req.Header.Set("Authorization", "Bearer "+token) // a session bearer: the extension's own connection

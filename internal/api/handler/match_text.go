@@ -1,18 +1,13 @@
 package handler
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"context"
+	"encoding/json"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/jobmatch"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 )
-
-// matchTextRequest is a job posting scraped from an arbitrary page: its heading
-// and visible text. No catalog job is required.
-type matchTextRequest struct {
-	Title string `json:"title"`
-	Text  string `json:"text"`
-}
 
 // textMatch derives skills from a posting's title+text with the same skilltag
 // pass ingest uses for job.Skills, then scores their coverage by the profile.
@@ -27,18 +22,18 @@ func textMatch(title, text string, profileSkills []string) jobmatch.JobMatch {
 // coverage as GET /jobs/:slug/match, but for a page that need not be in the
 // freehire catalog. This is what lets the browser extension show a match on any
 // job page. Cookie or API key; a caller without a profile is a 404.
-func (h *matchHandlers) MatchText(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *matchHandlers) MatchText(ctx context.Context, req *apigen.FitMatchTextRequest) (*apigen.MatchTextOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in matchTextRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	profile, err := h.userProfile.Get(c.Context(), userID)
+	profile, err := h.userProfile.Get(ctx, userID)
 	if err != nil {
-		return profileError(err)
+		return nil, profileError(err)
 	}
-	return c.JSON(fiber.Map{"data": textMatch(in.Title, in.Text, profile.Skills)})
+	raw, err := json.Marshal(textMatch(req.Title.Value, req.Text.Value, profile.Skills))
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.MatchTextOK{Data: raw}, nil
 }

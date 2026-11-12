@@ -112,6 +112,15 @@
     },
     {
       "name": "Mail"
+    },
+    {
+      "name": "Fit"
+    },
+    {
+      "name": "Autofill"
+    },
+    {
+      "name": "Support"
     }
   ],
   "paths": {
@@ -3763,6 +3772,96 @@
         ]
       }
     },
+    "/jobs/{slug}/fit": {
+      "get": {
+        "operationId": "getJobFit",
+        "description": "Alias of `getMatchAnalysis`.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitAnalysisResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Fit"
+        ]
+      },
+      "post": {
+        "operationId": "runJobFit",
+        "description": "Alias of `runMatchAnalysis`.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitAnalysisResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Fit"
+        ]
+      }
+    },
     "/jobs/{slug}/ghost-report": {
       "post": {
         "operationId": "createGhostReport",
@@ -3852,6 +3951,144 @@
         },
         "tags": [
           "Feedback"
+        ]
+      }
+    },
+    "/jobs/{slug}/match": {
+      "get": {
+        "operationId": "getJobMatch",
+        "description": "How well the job's skills are covered by the caller's profile, plus the advisory\nhard-constraint blockers. Deterministic, no model. A caller without a profile is a 404.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Fit"
+        ]
+      }
+    },
+    "/jobs/{slug}/match-analysis": {
+      "get": {
+        "operationId": "getMatchAnalysis",
+        "description": "The cached fit analysis for a job; never calls the model.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitAnalysisResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Fit"
+        ]
+      },
+      "post": {
+        "operationId": "runMatchAnalysis",
+        "description": "Runs the fit analysis and caches it. An unconfigured or failing model answers a null analysis.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitAnalysisResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Fit"
         ]
       }
     },
@@ -4821,6 +5058,84 @@
         },
         "tags": [
           "Tracking"
+        ]
+      }
+    },
+    "/me/autofill-profile": {
+      "get": {
+        "operationId": "getAutofillProfile",
+        "description": "The caller's canonical form fields, all empty bar the account email when no source\nstates a contact. Keys are the profile's own and the set grows with it.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Autofill"
+        ]
+      }
+    },
+    "/me/autofill/run": {
+      "post": {
+        "operationId": "runAutofill",
+        "description": "Fills the form in the caller's own browser through the browser-tool channel. Paid AI\nroute (unmetered). Only the extension's own Bearer session is admitted; anything else\nis a 403. The report names what was filled, deferred and left unmapped.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Autofill"
         ]
       }
     },
@@ -9386,6 +9701,55 @@
         ]
       }
     },
+    "/me/match-text": {
+      "post": {
+        "operationId": "matchText",
+        "description": "The same coverage for a posting that need not be in the catalogue.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Fit"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitMatchTextRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/mentorship/availability": {
       "get": {
         "operationId": "getMyAvailability",
@@ -11971,6 +12335,38 @@
         ]
       }
     },
+    "/me/tracking/analyses": {
+      "get": {
+        "operationId": "listMyAnalyses",
+        "description": "The jobs the caller has run the fit analysis on, newest first.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitAnalysedJobs"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Fit"
+        ]
+      }
+    },
     "/me/tracking/applied-companies": {
       "get": {
         "operationId": "listAppliedCompanySlugs",
@@ -13662,6 +14058,55 @@
         }
       }
     },
+    "/search/interpret": {
+      "post": {
+        "operationId": "interpretSearch",
+        "description": "Turns a written description of a job search into filter values. Open to signed-out\ncallers too, and a free AI route for every account. A description that resolved nothing\nis a 200 with `empty: true`.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Search"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchIntentRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/sources": {
       "get": {
         "operationId": "listSources",
@@ -13725,6 +14170,45 @@
                     "data": {
                       "$ref": "#/components/schemas/CatalogScale"
                     }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/stats/embeddings": {
+      "get": {
+        "operationId": "getEmbeddingProgress",
+        "description": "The embedding backfill's current progress document. Figures not yet measured are null.\nThe `/stats/embeddings/stream` route is Server-Sent Events and stays hand-written.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
                   },
                   "description": "A single item: `{\"data\": ...}`."
                 }
@@ -14332,6 +14816,100 @@
         },
         "tags": [
           "Search"
+        ]
+      }
+    },
+    "/support/sessions": {
+      "post": {
+        "operationId": "createSupportSession",
+        "description": "Starts a support conversation. The blank one the caller already has is handed back\n(200) rather than adding another; a new one is a 201.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SupportSession"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SupportSession"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Support"
+        ]
+      }
+    },
+    "/support/sessions/{id}/cancel": {
+      "post": {
+        "operationId": "cancelSupportTurn",
+        "description": "Stops the turn running in a support session.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful. "
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Support"
         ]
       }
     },
@@ -18402,6 +18980,139 @@
             "description": "Facet param, then value, then count. Every covered facet is present."
           }
         }
+      },
+      "FitAnalysedJob": {
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "company",
+          "closed",
+          "overall_score",
+          "verdict",
+          "analysed_at",
+          "stale"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "overall_score": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "verdict": {
+            "type": "string"
+          },
+          "analysed_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "stale": {
+            "type": "boolean"
+          }
+        },
+        "description": "One analysed job in the caller's list."
+      },
+      "FitAnalysedJobs": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FitAnalysedJob"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/FitAnalysedJobsMeta"
+          }
+        }
+      },
+      "FitAnalysedJobsMeta": {
+        "type": "object",
+        "required": [
+          "allowance"
+        ],
+        "properties": {
+          "allowance": {
+            "description": "Where the caller stands on the fit allowance today; null when it cannot be read."
+          }
+        }
+      },
+      "FitAnalysis": {
+        "type": "object",
+        "required": [
+          "has_cv",
+          "stale",
+          "analysis"
+        ],
+        "properties": {
+          "has_cv": {
+            "type": "boolean"
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "analysis": {},
+          "allowance": {},
+          "tailor_allowance": {}
+        },
+        "description": "The fit analysis for one job. `has_cv` is false when the caller has no stored CV;\n`stale` marks a cached analysis whose CV or job changed since; `analysis` is null when\nnone is cached or the model is unconfigured. The allowances ride on reads only and are\nabsent when they cannot be read."
+      },
+      "FitAnalysisResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/FitAnalysis"
+          }
+        }
+      },
+      "FitMatchTextRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "description": "A job posting scraped off any page."
+      },
+      "FitRefusal": {
+        "type": "object",
+        "required": [
+          "error",
+          "allowance"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "allowance": {},
+          "upgrade_url": {
+            "type": "string",
+            "description": "Absent for a fair-use refusal and for a caller already on the top plan."
+          }
+        },
+        "description": "The 402 a spent or missing fit allowance answers with."
       },
       "GeoSet": {
         "type": "object",
@@ -22882,6 +23593,18 @@
           }
         }
       },
+      "SearchIntentRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The description of the search; refused over the length limit."
+          },
+          "previous": {
+            "description": "The result being refined, echoed back from a prior answer."
+          }
+        }
+      },
       "SiteHealth": {
         "type": "object",
         "required": [
@@ -23794,6 +24517,33 @@
           }
         },
         "description": "One recognised piece of the query: a dictionary term, or text still being typed."
+      },
+      "SupportSession": {
+        "type": "object",
+        "required": [
+          "id",
+          "preset",
+          "label"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "preset": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "search_context": {},
+          "cv_id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "SurveyResponses": {
         "type": "object",
