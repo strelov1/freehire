@@ -31,6 +31,9 @@ type fakeStructuredResume struct {
 	// values model a caller for whom nothing was derived.
 	geo   resume.Geography
 	geoOK bool
+	// written, when set, receives the Owned block SetCandidateOwned was given; setErr makes that write fail.
+	written *resume.Owned
+	setErr  error
 }
 
 func (f fakeStructuredResume) Structured(context.Context, int64) (resumeextract.Structured, bool, error) {
@@ -52,6 +55,19 @@ func (f fakeStructuredResume) CandidateOwned(context.Context, int64) (resume.Own
 		return resume.OwnedFromStructured(f.provisional), nil
 	}
 	return resume.Owned{}, nil
+}
+
+// SetCandidateOwned applies the real limits and, when a test supplied written, records the
+// block there (the fake is passed by value, so the record is a pointer the test holds).
+func (f fakeStructuredResume) SetCandidateOwned(_ context.Context, _ int64, o resume.Owned) (resume.Owned, error) {
+	if f.setErr != nil {
+		return resume.Owned{}, f.setErr
+	}
+	o.Sanitize()
+	if f.written != nil {
+		*f.written = o
+	}
+	return o, nil
 }
 
 func (f fakeStructuredResume) StructureForSeed(context.Context, int64) (resumeextract.Structured, bool, error) {

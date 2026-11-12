@@ -43,7 +43,9 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 			"want, the skills they want to avoid, where and how they will work, and their CV " +
 			"(headline, years, experience, education — contacts are not included). Call this " +
 			"before asking the user what they are looking for; only ask about what the profile " +
-			"does not answer. The experience section reports the SHAPE of what they have told us — " +
+			"does not answer. The background block (headline, summary, years, education) is part of the " +
+			"profile, not a CV document — CV documents are read and edited with cv_get and cv_edit; " +
+			"`cv` repeats it under its old name. The experience section reports the SHAPE of what they have told us — " +
 			"which roles we know and how much evidence each carries — not the achievements " +
 			"themselves. Takes no arguments.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
@@ -81,14 +83,22 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 // and defeat trimming, so content is fetched per question through experience_search and
 // the summary tells the agent where it is worth asking one.
 type profileToolResult struct {
-	Specializations     []string                    `json:"specializations"`
-	Skills              []string                    `json:"skills"`
-	Seniorities         []string                    `json:"seniorities,omitempty"`
-	JobLanguages        []string                    `json:"job_languages,omitempty"`
-	ExcludedSkills      []string                    `json:"excluded_skills,omitempty"`
-	LocationPreferences any                         `json:"location_preferences,omitempty"`
-	CV                  *resumeextract.Professional `json:"cv,omitempty"`
-	Experience          *experienceSummary          `json:"experience,omitempty"`
+	Specializations     []string `json:"specializations"`
+	Skills              []string `json:"skills"`
+	Seniorities         []string `json:"seniorities,omitempty"`
+	JobLanguages        []string `json:"job_languages,omitempty"`
+	ExcludedSkills      []string `json:"excluded_skills,omitempty"`
+	LocationPreferences any      `json:"location_preferences,omitempty"`
+	// Background is the candidate's professional self-description: headline, summary,
+	// years, education, languages (work history is left to Experience). It is profile data,
+	// not a CV document, which is why it is named for what it is and not "cv".
+	Background *resumeextract.Professional `json:"background,omitempty"`
+	// CV is the same block under its original name, kept so a reader written against it does
+	// not break. Deprecated: drop it once get_profile's description has told agents to read
+	// `background` for a few weeks (revisit after 2026-12-01); it doubles this block in every
+	// transcript until then.
+	CV         *resumeextract.Professional `json:"cv,omitempty"`
+	Experience *experienceSummary          `json:"experience,omitempty"`
 }
 
 // experienceSummary is the bank at a glance.
@@ -131,12 +141,12 @@ func (h *assistantHandlers) profileToolResult(ctx context.Context, userID int64,
 		LocationPreferences: profile.LocationPreferences,
 		CV:                  h.profile.structuredCV(ctx, userID),
 	}
-	// The CV block already carries the whole work history, which is the very thing this
+	// The block already carries the whole work history, which is the very thing this
 	// summary exists to keep out of the transcript.
 	if out.CV != nil {
 		trimmed := *out.CV
 		trimmed.Experience = nil
-		out.CV = &trimmed
+		out.CV, out.Background = &trimmed, &trimmed
 	}
 	if summary := h.experienceSummary(ctx, userID, profile.Skills); summary != nil {
 		out.Experience = summary
