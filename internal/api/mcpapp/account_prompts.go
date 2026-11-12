@@ -34,9 +34,16 @@ func accountPrompts(tools []assistant.Tool) []promptSpec {
 				"If I have no saved profile yet, say so and offer to set one up first."))
 		setup := "Call get_profile and tell me what is missing: roles, skills, location and work mode, salary. " +
 			"Ask me about the gaps, then save my answers"
-		if served("update_profile") {
+		switch {
+		case served("get_setup_status") && served("add_cv") && served("update_profile"):
+			// The guided setup: a CV first, since the preferences are suggested from it.
+			setup = "Call get_setup_status and take me through what is missing, one step at a time. " +
+				"If I have no CV, ask me to paste it or tell you my work history, education and skills, " +
+				"and send it with add_cv in my own words. Show me every profile value it suggests, ask " +
+				"which to keep, and save only the ones I confirm with update_profile."
+		case served("update_profile"):
 			setup += " with update_profile once I agree."
-		} else {
+		default:
 			setup += " by sending me to /my/profile to fill them in."
 		}
 		out = append(out, fixed("set_up_my_profile", "Set up my profile",

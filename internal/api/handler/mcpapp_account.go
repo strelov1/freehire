@@ -66,6 +66,8 @@ func mcpAccountTools(assistants *assistantHandlers, origin string) []assistant.T
 	all = append(all, assistants.dictionaryMCPTools()...)
 	// Profile writes are cookie-only over REST (PUT /me/profile), so grant-only here too.
 	all = append(all, assistants.profileMCPTools()...)
+	// Storing a CV and reading its status are cookie-only over REST (PUT/GET /me/resume).
+	all = append(all, assistants.cvSetupMCPTools(origin)...)
 	all = append(all, assistants.buddies.mcpTools()...)
 	return append(all, assistants.problemMCPTools()...)
 }

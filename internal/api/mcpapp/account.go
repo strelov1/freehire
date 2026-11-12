@@ -27,7 +27,11 @@ const accountCapabilityInstructions = "freehire searches jobs, saves and tracks 
 
 const accountProfileInstructions = " and keeps the job-search profile. Call get_profile before the first search. "
 
-const accountAutoApplyInstructions = "Auto-apply prepares applications for review; saved answers may be sent to employers. "
+// accountSetupInstructions points a person with no CV or profile yet at the guided setup.
+const accountSetupInstructions = "get_setup_status: the next setup step. "
+
+// The capability line already says auto-apply prepares applications for review.
+const accountAutoApplyInstructions = "Auto-apply: saved answers may be sent to employers. "
 
 // accountPlanInstructions is kept to one clause: the tool's own description says what the
 // plan carries and that the free plan includes no AI. Only for a session served auto-apply,
@@ -92,6 +96,9 @@ func accountInstructions(tools []assistant.Tool) string {
 			out += ", prepares applications for review"
 		}
 		out += accountProfileInstructions
+	}
+	if served("get_setup_status") {
+		out += accountSetupInstructions
 	}
 	if served("auto_apply_start") {
 		out += accountAutoApplyInstructions

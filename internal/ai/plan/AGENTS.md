@@ -69,7 +69,10 @@ transaction. `store.go` is the transaction around it and nothing else.
 
 - **The `WithFreeAI` exceptions are marks, not missing checks.** The CV upload's background
   extraction and its retry run for every account on their own cheap model
-  (`RESUME_EXTRACT_MODEL`, falling back to `LLM_MODEL`). The parse was paid until 2026-10-19
+  (`RESUME_EXTRACT_MODEL`, falling back to `LLM_MODEL`). Every upload entry point
+  (`PUT /me/resume`, `/me/resume/extract`, the MCP `add_cv` tool, which takes only a first CV)
+  reaches it through one `storeCV`, and the mark is set inside the derivation, not by the
+  caller. The parse was paid until 2026-10-19
   and that cost paying customers: a CV uploaded before upgrading was never parsed, upgrading
   did not re-run it, and the experience bank every paid feature reads stayed empty. Support
   (`POST /support/sessions/:id/messages`, `assistant_support.go`) meters itself through

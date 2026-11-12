@@ -2,7 +2,7 @@
 
 The canonical MCP at `/api/v1/mcp` combines anonymous catalogue reads with
 OAuth account tools (`mixed.go`). Anonymous and OAuth sessions discover the same
-54 tools; personal calls without authentication never reach business code.
+56 tools; personal calls without authentication never reach business code.
 ChatGPT (User-Agent `openai-mcp`) gets an error result carrying `mcp/www_authenticate`,
 the in-band challenge its Apps SDK opens sign-in from. Every other host gets HTTP 401 with
 `WWW-Authenticate`, because Grok and Claude.ai ignore the in-band challenge and open sign-in
@@ -34,8 +34,23 @@ suggestions, problem reports and the interview-buddy tools. Dictionary suggestio
 buddy tools (`internal/api/handler/buddy_mcp_tools.go`: membership, mock hosts, slots,
 booking, cancelling and the hosting schedule) preserve the cookie-only REST gate, and so does
 `update_profile` (`assistant_profile_write_tool.go`: a partial update of the saved job-search
-profile: preferences plus the headline and summary text, never a CV document); problem
-reports use the signed-in agent's reporting workflow. A narrow (`cv`) key is a 403.
+profile: preferences plus the headline and summary text, never a CV document), and so do
+the guided-setup tools below; problem reports use the signed-in agent's reporting workflow.
+A narrow (`cv`) key is a 403.
+
+## Guided setup: `get_setup_status` and `add_cv`
+
+For a person who connects before uploading a CV (`internal/api/handler/assistant_setup_status_tool.go`,
+`assistant_cv_add_tool.go`, openspec/changes/mcp-cv-setup). `get_setup_status` derives, on every
+call and from existing state only, the steps `cv` → `preferences` → `alerts` → optional
+`paid_plan` and `agents_may_apply`, and ONE `next_step` (a tool or a page URL). `add_cv` takes
+the CV as text (100–30,000 characters) through `storeCV`, the website's own upload use case —
+so the stored document, the free extraction (`plan.WithFreeAI`, set inside the derivation) and
+the experience import are a paste on the profile page. Its atoms are `cv_import`: the text IS
+the stored CV they trace to, and a flag the agent set could not honestly tell a pasted CV from
+dictated history (`stated_in_chat` needs a transcript freehire holds). It refuses an account
+that already has a CV — replacing the person's document stays a website act — and returns
+suggested `specializations`/`seniorities`/`skills` that `update_profile` saves once confirmed.
 
 OAuth clients use `suggest_dictionary_term` when a user-requested specialization, skill
 or company industry cannot be resolved; zero search hits alone do not prove a gap.
