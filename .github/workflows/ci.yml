@@ -842,7 +842,8 @@ jobs:
           echo 'Generated contracts match the Go vocabularies.'
 
   # The HTTP contract: typespec/ compiles to openapi/api.openapi.json, and ogen turns
-  # that into internal/api/apigen, which the handlers implement. Both outputs are
+  # that into internal/api/apigen, which the handlers implement (and openapi-typescript
+  # into web/src/lib/generated/api.ts, the types the web client reads). The outputs are
   # committed, so a .tsp edit without `make api-contract` would ship the old Go and stay
   # green; this regenerates both and fails on any difference.
   api-contract:
@@ -877,11 +878,11 @@ jobs:
 
       - name: Assert the generated contract matches typespec/
         run: |
-          if [ -n "$(git status --porcelain -- openapi internal/api/apigen)" ]; then
-            git status --porcelain -- openapi internal/api/apigen
-            git --no-pager diff -- openapi internal/api/apigen
+          if [ -n "$(git status --porcelain -- openapi internal/api/apigen web/src/lib/generated/api.ts)" ]; then
+            git status --porcelain -- openapi internal/api/apigen web/src/lib/generated/api.ts
+            git --no-pager diff -- openapi internal/api/apigen web/src/lib/generated/api.ts
             echo
-            echo 'openapi/ or internal/api/apigen is stale. Run "make api-contract" and commit the result.'
+            echo 'openapi/, internal/api/apigen or web/src/lib/generated/api.ts is stale. Run "make api-contract" and commit the result.'
             exit 1
           fi
           echo 'Generated contract matches typespec/.'

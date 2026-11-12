@@ -43,9 +43,10 @@ mail-preview: ## Render every outgoing email and open the contact sheet in a bro
 	@(open $(MAIL_PREVIEW_DIR)/index.html 2>/dev/null || xdg-open $(MAIL_PREVIEW_DIR)/index.html 2>/dev/null) || \
 		echo "open $(MAIL_PREVIEW_DIR)/index.html"
 
-api-contract: ## Compile typespec/ to openapi/api.openapi.json, then generate internal/api/apigen from it
+api-contract: ## Compile typespec/ to openapi/api.openapi.json, then generate internal/api/apigen and the web's types from it
 	pnpm exec tsp compile typespec
 	node scripts/openapi-time-format.mjs openapi/api.openapi.json
+	pnpm exec openapi-typescript openapi/api.openapi.json -o web/src/lib/generated/api.ts --silent
 	@# Generated into a scratch dir and synced by content, so an unchanged contract touches no
 	@# file: the pre-commit hooks run in parallel, and go vet/govulncheck compiling apigen
 	@# while ogen --clean rewrote it in place saw a half-written package.

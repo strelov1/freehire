@@ -1,6 +1,7 @@
 import type { Http } from '../api-core';
 import type { EmailPrefs, EmailPrefsUpdate } from '../api-types';
 import { jsonBody } from '../api-core';
+import type { components } from '#lib/generated/api.js';
 
 export function emailPrefsApi({ requestData }: Http) {
   /** The email preferences a signed unsubscribe link opens. Unauthenticated: the
@@ -26,7 +27,7 @@ export function emailPrefsApi({ requestData }: Http) {
         activity_enabled: update.activity,
         news_enabled: update.news,
         deactivate_searches: update.deactivateSearches,
-      }),
+      } satisfies components['schemas']['EmailPrefsTokenUpdate']),
     );
   }
 
@@ -47,7 +48,7 @@ export function emailPrefsApi({ requestData }: Http) {
         activity_enabled: update.activity,
         news_enabled: update.news,
         deactivate_searches: update.deactivateSearches,
-      }),
+      } satisfies components['schemas']['EmailPrefsUpdate']),
     );
   }
 
