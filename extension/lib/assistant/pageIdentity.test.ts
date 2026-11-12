@@ -1,5 +1,56 @@
 import { describe, expect, it } from 'vitest';
-import { pageIdentity } from './pageIdentity';
+import { pageIdentity, readStablePageKey } from './pageIdentity';
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+describe('readStablePageKey', () => {
+  it('retries a stale page snapshot when a tab activation arrives during the read', async () => {
+    const first = deferred<string>();
+    let revision = 0;
+    let reads = 0;
+    const result = readStablePageKey(
+      () => (++reads === 1 ? first.promise : Promise.resolve('page-b')),
+      () => revision,
+      () => true,
+    );
+    revision++;
+    first.resolve('page-a');
+    expect(await result).toBe('page-b');
+  });
+
+  it('retries a same-page refresh instead of abandoning initialization', async () => {
+    const first = deferred<string>();
+    let revision = 0;
+    let reads = 0;
+    const result = readStablePageKey(
+      () => (++reads === 1 ? first.promise : Promise.resolve('page-a')),
+      () => revision,
+      () => true,
+    );
+    revision++;
+    first.resolve('page-a');
+    expect(await result).toBe('page-a');
+  });
+
+  it('discards a page snapshot if authentication or panel lifetime changed', async () => {
+    const read = deferred<string>();
+    let current = true;
+    const result = readStablePageKey(
+      () => read.promise,
+      () => 0,
+      () => current,
+    );
+    current = false;
+    read.resolve('page-a');
+    expect(await result).toBeNull();
+  });
+});
 
 describe('pageIdentity', () => {
   it.each(['boards.greenhouse.io', 'job-boards.greenhouse.io'])(

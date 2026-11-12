@@ -25,15 +25,17 @@ export function createConversationRestore(callbacks: RestoreCallbacks) {
       generation++;
       callbacks.loading(false);
     },
-    async run(token: string, key: string) {
+    async run(token: string | Promise<string | null>, key: string) {
       const request = ++requestId;
       const sameLifetime = capture();
       const current = () => sameLifetime() && request === requestId;
       try {
+        const credential = typeof token === 'string' ? token : await token;
+        if (!current() || !credential) return;
         const remembered = await callbacks.recall();
         if (!current() || !remembered || remembered.pageKey !== key) return;
         callbacks.loading(true);
-        const messages = await callbacks.load(remembered.id, token);
+        const messages = await callbacks.load(remembered.id, credential);
         if (current() && callbacks.canAdopt()) callbacks.adopt(remembered.id, messages);
       } catch (error) {
         if (current()) await callbacks.error(error);

@@ -20,3 +20,18 @@ export function pageIdentity(url: string): string {
     return url;
   }
 }
+
+/** Read the initial page before publishing the account to the panel. */
+export async function readStablePageKey(
+  read: () => Promise<string>,
+  revision: () => number,
+  isCurrent: () => boolean,
+): Promise<string | null> {
+  while (isCurrent()) {
+    const before = revision();
+    const key = await read();
+    if (!isCurrent()) return null;
+    if (before === revision()) return key;
+  }
+  return null;
+}

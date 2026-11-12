@@ -101,21 +101,26 @@ describe('sendTurn', () => {
     });
   });
 
-  // Stop renders as soon as a turn starts, so it is reachable before the response
-  // headers arrive. There the abort rejects the fetch, not the stream read.
-  it('reports cancelling before the response arrives as cancelled too', async () => {
+  it('waits for successful headers before sending an early cancellation', async () => {
     const calls: { url: string; init: RequestInit }[] = [];
+    let respond!: (response: Response) => void;
+    const response = new Promise<Response>((resolve) => {
+      respond = resolve;
+    });
     vi.stubGlobal('fetch', (url: string, init: RequestInit) => {
       calls.push({ url, init });
       if (url.endsWith('/cancel')) return Promise.resolve({ ok: true, status: 204 });
-      return new Promise((_resolve, reject) => {
-        (init.signal as AbortSignal).addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-      });
+      return response;
     });
 
     const seen: TurnEvent[] = [];
     const turn = sendTurn('s1', 'hi', 'tok', (e) => seen.push(e));
     turn.cancel();
+    expect(calls).toHaveLength(1);
+    expect(must(calls[0]).init.signal?.aborted).toBe(false);
+    expect(seen).toEqual([]);
+
+    respond(new Response(streamOf([]), { status: 200 }));
     await turn.done;
 
     expect(seen).toEqual([{ type: 'result', stop_reason: 'cancelled' }]);
@@ -128,25 +133,74 @@ describe('sendTurn', () => {
       credentials: 'omit',
       headers: { Authorization: 'Bearer tok' },
     });
+    expect(must(calls[0]).init.signal?.aborted).toBe(true);
   });
 
   it('still stops reading when the server cancellation request fails', async () => {
     const calls: string[] = [];
+    let started!: () => void;
+    const streaming = new Promise<void>((resolve) => {
+      started = resolve;
+    });
     vi.stubGlobal('fetch', (url: string, init: RequestInit) => {
       calls.push(url);
       if (url.endsWith('/cancel')) return Promise.reject(new TypeError('offline'));
-      return new Promise((_resolve, reject) => {
-        (init.signal as AbortSignal).addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-      });
+      return Promise.resolve({ ok: true, status: 200, body: hangingStream(init.signal as AbortSignal) });
     });
 
     const seen: TurnEvent[] = [];
-    const turn = sendTurn('s1', 'hi', 'tok', (event) => seen.push(event));
+    const turn = sendTurn('s1', 'hi', 'tok', (event) => {
+      seen.push(event);
+      if (event.type === 'assistant_text') started();
+    });
+    await streaming;
     turn.cancel();
     await turn.done;
 
     expect(calls).toContain(`${HIRE_ORIGIN}/api/v1/assistant/sessions/s1/cancel`);
-    expect(seen).toEqual([{ type: 'result', stop_reason: 'cancelled' }]);
+    expect(seen.at(-1)).toEqual({ type: 'result', stop_reason: 'cancelled' });
+  });
+
+  it.each([402, 503])('keeps an initial %s refusal when Stop was requested before headers', async (status) => {
+    const calls: string[] = [];
+    let respond!: (response: Response) => void;
+    const response = new Promise<Response>((resolve) => {
+      respond = resolve;
+    });
+    vi.stubGlobal('fetch', (url: string) => {
+      calls.push(url);
+      return response;
+    });
+    const seen: TurnEvent[] = [];
+    const turn = sendTurn('s1', 'hi', 'tok', (event) => seen.push(event));
+    turn.cancel();
+    respond(new Response('{}', { status }));
+
+    if (status === 402) await expect(turn.done).rejects.toBeInstanceOf(PlanRefused);
+    else await expect(turn.done).rejects.toThrow('could not send the message (503)');
+    expect(calls).toEqual([`${HIRE_ORIGIN}/api/v1/assistant/sessions/s1/messages`]);
+    expect(seen).toEqual([]);
+  });
+
+  it('preserves an initial transport failure after an early Stop without sending cancellation', async () => {
+    const calls: string[] = [];
+    let reject!: (reason: Error) => void;
+    const response = new Promise<Response>((_resolve, rejectResponse) => {
+      reject = rejectResponse;
+    });
+    vi.stubGlobal('fetch', (url: string) => {
+      calls.push(url);
+      return response;
+    });
+    const seen: TurnEvent[] = [];
+    const turn = sendTurn('s1', 'hi', 'tok', (event) => seen.push(event));
+    turn.cancel();
+    const failure = new TypeError('offline');
+    reject(failure);
+
+    await expect(turn.done).rejects.toBe(failure);
+    expect(calls).toEqual([`${HIRE_ORIGIN}/api/v1/assistant/sessions/s1/messages`]);
+    expect(seen).toEqual([]);
   });
 
   it('rejects when the turn could not be started', async () => {

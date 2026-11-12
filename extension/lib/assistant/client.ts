@@ -44,36 +44,39 @@ async function cancelTurn(sessionId: string, token: string): Promise<void> {
  */
 export function sendTurn(sessionId: string, text: string, token: string, onEvent: (e: TurnEvent) => void): Turn {
   const controller = new AbortController();
+  let cancellationRequested = false;
+  let accepted = false;
+
+  const stopAcceptedTurn = () => {
+    void cancelTurn(sessionId, token);
+    controller.abort();
+  };
 
   const done = (async () => {
-    // Divergence from the web's copy: the fetch is inside the abort guard, not
-    // outside it. Stop renders the moment a turn starts, so it is reachable before
-    // the response headers arrive — and there the abort rejects the fetch itself,
-    // which the web surfaces as a raw AbortError on screen.
-    let res: Response;
-    try {
-      res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`, {
-        method: 'POST',
-        credentials: 'omit',
-        headers: {
-          'content-type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ text }),
-        signal: controller.signal,
-      });
-    } catch (e) {
-      if (controller.signal.aborted) {
-        onEvent({ type: 'result', stop_reason: 'cancelled' });
-        return;
-      }
-      throw e;
-    }
+    const res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ text }),
+      signal: controller.signal,
+    });
     if (res.status === 402) {
       throw await planRefusal(res);
     }
     if (!res.ok) {
       throw new Error(`could not send the message (${res.status})`);
+    }
+    // Successful headers prove the server has claimed the turn. An earlier
+    // cancel request could arrive before that claim and do nothing; keep the
+    // message request alive until this point even if Stop was already pressed.
+    accepted = true;
+    if (cancellationRequested) {
+      stopAcceptedTurn();
+      onEvent({ type: 'result', stop_reason: 'cancelled' });
+      return;
     }
     if (!res.body) {
       throw new Error('the assistant returned no stream');
@@ -98,8 +101,8 @@ export function sendTurn(sessionId: string, text: string, token: string, onEvent
   return {
     done,
     cancel: () => {
-      void cancelTurn(sessionId, token);
-      controller.abort();
+      cancellationRequested = true;
+      if (accepted && !controller.signal.aborted) stopAcceptedTurn();
     },
   };
 }

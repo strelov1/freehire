@@ -11,7 +11,7 @@
   import { eventsFromTranscript } from '../../lib/assistant/wire';
   import { recallSession, rememberSession, forgetSession } from '../../lib/assistant/session';
   import { createConversationRestore } from '../../lib/assistant/conversationRestore';
-  import { pageIdentity } from '../../lib/assistant/pageIdentity';
+  import { pageIdentity, readStablePageKey } from '../../lib/assistant/pageIdentity';
   import { track } from '../../lib/analytics';
   import { signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
   import {
@@ -161,6 +161,7 @@
     // `handlePageChange`.
     const refresh = () => {
       if (user) void handlePageChange();
+      else pageRequestId++;
     };
     browser.tabs.onActivated.addListener(refresh);
     const onUpdated = (_id: number, info: { status?: string }) => {
@@ -181,6 +182,7 @@
     // has just been on the page, quite possibly answering a question there.
     const onFocus = () => {
       if (user) void refreshPlan();
+      else pageRequestId++;
     };
     window.addEventListener('focus', onFocus);
 
@@ -240,10 +242,9 @@
     if (chatPageKey !== null && key !== chatPageKey) {
       resetChat();
       chatPageKey = key;
-      const current = conversationRestore.capture();
-      const token = await getToken();
-      if (!current() || auth !== authGeneration || requestId !== pageRequestId) return;
-      if (token) void restoreConversation(token, key);
+      // The helper owns this pending read under the conversation's lifetime;
+      // another refresh of the same page must not invalidate its credentials.
+      void restoreConversation(getToken(), key);
     }
     chatPageKey = key;
     void loadMatch();
@@ -256,13 +257,18 @@
     if (auth !== authGeneration || !token) return;
     const restoredUser = await fetchMe(token);
     if (auth !== authGeneration || !restoredUser) return;
+    const current = conversationRestore.capture();
+    const key = await readStablePageKey(
+      currentPageKey,
+      () => pageRequestId,
+      () => auth === authGeneration && current(),
+    );
+    if (key === null || auth !== authGeneration || !current()) return;
+    chatPageKey = key;
+    // Publishing the account unlocks page refreshes and the composer, so its
+    // initial conversation page must already be known.
     user = restoredUser;
     tools.start(token);
-    const requestId = ++pageRequestId;
-    const current = conversationRestore.capture();
-    const key = await currentPageKey();
-    if (auth !== authGeneration || requestId !== pageRequestId || !current()) return;
-    chatPageKey = key;
     void loadMatch();
     void refreshPlan();
     void restoreConversation(token, key);
@@ -282,7 +288,7 @@
    * the user can act on from here — forget it and let the next message start a
    * fresh one.
    */
-  async function restoreConversation(token: string, key: string) {
+  async function restoreConversation(token: string | Promise<string | null>, key: string) {
     await conversationRestore.run(token, key);
   }
 
@@ -405,16 +411,19 @@
       if (auth !== authGeneration) return;
       const signedInUser = await fetchMe(token);
       if (auth !== authGeneration) return;
-      user = signedInUser;
-      if (!user) authError = 'Signed in, but could not load your account.';
+      if (!signedInUser) authError = 'Signed in, but could not load your account.';
       else {
+        const current = conversationRestore.capture();
+        const key = await readStablePageKey(
+          currentPageKey,
+          () => pageRequestId,
+          () => auth === authGeneration && current(),
+        );
+        if (key === null || auth !== authGeneration || !current()) return;
+        chatPageKey = key;
+        user = signedInUser;
         track('sign_in');
         tools.start(token);
-        const requestId = ++pageRequestId;
-        const current = conversationRestore.capture();
-        const key = await currentPageKey();
-        if (auth !== authGeneration || requestId !== pageRequestId || !current()) return;
-        chatPageKey = key;
         void loadMatch();
         void refreshPlan();
       }

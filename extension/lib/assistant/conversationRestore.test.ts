@@ -50,6 +50,37 @@ function harness() {
 }
 
 describe('conversation restoration', () => {
+  it('restores the remembered chat after delayed credentials resolve in the same lifetime', async () => {
+    const token = deferred<string | null>();
+    let adopted: StoredMessage[] = [];
+    const restore = createConversationRestore({
+      recall: async () => ({ id: 'chat-a', pageKey: 'page-a' }),
+      load: async (_id, credential) => (credential === 'token-a' ? transcript : []),
+      canAdopt: () => true,
+      adopt: (_id, messages) => {
+        adopted = messages;
+      },
+      loading: () => {},
+      error: () => {},
+    });
+    const pending = restore.run(token.promise, 'page-a');
+    token.resolve('token-a');
+    await pending;
+    expect(adopted).toEqual(transcript);
+  });
+
+  it('does not restore after delayed credentials outlive a page or account change', async () => {
+    const h = harness();
+    const token = deferred<string | null>();
+    const pending = h.restore.run(token.promise, 'page-a');
+    h.restore.invalidate();
+    token.resolve('token-a');
+    h.remembered.resolve({ id: 'chat-a', pageKey: 'page-a' });
+    h.response.resolve(transcript);
+    await pending;
+    expect(h.state().adopted).toEqual([]);
+  });
+
   it('adopts a valid conversation for the current page', async () => {
     const h = harness();
     const pending = h.restore.run('token-a', 'page-a');
@@ -95,9 +126,11 @@ describe('conversation restoration', () => {
 
   it('does not invalidate active conversation work when restoration starts', async () => {
     const h = harness();
+    const token = deferred<string | null>();
     h.occupy();
     const current = h.restore.capture();
-    const pending = h.restore.run('token-a', 'page-a');
+    const pending = h.restore.run(token.promise, 'page-a');
+    token.resolve('token-a');
     h.remembered.resolve({ id: 'chat-a', pageKey: 'page-a' });
     h.response.resolve(transcript);
     await pending;
