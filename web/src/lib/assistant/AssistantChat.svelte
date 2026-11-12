@@ -602,7 +602,8 @@
       // The support routes cannot replay a transcript, so the new session is opened as is.
       activeId = created.id;
       activePreset = 'support';
-      onSessionChange?.(created.id);
+      // A host that started over while this was being created has moved on to another chat.
+      if (!disposed) onSessionChange?.(created.id);
       return;
     }
     // Spent: the next chat minted here — "New chat", or a later boot() — is a plain one.

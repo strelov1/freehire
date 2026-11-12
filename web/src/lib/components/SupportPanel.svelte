@@ -32,6 +32,8 @@
   let sessionId = $state<string | null>(null);
   let answered = $state(false);
   let rated = $state<boolean | null>(null);
+  // One vote in flight at a time, so a late failure never restores a verdict a newer vote replaced.
+  let saving = $state(false);
 
   function newConversation() {
     chatKey++;
@@ -41,13 +43,16 @@
   }
 
   async function rate(helpful: boolean) {
-    if (!sessionId) return;
+    if (!sessionId || saving) return;
     const previous = rated;
     rated = helpful;
+    saving = true;
     try {
       await rateSupportSession(sessionId, helpful);
     } catch {
       rated = previous;
+    } finally {
+      saving = false;
     }
   }
 </script>
@@ -89,6 +94,7 @@
           <button
             type="button"
             onclick={() => rate(helpful)}
+            disabled={saving}
             aria-label={helpful ? s.helpedYes : s.helpedNo}
             aria-pressed={rated === helpful}
             class="rounded-md p-1 transition-colors hover:bg-accent hover:text-foreground aria-pressed:text-foreground"
