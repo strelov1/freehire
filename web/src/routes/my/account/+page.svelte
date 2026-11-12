@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { goto, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
@@ -48,7 +49,7 @@
 
 <svelte:head><title>{s.headTitle}</title></svelte:head>
 
-<h1 class="mb-1 text-2xl max-lg:text-xl font-semibold tracking-tight">{s.title}</h1>
+<AccountPageHeading class="mb-1">{s.title}</AccountPageHeading>
 <p class="mb-6 text-sm text-muted-foreground max-lg:sr-only">{s.subtitle}</p>
 
 <section class="mb-8 rounded-lg border border-border">

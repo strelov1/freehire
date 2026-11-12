@@ -11,7 +11,9 @@ const {
   getAgentPermissions,
   setAgentPermissions,
   user,
+  invalidateAll,
 } = vi.hoisted(() => ({
+  invalidateAll: vi.fn(),
   getAgentPermissions: vi.fn(),
   setAgentPermissions: vi.fn(),
   listOAuthGrants: vi.fn(),
@@ -32,6 +34,7 @@ const { StubApiError } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock('$app/navigation', () => ({ invalidateAll }));
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('#lib/api.js', () => ({
@@ -76,6 +79,7 @@ function openDialog(): HTMLElement {
 }
 
 beforeEach(() => {
+  invalidateAll.mockReset().mockResolvedValue(undefined);
   listOAuthGrants.mockReset().mockResolvedValue([grant]);
   revokeOAuthGrant.mockReset().mockResolvedValue(undefined);
   reauthenticatePassword.mockReset().mockResolvedValue('2099-01-01T00:00:00Z');
@@ -125,5 +129,6 @@ describe('ConnectedDevicesView', () => {
 
     expect(reauthenticatePassword).toHaveBeenCalledWith('hunter2');
     expect(revokeOAuthGrant).toHaveBeenCalledWith(9);
+    await vi.waitFor(() => expect(invalidateAll).toHaveBeenCalledOnce());
   });
 });

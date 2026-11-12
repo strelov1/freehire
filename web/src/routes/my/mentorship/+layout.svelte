@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import type { Snippet } from 'svelte';
   import { browserTimezone } from '#lib/mentorship.js';
 
@@ -16,7 +17,7 @@
 <!-- The account shell (my/+layout) owns the container, auth gate and noindex. -->
 <div class="flex flex-col gap-6">
   <div class="flex flex-col gap-1">
-    <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">Mentorship</h1>
+    <AccountPageHeading>Mentorship</AccountPageHeading>
     <p class="text-muted-foreground text-sm max-lg:sr-only">
       Half-hour conversations with people who work where you want to. Times shown in {timezone}.
     </p>

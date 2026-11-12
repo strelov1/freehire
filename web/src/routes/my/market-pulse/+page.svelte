@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { untrack } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
@@ -126,7 +127,7 @@
   <p class="py-12 text-center text-sm text-muted-foreground">{s.signedOut}</p>
 {:else}
   <div class="mb-6 flex flex-col gap-1">
-    <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">{s.title}</h1>
+    <AccountPageHeading>{s.title}</AccountPageHeading>
     <p class="text-sm text-muted-foreground max-lg:sr-only">
       {s.subtitle}
     </p>

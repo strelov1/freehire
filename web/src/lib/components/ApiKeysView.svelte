@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { X } from '@lucide/svelte';
   import { api } from '#lib/api.js';
@@ -96,6 +97,8 @@
   function dismiss(): void {
     revealed = null;
     createButton?.focus();
+    // A failed user reload can redirect; defer it until the one-time token is dismissed.
+    void invalidateAll();
   }
 
   function keepRevealed(): void {
@@ -148,6 +151,7 @@
       keysData.value = keysData.value.filter((k) => k.id !== key.id);
       if (revealed?.id === key.id) revealed = null;
       revokePassword = '';
+      if (!revealed || copied) await invalidateAll();
     } catch (error) {
       // ConfirmDialog shows a thrown message in place and holds itself open, which is what
       // keeps the confirmation the member needs on screen beside the failure that asked

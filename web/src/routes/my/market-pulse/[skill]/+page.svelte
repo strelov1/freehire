@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { ArrowLeft } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
@@ -115,6 +116,7 @@
   <p class="py-12 text-center text-sm text-muted-foreground">{s.signedOut}</p>
 {:else}
   <div class="flex flex-col gap-4">
+    <AccountPageHeading>{label}</AccountPageHeading>
     <a
       href={resolve('/my/market-pulse')}
       class="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -138,7 +140,6 @@
     {:else}
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 class="text-2xl font-semibold tracking-tight">{label}</h1>
           <div class="mt-1 flex items-baseline gap-2">
             <span class="text-3xl font-semibold tabular-nums">{skill.open_count}</span>
             <span class="text-sm text-muted-foreground">{plural(locale(), skill.open_count, s.openRoles)}</span>

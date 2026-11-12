@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { resolve } from '$app/paths';
   import { ApiError, api } from '#lib/api.js';
   import type { TalentNetworkVisibility } from '#lib/types.js';
@@ -76,7 +77,7 @@
      Full column width, like every other section, so card edges do not move between pages. -->
 <div class="flex flex-col gap-4">
   <div class="flex flex-col gap-1">
-    <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">Talent Network</h1>
+    <AccountPageHeading>Talent Network</AccountPageHeading>
     <p class="text-sm text-muted-foreground max-lg:sr-only">
       Get discovered without applying anywhere: appear in a public catalogue recruiters browse, without your name on it.
     </p>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { tick, untrack, type Snippet } from 'svelte';
   import { scrollBehavior } from '#lib/motion.js';
   import { Briefcase, ClipboardList, Tags, User } from '@lucide/svelte';
@@ -169,7 +170,7 @@
      heading sits above the gate so the section is titled while it is still loading and
      whether or not a profile exists yet, the way every other /my section titles itself. -->
 <div class="mb-6 flex flex-col gap-1">
-  <h1 class="text-2xl font-semibold tracking-tight max-lg:text-xl">{s.title}</h1>
+  <AccountPageHeading>{s.title}</AccountPageHeading>
   <p class="text-sm text-muted-foreground max-lg:sr-only">{s.description}</p>
 </div>
 

@@ -7,6 +7,7 @@ import { defineMessages } from '#lib/i18n/t.js';
 export const messages = defineMessages(
   {
     headTitle: 'CV readiness — freehire',
+    title: 'CV readiness',
     runReview: 'Run AI review',
     reRunReview: 'Re-run AI review',
     reviewing: 'Reviewing…',
@@ -24,6 +25,7 @@ export const messages = defineMessages(
   {
     ru: {
       headTitle: 'Готовность резюме для ATS — freehire',
+      title: 'Готовность резюме для ATS',
       runReview: 'Запустить AI-проверку',
       reRunReview: 'Запустить AI-проверку повторно',
       reviewing: 'Проверяем…',

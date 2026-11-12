@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { messages } from '#lib/components/ReferralsView.messages.js';
   import ReferralsView from '#lib/components/ReferralsView.svelte';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -13,6 +14,6 @@
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
 <div>
-  <h1 class="mb-4 text-2xl max-lg:text-xl font-semibold tracking-tight">{s.tabs.incoming}</h1>
+  <AccountPageHeading class="mb-4">{s.tabs.incoming}</AccountPageHeading>
   <ReferralsView tab="incoming" />
 </div>

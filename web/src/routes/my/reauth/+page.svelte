@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
@@ -25,7 +26,7 @@
 
 <svelte:head><title>Confirm identity · freehire</title></svelte:head>
 <div class="mx-auto max-w-md py-16 text-center">
-  <h1 class="mb-3 text-xl font-semibold tracking-tight">Confirm your identity</h1>
+  <AccountPageHeading class="mb-3">Confirm your identity</AccountPageHeading>
   {#if error}
     <p class="text-sm text-destructive">{error}</p>
   {:else}
