@@ -99,6 +99,8 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"report_job":              assistant.EffectAdds,
 		"suggest_dictionary_term": assistant.EffectAdds,
 		"report_problem":          assistant.EffectAdds,
+		// Replaces whichever preference lists the call sends.
+		"update_profile": assistant.EffectOverwrites,
 
 		"auto_apply_list":       assistant.EffectReads,
 		"auto_apply_get":        assistant.EffectReads,
