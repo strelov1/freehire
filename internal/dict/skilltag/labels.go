@@ -29,6 +29,17 @@ import (
 // Everything else is deliberately absent: "data-engineering" → "Data Engineering" needs
 // no curation, and listing it here would only be one more line to keep true.
 var displayNames = map[string]string{
+	// Industrial maintenance: acronyms and module names.
+	"sap-pm":                           "SAP PM",
+	"reliability-centered-maintenance": "Reliability-Centered Maintenance (RCM)",
+	"asset-performance-management":     "Asset Performance Management (APM)",
+	"total-productive-maintenance":     "Total Productive Maintenance (TPM)",
+	"overall-equipment-effectiveness":  "Overall Equipment Effectiveness (OEE)",
+	"mtbf":                             "MTBF",
+	"mttr":                             "MTTR",
+	"hvac":                             "HVAC",
+	"mep":                              "MEP",
+	"iso-17025":                        "ISO/IEC 17025",
 	// Occupational safety. Every one of these is an acronym or a vendor's own
 	// stylization, which is what this map is for — titleCase renders them "Osha",
 	// "Nfpa" and "Velocityehs".

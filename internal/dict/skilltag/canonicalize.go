@@ -170,5 +170,18 @@ func Resolve(value string) (string, bool) {
 	if _, ok := emittable[norm]; ok {
 		return norm, true
 	}
+	for surface, canonical := range sharedAcronyms {
+		if strings.EqualFold(norm, surface) {
+			return canonical, true
+		}
+	}
+	// A filter explicitly selects a skill rather than mining prose. Accept the
+	// acronyms the glossary advertises even when Parse needs an industrial category
+	// to disambiguate them (TPM can otherwise mean technical program manager).
+	for surface, scoped := range categoryScopedAcronyms {
+		if strings.EqualFold(norm, surface) {
+			return scoped.canonical, true
+		}
+	}
 	return canonicalizeToken(value, options{})
 }

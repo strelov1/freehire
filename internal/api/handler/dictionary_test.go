@@ -89,6 +89,11 @@ func TestDictionaryRecord(t *testing.T) {
 		`{"kind":"specialization","term":"Backend"}`,
 		`{"kind":"specialization","term":"Senior Backend Engineer"}`,
 		`{"kind":"skill","term":"k8s"}`,
+		`{"kind":"skill","term":"TPM"}`,
+		`{"kind":"skill","term":"rcm"}`,
+		`{"kind":"skill","term":"APM"}`,
+		`{"kind":"skill","term":"ППР"}`,
+		`{"kind":"skill","term":"oee"}`,
 		`{"kind":"industry","term":"software development"}`,
 		`{"kind":"industry","term":"finance"}`,
 	} {

@@ -208,9 +208,9 @@ func Parse(text string, opts ...Option) []string {
 	// carries no punctuation, so the dotted/hyphenated-suffix guard has nothing to
 	// protect here.
 	cased := stripMarkup(text)
-	matchAcronyms(cased, sharedAcronyms, strong)
+	matchAcronyms(cased, sharedAcronyms, strong, standalone)
 	if o.resumeAcronyms {
-		matchAcronyms(cased, resumeAcronyms, strong)
+		matchAcronyms(cased, resumeAcronyms, strong, standalone)
 	}
 	// Inlined rather than routed through matchAcronyms: its map value is a bare
 	// canonical string, but a categoryScopedAcronym also carries the allow-list
@@ -218,14 +218,25 @@ func Parse(text string, opts ...Option) []string {
 	if o.acronymCategory != "" {
 		for surface, ca := range categoryScopedAcronyms {
 			if ca.allowedCategories[o.acronymCategory] && wordmatch.Contains(cased, surface, wordmatch.UnicodeBoundary) {
-				strong[ca.canonical] = struct{}{}
+				if nonCorroboratingPhrases[ca.canonical] {
+					standalone[ca.canonical] = struct{}{}
+				} else {
+					strong[ca.canonical] = struct{}{}
+				}
 			}
 		}
 	}
 
-	norm := normalize(text)
+	norm := normalize(maskIndustrialAPI(text))
 	for _, m := range phraseMatchers {
-		if m.matches(norm) {
+		phraseText := norm
+		if m.canonical == "reliability-engineering" {
+			phraseText = siteReliabilityEngineeringRE.ReplaceAllString(norm, " ")
+			if !industrialMaintenanceCategories[o.acronymCategory] && !equipmentReliabilityEngineering.matches(phraseText) {
+				continue
+			}
+		}
+		if m.matches(phraseText) {
 			// A phrase that names a discipline rather than a technology tags itself
 			// but must not rescue the gated single-word canonicals: "AI-powered
 			// content marketing" describes the prose, not an AI requirement.
@@ -283,10 +294,14 @@ func writtenCapitalized(cased, word string) bool {
 
 // matchAcronyms adds the canonical of each acronym whose exact surface form occurs
 // as a standalone token in cased (case-preserved) text.
-func matchAcronyms(cased string, acronyms map[string]string, set map[string]struct{}) {
+func matchAcronyms(cased string, acronyms map[string]string, set, standalone map[string]struct{}) {
 	for surface, canonical := range acronyms {
 		if wordmatch.Contains(cased, surface, wordmatch.UnicodeBoundary) {
-			set[canonical] = struct{}{}
+			if nonCorroboratingPhrases[canonical] {
+				standalone[canonical] = struct{}{}
+			} else {
+				set[canonical] = struct{}{}
+			}
 		}
 	}
 }
