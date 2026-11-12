@@ -41,6 +41,14 @@ select:not([multiple], [size]) {
   background-size: 1rem;
   padding-right: 2rem;
 }
+/* The grey image ignores a forced-colors palette and can vanish on it; the native
+   arrow follows the palette, so it comes back there. */
+@media (forced-colors: active) {
+  select:not([multiple], [size]) {
+    appearance: auto;
+    background-image: none;
+  }
+}
 
 /* How a modal arrives: it grows out of the middle of the screen while it fades in, and
    its backdrop fades in under it. Short and decelerating, so a modal opened from the
