@@ -10,6 +10,7 @@ import type {
   Subscription,
   TelegramStatus,
 } from '../types';
+import type { components } from '#lib/generated/api.js';
 import { jsonBody } from '../api-core';
 
 export function submissionsApi({ call, request, requestData }: Http) {
@@ -70,7 +71,10 @@ export function submissionsApi({ call, request, requestData }: Http) {
 
   /** Submit a vacancy for moderation. Returns the pending submission. */
   async function submitJob(input: SubmissionInput): Promise<Submission> {
-    return requestData<Submission>('/api/v1/submissions', jsonBody('POST', input));
+    return requestData<Submission>(
+      '/api/v1/submissions',
+      jsonBody('POST', input satisfies components['schemas']['SubmissionRequest']),
+    );
   }
 
   /** The caller's own submissions with their review status. */

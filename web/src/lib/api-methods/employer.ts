@@ -7,6 +7,7 @@ import type {
   EmployerVacancyPatch,
   Job,
 } from '../types';
+import type { components } from '#lib/generated/api.js';
 import { ApiError, jsonBody } from '../api-core';
 
 export function employerApi({ call, requestData }: Http) {
@@ -50,7 +51,10 @@ export function employerApi({ call, requestData }: Http) {
   /** Apply the caller's authoritative edit to their own company's curated profile.
    *  Active-account-only. */
   async function updateEmployerCompany(input: EmployerCompanyProfileInput): Promise<EmployerCompany> {
-    return requestData<EmployerCompany>('/api/v1/employer/company', jsonBody('PATCH', input));
+    return requestData<EmployerCompany>(
+      '/api/v1/employer/company',
+      jsonBody('PATCH', input satisfies components['schemas']['EmployerCompanyPatch']),
+    );
   }
 
   /** Every vacancy the caller has published through this path, newest first, open and
@@ -63,13 +67,19 @@ export function employerApi({ call, requestData }: Http) {
    *  reopen one the caller already owns at the same URL. Active-account-only; a URL
    *  already owned by a different employer is a 409. */
   async function createEmployerVacancy(input: EmployerVacancyInput): Promise<Job> {
-    return requestData<Job>('/api/v1/employer/jobs', jsonBody('POST', input));
+    return requestData<Job>(
+      '/api/v1/employer/jobs',
+      jsonBody('POST', input satisfies components['schemas']['EmployerVacancyCreate']),
+    );
   }
 
   /** Edit a vacancy the caller's own account owns, addressed by public slug. Any other
    *  slug (missing, another owner's) is a 404. */
   async function updateEmployerVacancy(slug: string, input: EmployerVacancyPatch): Promise<Job> {
-    return requestData<Job>(`/api/v1/employer/jobs/${encodeURIComponent(slug)}`, jsonBody('PATCH', input));
+    return requestData<Job>(
+      `/api/v1/employer/jobs/${encodeURIComponent(slug)}`,
+      jsonBody('PATCH', input satisfies components['schemas']['EmployerVacancyPatch']),
+    );
   }
 
   /** Soft-close a vacancy the caller's own account owns. */

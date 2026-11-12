@@ -1,5 +1,6 @@
 import type { Http } from '../api-core';
 import type { ReferralCvOptions, ReferralOffer, ReferralRequestInput, SeekerReferralRequest } from '../types';
+import type { components } from '#lib/generated/api.js';
 import { jsonBody } from '../api-core';
 
 export function referralsApi({ call, requestData }: Http) {
@@ -8,7 +9,10 @@ export function referralsApi({ call, requestData }: Http) {
   /** Request a referral into a company's approved-referrer pool. 409 when the company has
    *  no referrer or an active request already exists; 422 on a bad CV/contact; 429 on cap. */
   async function createReferralRequest(input: ReferralRequestInput): Promise<SeekerReferralRequest> {
-    return requestData<SeekerReferralRequest>('/api/v1/me/referrals/requests', jsonBody('POST', input));
+    return requestData<SeekerReferralRequest>(
+      '/api/v1/me/referrals/requests',
+      jsonBody('POST', input satisfies components['schemas']['ReferralRequestCreate']),
+    );
   }
 
   /** The CVs the caller can attach to a referral request into a company, about a vacancy

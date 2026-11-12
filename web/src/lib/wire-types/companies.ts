@@ -1,3 +1,5 @@
+import type { components } from '#lib/generated/api.js';
+
 /** The lower-coverage extras stored in the company's `company_info` JSONB. Every
  *  field is optional — the loader omits what the source doesn't provide. */
 export interface CompanyInfo {
@@ -114,26 +116,14 @@ export interface ReportedCompanyFeedback extends CompanyFeedback {
 /** The result of casting or clearing a thumbs vote: the target's resulting public
  *  counters and the caller's own vote (-1, 0, 1). Returned by the vote endpoints
  *  and shaped identically for jobs and companies. */
-export interface VoteResult {
-  upvote_count: number;
-  downvote_count: number;
-  my_vote: number;
-}
+export type VoteResult = components['schemas']['VoteResult'];
 
 /** One company on the caller's watchlist (GET /me/watchlist), newest added first. */
-export interface WatchedCompany {
-  slug: string;
-  name: string;
-  added_at: string;
-}
+export type WatchedCompany = components['schemas']['WatchedCompany'];
 
 /** What a bulk import of names did: how many it added, how many were already on the
  *  list, and the entries that matched no company. */
-export interface WatchlistImportResult {
-  added: number;
-  already: number;
-  unmatched: string[];
-}
+export type WatchlistImportResult = components['schemas']['WatchlistImportResult'];
 
 /** A row of the companies catalog: company plus its computed job count and a few
  *  company-info facts for the card (present-only — absent on unenriched rows). */

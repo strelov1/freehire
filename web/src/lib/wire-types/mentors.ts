@@ -1,3 +1,5 @@
+import type { components } from '#lib/generated/api.js';
+
 /** One mentor as the PUBLIC routes return them — the directory row and the profile read
  *  are the same wire struct (`mentorResponse` in internal/api/handler/mentorship.go).
  *
@@ -44,13 +46,7 @@ export interface Mentor {
  *  Never re-derive the local fields from `starts_at` in the browser. The server already
  *  did that arithmetic against its own zone database, and a second answer computed here
  *  differs by exactly one hour twice a year — the kind of wrong that looks right. */
-export interface MentorSlot {
-  starts_at: string;
-  ends_at: string;
-  local_start: string;
-  local_end: string;
-  utc_offset: string;
-}
+export type MentorSlot = components['schemas']['BuddyMockSlot'];
 
 /** The slot endpoint's answer. `timezone` is the zone the server ACTUALLY used, which may
  *  not be the one asked for: an unrecognised name falls back to UTC. A client that assumes
@@ -70,30 +66,12 @@ export interface MentorSlots {
  *  `meeting_url` is present here and absent from the public profile: it is a live room,
  *  and only the two people meeting in it have any business holding the address.
  *  `seeker_email` reaches the MENTOR only — a seeker does not need their own back. */
-export interface MentorSession {
-  /** Random, not sequential: a booking is read by two accounts, and a countable id would
-   *  make any single authorisation slip enumerable. */
-  id: string;
-  mentor_slug: string;
-  headline: string;
-  starts_at: string;
-  ends_at: string;
-  status: string;
-  note: string;
-  meeting_url: string;
-  seeker_email?: string;
-  /** Ended and not cancelled — the state a review becomes possible in. Decided by the
-   *  server against one clock, not re-derived here. */
-  completed: boolean;
-}
+export type MentorSession = components['schemas']['MentorshipBooking'];
 
 /** A party's sessions, split by the server against ONE clock for the whole list, so a
  *  session starting mid-read cannot land in both halves or in neither. A cancelled
  *  session is PAST whatever its start says: nobody is going to it. */
-export interface MentorSessions {
-  upcoming: MentorSession[];
-  past: MentorSession[];
-}
+export type MentorSessions = components['schemas']['MentorshipSessions'];
 
 /** One availability row. Exactly one of `weekday` and `date` is set — the schema enforces
  *  it — so the pair is how a rule says which kind it is.
@@ -209,12 +187,4 @@ export interface MentorProfileInput {
  *  nothing to offer — so seed only the fields that are present and leave the rest at
  *  their ordinary blank defaults. A one-time starting point: apply it once on mount,
  *  then treat every field as an ordinary independent input. */
-export interface MentorProfileSuggestions {
-  name?: string;
-  headline?: string;
-  bio?: string;
-  languages?: string[];
-  topics?: string[];
-  timezone?: string;
-  company_slug?: string;
-}
+export type MentorProfileSuggestions = components['schemas']['MentorProfileSuggestions'];
