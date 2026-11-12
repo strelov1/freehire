@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { ArrowRight, ChevronDown, Layers, Map as MapIcon, Target } from '@lucide/svelte';
+  import { ArrowRight, Layers, Map as MapIcon, Target } from '@lucide/svelte';
   import { browser } from '$app/env';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -745,20 +745,16 @@
 {#snippet sortSelect()}
   <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
     <span class="hidden sm:inline">Sort</span>
-    <!-- The native arrow is replaced: it sat over the end of the selected text. -->
-    <span class="relative flex items-center">
-      <select
-        aria-label="Sort jobs"
-        class="appearance-none rounded-lg border border-input bg-transparent py-2 pl-2 pr-6 text-sm max-sm:max-w-24 text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:py-1 dark:bg-input/30"
-        value={selectedSort}
-        onchange={(e) => filters.setSort(e.currentTarget.value as JobSort)}
-      >
-        {#each sortOptions as opt (opt.value)}
-          <option value={opt.value}>{opt.label}</option>
-        {/each}
-      </select>
-      <ChevronDown class="pointer-events-none absolute right-1.5 size-3.5 text-muted-foreground" aria-hidden="true" />
-    </span>
+    <select
+      aria-label="Sort jobs"
+      class="rounded-lg border border-input bg-transparent py-2 pl-2 text-sm max-sm:max-w-24 text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:py-1 dark:bg-input/30"
+      value={selectedSort}
+      onchange={(e) => filters.setSort(e.currentTarget.value as JobSort)}
+    >
+      {#each sortOptions as opt (opt.value)}
+        <option value={opt.value}>{opt.label}</option>
+      {/each}
+    </select>
   </label>
 {/snippet}
 
@@ -778,23 +774,20 @@
   {@const openBound = openWithinAvailable}
   <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
     <span class="hidden sm:inline">{openBound ? 'Open' : 'Posted'}</span>
-    <span class="relative flex items-center">
-      <select
-        aria-label={openBound ? 'Open within' : 'Posted within'}
-        class="appearance-none rounded-lg border border-input bg-transparent py-2 pl-2 pr-6 text-sm max-sm:max-w-20 text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:py-1 dark:bg-input/30"
-        value={String((openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) ?? '')}
-        onchange={(e) => {
-          const days = Number(e.currentTarget.value) || null;
-          if (openBound) filters.pickOpenWithinDays(days);
-          else filters.pickPostedWithinDays(days);
-        }}
-      >
-        {#each freshnessOptions(openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) as preset (preset.label)}
-          <option value={String(preset.days ?? '')}>{preset.label}</option>
-        {/each}
-      </select>
-      <ChevronDown class="pointer-events-none absolute right-1.5 size-3.5 text-muted-foreground" aria-hidden="true" />
-    </span>
+    <select
+      aria-label={openBound ? 'Open within' : 'Posted within'}
+      class="rounded-lg border border-input bg-transparent py-2 pl-2 text-sm max-sm:max-w-20 text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:py-1 dark:bg-input/30"
+      value={String((openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) ?? '')}
+      onchange={(e) => {
+        const days = Number(e.currentTarget.value) || null;
+        if (openBound) filters.pickOpenWithinDays(days);
+        else filters.pickPostedWithinDays(days);
+      }}
+    >
+      {#each freshnessOptions(openBound ? filters.value.openWithinDays : filters.value.postedWithinDays) as preset (preset.label)}
+        <option value={String(preset.days ?? '')}>{preset.label}</option>
+      {/each}
+    </select>
   </label>
 {/snippet}
 
