@@ -91,7 +91,7 @@ func Handler(r Reader, origin string) http.Handler {
 }
 
 func newServer(r Reader, origin string) *mcp.Server {
-	return newCatalogueServer(r, origin, serverInstructions, "public")
+	return newCatalogueServer(forAnonymous(r), origin, serverInstructions, "public")
 }
 
 func newCatalogueServer(r Reader, origin, instructions, surface string) *mcp.Server {
