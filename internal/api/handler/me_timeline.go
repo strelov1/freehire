@@ -43,50 +43,30 @@ func (h *timelineHandlers) register(api fiber.Router, mw middleware, contract fi
 	api.Get("/me/interviews", mw.key, contract)
 }
 
-// timelineEvent is one ledger event on the wire — a projection of apptimeline.Event, and
-// separate from it so that a field added to the service type has to be published
-// deliberately rather than by inheritance.
+// timelineWire projects the service's events onto the wire — separate from apptimeline.Event
+// so that a field added to the service type has to be published deliberately rather than by
+// inheritance. Shared by the range read and the single application's history, so an event
+// published by one cannot carry a field the other withholds.
 //
-// The optional members are omitted rather than zeroed; apptimeline.Event says when each
-// is legitimately absent.
-type timelineEvent struct {
-	ID     int64  `json:"id"`
-	Kind   string `json:"kind"`
-	Signal string `json:"signal,omitempty"`
-	Source string `json:"source"`
-	// Observed is the server's verdict, not the reader's: appevent owns the rule that
-	// says which sources carry a date somebody other than the candidate set.
-	Observed bool `json:"observed"`
-	// OccurredAt is an instant, not a day. Which day it falls on depends on the reader's
-	// clock, so the grouping belongs in the browser that knows it.
-	OccurredAt    time.Time `json:"occurred_at"`
-	CompanySlug   string    `json:"company_slug"`
-	RoleTitle     string    `json:"role_title,omitempty"`
-	ApplicationID int64     `json:"application_id,omitempty"`
-	JobSlug       string    `json:"job_slug,omitempty"`
-	EmailID       int64     `json:"email_id,omitempty"`
-	EmailSubject  string    `json:"email_subject,omitempty"`
-}
-
-// timelineEvents projects the service's events onto the wire. Shared by the range read and
-// the single application's history, so an event published by one cannot carry a field the
-// other withholds.
-func timelineEvents(events []apptimeline.Event) []timelineEvent {
-	out := make([]timelineEvent, 0, len(events))
+// The optional members are omitted rather than zeroed; apptimeline.Event says when each is
+// legitimately absent. OccurredAt is an instant, not a day: which day it falls on depends on
+// the reader's clock, so the grouping belongs in the browser that knows it.
+func timelineWire(events []apptimeline.Event) []apigen.TimelineEvent {
+	out := make([]apigen.TimelineEvent, 0, len(events))
 	for _, e := range events {
-		out = append(out, timelineEvent{
+		out = append(out, apigen.TimelineEvent{
 			ID:            e.ID,
 			Kind:          e.Kind,
-			Signal:        e.Signal,
+			Signal:        optString(e.Signal),
 			Source:        e.Source,
 			Observed:      e.Observed,
 			OccurredAt:    e.OccurredAt,
 			CompanySlug:   e.CompanySlug,
-			RoleTitle:     e.RoleTitle,
-			ApplicationID: e.ApplicationID,
-			JobSlug:       e.JobSlug,
-			EmailID:       e.EmailID,
-			EmailSubject:  e.EmailSubject,
+			RoleTitle:     optString(e.RoleTitle),
+			ApplicationID: optInt64(e.ApplicationID),
+			JobSlug:       optString(e.JobSlug),
+			EmailID:       optInt64(e.EmailID),
+			EmailSubject:  optString(e.EmailSubject),
 		})
 	}
 	return out
@@ -107,23 +87,7 @@ func (h *timelineHandlers) GetTimeline(ctx context.Context, params apigen.GetTim
 		return nil, err
 	}
 
-	out := make([]apigen.TimelineEvent, 0, len(events))
-	for _, e := range events {
-		out = append(out, apigen.TimelineEvent{
-			ID:            e.ID,
-			Kind:          e.Kind,
-			Signal:        optString(e.Signal),
-			Source:        e.Source,
-			Observed:      e.Observed,
-			OccurredAt:    e.OccurredAt,
-			CompanySlug:   e.CompanySlug,
-			RoleTitle:     optString(e.RoleTitle),
-			ApplicationID: optInt64(e.ApplicationID),
-			JobSlug:       optString(e.JobSlug),
-			EmailID:       optInt64(e.EmailID),
-			EmailSubject:  optString(e.EmailSubject),
-		})
-	}
+	out := timelineWire(events)
 	return &apigen.GetTimelineOK{Data: out, Meta: apigen.TimelineMeta{From: from, To: to, Count: int64(len(out))}}, nil
 }
 

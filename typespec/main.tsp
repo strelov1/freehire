@@ -40,6 +40,7 @@ import "./search.tsp";
 import "./resume.tsp";
 import "./cv.tsp";
 import "./mentorship.tsp";
+import "./mail.tsp";
 
 using Http;
 

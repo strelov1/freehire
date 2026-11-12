@@ -109,6 +109,9 @@
     },
     {
       "name": "CV"
+    },
+    {
+      "name": "Mail"
     }
   ],
   "paths": {
@@ -7864,6 +7867,496 @@
         }
       }
     },
+    "/me/emails": {
+      "post": {
+        "operationId": "ingestEmails",
+        "description": "A batch of messages the caller's own mail client fetched, as `messages`: a list of\nobjects with `external_id`, `thread_id`, `from_addr`, `from_name`, `subject`, `body_text`,\n`body_html` and `received_at`. The mail service validates the batch and refuses it whole with a 400.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxIngested"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          }
+        }
+      }
+    },
+    "/me/emails/{id}": {
+      "get": {
+        "operationId": "getEmail",
+        "description": "Opening a message marks it read. 404 for another user's, or an id that is not a number.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxEmail"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/me/emails/{id}/application": {
+      "post": {
+        "operationId": "createApplicationFromEmail",
+        "description": "Records the application from the email and links it, dated by the email. 409 while a suggestion is pending.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxEmail"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxLinkTarget"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/emails/{id}/confirm": {
+      "post": {
+        "operationId": "confirmEmailLink",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxEmail"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/me/emails/{id}/delete": {
+      "post": {
+        "operationId": "deleteEmail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/me/emails/{id}/link": {
+      "post": {
+        "operationId": "linkEmail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxEmail"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxLinkTarget"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/emails/{id}/reject": {
+      "post": {
+        "operationId": "rejectEmailLink",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxEmail"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/me/emails/{id}/restore": {
+      "post": {
+        "operationId": "restoreEmail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/me/emails/{id}/triage": {
+      "post": {
+        "operationId": "triageEmail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxEmail"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxTriage"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/emails/{id}/unlink": {
+      "post": {
+        "operationId": "unlinkEmail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxEmail"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
     "/me/experience": {
       "get": {
         "operationId": "listExperience",
@@ -8222,6 +8715,354 @@
         ]
       }
     },
+    "/me/gmail": {
+      "get": {
+        "operationId": "gmailStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/GmailStatus"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      },
+      "delete": {
+        "operationId": "gmailDisconnect",
+        "description": "Revokes the grant (best effort) and purges the token and the synced Gmail mail.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/GmailDisconnected"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/me/gmail/sync": {
+      "post": {
+        "operationId": "syncGmail",
+        "description": "Starts a background sync. Registered only where Gmail is configured.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/GmailSyncStarted"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/me/inbox": {
+      "get": {
+        "operationId": "getInbox",
+        "description": "The caller's mail, newest first, without deleted messages. Filters: `source`, `status`,\n`link`, `q`, `unread`, `unclassified`, `include_other`; `body` adds each message's body\n(pages are then capped lower). A page param that does not read falls back to its default.",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "unread",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "unclassified",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "include_other",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "body",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/me/inbox/read-all": {
+      "post": {
+        "operationId": "markAllReadInbox",
+        "description": "Marks every unread message matching the same filters as the listing.",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "unread",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "unclassified",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "include_other",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxMarked"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
     "/me/interviews": {
       "get": {
         "operationId": "getInterviews",
@@ -8378,6 +9219,124 @@
             }
           }
         }
+      }
+    },
+    "/me/mailbox": {
+      "get": {
+        "operationId": "getMailbox",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MailboxStatus"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      },
+      "post": {
+        "operationId": "claimMailbox",
+        "description": "Registered only where a receiving domain is configured.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MailboxStatus"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      },
+      "delete": {
+        "operationId": "releaseMailbox",
+        "description": "Drops the mailbox and its received mail; Gmail mail stays.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MailboxStatus"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
       }
     },
     "/me/market-pulse": {
@@ -11224,6 +12183,247 @@
         "tags": [
           "Tracking"
         ]
+      }
+    },
+    "/me/tracking/{slug}": {
+      "get": {
+        "operationId": "getTrackedApplication",
+        "description": "The caller's application for a job slug with its linked mail. 404 when not tracked.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxApplicationDetail"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/me/tracking/{slug}/followup": {
+      "get": {
+        "operationId": "getApplicationFollowUp",
+        "description": "409 unless the application is waiting on a reply.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MailFollowUpDraft"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      },
+      "post": {
+        "operationId": "recordApplicationFollowUp",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/me/tracking/{slug}/mail-recall": {
+      "post": {
+        "operationId": "recallApplicationMail",
+        "description": "Sweeps the mailbox for mail belonging to the application and records suggestions. Paid AI.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MailRecallResult"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ]
+      }
+    },
+    "/me/tracking/{slug}/mail-recall/link": {
+      "post": {
+        "operationId": "linkRecalledMail",
+        "description": "Imports a message the sweep proposed and links it to the application.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxEmail"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailRecalledPick"
+              }
+            }
+          }
+        }
       }
     },
     "/me/usage": {
@@ -17266,6 +18466,62 @@
           }
         }
       },
+      "GmailDisconnected": {
+        "type": "object",
+        "required": [
+          "connected"
+        ],
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GmailStatus": {
+        "type": "object",
+        "required": [
+          "connected",
+          "available",
+          "calendar_connected",
+          "mentor_calendar_connected",
+          "mentor_busy_sync_connected"
+        ],
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "calendar_connected": {
+            "type": "boolean"
+          },
+          "mentor_calendar_connected": {
+            "type": "boolean"
+          },
+          "mentor_busy_sync_connected": {
+            "type": "boolean"
+          }
+        },
+        "description": "Whether Gmail is connected. `email` and `status` are sent only when a connection row\nexists; `available` says whether the connect flow is configured on this deployment."
+      },
+      "GmailSyncStarted": {
+        "type": "object",
+        "required": [
+          "started"
+        ],
+        "properties": {
+          "started": {
+            "type": "boolean"
+          }
+        }
+      },
       "GrowthPoint": {
         "type": "object",
         "required": [
@@ -17317,6 +18573,431 @@
           }
         },
         "description": "A query param the endpoint did not read: unknown, or known but unreadable\n(`min_years=lots`). Either way the answer is wider than the caller asked for."
+      },
+      "InboxApplicationDetail": {
+        "type": "object",
+        "required": [
+          "job",
+          "viewed_at",
+          "saved_at",
+          "applied_at",
+          "followed_up_at",
+          "emails",
+          "events"
+        ],
+        "properties": {
+          "job": {
+            "description": "The job in the shared wire shape."
+          },
+          "viewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "applied_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stage": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "followed_up_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InboxApplicationEmail"
+            }
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimelineEvent"
+            },
+            "description": "The ledger, newest first."
+          },
+          "stage_suggestion": {
+            "description": "The stage the newest classified message implies; absent when there is nothing to offer."
+          },
+          "auto_apply": {
+            "description": "The caller's live auto-apply attempt for this job; absent when none exists."
+          }
+        },
+        "description": "The job, the caller's interaction with it, the linked mail and the history."
+      },
+      "InboxApplicationEmail": {
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "from_addr",
+          "from_name",
+          "subject",
+          "received_at",
+          "read"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source": {
+            "type": "string"
+          },
+          "from_addr": {
+            "type": "string"
+          },
+          "from_name": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "status_signal": {
+            "type": "string"
+          },
+          "link_source": {
+            "type": "string"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "read": {
+            "type": "boolean"
+          }
+        }
+      },
+      "InboxEmail": {
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "external_id",
+          "from_addr",
+          "from_name",
+          "subject",
+          "body_text",
+          "body_html",
+          "received_at",
+          "read"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source": {
+            "type": "string"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "from_addr": {
+            "type": "string"
+          },
+          "from_name": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "body_text": {
+            "type": "string"
+          },
+          "body_html": {
+            "type": "string"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "status_signal": {
+            "type": "string"
+          },
+          "link_source": {
+            "type": "string"
+          },
+          "linked_slug": {
+            "type": "string"
+          },
+          "linked_company": {
+            "type": "string"
+          },
+          "suggested_slug": {
+            "type": "string"
+          },
+          "suggested_company": {
+            "type": "string"
+          }
+        },
+        "description": "One message with its body. The internal raw-MIME pointer is not exposed."
+      },
+      "InboxIngested": {
+        "type": "object",
+        "required": [
+          "inserted",
+          "updated"
+        ],
+        "properties": {
+          "inserted": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "InboxLinkTarget": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "Names the application: a catalogue job's slug. Required, 400 when empty."
+      },
+      "InboxLinking": {
+        "type": "object",
+        "properties": {
+          "status_signal": {
+            "type": "string"
+          },
+          "link_source": {
+            "type": "string"
+          },
+          "linked_slug": {
+            "type": "string"
+          },
+          "linked_company": {
+            "type": "string"
+          },
+          "suggested_slug": {
+            "type": "string"
+          },
+          "suggested_company": {
+            "type": "string"
+          }
+        },
+        "description": "The classification and link overlay every message carries; each is absent when empty."
+      },
+      "InboxMarked": {
+        "type": "object",
+        "required": [
+          "marked"
+        ],
+        "properties": {
+          "marked": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "InboxMessage": {
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "external_id",
+          "from_addr",
+          "from_name",
+          "subject",
+          "snippet",
+          "received_at",
+          "read"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source": {
+            "type": "string"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "from_addr": {
+            "type": "string"
+          },
+          "from_name": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "body_text": {
+            "type": "string"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "status_signal": {
+            "type": "string"
+          },
+          "link_source": {
+            "type": "string"
+          },
+          "linked_slug": {
+            "type": "string"
+          },
+          "linked_company": {
+            "type": "string"
+          },
+          "suggested_slug": {
+            "type": "string"
+          },
+          "suggested_company": {
+            "type": "string"
+          }
+        },
+        "description": "One row of the listing. `body_text` is sent only when the listing asked for bodies."
+      },
+      "InboxMeta": {
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset",
+          "hidden"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hidden": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many messages the default filter suppressed."
+          }
+        }
+      },
+      "InboxPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InboxMessage"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/InboxMeta"
+          }
+        }
+      },
+      "InboxTriage": {
+        "type": "object",
+        "properties": {
+          "signal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "format": "float"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stored for display; gates nothing."
+          }
+        },
+        "description": "The verdict an agent records for one message. Left-out fields read as empty."
       },
       "IngestStatus": {
         "type": "object",
@@ -17992,6 +19673,133 @@
           }
         },
         "description": "Where and how the caller wants to work. Every member is optional on a save; an\nentirely empty block clears it. Echoed back normalised, with `remote`, `base` and\n`relocation` always present."
+      },
+      "MailFollowUpDraft": {
+        "type": "object",
+        "required": [
+          "subject",
+          "body",
+          "days_silent"
+        ],
+        "properties": {
+          "subject": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "recipient_name": {
+            "type": "string"
+          },
+          "days_silent": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A chase the candidate sends themselves; `recipient` is absent when nobody ever replied."
+      },
+      "MailRecallResult": {
+        "type": "object",
+        "required": [
+          "scanned",
+          "suggested",
+          "invitations"
+        ],
+        "properties": {
+          "scanned": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "suggested": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailRecalledEmail"
+            }
+          },
+          "invitations": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "MailRecalledEmail": {
+        "type": "object",
+        "required": [
+          "id",
+          "from_addr",
+          "from_name",
+          "subject",
+          "received_at",
+          "invitation"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "from_addr": {
+            "type": "string"
+          },
+          "from_name": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "invitation": {
+            "type": "boolean"
+          }
+        },
+        "description": "One message the recall sweep proposes. `id` is 0 for a message the search found."
+      },
+      "MailRecalledPick": {
+        "type": "object",
+        "properties": {
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "The message the caller picked out of a sweep. Required, 400 when empty."
+      },
+      "MailboxStatus": {
+        "type": "object",
+        "required": [
+          "available",
+          "address"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
       },
       "MarketPulseMeta": {
         "type": "object",

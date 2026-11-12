@@ -40,10 +40,10 @@ func TestHostedMailboxEndToEnd(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	ra := auth.RequireAuth(iss, testVersions)
-	app.Get("/api/v1/me/mailbox", ra, h.GetMailbox)
-	app.Post("/api/v1/me/mailbox", ra, h.ClaimMailbox)
-	app.Delete("/api/v1/me/mailbox", ra, h.ReleaseMailbox)
-	app.Get("/api/v1/me/inbox", ra, h.GetInbox)
+	app.Get("/api/v1/me/mailbox", ra, newContract(contractHandlers{inboxHandlers: h}))
+	app.Post("/api/v1/me/mailbox", ra, newContract(contractHandlers{inboxHandlers: h}))
+	app.Delete("/api/v1/me/mailbox", ra, newContract(contractHandlers{inboxHandlers: h}))
+	app.Get("/api/v1/me/inbox", ra, newContract(contractHandlers{inboxHandlers: h}))
 
 	do := func(method, path string) (int, map[string]any) {
 		r := httptest.NewRequest(method, path, nil)
@@ -137,7 +137,7 @@ func TestGetMailbox_LegacyRowWithNoUsernameYet(t *testing.T) {
 	h := newInboxHandlers(db.New(pool), pool, nil, nil, "", false, "inbox.freehire.test")
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/mailbox", auth.RequireAuth(iss, testVersions), h.GetMailbox)
+	app.Get("/api/v1/me/mailbox", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{inboxHandlers: h}))
 
 	r := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/me/mailbox", nil)
 	r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})

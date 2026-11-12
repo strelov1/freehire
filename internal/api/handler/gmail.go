@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/apptimeline"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/application/inbox"
@@ -119,7 +120,7 @@ func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *g
 	}
 }
 
-func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
+func (h *inboxHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Mail inbox (Gmail connect + hosted mailbox). Open to every signed-in user.
 	// The read + disconnect routes are always registered (empty/no-op when not
 	// connected); the OAuth connect routes only when configured.
@@ -133,37 +134,37 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	// The OAuth connect flow is the exception and stays browser-bound: it
 	// redirects a browser to Google's consent screen and back, so it is
 	// meaningless to a keyed client and must not be reachable by one.
-	api.Get("/me/gmail", mw.key, h.GmailStatus)
-	api.Delete("/me/gmail", mw.key, h.GmailDisconnect)
-	api.Get("/me/inbox", mw.key, h.GetInbox)
-	api.Post("/me/inbox/read-all", mw.key, h.MarkAllReadInbox)
-	api.Get("/me/emails/:id", mw.key, h.GetEmail)
-	api.Post("/me/emails/:id/delete", mw.key, h.DeleteEmail)
-	api.Post("/me/emails/:id/restore", mw.key, h.RestoreEmail)
+	api.Get("/me/gmail", mw.key, contract)
+	api.Delete("/me/gmail", mw.key, contract)
+	api.Get("/me/inbox", mw.key, contract)
+	api.Post("/me/inbox/read-all", mw.key, contract)
+	api.Get("/me/emails/:id", mw.key, contract)
+	api.Post("/me/emails/:id/delete", mw.key, contract)
+	api.Post("/me/emails/:id/restore", mw.key, contract)
 	// Agent surface: a caller's own harness pushes mail it fetched itself and
 	// records its triage verdict.
-	api.Post("/me/emails", mw.key, h.IngestEmails)
-	api.Post("/me/emails/:id/triage", mw.key, h.TriageEmail)
+	api.Post("/me/emails", mw.key, contract)
+	api.Post("/me/emails/:id/triage", mw.key, contract)
 	// Email → application linking. :slug is registered after the static
 	// /me/tracking/* routes (see Register) so it does not shadow them.
-	api.Get("/me/tracking/:slug", mw.key, h.GetTrackedApplication)
+	api.Get("/me/tracking/:slug", mw.key, contract)
 	// The chase for an application that went quiet: assemble the draft, and record that the
 	// candidate sent it. A key is admitted for the same reason the apply write admits one — the
 	// CLI records applications, and a follow-up is the same kind of act.
-	api.Get("/me/tracking/:slug/followup", mw.key, h.GetApplicationFollowUp)
-	api.Post("/me/tracking/:slug/followup", mw.key, h.RecordApplicationFollowUp)
-	api.Post("/me/emails/:id/link", mw.key, h.LinkEmail)
-	api.Post("/me/emails/:id/unlink", mw.key, h.UnlinkEmail)
-	api.Post("/me/emails/:id/confirm", mw.key, h.ConfirmEmailLink)
-	api.Post("/me/emails/:id/reject", mw.key, h.RejectEmailLink)
-	api.Post("/me/emails/:id/application", mw.key, h.CreateApplicationFromEmail)
+	api.Get("/me/tracking/:slug/followup", mw.key, contract)
+	api.Post("/me/tracking/:slug/followup", mw.key, contract)
+	api.Post("/me/emails/:id/link", mw.key, contract)
+	api.Post("/me/emails/:id/unlink", mw.key, contract)
+	api.Post("/me/emails/:id/confirm", mw.key, contract)
+	api.Post("/me/emails/:id/reject", mw.key, contract)
+	api.Post("/me/emails/:id/application", mw.key, contract)
 	// The pull direction, beside the follow-up pair for the same reason they are there: it
 	// acts on one application and a keyed client drives it as legitimately as a browser.
-	api.Post("/me/tracking/:slug/mail-recall", mw.key, mw.paidAI(unmeteredAI), h.RecallApplicationMail)
+	api.Post("/me/tracking/:slug/mail-recall", mw.key, mw.paidAI(unmeteredAI), contract)
 	// Import-and-link, for a proposal the sweep found in the mailbox and deliberately did
 	// not store. Unlimited beside its sibling: this one is a person pressing Link on
 	// something they just read, not a model call.
-	api.Post("/me/tracking/:slug/mail-recall/link", mw.key, h.LinkRecalledMail)
+	api.Post("/me/tracking/:slug/mail-recall/link", mw.key, contract)
 	if h.gmailReady() {
 		api.Get("/me/gmail/connect", mw.cookie, h.GmailConnect)
 		// The callback is the browser returning from Google, not an XHR — so it is
@@ -178,14 +179,14 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 		// which a keyed client cannot complete.
 		api.Get("/me/calendar/connect", mw.cookie, h.CalendarConnect)
 		api.Get("/me/calendar/callback", mw.optionalCookie, h.CalendarCallback)
-		api.Post("/me/gmail/sync", mw.key, h.SyncGmail)
+		api.Post("/me/gmail/sync", mw.key, contract)
 	}
 	// Hosted-mailbox option: status is always available (reports unavailable when
 	// the feature is off); claim/release only when a receiving domain is configured.
-	api.Get("/me/mailbox", mw.key, h.GetMailbox)
+	api.Get("/me/mailbox", mw.key, contract)
 	if h.mailboxReady() {
-		api.Post("/me/mailbox", mw.key, h.ClaimMailbox)
-		api.Delete("/me/mailbox", mw.key, h.ReleaseMailbox)
+		api.Post("/me/mailbox", mw.key, contract)
+		api.Delete("/me/mailbox", mw.key, contract)
 	}
 }
 
@@ -371,35 +372,32 @@ func (h *inboxHandlers) CalendarCallback(c *fiber.Ctx) error {
 }
 
 // GmailStatus reports whether the caller has connected Gmail.
-func (h *inboxHandlers) GmailStatus(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *inboxHandlers) GmailStatus(ctx context.Context) (*apigen.GmailStatusOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	conn, err := h.queries.GetGmailConnection(c.Context(), userID)
+	conn, err := h.queries.GetGmailConnection(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// available signals whether the connect flow is wired (Google creds + token
 		// key), so the SPA hides the Connect button when it would 404.
-		return c.JSON(fiber.Map{"data": fiber.Map{
-			"connected": false, "available": h.gmailReady(), "calendar_connected": false,
-			"mentor_calendar_connected": false, "mentor_busy_sync_connected": false,
-		}})
+		return &apigen.GmailStatusOK{Data: apigen.GmailStatus{Available: h.gmailReady()}}, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{
+	return &apigen.GmailStatusOK{Data: apigen.GmailStatus{
 		// The row's existence alone does not mean mail is connected: UpsertCalendarGrant
 		// inserts this same row with an empty address for a calendar-only consent (see its
 		// comment, and ListConnectedGmailUsers' matching `email <> ''` guard). Reporting
 		// `connected: true` for that row would show the SPA's Mail card as connected with
 		// no address behind it.
-		"connected": conn.Email != "", "email": conn.Email, "status": conn.Status, "available": h.gmailReady(),
+		Connected: conn.Email != "", Email: apigen.NewOptString(conn.Email), Status: apigen.NewOptString(conn.Status), Available: h.gmailReady(),
 		// Whether this grant also covers the calendar. Read from the recorded scopes and
 		// not from the row's existence: mail and calendar are separate consents, so a
 		// connected mailbox says nothing about the calendar and a calendar grant may have
 		// no mailbox behind it at all.
-		"calendar_connected": slices.Contains(conn.Scopes, gmailsync.CalendarScope),
+		CalendarConnected: slices.Contains(conn.Scopes, gmailsync.CalendarScope),
 		// Whether this grant covers calendar.events — the write scope
 		// mentor-google-meet-link reads to decide whether a booking gets an
 		// auto-generated Meet link and whether the profile's own link becomes optional.
@@ -408,29 +406,29 @@ func (h *inboxHandlers) GmailStatus(c *fiber.Ctx) error {
 		// mentorship.GetMentorCalendarGrant) must not be told here that they're still
 		// connected — that reading would leave their profile's meeting link optional and
 		// every new booking silently landing with no link at all.
-		"mentor_calendar_connected": conn.Status == "connected" && slices.Contains(conn.Scopes, gmailsync.CalendarEventsScope),
+		MentorCalendarConnected: conn.Status == "connected" && slices.Contains(conn.Scopes, gmailsync.CalendarEventsScope),
 		// Whether this grant covers busy-sync. Gated on the explicit opt-in flag AND the
 		// scope AND status, unlike calendar_connected: a grant made before the calendar
 		// consents merged may hold calendar.readonly for interviews alone, and the flag
 		// is what tells it apart (see CalendarCallback).
-		"mentor_busy_sync_connected": conn.MentorBusySyncOptedIn && conn.Status == "connected" && slices.Contains(conn.Scopes, gmailsync.CalendarScope),
-	}})
+		MentorBusySyncConnected: conn.MentorBusySyncOptedIn && conn.Status == "connected" && slices.Contains(conn.Scopes, gmailsync.CalendarScope),
+	}}, nil
 }
 
 // SyncGmail triggers an on-demand sync of the caller's ATS mail. It runs in the
 // background (a full backfill can exceed the request write timeout) and returns
 // immediately; the SPA polls the inbox for results.
-func (h *inboxHandlers) SyncGmail(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *inboxHandlers) SyncGmail(ctx context.Context) (*apigen.SyncGmailOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	conn, err := h.queries.GetGmailConnection(c.Context(), userID)
+	conn, err := h.queries.GetGmailConnection(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return fiber.NewError(fiber.StatusBadRequest, "Gmail is not connected")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "Gmail is not connected")
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	gmailStore := gmailsync.NewDBStore(h.queries)
 	worker := gmailsync.NewWorker(gmailStore, h.gmailCipher, h.gmailConnector.ReaderFactory()).WithLearnedDomains(gmailStore)
@@ -438,28 +436,28 @@ func (h *inboxHandlers) SyncGmail(c *fiber.Ctx) error {
 	go worker.SyncUser(context.Background(), gmailsync.Connection{
 		UserID: conn.UserID, Email: conn.Email, Cursor: conn.SyncCursor,
 	})
-	return c.JSON(fiber.Map{"data": fiber.Map{"started": true}})
+	return &apigen.SyncGmailOK{Data: apigen.GmailSyncStarted{Started: true}}, nil
 }
 
 // GmailDisconnect revokes the grant (best-effort) and purges the token and the
 // user's synced mail.
-func (h *inboxHandlers) GmailDisconnect(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *inboxHandlers) GmailDisconnect(ctx context.Context) (*apigen.GmailDisconnectOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Best-effort revoke with Google before purging our copy.
-	if err := h.revokeGmailGrant(c.Context(), userID); err != nil {
+	if err := h.revokeGmailGrant(ctx, userID); err != nil {
 		log.Printf("gmail disconnect: revoke for user %d: %v", userID, err)
 	}
 	// Purge only this user's Gmail-sourced mail; a hosted mailbox's mail stays.
-	if err := h.queries.DeleteEmailsBySource(c.Context(), db.DeleteEmailsBySourceParams{UserID: userID, Source: "gmail"}); err != nil {
-		return err
+	if err := h.queries.DeleteEmailsBySource(ctx, db.DeleteEmailsBySourceParams{UserID: userID, Source: "gmail"}); err != nil {
+		return nil, err
 	}
-	if err := h.queries.DeleteGmailConnection(c.Context(), userID); err != nil {
-		return err
+	if err := h.queries.DeleteGmailConnection(ctx, userID); err != nil {
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"connected": false}})
+	return &apigen.GmailDisconnectOK{Data: apigen.GmailDisconnected{Connected: false}}, nil
 }
 
 // gmailReady reports whether the Gmail feature is wired (config present).

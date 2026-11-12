@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"context"
 	"log"
-	"time"
+	"net/url"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -20,30 +23,6 @@ import (
 // replayed into the model's context on every later turn of the session.
 const harnessPageMax = 50
 
-// emailLinking is the classification/link overlay carried by every inbox message
-// shape: the classified status and, when resolved, the linked application (slug +
-// company) or a pending suggestion the reading pane confirms inline.
-type emailLinking struct {
-	StatusSignal     string `json:"status_signal,omitempty"`
-	LinkSource       string `json:"link_source,omitempty"`
-	LinkedSlug       string `json:"linked_slug,omitempty"`
-	LinkedCompany    string `json:"linked_company,omitempty"`
-	SuggestedSlug    string `json:"suggested_slug,omitempty"`
-	SuggestedCompany string `json:"suggested_company,omitempty"`
-}
-
-// linkingOf projects the service's message onto the wire overlay.
-func linkingOf(m inbox.Message) emailLinking {
-	return emailLinking{
-		StatusSignal:     m.StatusSignal,
-		LinkSource:       m.LinkSource,
-		LinkedSlug:       m.LinkedSlug,
-		LinkedCompany:    m.LinkedCompany,
-		SuggestedSlug:    m.SuggestedSlug,
-		SuggestedCompany: m.SuggestedCompany,
-	}
-}
-
 // pgStr unwraps a nullable text column to a plain string ("" when NULL).
 func pgStr(t pgtype.Text) string {
 	if t.Valid {
@@ -52,48 +31,27 @@ func pgStr(t pgtype.Text) string {
 	return ""
 }
 
-// inboxMessage is one row in the flat inbox listing. BodyText is empty unless the
-// caller asked for bodies (?body=1) — the agent's read path, which lets a harness
-// triage a whole page without a GetEmail per message (and so without marking any
-// of them read).
-type inboxMessage struct {
-	ID         int64     `json:"id"`
-	Source     string    `json:"source"`
-	ExternalID string    `json:"external_id"`
-	FromAddr   string    `json:"from_addr"`
-	FromName   string    `json:"from_name"`
-	Subject    string    `json:"subject"`
-	Snippet    string    `json:"snippet"`
-	BodyText   string    `json:"body_text,omitempty"`
-	ReceivedAt time.Time `json:"received_at"`
-	Read       bool      `json:"read"`
-	emailLinking
+// emailPathID reads the ":id" of an email route. One that is not a number names no email, so
+// it is the same 404 as an id that is not the caller's, not the 400 of the other id routes.
+func emailPathID(raw string) (int64, error) {
+	id, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fiber.NewError(fiber.StatusNotFound, "not found")
+	}
+	return int64(id), nil
 }
 
-// emailBody is the single-message wire shape. s3_key (the internal raw-MIME
-// pointer for hosted mail) is deliberately not exposed.
-type emailBody struct {
-	ID         int64     `json:"id"`
-	Source     string    `json:"source"`
-	ExternalID string    `json:"external_id"`
-	FromAddr   string    `json:"from_addr"`
-	FromName   string    `json:"from_name"`
-	Subject    string    `json:"subject"`
-	BodyText   string    `json:"body_text"`
-	BodyHTML   string    `json:"body_html"`
-	ReceivedAt time.Time `json:"received_at"`
-	Read       bool      `json:"read"`
-	emailLinking
-}
-
-// bodyOf projects the service's message onto the single-message wire shape.
-func bodyOf(m inbox.Message) emailBody {
-	return emailBody{
+// bodyOf projects the service's message onto the single-message wire shape. s3_key (the
+// internal raw-MIME pointer for hosted mail) is deliberately not exposed.
+func bodyOf(m inbox.Message) apigen.InboxEmail {
+	return apigen.InboxEmail{
 		ID: m.ID, Source: m.Source, ExternalID: m.ExternalID,
 		FromAddr: m.FromAddr, FromName: m.FromName, Subject: m.Subject,
 		BodyText: m.BodyText, BodyHTML: m.BodyHTML,
 		ReceivedAt: m.ReceivedAt, Read: m.Read,
-		emailLinking: linkingOf(m),
+		StatusSignal: optString(m.StatusSignal), LinkSource: optString(m.LinkSource),
+		LinkedSlug: optString(m.LinkedSlug), LinkedCompany: optString(m.LinkedCompany),
+		SuggestedSlug: optString(m.SuggestedSlug), SuggestedCompany: optString(m.SuggestedCompany),
 	}
 }
 
@@ -105,16 +63,22 @@ func bodyOf(m inbox.Message) emailBody {
 // include_other is opt-IN because the listing's default is the applications a person came
 // to find, not everything a mailbox holds. What that default costs them is reported as a
 // number rather than left to be discovered.
-func parseInboxQuery(c *fiber.Ctx) inbox.Query {
+func parseInboxQuery(query url.Values) inbox.Query {
 	return inbox.Query{
-		Source:       c.Query("source"),
-		Status:       c.Query("status"),
-		Link:         c.Query("link"),
-		Q:            c.Query("q"),
-		Unread:       c.QueryBool("unread"),
-		Unclassified: c.QueryBool("unclassified"),
-		IncludeOther: c.QueryBool("include_other"),
+		Source:       query.Get("source"),
+		Status:       query.Get("status"),
+		Link:         query.Get("link"),
+		Q:            query.Get("q"),
+		Unread:       queryBool(query, "unread"),
+		Unclassified: queryBool(query, "unclassified"),
+		IncludeOther: queryBool(query, "include_other"),
 	}
+}
+
+// queryBool is Fiber's QueryBool over a parsed query: false when absent or unreadable.
+func queryBool(query url.Values, key string) bool {
+	b, _ := strconv.ParseBool(query.Get(key))
+	return b
 }
 
 // GetInbox returns the caller's mail as a flat list, newest first, excluding
@@ -128,38 +92,44 @@ func parseInboxQuery(c *fiber.Ctx) inbox.Query {
 // read path: it triages a page in one request, and — unlike GetEmail — marks
 // nothing read, so a harness sweeping the backlog never zeroes its owner's unread
 // count. Pages carrying bodies are capped at harnessPageMax.
-func (h *inboxHandlers) GetInbox(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *inboxHandlers) GetInbox(ctx context.Context, _ apigen.GetInboxParams) (*apigen.InboxPage, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	q := parseInboxQuery(c)
-	q.WithBody = c.QueryBool("body")
+	query := contractQuery(ctx)
+	q := parseInboxQuery(query)
+	q.WithBody = queryBool(query, "body")
 	ceiling := maxLimit
 	if q.WithBody {
 		ceiling = harnessPageMax
 	}
-	limit, offset := pageParamsBounded(c, defaultLimit, ceiling)
+	limit, offset := contractPageBounded(ctx, defaultLimit, ceiling)
 	q.Limit, q.Offset = limit, offset
 
-	page, err := h.inbox.Search(c.Context(), userID, q)
+	page, err := h.inbox.Search(ctx, userID, q)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]inboxMessage, 0, len(page.Messages))
+	out := make([]apigen.InboxMessage, 0, len(page.Messages))
 	for _, m := range page.Messages {
-		out = append(out, inboxMessage{
+		out = append(out, apigen.InboxMessage{
 			ID: m.ID, Source: m.Source, ExternalID: m.ExternalID,
 			FromAddr: m.FromAddr, FromName: m.FromName, Subject: m.Subject,
-			Snippet: m.Snippet, BodyText: m.BodyText,
+			Snippet: m.Snippet, BodyText: optString(m.BodyText),
 			ReceivedAt: m.ReceivedAt, Read: m.Read,
-			emailLinking: linkingOf(m),
+			StatusSignal: optString(m.StatusSignal), LinkSource: optString(m.LinkSource),
+			LinkedSlug: optString(m.LinkedSlug), LinkedCompany: optString(m.LinkedCompany),
+			SuggestedSlug: optString(m.SuggestedSlug), SuggestedCompany: optString(m.SuggestedCompany),
 		})
 	}
 	// The hidden count rides in the listing's meta rather than in a second request: a
 	// number nobody fetches is a number nobody sees, and this one exists precisely so a
 	// misclassification is findable.
-	return listResponseWithHidden(c, out, page.Total, page.Hidden, limit, offset)
+	return &apigen.InboxPage{
+		Data: out,
+		Meta: apigen.InboxMeta{Total: page.Total, Limit: int64(limit), Offset: int64(offset), Hidden: page.Hidden},
+	}, nil
 }
 
 // GetEmail returns one message body, scoped to the caller (404 for another user's),
@@ -168,23 +138,23 @@ func (h *inboxHandlers) GetInbox(c *fiber.Ctx) error {
 // Marking read is why this path is not part of internal/application/inbox and is not offered to
 // the assistant: read_at means "a human saw this", and a reader sweeping a backlog
 // through here would zero its owner's unread count. Sweeping goes through GetInbox.
-func (h *inboxHandlers) GetEmail(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *inboxHandlers) GetEmail(ctx context.Context, params apigen.GetEmailParams) (*apigen.GetEmailOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := emailPathID(params.ID)
 	if err != nil {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
+		return nil, err
 	}
-	msg, err := h.inbox.Get(c.Context(), userID, int64(id))
+	msg, err := h.inbox.Get(ctx, userID, id)
 	if err != nil {
-		return err // pgx.ErrNoRows → 404 via the central error handler
+		return nil, err // pgx.ErrNoRows → 404 via the central error handler
 	}
-	if err := h.queries.MarkEmailRead(c.Context(), db.MarkEmailReadParams{ID: msg.ID, UserID: userID}); err != nil {
+	if err := h.queries.MarkEmailRead(ctx, db.MarkEmailReadParams{ID: msg.ID, UserID: userID}); err != nil {
 		log.Printf("inbox: mark read user=%d email=%d: %v", userID, msg.ID, err)
 	}
-	return c.JSON(fiber.Map{"data": bodyOf(msg)})
+	return &apigen.GetEmailOK{Data: bodyOf(msg)}, nil
 }
 
 // MarkAllReadInbox marks every unread message matching the caller's active
@@ -195,33 +165,33 @@ func (h *inboxHandlers) GetEmail(c *fiber.Ctx) error {
 // in front of the caller and there is no undo. `include_other` goes through ShowsOther for
 // the same reason the listing does: `?status=other` is a request FOR that label, and
 // passing IncludeOther raw would mark nothing.
-func (h *inboxHandlers) MarkAllReadInbox(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *inboxHandlers) MarkAllReadInbox(ctx context.Context, _ apigen.MarkAllReadInboxParams) (*apigen.MarkAllReadInboxOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	q := parseInboxQuery(c)
+	q := parseInboxQuery(contractQuery(ctx))
 	if err := q.Validate(); err != nil {
-		return err
+		return nil, err
 	}
-	marked, err := h.queries.MarkAllEmailsRead(c.Context(), db.MarkAllEmailsReadParams{
+	marked, err := h.queries.MarkAllEmailsRead(ctx, db.MarkAllEmailsReadParams{
 		UserID: userID, Src: q.Source, Status: q.Status, Q: q.Q, Link: q.Link,
 		Unclassified: q.Unclassified, IncludeOther: q.ShowsOther(),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"marked": marked}})
+	return &apigen.MarkAllReadInboxOK{Data: apigen.InboxMarked{Marked: marked}}, nil
 }
 
 // DeleteEmail soft-deletes one message, scoped to the caller (404 if not theirs).
-func (h *inboxHandlers) DeleteEmail(c *fiber.Ctx) error {
-	return h.setEmailDeleted(c, true)
+func (h *inboxHandlers) DeleteEmail(ctx context.Context, params apigen.DeleteEmailParams) error {
+	return h.setEmailDeleted(ctx, params.ID, true)
 }
 
 // RestoreEmail undoes a soft-delete, scoped to the caller (404 if not theirs).
-func (h *inboxHandlers) RestoreEmail(c *fiber.Ctx) error {
-	return h.setEmailDeleted(c, false)
+func (h *inboxHandlers) RestoreEmail(ctx context.Context, params apigen.RestoreEmailParams) error {
+	return h.setEmailDeleted(ctx, params.ID, false)
 }
 
 // setEmailDeleted flips one message's soft-delete flag (delete or restore),
@@ -230,20 +200,20 @@ func (h *inboxHandlers) RestoreEmail(c *fiber.Ctx) error {
 // It answers 204, not Fiber's SendStatus(200): that helper writes the status text
 // "OK" as the body, which is neither of this API's response shapes, and a client
 // that decodes a 2xx body fails on a call that actually succeeded.
-func (h *inboxHandlers) setEmailDeleted(c *fiber.Ctx, deleted bool) error {
-	userID, err := requireUserID(c)
+func (h *inboxHandlers) setEmailDeleted(ctx context.Context, rawID string, deleted bool) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := emailPathID(rawID)
 	if err != nil {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
+		return err
 	}
 	var n int64
 	if deleted {
-		n, err = h.queries.SoftDeleteEmail(c.Context(), db.SoftDeleteEmailParams{ID: int64(id), UserID: userID})
+		n, err = h.queries.SoftDeleteEmail(ctx, db.SoftDeleteEmailParams{ID: id, UserID: userID})
 	} else {
-		n, err = h.queries.RestoreEmail(c.Context(), db.RestoreEmailParams{ID: int64(id), UserID: userID})
+		n, err = h.queries.RestoreEmail(ctx, db.RestoreEmailParams{ID: id, UserID: userID})
 	}
 	if err != nil {
 		return err
@@ -251,5 +221,5 @@ func (h *inboxHandlers) setEmailDeleted(c *fiber.Ctx, deleted bool) error {
 	if n == 0 {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return nil
 }

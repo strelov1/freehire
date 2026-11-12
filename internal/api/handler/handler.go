@@ -1129,7 +1129,8 @@ func Register(app *fiber.App, cfg Config) {
 		jobsHandlers:                 jobsH,
 		searchHandlers:               searchH,
 		companiesHandlers:            companiesH,
-		cvHandlers:                   cvH})
+		cvHandlers:                   cvH,
+		inboxHandlers:                inboxH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1264,7 +1265,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Mail inbox (Gmail connect + hosted mailbox) and email ↔ application linking
 	// (see inboxHandlers). Registered after the static /me/tracking/* routes so
 	// /me/tracking/:slug does not shadow them.
-	inboxH.register(api, mw)
+	inboxH.register(api, mw, contract)
 	// Résumé/CV surfaces: verdict, ATS report, extraction, storage (see
 	// resumeHandlers).
 	resumeH.register(api, mw, contract)

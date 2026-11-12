@@ -198,6 +198,12 @@ type Handler interface {
 	//
 	// POST /employer/claim
 	ClaimEmployerCompany(ctx context.Context, req *EmployerClaim) (*ClaimEmployerCompanyCreated, error)
+	// ClaimMailbox implements claimMailbox operation.
+	//
+	// Registered only where a receiving domain is configured.
+	//
+	// POST /me/mailbox
+	ClaimMailbox(ctx context.Context) (*ClaimMailboxOK, error)
 	// ClearApplicationStage implements clearApplicationStage operation.
 	//
 	// DELETE /me/applications/{id}/stage
@@ -236,6 +242,10 @@ type Handler interface {
 	//
 	// POST /me/onboarding/complete
 	CompleteOnboarding(ctx context.Context) (*CompleteOnboardingOK, error)
+	// ConfirmEmailLink implements confirmEmailLink operation.
+	//
+	// POST /me/emails/{id}/confirm
+	ConfirmEmailLink(ctx context.Context, params ConfirmEmailLinkParams) (*ConfirmEmailLinkOK, error)
 	// ConfirmEmployerClaim implements confirmEmployerClaim operation.
 	//
 	// Activates at once when the work email matches the company's website, else stays pending.
@@ -248,6 +258,13 @@ type Handler interface {
 	//
 	// GET /threads/count
 	CountThreads(ctx context.Context, params CountThreadsParams) (*CountThreadsOK, error)
+	// CreateApplicationFromEmail implements createApplicationFromEmail operation.
+	//
+	// Records the application from the email and links it, dated by the email. 409 while a suggestion is
+	// pending.
+	//
+	// POST /me/emails/{id}/application
+	CreateApplicationFromEmail(ctx context.Context, req OptInboxLinkTarget, params CreateApplicationFromEmailParams) (*CreateApplicationFromEmailOK, error)
 	// CreateCV implements createCV operation.
 	//
 	// POST /me/cvs
@@ -353,6 +370,10 @@ type Handler interface {
 	//
 	// DELETE /companies/{slug}/feedback
 	DeleteCompanyFeedback(ctx context.Context, params DeleteCompanyFeedbackParams) (*DeleteCompanyFeedbackOK, error)
+	// DeleteEmail implements deleteEmail operation.
+	//
+	// POST /me/emails/{id}/delete
+	DeleteEmail(ctx context.Context, params DeleteEmailParams) error
 	// DeleteEmployment implements deleteEmployment operation.
 	//
 	// 409 for a keyed caller while the place still holds achievements.
@@ -427,6 +448,12 @@ type Handler interface {
 	//
 	// GET /me/agent-permissions
 	GetAgentPermissions(ctx context.Context) (*GetAgentPermissionsOK, error)
+	// GetApplicationFollowUp implements getApplicationFollowUp operation.
+	//
+	// 409 unless the application is waiting on a reply.
+	//
+	// GET /me/tracking/{slug}/followup
+	GetApplicationFollowUp(ctx context.Context, params GetApplicationFollowUpParams) (*GetApplicationFollowUpOK, error)
 	// GetAtsReport implements getAtsReport operation.
 	//
 	// The ATS-readiness report of the caller's stored CV, with any cached model review folded in. `has_cv`
@@ -489,6 +516,12 @@ type Handler interface {
 	//
 	// GET /jobs/{slug}/direct-apply
 	GetDirectApplyForm(ctx context.Context, params GetDirectApplyFormParams) (*GetDirectApplyFormOK, error)
+	// GetEmail implements getEmail operation.
+	//
+	// Opening a message marks it read. 404 for another user's, or an id that is not a number.
+	//
+	// GET /me/emails/{id}
+	GetEmail(ctx context.Context, params GetEmailParams) (*GetEmailOK, error)
 	// GetEmailPrefs implements getEmailPrefs operation.
 	//
 	// GET /email-prefs
@@ -499,6 +532,14 @@ type Handler interface {
 	//
 	// GET /employer/company
 	GetEmployerCompany(ctx context.Context) (*GetEmployerCompanyOK, error)
+	// GetInbox implements getInbox operation.
+	//
+	// The caller's mail, newest first, without deleted messages. Filters: `source`, `status`, `link`, `q`,
+	// `unread`, `unclassified`, `include_other`; `body` adds each message's body (pages are then capped
+	// lower). A page param that does not read falls back to its default.
+	//
+	// GET /me/inbox
+	GetInbox(ctx context.Context, params GetInboxParams) (*InboxPage, error)
 	// GetInterviews implements getInterviews operation.
 	//
 	// The caller's arranged meetings whose start falls in the range.
@@ -518,6 +559,10 @@ type Handler interface {
 	//
 	// GET /jobs/{slug}
 	GetJob(ctx context.Context, params GetJobParams) (*GetJobOK, error)
+	// GetMailbox implements getMailbox operation.
+	//
+	// GET /me/mailbox
+	GetMailbox(ctx context.Context) (*GetMailboxOK, error)
 	// GetMarketPulse implements getMarketPulse operation.
 	//
 	// Demand for the caller's profile skills, week by week. Session cookie only.
@@ -658,10 +703,26 @@ type Handler interface {
 	//
 	// GET /me/timeline
 	GetTimeline(ctx context.Context, params GetTimelineParams) (*GetTimelineOK, error)
+	// GetTrackedApplication implements getTrackedApplication operation.
+	//
+	// The caller's application for a job slug with its linked mail. 404 when not tracked.
+	//
+	// GET /me/tracking/{slug}
+	GetTrackedApplication(ctx context.Context, params GetTrackedApplicationParams) (*GetTrackedApplicationOK, error)
 	// GetWatching implements getWatching operation.
 	//
 	// GET /me/watchlist/{slug}
 	GetWatching(ctx context.Context, params GetWatchingParams) (*GetWatchingOKHeaders, error)
+	// GmailDisconnect implements gmailDisconnect operation.
+	//
+	// Revokes the grant (best effort) and purges the token and the synced Gmail mail.
+	//
+	// DELETE /me/gmail
+	GmailDisconnect(ctx context.Context) (*GmailDisconnectOK, error)
+	// GmailStatus implements gmailStatus operation.
+	//
+	// GET /me/gmail
+	GmailStatus(ctx context.Context) (*GmailStatusOK, error)
 	// HideCompanyFeedback implements hideCompanyFeedback operation.
 	//
 	// Moderators only: hides a review. Idempotent.
@@ -674,6 +735,14 @@ type Handler interface {
 	//
 	// POST /me/watchlist/import
 	ImportWatchlist(ctx context.Context, req *WatchlistImport) (*ImportWatchlistOK, error)
+	// IngestEmails implements ingestEmails operation.
+	//
+	// A batch of messages the caller's own mail client fetched, as `messages`: a list of objects with
+	// `external_id`, `thread_id`, `from_addr`, `from_name`, `subject`, `body_text`, `body_html` and
+	// `received_at`. The mail service validates the batch and refuses it whole with a 400.
+	//
+	// POST /me/emails
+	IngestEmails(ctx context.Context, req jx.Raw) (*IngestEmailsOK, error)
 	// IngestStatus implements ingestStatus operation.
 	//
 	// The site's own live status plus a sanitized per-provider rollup of the ingest fleet.
@@ -744,6 +813,16 @@ type Handler interface {
 	//
 	// GET /stats/jobs-activity
 	JobsActivity(ctx context.Context, params JobsActivityParams) (*JobsActivity, error)
+	// LinkEmail implements linkEmail operation.
+	//
+	// POST /me/emails/{id}/link
+	LinkEmail(ctx context.Context, req OptInboxLinkTarget, params LinkEmailParams) (*LinkEmailOK, error)
+	// LinkRecalledMail implements linkRecalledMail operation.
+	//
+	// Imports a message the sweep proposed and links it to the application.
+	//
+	// POST /me/tracking/{slug}/mail-recall/link
+	LinkRecalledMail(ctx context.Context, req OptMailRecalledPick, params LinkRecalledMailParams) (*LinkRecalledMailOK, error)
 	// ListAppliedCompanySlugs implements listAppliedCompanySlugs operation.
 	//
 	// The employers the caller has applied to.
@@ -983,6 +1062,12 @@ type Handler interface {
 	//
 	// GET /me/watchlist
 	ListWatchlist(ctx context.Context, params ListWatchlistParams) (*WatchlistPageHeaders, error)
+	// MarkAllReadInbox implements markAllReadInbox operation.
+	//
+	// Marks every unread message matching the same filters as the listing.
+	//
+	// POST /me/inbox/read-all
+	MarkAllReadInbox(ctx context.Context, params MarkAllReadInboxParams) (*MarkAllReadInboxOK, error)
 	// MarkApplied implements markApplied operation.
 	//
 	// The body is optional: without a date the application is stamped now. 400 for a date out of range.
@@ -1077,6 +1162,16 @@ type Handler interface {
 	//
 	// POST /me/mentorship/profile/reactivate
 	ReactivateMentorProfile(ctx context.Context) (*ReactivateMentorProfileOK, error)
+	// RecallApplicationMail implements recallApplicationMail operation.
+	//
+	// Sweeps the mailbox for mail belonging to the application and records suggestions. Paid AI.
+	//
+	// POST /me/tracking/{slug}/mail-recall
+	RecallApplicationMail(ctx context.Context, params RecallApplicationMailParams) (*RecallApplicationMailOK, error)
+	// RecordApplicationFollowUp implements recordApplicationFollowUp operation.
+	//
+	// POST /me/tracking/{slug}/followup
+	RecordApplicationFollowUp(ctx context.Context, params RecordApplicationFollowUpParams) error
 	// RecordDictionaryGap implements recordDictionaryGap operation.
 	//
 	// Asks for a term the dictionary does not resolve. 409 when it already does. Session cookie only.
@@ -1099,6 +1194,10 @@ type Handler interface {
 	//
 	// POST /company-relations/{id}/reject
 	RejectCompanyRelation(ctx context.Context, params RejectCompanyRelationParams) (*RejectCompanyRelationOK, error)
+	// RejectEmailLink implements rejectEmailLink operation.
+	//
+	// POST /me/emails/{id}/reject
+	RejectEmailLink(ctx context.Context, params RejectEmailLinkParams) (*RejectEmailLinkOK, error)
 	// RejectEmployerClaim implements rejectEmployerClaim operation.
 	//
 	// Moderators only.
@@ -1111,6 +1210,12 @@ type Handler interface {
 	//
 	// POST /submissions/{id}/reject
 	RejectSubmission(ctx context.Context, req OptRejectSubmissionRequest, params RejectSubmissionParams) (*RejectSubmissionOK, error)
+	// ReleaseMailbox implements releaseMailbox operation.
+	//
+	// Drops the mailbox and its received mail; Gmail mail stays.
+	//
+	// DELETE /me/mailbox
+	ReleaseMailbox(ctx context.Context) (*ReleaseMailboxOK, error)
 	// RemoveFromWatchlist implements removeFromWatchlist operation.
 	//
 	// A company that was not on the list is not an error.
@@ -1192,6 +1297,10 @@ type Handler interface {
 	//
 	// POST /me/referrals/incoming/{id}/resolve
 	ResolveReferralRequest(ctx context.Context, req *ReferralResolve, params ResolveReferralRequestParams) (*ResolveReferralRequestOK, error)
+	// RestoreEmail implements restoreEmail operation.
+	//
+	// POST /me/emails/{id}/restore
+	RestoreEmail(ctx context.Context, params RestoreEmailParams) error
 	// RetractGhostReport implements retractGhostReport operation.
 	//
 	// Withdraws the caller's report. 404 when there is none.
@@ -1335,6 +1444,12 @@ type Handler interface {
 	//
 	// POST /billing/revenuecat/sync
 	SyncBillingStore(ctx context.Context) (*SyncBillingStoreOK, error)
+	// SyncGmail implements syncGmail operation.
+	//
+	// Starts a background sync. Registered only where Gmail is configured.
+	//
+	// POST /me/gmail/sync
+	SyncGmail(ctx context.Context) (*SyncGmailOK, error)
 	// TailorCV implements tailorCV operation.
 	//
 	// Starts the tailoring session for a vacancy (the paid gate runs before this). 201 with the ids and
@@ -1357,6 +1472,10 @@ type Handler interface {
 	//
 	// GET /me/tracking/pipeline
 	TrackingPipeline(ctx context.Context) (*TrackingPipelineOK, error)
+	// TriageEmail implements triageEmail operation.
+	//
+	// POST /me/emails/{id}/triage
+	TriageEmail(ctx context.Context, req *InboxTriage, params TriageEmailParams) (*TriageEmailOK, error)
 	// UnbanUser implements unbanUser operation.
 	//
 	// POST /moderation/users/{id}/unban
@@ -1373,6 +1492,10 @@ type Handler interface {
 	//
 	// POST /me/cvs/{id}/revisions/batch/{bid}/undo
 	UndoCVRevisionBatch(ctx context.Context, params UndoCVRevisionBatchParams) (*UndoCVRevisionBatchOK, error)
+	// UnlinkEmail implements unlinkEmail operation.
+	//
+	// POST /me/emails/{id}/unlink
+	UnlinkEmail(ctx context.Context, params UnlinkEmailParams) (*UnlinkEmailOK, error)
 	// UnsaveJob implements unsaveJob operation.
 	//
 	// Unsaving a job that was never saved answers with the empty interaction.
