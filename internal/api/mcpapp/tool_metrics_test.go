@@ -13,10 +13,10 @@ import (
 // Every tool call is counted by surface, tool, outcome and error code, and timed, so Grafana
 // sees MCP traffic without depending on any third-party quota.
 func TestToolCallIsCountedAndTimed(t *testing.T) {
-	ok := mcpToolCalls.WithLabelValues("public", toolSearchJobs, "success", "")
-	failed := mcpToolCalls.WithLabelValues("public", toolGetJob, "tool_error", "not_found")
+	ok := mcpToolCalls.WithLabelValues("mixed", toolSearchJobs, "success", "")
+	failed := mcpToolCalls.WithLabelValues("mixed", toolGetJob, "tool_error", "not_found")
 	before, beforeFailed := testutil.ToFloat64(ok), testutil.ToFloat64(failed)
-	timedBefore := histogramCount(t, "public", toolSearchJobs)
+	timedBefore := histogramCount(t, "mixed", toolSearchJobs)
 
 	if _, err := connect(t, readerThatFinds(t)).CallTool(context.Background(), &mcp.CallToolParams{Name: toolSearchJobs, Arguments: map[string]any{"query": "golang"}}); err != nil {
 		t.Fatalf("call: %v", err)
@@ -33,7 +33,7 @@ func TestToolCallIsCountedAndTimed(t *testing.T) {
 	if got := testutil.ToFloat64(failed) - beforeFailed; got != 1 {
 		t.Errorf("get_job not_found counted %v times, want 1", got)
 	}
-	if got := histogramCount(t, "public", toolSearchJobs) - timedBefore; got != 1 {
+	if got := histogramCount(t, "mixed", toolSearchJobs) - timedBefore; got != 1 {
 		t.Errorf("search_jobs timed %v times, want 1", got)
 	}
 }
@@ -50,9 +50,9 @@ func histogramCount(t *testing.T, surface, tool string) uint64 {
 // A call the SDK refuses before any handler runs — arguments failing the schema, a tool that
 // does not exist — is counted once as rejected, and a caller-chosen name never becomes a label.
 func TestRejectedToolCallIsCounted(t *testing.T) {
-	invalid := mcpToolCalls.WithLabelValues("public", toolSearchJobs, "rejected", "invalid_request")
-	unknown := mcpToolCalls.WithLabelValues("public", "unknown", "rejected", "invalid_request")
-	ran := mcpToolCalls.WithLabelValues("public", toolSearchJobs, "success", "")
+	invalid := mcpToolCalls.WithLabelValues("mixed", toolSearchJobs, "rejected", "invalid_request")
+	unknown := mcpToolCalls.WithLabelValues("mixed", "unknown", "rejected", "invalid_request")
+	ran := mcpToolCalls.WithLabelValues("mixed", toolSearchJobs, "success", "")
 	beforeInvalid, beforeUnknown, beforeRan := testutil.ToFloat64(invalid), testutil.ToFloat64(unknown), testutil.ToFloat64(ran)
 
 	session := connect(t, readerThatFinds(t))

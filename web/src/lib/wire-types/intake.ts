@@ -10,9 +10,7 @@ export type Contribution = components['schemas']['Contribution'];
 /** A job page in the wild recognised as one the catalog already carries. The lookup that
  *  produces it is public and read-only, so this is deliberately narrower than ResolvedLink:
  *  nothing was imported and no board was recorded, so there is no status to report. */
-export interface FoundJob {
-  public_slug: string;
-}
+export type FoundJob = components['schemas']['JobFoundPosting'];
 
 /** What became of the BOARD behind a link handed to the intake.
  *  - `found`    the catalog already carried the posting

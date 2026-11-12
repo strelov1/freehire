@@ -53,13 +53,13 @@ func TestAnalyticsLogsSafeSearchQualityAndConversation(t *testing.T) {
 func TestOutputValidationFailureIsNotCountedAsSuccess(t *testing.T) {
 	records := captureToolLogs(t)
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
-	server.AddReceivingMiddleware(toolCallMiddleware("public"))
-	AddObservedTool(server, "public", &mcp.Tool{Name: "invalid_output", OutputSchema: map[string]any{"type": "object", "required": []string{"count"}, "properties": map[string]any{"count": map[string]any{"type": "integer"}}}},
+	server.AddReceivingMiddleware(toolCallMiddleware("mixed"))
+	AddObservedTool(server, "mixed", &mcp.Tool{Name: "invalid_output", OutputSchema: map[string]any{"type": "object", "required": []string{"count"}, "properties": map[string]any{"count": map[string]any{"type": "integer"}}}},
 		func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, map[string]any, error) {
 			return nil, map[string]any{"count": "wrong"}, nil
 		})
-	ok := mcpToolCalls.WithLabelValues("public", "invalid_output", "success", "")
-	failed := mcpToolCalls.WithLabelValues("public", "invalid_output", "error", "internal_error")
+	ok := mcpToolCalls.WithLabelValues("mixed", "invalid_output", "success", "")
+	failed := mcpToolCalls.WithLabelValues("mixed", "invalid_output", "error", "internal_error")
 	beforeOK, beforeFailed := testutil.ToFloat64(ok), testutil.ToFloat64(failed)
 	ct, st := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(t.Context(), st, nil)
@@ -155,10 +155,10 @@ func TestClientFamilyDoesNotAliasItsInput(t *testing.T) {
 
 func TestClientAttributionFallsBackAfterGenericHandshake(t *testing.T) {
 	records := captureToolLogs(t)
-	server := httptest.NewServer(Handler(readerThatFinds(t), ""))
+	server := httptest.NewServer(MixedHandler(nil, "", readerThatFinds(t)))
 	defer server.Close()
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "Generic MCP Client", Version: "1"}, nil).Connect(t.Context(), &mcp.StreamableClientTransport{
-		Endpoint: server.URL, HTTPClient: &http.Client{Transport: withHeaders{http.Header{"User-Agent": []string{"Claude-User/1.0"}}}},
+		Endpoint: server.URL, HTTPClient: &http.Client{Transport: withHeaders{http.Header{"User-Agent": []string{"Claude-User/1.0"}, AccountUserIDHeader: []string{"42"}}}},
 	}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -178,7 +178,7 @@ func TestMultiMegabyteToolResultHasFiniteSizeBucket(t *testing.T) {
 	bucketCount := func() uint64 {
 		t.Helper()
 		metric := &dto.Metric{}
-		if err := mcpResponseBytes.WithLabelValues("public", "get_job").(prometheus.Histogram).Write(metric); err != nil {
+		if err := mcpResponseBytes.WithLabelValues("mixed", "get_job").(prometheus.Histogram).Write(metric); err != nil {
 			t.Fatal(err)
 		}
 		for _, bucket := range metric.GetHistogram().GetBucket() {

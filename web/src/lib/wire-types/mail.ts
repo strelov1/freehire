@@ -4,14 +4,7 @@ import type { Job } from '../generated/contracts';
 /** The classification/link overlay an inbox email carries: its classified status
  *  and, when resolved, the linked application (slug + company) or a pending
  *  suggestion the reading pane confirms inline. All optional/omitempty. */
-export interface EmailLinking {
-  status_signal?: string;
-  link_source?: string;
-  linked_slug?: string;
-  linked_company?: string;
-  suggested_slug?: string;
-  suggested_company?: string;
-}
+export type EmailLinking = components['schemas']['InboxLinking'];
 
 /** One email linked to an application, on the application detail page. */
 export type ApplicationEmail = components['schemas']['InboxApplicationEmail'];

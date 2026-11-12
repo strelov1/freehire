@@ -24,7 +24,7 @@ func connect(t *testing.T, r Reader) *mcp.ClientSession {
 	ctx := context.Background()
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	server, err := newServer(r, "").Connect(ctx, serverTransport, nil)
+	server, err := newMixedServer(nil, 0, "", r, false).Connect(ctx, serverTransport, nil)
 	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
@@ -175,10 +175,11 @@ func TestEveryToolDeclaresWhatItDoesAndWhatItDoesNotTouch(t *testing.T) {
 func TestTheServersInstructionsFitTheBudget(t *testing.T) {
 	// 512 characters is what the Apps SDK guidance asks for, and a limit nobody re-checks
 	// by eye is one that drifts on the next edit.
-	if got := utf8.RuneCountInString(serverInstructions); got > 512 {
+	instructions := connect(t, readerThatFinds(t)).InitializeResult().Instructions
+	if got := utf8.RuneCountInString(instructions); got > 512 {
 		t.Errorf("instructions are %d characters, want at most 512", got)
 	}
-	if strings.TrimSpace(serverInstructions) == "" {
+	if strings.TrimSpace(instructions) == "" {
 		t.Error("the server offers no instructions at all")
 	}
 }

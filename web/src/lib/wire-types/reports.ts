@@ -2,14 +2,14 @@ import type { components } from '#lib/generated/api.js';
 
 /** Why a job was reported. A closed vocabulary mirroring the backend's
  *  internal/report reasons; labels live in #lib/reports. */
-export type ReportReason = 'no_response' | 'not_relevant' | 'spam' | 'fraud' | 'other';
+export type ReportReason = components['schemas']['JobReportReason'];
 
 /** What a candidate can report about how a company hires. A closed vocabulary
  *  mirroring the backend's vocab.CompanyProcessReportKindValues and the CHECK in
  *  migration 0156. Each value is a statement that is either true of an employer or
  *  not, which is why one reporter is enough to show it and why nothing here reaches
  *  a moderator. */
-export type ProcessReportKind = 'ai_interview';
+export type ProcessReportKind = components['schemas']['ProcessReportKind'];
 
 /** Everything the report picker can offer. It is deliberately WIDER than
  *  ReportReason: the picker is one list to a person, but its entries land on two
