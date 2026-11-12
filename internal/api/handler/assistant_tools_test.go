@@ -257,6 +257,42 @@ func TestFacetsToolReturnsTheVocabulary(t *testing.T) {
 	}
 }
 
+// Problem report #17: an agent enumerating employers asked for company_slug and was refused.
+func TestMCPFacetsListsTheBusiestCompanies(t *testing.T) {
+	fc := &stubFacets{res: search.FacetResult{
+		Total: 90,
+		Facets: map[string]map[string]int64{
+			"company_slug": {"acme-corp": 40, "acme-labs": 10, "globex": 30},
+		},
+	}}
+	a := assistantWith(&searchHandlers{facets: fc}, nil)
+	tool := toolByName(t, mcpKeyTools(a, testMCPOrigin), "facets")
+	run := func(args string) map[string]any {
+		t.Helper()
+		out, err := tool.Run(context.Background(), 3, json.RawMessage(args))
+		if err != nil {
+			t.Fatalf("facets %s: %v", args, err)
+		}
+		return out.(map[string]any)
+	}
+
+	got := run(`{"facet":"company_slug"}`)["companies"].([]companyFacetValue)
+	if len(got) != 3 || got[0].Slug != "acme-corp" || got[0].Count != 40 || got[0].Name != "acme-corp" {
+		t.Errorf("companies = %+v, want all three busiest first, named by slug without a names source", got)
+	}
+	if asked := fc.gotP[0].Facets; len(asked) != 1 || asked[0] != "company_slug" {
+		t.Errorf("asked the index for %v, want only company_slug", asked)
+	}
+	// A space in the text matches the slug's hyphen.
+	res := run(`{"facet":"company_slug","contains":"Acme Corp"}`)
+	if got := res["companies"].([]companyFacetValue); len(got) != 1 || got[0].Slug != "acme-corp" {
+		t.Errorf("contains=Acme Corp companies = %+v, want acme-corp", got)
+	}
+	if res["matching_companies"] != 1 {
+		t.Errorf("matching_companies = %v, want 1", res["matching_companies"])
+	}
+}
+
 // An MCP client keeps every answer in its context, and the whole vocabulary ran to ~125 KB
 // (2026-11-05): four long tails of up to 1,200 values each. The MCP facets names the
 // filters with their sizes, and lists one filter's values on request.
@@ -316,7 +352,7 @@ func TestMCPFacetsNamesTheFiltersAndListsOneOnRequest(t *testing.T) {
 		t.Errorf("facet=salary_max = %v, want stats with no range and no values", got)
 	}
 
-	for _, unlisted := range []string{"vibe", "company_slug"} {
+	for _, unlisted := range []string{"vibe"} {
 		_, err := tool.Run(context.Background(), 3, json.RawMessage(`{"facet":"`+unlisted+`"}`))
 		if err == nil || !strings.Contains(err.Error(), unlisted) || !strings.Contains(err.Error(), "salary_min") {
 			t.Errorf("facet=%s error = %v, want it refused, naming it and the valid ones", unlisted, err)
