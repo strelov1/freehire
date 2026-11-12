@@ -34,7 +34,7 @@ suggestions, problem reports and the interview-buddy tools. Dictionary suggestio
 buddy tools (`internal/api/handler/buddy_mcp_tools.go`: membership, mock hosts, slots,
 booking, cancelling and the hosting schedule) preserve the cookie-only REST gate, and so does
 `update_profile` (`assistant_profile_write_tool.go`: a partial update of the saved job-search
-preferences, not the CV text); problem
+profile: preferences plus the headline and summary text, never a CV document); problem
 reports use the signed-in agent's reporting workflow. A narrow (`cv`) key is a 403.
 
 OAuth clients use `suggest_dictionary_term` when a user-requested specialization, skill

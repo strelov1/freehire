@@ -569,7 +569,8 @@ var cvOpSchema = map[string]any{
 func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name: "cv_edit",
-		Description: "Edit the CV. Send every edit that belongs together in one call — they land as one " +
+		Description: "Edit a CV document (the base CV or a tailored copy), not the profile: the headline and " +
+			"summary on the user's profile page change with update_profile. Send every edit that belongs together in one call — they land as one " +
 			"entry in the candidate's history and cost one round instead of several. Address things by " +
 			"their path from cv_get. Job roles use `experience[i].…`; portfolio and side-project entries " +
 			"use `projects[i].…` (name, link, bullets) — the template prints the Projects heading when " +

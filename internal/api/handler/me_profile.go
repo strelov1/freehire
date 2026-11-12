@@ -28,6 +28,9 @@ type structuredResumeReader interface {
 	// Structured — a geography derived from a superseded CV reads as absent.
 	Geography(ctx context.Context, userID int64) (resume.Geography, bool, error)
 	CandidateOwned(ctx context.Context, userID int64) (resume.Owned, error)
+	// SetCandidateOwned replaces the owned block after the profile page's length limits —
+	// the one write the profile's headline and summary have, used by update_profile.
+	SetCandidateOwned(ctx context.Context, userID int64, o resume.Owned) (resume.Owned, error)
 	StructureForSeed(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
 }
 
