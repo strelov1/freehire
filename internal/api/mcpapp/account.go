@@ -20,6 +20,13 @@ import (
 const accountServerInstructions = "This is the signed-in freehire account. " +
 	"Catalogue reads are public; personal tools change this account. Geography filters form a union. "
 
+// accountCapabilityInstructions tells an agent what freehire can do beyond a search, which
+// the people in this connector mostly never find out, and where to start. Auto-apply is
+// added only for a session that is served it.
+const accountCapabilityInstructions = "freehire searches jobs, saves and tracks them, sends alerts on new matches"
+
+const accountProfileInstructions = " and keeps the job-search profile. Call get_profile before the first search. "
+
 const accountAutoApplyInstructions = "Auto-apply prepares applications for review; saved answers may be sent to employers. "
 
 const accountAlertInstructions = "Alerts use configured channels. "
@@ -70,6 +77,13 @@ func accountInstructions(tools []assistant.Tool) string {
 		return slices.ContainsFunc(tools, func(t assistant.Tool) bool { return t.Name == name })
 	}
 	out := accountServerInstructions
+	if served("get_profile") {
+		out += accountCapabilityInstructions
+		if served("auto_apply_start") {
+			out += ", prepares applications for review"
+		}
+		out += accountProfileInstructions
+	}
 	if served("auto_apply_start") {
 		out += accountAutoApplyInstructions
 	}

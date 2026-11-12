@@ -8,6 +8,24 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
 
+const maxAccountInstructions = 720
+
+// The line on what freehire can do, and where to start, is served with get_profile and
+// offers auto-apply only to a session that has it.
+func TestAccountInstructions_SayWhatFreehireCanDo(t *testing.T) {
+	keyed := accountInstructions([]assistant.Tool{{Name: "get_profile"}})
+	if !strings.Contains(keyed, "Call get_profile before the first search") || strings.Contains(keyed, "applications") {
+		t.Errorf("key instructions: %q", keyed)
+	}
+	granted := accountInstructions([]assistant.Tool{{Name: "get_profile"}, {Name: "auto_apply_start"}})
+	if !strings.Contains(granted, "prepares applications for review") {
+		t.Errorf("grant instructions omit auto-apply: %q", granted)
+	}
+	if strings.Contains(accountInstructions(nil), "get_profile") {
+		t.Error("instructions name get_profile on a server that does not serve it")
+	}
+}
+
 // A session is told only about the workflows it can run; OAuth-only actions
 // must never be suggested to a client whose credential cannot call them.
 func TestAccountInstructions_FollowTheServedTools(t *testing.T) {
@@ -22,7 +40,7 @@ func TestAccountInstructions_FollowTheServedTools(t *testing.T) {
 	}
 
 	granted := accountInstructions([]assistant.Tool{
-		{Name: "auto_apply_start"}, {Name: "subscribe"},
+		{Name: "get_profile"}, {Name: "auto_apply_start"}, {Name: "subscribe"},
 		{Name: "suggest_dictionary_term"}, {Name: "report_problem"},
 	})
 	for _, required := range []string{
@@ -34,7 +52,9 @@ func TestAccountInstructions_FollowTheServedTools(t *testing.T) {
 			t.Errorf("instructions omit %q: %q", required, granted)
 		}
 	}
-	if n := utf8.RuneCountInString(granted); n > 512 {
-		t.Errorf("account instructions are %d characters, want at most512", n)
+	// Signed-in servers carry the capability line, so their budget is wider than the
+	// public server's 512; Claude Code, the strictest client known, cuts at 2048.
+	if n := utf8.RuneCountInString(granted); n > maxAccountInstructions {
+		t.Errorf("account instructions are %d characters, want at most %d", n, maxAccountInstructions)
 	}
 }
