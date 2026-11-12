@@ -436,8 +436,9 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 // declined or not. A buyer whose card was refused once would otherwise be handed the same
 // spent coupon by the idempotent create, and every checkout after it would fail outright.
 //
-// Who has never completed a purchase (no customer bound) did not use the offer, so they get
-// a fresh coupon. Who has, did: their checkout goes ahead at the plain price.
+// Who has never had an invoice paid did not use the offer, so they get a fresh coupon. A bound
+// customer alone is not proof: referral credit binds one before any purchase. Who has paid,
+// used it: their checkout goes ahead at the plain price.
 func (s *Service) spendableCoupon(ctx context.Context, discount Discount, customerID string) (string, error) {
 	id, err := s.client.createCoupon(ctx, discount.PercentOff, discount.Label, discount.Key)
 	if err != nil {
@@ -448,7 +449,13 @@ func (s *Service) spendableCoupon(ctx context.Context, discount Discount, custom
 		return id, err
 	}
 	if customerID != "" {
-		return "", nil
+		paid, err := s.client.hasPaidInvoice(ctx, customerID)
+		if err != nil {
+			return "", err
+		}
+		if paid {
+			return "", nil
+		}
 	}
 	// A fresh key per call: the stable key is exactly what keeps returning the spent coupon.
 	return s.client.createCoupon(ctx, discount.PercentOff, discount.Label, discount.Key+"_"+uuid.NewString())

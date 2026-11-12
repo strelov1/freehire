@@ -82,6 +82,23 @@ func (c *client) couponValid(ctx context.Context, id string) (bool, error) {
 	return out.Valid, nil
 }
 
+// hasPaidInvoice reports whether this customer has ever had an invoice paid — a purchase that
+// went through, at any price including a fully discounted one. A customer created only to hold
+// referral credit has none, and neither does one whose every card was declined.
+func (c *client) hasPaidInvoice(ctx context.Context, customerID string) (bool, error) {
+	form := url.Values{}
+	form.Set("customer", customerID)
+	form.Set("status", "paid")
+	form.Set("limit", "1")
+	var raw struct {
+		Data []struct{} `json:"data"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/invoices?"+form.Encode(), nil, "", &raw); err != nil {
+		return false, err
+	}
+	return len(raw.Data) > 0, nil
+}
+
 // createCustomer registers an account with the provider before it has bought anything, and
 // returns the customer id.
 //

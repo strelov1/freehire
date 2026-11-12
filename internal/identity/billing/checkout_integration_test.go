@@ -26,6 +26,7 @@ type checkoutRouter struct {
 	couponCalled   bool
 	couponSpent    bool     // GET /coupons/{id} answers valid=false for the first coupon
 	couponKeys     []string // Idempotency-Key of every POST /coupons, in order
+	paidInvoice    bool     // GET /invoices?status=paid answers with one invoice
 	updateCalled   bool
 	updatePath     string
 	updateForm     string
@@ -48,6 +49,12 @@ func (r *checkoutRouter) handler() http.HandlerFunc {
 		case strings.HasPrefix(req.URL.Path, "/coupons/"):
 			spent := r.couponSpent && req.URL.Path == "/coupons/co_test1"
 			_, _ = fmt.Fprintf(w, `{"valid":%t}`, !spent)
+		case req.URL.Path == "/invoices":
+			if r.paidInvoice && req.URL.Query().Get("status") == "paid" {
+				_, _ = w.Write([]byte(`{"data":[{}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"data":[]}`))
 		case strings.HasPrefix(req.URL.Path, "/subscriptions/"):
 			r.updateCalled = true
 			r.updatePath = req.URL.Path
@@ -268,11 +275,12 @@ func TestCheckoutURLRemintsACouponADeclinedAttemptSpent(t *testing.T) {
 	}
 }
 
-// An account bound to a customer has bought before, so a spent coupon means the offer was
+// A customer with a paid invoice has bought before, so a spent coupon means the offer was
 // used: the checkout goes ahead without one and says no discount was applied.
 func TestCheckoutURLDropsASpentCouponForAPastBuyer(t *testing.T) {
 	router := &checkoutRouter{
 		couponSpent: true,
+		paidInvoice: true,
 		subscriptions: func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write([]byte(`{"data":[]}`))
 		},
@@ -293,5 +301,31 @@ func TestCheckoutURLDropsASpentCouponForAPastBuyer(t *testing.T) {
 	}
 	if applied != (Discount{}) {
 		t.Fatalf("applied = %+v, want none", applied)
+	}
+}
+
+// Referral credit binds a customer before any purchase. Such an account has not used the offer,
+// so a coupon its declined card spent is replaced, not dropped.
+func TestCheckoutURLRemintsForACreditOnlyCustomer(t *testing.T) {
+	router := &checkoutRouter{
+		couponSpent: true,
+		subscriptions: func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		},
+	}
+	s, pool := newTieredService(t, router.handler())
+	userID := insertUser(t, pool, "credit-only@example.com")
+	bindCustomer(t, pool, userID, "cus_credit_only")
+
+	offer := Discount{PercentOff: 50, Label: "invite", Key: "invite_c"}
+	_, applied, err := s.CheckoutURL(context.Background(), userID, "", offer)
+	if err != nil {
+		t.Fatalf("CheckoutURL: %v", err)
+	}
+	if len(router.couponKeys) != 2 || !strings.Contains(router.checkoutForm, "co_test2") {
+		t.Fatalf("coupon keys = %v, checkout %q; want a fresh coupon co_test2", router.couponKeys, router.checkoutForm)
+	}
+	if applied != offer {
+		t.Fatalf("applied = %+v, want %+v", applied, offer)
 	}
 }
