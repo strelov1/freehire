@@ -35,9 +35,10 @@ describe('SupportPanel', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'No, it did not help' }));
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
-    const [url, init] = fetcher.mock.calls[0];
-    expect(url).toBe('/api/v1/support/sessions/support-1/rating');
-    expect(init?.body).toBe(JSON.stringify({ helpful: false }));
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/v1/support/sessions/support-1/rating',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ helpful: false }) }),
+    );
     expect((await screen.findByRole('status')).textContent).toBe('Thanks for telling us.');
   });
 });
