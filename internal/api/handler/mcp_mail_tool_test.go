@@ -210,8 +210,8 @@ func TestUnreadMail_SyncLookupFailureKeepsThePage(t *testing.T) {
 		t.Fatalf("a failed sync lookup failed the call: %v", err)
 	}
 	got := out.(unreadMailResult)
-	if len(got.Messages) != 1 || got.SyncPending || got.ReconnectNeeded {
-		t.Errorf("result = %+v, want the page with both flags false", got)
+	if len(got.Messages) != 1 || got.SyncPending || got.ReconnectNeeded || !got.GmailStateUnknown {
+		t.Errorf("result = %+v, want the page with both flags false and the Gmail state marked unknown", got)
 	}
 	if !strings.Contains(logged, "connection reset") {
 		t.Errorf("failure not logged: %q", logged)

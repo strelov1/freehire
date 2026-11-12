@@ -61,7 +61,7 @@ the headers of unread application mail (`from_name`, `from_addr`, subject, time,
 the company and job slug of a CONFIRMED link), `unread_count`, `sync_pending` (Gmail's first
 sync not completed), `reconnect_needed` (Gmail lost its grant; hosted mail still arrives) and
 `mailbox_url`. No body, snippet or message id, nothing marked read, no model call; a failed
-sync-state lookup logs and returns the page with both flags false. Served to keys too,
+sync-state lookup logs and returns the page with `gmail_state_unknown` set. Served to keys too,
 because REST `/me/inbox` is `mw.key`. Header text is sender-written: `inertLine` strips line
 breaks and runes that render blank (format, variation selectors, Hangul fillers, private-use,
 unassigned); name and subject are capped, the address is not (a long spoofed name must not
