@@ -3,7 +3,6 @@ package mcpapp
 import (
 	"context"
 	"errors"
-	"net/http"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,17 +13,6 @@ import (
 // Version is what this server reports itself as. It is the app's version, not the
 // catalogue's and not OJCP's.
 const Version = "1.0"
-
-// serverInstructions describes capabilities and result semantics shared across tools.
-// The packaged find-tech-jobs skill carries the optional search workflow; initialization
-// does not prescribe a call sequence, shortlist size or how the client presents results.
-// Keep this introduction within the 512-character budget enforced by the tests.
-const serverInstructions = "freehire provides anonymous, read-only access to aggregated job postings. " +
-	"search_jobs/get_job: postings; check_jobs_open: open status; similar_jobs: related postings; " +
-	"search_companies/get_company: employers; salary_stats/job_market_stats: pay and demand; " +
-	"list_filter_values: supported filters. Results include source boards and employer links " +
-	"where available. Geography filters form a union. ignored_params identifies unrecognized filter values." +
-	" Search sees the start of a description; get_job has the rest."
 
 // Tool names. Unlike the OJCP transport's, they feed no manifest — there is nothing here
 // that ADVERTISES a tool separately from registering it, so they are constants only because
@@ -60,39 +48,6 @@ func readOnly() *mcp.ToolAnnotations {
 		DestructiveHint: &destructive,
 		OpenWorldHint:   &openWorld,
 	}
-}
-
-// Handler builds the HTTP handler serving these tools over MCP's streamable transport.
-// Mount it with Fiber's adaptor at the path the app declares as its MCP endpoint.
-//
-// STATELESS, and that is the whole reason this surface works at all for the caller it was
-// built for. Measured from a packet capture of OpenAI's app scanner (2026-09-18): it sends
-// one request — `server/discover`, declaring protocol version 2026-07-28 — and stops. That
-// is the SEP-2575 lifecycle, where the version and client identity ride in `_meta` on every
-// request instead of being established once.
-//
-// The session-based transport cannot serve that lifecycle, and the SDK says so beside its
-// own code: it filters 2026-07-28 out of the versions it advertises. The result was a
-// `server/discover` answer marked complete that omitted the very version the caller had
-// just declared — reported by the portal as "MCP server/discover response was inconsistent",
-// which it was.
-//
-// Stateless costs this surface nothing it uses. Every tool is a read: a request in, an
-// answer out, no server-to-client call, nothing to remember between requests. What it gives
-// up is the GET event stream and DELETE (405 in this mode), neither of which any tool here
-// has ever needed. The handshake lifecycle still works, so clients that send `initialize`
-// are unaffected — see discovery_test.go, which holds both lifecycles to that promise.
-//
-// origin is the site's own address, which the server's icons and website link are built
-// from.
-func Handler(r Reader, origin string) http.Handler {
-	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
-		return newServer(r, origin)
-	}, &mcp.StreamableHTTPOptions{Stateless: true})
-}
-
-func newServer(r Reader, origin string) *mcp.Server {
-	return newCatalogueServer(forAnonymous(r), origin, serverInstructions, "public", signedOutNext(origin))
 }
 
 func newCatalogueServer(r Reader, origin, instructions, surface string, next nextHints) *mcp.Server {

@@ -322,7 +322,7 @@ that ignores `_meta.ui` sees exactly what it saw before.
 
 Anthropic's directory policy rules out tool descriptions that instruct the model about other
 tools ("call get_job for the full text" was in three places). A tool or field description
-states what comes back; cross-tool guidance, where needed, goes in `serverInstructions`.
+states what comes back; cross-tool guidance, where needed, goes in the server instructions (`newMixedServer`).
 `TestNoToolDescriptionDirectsTheModelToAnotherTool` walks the registered tools and both
 schemas to hold the line.
 
@@ -333,7 +333,7 @@ Incorrect annotation of these three is a named rejection reason in OpenAI's subm
 guidelines. The block is written once (`readOnly()`) and a test walks the REGISTERED tools
 rather than a list beside them — checked by removing one annotation and watching it fail.
 
-A tool on THIS (anonymous) server that writes anything belongs behind authentication, which
+A tool on the catalogue (anonymous) surface that writes anything belongs behind authentication, which
 this surface does not have — that is what `account.go`'s separate, authenticated server is
 for; do not add a write tool here instead of there.
 
@@ -353,7 +353,7 @@ An answer saved here is the CANDIDATE's (`answerbank.AuthorCandidate`, so it is 
 server only ever acts for the person who approved the connection. `accountInstructions`
 describes the account boundary and the tool groups actually served, opens with one line on what
 freehire can do (search, save/track, alerts, auto-apply prepared for review) and says to call
-`get_profile` before the first search and, with auto-apply served, `get_plan` before auto-apply. Its budget is 720 characters (the public server keeps 512);
+`get_profile` before the first search and, with auto-apply served, `get_plan` before auto-apply. Its budget is 720 characters (the anonymous catalogue session keeps 512);
 Claude Code cuts server instructions at 2048. Search and application
 workflows belong to the packaged skill; initialization describes capabilities and result
 states without prescribing a call sequence or presentation.

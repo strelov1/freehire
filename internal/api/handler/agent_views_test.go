@@ -36,13 +36,14 @@ func TestAnMCPSearchThroughTheMountedRouteIsRecorded(t *testing.T) {
 	fake := &fakeSearcher{res: search.SearchResult{Hits: []search.JobDocument{{ID: 7}, {ID: 9}}}}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.All("/mcp", agentViews(sink, agentview.SurfaceMCP),
-		adaptor.HTTPHandler(mcpapp.Handler(mcpappUnder(fake, nil, fakeOJCPStore{}), "")))
+		adaptor.HTTPHandler(mcpapp.MixedHandler(nil, "", mcpappUnder(fake, nil, fakeOJCPStore{}))))
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_jobs","arguments":{"query":"go"}}}`
 	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("User-Agent", "Claude-User")
+	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)
@@ -68,6 +69,7 @@ func mcpCall(t *testing.T, app *fiber.App, ua, body string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("User-Agent", ua)
+	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +80,7 @@ func mcpCall(t *testing.T, app *fiber.App, ua, body string) {
 func mountedMCP(sink agentview.Sink, store fakeOJCPStore) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.All("/mcp", agentViews(sink, agentview.SurfaceMCP),
-		adaptor.HTTPHandler(mcpapp.Handler(mcpappUnder(&fakeSearcher{}, nil, store), "")))
+		adaptor.HTTPHandler(mcpapp.MixedHandler(nil, "", mcpappUnder(&fakeSearcher{}, nil, store))))
 	return app
 }
 
@@ -222,6 +224,7 @@ func ojcpMCPCall(t *testing.T, app *fiber.App, body string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("User-Agent", "Claude-User")
+	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)

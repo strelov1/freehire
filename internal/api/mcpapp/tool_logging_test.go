@@ -53,7 +53,7 @@ func nextToolLog(t *testing.T, records logRecords) map[string]any {
 
 func TestToolLogsSpanActualExecutionAndExcludePayloads(t *testing.T) {
 	const private = "private-query-token-and-result@example.invalid"
-	for _, surface := range []string{"public", "account"} {
+	for _, surface := range []string{"mixed", "account"} {
 		t.Run(surface, func(t *testing.T) {
 			records := captureToolLogs(t)
 			release := make(chan struct{})
@@ -61,7 +61,7 @@ func TestToolLogsSpanActualExecutionAndExcludePayloads(t *testing.T) {
 			unblock := sync.OnceFunc(func() { close(release) })
 			defer unblock()
 			var server *mcp.Server
-			if surface == "public" {
+			if surface == "mixed" {
 				reader := readerThatFinds(t)
 				reader.searchJobs = func(ctx context.Context, in SearchInput) (SearchJobsResult, error) {
 					select {
@@ -71,7 +71,7 @@ func TestToolLogsSpanActualExecutionAndExcludePayloads(t *testing.T) {
 					}
 					return SearchJobsResult{Query: in.Query}, nil
 				}
-				server = newServer(reader, "")
+				server = newMixedServer(nil, 0, "", reader, false)
 			} else {
 				server = NewAccountServer(
 					[]assistant.Tool{{Name: toolSearchJobs, Schema: map[string]any{"type": "object"}, Run: func(ctx context.Context, _ int64, _ json.RawMessage) (any, error) {
