@@ -10,12 +10,40 @@ package userprofile_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
+
+func TestCreateIfAbsent_DoesNotReplaceConcurrentProfile(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	var userID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ($1) RETURNING id`, "profile-initial-race@example.test").Scan(&userID); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	svc := userprofile.New(userprofile.NewQueriesRepository(db.New(pool)))
+	created, err := svc.CreateIfAbsent(ctx, userID, []string{"backend"}, []string{"go"},
+		[]string{"senior"}, []string{"php"}, []string{"hh"}, []string{"acme"},
+		&userprofile.LocationPreferences{WorkModes: []string{"remote"}}, "en")
+	if err != nil {
+		t.Fatalf("CreateIfAbsent: %v", err)
+	}
+	_, err = svc.CreateIfAbsent(ctx, userID, nil, []string{"python"}, nil, nil, nil, nil, nil)
+	if !errors.Is(err, userprofile.ErrConflict) {
+		t.Fatalf("second create err=%v, want ErrConflict", err)
+	}
+	stored, err := svc.Get(ctx, userID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !reflect.DeepEqual(stored, created) {
+		t.Fatalf("conflicted creation replaced stored profile: got %+v, want %+v", stored, created)
+	}
+}
 
 func TestUpsertIfUnchanged_GuardsOnUpdatedAt(t *testing.T) {
 	pool := testdb.Pool(t)

@@ -3,8 +3,8 @@
 //
 // A turn is a single POST whose response body streams the turn as SSE. That is the
 // whole transport: no connection held open between turns, no attach, no input
-// lease. Cancelling is aborting the fetch — the backend notices its next write fail
-// and stops the loop before spending another model call.
+// lease. Cancelling explicitly asks the server to stop the turn, then aborts the
+// local reader: a reader disconnect alone deliberately leaves the turn running.
 //
 // Divergence from the web's copy: an absolute origin and a Bearer credential, since
 // extension code cannot see hire's httpOnly cookie across origins.
@@ -20,6 +20,20 @@ const BASE = `${HIRE_ORIGIN}/api/v1/assistant`;
 export interface Turn {
   done: Promise<void>;
   cancel: () => void;
+}
+
+/** Cancellation is independent of the reader: its signal must not abort this request. */
+async function cancelTurn(sessionId: string, token: string): Promise<void> {
+  try {
+    await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    // Best-effort while offline. The local reader still stops, and the server's
+    // own step and timeout bounds limit work if cancellation cannot reach it.
+  }
 }
 
 /**
@@ -81,7 +95,13 @@ export function sendTurn(sessionId: string, text: string, token: string, onEvent
     }
   })();
 
-  return { done, cancel: () => controller.abort() };
+  return {
+    done,
+    cancel: () => {
+      void cancelTurn(sessionId, token);
+      controller.abort();
+    },
+  };
 }
 
 /** Read a 402's body into a PlanRefused. An unreadable body must still surface as

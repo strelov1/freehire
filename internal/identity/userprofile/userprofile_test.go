@@ -71,6 +71,10 @@ func (f *fakeRepo) Upsert(_ context.Context, userID int64, specializations, skil
 	return f.upsertRet, f.upsertErr
 }
 
+func (f *fakeRepo) CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	return f.Upsert(ctx, userID, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages, locationPreferences)
+}
+
 func (f *fakeRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (userprofile.Profile, error) {
 	f.guardedUpserted = guardedUpsertArgs{
 		upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, JobLanguages: jobLanguages, LocationPreferences: locationPreferences},

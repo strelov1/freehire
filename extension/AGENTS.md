@@ -79,8 +79,10 @@ extension/            WXT + Svelte MV3 extension (npm-managed; the repo's other
 A turn is **one POST whose response body streams SSE** (`lib/assistant/`): create
 a conversation once (`POST /assistant/sessions?preset=browse`), then post each
 message and fold the streamed `TurnEvent`s into the message list. Nothing is held
-open between turns, and cancelling is aborting the fetch — the backend notices its
-next write fail and stops before spending another model call.
+open between turns. Cancelling sends a Bearer-authenticated
+`POST /assistant/sessions/:id/cancel` with `credentials: 'omit'`, then aborts the
+local reader. A reader disconnect alone leaves the server turn running so a
+temporary connection loss does not discard its work.
 
 The conversation id lives in `storage.local`, so closing the panel and reopening
 it resumes; the transcript is replayed from the server through the same reducer a

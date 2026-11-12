@@ -1689,6 +1689,9 @@ type Querier interface {
 	// Link a provider identity to an account (first OAuth sign-in). The composite
 	// primary key rejects a duplicate identity.
 	CreateUserIdentity(ctx context.Context, arg CreateUserIdentityParams) error
+	// A partial update based on a missing-row snapshot must not replace a profile that
+	// another writer created meanwhile. No returned row means the caller must reload.
+	CreateUserProfileIfAbsent(ctx context.Context, arg CreateUserProfileIfAbsentParams) (UserProfile, error)
 	// Turn ONE email digest off, scoped to its owner. Deactivate only — it cannot
 	// create a subscription and cannot turn one back on, so a leaked link can silence
 	// somebody but never sign them up for anything. Returns the affected row count; 0

@@ -12,6 +12,56 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createUserProfileIfAbsent = `-- name: CreateUserProfileIfAbsent :one
+INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies, location_preferences, job_languages)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::text[], '{}'::text[]))
+ON CONFLICT (user_id) DO NOTHING
+RETURNING user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills, seniorities, excluded_sources, excluded_companies, job_languages
+`
+
+type CreateUserProfileIfAbsentParams struct {
+	UserID              int64           `json:"user_id"`
+	Specializations     []string        `json:"specializations"`
+	Skills              []string        `json:"skills"`
+	Seniorities         []string        `json:"seniorities"`
+	ExcludedSkills      []string        `json:"excluded_skills"`
+	ExcludedSources     []string        `json:"excluded_sources"`
+	ExcludedCompanies   []string        `json:"excluded_companies"`
+	LocationPreferences json.RawMessage `json:"location_preferences"`
+	JobLanguages        []string        `json:"job_languages"`
+}
+
+// A partial update based on a missing-row snapshot must not replace a profile that
+// another writer created meanwhile. No returned row means the caller must reload.
+func (q *Queries) CreateUserProfileIfAbsent(ctx context.Context, arg CreateUserProfileIfAbsentParams) (UserProfile, error) {
+	row := q.db.QueryRow(ctx, createUserProfileIfAbsent,
+		arg.UserID,
+		arg.Specializations,
+		arg.Skills,
+		arg.Seniorities,
+		arg.ExcludedSkills,
+		arg.ExcludedSources,
+		arg.ExcludedCompanies,
+		arg.LocationPreferences,
+		arg.JobLanguages,
+	)
+	var i UserProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Skills,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Specializations,
+		&i.LocationPreferences,
+		&i.ExcludedSkills,
+		&i.Seniorities,
+		&i.ExcludedSources,
+		&i.ExcludedCompanies,
+		&i.JobLanguages,
+	)
+	return i, err
+}
+
 const deleteUserProfile = `-- name: DeleteUserProfile :execrows
 DELETE FROM user_profiles
 WHERE user_id = $1

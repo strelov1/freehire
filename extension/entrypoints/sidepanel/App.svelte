@@ -10,6 +10,8 @@
   import { initChat, reduceTurnEvent, type ChatState } from '../../lib/assistant/chat';
   import { eventsFromTranscript } from '../../lib/assistant/wire';
   import { recallSession, rememberSession, forgetSession } from '../../lib/assistant/session';
+  import { createConversationRestore } from '../../lib/assistant/conversationRestore';
+  import { pageIdentity } from '../../lib/assistant/pageIdentity';
   import { track } from '../../lib/analytics';
   import { signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
   import {
@@ -87,7 +89,7 @@
   let sessionId: string | null = null;
   let turn: Turn | null = null;
 
-  // The page the CURRENT conversation is about (see `pageKey`). A job posting's
+  // The page the CURRENT conversation is about (see `pageIdentity`). A job posting's
   // chat has no reason to carry over to a different page — there is nothing left
   // to continue — so this is compared against the active tab on every tab switch
   // and reload, and a mismatch resets the conversation instead of resuming it.
@@ -97,6 +99,30 @@
   let user = $state<HireUser | null>(null);
   let authBusy = $state(false);
   let authError = $state('');
+  let authGeneration = 0;
+  let pageRequestId = 0;
+
+  const conversationRestore = createConversationRestore({
+    recall: recallSession,
+    load: async (id, token) => (await getSession(id, token)).messages,
+    canAdopt: () => sessionId === null && !sending,
+    adopt: (id, messages) => {
+      sessionId = id;
+      for (const event of eventsFromTranscript(messages)) {
+        chat = reduceTurnEvent(chat, event);
+      }
+    },
+    loading: (value) => {
+      restoring = value;
+    },
+    error: async (err) => {
+      if (err instanceof SessionNotFound) {
+        await forgetSession();
+      } else {
+        chatError = `Could not load your conversation: ${err instanceof Error ? err.message : 'error'}`;
+      }
+    },
+  });
 
   // The browser-tool wire: while the panel is open this holds the socket the
   // agent drives this browser through. It lives here rather than in the service
@@ -159,6 +185,9 @@
     window.addEventListener('focus', onFocus);
 
     return () => {
+      authGeneration++;
+      pageRequestId++;
+      conversationRestore.invalidate();
       turn?.cancel();
       tools.stop();
       browser.tabs.onActivated.removeListener(refresh);
@@ -168,23 +197,9 @@
     };
   });
 
-  /** Identifies the page a conversation is about, for `chatPageKey`. The query
-   *  string is dropped so a tracking-parameter change on the same posting is not
-   *  read as a different one; the path is kept because that is what actually
-   *  distinguishes one job posting's URL from another's, on freehire's own job
-   *  pages and on an ATS's alike. */
-  function pageKey(url: string): string {
-    try {
-      const u = new URL(url);
-      return `${u.origin}${u.pathname}`;
-    } catch {
-      return url;
-    }
-  }
-
   async function currentPageKey(): Promise<string> {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    return pageKey(tab?.url ?? '');
+    return pageIdentity(tab?.url ?? '');
   }
 
   /** Strips the fragment and any embedded credentials from a URL before it goes to
@@ -216,12 +231,18 @@
    * A resumes A's conversation rather than finding it erased.
    */
   async function handlePageChange() {
+    const requestId = ++pageRequestId;
+    const auth = authGeneration;
     const key = await currentPageKey();
+    if (requestId !== pageRequestId || auth !== authGeneration || !user) return;
     formFilled = false;
     autofilled.clear();
     if (chatPageKey !== null && key !== chatPageKey) {
       resetChat();
+      chatPageKey = key;
+      const current = conversationRestore.capture();
       const token = await getToken();
+      if (!current() || auth !== authGeneration || requestId !== pageRequestId) return;
       if (token) void restoreConversation(token, key);
     }
     chatPageKey = key;
@@ -230,12 +251,17 @@
   }
 
   async function restoreSession() {
+    const auth = ++authGeneration;
     const token = await getToken();
-    if (!token) return;
-    user = await fetchMe(token);
-    if (!user) return;
+    if (auth !== authGeneration || !token) return;
+    const restoredUser = await fetchMe(token);
+    if (auth !== authGeneration || !restoredUser) return;
+    user = restoredUser;
     tools.start(token);
+    const requestId = ++pageRequestId;
+    const current = conversationRestore.capture();
     const key = await currentPageKey();
+    if (auth !== authGeneration || requestId !== pageRequestId || !current()) return;
     chatPageKey = key;
     void loadMatch();
     void refreshPlan();
@@ -257,30 +283,7 @@
    * fresh one.
    */
   async function restoreConversation(token: string, key: string) {
-    const remembered = await recallSession();
-    if (!remembered) return;
-    if (remembered.pageKey !== key) return;
-    restoring = true;
-    try {
-      const { messages } = await getSession(remembered.id, token);
-      // The composer unlocks as soon as the user is known, so a message can be
-      // sent while this read is in flight — and that message created its own
-      // conversation. Adopting the remembered one now would point the panel at A
-      // while storage holds B, and lose the exchange the user just watched.
-      if (sessionId) return;
-      sessionId = remembered.id;
-      for (const event of eventsFromTranscript(messages)) {
-        chat = reduceTurnEvent(chat, event);
-      }
-    } catch (err) {
-      if (err instanceof SessionNotFound) {
-        await forgetSession();
-      } else {
-        chatError = `Could not load your conversation: ${err instanceof Error ? err.message : 'error'}`;
-      }
-    } finally {
-      restoring = false;
-    }
+    await conversationRestore.run(token, key);
   }
 
   // Bumped at the start of every loadMatch() call; a stale call checks its own
@@ -393,43 +396,58 @@
   }
 
   async function handleSignIn() {
+    const auth = ++authGeneration;
+    resetChat();
     authBusy = true;
     authError = '';
     try {
       const token = await signIn();
-      user = await fetchMe(token);
+      if (auth !== authGeneration) return;
+      const signedInUser = await fetchMe(token);
+      if (auth !== authGeneration) return;
+      user = signedInUser;
       if (!user) authError = 'Signed in, but could not load your account.';
       else {
         track('sign_in');
         tools.start(token);
-        chatPageKey = await currentPageKey();
+        const requestId = ++pageRequestId;
+        const current = conversationRestore.capture();
+        const key = await currentPageKey();
+        if (auth !== authGeneration || requestId !== pageRequestId || !current()) return;
+        chatPageKey = key;
         void loadMatch();
         void refreshPlan();
       }
     } catch (err) {
-      authError = err instanceof Error ? err.message : 'Sign-in failed';
+      if (auth === authGeneration) authError = err instanceof Error ? err.message : 'Sign-in failed';
     } finally {
-      authBusy = false;
+      if (auth === authGeneration) authBusy = false;
     }
   }
 
   async function handleSignOut() {
-    await signOut();
+    const auth = ++authGeneration;
+    pageRequestId++;
+    resetChat();
     user = null;
+    authBusy = true;
     // Detach the wire too: it is authenticated as the user who just left.
     tools.stop();
-    // Forget the conversation so a later sign-in never resumes the previous
-    // user's, and clear what is on screen.
-    await newChat();
     // No page is "current" while signed out — re-established by restoreSession
     // or handleSignIn on the next sign-in, same as on first mount.
     chatPageKey = null;
+    try {
+      await signOut();
+      await forgetSession();
+    } finally {
+      if (auth === authGeneration) authBusy = false;
+    }
   }
 
   /**
    * Run one turn. A turn is a single POST whose response body streams the events,
-   * so there is nothing to connect, attach to, or lease — and cancelling is
-   * aborting that fetch, which the backend notices on its next write.
+   * so there is nothing to connect, attach to, or lease. Stop asks the server to
+   * cancel the work separately from aborting this reader.
    *
    * The user's own message is NOT painted optimistically: the backend emits
    * `user_prompt` as the turn's first frame, before the first model call, so the
@@ -437,12 +455,15 @@
    */
   async function dispatch(text: string) {
     if (sending) return;
+    conversationRestore.invalidate();
+    const current = conversationRestore.capture();
     // Claim the turn synchronously — before the first await — so a second action
     // during `getToken()` queues out via the guard instead of double-dispatching.
     sending = true;
     chatError = '';
     planRefusal = null;
     const token = await getToken();
+    if (!current()) return;
     if (!token) {
       sending = false;
       chatError = 'Sign in to chat with the agent.';
@@ -451,16 +472,21 @@
     try {
       if (!sessionId) {
         const key = chatPageKey ?? (await currentPageKey());
-        sessionId = (await createSession(token)).id;
+        if (!current()) return;
+        const created = await createSession(token);
+        if (!current()) return;
+        sessionId = created.id;
         await rememberSession(sessionId, key);
+        if (!current()) return;
         chatPageKey = key;
       }
       turn = sendTurn(sessionId, text, token, (event) => {
-        chat = reduceTurnEvent(chat, event);
+        if (current()) chat = reduceTurnEvent(chat, event);
       });
       await turn.done;
       track('assistant_message');
     } catch (err) {
+      if (!current()) return;
       // An aborted fetch is the Stop button, not a failure: the stream may drop
       // before the response headers arrive, which lands here rather than in the
       // client's own abort path.
@@ -478,8 +504,10 @@
         chat = reduceTurnEvent(chat, { type: 'result', stop_reason: 'error', is_error: true });
       }
     } finally {
-      turn = null;
-      sending = false;
+      if (current()) {
+        turn = null;
+        sending = false;
+      }
     }
   }
 
@@ -494,7 +522,10 @@
    *  (a page change; see `handlePageChange`). `newChat` below is the same clear
    *  plus the deliberate forget. */
   function resetChat() {
+    conversationRestore.invalidate();
     if (sending) stopTurn();
+    turn = null;
+    sending = false;
     sessionId = null;
     chat = initChat();
     notices = [];

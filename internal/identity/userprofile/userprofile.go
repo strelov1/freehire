@@ -37,9 +37,9 @@ var (
 	// ErrNotFound is the caller having no profile yet (mapped to a null payload on GET,
 	// 404 on the verdict/ATS sub-resources).
 	ErrNotFound = errors.New("userprofile: not found")
-	// ErrConflict is a guarded write (UpsertIfUnchanged) landing after the row it read
-	// changed underneath it — used internally by MergeSkills' retry loop, never
-	// returned to a Save() caller.
+	// ErrConflict is a guarded write losing a race: either the read row changed or
+	// a missing profile was created. Read-modify-write callers can reload and retry.
+	// A full Save is an unconditional replacement and does not return this error.
 	ErrConflict = errors.New("userprofile: profile changed concurrently")
 )
 
@@ -114,6 +114,8 @@ type Profile struct {
 type Repository interface {
 	Get(ctx context.Context, userID int64) (Profile, error)
 	Upsert(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error)
+	// CreateIfAbsent inserts only when no profile exists, or returns ErrConflict.
+	CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error)
 	// UpsertIfUnchanged behaves like Upsert but writes only when the row's updated_at
 	// still equals expectedUpdatedAt — the guard MergeSkills needs because its merge is
 	// computed from a prior Get outside any transaction, so a Save() landing in that
@@ -156,10 +158,20 @@ func (s *Service) Save(ctx context.Context, userID int64, specializations, skill
 	return s.repo.Upsert(ctx, userID, n.specs, n.skills, n.levels, n.excluded, n.sources, n.companies, n.languages, n.loc)
 }
 
+// CreateIfAbsent normalizes a first partial update and inserts it only if the profile
+// is still absent. ErrConflict asks a read-modify-write caller to reload and merge.
+func (s *Service) CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, loc *LocationPreferences, jobLanguages ...string) (Profile, error) {
+	n, err := normalizeProfile(specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, loc, jobLanguages)
+	if err != nil {
+		return Profile{}, err
+	}
+	return s.repo.CreateIfAbsent(ctx, userID, n.specs, n.skills, n.levels, n.excluded, n.sources, n.companies, n.languages, n.loc)
+}
+
 // SaveIfUnchanged is Save for a caller that computed the new profile from a prior Get: it
 // writes only when the row's updated_at still equals expected, and returns ErrConflict when
 // a concurrent write got there first, so the caller can re-read and retry instead of
-// silently reverting that write. The profile must already exist; a first save is plain Save.
+// silently reverting that write. Use CreateIfAbsent for a missing-row snapshot.
 func (s *Service) SaveIfUnchanged(ctx context.Context, userID int64, expected time.Time, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies []string, loc *LocationPreferences, jobLanguages ...string) (Profile, error) {
 	n, err := normalizeProfile(specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, loc, jobLanguages)
 	if err != nil {

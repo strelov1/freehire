@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { sendTurn } from './client';
 import { PlanRefused } from '../planRefused';
+import { HIRE_ORIGIN } from '../auth';
 import type { TurnEvent } from './wire';
 import { must } from '../test-utils';
 
@@ -68,39 +69,83 @@ describe('sendTurn', () => {
   // Stopping is something the user chose. It has to arrive as a terminal event, or
   // the composer stays disabled waiting for one that will never come.
   it('reports cancelling as a cancelled result, not as a failure', async () => {
-    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => ({
-      ok: true,
-      status: 200,
-      body: hangingStream(init.signal as AbortSignal),
-    }));
+    const calls: { url: string; init: RequestInit }[] = [];
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      if (url.endsWith('/cancel')) return { ok: true, status: 204 };
+      return { ok: true, status: 200, body: hangingStream(init.signal as AbortSignal) };
+    });
 
     const seen: TurnEvent[] = [];
-    const turn = sendTurn('s1', 'hi', 'tok', (e) => seen.push(e));
-    await new Promise((r) => setTimeout(r, 10));
+    let started!: () => void;
+    const streaming = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const turn = sendTurn('s/1', 'hi', 'tok', (e) => {
+      seen.push(e);
+      if (e.type === 'assistant_text') started();
+    });
+    await streaming;
     turn.cancel();
     await turn.done;
 
     expect(seen.at(-1)).toEqual({ type: 'result', stop_reason: 'cancelled' });
+    expect(calls).toHaveLength(2);
+    expect(must(calls[1])).toEqual({
+      url: `${HIRE_ORIGIN}/api/v1/assistant/sessions/s%2F1/cancel`,
+      init: {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { Authorization: 'Bearer tok' },
+      },
+    });
   });
 
   // Stop renders as soon as a turn starts, so it is reachable before the response
   // headers arrive. There the abort rejects the fetch, not the stream read.
   it('reports cancelling before the response arrives as cancelled too', async () => {
-    vi.stubGlobal(
-      'fetch',
-      (_url: string, init: RequestInit) =>
-        new Promise((_resolve, reject) => {
-          (init.signal as AbortSignal).addEventListener('abort', () =>
-            reject(new DOMException('aborted', 'AbortError')),
-          );
-        }),
-    );
+    const calls: { url: string; init: RequestInit }[] = [];
+    vi.stubGlobal('fetch', (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      if (url.endsWith('/cancel')) return Promise.resolve({ ok: true, status: 204 });
+      return new Promise((_resolve, reject) => {
+        (init.signal as AbortSignal).addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      });
+    });
 
     const seen: TurnEvent[] = [];
     const turn = sendTurn('s1', 'hi', 'tok', (e) => seen.push(e));
     turn.cancel();
     await turn.done;
 
+    expect(seen).toEqual([{ type: 'result', stop_reason: 'cancelled' }]);
+    expect(calls.map((call) => call.url)).toEqual([
+      `${HIRE_ORIGIN}/api/v1/assistant/sessions/s1/messages`,
+      `${HIRE_ORIGIN}/api/v1/assistant/sessions/s1/cancel`,
+    ]);
+    expect(must(calls[1]).init).toEqual({
+      method: 'POST',
+      credentials: 'omit',
+      headers: { Authorization: 'Bearer tok' },
+    });
+  });
+
+  it('still stops reading when the server cancellation request fails', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', (url: string, init: RequestInit) => {
+      calls.push(url);
+      if (url.endsWith('/cancel')) return Promise.reject(new TypeError('offline'));
+      return new Promise((_resolve, reject) => {
+        (init.signal as AbortSignal).addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      });
+    });
+
+    const seen: TurnEvent[] = [];
+    const turn = sendTurn('s1', 'hi', 'tok', (event) => seen.push(event));
+    turn.cancel();
+    await turn.done;
+
+    expect(calls).toContain(`${HIRE_ORIGIN}/api/v1/assistant/sessions/s1/cancel`);
     expect(seen).toEqual([{ type: 'result', stop_reason: 'cancelled' }]);
   });
 
