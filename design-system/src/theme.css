@@ -26,6 +26,30 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Every single-line <select> draws OUR chevron, inset from the edge. The browser's own
+   arrow sits flush against the right border whatever padding a call site gives, and
+   call sites kept fixing that one by one with an absolutely placed icon. This is the
+   one place it is solved: deliberately unlayered, so it beats Tailwind's utilities and
+   a `px-*` on a select cannot pull the text back under the chevron. The stroke is a
+   mid grey because a data-URL image cannot read `currentColor`; it reads on both
+   palettes. List boxes (`multiple`, `size`) draw no arrow and are left alone. */
+select:not([multiple], [size]) {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8a8a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+  background-size: 1rem;
+  padding-right: 2rem;
+}
+/* The grey image ignores a forced-colors palette and can vanish on it; the native
+   arrow follows the palette, so it comes back there. */
+@media (forced-colors: active) {
+  select:not([multiple], [size]) {
+    appearance: auto;
+    background-image: none;
+  }
+}
+
 /* How a modal arrives: it grows out of the middle of the screen while it fades in, and
    its backdrop fades in under it. Short and decelerating, so a modal opened from the
    keyboard is ready to use at once. Under reduced motion only the fade remains — the
