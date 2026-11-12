@@ -204,6 +204,12 @@ type Handler interface {
 	//
 	// GET /stats/catalog
 	CatalogScale(ctx context.Context) (*CatalogScaleOK, error)
+	// CheckUsername implements checkUsername operation.
+	//
+	// Public: a name picker probes before the caller is signed in.
+	//
+	// GET /username/check
+	CheckUsername(ctx context.Context, params CheckUsernameParams) (*CheckUsernameOK, error)
 	// ClaimEmployerCompany implements claimEmployerCompany operation.
 	//
 	// Starts a claim: reserves the company and mails a code to the work email.
@@ -216,6 +222,12 @@ type Handler interface {
 	//
 	// POST /me/mailbox
 	ClaimMailbox(ctx context.Context) (*ClaimMailboxOK, error)
+	// ClaimUsername implements claimUsername operation.
+	//
+	// Claims or changes the username.
+	//
+	// PUT /me/username
+	ClaimUsername(ctx context.Context, req *AccountUsernameClaim) (*ClaimUsernameOK, error)
 	// ClearApplicationStage implements clearApplicationStage operation.
 	//
 	// DELETE /me/applications/{id}/stage
@@ -258,6 +270,10 @@ type Handler interface {
 	//
 	// POST /me/emails/{id}/confirm
 	ConfirmEmailLink(ctx context.Context, params ConfirmEmailLinkParams) (*ConfirmEmailLinkOK, error)
+	// ConfirmEmailVerification implements confirmEmailVerification operation.
+	//
+	// POST /auth/verify/confirm
+	ConfirmEmailVerification(ctx context.Context, req *AuthCode) (*ConfirmEmailVerificationOK, error)
 	// ConfirmEmployerClaim implements confirmEmployerClaim operation.
 	//
 	// Activates at once when the work email matches the company's website, else stays pending.
@@ -270,6 +286,12 @@ type Handler interface {
 	//
 	// GET /threads/count
 	CountThreads(ctx context.Context, params CountThreadsParams) (*CountThreadsOK, error)
+	// CreateApiKey implements createApiKey operation.
+	//
+	// Creates a key and returns its plaintext token, this once. Behind the recent-auth gate.
+	//
+	// POST /me/api-keys
+	CreateApiKey(ctx context.Context, req *ApiKeyCreate) (*CreateApiKeyCreated, error)
 	// CreateApplicationFromEmail implements createApplicationFromEmail operation.
 	//
 	// Records the application from the email and links it, dated by the email. 409 while a suggestion is
@@ -481,12 +503,22 @@ type Handler interface {
 	//
 	// GET /moderation/users
 	FindModeratedUser(ctx context.Context, params FindModeratedUserParams) (*FindModeratedUserOK, error)
+	// ForgotPassword implements forgotPassword operation.
+	//
+	// Always answers 202, whether or not the address has an account.
+	//
+	// POST /auth/password/forgot
+	ForgotPassword(ctx context.Context, req *AuthPasswordForgot) error
 	// GetAgentPermissions implements getAgentPermissions operation.
 	//
 	// Readable with a session or an API key.
 	//
 	// GET /me/agent-permissions
 	GetAgentPermissions(ctx context.Context) (*GetAgentPermissionsOK, error)
+	// GetApiPlan implements getApiPlan operation.
+	//
+	// GET /me/api-plan
+	GetApiPlan(ctx context.Context) (*GetApiPlanOK, error)
 	// GetApplicationFollowUp implements getApplicationFollowUp operation.
 	//
 	// 409 unless the application is waiting on a reply.
@@ -506,6 +538,12 @@ type Handler interface {
 	//
 	// GET /me/profile/ats-report
 	GetAtsReport(ctx context.Context) (*GetAtsReportOK, error)
+	// GetAuthMe implements getAuthMe operation.
+	//
+	// Readable with a session or an API key, narrow scope included.
+	//
+	// GET /auth/me
+	GetAuthMe(ctx context.Context) (*GetAuthMeOK, error)
 	// GetAutofillProfile implements getAutofillProfile operation.
 	//
 	// The caller's canonical form fields, all empty bar the account email when no source states a contact.
@@ -701,6 +739,12 @@ type Handler interface {
 	//
 	// GET /me/usage
 	GetMyUsage(ctx context.Context) (*GetMyUsageOK, error)
+	// GetNotification implements getNotification operation.
+	//
+	// Another user's id, or one that does not exist, is a 404.
+	//
+	// GET /me/notifications/{id}
+	GetNotification(ctx context.Context, params GetNotificationParams) (*GetNotificationOK, error)
 	// GetNotificationSettings implements getNotificationSettings operation.
 	//
 	// Session cookie only.
@@ -787,6 +831,10 @@ type Handler interface {
 	//
 	// GET /me/tracking/{slug}
 	GetTrackedApplication(ctx context.Context, params GetTrackedApplicationParams) (*GetTrackedApplicationOK, error)
+	// GetUsername implements getUsername operation.
+	//
+	// GET /me/username
+	GetUsername(ctx context.Context) (*GetUsernameOK, error)
 	// GetWatching implements getWatching operation.
 	//
 	// GET /me/watchlist/{slug}
@@ -908,6 +956,10 @@ type Handler interface {
 	//
 	// POST /me/tracking/{slug}/mail-recall/link
 	LinkRecalledMail(ctx context.Context, req OptMailRecalledPick, params LinkRecalledMailParams) (*LinkRecalledMailOK, error)
+	// ListApiKeys implements listApiKeys operation.
+	//
+	// GET /me/api-keys
+	ListApiKeys(ctx context.Context) (*ListApiKeysOK, error)
 	// ListAppliedCompanySlugs implements listAppliedCompanySlugs operation.
 	//
 	// The employers the caller has applied to.
@@ -1063,6 +1115,20 @@ type Handler interface {
 	//
 	// GET /me/submissions
 	ListMySubmissions(ctx context.Context) (*ListMySubmissionsOK, error)
+	// ListNotifications implements listNotifications operation.
+	//
+	// GET /me/notifications
+	ListNotifications(ctx context.Context, params ListNotificationsParams) (*NotificationPage, error)
+	// ListOauthGrants implements listOauthGrants operation.
+	//
+	// GET /me/oauth-grants
+	ListOauthGrants(ctx context.Context) (*ListOauthGrantsOK, error)
+	// ListOauthProviders implements listOauthProviders operation.
+	//
+	// The names of the enabled sign-in providers.
+	//
+	// GET /auth/oauth/providers
+	ListOauthProviders(ctx context.Context) (*ListOauthProvidersOK, error)
 	// ListPendingCompanyRelations implements listPendingCompanyRelations operation.
 	//
 	// Moderators only, oldest first.
@@ -1093,6 +1159,10 @@ type Handler interface {
 	//
 	// GET /submissions
 	ListPendingSubmissions(ctx context.Context) (*ListPendingSubmissionsOK, error)
+	// ListPushTokens implements listPushTokens operation.
+	//
+	// GET /me/push-tokens
+	ListPushTokens(ctx context.Context) (*ListPushTokensOK, error)
 	// ListRecentThreads implements listRecentThreads operation.
 	//
 	// Open threads across every subject, newest first, keyset-paged: the discussions feed.
@@ -1159,6 +1229,10 @@ type Handler interface {
 	//
 	// GET /me/watchlist
 	ListWatchlist(ctx context.Context, params ListWatchlistParams) (*WatchlistPageHeaders, error)
+	// MarkAllNotificationsRead implements markAllNotificationsRead operation.
+	//
+	// POST /me/notifications/read-all
+	MarkAllNotificationsRead(ctx context.Context) (*MarkAllNotificationsReadOK, error)
 	// MarkAllReadInbox implements markAllReadInbox operation.
 	//
 	// Marks every unread message matching the same filters as the listing.
@@ -1177,6 +1251,12 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/read
 	MarkConversationRead(ctx context.Context, req *ConversationReadRequest, params MarkConversationReadParams) error
+	// MarkNotificationRead implements markNotificationRead operation.
+	//
+	// Idempotent; another user's id, or one that does not exist, is a 404.
+	//
+	// POST /me/notifications/{id}/read
+	MarkNotificationRead(ctx context.Context, params MarkNotificationReadParams) error
 	// MarketCoverage implements marketCoverage operation.
 	//
 	// Scores a skill list against the market the query's facet params select. The `skills` facet params
@@ -1333,6 +1413,12 @@ type Handler interface {
 	//
 	// POST /me/promo/redeem
 	RedeemPromoCode(ctx context.Context, req *PromoCode) (*RedeemPromoCodeOK, error)
+	// RegisterPushToken implements registerPushToken operation.
+	//
+	// Registers or refreshes the device's push token; a token is reassigned to the caller.
+	//
+	// POST /me/push-tokens
+	RegisterPushToken(ctx context.Context, req *PushTokenRegister) error
 	// RejectCompanyRelation implements rejectCompanyRelation operation.
 	//
 	// Moderators only.
@@ -1394,6 +1480,24 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/report
 	ReportConversation(ctx context.Context, req *ConversationReportRequest, params ReportConversationParams) error
+	// ReportSignupAttribution implements reportSignupAttribution operation.
+	//
+	// A failure to store or send never surfaces as an error.
+	//
+	// POST /me/attribution
+	ReportSignupAttribution(ctx context.Context, req *AccountAttribution) (*ReportSignupAttributionOK, error)
+	// RequestEmailChange implements requestEmailChange operation.
+	//
+	// Mails a confirmation code to the new address. Behind the recent-auth gate.
+	//
+	// POST /me/email
+	RequestEmailChange(ctx context.Context, req *AuthEmailChange) error
+	// RequestEmailVerification implements requestEmailVerification operation.
+	//
+	// Mails the caller a fresh verification code.
+	//
+	// POST /auth/verify/request
+	RequestEmailVerification(ctx context.Context) error
 	// ReseedBaseCV implements reseedBaseCV operation.
 	//
 	// Rebuilds the default base CV from the current seed.
@@ -1412,6 +1516,12 @@ type Handler interface {
 	//
 	// POST /employer/claim/resend
 	ResendEmployerClaimCode(ctx context.Context) (*ResendEmployerClaimCodeOK, error)
+	// ResetPassword implements resetPassword operation.
+	//
+	// Public: the mailed code is the credential. Revokes every session.
+	//
+	// POST /auth/password/reset
+	ResetPassword(ctx context.Context, req *AuthPasswordReset) (*ResetPasswordOK, error)
 	// ResolveConversationReport implements resolveConversationReport operation.
 	//
 	// Moderators only: marks a report handled. Idempotent; 404 for an unknown id.
@@ -1466,12 +1576,24 @@ type Handler interface {
 	//
 	// PUT /me/mentorship/sessions/{id}/review
 	ReviewSession(ctx context.Context, req *MentorshipReviewBody, params ReviewSessionParams) (*ReviewSessionOK, error)
+	// RevokeApiKey implements revokeApiKey operation.
+	//
+	// An id that is not the caller's is a 404. Behind the recent-auth gate.
+	//
+	// DELETE /me/api-keys/{id}
+	RevokeApiKey(ctx context.Context, params RevokeApiKeyParams) error
 	// RevokeEmployerAccount implements revokeEmployerAccount operation.
 	//
 	// Admins only: deactivates the account but keeps the company reservation.
 	//
 	// POST /employer/claims/{user_id}/revoke
 	RevokeEmployerAccount(ctx context.Context, params RevokeEmployerAccountParams) (*RevokeEmployerAccountOK, error)
+	// RevokeOauthGrant implements revokeOauthGrant operation.
+	//
+	// An id that is not the caller's is a 404. Behind the recent-auth gate.
+	//
+	// DELETE /me/oauth-grants/{id}
+	RevokeOauthGrant(ctx context.Context, params RevokeOauthGrantParams) error
 	// RunAutofill implements runAutofill operation.
 	//
 	// Fills the form in the caller's own browser through the browser-tool channel. Paid AI route
@@ -1623,6 +1745,12 @@ type Handler interface {
 	//
 	// POST /me/cvs/tailor
 	TailorCV(ctx context.Context, req *CvTailorRequest) (TailorCVRes, error)
+	// TestPushToken implements testPushToken operation.
+	//
+	// Sends a test push to the caller's own registered tokens, never anyone else's.
+	//
+	// POST /me/push-tokens/test
+	TestPushToken(ctx context.Context) (*TestPushTokenOK, error)
 	// TrackApplication implements trackApplication operation.
 	//
 	// PATCH /me/applications/{id}
@@ -1661,6 +1789,12 @@ type Handler interface {
 	//
 	// POST /me/emails/{id}/unlink
 	UnlinkEmail(ctx context.Context, params UnlinkEmailParams) (*UnlinkEmailOK, error)
+	// UnregisterPushToken implements unregisterPushToken operation.
+	//
+	// A token that is not the caller's is a 404.
+	//
+	// DELETE /me/push-tokens
+	UnregisterPushToken(ctx context.Context, req *PushTokenRemove) error
 	// UnsaveJob implements unsaveJob operation.
 	//
 	// Unsaving a job that was never saved answers with the empty interaction.
@@ -1711,6 +1845,10 @@ type Handler interface {
 	//
 	// PATCH /jobs/{slug}
 	UpdateJob(ctx context.Context, req *JobUpdate, params UpdateJobParams) (*UpdateJobOK, error)
+	// UpdateLanguage implements updateLanguage operation.
+	//
+	// PATCH /me/language
+	UpdateLanguage(ctx context.Context, req *AccountLanguageUpdate) (*UpdateLanguageOK, error)
 	// UpdateMentorProfile implements updateMentorProfile operation.
 	//
 	// PUT /me/mentorship/profile
@@ -1737,6 +1875,10 @@ type Handler interface {
 	//
 	// PUT /me/survey
 	UpdateSurvey(ctx context.Context, req *SurveyResponses) (*UpdateSurveyOK, error)
+	// UpdateTimezone implements updateTimezone operation.
+	//
+	// PATCH /me/timezone
+	UpdateTimezone(ctx context.Context, req *AccountTimezoneUpdate) (*UpdateTimezoneOK, error)
 	// UpsertCompanyFeedback implements upsertCompanyFeedback operation.
 	//
 	// Creates or overwrites the caller's review in one category.

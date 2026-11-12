@@ -30,6 +30,312 @@ func (s *AcceptConversationOK) SetData(val Conversation) {
 	s.Data = val
 }
 
+// How a just-created account arrived. Every field is optional and untrusted.
+// Ref: #/components/schemas/AccountAttribution
+type AccountAttribution struct {
+	UtmSource    OptString `json:"utm_source"`
+	UtmMedium    OptString `json:"utm_medium"`
+	UtmCampaign  OptString `json:"utm_campaign"`
+	UtmContent   OptString `json:"utm_content"`
+	UtmTerm      OptString `json:"utm_term"`
+	ReferrerHost OptString `json:"referrer_host"`
+	LandingPath  OptString `json:"landing_path"`
+	Method       OptString `json:"method"`
+	GaClientID   OptString `json:"ga_client_id"`
+	GaSessionID  OptString `json:"ga_session_id"`
+}
+
+// GetUtmSource returns the value of UtmSource.
+func (s *AccountAttribution) GetUtmSource() OptString {
+	return s.UtmSource
+}
+
+// GetUtmMedium returns the value of UtmMedium.
+func (s *AccountAttribution) GetUtmMedium() OptString {
+	return s.UtmMedium
+}
+
+// GetUtmCampaign returns the value of UtmCampaign.
+func (s *AccountAttribution) GetUtmCampaign() OptString {
+	return s.UtmCampaign
+}
+
+// GetUtmContent returns the value of UtmContent.
+func (s *AccountAttribution) GetUtmContent() OptString {
+	return s.UtmContent
+}
+
+// GetUtmTerm returns the value of UtmTerm.
+func (s *AccountAttribution) GetUtmTerm() OptString {
+	return s.UtmTerm
+}
+
+// GetReferrerHost returns the value of ReferrerHost.
+func (s *AccountAttribution) GetReferrerHost() OptString {
+	return s.ReferrerHost
+}
+
+// GetLandingPath returns the value of LandingPath.
+func (s *AccountAttribution) GetLandingPath() OptString {
+	return s.LandingPath
+}
+
+// GetMethod returns the value of Method.
+func (s *AccountAttribution) GetMethod() OptString {
+	return s.Method
+}
+
+// GetGaClientID returns the value of GaClientID.
+func (s *AccountAttribution) GetGaClientID() OptString {
+	return s.GaClientID
+}
+
+// GetGaSessionID returns the value of GaSessionID.
+func (s *AccountAttribution) GetGaSessionID() OptString {
+	return s.GaSessionID
+}
+
+// SetUtmSource sets the value of UtmSource.
+func (s *AccountAttribution) SetUtmSource(val OptString) {
+	s.UtmSource = val
+}
+
+// SetUtmMedium sets the value of UtmMedium.
+func (s *AccountAttribution) SetUtmMedium(val OptString) {
+	s.UtmMedium = val
+}
+
+// SetUtmCampaign sets the value of UtmCampaign.
+func (s *AccountAttribution) SetUtmCampaign(val OptString) {
+	s.UtmCampaign = val
+}
+
+// SetUtmContent sets the value of UtmContent.
+func (s *AccountAttribution) SetUtmContent(val OptString) {
+	s.UtmContent = val
+}
+
+// SetUtmTerm sets the value of UtmTerm.
+func (s *AccountAttribution) SetUtmTerm(val OptString) {
+	s.UtmTerm = val
+}
+
+// SetReferrerHost sets the value of ReferrerHost.
+func (s *AccountAttribution) SetReferrerHost(val OptString) {
+	s.ReferrerHost = val
+}
+
+// SetLandingPath sets the value of LandingPath.
+func (s *AccountAttribution) SetLandingPath(val OptString) {
+	s.LandingPath = val
+}
+
+// SetMethod sets the value of Method.
+func (s *AccountAttribution) SetMethod(val OptString) {
+	s.Method = val
+}
+
+// SetGaClientID sets the value of GaClientID.
+func (s *AccountAttribution) SetGaClientID(val OptString) {
+	s.GaClientID = val
+}
+
+// SetGaSessionID sets the value of GaSessionID.
+func (s *AccountAttribution) SetGaSessionID(val OptString) {
+	s.GaSessionID = val
+}
+
+// Ref: #/components/schemas/AccountAttributionResult
+type AccountAttributionResult struct {
+	// Whether the server sent the GA4 `sign_up`, so the browser stays out of it.
+	Ga4Sent bool `json:"ga4_sent"`
+}
+
+// GetGa4Sent returns the value of Ga4Sent.
+func (s *AccountAttributionResult) GetGa4Sent() bool {
+	return s.Ga4Sent
+}
+
+// SetGa4Sent sets the value of Ga4Sent.
+func (s *AccountAttributionResult) SetGa4Sent(val bool) {
+	s.Ga4Sent = val
+}
+
+// Ref: #/components/schemas/AccountLanguageUpdate
+type AccountLanguageUpdate struct {
+	Language OptString `json:"language"`
+}
+
+// GetLanguage returns the value of Language.
+func (s *AccountLanguageUpdate) GetLanguage() OptString {
+	return s.Language
+}
+
+// SetLanguage sets the value of Language.
+func (s *AccountLanguageUpdate) SetLanguage(val OptString) {
+	s.Language = val
+}
+
+// A connected MCP client.
+// Ref: #/components/schemas/AccountOauthGrant
+type AccountOauthGrant struct {
+	ID         int64       `json:"id"`
+	ClientName string      `json:"client_name"`
+	CreatedAt  NilDateTime `json:"created_at"`
+	ExpiresAt  NilDateTime `json:"expires_at"`
+	LastUsedAt NilDateTime `json:"last_used_at"`
+}
+
+// GetID returns the value of ID.
+func (s *AccountOauthGrant) GetID() int64 {
+	return s.ID
+}
+
+// GetClientName returns the value of ClientName.
+func (s *AccountOauthGrant) GetClientName() string {
+	return s.ClientName
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *AccountOauthGrant) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// GetExpiresAt returns the value of ExpiresAt.
+func (s *AccountOauthGrant) GetExpiresAt() NilDateTime {
+	return s.ExpiresAt
+}
+
+// GetLastUsedAt returns the value of LastUsedAt.
+func (s *AccountOauthGrant) GetLastUsedAt() NilDateTime {
+	return s.LastUsedAt
+}
+
+// SetID sets the value of ID.
+func (s *AccountOauthGrant) SetID(val int64) {
+	s.ID = val
+}
+
+// SetClientName sets the value of ClientName.
+func (s *AccountOauthGrant) SetClientName(val string) {
+	s.ClientName = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *AccountOauthGrant) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
+// SetExpiresAt sets the value of ExpiresAt.
+func (s *AccountOauthGrant) SetExpiresAt(val NilDateTime) {
+	s.ExpiresAt = val
+}
+
+// SetLastUsedAt sets the value of LastUsedAt.
+func (s *AccountOauthGrant) SetLastUsedAt(val NilDateTime) {
+	s.LastUsedAt = val
+}
+
+// Ref: #/components/schemas/AccountTimezoneUpdate
+type AccountTimezoneUpdate struct {
+	Timezone OptString `json:"timezone"`
+	// Leave a timezone that is already set alone.
+	OnlyIfUnset OptBool `json:"only_if_unset"`
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *AccountTimezoneUpdate) GetTimezone() OptString {
+	return s.Timezone
+}
+
+// GetOnlyIfUnset returns the value of OnlyIfUnset.
+func (s *AccountTimezoneUpdate) GetOnlyIfUnset() OptBool {
+	return s.OnlyIfUnset
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *AccountTimezoneUpdate) SetTimezone(val OptString) {
+	s.Timezone = val
+}
+
+// SetOnlyIfUnset sets the value of OnlyIfUnset.
+func (s *AccountTimezoneUpdate) SetOnlyIfUnset(val OptBool) {
+	s.OnlyIfUnset = val
+}
+
+// Ref: #/components/schemas/AccountTotalMeta
+type AccountTotalMeta struct {
+	Total int64 `json:"total"`
+}
+
+// GetTotal returns the value of Total.
+func (s *AccountTotalMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// SetTotal sets the value of Total.
+func (s *AccountTotalMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
+// Ref: #/components/schemas/AccountUsername
+type AccountUsername struct {
+	// Null until claimed or allocated.
+	Username NilString `json:"username"`
+	// Null for a lazy default that was never explicitly claimed.
+	UpdatedAt NilDateTime `json:"updated_at"`
+}
+
+// GetUsername returns the value of Username.
+func (s *AccountUsername) GetUsername() NilString {
+	return s.Username
+}
+
+// GetUpdatedAt returns the value of UpdatedAt.
+func (s *AccountUsername) GetUpdatedAt() NilDateTime {
+	return s.UpdatedAt
+}
+
+// SetUsername sets the value of Username.
+func (s *AccountUsername) SetUsername(val NilString) {
+	s.Username = val
+}
+
+// SetUpdatedAt sets the value of UpdatedAt.
+func (s *AccountUsername) SetUpdatedAt(val NilDateTime) {
+	s.UpdatedAt = val
+}
+
+// Ref: #/components/schemas/AccountUsernameAvailability
+type AccountUsernameAvailability struct {
+	Available bool `json:"available"`
+}
+
+// GetAvailable returns the value of Available.
+func (s *AccountUsernameAvailability) GetAvailable() bool {
+	return s.Available
+}
+
+// SetAvailable sets the value of Available.
+func (s *AccountUsernameAvailability) SetAvailable(val bool) {
+	s.Available = val
+}
+
+// Ref: #/components/schemas/AccountUsernameClaim
+type AccountUsernameClaim struct {
+	Username OptString `json:"username"`
+}
+
+// GetUsername returns the value of Username.
+func (s *AccountUsernameClaim) GetUsername() OptString {
+	return s.Username
+}
+
+// SetUsername sets the value of Username.
+func (s *AccountUsernameClaim) SetUsername(val OptString) {
+	s.Username = val
+}
+
 // Ref: #/components/schemas/ActivityMeta
 type ActivityMeta struct {
 	Granularity string `json:"granularity"`
@@ -331,6 +637,252 @@ func (s *AlertListMeta) GetTotal() int64 {
 // SetTotal sets the value of Total.
 func (s *AlertListMeta) SetTotal(val int64) {
 	s.Total = val
+}
+
+// The public, secret-free shape of an API key.
+// Ref: #/components/schemas/ApiKey
+type ApiKey struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	// What identifies the key in a list.
+	TokenPrefix string `json:"token_prefix"`
+	// What the key may reach: `full`, or `cv` for the tailoring agent.
+	Scope      string      `json:"scope"`
+	CreatedAt  NilDateTime `json:"created_at"`
+	LastUsedAt NilDateTime `json:"last_used_at"`
+	ExpiresAt  NilDateTime `json:"expires_at"`
+}
+
+// GetID returns the value of ID.
+func (s *ApiKey) GetID() int64 {
+	return s.ID
+}
+
+// GetName returns the value of Name.
+func (s *ApiKey) GetName() string {
+	return s.Name
+}
+
+// GetTokenPrefix returns the value of TokenPrefix.
+func (s *ApiKey) GetTokenPrefix() string {
+	return s.TokenPrefix
+}
+
+// GetScope returns the value of Scope.
+func (s *ApiKey) GetScope() string {
+	return s.Scope
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *ApiKey) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// GetLastUsedAt returns the value of LastUsedAt.
+func (s *ApiKey) GetLastUsedAt() NilDateTime {
+	return s.LastUsedAt
+}
+
+// GetExpiresAt returns the value of ExpiresAt.
+func (s *ApiKey) GetExpiresAt() NilDateTime {
+	return s.ExpiresAt
+}
+
+// SetID sets the value of ID.
+func (s *ApiKey) SetID(val int64) {
+	s.ID = val
+}
+
+// SetName sets the value of Name.
+func (s *ApiKey) SetName(val string) {
+	s.Name = val
+}
+
+// SetTokenPrefix sets the value of TokenPrefix.
+func (s *ApiKey) SetTokenPrefix(val string) {
+	s.TokenPrefix = val
+}
+
+// SetScope sets the value of Scope.
+func (s *ApiKey) SetScope(val string) {
+	s.Scope = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *ApiKey) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
+// SetLastUsedAt sets the value of LastUsedAt.
+func (s *ApiKey) SetLastUsedAt(val NilDateTime) {
+	s.LastUsedAt = val
+}
+
+// SetExpiresAt sets the value of ExpiresAt.
+func (s *ApiKey) SetExpiresAt(val NilDateTime) {
+	s.ExpiresAt = val
+}
+
+// Ref: #/components/schemas/ApiKeyCreate
+type ApiKeyCreate struct {
+	// Required: an empty name is refused with a 400.
+	Name OptString `json:"name"`
+	// Null or absent: the key never expires.
+	ExpiresAt OptNilDateTime `json:"expires_at"`
+	// Absent or empty mints a full-scope key; `embed` is the only other value a client may ask for.
+	Scope OptString `json:"scope"`
+}
+
+// GetName returns the value of Name.
+func (s *ApiKeyCreate) GetName() OptString {
+	return s.Name
+}
+
+// GetExpiresAt returns the value of ExpiresAt.
+func (s *ApiKeyCreate) GetExpiresAt() OptNilDateTime {
+	return s.ExpiresAt
+}
+
+// GetScope returns the value of Scope.
+func (s *ApiKeyCreate) GetScope() OptString {
+	return s.Scope
+}
+
+// SetName sets the value of Name.
+func (s *ApiKeyCreate) SetName(val OptString) {
+	s.Name = val
+}
+
+// SetExpiresAt sets the value of ExpiresAt.
+func (s *ApiKeyCreate) SetExpiresAt(val OptNilDateTime) {
+	s.ExpiresAt = val
+}
+
+// SetScope sets the value of Scope.
+func (s *ApiKeyCreate) SetScope(val OptString) {
+	s.Scope = val
+}
+
+// The key plus its plaintext token, revealed exactly once, in the answer that creates it.
+// Ref: #/components/schemas/ApiKeyCreated
+type ApiKeyCreated struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	// What identifies the key in a list.
+	TokenPrefix string `json:"token_prefix"`
+	// What the key may reach: `full`, or `cv` for the tailoring agent.
+	Scope      string      `json:"scope"`
+	CreatedAt  NilDateTime `json:"created_at"`
+	LastUsedAt NilDateTime `json:"last_used_at"`
+	ExpiresAt  NilDateTime `json:"expires_at"`
+	Token      string      `json:"token"`
+}
+
+// GetID returns the value of ID.
+func (s *ApiKeyCreated) GetID() int64 {
+	return s.ID
+}
+
+// GetName returns the value of Name.
+func (s *ApiKeyCreated) GetName() string {
+	return s.Name
+}
+
+// GetTokenPrefix returns the value of TokenPrefix.
+func (s *ApiKeyCreated) GetTokenPrefix() string {
+	return s.TokenPrefix
+}
+
+// GetScope returns the value of Scope.
+func (s *ApiKeyCreated) GetScope() string {
+	return s.Scope
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *ApiKeyCreated) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// GetLastUsedAt returns the value of LastUsedAt.
+func (s *ApiKeyCreated) GetLastUsedAt() NilDateTime {
+	return s.LastUsedAt
+}
+
+// GetExpiresAt returns the value of ExpiresAt.
+func (s *ApiKeyCreated) GetExpiresAt() NilDateTime {
+	return s.ExpiresAt
+}
+
+// GetToken returns the value of Token.
+func (s *ApiKeyCreated) GetToken() string {
+	return s.Token
+}
+
+// SetID sets the value of ID.
+func (s *ApiKeyCreated) SetID(val int64) {
+	s.ID = val
+}
+
+// SetName sets the value of Name.
+func (s *ApiKeyCreated) SetName(val string) {
+	s.Name = val
+}
+
+// SetTokenPrefix sets the value of TokenPrefix.
+func (s *ApiKeyCreated) SetTokenPrefix(val string) {
+	s.TokenPrefix = val
+}
+
+// SetScope sets the value of Scope.
+func (s *ApiKeyCreated) SetScope(val string) {
+	s.Scope = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *ApiKeyCreated) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
+// SetLastUsedAt sets the value of LastUsedAt.
+func (s *ApiKeyCreated) SetLastUsedAt(val NilDateTime) {
+	s.LastUsedAt = val
+}
+
+// SetExpiresAt sets the value of ExpiresAt.
+func (s *ApiKeyCreated) SetExpiresAt(val NilDateTime) {
+	s.ExpiresAt = val
+}
+
+// SetToken sets the value of Token.
+func (s *ApiKeyCreated) SetToken(val string) {
+	s.Token = val
+}
+
+// Ref: #/components/schemas/ApiKeyPlan
+type ApiKeyPlan struct {
+	// The API product tier the account holds.
+	Tier  string      `json:"tier"`
+	Until OptDateTime `json:"until"`
+}
+
+// GetTier returns the value of Tier.
+func (s *ApiKeyPlan) GetTier() string {
+	return s.Tier
+}
+
+// GetUntil returns the value of Until.
+func (s *ApiKeyPlan) GetUntil() OptDateTime {
+	return s.Until
+}
+
+// SetTier sets the value of Tier.
+func (s *ApiKeyPlan) SetTier(val string) {
+	s.Tier = val
+}
+
+// SetUntil sets the value of Until.
+func (s *ApiKeyPlan) SetUntil(val OptDateTime) {
+	s.Until = val
 }
 
 // Ref: #/components/schemas/ApplyJob
@@ -711,6 +1263,246 @@ func (s *AssistantVoiceTurn) SetRole(val OptString) {
 // SetContent sets the value of Content.
 func (s *AssistantVoiceTurn) SetContent(val OptString) {
 	s.Content = val
+}
+
+// Ref: #/components/schemas/AuthCode
+type AuthCode struct {
+	Code OptString `json:"code"`
+}
+
+// GetCode returns the value of Code.
+func (s *AuthCode) GetCode() OptString {
+	return s.Code
+}
+
+// SetCode sets the value of Code.
+func (s *AuthCode) SetCode(val OptString) {
+	s.Code = val
+}
+
+// Ref: #/components/schemas/AuthEmailChange
+type AuthEmailChange struct {
+	Email OptString `json:"email"`
+}
+
+// GetEmail returns the value of Email.
+func (s *AuthEmailChange) GetEmail() OptString {
+	return s.Email
+}
+
+// SetEmail sets the value of Email.
+func (s *AuthEmailChange) SetEmail(val OptString) {
+	s.Email = val
+}
+
+// Ref: #/components/schemas/AuthPasswordForgot
+type AuthPasswordForgot struct {
+	Email OptString `json:"email"`
+}
+
+// GetEmail returns the value of Email.
+func (s *AuthPasswordForgot) GetEmail() OptString {
+	return s.Email
+}
+
+// SetEmail sets the value of Email.
+func (s *AuthPasswordForgot) SetEmail(val OptString) {
+	s.Email = val
+}
+
+// Ref: #/components/schemas/AuthPasswordReset
+type AuthPasswordReset struct {
+	Email    OptString `json:"email"`
+	Code     OptString `json:"code"`
+	Password OptString `json:"password"`
+}
+
+// GetEmail returns the value of Email.
+func (s *AuthPasswordReset) GetEmail() OptString {
+	return s.Email
+}
+
+// GetCode returns the value of Code.
+func (s *AuthPasswordReset) GetCode() OptString {
+	return s.Code
+}
+
+// GetPassword returns the value of Password.
+func (s *AuthPasswordReset) GetPassword() OptString {
+	return s.Password
+}
+
+// SetEmail sets the value of Email.
+func (s *AuthPasswordReset) SetEmail(val OptString) {
+	s.Email = val
+}
+
+// SetCode sets the value of Code.
+func (s *AuthPasswordReset) SetCode(val OptString) {
+	s.Code = val
+}
+
+// SetPassword sets the value of Password.
+func (s *AuthPasswordReset) SetPassword(val OptString) {
+	s.Password = val
+}
+
+// Ref: #/components/schemas/AuthPasswordResetResult
+type AuthPasswordResetResult struct {
+	Reset bool `json:"reset"`
+}
+
+// GetReset returns the value of Reset.
+func (s *AuthPasswordResetResult) GetReset() bool {
+	return s.Reset
+}
+
+// SetReset sets the value of Reset.
+func (s *AuthPasswordResetResult) SetReset(val bool) {
+	s.Reset = val
+}
+
+// The account as the SPA and the CLI read it.
+// Ref: #/components/schemas/AuthUser
+type AuthUser struct {
+	ID         int64  `json:"id"`
+	Email      string `json:"email"`
+	Role       string `json:"role"`
+	BetaTester bool   `json:"beta_tester"`
+	// An affordance only: the server never trusts the client's copy of it.
+	EmailVerified bool `json:"email_verified"`
+	// False for an OAuth-only account.
+	HasPassword bool        `json:"has_password"`
+	CreatedAt   NilDateTime `json:"created_at"`
+	// The account's IANA name, null until set.
+	Timezone NilString `json:"timezone"`
+	Language string    `json:"language"`
+	// Null for an account that never finished (or declined) the onboarding wizard.
+	OnboardingCompletedAt NilDateTime `json:"onboarding_completed_at"`
+	// The resolved plan: `free`, `pro` or `ultra`.
+	Tier string `json:"tier"`
+	// Whether the account holds a live API key or MCP grant.
+	AgentConnected bool `json:"agent_connected"`
+}
+
+// GetID returns the value of ID.
+func (s *AuthUser) GetID() int64 {
+	return s.ID
+}
+
+// GetEmail returns the value of Email.
+func (s *AuthUser) GetEmail() string {
+	return s.Email
+}
+
+// GetRole returns the value of Role.
+func (s *AuthUser) GetRole() string {
+	return s.Role
+}
+
+// GetBetaTester returns the value of BetaTester.
+func (s *AuthUser) GetBetaTester() bool {
+	return s.BetaTester
+}
+
+// GetEmailVerified returns the value of EmailVerified.
+func (s *AuthUser) GetEmailVerified() bool {
+	return s.EmailVerified
+}
+
+// GetHasPassword returns the value of HasPassword.
+func (s *AuthUser) GetHasPassword() bool {
+	return s.HasPassword
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *AuthUser) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *AuthUser) GetTimezone() NilString {
+	return s.Timezone
+}
+
+// GetLanguage returns the value of Language.
+func (s *AuthUser) GetLanguage() string {
+	return s.Language
+}
+
+// GetOnboardingCompletedAt returns the value of OnboardingCompletedAt.
+func (s *AuthUser) GetOnboardingCompletedAt() NilDateTime {
+	return s.OnboardingCompletedAt
+}
+
+// GetTier returns the value of Tier.
+func (s *AuthUser) GetTier() string {
+	return s.Tier
+}
+
+// GetAgentConnected returns the value of AgentConnected.
+func (s *AuthUser) GetAgentConnected() bool {
+	return s.AgentConnected
+}
+
+// SetID sets the value of ID.
+func (s *AuthUser) SetID(val int64) {
+	s.ID = val
+}
+
+// SetEmail sets the value of Email.
+func (s *AuthUser) SetEmail(val string) {
+	s.Email = val
+}
+
+// SetRole sets the value of Role.
+func (s *AuthUser) SetRole(val string) {
+	s.Role = val
+}
+
+// SetBetaTester sets the value of BetaTester.
+func (s *AuthUser) SetBetaTester(val bool) {
+	s.BetaTester = val
+}
+
+// SetEmailVerified sets the value of EmailVerified.
+func (s *AuthUser) SetEmailVerified(val bool) {
+	s.EmailVerified = val
+}
+
+// SetHasPassword sets the value of HasPassword.
+func (s *AuthUser) SetHasPassword(val bool) {
+	s.HasPassword = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *AuthUser) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *AuthUser) SetTimezone(val NilString) {
+	s.Timezone = val
+}
+
+// SetLanguage sets the value of Language.
+func (s *AuthUser) SetLanguage(val string) {
+	s.Language = val
+}
+
+// SetOnboardingCompletedAt sets the value of OnboardingCompletedAt.
+func (s *AuthUser) SetOnboardingCompletedAt(val NilDateTime) {
+	s.OnboardingCompletedAt = val
+}
+
+// SetTier sets the value of Tier.
+func (s *AuthUser) SetTier(val string) {
+	s.Tier = val
+}
+
+// SetAgentConnected sets the value of AgentConnected.
+func (s *AuthUser) SetAgentConnected(val bool) {
+	s.AgentConnected = val
 }
 
 // Ref: #/components/schemas/AutoApplyCancelled
@@ -3140,6 +3932,21 @@ func (s *CategoryMeta) SetCategory(val string) {
 	s.Category = val
 }
 
+// A single item: `{"data": ...}`.
+type CheckUsernameOK struct {
+	Data AccountUsernameAvailability `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CheckUsernameOK) GetData() AccountUsernameAvailability {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CheckUsernameOK) SetData(val AccountUsernameAvailability) {
+	s.Data = val
+}
+
 // Ref: #/components/schemas/CityMatch
 type CityMatch struct {
 	// The city's canonical name, the value the filters take.
@@ -3195,6 +4002,21 @@ func (s *ClaimMailboxOK) GetData() MailboxStatus {
 
 // SetData sets the value of Data.
 func (s *ClaimMailboxOK) SetData(val MailboxStatus) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ClaimUsernameOK struct {
+	Data AccountUsername `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ClaimUsernameOK) GetData() AccountUsername {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ClaimUsernameOK) SetData(val AccountUsername) {
 	s.Data = val
 }
 
@@ -3845,6 +4667,21 @@ func (s *ConfirmEmailLinkOK) SetData(val InboxEmail) {
 }
 
 // A single item: `{"data": ...}`.
+type ConfirmEmailVerificationOK struct {
+	Data AuthUser `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ConfirmEmailVerificationOK) GetData() AuthUser {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ConfirmEmailVerificationOK) SetData(val AuthUser) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type ConfirmEmployerClaimOK struct {
 	Data EmployerAccount `json:"data"`
 }
@@ -4420,6 +5257,21 @@ func (s *CountThreadsOK) GetData() ThreadCount {
 
 // SetData sets the value of Data.
 func (s *CountThreadsOK) SetData(val ThreadCount) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type CreateApiKeyCreated struct {
+	Data ApiKeyCreated `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateApiKeyCreated) GetData() ApiKeyCreated {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateApiKeyCreated) SetData(val ApiKeyCreated) {
 	s.Data = val
 }
 
@@ -7829,6 +8681,9 @@ func (s *FitRefusal) SetUpgradeURL(val OptString) {
 func (*FitRefusal) runJobFitRes()        {}
 func (*FitRefusal) runMatchAnalysisRes() {}
 
+// ForgotPasswordAccepted is response for ForgotPassword operation.
+type ForgotPasswordAccepted struct{}
+
 // A single item: `{"data": ...}`.
 type GetAgentPermissionsOK struct {
 	Data AgentPermissions `json:"data"`
@@ -7841,6 +8696,21 @@ func (s *GetAgentPermissionsOK) GetData() AgentPermissions {
 
 // SetData sets the value of Data.
 func (s *GetAgentPermissionsOK) SetData(val AgentPermissions) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetApiPlanOK struct {
+	Data ApiKeyPlan `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetApiPlanOK) GetData() ApiKeyPlan {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetApiPlanOK) SetData(val ApiKeyPlan) {
 	s.Data = val
 }
 
@@ -7886,6 +8756,21 @@ func (s *GetAtsReportOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *GetAtsReportOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetAuthMeOK struct {
+	Data AuthUser `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetAuthMeOK) GetData() AuthUser {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetAuthMeOK) SetData(val AuthUser) {
 	s.Data = val
 }
 
@@ -8330,6 +9215,21 @@ func (s *GetMyUsageOK) SetData(val Usage) {
 }
 
 // A single item: `{"data": ...}`.
+type GetNotificationOK struct {
+	Data Notification `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetNotificationOK) GetData() Notification {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetNotificationOK) SetData(val Notification) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type GetNotificationSettingsOK struct {
 	Data NotificationSettings `json:"data"`
 }
@@ -8628,6 +9528,21 @@ func (s *GetTrackedApplicationOK) GetData() InboxApplicationDetail {
 
 // SetData sets the value of Data.
 func (s *GetTrackedApplicationOK) SetData(val InboxApplicationDetail) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetUsernameOK struct {
+	Data AccountUsername `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetUsernameOK) GetData() AccountUsername {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetUsernameOK) SetData(val AccountUsername) {
 	s.Data = val
 }
 
@@ -10879,6 +11794,32 @@ func (s *LinkRecalledMailOK) SetData(val InboxEmail) {
 	s.Data = val
 }
 
+// An unpaginated, owner-scoped list.
+type ListApiKeysOK struct {
+	Data []ApiKey         `json:"data"`
+	Meta AccountTotalMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *ListApiKeysOK) GetData() []ApiKey {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *ListApiKeysOK) GetMeta() AccountTotalMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *ListApiKeysOK) SetData(val []ApiKey) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *ListApiKeysOK) SetMeta(val AccountTotalMeta) {
+	s.Meta = val
+}
+
 // A single item: `{"data": ...}`.
 type ListAppliedCompanySlugsOK struct {
 	Data []string `json:"data"`
@@ -11277,6 +12218,47 @@ func (s *ListMySubmissionsOK) SetData(val []Submission) {
 	s.Data = val
 }
 
+// An unpaginated, owner-scoped list.
+type ListOauthGrantsOK struct {
+	Data []AccountOauthGrant `json:"data"`
+	Meta AccountTotalMeta    `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *ListOauthGrantsOK) GetData() []AccountOauthGrant {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *ListOauthGrantsOK) GetMeta() AccountTotalMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *ListOauthGrantsOK) SetData(val []AccountOauthGrant) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *ListOauthGrantsOK) SetMeta(val AccountTotalMeta) {
+	s.Meta = val
+}
+
+// A single item: `{"data": ...}`.
+type ListOauthProvidersOK struct {
+	Data []string `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListOauthProvidersOK) GetData() []string {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListOauthProvidersOK) SetData(val []string) {
+	s.Data = val
+}
+
 // A single item: `{"data": ...}`.
 type ListPendingCompanyRelationsOK struct {
 	Data []PendingCompanyRelation `json:"data"`
@@ -11360,6 +12342,32 @@ func (s *ListPendingSubmissionsOK) GetData() []Submission {
 // SetData sets the value of Data.
 func (s *ListPendingSubmissionsOK) SetData(val []Submission) {
 	s.Data = val
+}
+
+// An unpaginated, owner-scoped list.
+type ListPushTokensOK struct {
+	Data []PushToken      `json:"data"`
+	Meta AccountTotalMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *ListPushTokensOK) GetData() []PushToken {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *ListPushTokensOK) GetMeta() AccountTotalMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *ListPushTokensOK) SetData(val []PushToken) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *ListPushTokensOK) SetMeta(val AccountTotalMeta) {
+	s.Meta = val
 }
 
 // A single item: `{"data": ...}`.
@@ -11685,6 +12693,21 @@ func (s *MailboxStatus) SetAddress(val NilString) {
 }
 
 // A single item: `{"data": ...}`.
+type MarkAllNotificationsReadOK struct {
+	Data NotificationsMarked `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *MarkAllNotificationsReadOK) GetData() NotificationsMarked {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *MarkAllNotificationsReadOK) SetData(val NotificationsMarked) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type MarkAllReadInboxOK struct {
 	Data InboxMarked `json:"data"`
 }
@@ -11716,6 +12739,9 @@ func (s *MarkAppliedOK) SetData(val Interaction) {
 
 // MarkConversationReadNoContent is response for MarkConversationRead operation.
 type MarkConversationReadNoContent struct{}
+
+// MarkNotificationReadNoContent is response for MarkNotificationRead operation.
+type MarkNotificationReadNoContent struct{}
 
 // A single item that read query params: `{"data": ...}`, plus `meta` when one was dropped.
 type MarketCoverageOK struct {
@@ -13994,6 +15020,173 @@ func (o NilString) Or(d string) string {
 	return d
 }
 
+// Ref: #/components/schemas/Notification
+type Notification struct {
+	ID         int64     `json:"id"`
+	Kind       string    `json:"kind"`
+	Title      string    `json:"title"`
+	Body       string    `json:"body"`
+	PublicSlug NilString `json:"public_slug"`
+	// The stored snapshot of a multi-job digest; left out for every other kind.
+	Jobs      jx.Raw      `json:"jobs"`
+	CreatedAt NilDateTime `json:"created_at"`
+	ReadAt    NilDateTime `json:"read_at"`
+}
+
+// GetID returns the value of ID.
+func (s *Notification) GetID() int64 {
+	return s.ID
+}
+
+// GetKind returns the value of Kind.
+func (s *Notification) GetKind() string {
+	return s.Kind
+}
+
+// GetTitle returns the value of Title.
+func (s *Notification) GetTitle() string {
+	return s.Title
+}
+
+// GetBody returns the value of Body.
+func (s *Notification) GetBody() string {
+	return s.Body
+}
+
+// GetPublicSlug returns the value of PublicSlug.
+func (s *Notification) GetPublicSlug() NilString {
+	return s.PublicSlug
+}
+
+// GetJobs returns the value of Jobs.
+func (s *Notification) GetJobs() jx.Raw {
+	return s.Jobs
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *Notification) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// GetReadAt returns the value of ReadAt.
+func (s *Notification) GetReadAt() NilDateTime {
+	return s.ReadAt
+}
+
+// SetID sets the value of ID.
+func (s *Notification) SetID(val int64) {
+	s.ID = val
+}
+
+// SetKind sets the value of Kind.
+func (s *Notification) SetKind(val string) {
+	s.Kind = val
+}
+
+// SetTitle sets the value of Title.
+func (s *Notification) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetBody sets the value of Body.
+func (s *Notification) SetBody(val string) {
+	s.Body = val
+}
+
+// SetPublicSlug sets the value of PublicSlug.
+func (s *Notification) SetPublicSlug(val NilString) {
+	s.PublicSlug = val
+}
+
+// SetJobs sets the value of Jobs.
+func (s *Notification) SetJobs(val jx.Raw) {
+	s.Jobs = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *Notification) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
+// SetReadAt sets the value of ReadAt.
+func (s *Notification) SetReadAt(val NilDateTime) {
+	s.ReadAt = val
+}
+
+// Ref: #/components/schemas/NotificationListMeta
+type NotificationListMeta struct {
+	Total       int64 `json:"total"`
+	UnreadCount int64 `json:"unread_count"`
+	Limit       int64 `json:"limit"`
+	Offset      int64 `json:"offset"`
+}
+
+// GetTotal returns the value of Total.
+func (s *NotificationListMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// GetUnreadCount returns the value of UnreadCount.
+func (s *NotificationListMeta) GetUnreadCount() int64 {
+	return s.UnreadCount
+}
+
+// GetLimit returns the value of Limit.
+func (s *NotificationListMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetOffset returns the value of Offset.
+func (s *NotificationListMeta) GetOffset() int64 {
+	return s.Offset
+}
+
+// SetTotal sets the value of Total.
+func (s *NotificationListMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
+// SetUnreadCount sets the value of UnreadCount.
+func (s *NotificationListMeta) SetUnreadCount(val int64) {
+	s.UnreadCount = val
+}
+
+// SetLimit sets the value of Limit.
+func (s *NotificationListMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetOffset sets the value of Offset.
+func (s *NotificationListMeta) SetOffset(val int64) {
+	s.Offset = val
+}
+
+// Ref: #/components/schemas/NotificationPage
+type NotificationPage struct {
+	Data []Notification       `json:"data"`
+	Meta NotificationListMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *NotificationPage) GetData() []Notification {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *NotificationPage) GetMeta() NotificationListMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *NotificationPage) SetData(val []Notification) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *NotificationPage) SetMeta(val NotificationListMeta) {
+	s.Meta = val
+}
+
 // Ref: #/components/schemas/NotificationSettings
 type NotificationSettings struct {
 	Enabled         bool     `json:"enabled"`
@@ -14156,6 +15349,21 @@ func (s *NotificationSettingsUpdate) SetQuietHoursStart(val OptNilString) {
 // SetQuietHoursEnd sets the value of QuietHoursEnd.
 func (s *NotificationSettingsUpdate) SetQuietHoursEnd(val OptNilString) {
 	s.QuietHoursEnd = val
+}
+
+// Ref: #/components/schemas/NotificationsMarked
+type NotificationsMarked struct {
+	Marked int64 `json:"marked"`
+}
+
+// GetMarked returns the value of Marked.
+func (s *NotificationsMarked) GetMarked() int64 {
+	return s.Marked
+}
+
+// SetMarked sets the value of Marked.
+func (s *NotificationsMarked) SetMarked(val int64) {
+	s.Marked = val
 }
 
 // Ref: #/components/schemas/OnboardingCompleted
@@ -16777,6 +17985,145 @@ func (s *PulseTimeToClose) SetMedianDaysPrev(val NilFloat32) {
 	s.MedianDaysPrev = val
 }
 
+// Ref: #/components/schemas/PushToken
+type PushToken struct {
+	Token      string      `json:"token"`
+	Platform   string      `json:"platform"`
+	CreatedAt  NilDateTime `json:"created_at"`
+	LastSeenAt NilDateTime `json:"last_seen_at"`
+}
+
+// GetToken returns the value of Token.
+func (s *PushToken) GetToken() string {
+	return s.Token
+}
+
+// GetPlatform returns the value of Platform.
+func (s *PushToken) GetPlatform() string {
+	return s.Platform
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *PushToken) GetCreatedAt() NilDateTime {
+	return s.CreatedAt
+}
+
+// GetLastSeenAt returns the value of LastSeenAt.
+func (s *PushToken) GetLastSeenAt() NilDateTime {
+	return s.LastSeenAt
+}
+
+// SetToken sets the value of Token.
+func (s *PushToken) SetToken(val string) {
+	s.Token = val
+}
+
+// SetPlatform sets the value of Platform.
+func (s *PushToken) SetPlatform(val string) {
+	s.Platform = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *PushToken) SetCreatedAt(val NilDateTime) {
+	s.CreatedAt = val
+}
+
+// SetLastSeenAt sets the value of LastSeenAt.
+func (s *PushToken) SetLastSeenAt(val NilDateTime) {
+	s.LastSeenAt = val
+}
+
+// Ref: #/components/schemas/PushTokenRegister
+type PushTokenRegister struct {
+	Token OptString `json:"token"`
+	// `ios` or `android`.
+	Platform OptString `json:"platform"`
+}
+
+// GetToken returns the value of Token.
+func (s *PushTokenRegister) GetToken() OptString {
+	return s.Token
+}
+
+// GetPlatform returns the value of Platform.
+func (s *PushTokenRegister) GetPlatform() OptString {
+	return s.Platform
+}
+
+// SetToken sets the value of Token.
+func (s *PushTokenRegister) SetToken(val OptString) {
+	s.Token = val
+}
+
+// SetPlatform sets the value of Platform.
+func (s *PushTokenRegister) SetPlatform(val OptString) {
+	s.Platform = val
+}
+
+// Ref: #/components/schemas/PushTokenRemove
+type PushTokenRemove struct {
+	Token OptString `json:"token"`
+}
+
+// GetToken returns the value of Token.
+func (s *PushTokenRemove) GetToken() OptString {
+	return s.Token
+}
+
+// SetToken sets the value of Token.
+func (s *PushTokenRemove) SetToken(val OptString) {
+	s.Token = val
+}
+
+// What a self-test send did per registered device.
+// Ref: #/components/schemas/PushTokenTestResult
+type PushTokenTestResult struct {
+	Devices int64 `json:"devices"`
+	Sent    int64 `json:"sent"`
+	Pruned  int64 `json:"pruned"`
+	Failed  int64 `json:"failed"`
+}
+
+// GetDevices returns the value of Devices.
+func (s *PushTokenTestResult) GetDevices() int64 {
+	return s.Devices
+}
+
+// GetSent returns the value of Sent.
+func (s *PushTokenTestResult) GetSent() int64 {
+	return s.Sent
+}
+
+// GetPruned returns the value of Pruned.
+func (s *PushTokenTestResult) GetPruned() int64 {
+	return s.Pruned
+}
+
+// GetFailed returns the value of Failed.
+func (s *PushTokenTestResult) GetFailed() int64 {
+	return s.Failed
+}
+
+// SetDevices sets the value of Devices.
+func (s *PushTokenTestResult) SetDevices(val int64) {
+	s.Devices = val
+}
+
+// SetSent sets the value of Sent.
+func (s *PushTokenTestResult) SetSent(val int64) {
+	s.Sent = val
+}
+
+// SetPruned sets the value of Pruned.
+func (s *PushTokenTestResult) SetPruned(val int64) {
+	s.Pruned = val
+}
+
+// SetFailed sets the value of Failed.
+func (s *PushTokenTestResult) SetFailed(val int64) {
+	s.Failed = val
+}
+
 // A single item: `{"data": ...}`.
 type PutProfileOK struct {
 	Data Profile `json:"data"`
@@ -17527,6 +18874,9 @@ func (s *ReferralSeekerRequest) SetCreatedAt(val NilDateTime) {
 	s.CreatedAt = val
 }
 
+// RegisterPushTokenNoContent is response for RegisterPushToken operation.
+type RegisterPushTokenNoContent struct{}
+
 // A single item: `{"data": ...}`.
 type RejectCompanyRelationOK struct {
 	Data CompanyRelationRejection `json:"data"`
@@ -17671,6 +19021,21 @@ type ReportCompanyFeedbackNoContent struct{}
 // ReportConversationNoContent is response for ReportConversation operation.
 type ReportConversationNoContent struct{}
 
+// A single item: `{"data": ...}`.
+type ReportSignupAttributionOK struct {
+	Data AccountAttributionResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ReportSignupAttributionOK) GetData() AccountAttributionResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ReportSignupAttributionOK) SetData(val AccountAttributionResult) {
+	s.Data = val
+}
+
 // A review with what a moderator triages by.
 // Ref: #/components/schemas/ReportedCompanyFeedback
 type ReportedCompanyFeedback struct {
@@ -17798,6 +19163,12 @@ func (s *ReportedCompanyFeedback) SetReportReasons(val []string) {
 	s.ReportReasons = val
 }
 
+// RequestEmailChangeAccepted is response for RequestEmailChange operation.
+type RequestEmailChangeAccepted struct{}
+
+// RequestEmailVerificationAccepted is response for RequestEmailVerification operation.
+type RequestEmailVerificationAccepted struct{}
+
 // A single item: `{"data": ...}`.
 type ReseedBaseCVOK struct {
 	Data CvRecord `json:"data"`
@@ -17840,6 +19211,21 @@ func (s *ResendEmployerClaimCodeOK) GetData() EmployerAccount {
 
 // SetData sets the value of Data.
 func (s *ResendEmployerClaimCodeOK) SetData(val EmployerAccount) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ResetPasswordOK struct {
+	Data AuthPasswordResetResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ResetPasswordOK) GetData() AuthPasswordResetResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ResetPasswordOK) SetData(val AuthPasswordResetResult) {
 	s.Data = val
 }
 
@@ -18118,6 +19504,9 @@ func (s *ReviewSessionOK) SetData(val MentorshipReview) {
 	s.Data = val
 }
 
+// RevokeApiKeyNoContent is response for RevokeApiKey operation.
+type RevokeApiKeyNoContent struct{}
+
 // A single item: `{"data": ...}`.
 type RevokeEmployerAccountOK struct {
 	Data EmployerAccount `json:"data"`
@@ -18132,6 +19521,9 @@ func (s *RevokeEmployerAccountOK) GetData() EmployerAccount {
 func (s *RevokeEmployerAccountOK) SetData(val EmployerAccount) {
 	s.Data = val
 }
+
+// RevokeOauthGrantNoContent is response for RevokeOauthGrant operation.
+type RevokeOauthGrantNoContent struct{}
 
 // Ref: #/components/schemas/RoleCountriesAnswer
 type RoleCountriesAnswer struct {
@@ -21844,6 +23236,21 @@ func (s *TalentRole) SetStack(val []string) {
 	s.Stack = val
 }
 
+// A single item: `{"data": ...}`.
+type TestPushTokenOK struct {
+	Data PushTokenTestResult `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *TestPushTokenOK) GetData() PushTokenTestResult {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *TestPushTokenOK) SetData(val PushTokenTestResult) {
+	s.Data = val
+}
+
 // The author is the persona handle, "AI" for a system reply or "[deleted]" once the account is gone.
 // Ref: #/components/schemas/Thread
 type Thread struct {
@@ -22881,6 +24288,9 @@ func (s *UnlinkEmailOK) SetData(val InboxEmail) {
 	s.Data = val
 }
 
+// UnregisterPushTokenNoContent is response for UnregisterPushToken operation.
+type UnregisterPushTokenNoContent struct{}
+
 // A single item: `{"data": ...}`.
 type UnsaveJobOK struct {
 	Data Interaction `json:"data"`
@@ -23032,6 +24442,21 @@ func (s *UpdateJobOK) SetData(val jx.Raw) {
 }
 
 // A single item: `{"data": ...}`.
+type UpdateLanguageOK struct {
+	Data AuthUser `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateLanguageOK) GetData() AuthUser {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateLanguageOK) SetData(val AuthUser) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type UpdateMentorProfileOK struct {
 	Data MentorshipMentor `json:"data"`
 }
@@ -23118,6 +24543,21 @@ func (s *UpdateSurveyOK) GetData() SurveyResponses {
 
 // SetData sets the value of Data.
 func (s *UpdateSurveyOK) SetData(val SurveyResponses) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type UpdateTimezoneOK struct {
+	Data AuthUser `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *UpdateTimezoneOK) GetData() AuthUser {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *UpdateTimezoneOK) SetData(val AuthUser) {
 	s.Data = val
 }
 

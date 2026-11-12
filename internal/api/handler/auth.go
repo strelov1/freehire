@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/ga4mp"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 	"github.com/strelov1/freehire/internal/identity/accounts"
@@ -128,7 +129,7 @@ func ga4Reporter() ga4mp.Reporter {
 	return nil
 }
 
-func (h *authHandlers) register(api fiber.Router, mw middleware) {
+func (h *authHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	noCache := func(c *fiber.Ctx) error {
 		c.Set("Cache-Control", "no-store")
 		c.Set("Pragma", "no-cache")
@@ -145,48 +146,48 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	if h.authV2Enabled {
 		recent = h.requireRecentAuth
 	}
-	meGroup.Patch("/timezone", mw.cookie, h.UpdateTimezone)
-	meGroup.Patch("/language", mw.cookie, h.UpdateLanguage)
-	meGroup.Get("/username", mw.cookie, h.GetUsername)
-	meGroup.Put("/username", mw.cookie, h.ClaimUsername)
+	meGroup.Patch("/timezone", mw.cookie, contract)
+	meGroup.Patch("/language", mw.cookie, contract)
+	meGroup.Get("/username", mw.cookie, contract)
+	meGroup.Put("/username", mw.cookie, contract)
 	meGroup.Post("/password", mw.cookie, recent, h.ChangePassword)
 	// Changing the account email: request mails a code to the NEW address, confirm moves
 	// the account there. Cookie-only and recent-auth-gated on the request for the same
 	// reason as the password — the address is a sign-in credential. Confirm needs no
 	// fresh proof of its own: the code it spends could only be issued behind that gate.
 	meGroup.Post("/email",
-		mw.cookie, recent, h.RequestEmailChange)
+		mw.cookie, recent, contract)
 	meGroup.Post("/email/confirm",
 		mw.cookie, h.ConfirmEmailChange)
-	meGroup.Post("/api-keys", mw.cookie, recent, h.CreateAPIKey)
-	meGroup.Get("/api-keys", mw.cookie, h.ListAPIKeys)
-	meGroup.Get("/api-plan", mw.cookie, h.GetAPIPlan)
-	meGroup.Delete("/api-keys/:id", mw.cookie, recent, h.RevokeAPIKey)
+	meGroup.Post("/api-keys", mw.cookie, recent, contract)
+	meGroup.Get("/api-keys", mw.cookie, contract)
+	meGroup.Get("/api-plan", mw.cookie, contract)
+	meGroup.Delete("/api-keys/:id", mw.cookie, recent, contract)
 	// MCP OAuth "Connected devices": list is a plain read (same gating as
 	// ListAPIKeys); revoke is recent-auth-gated, same reasoning as RevokeAPIKey.
-	meGroup.Get("/oauth-grants", mw.cookie, h.ListOAuthGrants)
-	meGroup.Delete("/oauth-grants/:id", mw.cookie, recent, h.RevokeOAuthGrant)
+	meGroup.Get("/oauth-grants", mw.cookie, contract)
+	meGroup.Delete("/oauth-grants/:id", mw.cookie, recent, contract)
 
 	// How a just-created account arrived (campaign tags, referring host, landing path),
 	// reported once by the browser. Cookie-only; says whether GA4 was sent.
-	meGroup.Post("/attribution", mw.cookie, h.ReportSignupAttribution)
+	meGroup.Post("/attribution", mw.cookie, contract)
 
 	// Push-token registration is cookie-only for the same reason key management
 	// is: a leaked API key must not be able to redirect another device's push
 	// notifications to itself. The self-test send only ever targets the
 	// caller's own registered token(s) — see TestPushToken.
-	meGroup.Post("/push-tokens", mw.cookie, h.RegisterPushToken)
-	meGroup.Get("/push-tokens", mw.cookie, h.ListPushTokens)
-	meGroup.Delete("/push-tokens", mw.cookie, h.UnregisterPushToken)
-	meGroup.Post("/push-tokens/test", mw.cookie, h.TestPushToken)
+	meGroup.Post("/push-tokens", mw.cookie, contract)
+	meGroup.Get("/push-tokens", mw.cookie, contract)
+	meGroup.Delete("/push-tokens", mw.cookie, contract)
+	meGroup.Post("/push-tokens/test", mw.cookie, contract)
 
 	// The in-app notification center: a durable, channel-independent record of
 	// every delivered subscription digest/reminder/nudge. Cookie-only, same
 	// reasoning as push-token management.
-	meGroup.Get("/notifications", mw.cookie, h.GetNotifications)
-	meGroup.Get("/notifications/:id", mw.cookie, h.GetNotification)
-	meGroup.Post("/notifications/:id/read", mw.cookie, h.MarkNotificationRead)
-	meGroup.Post("/notifications/read-all", mw.cookie, h.MarkAllNotificationsRead)
+	meGroup.Get("/notifications", mw.cookie, contract)
+	meGroup.Get("/notifications/:id", mw.cookie, contract)
+	meGroup.Post("/notifications/:id/read", mw.cookie, contract)
+	meGroup.Post("/notifications/read-all", mw.cookie, contract)
 
 	// Account deletion is permanent and cookie-only, for the same reason key
 	// management is: a leaked API key must not be able to destroy the account that
@@ -197,7 +198,7 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 
 	// Availability check for a candidate username: public, so a name picker can
 	// probe before the caller is even signed in.
-	api.Get("/username/check", h.CheckUsername)
+	api.Get("/username/check", contract)
 
 	// Auth: register/login/logout are public (logout just clears the cookie).
 	// me is guarded and accepts a session cookie OR an API key, so a non-browser
@@ -221,23 +222,23 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	authGroup.Post("/logout", sameOrigin, h.Logout)
 	// Email verification. Cookie-only and identified by the session, never by a body
 	// field, so neither endpoint can be pointed at someone else's address. Confirm is a code-guessing surface; request sends mail.
-	authGroup.Post("/verify/request", mw.cookie, h.RequestEmailVerification)
-	authGroup.Post("/verify/confirm", mw.cookie, h.ConfirmEmailVerification)
+	authGroup.Post("/verify/request", mw.cookie, contract)
+	authGroup.Post("/verify/confirm", mw.cookie, contract)
 	// Password recovery. Public — the mailed code is the credential. forgot always answers
 	// 202 (never an enumeration oracle); reset revokes every session on success.
-	authGroup.Post("/password/forgot", h.ForgotPassword)
-	authGroup.Post("/password/reset", h.ResetPassword)
+	authGroup.Post("/password/forgot", contract)
+	authGroup.Post("/password/reset", contract)
 	// Sign out everywhere. Cookie-only (like key management): revoking a human's sessions
 	// is not something a programmatic credential should be able to do, and sameOrigin
 	// keeps a cross-site form from revoking the browser's sessions either.
 	authGroup.Post("/logout-all", sameOrigin, mw.cookie, h.LogoutAll)
 	// The agent needs to resolve who its key belongs to, so the identity read admits the
 	// narrow scope too; it exposes nothing the key holder cannot already infer.
-	authGroup.Get("/me", mw.cvKey, h.Me)
+	authGroup.Get("/me", mw.cvKey, contract)
 
 	// OAuth sign-in: provider listing plus the authorization-code start and
 	// callback redirects. All public; the callback sets the session cookie.
-	authGroup.Get("/oauth/providers", h.ListOAuthProviders)
+	authGroup.Get("/oauth/providers", contract)
 	authGroup.Get("/oauth/:provider/start", h.OAuthStart)
 	authGroup.Get("/oauth/:provider/callback", h.OAuthCallback)
 	// Apple's callback arrives as a POST with a form-encoded body (mandatory
@@ -409,49 +410,40 @@ func (h *authHandlers) resolveTier(ctx context.Context, userID int64) plan.Tier 
 	return plan.TierOf(untils.ProUntil.Time, untils.UltraUntil.Time, time.Now().UTC())
 }
 
-// timezoneRequest is the PATCH /me/timezone body.
-type timezoneRequest struct {
-	Timezone    string `json:"timezone"`
-	OnlyIfUnset bool   `json:"only_if_unset"`
-}
-
 // UpdateTimezone sets the caller's IANA timezone name. Cookie-only.
-func (h *authHandlers) UpdateTimezone(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *authHandlers) UpdateTimezone(ctx context.Context, req *apigen.AccountTimezoneUpdate) (*apigen.UpdateTimezoneOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in timezoneRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	user, err := h.accounts.UpdateTimezone(c.Context(), userID, in.Timezone, in.OnlyIfUnset)
+	user, err := h.accounts.UpdateTimezone(ctx, userID, req.Timezone.Value, req.OnlyIfUnset.Value)
 	if err != nil {
-		return accountsError(err)
+		return nil, accountsError(err)
 	}
-	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
-}
-
-// languageRequest is the PATCH /me/language body.
-type languageRequest struct {
-	Language string `json:"language"`
+	return &apigen.UpdateTimezoneOK{Data: authUserOut(h.toUserResponseWithTier(ctx, user))}, nil
 }
 
 // UpdateLanguage sets the caller's preferred interface language. Cookie-only.
-func (h *authHandlers) UpdateLanguage(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *authHandlers) UpdateLanguage(ctx context.Context, req *apigen.AccountLanguageUpdate) (*apigen.UpdateLanguageOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in languageRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	user, err := h.accounts.UpdateLanguage(c.Context(), userID, in.Language)
+	user, err := h.accounts.UpdateLanguage(ctx, userID, req.Language.Value)
 	if err != nil {
-		return accountsError(err)
+		return nil, accountsError(err)
 	}
-	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
+	return &apigen.UpdateLanguageOK{Data: authUserOut(h.toUserResponseWithTier(ctx, user))}, nil
+}
+
+// authUserOut is the contract's shape of the account: the same fields userResponse writes
+// for the routes that still set a cookie.
+func authUserOut(r userResponse) apigen.AuthUser {
+	return apigen.AuthUser{ID: r.ID, Email: r.Email, Role: r.Role, BetaTester: r.BetaTester,
+		EmailVerified: r.EmailVerified, HasPassword: r.HasPassword, CreatedAt: nilDateTime(r.CreatedAt),
+		Timezone: nilString(r.Timezone), Language: r.Language,
+		OnboardingCompletedAt: nilDateTime(r.OnboardingCompletedAt),
+		Tier:                  string(r.Tier), AgentConnected: r.AgentConnected}
 }
 
 // accountsError maps the accounts service sentinels to HTTP errors, preserving
@@ -613,18 +605,18 @@ func (h *authHandlers) issueSessionAt(c *fiber.Ctx, userID int64, version int32)
 	return token, nil
 }
 
-// Me returns the authenticated user. It runs behind auth.RequireAuthOrKey (a
+// GetAuthMe returns the authenticated user. It runs behind auth.RequireAuthOrKey (a
 // session cookie or an API key), which has already resolved and stored the user id.
-func (h *authHandlers) Me(c *fiber.Ctx) error {
-	id, err := requireUserID(c)
+func (h *authHandlers) GetAuthMe(ctx context.Context) (*apigen.GetAuthMeOK, error) {
+	id, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	user, err := h.accounts.UserByID(c.Context(), id)
+	user, err := h.accounts.UserByID(ctx, id)
 	if err != nil {
-		return accountsError(err)
+		return nil, accountsError(err)
 	}
-	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
+	return &apigen.GetAuthMeOK{Data: authUserOut(h.toUserResponseWithTier(ctx, user))}, nil
 }
 
 // authHasher adapts the auth package's bcrypt helpers to the accounts.PasswordHasher

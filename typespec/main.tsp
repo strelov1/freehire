@@ -47,6 +47,7 @@ import "./search-intent.tsp";
 import "./embeddings.tsp";
 import "./support.tsp";
 import "./assistant.tsp";
+import "./account.tsp";
 
 using Http;
 

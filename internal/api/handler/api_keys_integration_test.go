@@ -52,9 +52,9 @@ func TestAPIKeysEndToEnd(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{h.queries})
-	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.CreateAPIKey)
-	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.ListAPIKeys)
-	app.Delete("/api/v1/me/api-keys/:id", auth.RequireAuth(iss, testVersions), h.RevokeAPIKey)
+	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Delete("/api/v1/me/api-keys/:id", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 	app.Post("/api/v1/jobs/:slug/apply", keyAuth, newContract(contractHandlers{trackingHandlers: th}))
 
 	const applyPath = "/api/v1/jobs/go-dev-acme-t35nijto/apply"
@@ -191,7 +191,7 @@ func TestCreateAPIKey_EmbedScope_Persists(t *testing.T) {
 	h := &authHandlers{queries: db.New(pool)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.CreateAPIKey)
+	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 
 	req := httptest.NewRequestWithContext(ctx, fiber.MethodPost, "/api/v1/me/api-keys", bytes.NewBufferString(`{"name":"volunteer embed worker","scope":"embed"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -249,7 +249,7 @@ func TestCreateAPIKeyRequiresAVerifiedAddress(t *testing.T) {
 	h := &authHandlers{queries: db.New(pool)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.CreateAPIKey)
+	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 
 	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/api-keys", bytes.NewBufferString(`{"name":"squatter cli"}`))
 	req.Header.Set("Content-Type", "application/json")

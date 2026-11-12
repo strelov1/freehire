@@ -1069,6 +1069,7 @@ func Register(app *fiber.App, cfg Config) {
 	userModerationH := newUserModerationHandlers(queries)
 	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
 	contract := newContract(contractHandlers{conversationHandlers: conversationH,
+		authHandlers:                 authH,
 		resumeHandlers:               resumeH,
 		matchHandlers:                matchH,
 		autofillHandlers:             autofillH,
@@ -1235,7 +1236,7 @@ func Register(app *fiber.App, cfg Config) {
 	usageH.register(api, mw, contract)
 
 	// API-key management and the auth surface (see authHandlers).
-	authH.register(api, mw)
+	authH.register(api, mw, contract)
 	authH.registerV2(app.Group("/api/v2"), mw)
 
 	// The per-user profile singleton (see profileHandlers).

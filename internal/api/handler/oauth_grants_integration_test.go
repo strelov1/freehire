@@ -60,8 +60,8 @@ func TestOAuthGrantsEndToEnd(t *testing.T) {
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/oauth-grants", auth.RequireAuth(iss, testVersions), h.ListOAuthGrants)
-	app.Delete("/api/v1/me/oauth-grants/:id", auth.RequireAuth(iss, testVersions), h.RevokeOAuthGrant)
+	app.Get("/api/v1/me/oauth-grants", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Delete("/api/v1/me/oauth-grants/:id", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 
 	cookieReq := func(method, path, cookie string) *http.Request {
 		r := httptest.NewRequestWithContext(context.Background(), method, path, nil)
@@ -79,7 +79,7 @@ func TestOAuthGrantsEndToEnd(t *testing.T) {
 			t.Fatalf("status = %d, want 200", resp.StatusCode)
 		}
 		var out struct {
-			Data []oauthGrantResponse `json:"data"`
+			Data []oauthGrantWire `json:"data"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 			t.Fatalf("decode: %v", err)
@@ -96,7 +96,7 @@ func TestOAuthGrantsEndToEnd(t *testing.T) {
 		}
 		defer listResp.Body.Close()
 		var out struct {
-			Data []oauthGrantResponse `json:"data"`
+			Data []oauthGrantWire `json:"data"`
 		}
 		if err := json.NewDecoder(listResp.Body).Decode(&out); err != nil {
 			t.Fatalf("decode: %v", err)
@@ -129,4 +129,13 @@ func TestOAuthGrantsEndToEnd(t *testing.T) {
 			t.Error("revoked grant still authenticates")
 		}
 	})
+}
+
+// oauthGrantWire is a connected device as the API writes it.
+type oauthGrantWire struct {
+	ID         int64      `json:"id"`
+	ClientName string     `json:"client_name"`
+	CreatedAt  *time.Time `json:"created_at"`
+	ExpiresAt  *time.Time `json:"expires_at"`
+	LastUsedAt *time.Time `json:"last_used_at"`
 }

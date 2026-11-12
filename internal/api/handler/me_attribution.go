@@ -11,9 +11,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/ga4mp"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -25,16 +25,16 @@ import (
 // only after they accepted analytics; they are used to send the GA4 sign-up from the
 // server and are never stored.
 type signupAttributionRequest struct {
-	UTMSource    string `json:"utm_source"`
-	UTMMedium    string `json:"utm_medium"`
-	UTMCampaign  string `json:"utm_campaign"`
-	UTMContent   string `json:"utm_content"`
-	UTMTerm      string `json:"utm_term"`
-	ReferrerHost string `json:"referrer_host"`
-	LandingPath  string `json:"landing_path"`
-	Method       string `json:"method"`
-	GAClientID   string `json:"ga_client_id"`
-	GASessionID  string `json:"ga_session_id"`
+	UTMSource    string
+	UTMMedium    string
+	UTMCampaign  string
+	UTMContent   string
+	UTMTerm      string
+	ReferrerHost string
+	LandingPath  string
+	Method       string
+	GAClientID   string
+	GASessionID  string
 }
 
 var hostPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$`)
@@ -102,32 +102,27 @@ func (in signupAttributionRequest) params(userID int64) db.InsertSignupAttributi
 	}
 }
 
-// signupAttributionResponse tells the browser whether the server sent the GA4
-// `sign_up`. The browser no longer sends it itself while the server does, so when this
-// is false the browser sends it, rather than the sign-up vanishing from GA.
-type signupAttributionResponse struct {
-	GA4Sent bool `json:"ga4_sent"`
-}
-
 // ReportSignupAttribution records how the caller's brand-new account arrived and,
 // when the browser handed over a Google Analytics client id, sends the GA4 `sign_up`
 // from here. A failure to store or send never surfaces as an error: attribution is
 // observation, and it must not disturb a person who has just signed up. Cookie-only,
 // like the other /me writes.
-func (h *authHandlers) ReportSignupAttribution(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *authHandlers) ReportSignupAttribution(ctx context.Context, req *apigen.AccountAttribution) (*apigen.ReportSignupAttributionOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in signupAttributionRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	in := signupAttributionRequest{
+		UTMSource: req.UtmSource.Value, UTMMedium: req.UtmMedium.Value, UTMCampaign: req.UtmCampaign.Value,
+		UTMContent: req.UtmContent.Value, UTMTerm: req.UtmTerm.Value, ReferrerHost: req.ReferrerHost.Value,
+		LandingPath: req.LandingPath.Value, Method: req.Method.Value,
+		GAClientID: req.GaClientID.Value, GASessionID: req.GaSessionID.Value,
 	}
 
-	inserted, err := h.queries.InsertSignupAttribution(c.Context(), in.params(userID))
+	inserted, err := h.queries.InsertSignupAttribution(ctx, in.params(userID))
 	if err != nil {
 		log.Printf("attribution: storing for user %d: %v", userID, err)
-		return c.JSON(fiber.Map{"data": signupAttributionResponse{}})
+		return &apigen.ReportSignupAttributionOK{Data: apigen.AccountAttributionResult{}}, nil
 	}
 	// Only the first report for an account sends the event, so a retried or replayed
 	// request cannot count one sign-up twice in GA.
@@ -144,9 +139,9 @@ func (h *authHandlers) ReportSignupAttribution(c *fiber.Ctx) error {
 		if in.Method == "password" {
 			method = "password"
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		sendCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 		defer cancel()
-		switch err := h.ga4.SignUp(ctx, in.GAClientID, in.GASessionID, method); {
+		switch err := h.ga4.SignUp(sendCtx, in.GAClientID, in.GASessionID, method); {
 		case err == nil:
 			sent = true
 		case errors.Is(err, ga4mp.ErrUncertain):
@@ -156,5 +151,5 @@ func (h *authHandlers) ReportSignupAttribution(c *fiber.Ctx) error {
 			log.Printf("attribution: GA4 sign_up for user %d: %v", userID, err)
 		}
 	}
-	return c.JSON(fiber.Map{"data": signupAttributionResponse{GA4Sent: sent}})
+	return &apigen.ReportSignupAttributionOK{Data: apigen.AccountAttributionResult{Ga4Sent: sent}}, nil
 }

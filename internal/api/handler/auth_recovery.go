@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/accounts"
 )
 
@@ -66,22 +67,22 @@ func recoveryError(err error) error {
 // RequestEmailVerification mails the caller a fresh verification code. Cookie-only: the
 // account is identified by the session, never by a body field, so the endpoint cannot be
 // pointed at someone else's address.
-func (h *authHandlers) RequestEmailVerification(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *authHandlers) RequestEmailVerification(ctx context.Context) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	user, err := h.accounts.UserByID(c.Context(), userID)
+	user, err := h.accounts.UserByID(ctx, userID)
 	if err != nil {
 		return accountsError(err)
 	}
 	if user.EmailVerified {
 		return recoveryError(accounts.ErrAlreadyVerified)
 	}
-	if err := h.accounts.IssueVerificationCode(c.Context(), userID, user.Email); err != nil {
+	if err := h.accounts.IssueVerificationCode(ctx, userID, user.Email); err != nil {
 		return recoveryError(err)
 	}
-	return c.SendStatus(fiber.StatusAccepted)
+	return nil
 }
 
 type verifyCodeRequest struct {
@@ -90,27 +91,19 @@ type verifyCodeRequest struct {
 
 // ConfirmEmailVerification marks the caller's address verified when the presented code
 // matches. Cookie-only, same reasoning as the request side.
-func (h *authHandlers) ConfirmEmailVerification(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *authHandlers) ConfirmEmailVerification(ctx context.Context, req *apigen.AuthCode) (*apigen.ConfirmEmailVerificationOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in verifyCodeRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	if err := h.accounts.ConfirmVerification(ctx, userID, req.Code.Value); err != nil {
+		return nil, recoveryError(err)
 	}
-	if err := h.accounts.ConfirmVerification(c.Context(), userID, in.Code); err != nil {
-		return recoveryError(err)
-	}
-	user, err := h.accounts.UserByID(c.Context(), userID)
+	user, err := h.accounts.UserByID(ctx, userID)
 	if err != nil {
-		return accountsError(err)
+		return nil, accountsError(err)
 	}
-	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
-}
-
-type forgotPasswordRequest struct {
-	Email string `json:"email"`
+	return &apigen.ConfirmEmailVerificationOK{Data: authUserOut(h.toUserResponseWithTier(ctx, user))}, nil
 }
 
 // ForgotPassword mails a reset code, if the address has a password-backed account. It
@@ -118,13 +111,9 @@ type forgotPasswordRequest struct {
 // bcrypt hash, and an SES round-trip take wildly different times for a known and an
 // unknown address, so answering before any of it happens removes the timing side-channel
 // instead of trying to mask it with dummy work.
-func (h *authHandlers) ForgotPassword(c *fiber.Ctx) error {
-	var in forgotPasswordRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	go h.sendPasswordResetCode(in.Email)
-	return c.SendStatus(fiber.StatusAccepted)
+func (h *authHandlers) ForgotPassword(_ context.Context, req *apigen.AuthPasswordForgot) error {
+	go h.sendPasswordResetCode(req.Email.Value)
+	return nil
 }
 
 // sendPasswordResetCode runs the forgot-password work off the request path. Failures are
@@ -139,24 +128,14 @@ func (h *authHandlers) sendPasswordResetCode(email string) {
 	}
 }
 
-type resetPasswordRequest struct {
-	Email    string `json:"email"`
-	Code     string `json:"code"`
-	Password string `json:"password"`
-}
-
 // ResetPassword sets a new password against a mailed code. Public — the code is the
 // credential. Success revokes every session, so the user signs in fresh with the new
 // password rather than being handed a session by the reset itself.
-func (h *authHandlers) ResetPassword(c *fiber.Ctx) error {
-	var in resetPasswordRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+func (h *authHandlers) ResetPassword(ctx context.Context, req *apigen.AuthPasswordReset) (*apigen.ResetPasswordOK, error) {
+	if err := h.accounts.ResetPassword(ctx, req.Email.Value, req.Code.Value, req.Password.Value); err != nil {
+		return nil, recoveryError(err)
 	}
-	if err := h.accounts.ResetPassword(c.Context(), in.Email, in.Code, in.Password); err != nil {
-		return recoveryError(err)
-	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"reset": true}})
+	return &apigen.ResetPasswordOK{Data: apigen.AuthPasswordResetResult{Reset: true}}, nil
 }
 
 type changePasswordRequest struct {
@@ -186,25 +165,17 @@ func (h *authHandlers) ChangePassword(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": fiber.Map{"changed": true}})
 }
 
-type changeEmailRequest struct {
-	Email string `json:"email"`
-}
-
 // RequestEmailChange mails a confirmation code to the address the caller wants to move
 // the account to. Nothing changes until ConfirmEmailChange spends that code.
-func (h *authHandlers) RequestEmailChange(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *authHandlers) RequestEmailChange(ctx context.Context, req *apigen.AuthEmailChange) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	var in changeEmailRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	if err := h.accounts.RequestEmailChange(c.Context(), userID, in.Email); err != nil {
+	if err := h.accounts.RequestEmailChange(ctx, userID, req.Email.Value); err != nil {
 		return recoveryError(err)
 	}
-	return c.SendStatus(fiber.StatusAccepted)
+	return nil
 }
 
 // ConfirmEmailChange moves the caller's account to the address the code was mailed to.
