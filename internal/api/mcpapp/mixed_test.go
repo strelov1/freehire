@@ -120,3 +120,14 @@ func TestMixedAnonymousPersonalCallStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestMixedInstructions_AnonymousIsNotSentToGetProfile(t *testing.T) {
+	tools := []assistant.Tool{{Name: "get_profile", Schema: map[string]any{"type": "object"}}}
+	for userID, wantLine := range map[int64]bool{0: false, 42: true} {
+		session := connectServer(t, newMixedServer(tools, userID, testOrigin, readerThatFinds(t)))
+		got := strings.Contains(session.InitializeResult().Instructions, "Call get_profile before the first search")
+		if got != wantLine {
+			t.Errorf("user %d: profile-first line present = %v, want %v", userID, got, wantLine)
+		}
+	}
+}
