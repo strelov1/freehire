@@ -33,7 +33,7 @@ const (
 type SearchInput struct {
 	// The operators are listed here because a model only writes what the schema tells it
 	// exists; the engine has understood them since freehire#3270.
-	Query string `json:"query,omitempty" jsonschema:"free text, matched against title, company, description and location. Operators: double quotes require every quoted word in any order (not a phrase); -word excludes; uppercase OR between terms matches any alternative (at most 5), e.g. golang OR rust; title: at the start of an alternative matches it in the title only, e.g. title:\"product owner\" OR title:produktchef"`
+	Query string `json:"query,omitempty" jsonschema:"free text, matched against title, company, location and the start of the description (not the full text, so details such as equity or visa may be missing from the match). Use few, specific words. Operators: double quotes require every quoted word in any order (not a phrase); -word excludes; uppercase OR between terms matches any alternative (at most 5), e.g. golang OR rust; title: at the start of an alternative matches it in the title only, e.g. title:\"product owner\" OR title:produktchef"`
 
 	Countries stringList `json:"countries,omitempty" jsonschema:"ISO 3166-1 alpha-2 codes, e.g. DE, BR"`
 	Cities    stringList `json:"cities,omitempty"`
@@ -113,7 +113,7 @@ type CheckJobsOpenInput struct {
 // ResearchQuery and ResearchID are the inputs of search and fetch, whose shapes ChatGPT's
 // deep-research and company-knowledge connectors fix: one query string in, one id in.
 type ResearchQuery struct {
-	Query string `json:"query" jsonschema:"free text describing the jobs to find"`
+	Query string `json:"query" jsonschema:"free text describing the jobs to find; matched against title, company, location and the start of the description, so use few, specific words"`
 }
 
 type ResearchID struct {

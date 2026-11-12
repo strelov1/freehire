@@ -23,7 +23,8 @@ const serverInstructions = "freehire provides anonymous, read-only access to agg
 	"search_jobs/get_job: postings; check_jobs_open: open status; similar_jobs: related postings; " +
 	"search_companies/get_company: employers; salary_stats/job_market_stats: pay and demand; " +
 	"list_filter_values: supported filters. Results include source boards and employer links " +
-	"where available. Geography filters form a union. ignored_params identifies unrecognized filter values."
+	"where available. Geography filters form a union. ignored_params identifies unrecognized filter values." +
+	" Search sees the start of a description; get_job has the rest."
 
 // Tool names. Unlike the OJCP transport's, they feed no manifest — there is nothing here
 // that ADVERTISES a tool separately from registering it, so they are constants only because
