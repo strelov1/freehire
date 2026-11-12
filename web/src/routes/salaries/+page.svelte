@@ -169,7 +169,7 @@
           {#if data.bands === null}
             Salary figures are unavailable right now.
           {:else if bands.length}
-            No open postings here state a salary in {currency} per {period}.
+            Too few open postings here state a salary in {currency} per {period}.
           {:else}
             Too few open postings state a salary here.
           {/if}
