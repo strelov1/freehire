@@ -125,18 +125,12 @@
       </select>
     </label>
     {#if units.length > 1}
-      <div class="flex flex-wrap gap-1 text-sm" role="group" aria-label="Currency and period">
-        {#each units as u (u)}
-          <button
-            type="button"
-            class="rounded-md border px-2.5 py-1 {u === unit
-              ? 'border-foreground font-medium text-foreground'
-              : 'border-border text-muted-foreground hover:text-foreground'}"
-            aria-pressed={u === unit}
-            onclick={() => go({ ...q, unit: u })}>{u.replace('-', ' / ')}</button
-          >
-        {/each}
-      </div>
+      <label class="flex flex-col gap-1 text-xs text-muted-foreground"
+        >Currency
+        <select class={selectClass} value={unit} onchange={(e) => go({ ...q, unit: e.currentTarget.value })}>
+          {#each units as u (u)}<option value={u}>{u.replace('-', ' / ')}</option>{/each}
+        </select>
+      </label>
     {/if}
   </div>
 
