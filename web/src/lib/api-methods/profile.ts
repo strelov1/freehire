@@ -1,4 +1,5 @@
 import type { Http } from '../api-core';
+import type { components } from '../generated/api.js';
 import type {
   ATSResponse,
   CandidateContacts,
@@ -167,7 +168,10 @@ export function profileApi({ call, request, requestData }: Http) {
   /** Update the caller's own Talent Network visibility. Returns the echoed setting rather
    *  than assuming success, same as saveProfile. */
   async function setTalentNetworkVisibility(visibility: TalentNetworkVisibility): Promise<TalentNetworkSetting> {
-    return requestData<TalentNetworkSetting>('/api/v1/me/talent-network', jsonBody('PUT', { visibility }));
+    return requestData<TalentNetworkSetting>(
+      '/api/v1/me/talent-network',
+      jsonBody('PUT', { visibility } satisfies components['schemas']['TalentNetworkVisibilityUpdate']),
+    );
   }
 
   /** One filtered page of the public Talent Network catalogue. Unauthenticated.

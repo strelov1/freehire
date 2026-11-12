@@ -1,29 +1,14 @@
+import type { components } from '../generated/api.js';
 import type { CandidateCard } from '../generated/contracts';
 import type { MentorSlots } from './mentors';
 
-export interface BuddySummary {
-  category: string;
-  seniority: string;
-  country: string;
-}
+export type BuddySummary = components['schemas']['BuddyCardSummary'];
 
-export interface BuddyCompany {
-  slug: string;
-  name: string;
-}
+export type BuddyCompany = components['schemas']['BuddyCompany'];
 
-export interface BuddyStatus {
-  member: boolean;
-  handle?: string;
-  card_empty: boolean;
-}
+export type BuddyStatus = components['schemas']['BuddyStatus'];
 
-export interface BuddySimilar {
-  handle: string;
-  card_summary: BuddySummary;
-  score: number;
-  shared_companies: BuddyCompany[];
-}
+export type BuddySimilar = components['schemas']['BuddySimilar'];
 
 export interface BuddyFeedPage {
   data: BuddyFeedItem[];
@@ -39,9 +24,7 @@ export interface BuddyProfile {
 
 /** One member's feed events per UTC day over the last year; only days with an event.
  *  `count` is always applied + interview + offer. */
-export interface BuddyActivity {
-  days: { day: string; count: number; applied: number; interview: number; offer: number }[];
-}
+export type BuddyActivity = components['schemas']['BuddyActivity'];
 
 /** The mock-interview topics, the server's vocabulary (internal/engage/buddy). */
 export type BuddyMockTopic = 'coding' | 'system_design' | 'behavioral';
@@ -59,10 +42,7 @@ export interface BuddyMockSlots extends MentorSlots {
   topics: BuddyMockTopic[];
 }
 
-interface BuddyMockReview {
-  rating: number;
-  comment: string;
-}
+type BuddyMockReview = components['schemas']['BuddyMockReview'];
 
 /** One mock as its participant sees it. `counterpart` is null once the other member left or a
  *  block stands between them; `their_review` is null until revealed (both reviewed, or a week
