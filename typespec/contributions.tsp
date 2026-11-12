@@ -12,15 +12,41 @@ model ResolveJobRequest {
   surface?: string;
 }
 
+/**
+ * What became of the board behind a job page: `found` (the catalogue already carried the
+ * posting), `tracked` (imported, and the board is already crawled), `imported` (imported,
+ * and the board queued for onboarding), `review` (imported, but no crawlable board could be
+ * named) or `queued` (nothing could read the page, so the link went to manual triage).
+ */
+enum ResolvedJobStatus {
+  found,
+  tracked,
+  imported,
+  review,
+  queued,
+}
+
 /** Where a job page ended up. */
 model ResolvedJobPage {
   /** The catalogue job; null while it is still queued. */
   public_slug: string | null;
 
-  /** `found`, `tracked`, `imported`, `review` or `queued`. */
-  status: string;
+  status: ResolvedJobStatus;
 
   company_slug?: string;
+}
+
+/**
+ * `pending`: recorded, not yet proven by a crawl; `active`: its first crawl succeeded;
+ * `rejected` and `retired`: a curator turned it down or removed it; `review`: an
+ * unrecognised link awaiting manual triage.
+ */
+enum ContributionStatus {
+  pending,
+  active,
+  rejected,
+  retired,
+  review,
 }
 
 /** A job page the caller sent in, and what became of it. */
@@ -29,7 +55,7 @@ model Contribution {
   url: string;
   source: string;
   board: string;
-  status: string;
+  status: ContributionStatus;
   surface: string;
   created_at: utcDateTime | null;
 }

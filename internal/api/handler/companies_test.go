@@ -102,8 +102,8 @@ func TestCompanyListItemJSONIsStableAcrossBothBackends(t *testing.T) {
 		Collections: []string{"yc"},
 	})
 
-	assertJSON(t, "postgres", fromPostgres, goldenCompanyFull)
-	assertJSON(t, "search", fromSearch, goldenCompanyFull)
+	assertJSON(t, "postgres", &fromPostgres, goldenCompanyFull)
+	assertJSON(t, "search", &fromSearch, goldenCompanyFull)
 }
 
 // Absence is the half a struct comparison cannot see: a missing tagline must serialize as null
@@ -112,8 +112,8 @@ func TestCompanyListItemJSONKeepsAbsenceShapes(t *testing.T) {
 	fromPostgres := companyListItemFromRow(db.ListCompaniesRow{Slug: "x", Name: "X", Industries: []string{}, Collections: []string{}})
 	fromSearch := companyListItemFromDoc(search.CompanyDocument{Slug: "x", Name: "X"})
 
-	assertJSON(t, "postgres", fromPostgres, goldenCompanyEmpty)
-	assertJSON(t, "search", fromSearch, goldenCompanyEmpty)
+	assertJSON(t, "postgres", &fromPostgres, goldenCompanyEmpty)
+	assertJSON(t, "search", &fromSearch, goldenCompanyEmpty)
 }
 
 // A populated rating must agree between backends too — CompanyDocument's 0-means-
@@ -129,8 +129,8 @@ func TestCompanyListItemJSONCarriesRating(t *testing.T) {
 		Slug: "euro-lab", Name: "Euro Lab", FeedbackCount: 3, FeedbackRatingAvg: 4.5,
 	})
 
-	assertJSON(t, "postgres", fromPostgres, golden)
-	assertJSON(t, "search", fromSearch, golden)
+	assertJSON(t, "postgres", &fromPostgres, golden)
+	assertJSON(t, "search", &fromSearch, golden)
 }
 
 func assertJSON(t *testing.T, label string, v any, want string) {

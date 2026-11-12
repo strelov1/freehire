@@ -38,6 +38,9 @@ model ListMeta {
   /** Absent when every param was read. */
   ignored_params?: IgnoredParam[];
   ignored_values?: unknown;
+
+  /** True when `total` counts only what was read, not the whole match. */
+  total_is_lower_bound?: boolean;
 }
 
 /** A list: `{"data": [...], "meta": {...}}`. */

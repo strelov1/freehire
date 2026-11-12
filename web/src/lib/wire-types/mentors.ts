@@ -9,31 +9,7 @@ import type { components } from '#lib/generated/api.js';
  *  `meeting_url` is absent here on purpose — it is a live room, so only a booked party
  *  receives it, on their own booking. The owner's and moderator's routes add `status`,
  *  `paused` and (for the owner alone) `meeting_url` to this same struct. */
-export interface Mentor {
-  slug: string;
-  name: string;
-  company_slug: string;
-  company_name: string;
-  headline: string;
-  bio: string;
-  topics: string[];
-  languages: string[];
-  /** The mentor's own IANA zone. What a VIEWER sees is decided per request by the slot
-   *  endpoint, which reports the zone it actually used — never assume this one. */
-  timezone: string;
-  /** What is being booked. An hour and twenty minutes are different offers, so this
-   *  belongs on the card and not only on the profile. */
-  session_minutes: number;
-  rating_count: number;
-  rating_avg: number;
-  /** The mentor's own opt-in to publish their account's CV headshot at
-   *  `/api/v1/mentors/{slug}/photo`. Off by default; render the avatar only when this
-   *  is true, and hide it on a load error rather than showing a broken-image icon. */
-  show_photo: boolean;
-  /** One of the platform's seniority levels, or absent when the mentor left it unset —
-   *  never an empty string on the wire (the backend omits the key entirely). */
-  seniority?: string;
-}
+export type Mentor = components['schemas']['MentorshipMentor'];
 
 /** One offerable hour, carrying three views of the same moment on purpose.
  *
@@ -111,11 +87,7 @@ export interface AvailabilityApi {
  *  `starts_at`/`ends_at` are absolute instants in UTC; render them in the mentor's own
  *  zone (`MentorCalendar.timezone`), not the viewer's — this is a self-view, and the
  *  mentor's own weekly-hours editor already assumes their own zone. */
-export interface MentorCalendarInterval {
-  starts_at: string;
-  ends_at: string;
-  status: 'booked' | 'busy' | 'free' | 'closed';
-}
+export type MentorCalendarInterval = components['schemas']['MentorshipCalendarInterval'];
 
 /** The owner's own resolved calendar for one month: a gapless, non-overlapping partition
  *  of the requested window. `timezone` is the mentor's own IANA zone. */
@@ -125,35 +97,12 @@ export interface MentorCalendar {
 }
 
 /** The mentor's own profile: the public shape plus what only its owner sees. */
-export interface OwnMentorProfile extends Mentor {
-  status: string;
-  paused: boolean;
-  meeting_url: string;
-  /** The rest of the session parameters, sent to the OWNER alone so the cabinet's
-   *  whole-object save re-submits what the mentor chose rather than the form's defaults.
-   *  Optional because nothing public carries them. */
-  buffer_before_minutes?: number;
-  buffer_after_minutes?: number;
-  notice_minutes?: number;
-  horizon_days?: number;
-}
+export type OwnMentorProfile = components['schemas']['MentorshipOwnMentor'];
 
 /** One profile awaiting a moderator. The moderator's view of a mentor — status and pause,
  *  but no meeting link: deciding whether somebody may mentor does not require the address
  *  of the room they meet in. */
-export interface PendingMentorProfile extends Mentor {
-  /** The numeric row id the decide route takes — not the public slug. */
-  id: number;
-  status: string;
-  paused: boolean;
-  /** When the profile was submitted (or resubmitted after a withdrawal) — moderator-only,
-   *  ISO 8601. */
-  created_at: string;
-  /** Evidence for the human deciding: this account is already an approved referrer for
-   *  the same company. Corroboration, never a gate — an approved offer does not approve
-   *  a mentor profile, and the spec says so outright. */
-  has_approved_referral_offer: boolean;
-}
+export type PendingMentorProfile = components['schemas']['MentorshipPendingMentor'];
 
 /** What a mentor submits. Whole-object on both create and update: the endpoint takes the
  *  same body either way, and a partial one would clear what it omits. */

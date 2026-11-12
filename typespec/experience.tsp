@@ -10,12 +10,67 @@ namespace Freehire;
 // edit rewrites the words and leaves the label alone. With a session or an API key, except
 // the merge, which is the session cookie only.
 
+/**
+ * How the bank came to hold an achievement. Only the first three are the candidate
+ * speaking and may be written into a CV; `agent_inferred` is the assistant's own reading.
+ */
+enum ExperienceProvenance {
+  cv_import,
+  stated_in_chat,
+  manual,
+  agent_inferred,
+}
+
+enum ExperienceEmploymentKind {
+  job,
+  project,
+}
+
+/** One place where evidence was produced. A job carries `company`; a project carries its title as `name`. */
+model ExperienceEmployment {
+  id: string;
+  kind: ExperienceEmploymentKind;
+  company?: string;
+  name?: string;
+  role?: string;
+  location?: string;
+  start?: PeriodDate;
+  end?: PeriodDate;
+  current?: boolean;
+  summary?: string;
+
+  /** Portfolio URL, typically on a project. */
+  link?: string;
+
+  stack?: string[];
+}
+
+/** One piece of evidence, at the grain of a CV bullet. The three flags below are computed at read time. */
+model ExperienceAtom {
+  id: string;
+  employment_id?: string;
+  claim: string;
+  context?: string;
+  metrics?: string[];
+  skills?: string[];
+  provenance: ExperienceProvenance;
+  source_ref?: string;
+  needs_context: boolean;
+  needs_metrics: boolean;
+
+  /** Shared id of a soft-duplicate group (its first member), when the list clustered this atom. */
+  cluster_id?: string;
+}
+
+model ExperienceEmploymentWithAtoms {
+  ...ExperienceEmployment;
+  atoms: ExperienceAtom[];
+}
+
 /** The places with their achievements, and the achievements that belong to no place. */
 model ExperienceBank {
-  /** Each place with an `atoms` array of its achievements. */
-  employments: unknown[];
-
-  unplaced: unknown[];
+  employments: ExperienceEmploymentWithAtoms[];
+  unplaced: ExperienceAtom[];
 }
 
 model MergeAtoms {

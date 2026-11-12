@@ -63,13 +63,13 @@ func (h *contributionHandlers) ResolveJob(ctx context.Context, req *apigen.Resol
 		return nil, err
 	}
 	if out.Status == outcomeQueued {
-		page := apigen.ResolvedJobPage{Status: out.Status}
+		page := apigen.ResolvedJobPage{Status: apigen.ResolvedJobStatus(out.Status)}
 		page.PublicSlug.SetToNull()
 		return &apigen.ResolveJobAccepted{Data: page}, nil
 	}
 	page := apigen.ResolvedJobPage{
 		PublicSlug:  apigen.NewNilString(out.PublicSlug),
-		Status:      out.Status,
+		Status:      apigen.ResolvedJobStatus(out.Status),
 		CompanySlug: optString(out.CompanySlug),
 	}
 	if out.Status == outcomeFound {

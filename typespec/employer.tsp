@@ -9,13 +9,19 @@ namespace Freehire;
 // review of a claim. A vacancy is the shared job view (internal/job/jobview), whose wide
 // shape belongs to search too, so it travels as an opaque value.
 
+enum EmployerAccountStatus {
+  pending,
+  active,
+  revoked,
+}
+
 /** A company account. `user_id` is the address the moderator and admin actions take. */
 model EmployerAccount {
   user_id: int64;
   company_slug: string;
   company_name: string;
   work_email: string;
-  status: string;
+  status: EmployerAccountStatus;
   verified_at?: utcDateTime;
 
   /** Whether the claimant still owes the mailed code or is waiting on a moderator. */

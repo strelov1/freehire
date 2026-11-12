@@ -63,7 +63,7 @@ func (h *directApplyHandlers) GetDirectApplyForm(ctx context.Context, params api
 		out.Cvs.Tailored.SetToNull()
 	}
 	for i, f := range view.Questions {
-		q := apigen.DirectApplyQuestion{ID: f.ID, Label: f.Label, Type: string(f.Type), Required: f.Required}
+		q := apigen.DirectApplyQuestion{ID: f.ID, Label: f.Label, Type: apigen.DirectApplyQuestionType(f.Type), Required: f.Required}
 		for _, o := range f.Options {
 			q.Options = append(q.Options, o.Value)
 		}

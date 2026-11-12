@@ -8,6 +8,12 @@ namespace Freehire;
 // vacancy for review and reads their own queue; the pending queue, approve and reject
 // are moderator-only.
 
+enum SubmissionStatus {
+  pending,
+  approved,
+  rejected,
+}
+
 /** A submission as the API shows it. */
 model Submission {
   id: int64;
@@ -22,8 +28,7 @@ model Submission {
   /** RFC 3339. */
   posted_at?: string;
 
-  /** pending, approved or rejected. */
-  status: string;
+  status: SubmissionStatus;
 
   review_reason?: string;
   reviewed_at?: string;

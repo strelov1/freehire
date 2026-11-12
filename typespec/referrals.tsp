@@ -8,12 +8,30 @@ namespace Freehire;
 // and the two proof/CV PDF streams stay hand-written. An id that is not a UUID answers 404,
 // like a missing row, so ids travel as strings.
 
+enum ReferralOfferStatus {
+  pending,
+  approved,
+  rejected,
+}
+
+enum ReferralRequestStatus {
+  sent,
+  contacted,
+  declined,
+}
+
+/** `original` attaches the uploaded CV; `built` one tailored in freehire. */
+enum ReferralCvKind {
+  original,
+  built,
+}
+
 model ReferralOffer {
   id: string;
   company_slug: string;
   company_name: string;
   linkedin_url: string;
-  status: string;
+  status: ReferralOfferStatus;
   decided_at: utcDateTime | null;
   created_at: utcDateTime | null;
 }
@@ -24,9 +42,9 @@ model ReferralSeekerRequest {
   company_slug: string;
   company_name: string;
   job_id: int64 | null;
-  cv_kind: string;
+  cv_kind: ReferralCvKind;
   cv_id: string | null;
-  status: string;
+  status: ReferralRequestStatus;
   created_at: utcDateTime | null;
 }
 
@@ -36,12 +54,12 @@ model ReferralIncomingRequest {
   company_slug: string;
   company_name: string;
   job_id: int64 | null;
-  cv_kind: string;
+  cv_kind: ReferralCvKind;
   linkedin_url?: string;
   contact_telegram?: string;
   contact_email?: string;
   note?: string;
-  status: string;
+  status: ReferralRequestStatus;
   created_at: utcDateTime | null;
 }
 

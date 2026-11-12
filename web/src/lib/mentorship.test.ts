@@ -683,6 +683,7 @@ describe('profileInputFromProfile', () => {
       show_photo: true,
       status: 'approved',
       paused: false,
+      created_at: '2026-09-01T00:00:00Z',
       meeting_url: 'https://meet.example.test/jane',
       buffer_before_minutes: 5,
       buffer_after_minutes: 10,
@@ -721,26 +722,6 @@ describe('profileInputFromProfile', () => {
 
   test('an unset seniority becomes the empty string, never undefined', () => {
     expect(profileInputFromProfile(ownProfile({ seniority: undefined })).seniority).toBe('');
-  });
-
-  // The owner's read carries the session parameters precisely so a re-submit (from
-  // either the profile form or the schedule page's session settings) never silently
-  // resets a buffer/notice/horizon the mentor already has, even though nothing in
-  // either screen lets them edit these three directly yet.
-  test('an absent optional session parameter falls back to its stored default', () => {
-    const input = profileInputFromProfile(
-      ownProfile({
-        buffer_before_minutes: undefined,
-        buffer_after_minutes: undefined,
-        notice_minutes: undefined,
-        horizon_days: undefined,
-      }),
-    );
-
-    expect(input.buffer_before_minutes).toBe(0);
-    expect(input.buffer_after_minutes).toBe(0);
-    expect(input.notice_minutes).toBe(120);
-    expect(input.horizon_days).toBe(30);
   });
 });
 

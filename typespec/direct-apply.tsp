@@ -4,10 +4,16 @@ using Http;
 
 namespace Freehire;
 
+enum DirectApplyQuestionType {
+  text,
+  boolean,
+  select,
+}
+
 model DirectApplyQuestion {
   id: string;
   label: string;
-  type: string;
+  type: DirectApplyQuestionType;
   required: boolean;
   options?: string[];
 }

@@ -4,9 +4,29 @@ using Http;
 
 namespace Freehire;
 
-// The public company catalogue. A company is passed through as `unknown`: the list item
-// is shared with the search backends. The detail, hiring and closed-jobs reads stay
-// hand-written because a retired slug answers with a redirect to the canonical one.
+// The public company catalogue. The detail, hiring and closed-jobs reads stay hand-written
+// because a retired slug answers with a redirect to the canonical one.
+
+/** A row of the catalogue: the company, its open-job count and a few company-info facts for the card. */
+model CompanyListItem {
+  slug: string;
+  name: string;
+  job_count: int64;
+  tagline: string | null;
+  industries: string[];
+  hq_country: string | null;
+
+  /** Curated company tags; the catalogue card renders the backer marks from these. */
+  collections: string[];
+
+  feedback_count: int64;
+
+  /** Null until a review counts. */
+  feedback_rating_avg: float32 | null;
+
+  /** How many people reported an AI interviewer. Absent at zero, so a badge never shows a bare 0. */
+  ai_interview_reports?: int64;
+}
 
 /** One option of the subindustry vocabulary. */
 model CompanySubindustry {
@@ -28,7 +48,7 @@ op listCompanies(
   @query sort?: string,
   @query limit?: string,
   @query offset?: string,
-): List<unknown> | Problem;
+): List<CompanyListItem> | Problem;
 
 /** The subindustry vocabulary with company counts, most common first. */
 @tag("Companies")

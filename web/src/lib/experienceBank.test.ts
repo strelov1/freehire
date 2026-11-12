@@ -3,7 +3,7 @@ import { findFirstUnconfirmed, sortNeedsAttentionFirst } from './experienceBank'
 import type { ExperienceAtom, ExperienceBank, ExperienceEmploymentWithAtoms } from './types';
 
 function atom(id: string, provenance: ExperienceAtom['provenance'] = 'manual'): ExperienceAtom {
-  return { id, claim: `claim ${id}`, provenance };
+  return { id, claim: `claim ${id}`, provenance, needs_context: false, needs_metrics: false };
 }
 
 function employment(id: string, atoms: ExperienceAtom[]): ExperienceEmploymentWithAtoms {

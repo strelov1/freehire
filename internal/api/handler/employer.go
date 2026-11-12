@@ -115,7 +115,7 @@ func employerAccountOut(a employer.Account) apigen.EmployerAccount {
 		CompanySlug:    a.CompanySlug,
 		CompanyName:    a.CompanyName,
 		WorkEmail:      a.WorkEmail,
-		Status:         a.Status,
+		Status:         apigen.EmployerAccountStatus(a.Status),
 		EmailConfirmed: a.EmailConfirmed(),
 		CreatedAt:      a.CreatedAt,
 	}

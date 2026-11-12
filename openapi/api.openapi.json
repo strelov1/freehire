@@ -1115,7 +1115,9 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "$ref": "#/components/schemas/CompanyListItem"
+                      }
                     },
                     "meta": {
                       "$ref": "#/components/schemas/ListMeta"
@@ -11191,7 +11193,7 @@
                     "data": {
                       "anyOf": [
                         {
-                          "$ref": "#/components/schemas/MentorshipMentor"
+                          "$ref": "#/components/schemas/MentorshipOwnMentor"
                         },
                         {
                           "type": "null"
@@ -11234,7 +11236,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/MentorshipMentor"
+                      "$ref": "#/components/schemas/MentorshipOwnMentor"
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
@@ -11282,7 +11284,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/MentorshipMentor"
+                      "$ref": "#/components/schemas/MentorshipOwnMentor"
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
@@ -11354,7 +11356,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/MentorshipMentor"
+                      "$ref": "#/components/schemas/MentorshipOwnMentor"
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
@@ -11404,7 +11406,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/MentorshipMentor"
+                      "$ref": "#/components/schemas/MentorshipOwnMentor"
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
@@ -15200,7 +15202,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/MentorshipMentor"
+                      "$ref": "#/components/schemas/MentorshipModeratedMentor"
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
@@ -19798,6 +19800,87 @@
           }
         }
       },
+      "CompanyListItem": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "job_count",
+          "tagline",
+          "industries",
+          "hq_country",
+          "collections",
+          "feedback_count",
+          "feedback_rating_avg"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "job_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tagline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "industries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hq_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Curated company tags; the catalogue card renders the backer marks from these."
+          },
+          "feedback_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "feedback_rating_avg": {
+            "anyOf": [
+              {
+                "type": "number",
+                "format": "float"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null until a review counts."
+          },
+          "ai_interview_reports": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many people reported an AI interviewer. Absent at zero, so a badge never shows a bare 0."
+          }
+        },
+        "description": "A row of the catalogue: the company, its open-job count and a few company-info facts for the card."
+      },
       "CompanyRelationApproval": {
         "type": "object",
         "required": [
@@ -19814,6 +19897,14 @@
             "description": "Jobs a `same` approval re-keyed; 0 for a subsidiary."
           }
         }
+      },
+      "CompanyRelationKind": {
+        "type": "string",
+        "enum": [
+          "same",
+          "subsidiary"
+        ],
+        "description": "`same`: one employer under two names; `subsidiary`: the page's company is owned by the target."
       },
       "CompanyRelationProposal": {
         "type": "object",
@@ -19922,7 +20013,7 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/ContributionStatus"
           },
           "surface": {
             "type": "string"
@@ -19941,6 +20032,17 @@
           }
         },
         "description": "A job page the caller sent in, and what became of it."
+      },
+      "ContributionStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "active",
+          "rejected",
+          "retired",
+          "review"
+        ],
+        "description": "`pending`: recorded, not yet proven by a crawl; `active`: its first crawl succeeded;\n`rejected` and `retired`: a curator turned it down or removed it; `review`: an\nunrecognised link awaiting manual triage."
       },
       "Conversation": {
         "type": "object",
@@ -20846,7 +20948,7 @@
             "type": "string"
           },
           "type": {
-            "type": "string"
+            "$ref": "#/components/schemas/DirectApplyQuestionType"
           },
           "required": {
             "type": "boolean"
@@ -20858,6 +20960,14 @@
             }
           }
         }
+      },
+      "DirectApplyQuestionType": {
+        "type": "string",
+        "enum": [
+          "text",
+          "boolean",
+          "select"
+        ]
       },
       "DirectApplyRequest": {
         "type": "object",
@@ -21148,7 +21258,7 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/EmployerAccountStatus"
           },
           "verified_at": {
             "type": "string",
@@ -21166,6 +21276,14 @@
           }
         },
         "description": "A company account. `user_id` is the address the moderator and admin actions take."
+      },
+      "EmployerAccountStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "active",
+          "revoked"
+        ]
       },
       "EmployerClaim": {
         "type": "object",
@@ -21215,7 +21333,7 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/EmployerAccountStatus"
           },
           "verified_at": {
             "type": "string",
@@ -21631,6 +21749,59 @@
           }
         }
       },
+      "ExperienceAtom": {
+        "type": "object",
+        "required": [
+          "id",
+          "claim",
+          "provenance",
+          "needs_context",
+          "needs_metrics"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "employment_id": {
+            "type": "string"
+          },
+          "claim": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/ExperienceProvenance"
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "needs_context": {
+            "type": "boolean"
+          },
+          "needs_metrics": {
+            "type": "boolean"
+          },
+          "cluster_id": {
+            "type": "string",
+            "description": "Shared id of a soft-duplicate group (its first member), when the list clustered this atom."
+          }
+        },
+        "description": "One piece of evidence, at the grain of a CV bullet. The three flags below are computed at read time."
+      },
       "ExperienceBank": {
         "type": "object",
         "required": [
@@ -21640,15 +21811,141 @@
         "properties": {
           "employments": {
             "type": "array",
-            "items": {},
-            "description": "Each place with an `atoms` array of its achievements."
+            "items": {
+              "$ref": "#/components/schemas/ExperienceEmploymentWithAtoms"
+            }
           },
           "unplaced": {
             "type": "array",
-            "items": {}
+            "items": {
+              "$ref": "#/components/schemas/ExperienceAtom"
+            }
           }
         },
         "description": "The places with their achievements, and the achievements that belong to no place."
+      },
+      "ExperienceEmployment": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ExperienceEmploymentKind"
+          },
+          "company": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "start": {
+            "$ref": "#/components/schemas/PeriodDate"
+          },
+          "end": {
+            "$ref": "#/components/schemas/PeriodDate"
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "link": {
+            "type": "string",
+            "description": "Portfolio URL, typically on a project."
+          },
+          "stack": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "One place where evidence was produced. A job carries `company`; a project carries its title as `name`."
+      },
+      "ExperienceEmploymentKind": {
+        "type": "string",
+        "enum": [
+          "job",
+          "project"
+        ]
+      },
+      "ExperienceEmploymentWithAtoms": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "atoms"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ExperienceEmploymentKind"
+          },
+          "company": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "start": {
+            "$ref": "#/components/schemas/PeriodDate"
+          },
+          "end": {
+            "$ref": "#/components/schemas/PeriodDate"
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "link": {
+            "type": "string",
+            "description": "Portfolio URL, typically on a project."
+          },
+          "stack": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "atoms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExperienceAtom"
+            }
+          }
+        }
+      },
+      "ExperienceProvenance": {
+        "type": "string",
+        "enum": [
+          "cv_import",
+          "stated_in_chat",
+          "manual",
+          "agent_inferred"
+        ],
+        "description": "How the bank came to hold an achievement. Only the first three are the candidate\nspeaking and may be written into a CV; `agent_inferred` is the assistant's own reading."
       },
       "FacetRange": {
         "type": "object",
@@ -23045,7 +23342,11 @@
             },
             "description": "Absent when every param was read."
           },
-          "ignored_values": {}
+          "ignored_values": {},
+          "total_is_lower_bound": {
+            "type": "boolean",
+            "description": "True when `total` counts only what was read, not the whole match."
+          }
         },
         "description": "A page of a filtered list, with what the filter dropped."
       },
@@ -23281,7 +23582,7 @@
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/MentorshipBookingStatus"
           },
           "note": {
             "type": "string"
@@ -23317,6 +23618,14 @@
           }
         }
       },
+      "MentorshipBookingStatus": {
+        "type": "string",
+        "enum": [
+          "confirmed",
+          "cancelled"
+        ],
+        "description": "A booked session is `confirmed` or `cancelled`."
+      },
       "MentorshipCalendarInterval": {
         "type": "object",
         "required": [
@@ -23336,8 +23645,7 @@
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "status": {
-            "type": "string",
-            "description": "One of booked, busy, free or closed."
+            "$ref": "#/components/schemas/MentorshipCalendarStatus"
           }
         }
       },
@@ -23358,6 +23666,16 @@
             "$ref": "#/components/schemas/MentorshipTimezoneMeta"
           }
         }
+      },
+      "MentorshipCalendarStatus": {
+        "type": "string",
+        "enum": [
+          "booked",
+          "busy",
+          "free",
+          "closed"
+        ],
+        "description": "`booked`: a confirmed session; `busy`: a synced interval from the mentor's calendar; `free`: offered to seekers; `closed`: outside the stated availability."
       },
       "MentorshipCancelBody": {
         "type": "object",
@@ -23461,30 +23779,16 @@
             "type": "string"
           },
           "topics": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "languages": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "timezone": {
             "type": "string"
@@ -23505,21 +23809,190 @@
             "type": "boolean"
           },
           "seniority": {
+            "type": "string",
+            "description": "Absent when the mentor left it unset."
+          }
+        },
+        "description": "A mentor as the PUBLIC sees them: the directory card and the profile read are one shape."
+      },
+      "MentorshipModeratedMentor": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "company_slug",
+          "company_name",
+          "headline",
+          "bio",
+          "topics",
+          "languages",
+          "timezone",
+          "session_minutes",
+          "rating_count",
+          "rating_avg",
+          "show_photo",
+          "status",
+          "paused",
+          "created_at"
+        ],
+        "properties": {
+          "slug": {
             "type": "string"
           },
-          "status": {
+          "name": {
             "type": "string"
+          },
+          "company_slug": {
+            "type": "string"
+          },
+          "company_name": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string"
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "session_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_avg": {
+            "type": "number",
+            "format": "double"
+          },
+          "show_photo": {
+            "type": "boolean"
+          },
+          "seniority": {
+            "type": "string",
+            "description": "Absent when the mentor left it unset."
+          },
+          "status": {
+            "$ref": "#/components/schemas/MentorshipProfileStatus"
           },
           "paused": {
             "type": "boolean"
-          },
-          "meeting_url": {
-            "type": "string"
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        },
+        "description": "A mentor as a moderator sees them: the public shape plus the moderation state, never the meeting link."
+      },
+      "MentorshipOwnMentor": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "company_slug",
+          "company_name",
+          "headline",
+          "bio",
+          "topics",
+          "languages",
+          "timezone",
+          "session_minutes",
+          "rating_count",
+          "rating_avg",
+          "show_photo",
+          "status",
+          "paused",
+          "created_at",
+          "buffer_before_minutes",
+          "buffer_after_minutes",
+          "notice_minutes",
+          "horizon_days"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "company_slug": {
+            "type": "string"
+          },
+          "company_name": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string"
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "session_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_avg": {
+            "type": "number",
+            "format": "double"
+          },
+          "show_photo": {
+            "type": "boolean"
+          },
+          "seniority": {
+            "type": "string",
+            "description": "Absent when the mentor left it unset."
+          },
+          "status": {
+            "$ref": "#/components/schemas/MentorshipProfileStatus"
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "meeting_url": {
+            "type": "string",
+            "description": "Absent while the mentor has not set one."
           },
           "buffer_before_minutes": {
             "type": "integer",
@@ -23538,7 +24011,7 @@
             "format": "int64"
           }
         },
-        "description": "A mentor as the public, the owner and a moderator see them. The owner and moderator\nviews add status, paused and created_at; the owner alone gets meeting_url and the\nsession parameters."
+        "description": "A mentor as their owner sees them: the moderated shape plus the room and the session parameters."
       },
       "MentorshipPauseBody": {
         "type": "object",
@@ -23564,6 +24037,9 @@
           "rating_count",
           "rating_avg",
           "show_photo",
+          "status",
+          "paused",
+          "created_at",
           "id",
           "has_approved_referral_offer"
         ],
@@ -23587,30 +24063,16 @@
             "type": "string"
           },
           "topics": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "languages": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "timezone": {
             "type": "string"
@@ -23631,37 +24093,19 @@
             "type": "boolean"
           },
           "seniority": {
-            "type": "string"
+            "type": "string",
+            "description": "Absent when the mentor left it unset."
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/MentorshipProfileStatus"
           },
           "paused": {
             "type": "boolean"
-          },
-          "meeting_url": {
-            "type": "string"
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
-          },
-          "buffer_before_minutes": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "buffer_after_minutes": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "notice_minutes": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "horizon_days": {
-            "type": "integer",
-            "format": "int64"
           },
           "id": {
             "type": "integer",
@@ -23750,6 +24194,16 @@
             "type": "string"
           }
         }
+      },
+      "MentorshipProfileStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected",
+          "withdrawn"
+        ],
+        "description": "The moderation status of a profile. `withdrawn` is a mentor who has left; the row survives it."
       },
       "MentorshipReview": {
         "type": "object",
@@ -24328,7 +24782,7 @@
             "format": "int64"
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/CompanyRelationKind"
           },
           "company_slug": {
             "type": "string"
@@ -24359,10 +24813,17 @@
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "status": {
-            "type": "string",
-            "description": "`pending`, or `approved` for a merge whose job move stopped part-way."
+            "$ref": "#/components/schemas/PendingCompanyRelationStatus"
           }
         }
+      },
+      "PendingCompanyRelationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved"
+        ],
+        "description": "`approved` marks a merge whose job move stopped part-way; approving again resumes it."
       },
       "PeriodDate": {
         "type": "object",
@@ -25323,6 +25784,14 @@
           }
         }
       },
+      "ReferralCvKind": {
+        "type": "string",
+        "enum": [
+          "original",
+          "built"
+        ],
+        "description": "`original` attaches the uploaded CV; `built` one tailored in freehire."
+      },
       "ReferralDecision": {
         "type": "object",
         "properties": {
@@ -25364,7 +25833,7 @@
             ]
           },
           "cv_kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReferralCvKind"
           },
           "linkedin_url": {
             "type": "string"
@@ -25379,7 +25848,7 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReferralRequestStatus"
           },
           "created_at": {
             "anyOf": [
@@ -25421,7 +25890,7 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReferralOfferStatus"
           },
           "decided_at": {
             "anyOf": [
@@ -25448,6 +25917,14 @@
             ]
           }
         }
+      },
+      "ReferralOfferStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected"
+        ]
       },
       "ReferralRequestCreate": {
         "type": "object",
@@ -25497,6 +25974,14 @@
           }
         }
       },
+      "ReferralRequestStatus": {
+        "type": "string",
+        "enum": [
+          "sent",
+          "contacted",
+          "declined"
+        ]
+      },
       "ReferralResolve": {
         "type": "object",
         "properties": {
@@ -25540,7 +26025,7 @@
             ]
           },
           "cv_kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReferralCvKind"
           },
           "cv_id": {
             "anyOf": [
@@ -25553,7 +26038,7 @@
             ]
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/ReferralRequestStatus"
           },
           "created_at": {
             "anyOf": [
@@ -25731,14 +26216,24 @@
             "description": "The catalogue job; null while it is still queued."
           },
           "status": {
-            "type": "string",
-            "description": "`found`, `tracked`, `imported`, `review` or `queued`."
+            "$ref": "#/components/schemas/ResolvedJobStatus"
           },
           "company_slug": {
             "type": "string"
           }
         },
         "description": "Where a job page ended up."
+      },
+      "ResolvedJobStatus": {
+        "type": "string",
+        "enum": [
+          "found",
+          "tracked",
+          "imported",
+          "review",
+          "queued"
+        ],
+        "description": "What became of the board behind a job page: `found` (the catalogue already carried the\nposting), `tracked` (imported, and the board is already crawled), `imported` (imported,\nand the board queued for onboarding), `review` (imported, but no crawlable board could be\nnamed) or `queued` (nothing could read the page, so the link went to manual triage)."
       },
       "ResumeCoverageRequest": {
         "type": "object",
@@ -27027,8 +27522,7 @@
             "description": "RFC 3339."
           },
           "status": {
-            "type": "string",
-            "description": "pending, approved or rejected."
+            "$ref": "#/components/schemas/SubmissionStatus"
           },
           "review_reason": {
             "type": "string"
@@ -27335,6 +27829,14 @@
           }
         },
         "description": "A vacancy to submit. url, title and company are required; the service refuses a body without them with a 400."
+      },
+      "SubmissionStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected"
+        ]
       },
       "Subscription": {
         "type": "object",

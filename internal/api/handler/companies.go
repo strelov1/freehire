@@ -318,7 +318,7 @@ func (h *companiesHandlers) ListCompanies(ctx context.Context, params apigen.Lis
 		return nil, err
 	}
 
-	items := make([]companyListItem, len(companies))
+	items := make([]apigen.CompanyListItem, len(companies))
 	for i, row := range companies {
 		items[i] = companyListItemFromRow(row)
 	}
@@ -594,7 +594,7 @@ func (h *companiesHandlers) CompanyClosedJobs(c *fiber.Ctx) error {
 // shape — the same type the Postgres path serves, so the two cannot disagree. meta.total is
 // Meilisearch's estimated filtered total, which backs list pagination exactly as CountCompanies
 // does on the Postgres path.
-func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query string, vals url.Values, limit, offset int) ([]companyListItem, int64, error) {
+func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query string, vals url.Values, limit, offset int) ([]apigen.CompanyListItem, int64, error) {
 	res, err := h.companySearch.SearchCompanies(ctx, search.CompanySearchParams{
 		Query:  query,
 		Filter: search.CompanyFilterFromValues(vals),
@@ -604,57 +604,27 @@ func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query strin
 	if err != nil {
 		return nil, 0, err
 	}
-	items := make([]companyListItem, len(res.Hits))
+	items := make([]apigen.CompanyListItem, len(res.Hits))
 	for i, h := range res.Hits {
 		items[i] = companyListItemFromDoc(h)
 	}
 	return items, res.Total, nil
 }
 
-// companyListItem is the public projection of a company for the list endpoint. It exists so the
-// response shape is owned here rather than by sqlc: served straight, a generated row makes
-// `make sqlc` an API-changing operation — a renamed column or a changed SELECT alias would
-// rewrite the public JSON with nothing to compile against. Both backends project onto this one
-// type, so a field added for one cannot be silently missing from the other.
-//
-// The nullable columns are *string rather than pgtype.Text: identical on the wire in all three
-// states ("x", "", null — pinned by the golden bodies in companies_test.go), without putting a
-// persistence vocabulary on a public contract. A plain string would collapse null into "" and
-// change the response for every company with no tagline.
-type companyListItem struct {
-	Slug        string   `json:"slug"`
-	Name        string   `json:"name"`
-	JobCount    int32    `json:"job_count"`
-	Tagline     *string  `json:"tagline"`
-	Industries  []string `json:"industries"`
-	HqCountry   *string  `json:"hq_country"`
-	Collections []string `json:"collections"`
-	// FeedbackCount/FeedbackRatingAvg are the company's materialized feedback
-	// counters (internal/engage/companyfeedback) — the same fields the single-company
-	// detail view (companyView) already serves.
-	FeedbackCount     int32    `json:"feedback_count"`
-	FeedbackRatingAvg *float32 `json:"feedback_rating_avg"`
-	// AIInterviewReports is how many people have reported that this company screens
-	// with an AI interviewer (internal/engage/processreport). Omitted at zero: the
-	// count is what the label must always be shown with, so no reports has to be an
-	// absent field rather than a zero a badge could render beside.
-	AIInterviewReports int32 `json:"ai_interview_reports,omitempty"`
-}
-
 // companyListItemFromRow projects the Postgres read onto the wire shape. The row already carries
 // null-ness, so the two nullable columns pass through as-is.
-func companyListItemFromRow(r db.ListCompaniesRow) companyListItem {
-	return companyListItem{
+func companyListItemFromRow(r db.ListCompaniesRow) apigen.CompanyListItem {
+	return apigen.CompanyListItem{
 		Slug:               r.Slug,
 		Name:               r.Name,
-		JobCount:           r.JobCount,
-		Tagline:            pgconv.TextPtr(r.Tagline),
+		JobCount:           int64(r.JobCount),
+		Tagline:            nilString(pgconv.TextPtr(r.Tagline)),
 		Industries:         r.Industries,
-		HqCountry:          pgconv.TextPtr(r.HqCountry),
+		HqCountry:          nilString(pgconv.TextPtr(r.HqCountry)),
 		Collections:        r.Collections,
-		FeedbackCount:      r.FeedbackCount,
-		FeedbackRatingAvg:  pgconv.Float4Ptr(r.FeedbackRatingAvg),
-		AIInterviewReports: r.AiInterviewReports,
+		FeedbackCount:      int64(r.FeedbackCount),
+		FeedbackRatingAvg:  nilFloat32Ptr(pgconv.Float4Ptr(r.FeedbackRatingAvg)),
+		AiInterviewReports: optInt64(int64(r.AiInterviewReports)),
 	}
 }
 
@@ -663,18 +633,25 @@ func companyListItemFromRow(r db.ListCompaniesRow) companyListItem {
 // string, which must serialize as null like the Postgres NULL; and an absent array arrives nil,
 // which must serialize as [] like the Postgres '{}'. Collections drive the backer marks, so an
 // array that came back null instead would make those marks disappear the moment a user searched.
-func companyListItemFromDoc(d search.CompanyDocument) companyListItem {
-	return companyListItem{
+func companyListItemFromDoc(d search.CompanyDocument) apigen.CompanyListItem {
+	return apigen.CompanyListItem{
 		Slug:              d.Slug,
 		Name:              d.Name,
-		JobCount:          d.JobCount,
-		Tagline:           presentOrNil(d.Tagline),
+		JobCount:          int64(d.JobCount),
+		Tagline:           nilString(presentOrNil(d.Tagline)),
 		Industries:        orEmpty(d.Industries),
-		HqCountry:         presentOrNil(d.HqCountry),
+		HqCountry:         nilString(presentOrNil(d.HqCountry)),
 		Collections:       orEmpty(d.Collections),
-		FeedbackCount:     d.FeedbackCount,
-		FeedbackRatingAvg: presentOrNilFloat(d.FeedbackRatingAvg),
+		FeedbackCount:     int64(d.FeedbackCount),
+		FeedbackRatingAvg: nilFloat32Ptr(presentOrNilFloat(d.FeedbackRatingAvg)),
 	}
+}
+
+func nilFloat32Ptr(p *float32) apigen.NilFloat32 {
+	if p == nil {
+		return apigen.NilFloat32{Null: true}
+	}
+	return apigen.NewNilFloat32(*p)
 }
 
 // presentOrNilFloat treats 0 as absent — CompanyDocument's "no rating" sentinel
@@ -716,14 +693,9 @@ func ignoredCompanyParams(query url.Values) []search.UnknownParam {
 	return search.UnknownCompanyParams(query, companiesParams)
 }
 
-// companyListPage is the list envelope: each item as the JSON its projection marshals to,
-// and the params the filter did not read.
-func companyListPage(items []companyListItem, total int64, limit, offset int, query url.Values) (*apigen.ListCompaniesOK, error) {
-	data, err := marshalRaws(items)
-	if err != nil {
-		return nil, err
-	}
-	return &apigen.ListCompaniesOK{Data: data, Meta: apigen.ListMeta{
+// companyListPage is the list envelope: the items and the params the filter did not read.
+func companyListPage(items []apigen.CompanyListItem, total int64, limit, offset int, query url.Values) (*apigen.ListCompaniesOK, error) {
+	return &apigen.ListCompaniesOK{Data: items, Meta: apigen.ListMeta{
 		Total: total, Limit: int64(limit), Offset: int64(offset),
 		IgnoredParams: contractIgnoredParams(ignoredCompanyParams(query)),
 	}}, nil

@@ -16326,6 +16326,274 @@ func (s *CompanyInsight) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
+func (s *CompanyListItem) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *CompanyListItem) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("slug")
+		e.Str(s.Slug)
+	}
+	{
+		e.FieldStart("name")
+		e.Str(s.Name)
+	}
+	{
+		e.FieldStart("job_count")
+		e.Int64(s.JobCount)
+	}
+	{
+		e.FieldStart("tagline")
+		s.Tagline.Encode(e)
+	}
+	{
+		e.FieldStart("industries")
+		e.ArrStart()
+		for _, elem := range s.Industries {
+			e.Str(elem)
+		}
+		e.ArrEnd()
+	}
+	{
+		e.FieldStart("hq_country")
+		s.HqCountry.Encode(e)
+	}
+	{
+		e.FieldStart("collections")
+		e.ArrStart()
+		for _, elem := range s.Collections {
+			e.Str(elem)
+		}
+		e.ArrEnd()
+	}
+	{
+		e.FieldStart("feedback_count")
+		e.Int64(s.FeedbackCount)
+	}
+	{
+		e.FieldStart("feedback_rating_avg")
+		s.FeedbackRatingAvg.Encode(e)
+	}
+	{
+		if s.AiInterviewReports.Set {
+			e.FieldStart("ai_interview_reports")
+			s.AiInterviewReports.Encode(e)
+		}
+	}
+}
+
+var jsonFieldsNameOfCompanyListItem = [10]string{
+	0: "slug",
+	1: "name",
+	2: "job_count",
+	3: "tagline",
+	4: "industries",
+	5: "hq_country",
+	6: "collections",
+	7: "feedback_count",
+	8: "feedback_rating_avg",
+	9: "ai_interview_reports",
+}
+
+// Decode decodes CompanyListItem from json.
+func (s *CompanyListItem) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode CompanyListItem to nil")
+	}
+	var requiredBitSet [2]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "slug":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.Slug = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"slug\"")
+			}
+		case "name":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Str()
+				s.Name = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"name\"")
+			}
+		case "job_count":
+			requiredBitSet[0] |= 1 << 2
+			if err := func() error {
+				v, err := d.Int64()
+				s.JobCount = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"job_count\"")
+			}
+		case "tagline":
+			requiredBitSet[0] |= 1 << 3
+			if err := func() error {
+				if err := s.Tagline.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"tagline\"")
+			}
+		case "industries":
+			requiredBitSet[0] |= 1 << 4
+			if err := func() error {
+				s.Industries = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Industries = append(s.Industries, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"industries\"")
+			}
+		case "hq_country":
+			requiredBitSet[0] |= 1 << 5
+			if err := func() error {
+				if err := s.HqCountry.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"hq_country\"")
+			}
+		case "collections":
+			requiredBitSet[0] |= 1 << 6
+			if err := func() error {
+				s.Collections = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Collections = append(s.Collections, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"collections\"")
+			}
+		case "feedback_count":
+			requiredBitSet[0] |= 1 << 7
+			if err := func() error {
+				v, err := d.Int64()
+				s.FeedbackCount = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"feedback_count\"")
+			}
+		case "feedback_rating_avg":
+			requiredBitSet[1] |= 1 << 0
+			if err := func() error {
+				if err := s.FeedbackRatingAvg.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"feedback_rating_avg\"")
+			}
+		case "ai_interview_reports":
+			if err := func() error {
+				s.AiInterviewReports.Reset()
+				if err := s.AiInterviewReports.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"ai_interview_reports\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode CompanyListItem")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [2]uint8{
+		0b11111111,
+		0b00000001,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfCompanyListItem) {
+					name = jsonFieldsNameOfCompanyListItem[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *CompanyListItem) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *CompanyListItem) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
 func (s *CompanyRelationApproval) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
@@ -16434,6 +16702,46 @@ func (s *CompanyRelationApproval) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *CompanyRelationApproval) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes CompanyRelationKind as json.
+func (s CompanyRelationKind) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes CompanyRelationKind from json.
+func (s *CompanyRelationKind) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode CompanyRelationKind to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch CompanyRelationKind(v) {
+	case CompanyRelationKindSame:
+		*s = CompanyRelationKindSame
+	case CompanyRelationKindSubsidiary:
+		*s = CompanyRelationKindSubsidiary
+	default:
+		*s = CompanyRelationKind(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s CompanyRelationKind) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *CompanyRelationKind) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -17451,7 +17759,7 @@ func (s *Contribution) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("status")
-		e.Str(s.Status)
+		s.Status.Encode(e)
 	}
 	{
 		e.FieldStart("surface")
@@ -17533,9 +17841,7 @@ func (s *Contribution) Decode(d *jx.Decoder) error {
 		case "status":
 			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				v, err := d.Str()
-				s.Status = string(v)
-				if err != nil {
+				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -17616,6 +17922,52 @@ func (s *Contribution) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *Contribution) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes ContributionStatus as json.
+func (s ContributionStatus) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes ContributionStatus from json.
+func (s *ContributionStatus) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode ContributionStatus to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch ContributionStatus(v) {
+	case ContributionStatusPending:
+		*s = ContributionStatusPending
+	case ContributionStatusActive:
+		*s = ContributionStatusActive
+	case ContributionStatusRejected:
+		*s = ContributionStatusRejected
+	case ContributionStatusRetired:
+		*s = ContributionStatusRetired
+	case ContributionStatusReview:
+		*s = ContributionStatusReview
+	default:
+		*s = ContributionStatus(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s ContributionStatus) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *ContributionStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -25316,7 +25668,7 @@ func (s *DirectApplyQuestion) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("type")
-		e.Str(s.Type)
+		s.Type.Encode(e)
 	}
 	{
 		e.FieldStart("required")
@@ -25378,9 +25730,7 @@ func (s *DirectApplyQuestion) Decode(d *jx.Decoder) error {
 		case "type":
 			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
-				v, err := d.Str()
-				s.Type = string(v)
-				if err != nil {
+				if err := s.Type.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -25470,6 +25820,48 @@ func (s *DirectApplyQuestion) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *DirectApplyQuestion) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes DirectApplyQuestionType as json.
+func (s DirectApplyQuestionType) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes DirectApplyQuestionType from json.
+func (s *DirectApplyQuestionType) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode DirectApplyQuestionType to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch DirectApplyQuestionType(v) {
+	case DirectApplyQuestionTypeText:
+		*s = DirectApplyQuestionTypeText
+	case DirectApplyQuestionTypeBoolean:
+		*s = DirectApplyQuestionTypeBoolean
+	case DirectApplyQuestionTypeSelect:
+		*s = DirectApplyQuestionTypeSelect
+	default:
+		*s = DirectApplyQuestionType(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s DirectApplyQuestionType) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *DirectApplyQuestionType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -27110,7 +27502,7 @@ func (s *EmployerAccount) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("status")
-		e.Str(s.Status)
+		s.Status.Encode(e)
 	}
 	{
 		if s.VerifiedAt.Set {
@@ -27199,9 +27591,7 @@ func (s *EmployerAccount) Decode(d *jx.Decoder) error {
 		case "status":
 			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				v, err := d.Str()
-				s.Status = string(v)
-				if err != nil {
+				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -27294,6 +27684,48 @@ func (s *EmployerAccount) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *EmployerAccount) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes EmployerAccountStatus as json.
+func (s EmployerAccountStatus) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes EmployerAccountStatus from json.
+func (s *EmployerAccountStatus) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode EmployerAccountStatus to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch EmployerAccountStatus(v) {
+	case EmployerAccountStatusPending:
+		*s = EmployerAccountStatusPending
+	case EmployerAccountStatusActive:
+		*s = EmployerAccountStatusActive
+	case EmployerAccountStatusRevoked:
+		*s = EmployerAccountStatusRevoked
+	default:
+		*s = EmployerAccountStatus(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s EmployerAccountStatus) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *EmployerAccountStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -27501,7 +27933,7 @@ func (s *EmployerCompany) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("status")
-		e.Str(s.Status)
+		s.Status.Encode(e)
 	}
 	{
 		if s.VerifiedAt.Set {
@@ -27650,9 +28082,7 @@ func (s *EmployerCompany) Decode(d *jx.Decoder) error {
 		case "status":
 			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				v, err := d.Str()
-				s.Status = string(v)
-				if err != nil {
+				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -29200,6 +29630,297 @@ func (s *EngagementStatsOK) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
+func (s *ExperienceAtom) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *ExperienceAtom) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("id")
+		e.Str(s.ID)
+	}
+	{
+		if s.EmploymentID.Set {
+			e.FieldStart("employment_id")
+			s.EmploymentID.Encode(e)
+		}
+	}
+	{
+		e.FieldStart("claim")
+		e.Str(s.Claim)
+	}
+	{
+		if s.Context.Set {
+			e.FieldStart("context")
+			s.Context.Encode(e)
+		}
+	}
+	{
+		if s.Metrics != nil {
+			e.FieldStart("metrics")
+			e.ArrStart()
+			for _, elem := range s.Metrics {
+				e.Str(elem)
+			}
+			e.ArrEnd()
+		}
+	}
+	{
+		if s.Skills != nil {
+			e.FieldStart("skills")
+			e.ArrStart()
+			for _, elem := range s.Skills {
+				e.Str(elem)
+			}
+			e.ArrEnd()
+		}
+	}
+	{
+		e.FieldStart("provenance")
+		s.Provenance.Encode(e)
+	}
+	{
+		if s.SourceRef.Set {
+			e.FieldStart("source_ref")
+			s.SourceRef.Encode(e)
+		}
+	}
+	{
+		e.FieldStart("needs_context")
+		e.Bool(s.NeedsContext)
+	}
+	{
+		e.FieldStart("needs_metrics")
+		e.Bool(s.NeedsMetrics)
+	}
+	{
+		if s.ClusterID.Set {
+			e.FieldStart("cluster_id")
+			s.ClusterID.Encode(e)
+		}
+	}
+}
+
+var jsonFieldsNameOfExperienceAtom = [11]string{
+	0:  "id",
+	1:  "employment_id",
+	2:  "claim",
+	3:  "context",
+	4:  "metrics",
+	5:  "skills",
+	6:  "provenance",
+	7:  "source_ref",
+	8:  "needs_context",
+	9:  "needs_metrics",
+	10: "cluster_id",
+}
+
+// Decode decodes ExperienceAtom from json.
+func (s *ExperienceAtom) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode ExperienceAtom to nil")
+	}
+	var requiredBitSet [2]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "id":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.ID = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"id\"")
+			}
+		case "employment_id":
+			if err := func() error {
+				s.EmploymentID.Reset()
+				if err := s.EmploymentID.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"employment_id\"")
+			}
+		case "claim":
+			requiredBitSet[0] |= 1 << 2
+			if err := func() error {
+				v, err := d.Str()
+				s.Claim = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"claim\"")
+			}
+		case "context":
+			if err := func() error {
+				s.Context.Reset()
+				if err := s.Context.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"context\"")
+			}
+		case "metrics":
+			if err := func() error {
+				s.Metrics = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Metrics = append(s.Metrics, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"metrics\"")
+			}
+		case "skills":
+			if err := func() error {
+				s.Skills = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Skills = append(s.Skills, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"skills\"")
+			}
+		case "provenance":
+			requiredBitSet[0] |= 1 << 6
+			if err := func() error {
+				if err := s.Provenance.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"provenance\"")
+			}
+		case "source_ref":
+			if err := func() error {
+				s.SourceRef.Reset()
+				if err := s.SourceRef.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"source_ref\"")
+			}
+		case "needs_context":
+			requiredBitSet[1] |= 1 << 0
+			if err := func() error {
+				v, err := d.Bool()
+				s.NeedsContext = bool(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"needs_context\"")
+			}
+		case "needs_metrics":
+			requiredBitSet[1] |= 1 << 1
+			if err := func() error {
+				v, err := d.Bool()
+				s.NeedsMetrics = bool(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"needs_metrics\"")
+			}
+		case "cluster_id":
+			if err := func() error {
+				s.ClusterID.Reset()
+				if err := s.ClusterID.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"cluster_id\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode ExperienceAtom")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [2]uint8{
+		0b01000101,
+		0b00000011,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfExperienceAtom) {
+					name = jsonFieldsNameOfExperienceAtom[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *ExperienceAtom) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *ExperienceAtom) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
 func (s *ExperienceBank) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
@@ -29212,9 +29933,7 @@ func (s *ExperienceBank) encodeFields(e *jx.Encoder) {
 		e.FieldStart("employments")
 		e.ArrStart()
 		for _, elem := range s.Employments {
-			if len(elem) != 0 {
-				e.Raw(elem)
-			}
+			elem.Encode(e)
 		}
 		e.ArrEnd()
 	}
@@ -29222,9 +29941,7 @@ func (s *ExperienceBank) encodeFields(e *jx.Encoder) {
 		e.FieldStart("unplaced")
 		e.ArrStart()
 		for _, elem := range s.Unplaced {
-			if len(elem) != 0 {
-				e.Raw(elem)
-			}
+			elem.Encode(e)
 		}
 		e.ArrEnd()
 	}
@@ -29247,12 +29964,10 @@ func (s *ExperienceBank) Decode(d *jx.Decoder) error {
 		case "employments":
 			requiredBitSet[0] |= 1 << 0
 			if err := func() error {
-				s.Employments = make([]jx.Raw, 0)
+				s.Employments = make([]ExperienceEmploymentWithAtoms, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem jx.Raw
-					v, err := d.RawAppend(nil)
-					elem = jx.Raw(v)
-					if err != nil {
+					var elem ExperienceEmploymentWithAtoms
+					if err := elem.Decode(d); err != nil {
 						return err
 					}
 					s.Employments = append(s.Employments, elem)
@@ -29267,12 +29982,10 @@ func (s *ExperienceBank) Decode(d *jx.Decoder) error {
 		case "unplaced":
 			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
-				s.Unplaced = make([]jx.Raw, 0)
+				s.Unplaced = make([]ExperienceAtom, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem jx.Raw
-					v, err := d.RawAppend(nil)
-					elem = jx.Raw(v)
-					if err != nil {
+					var elem ExperienceAtom
+					if err := elem.Decode(d); err != nil {
 						return err
 					}
 					s.Unplaced = append(s.Unplaced, elem)
@@ -29336,6 +30049,412 @@ func (s *ExperienceBank) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *ExperienceBank) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes ExperienceEmploymentKind as json.
+func (s ExperienceEmploymentKind) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes ExperienceEmploymentKind from json.
+func (s *ExperienceEmploymentKind) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode ExperienceEmploymentKind to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch ExperienceEmploymentKind(v) {
+	case ExperienceEmploymentKindJob:
+		*s = ExperienceEmploymentKindJob
+	case ExperienceEmploymentKindProject:
+		*s = ExperienceEmploymentKindProject
+	default:
+		*s = ExperienceEmploymentKind(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s ExperienceEmploymentKind) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *ExperienceEmploymentKind) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s *ExperienceEmploymentWithAtoms) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *ExperienceEmploymentWithAtoms) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("id")
+		e.Str(s.ID)
+	}
+	{
+		e.FieldStart("kind")
+		s.Kind.Encode(e)
+	}
+	{
+		if s.Company.Set {
+			e.FieldStart("company")
+			s.Company.Encode(e)
+		}
+	}
+	{
+		if s.Name.Set {
+			e.FieldStart("name")
+			s.Name.Encode(e)
+		}
+	}
+	{
+		if s.Role.Set {
+			e.FieldStart("role")
+			s.Role.Encode(e)
+		}
+	}
+	{
+		if s.Location.Set {
+			e.FieldStart("location")
+			s.Location.Encode(e)
+		}
+	}
+	{
+		if s.Start.Set {
+			e.FieldStart("start")
+			s.Start.Encode(e)
+		}
+	}
+	{
+		if s.End.Set {
+			e.FieldStart("end")
+			s.End.Encode(e)
+		}
+	}
+	{
+		if s.Current.Set {
+			e.FieldStart("current")
+			s.Current.Encode(e)
+		}
+	}
+	{
+		if s.Summary.Set {
+			e.FieldStart("summary")
+			s.Summary.Encode(e)
+		}
+	}
+	{
+		if s.Link.Set {
+			e.FieldStart("link")
+			s.Link.Encode(e)
+		}
+	}
+	{
+		if s.Stack != nil {
+			e.FieldStart("stack")
+			e.ArrStart()
+			for _, elem := range s.Stack {
+				e.Str(elem)
+			}
+			e.ArrEnd()
+		}
+	}
+	{
+		e.FieldStart("atoms")
+		e.ArrStart()
+		for _, elem := range s.Atoms {
+			elem.Encode(e)
+		}
+		e.ArrEnd()
+	}
+}
+
+var jsonFieldsNameOfExperienceEmploymentWithAtoms = [13]string{
+	0:  "id",
+	1:  "kind",
+	2:  "company",
+	3:  "name",
+	4:  "role",
+	5:  "location",
+	6:  "start",
+	7:  "end",
+	8:  "current",
+	9:  "summary",
+	10: "link",
+	11: "stack",
+	12: "atoms",
+}
+
+// Decode decodes ExperienceEmploymentWithAtoms from json.
+func (s *ExperienceEmploymentWithAtoms) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode ExperienceEmploymentWithAtoms to nil")
+	}
+	var requiredBitSet [2]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "id":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.ID = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"id\"")
+			}
+		case "kind":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				if err := s.Kind.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"kind\"")
+			}
+		case "company":
+			if err := func() error {
+				s.Company.Reset()
+				if err := s.Company.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"company\"")
+			}
+		case "name":
+			if err := func() error {
+				s.Name.Reset()
+				if err := s.Name.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"name\"")
+			}
+		case "role":
+			if err := func() error {
+				s.Role.Reset()
+				if err := s.Role.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"role\"")
+			}
+		case "location":
+			if err := func() error {
+				s.Location.Reset()
+				if err := s.Location.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"location\"")
+			}
+		case "start":
+			if err := func() error {
+				s.Start.Reset()
+				if err := s.Start.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"start\"")
+			}
+		case "end":
+			if err := func() error {
+				s.End.Reset()
+				if err := s.End.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"end\"")
+			}
+		case "current":
+			if err := func() error {
+				s.Current.Reset()
+				if err := s.Current.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"current\"")
+			}
+		case "summary":
+			if err := func() error {
+				s.Summary.Reset()
+				if err := s.Summary.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"summary\"")
+			}
+		case "link":
+			if err := func() error {
+				s.Link.Reset()
+				if err := s.Link.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"link\"")
+			}
+		case "stack":
+			if err := func() error {
+				s.Stack = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Stack = append(s.Stack, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"stack\"")
+			}
+		case "atoms":
+			requiredBitSet[1] |= 1 << 4
+			if err := func() error {
+				s.Atoms = make([]ExperienceAtom, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem ExperienceAtom
+					if err := elem.Decode(d); err != nil {
+						return err
+					}
+					s.Atoms = append(s.Atoms, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"atoms\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode ExperienceEmploymentWithAtoms")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [2]uint8{
+		0b00000011,
+		0b00010000,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfExperienceEmploymentWithAtoms) {
+					name = jsonFieldsNameOfExperienceEmploymentWithAtoms[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *ExperienceEmploymentWithAtoms) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *ExperienceEmploymentWithAtoms) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes ExperienceProvenance as json.
+func (s ExperienceProvenance) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes ExperienceProvenance from json.
+func (s *ExperienceProvenance) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode ExperienceProvenance to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch ExperienceProvenance(v) {
+	case ExperienceProvenanceCvImport:
+		*s = ExperienceProvenanceCvImport
+	case ExperienceProvenanceStatedInChat:
+		*s = ExperienceProvenanceStatedInChat
+	case ExperienceProvenanceManual:
+		*s = ExperienceProvenanceManual
+	case ExperienceProvenanceAgentInferred:
+		*s = ExperienceProvenanceAgentInferred
+	default:
+		*s = ExperienceProvenance(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s ExperienceProvenance) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *ExperienceProvenance) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -42984,9 +44103,7 @@ func (s *ListCompaniesOK) encodeFields(e *jx.Encoder) {
 		e.FieldStart("data")
 		e.ArrStart()
 		for _, elem := range s.Data {
-			if len(elem) != 0 {
-				e.Raw(elem)
-			}
+			elem.Encode(e)
 		}
 		e.ArrEnd()
 	}
@@ -43013,12 +44130,10 @@ func (s *ListCompaniesOK) Decode(d *jx.Decoder) error {
 		case "data":
 			requiredBitSet[0] |= 1 << 0
 			if err := func() error {
-				s.Data = make([]jx.Raw, 0)
+				s.Data = make([]CompanyListItem, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem jx.Raw
-					v, err := d.RawAppend(nil)
-					elem = jx.Raw(v)
-					if err != nil {
+					var elem CompanyListItem
+					if err := elem.Decode(d); err != nil {
 						return err
 					}
 					s.Data = append(s.Data, elem)
@@ -43994,14 +45109,21 @@ func (s *ListMeta) encodeFields(e *jx.Encoder) {
 			e.Raw(s.IgnoredValues)
 		}
 	}
+	{
+		if s.TotalIsLowerBound.Set {
+			e.FieldStart("total_is_lower_bound")
+			s.TotalIsLowerBound.Encode(e)
+		}
+	}
 }
 
-var jsonFieldsNameOfListMeta = [5]string{
+var jsonFieldsNameOfListMeta = [6]string{
 	0: "total",
 	1: "limit",
 	2: "offset",
 	3: "ignored_params",
 	4: "ignored_values",
+	5: "total_is_lower_bound",
 }
 
 // Decode decodes ListMeta from json.
@@ -44076,6 +45198,16 @@ func (s *ListMeta) Decode(d *jx.Decoder) error {
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"ignored_values\"")
+			}
+		case "total_is_lower_bound":
+			if err := func() error {
+				s.TotalIsLowerBound.Reset()
+				if err := s.TotalIsLowerBound.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"total_is_lower_bound\"")
 			}
 		default:
 			return d.Skip()
@@ -47584,7 +48716,7 @@ func (s *MentorshipBooking) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("status")
-		e.Str(s.Status)
+		s.Status.Encode(e)
 	}
 	{
 		e.FieldStart("note")
@@ -47691,9 +48823,7 @@ func (s *MentorshipBooking) Decode(d *jx.Decoder) error {
 		case "status":
 			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				v, err := d.Str()
-				s.Status = string(v)
-				if err != nil {
+				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -47917,6 +49047,46 @@ func (s *MentorshipBookingBody) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
+// Encode encodes MentorshipBookingStatus as json.
+func (s MentorshipBookingStatus) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes MentorshipBookingStatus from json.
+func (s *MentorshipBookingStatus) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode MentorshipBookingStatus to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch MentorshipBookingStatus(v) {
+	case MentorshipBookingStatusConfirmed:
+		*s = MentorshipBookingStatusConfirmed
+	case MentorshipBookingStatusCancelled:
+		*s = MentorshipBookingStatusCancelled
+	default:
+		*s = MentorshipBookingStatus(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s MentorshipBookingStatus) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *MentorshipBookingStatus) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
 // Encode implements json.Marshaler.
 func (s *MentorshipCalendarInterval) Encode(e *jx.Encoder) {
 	e.ObjStart()
@@ -47936,7 +49106,7 @@ func (s *MentorshipCalendarInterval) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("status")
-		e.Str(s.Status)
+		s.Status.Encode(e)
 	}
 }
 
@@ -47982,9 +49152,7 @@ func (s *MentorshipCalendarInterval) Decode(d *jx.Decoder) error {
 		case "status":
 			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
-				v, err := d.Str()
-				s.Status = string(v)
-				if err != nil {
+				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -48164,6 +49332,50 @@ func (s *MentorshipCalendarPage) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *MentorshipCalendarPage) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes MentorshipCalendarStatus as json.
+func (s MentorshipCalendarStatus) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes MentorshipCalendarStatus from json.
+func (s *MentorshipCalendarStatus) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode MentorshipCalendarStatus to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch MentorshipCalendarStatus(v) {
+	case MentorshipCalendarStatusBooked:
+		*s = MentorshipCalendarStatusBooked
+	case MentorshipCalendarStatusBusy:
+		*s = MentorshipCalendarStatusBusy
+	case MentorshipCalendarStatusFree:
+		*s = MentorshipCalendarStatusFree
+	case MentorshipCalendarStatusClosed:
+		*s = MentorshipCalendarStatusClosed
+	default:
+		*s = MentorshipCalendarStatus(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s MentorshipCalendarStatus) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *MentorshipCalendarStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -48672,27 +49884,361 @@ func (s *MentorshipMentor) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("topics")
-		if s.Topics == nil {
-			e.Null()
-		} else {
-			e.ArrStart()
-			for _, elem := range s.Topics {
-				e.Str(elem)
-			}
-			e.ArrEnd()
+		e.ArrStart()
+		for _, elem := range s.Topics {
+			e.Str(elem)
 		}
+		e.ArrEnd()
 	}
 	{
 		e.FieldStart("languages")
-		if s.Languages == nil {
-			e.Null()
-		} else {
-			e.ArrStart()
-			for _, elem := range s.Languages {
-				e.Str(elem)
-			}
-			e.ArrEnd()
+		e.ArrStart()
+		for _, elem := range s.Languages {
+			e.Str(elem)
 		}
+		e.ArrEnd()
+	}
+	{
+		e.FieldStart("timezone")
+		e.Str(s.Timezone)
+	}
+	{
+		e.FieldStart("session_minutes")
+		e.Int64(s.SessionMinutes)
+	}
+	{
+		e.FieldStart("rating_count")
+		e.Int64(s.RatingCount)
+	}
+	{
+		e.FieldStart("rating_avg")
+		e.Float64(s.RatingAvg)
+	}
+	{
+		e.FieldStart("show_photo")
+		e.Bool(s.ShowPhoto)
+	}
+	{
+		if s.Seniority.Set {
+			e.FieldStart("seniority")
+			s.Seniority.Encode(e)
+		}
+	}
+}
+
+var jsonFieldsNameOfMentorshipMentor = [14]string{
+	0:  "slug",
+	1:  "name",
+	2:  "company_slug",
+	3:  "company_name",
+	4:  "headline",
+	5:  "bio",
+	6:  "topics",
+	7:  "languages",
+	8:  "timezone",
+	9:  "session_minutes",
+	10: "rating_count",
+	11: "rating_avg",
+	12: "show_photo",
+	13: "seniority",
+}
+
+// Decode decodes MentorshipMentor from json.
+func (s *MentorshipMentor) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode MentorshipMentor to nil")
+	}
+	var requiredBitSet [2]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "slug":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.Slug = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"slug\"")
+			}
+		case "name":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Str()
+				s.Name = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"name\"")
+			}
+		case "company_slug":
+			requiredBitSet[0] |= 1 << 2
+			if err := func() error {
+				v, err := d.Str()
+				s.CompanySlug = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"company_slug\"")
+			}
+		case "company_name":
+			requiredBitSet[0] |= 1 << 3
+			if err := func() error {
+				v, err := d.Str()
+				s.CompanyName = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"company_name\"")
+			}
+		case "headline":
+			requiredBitSet[0] |= 1 << 4
+			if err := func() error {
+				v, err := d.Str()
+				s.Headline = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"headline\"")
+			}
+		case "bio":
+			requiredBitSet[0] |= 1 << 5
+			if err := func() error {
+				v, err := d.Str()
+				s.Bio = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"bio\"")
+			}
+		case "topics":
+			requiredBitSet[0] |= 1 << 6
+			if err := func() error {
+				s.Topics = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Topics = append(s.Topics, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"topics\"")
+			}
+		case "languages":
+			requiredBitSet[0] |= 1 << 7
+			if err := func() error {
+				s.Languages = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Languages = append(s.Languages, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"languages\"")
+			}
+		case "timezone":
+			requiredBitSet[1] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.Timezone = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"timezone\"")
+			}
+		case "session_minutes":
+			requiredBitSet[1] |= 1 << 1
+			if err := func() error {
+				v, err := d.Int64()
+				s.SessionMinutes = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"session_minutes\"")
+			}
+		case "rating_count":
+			requiredBitSet[1] |= 1 << 2
+			if err := func() error {
+				v, err := d.Int64()
+				s.RatingCount = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"rating_count\"")
+			}
+		case "rating_avg":
+			requiredBitSet[1] |= 1 << 3
+			if err := func() error {
+				v, err := d.Float64()
+				s.RatingAvg = float64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"rating_avg\"")
+			}
+		case "show_photo":
+			requiredBitSet[1] |= 1 << 4
+			if err := func() error {
+				v, err := d.Bool()
+				s.ShowPhoto = bool(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"show_photo\"")
+			}
+		case "seniority":
+			if err := func() error {
+				s.Seniority.Reset()
+				if err := s.Seniority.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"seniority\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode MentorshipMentor")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [2]uint8{
+		0b11111111,
+		0b00011111,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfMentorshipMentor) {
+					name = jsonFieldsNameOfMentorshipMentor[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *MentorshipMentor) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *MentorshipMentor) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s *MentorshipModeratedMentor) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *MentorshipModeratedMentor) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("slug")
+		e.Str(s.Slug)
+	}
+	{
+		e.FieldStart("name")
+		e.Str(s.Name)
+	}
+	{
+		e.FieldStart("company_slug")
+		e.Str(s.CompanySlug)
+	}
+	{
+		e.FieldStart("company_name")
+		e.Str(s.CompanyName)
+	}
+	{
+		e.FieldStart("headline")
+		e.Str(s.Headline)
+	}
+	{
+		e.FieldStart("bio")
+		e.Str(s.Bio)
+	}
+	{
+		e.FieldStart("topics")
+		e.ArrStart()
+		for _, elem := range s.Topics {
+			e.Str(elem)
+		}
+		e.ArrEnd()
+	}
+	{
+		e.FieldStart("languages")
+		e.ArrStart()
+		for _, elem := range s.Languages {
+			e.Str(elem)
+		}
+		e.ArrEnd()
 	}
 	{
 		e.FieldStart("timezone")
@@ -48721,56 +50267,20 @@ func (s *MentorshipMentor) encodeFields(e *jx.Encoder) {
 		}
 	}
 	{
-		if s.Status.Set {
-			e.FieldStart("status")
-			s.Status.Encode(e)
-		}
+		e.FieldStart("status")
+		s.Status.Encode(e)
 	}
 	{
-		if s.Paused.Set {
-			e.FieldStart("paused")
-			s.Paused.Encode(e)
-		}
+		e.FieldStart("paused")
+		e.Bool(s.Paused)
 	}
 	{
-		if s.MeetingURL.Set {
-			e.FieldStart("meeting_url")
-			s.MeetingURL.Encode(e)
-		}
-	}
-	{
-		if s.CreatedAt.Set {
-			e.FieldStart("created_at")
-			s.CreatedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
-		}
-	}
-	{
-		if s.BufferBeforeMinutes.Set {
-			e.FieldStart("buffer_before_minutes")
-			s.BufferBeforeMinutes.Encode(e)
-		}
-	}
-	{
-		if s.BufferAfterMinutes.Set {
-			e.FieldStart("buffer_after_minutes")
-			s.BufferAfterMinutes.Encode(e)
-		}
-	}
-	{
-		if s.NoticeMinutes.Set {
-			e.FieldStart("notice_minutes")
-			s.NoticeMinutes.Encode(e)
-		}
-	}
-	{
-		if s.HorizonDays.Set {
-			e.FieldStart("horizon_days")
-			s.HorizonDays.Encode(e)
-		}
+		e.FieldStart("created_at")
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 }
 
-var jsonFieldsNameOfMentorshipMentor = [22]string{
+var jsonFieldsNameOfMentorshipModeratedMentor = [17]string{
 	0:  "slug",
 	1:  "name",
 	2:  "company_slug",
@@ -48787,18 +50297,13 @@ var jsonFieldsNameOfMentorshipMentor = [22]string{
 	13: "seniority",
 	14: "status",
 	15: "paused",
-	16: "meeting_url",
-	17: "created_at",
-	18: "buffer_before_minutes",
-	19: "buffer_after_minutes",
-	20: "notice_minutes",
-	21: "horizon_days",
+	16: "created_at",
 }
 
-// Decode decodes MentorshipMentor from json.
-func (s *MentorshipMentor) Decode(d *jx.Decoder) error {
+// Decode decodes MentorshipModeratedMentor from json.
+func (s *MentorshipModeratedMentor) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode MentorshipMentor to nil")
+		return errors.New("invalid: unable to decode MentorshipModeratedMentor to nil")
 	}
 	var requiredBitSet [3]uint8
 
@@ -48879,25 +50384,18 @@ func (s *MentorshipMentor) Decode(d *jx.Decoder) error {
 		case "topics":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				switch tt := d.Next(); tt {
-				case jx.Null:
-					if err := d.Skip(); err != nil {
+				s.Topics = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
 						return err
 					}
-				default:
-					s.Topics = make([]string, 0)
-					if err := d.Arr(func(d *jx.Decoder) error {
-						var elem string
-						v, err := d.Str()
-						elem = string(v)
-						if err != nil {
-							return err
-						}
-						s.Topics = append(s.Topics, elem)
-						return nil
-					}); err != nil {
-						return err
-					}
+					s.Topics = append(s.Topics, elem)
+					return nil
+				}); err != nil {
+					return err
 				}
 				return nil
 			}(); err != nil {
@@ -48906,25 +50404,18 @@ func (s *MentorshipMentor) Decode(d *jx.Decoder) error {
 		case "languages":
 			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
-				switch tt := d.Next(); tt {
-				case jx.Null:
-					if err := d.Skip(); err != nil {
+				s.Languages = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
 						return err
 					}
-				default:
-					s.Languages = make([]string, 0)
-					if err := d.Arr(func(d *jx.Decoder) error {
-						var elem string
-						v, err := d.Str()
-						elem = string(v)
-						if err != nil {
-							return err
-						}
-						s.Languages = append(s.Languages, elem)
-						return nil
-					}); err != nil {
-						return err
-					}
+					s.Languages = append(s.Languages, elem)
+					return nil
+				}); err != nil {
+					return err
 				}
 				return nil
 			}(); err != nil {
@@ -49001,8 +50492,8 @@ func (s *MentorshipMentor) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"seniority\"")
 			}
 		case "status":
+			requiredBitSet[1] |= 1 << 6
 			if err := func() error {
-				s.Status.Reset()
 				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
@@ -49011,88 +50502,42 @@ func (s *MentorshipMentor) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"status\"")
 			}
 		case "paused":
+			requiredBitSet[1] |= 1 << 7
 			if err := func() error {
-				s.Paused.Reset()
-				if err := s.Paused.Decode(d); err != nil {
+				v, err := d.Bool()
+				s.Paused = bool(v)
+				if err != nil {
 					return err
 				}
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"paused\"")
 			}
-		case "meeting_url":
-			if err := func() error {
-				s.MeetingURL.Reset()
-				if err := s.MeetingURL.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"meeting_url\"")
-			}
 		case "created_at":
+			requiredBitSet[2] |= 1 << 0
 			if err := func() error {
-				s.CreatedAt.Reset()
-				if err := s.CreatedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
+				s.CreatedAt = v
+				if err != nil {
 					return err
 				}
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"created_at\"")
 			}
-		case "buffer_before_minutes":
-			if err := func() error {
-				s.BufferBeforeMinutes.Reset()
-				if err := s.BufferBeforeMinutes.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"buffer_before_minutes\"")
-			}
-		case "buffer_after_minutes":
-			if err := func() error {
-				s.BufferAfterMinutes.Reset()
-				if err := s.BufferAfterMinutes.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"buffer_after_minutes\"")
-			}
-		case "notice_minutes":
-			if err := func() error {
-				s.NoticeMinutes.Reset()
-				if err := s.NoticeMinutes.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"notice_minutes\"")
-			}
-		case "horizon_days":
-			if err := func() error {
-				s.HorizonDays.Reset()
-				if err := s.HorizonDays.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"horizon_days\"")
-			}
 		default:
 			return d.Skip()
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode MentorshipMentor")
+		return errors.Wrap(err, "decode MentorshipModeratedMentor")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [3]uint8{
 		0b11111111,
-		0b00011111,
-		0b00000000,
+		0b11011111,
+		0b00000001,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -49104,8 +50549,8 @@ func (s *MentorshipMentor) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfMentorshipMentor) {
-					name = jsonFieldsNameOfMentorshipMentor[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfMentorshipModeratedMentor) {
+					name = jsonFieldsNameOfMentorshipModeratedMentor[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -49126,14 +50571,491 @@ func (s *MentorshipMentor) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *MentorshipMentor) MarshalJSON() ([]byte, error) {
+func (s *MentorshipModeratedMentor) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *MentorshipMentor) UnmarshalJSON(data []byte) error {
+func (s *MentorshipModeratedMentor) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s *MentorshipOwnMentor) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *MentorshipOwnMentor) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("slug")
+		e.Str(s.Slug)
+	}
+	{
+		e.FieldStart("name")
+		e.Str(s.Name)
+	}
+	{
+		e.FieldStart("company_slug")
+		e.Str(s.CompanySlug)
+	}
+	{
+		e.FieldStart("company_name")
+		e.Str(s.CompanyName)
+	}
+	{
+		e.FieldStart("headline")
+		e.Str(s.Headline)
+	}
+	{
+		e.FieldStart("bio")
+		e.Str(s.Bio)
+	}
+	{
+		e.FieldStart("topics")
+		e.ArrStart()
+		for _, elem := range s.Topics {
+			e.Str(elem)
+		}
+		e.ArrEnd()
+	}
+	{
+		e.FieldStart("languages")
+		e.ArrStart()
+		for _, elem := range s.Languages {
+			e.Str(elem)
+		}
+		e.ArrEnd()
+	}
+	{
+		e.FieldStart("timezone")
+		e.Str(s.Timezone)
+	}
+	{
+		e.FieldStart("session_minutes")
+		e.Int64(s.SessionMinutes)
+	}
+	{
+		e.FieldStart("rating_count")
+		e.Int64(s.RatingCount)
+	}
+	{
+		e.FieldStart("rating_avg")
+		e.Float64(s.RatingAvg)
+	}
+	{
+		e.FieldStart("show_photo")
+		e.Bool(s.ShowPhoto)
+	}
+	{
+		if s.Seniority.Set {
+			e.FieldStart("seniority")
+			s.Seniority.Encode(e)
+		}
+	}
+	{
+		e.FieldStart("status")
+		s.Status.Encode(e)
+	}
+	{
+		e.FieldStart("paused")
+		e.Bool(s.Paused)
+	}
+	{
+		e.FieldStart("created_at")
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
+	}
+	{
+		if s.MeetingURL.Set {
+			e.FieldStart("meeting_url")
+			s.MeetingURL.Encode(e)
+		}
+	}
+	{
+		e.FieldStart("buffer_before_minutes")
+		e.Int64(s.BufferBeforeMinutes)
+	}
+	{
+		e.FieldStart("buffer_after_minutes")
+		e.Int64(s.BufferAfterMinutes)
+	}
+	{
+		e.FieldStart("notice_minutes")
+		e.Int64(s.NoticeMinutes)
+	}
+	{
+		e.FieldStart("horizon_days")
+		e.Int64(s.HorizonDays)
+	}
+}
+
+var jsonFieldsNameOfMentorshipOwnMentor = [22]string{
+	0:  "slug",
+	1:  "name",
+	2:  "company_slug",
+	3:  "company_name",
+	4:  "headline",
+	5:  "bio",
+	6:  "topics",
+	7:  "languages",
+	8:  "timezone",
+	9:  "session_minutes",
+	10: "rating_count",
+	11: "rating_avg",
+	12: "show_photo",
+	13: "seniority",
+	14: "status",
+	15: "paused",
+	16: "created_at",
+	17: "meeting_url",
+	18: "buffer_before_minutes",
+	19: "buffer_after_minutes",
+	20: "notice_minutes",
+	21: "horizon_days",
+}
+
+// Decode decodes MentorshipOwnMentor from json.
+func (s *MentorshipOwnMentor) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode MentorshipOwnMentor to nil")
+	}
+	var requiredBitSet [3]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "slug":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.Slug = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"slug\"")
+			}
+		case "name":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Str()
+				s.Name = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"name\"")
+			}
+		case "company_slug":
+			requiredBitSet[0] |= 1 << 2
+			if err := func() error {
+				v, err := d.Str()
+				s.CompanySlug = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"company_slug\"")
+			}
+		case "company_name":
+			requiredBitSet[0] |= 1 << 3
+			if err := func() error {
+				v, err := d.Str()
+				s.CompanyName = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"company_name\"")
+			}
+		case "headline":
+			requiredBitSet[0] |= 1 << 4
+			if err := func() error {
+				v, err := d.Str()
+				s.Headline = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"headline\"")
+			}
+		case "bio":
+			requiredBitSet[0] |= 1 << 5
+			if err := func() error {
+				v, err := d.Str()
+				s.Bio = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"bio\"")
+			}
+		case "topics":
+			requiredBitSet[0] |= 1 << 6
+			if err := func() error {
+				s.Topics = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Topics = append(s.Topics, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"topics\"")
+			}
+		case "languages":
+			requiredBitSet[0] |= 1 << 7
+			if err := func() error {
+				s.Languages = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
+						return err
+					}
+					s.Languages = append(s.Languages, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"languages\"")
+			}
+		case "timezone":
+			requiredBitSet[1] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.Timezone = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"timezone\"")
+			}
+		case "session_minutes":
+			requiredBitSet[1] |= 1 << 1
+			if err := func() error {
+				v, err := d.Int64()
+				s.SessionMinutes = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"session_minutes\"")
+			}
+		case "rating_count":
+			requiredBitSet[1] |= 1 << 2
+			if err := func() error {
+				v, err := d.Int64()
+				s.RatingCount = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"rating_count\"")
+			}
+		case "rating_avg":
+			requiredBitSet[1] |= 1 << 3
+			if err := func() error {
+				v, err := d.Float64()
+				s.RatingAvg = float64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"rating_avg\"")
+			}
+		case "show_photo":
+			requiredBitSet[1] |= 1 << 4
+			if err := func() error {
+				v, err := d.Bool()
+				s.ShowPhoto = bool(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"show_photo\"")
+			}
+		case "seniority":
+			if err := func() error {
+				s.Seniority.Reset()
+				if err := s.Seniority.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"seniority\"")
+			}
+		case "status":
+			requiredBitSet[1] |= 1 << 6
+			if err := func() error {
+				if err := s.Status.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"status\"")
+			}
+		case "paused":
+			requiredBitSet[1] |= 1 << 7
+			if err := func() error {
+				v, err := d.Bool()
+				s.Paused = bool(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"paused\"")
+			}
+		case "created_at":
+			requiredBitSet[2] |= 1 << 0
+			if err := func() error {
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
+				s.CreatedAt = v
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"created_at\"")
+			}
+		case "meeting_url":
+			if err := func() error {
+				s.MeetingURL.Reset()
+				if err := s.MeetingURL.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"meeting_url\"")
+			}
+		case "buffer_before_minutes":
+			requiredBitSet[2] |= 1 << 2
+			if err := func() error {
+				v, err := d.Int64()
+				s.BufferBeforeMinutes = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"buffer_before_minutes\"")
+			}
+		case "buffer_after_minutes":
+			requiredBitSet[2] |= 1 << 3
+			if err := func() error {
+				v, err := d.Int64()
+				s.BufferAfterMinutes = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"buffer_after_minutes\"")
+			}
+		case "notice_minutes":
+			requiredBitSet[2] |= 1 << 4
+			if err := func() error {
+				v, err := d.Int64()
+				s.NoticeMinutes = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"notice_minutes\"")
+			}
+		case "horizon_days":
+			requiredBitSet[2] |= 1 << 5
+			if err := func() error {
+				v, err := d.Int64()
+				s.HorizonDays = int64(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"horizon_days\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode MentorshipOwnMentor")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [3]uint8{
+		0b11111111,
+		0b11011111,
+		0b00111101,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfMentorshipOwnMentor) {
+					name = jsonFieldsNameOfMentorshipOwnMentor[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *MentorshipOwnMentor) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *MentorshipOwnMentor) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -49236,27 +51158,19 @@ func (s *MentorshipPendingMentor) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("topics")
-		if s.Topics == nil {
-			e.Null()
-		} else {
-			e.ArrStart()
-			for _, elem := range s.Topics {
-				e.Str(elem)
-			}
-			e.ArrEnd()
+		e.ArrStart()
+		for _, elem := range s.Topics {
+			e.Str(elem)
 		}
+		e.ArrEnd()
 	}
 	{
 		e.FieldStart("languages")
-		if s.Languages == nil {
-			e.Null()
-		} else {
-			e.ArrStart()
-			for _, elem := range s.Languages {
-				e.Str(elem)
-			}
-			e.ArrEnd()
+		e.ArrStart()
+		for _, elem := range s.Languages {
+			e.Str(elem)
 		}
+		e.ArrEnd()
 	}
 	{
 		e.FieldStart("timezone")
@@ -49285,52 +51199,16 @@ func (s *MentorshipPendingMentor) encodeFields(e *jx.Encoder) {
 		}
 	}
 	{
-		if s.Status.Set {
-			e.FieldStart("status")
-			s.Status.Encode(e)
-		}
+		e.FieldStart("status")
+		s.Status.Encode(e)
 	}
 	{
-		if s.Paused.Set {
-			e.FieldStart("paused")
-			s.Paused.Encode(e)
-		}
+		e.FieldStart("paused")
+		e.Bool(s.Paused)
 	}
 	{
-		if s.MeetingURL.Set {
-			e.FieldStart("meeting_url")
-			s.MeetingURL.Encode(e)
-		}
-	}
-	{
-		if s.CreatedAt.Set {
-			e.FieldStart("created_at")
-			s.CreatedAt.Encode(e, json.NewTimeEncoder("2006-01-02T15:04:05.999999999Z07:00"))
-		}
-	}
-	{
-		if s.BufferBeforeMinutes.Set {
-			e.FieldStart("buffer_before_minutes")
-			s.BufferBeforeMinutes.Encode(e)
-		}
-	}
-	{
-		if s.BufferAfterMinutes.Set {
-			e.FieldStart("buffer_after_minutes")
-			s.BufferAfterMinutes.Encode(e)
-		}
-	}
-	{
-		if s.NoticeMinutes.Set {
-			e.FieldStart("notice_minutes")
-			s.NoticeMinutes.Encode(e)
-		}
-	}
-	{
-		if s.HorizonDays.Set {
-			e.FieldStart("horizon_days")
-			s.HorizonDays.Encode(e)
-		}
+		e.FieldStart("created_at")
+		json.EncodeTimeFormat(e, s.CreatedAt, "2006-01-02T15:04:05.999999999Z07:00")
 	}
 	{
 		e.FieldStart("id")
@@ -49342,7 +51220,7 @@ func (s *MentorshipPendingMentor) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfMentorshipPendingMentor = [24]string{
+var jsonFieldsNameOfMentorshipPendingMentor = [19]string{
 	0:  "slug",
 	1:  "name",
 	2:  "company_slug",
@@ -49359,14 +51237,9 @@ var jsonFieldsNameOfMentorshipPendingMentor = [24]string{
 	13: "seniority",
 	14: "status",
 	15: "paused",
-	16: "meeting_url",
-	17: "created_at",
-	18: "buffer_before_minutes",
-	19: "buffer_after_minutes",
-	20: "notice_minutes",
-	21: "horizon_days",
-	22: "id",
-	23: "has_approved_referral_offer",
+	16: "created_at",
+	17: "id",
+	18: "has_approved_referral_offer",
 }
 
 // Decode decodes MentorshipPendingMentor from json.
@@ -49453,25 +51326,18 @@ func (s *MentorshipPendingMentor) Decode(d *jx.Decoder) error {
 		case "topics":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				switch tt := d.Next(); tt {
-				case jx.Null:
-					if err := d.Skip(); err != nil {
+				s.Topics = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
 						return err
 					}
-				default:
-					s.Topics = make([]string, 0)
-					if err := d.Arr(func(d *jx.Decoder) error {
-						var elem string
-						v, err := d.Str()
-						elem = string(v)
-						if err != nil {
-							return err
-						}
-						s.Topics = append(s.Topics, elem)
-						return nil
-					}); err != nil {
-						return err
-					}
+					s.Topics = append(s.Topics, elem)
+					return nil
+				}); err != nil {
+					return err
 				}
 				return nil
 			}(); err != nil {
@@ -49480,25 +51346,18 @@ func (s *MentorshipPendingMentor) Decode(d *jx.Decoder) error {
 		case "languages":
 			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
-				switch tt := d.Next(); tt {
-				case jx.Null:
-					if err := d.Skip(); err != nil {
+				s.Languages = make([]string, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
 						return err
 					}
-				default:
-					s.Languages = make([]string, 0)
-					if err := d.Arr(func(d *jx.Decoder) error {
-						var elem string
-						v, err := d.Str()
-						elem = string(v)
-						if err != nil {
-							return err
-						}
-						s.Languages = append(s.Languages, elem)
-						return nil
-					}); err != nil {
-						return err
-					}
+					s.Languages = append(s.Languages, elem)
+					return nil
+				}); err != nil {
+					return err
 				}
 				return nil
 			}(); err != nil {
@@ -49575,8 +51434,8 @@ func (s *MentorshipPendingMentor) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"seniority\"")
 			}
 		case "status":
+			requiredBitSet[1] |= 1 << 6
 			if err := func() error {
-				s.Status.Reset()
 				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
@@ -49585,77 +51444,31 @@ func (s *MentorshipPendingMentor) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"status\"")
 			}
 		case "paused":
+			requiredBitSet[1] |= 1 << 7
 			if err := func() error {
-				s.Paused.Reset()
-				if err := s.Paused.Decode(d); err != nil {
+				v, err := d.Bool()
+				s.Paused = bool(v)
+				if err != nil {
 					return err
 				}
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"paused\"")
 			}
-		case "meeting_url":
-			if err := func() error {
-				s.MeetingURL.Reset()
-				if err := s.MeetingURL.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"meeting_url\"")
-			}
 		case "created_at":
+			requiredBitSet[2] |= 1 << 0
 			if err := func() error {
-				s.CreatedAt.Reset()
-				if err := s.CreatedAt.Decode(d, json.NewTimeDecoder("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
+				s.CreatedAt = v
+				if err != nil {
 					return err
 				}
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"created_at\"")
 			}
-		case "buffer_before_minutes":
-			if err := func() error {
-				s.BufferBeforeMinutes.Reset()
-				if err := s.BufferBeforeMinutes.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"buffer_before_minutes\"")
-			}
-		case "buffer_after_minutes":
-			if err := func() error {
-				s.BufferAfterMinutes.Reset()
-				if err := s.BufferAfterMinutes.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"buffer_after_minutes\"")
-			}
-		case "notice_minutes":
-			if err := func() error {
-				s.NoticeMinutes.Reset()
-				if err := s.NoticeMinutes.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"notice_minutes\"")
-			}
-		case "horizon_days":
-			if err := func() error {
-				s.HorizonDays.Reset()
-				if err := s.HorizonDays.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"horizon_days\"")
-			}
 		case "id":
-			requiredBitSet[2] |= 1 << 6
+			requiredBitSet[2] |= 1 << 1
 			if err := func() error {
 				v, err := d.Int64()
 				s.ID = int64(v)
@@ -49667,7 +51480,7 @@ func (s *MentorshipPendingMentor) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"id\"")
 			}
 		case "has_approved_referral_offer":
-			requiredBitSet[2] |= 1 << 7
+			requiredBitSet[2] |= 1 << 2
 			if err := func() error {
 				v, err := d.Bool()
 				s.HasApprovedReferralOffer = bool(v)
@@ -49689,8 +51502,8 @@ func (s *MentorshipPendingMentor) Decode(d *jx.Decoder) error {
 	var failures []validate.FieldError
 	for i, mask := range [3]uint8{
 		0b11111111,
-		0b00011111,
-		0b11000000,
+		0b11011111,
+		0b00000111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -50050,6 +51863,50 @@ func (s *MentorshipProfileBody) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *MentorshipProfileBody) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes MentorshipProfileStatus as json.
+func (s MentorshipProfileStatus) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes MentorshipProfileStatus from json.
+func (s *MentorshipProfileStatus) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode MentorshipProfileStatus to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch MentorshipProfileStatus(v) {
+	case MentorshipProfileStatusPending:
+		*s = MentorshipProfileStatusPending
+	case MentorshipProfileStatusApproved:
+		*s = MentorshipProfileStatusApproved
+	case MentorshipProfileStatusRejected:
+		*s = MentorshipProfileStatusRejected
+	case MentorshipProfileStatusWithdrawn:
+		*s = MentorshipProfileStatusWithdrawn
+	default:
+		*s = MentorshipProfileStatus(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s MentorshipProfileStatus) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *MentorshipProfileStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -51876,8 +53733,8 @@ func (s *NilJobFoundPosting) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes MentorshipMentor as json.
-func (o NilMentorshipMentor) Encode(e *jx.Encoder) {
+// Encode encodes MentorshipOwnMentor as json.
+func (o NilMentorshipOwnMentor) Encode(e *jx.Encoder) {
 	if o.Null {
 		e.Null()
 		return
@@ -51885,17 +53742,17 @@ func (o NilMentorshipMentor) Encode(e *jx.Encoder) {
 	o.Value.Encode(e)
 }
 
-// Decode decodes MentorshipMentor from json.
-func (o *NilMentorshipMentor) Decode(d *jx.Decoder) error {
+// Decode decodes MentorshipOwnMentor from json.
+func (o *NilMentorshipOwnMentor) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode NilMentorshipMentor to nil")
+		return errors.New("invalid: unable to decode NilMentorshipOwnMentor to nil")
 	}
 	if d.Next() == jx.Null {
 		if err := d.Null(); err != nil {
 			return err
 		}
 
-		var v MentorshipMentor
+		var v MentorshipOwnMentor
 		o.Value = v
 		o.Null = true
 		return nil
@@ -51908,14 +53765,14 @@ func (o *NilMentorshipMentor) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s NilMentorshipMentor) MarshalJSON() ([]byte, error) {
+func (s NilMentorshipOwnMentor) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *NilMentorshipMentor) UnmarshalJSON(data []byte) error {
+func (s *NilMentorshipOwnMentor) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -55122,7 +56979,7 @@ func (s *PendingCompanyRelation) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("kind")
-		e.Str(s.Kind)
+		s.Kind.Encode(e)
 	}
 	{
 		e.FieldStart("company_slug")
@@ -55158,7 +57015,7 @@ func (s *PendingCompanyRelation) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("status")
-		e.Str(s.Status)
+		s.Status.Encode(e)
 	}
 }
 
@@ -55200,9 +57057,7 @@ func (s *PendingCompanyRelation) Decode(d *jx.Decoder) error {
 		case "kind":
 			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
-				v, err := d.Str()
-				s.Kind = string(v)
-				if err != nil {
+				if err := s.Kind.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -55308,9 +57163,7 @@ func (s *PendingCompanyRelation) Decode(d *jx.Decoder) error {
 		case "status":
 			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
-				v, err := d.Str()
-				s.Status = string(v)
-				if err != nil {
+				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -55370,6 +57223,46 @@ func (s *PendingCompanyRelation) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *PendingCompanyRelation) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes PendingCompanyRelationStatus as json.
+func (s PendingCompanyRelationStatus) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes PendingCompanyRelationStatus from json.
+func (s *PendingCompanyRelationStatus) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode PendingCompanyRelationStatus to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch PendingCompanyRelationStatus(v) {
+	case PendingCompanyRelationStatusPending:
+		*s = PendingCompanyRelationStatusPending
+	case PendingCompanyRelationStatusApproved:
+		*s = PendingCompanyRelationStatusApproved
+	default:
+		*s = PendingCompanyRelationStatus(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s PendingCompanyRelationStatus) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *PendingCompanyRelationStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -60890,6 +62783,46 @@ func (s *ReferralCVOptions) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
+// Encode encodes ReferralCvKind as json.
+func (s ReferralCvKind) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes ReferralCvKind from json.
+func (s *ReferralCvKind) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode ReferralCvKind to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch ReferralCvKind(v) {
+	case ReferralCvKindOriginal:
+		*s = ReferralCvKindOriginal
+	case ReferralCvKindBuilt:
+		*s = ReferralCvKindBuilt
+	default:
+		*s = ReferralCvKind(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s ReferralCvKind) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *ReferralCvKind) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
 // Encode implements json.Marshaler.
 func (s *ReferralDecision) Encode(e *jx.Encoder) {
 	e.ObjStart()
@@ -60980,7 +62913,7 @@ func (s *ReferralIncomingRequest) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("cv_kind")
-		e.Str(s.CvKind)
+		s.CvKind.Encode(e)
 	}
 	{
 		if s.LinkedinURL.Set {
@@ -61008,7 +62941,7 @@ func (s *ReferralIncomingRequest) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("status")
-		e.Str(s.Status)
+		s.Status.Encode(e)
 	}
 	{
 		e.FieldStart("created_at")
@@ -61088,9 +63021,7 @@ func (s *ReferralIncomingRequest) Decode(d *jx.Decoder) error {
 		case "cv_kind":
 			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				v, err := d.Str()
-				s.CvKind = string(v)
-				if err != nil {
+				if err := s.CvKind.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -61140,9 +63071,7 @@ func (s *ReferralIncomingRequest) Decode(d *jx.Decoder) error {
 		case "status":
 			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
-				v, err := d.Str()
-				s.Status = string(v)
-				if err != nil {
+				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -61243,7 +63172,7 @@ func (s *ReferralOffer) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("status")
-		e.Str(s.Status)
+		s.Status.Encode(e)
 	}
 	{
 		e.FieldStart("decided_at")
@@ -61325,9 +63254,7 @@ func (s *ReferralOffer) Decode(d *jx.Decoder) error {
 		case "status":
 			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				v, err := d.Str()
-				s.Status = string(v)
-				if err != nil {
+				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -61406,6 +63333,48 @@ func (s *ReferralOffer) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *ReferralOffer) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes ReferralOfferStatus as json.
+func (s ReferralOfferStatus) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes ReferralOfferStatus from json.
+func (s *ReferralOfferStatus) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode ReferralOfferStatus to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch ReferralOfferStatus(v) {
+	case ReferralOfferStatusPending:
+		*s = ReferralOfferStatusPending
+	case ReferralOfferStatusApproved:
+		*s = ReferralOfferStatusApproved
+	case ReferralOfferStatusRejected:
+		*s = ReferralOfferStatusRejected
+	default:
+		*s = ReferralOfferStatus(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s ReferralOfferStatus) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *ReferralOfferStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -61609,6 +63578,48 @@ func (s *ReferralRequestCreate) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
+// Encode encodes ReferralRequestStatus as json.
+func (s ReferralRequestStatus) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes ReferralRequestStatus from json.
+func (s *ReferralRequestStatus) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode ReferralRequestStatus to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch ReferralRequestStatus(v) {
+	case ReferralRequestStatusSent:
+		*s = ReferralRequestStatusSent
+	case ReferralRequestStatusContacted:
+		*s = ReferralRequestStatusContacted
+	case ReferralRequestStatusDeclined:
+		*s = ReferralRequestStatusDeclined
+	default:
+		*s = ReferralRequestStatus(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s ReferralRequestStatus) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *ReferralRequestStatus) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
 // Encode implements json.Marshaler.
 func (s *ReferralResolve) Encode(e *jx.Encoder) {
 	e.ObjStart()
@@ -61699,7 +63710,7 @@ func (s *ReferralSeekerRequest) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("cv_kind")
-		e.Str(s.CvKind)
+		s.CvKind.Encode(e)
 	}
 	{
 		e.FieldStart("cv_id")
@@ -61707,7 +63718,7 @@ func (s *ReferralSeekerRequest) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("status")
-		e.Str(s.Status)
+		s.Status.Encode(e)
 	}
 	{
 		e.FieldStart("created_at")
@@ -61784,9 +63795,7 @@ func (s *ReferralSeekerRequest) Decode(d *jx.Decoder) error {
 		case "cv_kind":
 			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				v, err := d.Str()
-				s.CvKind = string(v)
-				if err != nil {
+				if err := s.CvKind.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -61806,9 +63815,7 @@ func (s *ReferralSeekerRequest) Decode(d *jx.Decoder) error {
 		case "status":
 			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
-				v, err := d.Str()
-				s.Status = string(v)
-				if err != nil {
+				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -64224,7 +66231,7 @@ func (s *ResolvedJobPage) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("status")
-		e.Str(s.Status)
+		s.Status.Encode(e)
 	}
 	{
 		if s.CompanySlug.Set {
@@ -64262,9 +66269,7 @@ func (s *ResolvedJobPage) Decode(d *jx.Decoder) error {
 		case "status":
 			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
-				v, err := d.Str()
-				s.Status = string(v)
-				if err != nil {
+				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -64333,6 +66338,52 @@ func (s *ResolvedJobPage) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *ResolvedJobPage) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes ResolvedJobStatus as json.
+func (s ResolvedJobStatus) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes ResolvedJobStatus from json.
+func (s *ResolvedJobStatus) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode ResolvedJobStatus to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch ResolvedJobStatus(v) {
+	case ResolvedJobStatusFound:
+		*s = ResolvedJobStatusFound
+	case ResolvedJobStatusTracked:
+		*s = ResolvedJobStatusTracked
+	case ResolvedJobStatusImported:
+		*s = ResolvedJobStatusImported
+	case ResolvedJobStatusReview:
+		*s = ResolvedJobStatusReview
+	case ResolvedJobStatusQueued:
+		*s = ResolvedJobStatusQueued
+	default:
+		*s = ResolvedJobStatus(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s ResolvedJobStatus) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *ResolvedJobStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -71918,7 +73969,7 @@ func (s *Submission) encodeFields(e *jx.Encoder) {
 	}
 	{
 		e.FieldStart("status")
-		e.Str(s.Status)
+		s.Status.Encode(e)
 	}
 	{
 		if s.ReviewReason.Set {
@@ -72162,9 +74213,7 @@ func (s *Submission) Decode(d *jx.Decoder) error {
 		case "status":
 			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
-				v, err := d.Str()
-				s.Status = string(v)
-				if err != nil {
+				if err := s.Status.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -72984,6 +75033,48 @@ func (s *SubmissionRequest) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *SubmissionRequest) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes SubmissionStatus as json.
+func (s SubmissionStatus) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes SubmissionStatus from json.
+func (s *SubmissionStatus) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode SubmissionStatus to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch SubmissionStatus(v) {
+	case SubmissionStatusPending:
+		*s = SubmissionStatusPending
+	case SubmissionStatusApproved:
+		*s = SubmissionStatusApproved
+	case SubmissionStatusRejected:
+		*s = SubmissionStatusRejected
+	default:
+		*s = SubmissionStatus(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s SubmissionStatus) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *SubmissionStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }

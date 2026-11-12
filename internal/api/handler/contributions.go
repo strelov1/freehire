@@ -51,7 +51,7 @@ func contributionOut(c contribution.Contribution) apigen.Contribution {
 		URL:       c.URL,
 		Source:    c.Source,
 		Board:     c.Board,
-		Status:    c.Status,
+		Status:    apigen.ContributionStatus(c.Status),
 		Surface:   c.Surface,
 		CreatedAt: nilDateTime(c.CreatedAt),
 	}

@@ -5571,6 +5571,27 @@ export interface components {
             /** Format: int64 */
             growth_30d: number;
         };
+        /** @description A row of the catalogue: the company, its open-job count and a few company-info facts for the card. */
+        CompanyListItem: {
+            slug: string;
+            name: string;
+            /** Format: int64 */
+            job_count: number;
+            tagline: string | null;
+            industries: string[];
+            hq_country: string | null;
+            /** @description Curated company tags; the catalogue card renders the backer marks from these. */
+            collections: string[];
+            /** Format: int64 */
+            feedback_count: number;
+            /** @description Null until a review counts. */
+            feedback_rating_avg: number | null;
+            /**
+             * Format: int64
+             * @description How many people reported an AI interviewer. Absent at zero, so a badge never shows a bare 0.
+             */
+            ai_interview_reports?: number;
+        };
         CompanyRelationApproval: {
             kind: string;
             /**
@@ -5579,6 +5600,11 @@ export interface components {
              */
             moved_jobs: number;
         };
+        /**
+         * @description `same`: one employer under two names; `subsidiary`: the page's company is owned by the target.
+         * @enum {string}
+         */
+        CompanyRelationKind: "same" | "subsidiary";
         CompanyRelationProposal: {
             /** Format: int64 */
             id: number;
@@ -5612,10 +5638,17 @@ export interface components {
             url: string;
             source: string;
             board: string;
-            status: string;
+            status: components["schemas"]["ContributionStatus"];
             surface: string;
             created_at: string | null;
         };
+        /**
+         * @description `pending`: recorded, not yet proven by a crawl; `active`: its first crawl succeeded;
+         *     `rejected` and `retired`: a curator turned it down or removed it; `review`: an
+         *     unrecognised link awaiting manual triage.
+         * @enum {string}
+         */
+        ContributionStatus: "pending" | "active" | "rejected" | "retired" | "review";
         /** @description `unread` and `last_message_at` mean something on the list only; elsewhere they are 0 and null. */
         Conversation: {
             /** Format: int64 */
@@ -5906,10 +5939,12 @@ export interface components {
         DirectApplyQuestion: {
             id: string;
             label: string;
-            type: string;
+            type: components["schemas"]["DirectApplyQuestionType"];
             required: boolean;
             options?: string[];
         };
+        /** @enum {string} */
+        DirectApplyQuestionType: "text" | "boolean" | "select";
         /** @description Names the CV to send: `resume: true` for the uploaded one, or `cv_id`, exactly one. */
         DirectApplyRequest: {
             resume?: boolean;
@@ -5982,7 +6017,7 @@ export interface components {
             company_slug: string;
             company_name: string;
             work_email: string;
-            status: string;
+            status: components["schemas"]["EmployerAccountStatus"];
             /** Format: date-time */
             verified_at?: string;
             /** @description Whether the claimant still owes the mailed code or is waiting on a moderator. */
@@ -5990,6 +6025,8 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /** @enum {string} */
+        EmployerAccountStatus: "pending" | "active" | "revoked";
         EmployerClaim: {
             company_name?: string;
             work_email?: string;
@@ -6004,7 +6041,7 @@ export interface components {
             company_slug: string;
             company_name: string;
             work_email: string;
-            status: string;
+            status: components["schemas"]["EmployerAccountStatus"];
             /** Format: date-time */
             verified_at?: string;
             /** @description Whether the claimant still owes the mailed code or is waiting on a moderator. */
@@ -6097,12 +6134,66 @@ export interface components {
             /** Format: int64 */
             saved_searches: number;
         };
+        /** @description One piece of evidence, at the grain of a CV bullet. The three flags below are computed at read time. */
+        ExperienceAtom: {
+            id: string;
+            employment_id?: string;
+            claim: string;
+            context?: string;
+            metrics?: string[];
+            skills?: string[];
+            provenance: components["schemas"]["ExperienceProvenance"];
+            source_ref?: string;
+            needs_context: boolean;
+            needs_metrics: boolean;
+            /** @description Shared id of a soft-duplicate group (its first member), when the list clustered this atom. */
+            cluster_id?: string;
+        };
         /** @description The places with their achievements, and the achievements that belong to no place. */
         ExperienceBank: {
-            /** @description Each place with an `atoms` array of its achievements. */
-            employments: unknown[];
-            unplaced: unknown[];
+            employments: components["schemas"]["ExperienceEmploymentWithAtoms"][];
+            unplaced: components["schemas"]["ExperienceAtom"][];
         };
+        /** @description One place where evidence was produced. A job carries `company`; a project carries its title as `name`. */
+        ExperienceEmployment: {
+            id: string;
+            kind: components["schemas"]["ExperienceEmploymentKind"];
+            company?: string;
+            name?: string;
+            role?: string;
+            location?: string;
+            start?: components["schemas"]["PeriodDate"];
+            end?: components["schemas"]["PeriodDate"];
+            current?: boolean;
+            summary?: string;
+            /** @description Portfolio URL, typically on a project. */
+            link?: string;
+            stack?: string[];
+        };
+        /** @enum {string} */
+        ExperienceEmploymentKind: "job" | "project";
+        ExperienceEmploymentWithAtoms: {
+            id: string;
+            kind: components["schemas"]["ExperienceEmploymentKind"];
+            company?: string;
+            name?: string;
+            role?: string;
+            location?: string;
+            start?: components["schemas"]["PeriodDate"];
+            end?: components["schemas"]["PeriodDate"];
+            current?: boolean;
+            summary?: string;
+            /** @description Portfolio URL, typically on a project. */
+            link?: string;
+            stack?: string[];
+            atoms: components["schemas"]["ExperienceAtom"][];
+        };
+        /**
+         * @description How the bank came to hold an achievement. Only the first three are the candidate
+         *     speaking and may be written into a CV; `agent_inferred` is the assistant's own reading.
+         * @enum {string}
+         */
+        ExperienceProvenance: "cv_import" | "stated_in_chat" | "manual" | "agent_inferred";
         FacetRange: {
             /** Format: int32 */
             min: number;
@@ -6518,6 +6609,8 @@ export interface components {
             /** @description Absent when every param was read. */
             ignored_params?: components["schemas"]["IgnoredParam"][];
             ignored_values?: unknown;
+            /** @description True when `total` counts only what was read, not the whole match. */
+            total_is_lower_bound?: boolean;
         };
         /**
          * @description Where and how the caller wants to work, as it is stored and echoed back: normalised,
@@ -6589,7 +6682,7 @@ export interface components {
             starts_at: string;
             /** Format: date-time */
             ends_at: string;
-            status: string;
+            status: components["schemas"]["MentorshipBookingStatus"];
             note: string;
             meeting_url: string;
             seeker_email?: string;
@@ -6603,18 +6696,27 @@ export interface components {
             /** Format: int64 */
             job_id?: number;
         };
+        /**
+         * @description A booked session is `confirmed` or `cancelled`.
+         * @enum {string}
+         */
+        MentorshipBookingStatus: "confirmed" | "cancelled";
         MentorshipCalendarInterval: {
             /** Format: date-time */
             starts_at: string;
             /** Format: date-time */
             ends_at: string;
-            /** @description One of booked, busy, free or closed. */
-            status: string;
+            status: components["schemas"]["MentorshipCalendarStatus"];
         };
         MentorshipCalendarPage: {
             data: components["schemas"]["MentorshipCalendarInterval"][];
             meta: components["schemas"]["MentorshipTimezoneMeta"];
         };
+        /**
+         * @description `booked`: a confirmed session; `busy`: a synced interval from the mentor's calendar; `free`: offered to seekers; `closed`: outside the stated availability.
+         * @enum {string}
+         */
+        MentorshipCalendarStatus: "booked" | "busy" | "free" | "closed";
         MentorshipCancelBody: {
             reason?: string;
         };
@@ -6635,11 +6737,7 @@ export interface components {
             data: components["schemas"]["MentorshipMentor"][];
             meta: components["schemas"]["MentorshipDirectoryMeta"];
         };
-        /**
-         * @description A mentor as the public, the owner and a moderator see them. The owner and moderator
-         *     views add status, paused and created_at; the owner alone gets meeting_url and the
-         *     session parameters.
-         */
+        /** @description A mentor as the PUBLIC sees them: the directory card and the profile read are one shape. */
         MentorshipMentor: {
             slug: string;
             name: string;
@@ -6647,8 +6745,8 @@ export interface components {
             company_name: string;
             headline: string;
             bio: string;
-            topics: string[] | null;
-            languages: string[] | null;
+            topics: string[];
+            languages: string[];
             timezone: string;
             /** Format: int64 */
             session_minutes: number;
@@ -6657,20 +6755,68 @@ export interface components {
             /** Format: double */
             rating_avg: number;
             show_photo: boolean;
+            /** @description Absent when the mentor left it unset. */
             seniority?: string;
-            status?: string;
-            paused?: boolean;
-            meeting_url?: string;
+        };
+        /** @description A mentor as a moderator sees them: the public shape plus the moderation state, never the meeting link. */
+        MentorshipModeratedMentor: {
+            slug: string;
+            name: string;
+            company_slug: string;
+            company_name: string;
+            headline: string;
+            bio: string;
+            topics: string[];
+            languages: string[];
+            timezone: string;
+            /** Format: int64 */
+            session_minutes: number;
+            /** Format: int64 */
+            rating_count: number;
+            /** Format: double */
+            rating_avg: number;
+            show_photo: boolean;
+            /** @description Absent when the mentor left it unset. */
+            seniority?: string;
+            status: components["schemas"]["MentorshipProfileStatus"];
+            paused: boolean;
             /** Format: date-time */
-            created_at?: string;
+            created_at: string;
+        };
+        /** @description A mentor as their owner sees them: the moderated shape plus the room and the session parameters. */
+        MentorshipOwnMentor: {
+            slug: string;
+            name: string;
+            company_slug: string;
+            company_name: string;
+            headline: string;
+            bio: string;
+            topics: string[];
+            languages: string[];
+            timezone: string;
             /** Format: int64 */
-            buffer_before_minutes?: number;
+            session_minutes: number;
             /** Format: int64 */
-            buffer_after_minutes?: number;
+            rating_count: number;
+            /** Format: double */
+            rating_avg: number;
+            show_photo: boolean;
+            /** @description Absent when the mentor left it unset. */
+            seniority?: string;
+            status: components["schemas"]["MentorshipProfileStatus"];
+            paused: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Absent while the mentor has not set one. */
+            meeting_url?: string;
             /** Format: int64 */
-            notice_minutes?: number;
+            buffer_before_minutes: number;
             /** Format: int64 */
-            horizon_days?: number;
+            buffer_after_minutes: number;
+            /** Format: int64 */
+            notice_minutes: number;
+            /** Format: int64 */
+            horizon_days: number;
         };
         MentorshipPauseBody: {
             paused?: boolean;
@@ -6683,8 +6829,8 @@ export interface components {
             company_name: string;
             headline: string;
             bio: string;
-            topics: string[] | null;
-            languages: string[] | null;
+            topics: string[];
+            languages: string[];
             timezone: string;
             /** Format: int64 */
             session_minutes: number;
@@ -6693,20 +6839,12 @@ export interface components {
             /** Format: double */
             rating_avg: number;
             show_photo: boolean;
+            /** @description Absent when the mentor left it unset. */
             seniority?: string;
-            status?: string;
-            paused?: boolean;
-            meeting_url?: string;
+            status: components["schemas"]["MentorshipProfileStatus"];
+            paused: boolean;
             /** Format: date-time */
-            created_at?: string;
-            /** Format: int64 */
-            buffer_before_minutes?: number;
-            /** Format: int64 */
-            buffer_after_minutes?: number;
-            /** Format: int64 */
-            notice_minutes?: number;
-            /** Format: int64 */
-            horizon_days?: number;
+            created_at: string;
             /** Format: int64 */
             id: number;
             has_approved_referral_offer: boolean;
@@ -6734,6 +6872,11 @@ export interface components {
             show_photo?: boolean;
             seniority?: string;
         };
+        /**
+         * @description The moderation status of a profile. `withdrawn` is a mentor who has left; the row survives it.
+         * @enum {string}
+         */
+        MentorshipProfileStatus: "pending" | "approved" | "rejected" | "withdrawn";
         MentorshipReview: {
             booking_id: string;
             /** Format: int64 */
@@ -6863,7 +7006,7 @@ export interface components {
         PendingCompanyRelation: {
             /** Format: int64 */
             id: number;
-            kind: string;
+            kind: components["schemas"]["CompanyRelationKind"];
             company_slug: string;
             company_name: string;
             /** Format: int64 */
@@ -6875,9 +7018,13 @@ export interface components {
             note: string;
             /** Format: date-time */
             created_at: string;
-            /** @description `pending`, or `approved` for a merge whose job move stopped part-way. */
-            status: string;
+            status: components["schemas"]["PendingCompanyRelationStatus"];
         };
+        /**
+         * @description `approved` marks a merge whose job move stopped part-way; approving again resumes it.
+         * @enum {string}
+         */
+        PendingCompanyRelationStatus: "pending" | "approved";
         /** @description A year, with a month when the CV gives one. */
         PeriodDate: {
             /** Format: int32 */
@@ -7159,6 +7306,11 @@ export interface components {
             tailored: components["schemas"]["ReferralCVOption"][];
             has_resume: boolean;
         };
+        /**
+         * @description `original` attaches the uploaded CV; `built` one tailored in freehire.
+         * @enum {string}
+         */
+        ReferralCvKind: "original" | "built";
         ReferralDecision: {
             approve?: boolean;
         };
@@ -7168,12 +7320,12 @@ export interface components {
             company_slug: string;
             company_name: string;
             job_id: number | null;
-            cv_kind: string;
+            cv_kind: components["schemas"]["ReferralCvKind"];
             linkedin_url?: string;
             contact_telegram?: string;
             contact_email?: string;
             note?: string;
-            status: string;
+            status: components["schemas"]["ReferralRequestStatus"];
             created_at: string | null;
         };
         ReferralOffer: {
@@ -7181,10 +7333,12 @@ export interface components {
             company_slug: string;
             company_name: string;
             linkedin_url: string;
-            status: string;
+            status: components["schemas"]["ReferralOfferStatus"];
             decided_at: string | null;
             created_at: string | null;
         };
+        /** @enum {string} */
+        ReferralOfferStatus: "pending" | "approved" | "rejected";
         ReferralRequestCreate: {
             company_slug?: string;
             /** @description Names the vacancy; an unknown slug is a 404. Wins over `job_id`. */
@@ -7197,6 +7351,8 @@ export interface components {
             contact_email?: string;
             note?: string;
         };
+        /** @enum {string} */
+        ReferralRequestStatus: "sent" | "contacted" | "declined";
         /** @description `status` is "contacted" or "declined". */
         ReferralResolve: {
             status?: string;
@@ -7207,9 +7363,9 @@ export interface components {
             company_slug: string;
             company_name: string;
             job_id: number | null;
-            cv_kind: string;
+            cv_kind: components["schemas"]["ReferralCvKind"];
             cv_id: string | null;
-            status: string;
+            status: components["schemas"]["ReferralRequestStatus"];
             created_at: string | null;
         };
         RejectSubmissionRequest: {
@@ -7262,10 +7418,17 @@ export interface components {
         ResolvedJobPage: {
             /** @description The catalogue job; null while it is still queued. */
             public_slug: string | null;
-            /** @description `found`, `tracked`, `imported`, `review` or `queued`. */
-            status: string;
+            status: components["schemas"]["ResolvedJobStatus"];
             company_slug?: string;
         };
+        /**
+         * @description What became of the board behind a job page: `found` (the catalogue already carried the
+         *     posting), `tracked` (imported, and the board is already crawled), `imported` (imported,
+         *     and the board queued for onboarding), `review` (imported, but no crawlable board could be
+         *     named) or `queued` (nothing could read the page, so the link went to manual triage).
+         * @enum {string}
+         */
+        ResolvedJobStatus: "found" | "tracked" | "imported" | "review" | "queued";
         /** @description The skill list a coverage reading scores against the market. */
         ResumeCoverageRequest: {
             /** @description Required and at most 100 once blanks are dropped; anything else is a 400. */
@@ -7619,8 +7782,7 @@ export interface components {
             description?: string;
             /** @description RFC 3339. */
             posted_at?: string;
-            /** @description pending, approved or rejected. */
-            status: string;
+            status: components["schemas"]["SubmissionStatus"];
             review_reason?: string;
             reviewed_at?: string;
             created_at: string | null;
@@ -7677,6 +7839,8 @@ export interface components {
             salary_currency?: string | null;
             salary_period?: string | null;
         };
+        /** @enum {string} */
+        SubmissionStatus: "pending" | "approved" | "rejected";
         /** @description One alert on a saved search. `saved_search_name` is sent on the list only. */
         Subscription: {
             /** Format: int64 */
@@ -8737,7 +8901,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: unknown[];
+                        data: components["schemas"]["CompanyListItem"][];
                         meta: components["schemas"]["ListMeta"];
                     };
                 };
@@ -15516,7 +15680,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["MentorshipMentor"] | null;
+                        data: components["schemas"]["MentorshipOwnMentor"] | null;
                     };
                 };
             };
@@ -15551,7 +15715,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["MentorshipMentor"];
+                        data: components["schemas"]["MentorshipOwnMentor"];
                     };
                 };
             };
@@ -15586,7 +15750,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["MentorshipMentor"];
+                        data: components["schemas"]["MentorshipOwnMentor"];
                     };
                 };
             };
@@ -15648,7 +15812,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["MentorshipMentor"];
+                        data: components["schemas"]["MentorshipOwnMentor"];
                     };
                 };
             };
@@ -15679,7 +15843,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["MentorshipMentor"];
+                        data: components["schemas"]["MentorshipOwnMentor"];
                     };
                 };
             };
@@ -18369,7 +18533,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["MentorshipMentor"];
+                        data: components["schemas"]["MentorshipModeratedMentor"];
                     };
                 };
             };
