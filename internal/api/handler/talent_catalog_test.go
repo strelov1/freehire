@@ -106,6 +106,8 @@ func (f *fakeTalentPhotoBlobs) Get(_ context.Context, key string) (io.ReadCloser
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
+func (f *fakeTalentPhotoBlobs) List(context.Context, string) ([]string, error) { return nil, nil }
+
 func (f *fakeTalentPhotoBlobs) Delete(_ context.Context, key string) error {
 	delete(f.objects, key)
 	return nil

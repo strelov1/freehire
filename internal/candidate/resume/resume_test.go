@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,6 +39,16 @@ func (f *fakeBlobs) Get(_ context.Context, key string) (io.ReadCloser, error) {
 		return nil, minio.ErrorResponse{Code: minio.NoSuchKey}
 	}
 	return io.NopCloser(bytes.NewReader(data)), nil
+}
+
+func (f *fakeBlobs) List(_ context.Context, prefix string) ([]string, error) {
+	var out []string
+	for k := range f.objs {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeBlobs) Delete(_ context.Context, key string) error {
@@ -302,6 +313,49 @@ func TestStore_FailedPointerWriteDeletesTheNewObject(t *testing.T) {
 	}
 	if len(blobs.objs) != 0 {
 		t.Errorf("objects = %v, want the orphan deleted", blobs.objs)
+	}
+}
+
+// ambiguousCommitRepo writes the pointer and then reports a failure, as a COMMIT whose reply
+// was lost after the server committed it does.
+type ambiguousCommitRepo struct{ *fakeRepo }
+
+func (r ambiguousCommitRepo) WithUploadLock(_ context.Context, _ int64, fn func(Repository) error) error {
+	if err := fn(r.fakeRepo); err != nil {
+		return err
+	}
+	return errors.New("commit reply lost")
+}
+
+// The upload reports the failure, but the object the pointer now names is kept: deleting it
+// would leave the pointer naming nothing.
+func TestStore_AmbiguousCommitKeepsTheObjectThePointerNames(t *testing.T) {
+	blobs, repo := newFakeBlobs(), newFakeRepo()
+	s := New(blobs, ambiguousCommitRepo{repo})
+	if _, err := s.Put(context.Background(), 7, "text/plain", []byte("CV")); err == nil {
+		t.Fatal("Put hid the commit failure")
+	}
+	if got := string(blobs.objs[repo.ptr[7]]); got != "CV" {
+		t.Errorf("the object the pointer names = %q, want it kept", got)
+	}
+}
+
+// failingDeleteBlobs refuses every delete.
+type failingDeleteBlobs struct{ *fakeBlobs }
+
+func (failingDeleteBlobs) Delete(context.Context, string) error { return errors.New("storage down") }
+
+// Deleting a CV succeeds once its pointer is cleared; the object's removal is best-effort, so
+// a storage failure there neither fails the call nor brings the CV back.
+func TestStore_DeleteSucceedsWhenTheObjectDeleteFails(t *testing.T) {
+	repo := newFakeRepo()
+	repo.ptr[7] = "resumes/7-1-x"
+	s := New(failingDeleteBlobs{newFakeBlobs()}, repo)
+	if err := s.Delete(context.Background(), 7); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if meta, _ := s.Status(context.Background(), 7); meta.Present {
+		t.Error("the CV is still present after Delete")
 	}
 }
 

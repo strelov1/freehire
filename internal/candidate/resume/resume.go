@@ -166,8 +166,9 @@ func (s *Store) PutIfAbsent(ctx context.Context, userID int64, contentType strin
 // put writes the bytes to an object of their own OUTSIDE any transaction — an object-store
 // round trip must never hold a pooled connection — and then, briefly under the per-user upload
 // lock, checks presence (firstOnly) and moves the pointer to it. The object the pointer left is
-// deleted after commit; the new one is deleted when the pointer did not move to it, so neither
-// a refusal nor a failure leaves an orphan behind.
+// deleted after commit, and the new one when the pointer did not move to it. Both are
+// best-effort cleanup; account deletion removes every object under the user's prefix, which
+// is the backstop for a cleanup that failed or a process that died between the steps.
 func (s *Store) put(ctx context.Context, userID int64, contentType string, data []byte, firstOnly bool) (Meta, error) {
 	if !s.Enabled() {
 		return Meta{}, ErrStorageDisabled
@@ -197,11 +198,18 @@ func (s *Store) put(ctx context.Context, userID int64, contentType string, data 
 		superseded = ptr.ResumeObjectKey.String
 		return repo.Set(ctx, userID, key)
 	})
-	if err != nil {
+	if errors.Is(err, ErrAlreadyStored) {
 		s.discard(ctx, key)
-		if !errors.Is(err, ErrAlreadyStored) {
-			observability.RecordCVUpload(false)
+		return Meta{}, err
+	}
+	if err != nil {
+		// A failed COMMIT can still have committed on the server. Discard the object only once
+		// a fresh read shows the pointer does not name it; an unreadable pointer keeps it, and
+		// account deletion is the backstop for that.
+		if ptr, readErr := s.repo.Get(context.WithoutCancel(ctx), userID); readErr == nil && ptr.ResumeObjectKey.String != key {
+			s.discard(ctx, key)
 		}
+		observability.RecordCVUpload(false)
 		return Meta{}, err
 	}
 	if superseded != "" && superseded != key {
@@ -486,7 +494,10 @@ func (s *Store) read(ctx context.Context, userID int64) ([]byte, time.Time, erro
 
 // Delete clears the pointer under the per-user upload lock, so it cannot interleave with an
 // upload, and then removes the object the pointer named. The object goes after the commit, like
-// a superseded upload's: a pointer must never name an object that is already gone.
+// a superseded upload's: a pointer must never name an object that is already gone. Its removal
+// is best-effort cleanup — the CV is deleted once the pointer is, and a retry would find nothing
+// to name the object by — so a failure is logged; account deletion removes every object under
+// the user's prefix.
 func (s *Store) Delete(ctx context.Context, userID int64) error {
 	if !s.Enabled() {
 		return ErrStorageDisabled
@@ -500,10 +511,13 @@ func (s *Store) Delete(ctx context.Context, userID int64) error {
 		key = ptr.ResumeObjectKey.String
 		return repo.Clear(ctx, userID)
 	})
-	if err != nil || key == "" {
+	if err != nil {
 		return err
 	}
-	return s.blobs.Delete(ctx, key)
+	if key != "" {
+		s.discard(ctx, key)
+	}
+	return nil
 }
 
 func metaFromPointer(ptr db.GetUserResumeRow) Meta {

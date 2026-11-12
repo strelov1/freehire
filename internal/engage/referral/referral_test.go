@@ -153,6 +153,7 @@ type fakeBlobs struct {
 
 func (f *fakeBlobs) Put(context.Context, string, string, io.Reader, int64) error { return nil }
 func (f *fakeBlobs) Get(context.Context, string) (io.ReadCloser, error)          { return nil, nil }
+func (f *fakeBlobs) List(context.Context, string) ([]string, error)              { return nil, nil }
 func (f *fakeBlobs) Delete(_ context.Context, key string) error {
 	if f.err != nil {
 		return f.err

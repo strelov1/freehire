@@ -81,6 +81,12 @@ func (b *lockedResumeBlobs) Delete(ctx context.Context, key string) error {
 	return b.fakeResumeBlobs.Delete(ctx, key)
 }
 
+func (b *lockedResumeBlobs) List(ctx context.Context, prefix string) ([]string, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.fakeResumeBlobs.List(ctx, prefix)
+}
+
 // count is how many objects the bucket holds: one per stored CV, so anything more is an orphan.
 func (b *lockedResumeBlobs) count() int {
 	b.mu.Lock()

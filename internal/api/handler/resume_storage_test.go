@@ -46,6 +46,16 @@ func (f *fakeResumeBlobs) Get(_ context.Context, key string) (io.ReadCloser, err
 	return io.NopCloser(bytes.NewReader(b)), nil
 }
 
+func (f *fakeResumeBlobs) List(_ context.Context, prefix string) ([]string, error) {
+	var out []string
+	for k := range f.objs {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeResumeBlobs) Delete(_ context.Context, key string) error {
 	delete(f.objs, key)
 	return nil

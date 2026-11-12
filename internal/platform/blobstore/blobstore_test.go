@@ -1,8 +1,10 @@
 package blobstore
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -10,13 +12,46 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
-func TestResumeUploadKey_DerivedFromUserIDAndInstant(t *testing.T) {
+// Each upload has its own key, even two at the same instant on a coarse clock: a refused upload
+// deletes its own object, which must never be the winner's.
+func TestResumeUploadKey_UniquePerUploadUnderTheUsersPrefix(t *testing.T) {
 	at := time.Unix(1_700_000_000, 5)
-	if got := ResumeUploadKey(7, at); got != "resumes/7-1700000000000000005" {
-		t.Errorf("ResumeUploadKey = %q, want resumes/7-1700000000000000005", got)
+	a, b := ResumeUploadKey(7, at), ResumeUploadKey(7, at)
+	if a == b {
+		t.Errorf("two uploads at one instant share the key %q", a)
 	}
-	if ResumeUploadKey(7, at) == ResumeUploadKey(7, at.Add(time.Nanosecond)) {
-		t.Error("two uploads share one key")
+	if !strings.HasPrefix(a, "resumes/7-1700000000000000005-") {
+		t.Errorf("ResumeUploadKey = %q, want it under resumes/7-<nanos>-", a)
+	}
+	if strings.HasPrefix(ResumeUploadKey(12, at), ResumeUploadPrefix(1)) {
+		t.Error("user 1's prefix matches user 12's keys")
+	}
+}
+
+type listingStore struct {
+	Store
+	keys []string
+}
+
+func (s listingStore) List(_ context.Context, prefix string) ([]string, error) {
+	var out []string
+	for _, k := range s.keys {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
+// Account deletion's list: every upload object of the user and the legacy key, nobody else's.
+func TestResumeObjectKeys_EveryObjectOfTheUserAndNoOneElses(t *testing.T) {
+	s := listingStore{keys: []string{"resumes/7-1-a", "resumes/7-2-b", "resumes/70-1-c", "resumes/7", "photos/7"}}
+	got, err := ResumeObjectKeys(context.Background(), s, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"resumes/7-1-a", "resumes/7-2-b", "resumes/7"}; !slices.Equal(got, want) {
+		t.Errorf("ResumeObjectKeys = %v, want %v", got, want)
 	}
 }
 

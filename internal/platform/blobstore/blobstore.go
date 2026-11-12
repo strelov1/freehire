@@ -7,6 +7,7 @@ package blobstore
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -23,6 +24,8 @@ type Store interface {
 	Put(ctx context.Context, key, contentType string, r io.Reader, size int64) error
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	Delete(ctx context.Context, key string) error
+	// List returns the key of every object whose key starts with prefix.
+	List(ctx context.Context, prefix string) ([]string, error)
 }
 
 // IsNotFound reports whether err — from Get, or from reading/stat-ing the io.ReadCloser
@@ -51,12 +54,29 @@ func (c Config) configured() bool {
 }
 
 // ResumeUploadKey is the object key one résumé upload is written under: the authenticated user
-// id (never client input) and the upload's instant, so each upload has its own object and the
-// pointer on the users row decides which is current. A reader always takes the key from that
-// pointer — rows written before 2026-11 point at the old fixed `resumes/<id>`. The instant is
-// joined with "-", not "/": MinIO refuses an object under a prefix that is itself an object.
+// id (never client input), the upload's instant and a random suffix, so each upload has its own
+// object even on a coarse clock, and the pointer on the users row decides which is current. A
+// reader always takes the key from that pointer — rows written before 2026-11 point at the old
+// fixed `resumes/<id>`. The parts are joined with "-", not "/": MinIO refuses an object under a
+// prefix that is itself an object.
 func ResumeUploadKey(userID int64, at time.Time) string {
-	return fmt.Sprintf("resumes/%d-%d", userID, at.UnixNano())
+	return fmt.Sprintf("%s%d-%s", ResumeUploadPrefix(userID), at.UnixNano(), rand.Text()[:16])
+}
+
+// ResumeUploadPrefix is what every upload key of one user starts with. The id ends at the "-",
+// so user 1's prefix never matches user 12's keys.
+func ResumeUploadPrefix(userID int64) string { return fmt.Sprintf("resumes/%d-", userID) }
+
+// ResumeObjectKeys is every object a user's CV may be stored under, whatever the pointer says:
+// each upload's own object, plus the pre-2026-11 fixed key (named whether or not it exists —
+// deleting a missing object succeeds). Account deletion erases them all, so an object a failed
+// cleanup or a crash left behind does not outlive the account.
+func ResumeObjectKeys(ctx context.Context, s Store, userID int64) ([]string, error) {
+	keys, err := s.List(ctx, ResumeUploadPrefix(userID))
+	if err != nil {
+		return nil, err
+	}
+	return append(keys, fmt.Sprintf("resumes/%d", userID)), nil
 }
 
 // PhotoKey is the per-user object key for a stored headshot. Like ResumeUploadKey it is
@@ -123,4 +143,19 @@ func (s *s3Store) Delete(ctx context.Context, key string) error {
 		return fmt.Errorf("blobstore: delete %s: %w", key, err)
 	}
 	return nil
+}
+
+func (s *s3Store) List(ctx context.Context, prefix string) ([]string, error) {
+	// Cancelling the context is how the listing goroutine is stopped when an error ends the
+	// read early.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var keys []string
+	for obj := range s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		if obj.Err != nil {
+			return nil, fmt.Errorf("blobstore: list %s: %w", prefix, obj.Err)
+		}
+		keys = append(keys, obj.Key)
+	}
+	return keys, nil
 }

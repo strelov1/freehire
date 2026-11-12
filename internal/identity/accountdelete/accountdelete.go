@@ -99,7 +99,14 @@ func (s *Service) Delete(ctx context.Context, userID int64) error {
 		if err != nil {
 			return fmt.Errorf("accountdelete: collect object keys: %w", err)
 		}
-		if err := s.deleteObjects(ctx, keys); err != nil {
+		// The pointer names only the CV object that is current. Every other one under the
+		// member's prefix — left by a cleanup that failed or a process that died mid-upload —
+		// is theirs too, and is found by listing rather than by any row.
+		cvKeys, err := blobstore.ResumeObjectKeys(ctx, s.blobs, userID)
+		if err != nil {
+			return fmt.Errorf("%w: list CV objects: %v", ErrStorageUnavailable, err)
+		}
+		if err := s.deleteObjects(ctx, unique(append(keys, cvKeys...))); err != nil {
 			return err
 		}
 	}
@@ -125,7 +132,45 @@ func (s *Service) Delete(ctx context.Context, userID int64) error {
 			log.Printf("accountdelete: block gateway credential for user %d: %v", userID, err)
 		}
 	}
-	return s.repo.DeleteUser(ctx, userID)
+	if err := s.repo.DeleteUser(ctx, userID); err != nil {
+		return err
+	}
+	s.sweepCVObjects(ctx, userID)
+	return nil
+}
+
+// sweepCVObjects lists the member's CV upload prefix once more after the row is gone: an upload
+// that committed between the listing above and DeleteUser left an object nothing else can name.
+// (The legacy fixed key cannot reappear; no upload writes it any more.) Best-effort — the
+// account is already erased, so a failure is logged, not returned.
+func (s *Service) sweepCVObjects(ctx context.Context, userID int64) {
+	if s.blobs == nil {
+		return
+	}
+	ctx = context.WithoutCancel(ctx)
+	keys, err := s.blobs.List(ctx, blobstore.ResumeUploadPrefix(userID))
+	if err != nil {
+		log.Printf("accountdelete: re-list CV objects for user %d: %v", userID, err)
+		return
+	}
+	for _, key := range keys {
+		if err := s.blobs.Delete(ctx, key); err != nil {
+			log.Printf("accountdelete: delete CV object %s: %v", key, err)
+		}
+	}
+}
+
+// unique drops repeated keys, keeping the first occurrence's order.
+func unique(keys []string) []string {
+	seen := make(map[string]bool, len(keys))
+	out := keys[:0]
+	for _, k := range keys {
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 // WithGatewayKeys attaches the blocker for the LLM gateway credential. Separate from the
