@@ -2,7 +2,7 @@
 
 The canonical MCP at `/api/v1/mcp` combines anonymous catalogue reads with
 OAuth account tools (`mixed.go`). Anonymous and OAuth sessions discover the same
-53 tools; personal calls without authentication never reach business code.
+54 tools; personal calls without authentication never reach business code.
 ChatGPT (User-Agent `openai-mcp`) gets an error result carrying `mcp/www_authenticate`,
 the in-band challenge its Apps SDK opens sign-in from. Every other host gets HTTP 401 with
 `WWW-Authenticate`, because Grok and Claude.ai ignore the in-band challenge and open sign-in
