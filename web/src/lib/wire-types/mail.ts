@@ -1,3 +1,4 @@
+import type { components } from '#lib/generated/api.js';
 import type { Job } from '../generated/contracts';
 import type { TimelineEvent } from './experience';
 import type { AutoApplyReviewInfo } from './tracking';
@@ -15,45 +16,15 @@ export interface EmailLinking {
 }
 
 /** One email linked to an application, on the application detail page. */
-export interface ApplicationEmail {
-  id: number;
-  source: string;
-  from_addr: string;
-  from_name: string;
-  subject: string;
-  status_signal?: string;
-  link_source?: string;
-  received_at: string;
-  read: boolean;
-}
+export type ApplicationEmail = components['schemas']['InboxApplicationEmail'];
 
 /** One message the mailbox sweep proposes for an application. It is a SUGGESTION, not a
  *  link: it is resolved through the same confirm/reject calls the inbox uses. */
-export interface RecalledEmail {
-  /** Our stored row's id, and 0 for a message the mailbox search found — that one is not
-   *  stored at all until you link it. */
-  id: number;
-  /** Names the message at the mail provider. Present on the search path, and what the link
-   *  call is given. */
-  provider_id?: string;
-  from_addr: string;
-  from_name: string;
-  subject: string;
-  received_at: string;
-  /** This message carries a calendar invitation's identifier, so confirming it is what
-   *  brings the meeting in. */
-  invitation: boolean;
-}
+export type RecalledEmail = components['schemas']['MailRecalledEmail'];
 
 /** The result of one sweep. `scanned` is what makes an empty `suggested` legible: nothing
  *  found among forty messages is a different answer from nothing to look at. */
-export interface MailRecallResult {
-  scanned: number;
-  suggested: RecalledEmail[];
-  /** How many of the proposed messages carry an invitation identifier. The meetings
-   *  themselves arrive on the next calendar sync. */
-  invitations: number;
-}
+export type MailRecallResult = components['schemas']['MailRecallResult'];
 
 /** An offer to move the application to the stage its newest classified message implies.
  *  Present only when the two disagree and the candidate has not already answered — mail
@@ -89,10 +60,4 @@ export interface TrackedApplication {
   auto_apply?: AutoApplyReviewInfo;
 }
 
-export interface FollowUpDraft {
-  subject: string;
-  body: string;
-  recipient?: string;
-  recipient_name?: string;
-  days_silent: number;
-}
+export type FollowUpDraft = components['schemas']['MailFollowUpDraft'];

@@ -1,21 +1,8 @@
+import type { components } from '#lib/generated/api.js';
 /** The account-level notification rule: whether notifications are on, and the
  *  channels to deliver over. Gates saved-job reminders and both lifecycle nudges
  *  (follow-up, interview-prep) — one shared rule, no per-kind or per-job control. */
-export interface NotificationSettings {
-  enabled: boolean;
-  channels: string[];
-  /** 'daily' (default, at 09:00), 'instant' or 'interval' — governs only saved-search
-   *  digests, not reminders/nudges. */
-  digest_frequency: string;
-  /** "HH:MM" local time, meaningful only when digest_frequency is 'daily'. */
-  digest_time: string | null;
-  /** 1-23: at most one digest per alert every this many hours, meaningful only
-   *  when digest_frequency is 'interval'. Omitted on a write reads as 1. */
-  digest_interval_hours?: number;
-  /** "HH:MM" local time; both null means quiet hours are off (the default). */
-  quiet_hours_start: string | null;
-  quiet_hours_end: string | null;
-}
+export type NotificationSettings = components['schemas']['NotificationSettings'];
 
 /** The notification-center event kinds a `user_notifications` row can carry — matches
  *  internal/engage/{notify,reminder,nudge}'s kind strings exactly (see

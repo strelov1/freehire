@@ -1,18 +1,25 @@
 import type { Http } from '../api-core';
 import type { GhostReportInput, ProcessReportKind, ProcessReportResult, Report, ReportInput } from '../types';
 import { jsonBody } from '../api-core';
+import type { components } from '#lib/generated/api.js';
 
 export function reportsApi({ call, requestData }: Http) {
   /** Report a problem with a live vacancy (by slug). Returns the pending report. */
   async function reportJob(slug: string, input: ReportInput): Promise<Report> {
-    return requestData<Report>(`/api/v1/jobs/${encodeURIComponent(slug)}/reports`, jsonBody('POST', input));
+    return requestData<Report>(
+      `/api/v1/jobs/${encodeURIComponent(slug)}/reports`,
+      jsonBody('POST', input satisfies components['schemas']['JobReportRequest']),
+    );
   }
 
   /** File a ghost-signal claim: applied on this date, never answered. Unlike
    *  reportJob this reaches no moderator and closes nothing — it accumulates as
    *  evidence, and `withdrawGhostReport` takes it back when an employer answers. */
   async function reportGhostJob(slug: string, input: GhostReportInput): Promise<void> {
-    await call(`/api/v1/jobs/${slug}/ghost-report`, jsonBody('POST', input));
+    await call(
+      `/api/v1/jobs/${slug}/ghost-report`,
+      jsonBody('POST', input satisfies components['schemas']['GhostReportRequest']),
+    );
   }
 
   /** Report a fact about how a COMPANY hires — today only that it screens with an AI
@@ -23,7 +30,7 @@ export function reportsApi({ call, requestData }: Http) {
   async function reportCompanyProcess(slug: string, kind: ProcessReportKind): Promise<ProcessReportResult> {
     return requestData<ProcessReportResult>(
       `/api/v1/companies/${encodeURIComponent(slug)}/process-reports`,
-      jsonBody('POST', { kind }),
+      jsonBody('POST', { kind } satisfies components['schemas']['ProcessReportRequest']),
     );
   }
 
