@@ -349,6 +349,8 @@ func (r *iteratorForCopyInsightsSalaryMonthly) Next() bool {
 func (r iteratorForCopyInsightsSalaryMonthly) Values() ([]interface{}, error) {
 	return []interface{}{
 		r.rows[0].Category,
+		r.rows[0].Seniority,
+		r.rows[0].Country,
 		r.rows[0].Currency,
 		r.rows[0].Period,
 		r.rows[0].Month,
@@ -364,7 +366,7 @@ func (r iteratorForCopyInsightsSalaryMonthly) Err() error {
 }
 
 func (q *Queries) CopyInsightsSalaryMonthly(ctx context.Context, arg []CopyInsightsSalaryMonthlyParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"insights_salary_monthly"}, []string{"category", "currency", "period", "month", "sample_size", "p25", "p50", "p75"}, &iteratorForCopyInsightsSalaryMonthly{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"insights_salary_monthly"}, []string{"category", "seniority", "country", "currency", "period", "month", "sample_size", "p25", "p50", "p75"}, &iteratorForCopyInsightsSalaryMonthly{rows: arg})
 }
 
 // iteratorForCopyInsightsSalaryStats implements pgx.CopyFromSource.
@@ -396,6 +398,7 @@ func (r iteratorForCopyInsightsSalaryStats) Values() ([]interface{}, error) {
 		r.rows[0].P25,
 		r.rows[0].P50,
 		r.rows[0].P75,
+		r.rows[0].Quantiles,
 	}, nil
 }
 
@@ -404,7 +407,7 @@ func (r iteratorForCopyInsightsSalaryStats) Err() error {
 }
 
 func (q *Queries) CopyInsightsSalaryStats(ctx context.Context, arg []CopyInsightsSalaryStatsParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"insights_salary_stats"}, []string{"category", "seniority", "country", "currency", "period", "sample_size", "p25", "p50", "p75"}, &iteratorForCopyInsightsSalaryStats{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"insights_salary_stats"}, []string{"category", "seniority", "country", "currency", "period", "sample_size", "p25", "p50", "p75", "quantiles"}, &iteratorForCopyInsightsSalaryStats{rows: arg})
 }
 
 // iteratorForCopyInsightsSkillStats implements pgx.CopyFromSource.

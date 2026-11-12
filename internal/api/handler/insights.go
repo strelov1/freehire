@@ -54,6 +54,9 @@ type salaryBand struct {
 	P25        int32  `json:"p25"`
 	P50        int32  `json:"p50"`
 	P75        int32  `json:"p75"`
+	// Quantiles is the salary at every 5th percentile from 5 to 95; empty until the
+	// rollup has computed it.
+	Quantiles []int32 `json:"quantiles"`
 }
 
 // parseInsightsSort resolves the ranking order: empty/"open" ranks by raw open-count,
@@ -573,18 +576,26 @@ func (h *statsHandlers) InsightsVelocity(ctx context.Context, params apigen.Insi
 	}, nil
 }
 
-// InsightsSalaryHistory serves GET /api/v1/insights/salary/history: one category's
-// monthly salary percentiles per (currency, period), from insights_salary_monthly.
-// The category is required — the history is per role by design. Aggregate-only.
+// InsightsSalaryHistory serves GET /api/v1/insights/salary/history: one role × grade ×
+// country scope's monthly salary percentiles per (currency, period), from
+// insights_salary_monthly. An absent part means every value, as on /insights/salary.
+// Aggregate-only.
 func (h *statsHandlers) InsightsSalaryHistory(ctx context.Context, params apigen.InsightsSalaryHistoryParams) (*apigen.SalaryHistoryAnswer, error) {
 	category, err := parseCategory(params.Category.Value)
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	if category == "" {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "category is required")
+	seniority, err := parseSeniority(params.Seniority.Value)
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	rows, err := h.queries.ListInsightsSalaryHistory(ctx, category)
+	country, err := parseCountry(params.Country.Value)
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	rows, err := h.queries.ListInsightsSalaryHistory(ctx, db.ListInsightsSalaryHistoryParams{
+		Category: category, Seniority: seniority, Country: country,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -595,7 +606,7 @@ func (h *statsHandlers) InsightsSalaryHistory(ctx context.Context, params apigen
 			SampleSize: int64(r.SampleSize), P25: int64(r.P25), P50: int64(r.P50), P75: int64(r.P75),
 		}
 	}
-	return &apigen.SalaryHistoryAnswer{Data: data, Meta: apigen.CategoryMeta{Category: category}}, nil
+	return &apigen.SalaryHistoryAnswer{Data: data, Meta: apigen.SalaryMeta{Category: category, Seniority: seniority, Country: country}}, nil
 }
 
 // InsightsSalary serves GET /api/v1/insights/salary: salary bands for a role × country
@@ -622,7 +633,8 @@ func (h *statsHandlers) InsightsSalary(ctx context.Context, params apigen.Insigh
 	data := make([]apigen.SalaryBand, len(bands))
 	for i, b := range bands {
 		data[i] = apigen.SalaryBand{Seniority: b.Seniority, Currency: b.Currency, Period: b.Period,
-			SampleSize: int64(b.SampleSize), P25: int64(b.P25), P50: int64(b.P50), P75: int64(b.P75)}
+			SampleSize: int64(b.SampleSize), P25: int64(b.P25), P50: int64(b.P50), P75: int64(b.P75),
+			Quantiles: int64s(b.Quantiles)}
 	}
 	meta := apigen.SalaryMeta{Category: category, Seniority: seniority, Country: country}
 	if bySeniority {
@@ -652,7 +664,7 @@ func salaryBands(ctx context.Context, q salaryReader, category, seniority, count
 		}
 		bands = make([]salaryBand, len(rows))
 		for i, r := range rows {
-			bands[i] = salaryBand{Seniority: r.Seniority, Currency: r.Currency, Period: r.Period, SampleSize: r.SampleSize, P25: r.P25, P50: r.P50, P75: r.P75}
+			bands[i] = salaryBand{Seniority: r.Seniority, Currency: r.Currency, Period: r.Period, SampleSize: r.SampleSize, P25: r.P25, P50: r.P50, P75: r.P75, Quantiles: r.Quantiles}
 		}
 		return bands, true, nil
 	}
@@ -663,7 +675,7 @@ func salaryBands(ctx context.Context, q salaryReader, category, seniority, count
 	}
 	bands = make([]salaryBand, len(rows))
 	for i, r := range rows {
-		bands[i] = salaryBand{Seniority: seniority, Currency: r.Currency, Period: r.Period, SampleSize: r.SampleSize, P25: r.P25, P50: r.P50, P75: r.P75}
+		bands[i] = salaryBand{Seniority: seniority, Currency: r.Currency, Period: r.Period, SampleSize: r.SampleSize, P25: r.P25, P50: r.P50, P75: r.P75, Quantiles: r.Quantiles}
 	}
 	return bands, false, nil
 }

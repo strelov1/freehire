@@ -1315,14 +1315,23 @@ type Querier interface {
 	// once instead of repeating the FILTER expressions in a HAVING.
 	ComputeInsightsRoleStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsRoleStatsGlobalRow, error)
 	// Compute on the read connection; publish the result separately on the writer.
-	// The salary history: effective-salary percentiles per (category, currency, period,
-	// month a posting was PUBLISHED), the current month and the eleven before it. Open and
-	// closed postings alike — a posting closed since still records what was offered that
-	// month — and canonical, public ones only. A month a posting belongs to is its
-	// existence date (see the file header), so one found in June but published in March
-	// counts in March. Months under @min_sample are not stored: a line through a handful
-	// of postings a month is noise drawn as a trend.
+	// The salary history: effective-salary percentiles per (currency, period, month a
+	// posting was PUBLISHED), the current month and the eleven before it, for every role ×
+	// grade scope — CUBE(category, seniority), '' meaning every value, so "all roles" and
+	// "all grades" are rows of their own. Country-agnostic: the per-country history is
+	// ComputeInsightsSalaryMonthlyByCountry, kept apart because unnesting countries would
+	// count a posting once per country here. Open and closed postings alike — a posting
+	// closed since still records what was offered that month — and canonical, public ones
+	// only. A month a posting belongs to is its existence date (see the file header), so
+	// one found in June but published in March counts in March. A posting without a grade
+	// counts toward its role's all-grades row but has no grade row: grouping(seniority) = 0
+	// with seniority '' would collide with the all-grades row. Months under @min_sample
+	// are not stored: a line through a handful of postings a month is noise drawn as a trend.
 	ComputeInsightsSalaryMonthly(ctx context.Context, arg ComputeInsightsSalaryMonthlyParams) ([]ComputeInsightsSalaryMonthlyRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// The per-country salary history: ComputeInsightsSalaryMonthly's scopes and rules with
+	// the country each posting is in (unnest), so a posting in two countries counts in both.
+	ComputeInsightsSalaryMonthlyByCountry(ctx context.Context, arg ComputeInsightsSalaryMonthlyByCountryParams) ([]ComputeInsightsSalaryMonthlyByCountryRow, error)
 	// Compute on the read connection; publish the result separately on the writer.
 	// Per-country salary bands (same CUBE of role scope, country from unnest).
 	ComputeInsightsSalaryStatsByCountry(ctx context.Context, minSample int32) ([]ComputeInsightsSalaryStatsByCountryRow, error)
@@ -4672,8 +4681,9 @@ type Querier interface {
 	// seniorities are the per-grade bands. Bands below the sample floor are already
 	// absent from the rollup.
 	ListInsightsSalaryByCategory(ctx context.Context, category string) ([]ListInsightsSalaryByCategoryRow, error)
-	// One category's stored months, every (currency, period) it has.
-	ListInsightsSalaryHistory(ctx context.Context, category string) ([]ListInsightsSalaryHistoryRow, error)
+	// One role × grade × country scope's stored months ('' = every value), every
+	// (currency, period) it has.
+	ListInsightsSalaryHistory(ctx context.Context, arg ListInsightsSalaryHistoryParams) ([]ListInsightsSalaryHistoryRow, error)
 	// All retained weekly snapshots for a set of skills (a caller's own profile
 	// skills), newest first per skill.
 	ListInsightsSkillHistory(ctx context.Context, skills []string) ([]InsightsSkillHistory, error)

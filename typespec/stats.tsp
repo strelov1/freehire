@@ -245,7 +245,7 @@ model SalaryMonth {
 
 model SalaryHistoryAnswer {
   data: SalaryMonth[];
-  meta: CategoryMeta;
+  meta: SalaryMeta;
 }
 
 model SalaryBand {
@@ -256,6 +256,9 @@ model SalaryBand {
   p25: int64;
   p50: int64;
   p75: int64;
+
+  /** The salary at every 5th percentile from 5 to 95 (19 values); empty until the rollup has computed them. */
+  quantiles: int64[];
 }
 
 model SalaryMeta {
@@ -440,11 +443,15 @@ op insightsSalary(
   @query country?: string,
 ): SalaryAnswer | Problem;
 
-/** The category is required. */
+/** One role × grade × country scope's monthly history; an absent part means every value. */
 @tag("Insights")
 @route("/insights/salary/history")
 @get
-op insightsSalaryHistory(@query category?: string): SalaryHistoryAnswer | Problem;
+op insightsSalaryHistory(
+  @query category?: string,
+  @query seniority?: string,
+  @query country?: string,
+): SalaryHistoryAnswer | Problem;
 
 @tag("Insights")
 @route("/insights/companies")

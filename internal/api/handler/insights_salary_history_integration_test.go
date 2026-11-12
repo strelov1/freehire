@@ -24,11 +24,13 @@ func TestInsightsSalaryHistoryEndpoint(t *testing.T) {
 	// The rollup is tested in internal/platform/db; here the table is seeded directly so
 	// the test pins the wire contract, not the percentile arithmetic again.
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO insights_salary_monthly (category, currency, period, month, sample_size, p25, p50, p75) VALUES
-			('backend', 'USD', 'year',  '2026-09-01', 40, 90000, 110000, 130000),
-			('backend', 'USD', 'year',  '2026-08-01', 35, 88000, 108000, 128000),
-			('backend', 'EUR', 'month', '2026-09-01', 31, 4000, 5000, 6000),
-			('design',  'USD', 'year',  '2026-09-01', 50, 70000, 80000, 90000)`); err != nil {
+		INSERT INTO insights_salary_monthly (category, seniority, country, currency, period, month, sample_size, p25, p50, p75) VALUES
+			('backend', '',       '',   'USD', 'year',  '2026-09-01', 40, 90000, 110000, 130000),
+			('backend', '',       '',   'USD', 'year',  '2026-08-01', 35, 88000, 108000, 128000),
+			('backend', '',       '',   'EUR', 'month', '2026-09-01', 31, 4000, 5000, 6000),
+			('backend', 'senior', 'de', 'EUR', 'year',  '2026-09-01', 30, 70000, 78000, 90000),
+			('',        '',       '',   'USD', 'year',  '2026-09-01', 90, 60000, 95000, 120000),
+			('design',  '',       '',   'USD', 'year',  '2026-09-01', 50, 70000, 80000, 90000)`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
@@ -57,7 +59,27 @@ func TestInsightsSalaryHistoryEndpoint(t *testing.T) {
 		t.Errorf("rows = %v, want %s", got, want)
 	}
 
-	for _, bad := range []string{"", "?category=", "?category=not-a-category"} {
+	// A scope reads its own rows only; an absent part means every value.
+	for query, want := range map[string]string{
+		"?category=backend&seniority=senior&country=DE": "EUR/year/2026-09",
+		"":           "USD/year/2026-09",
+		"?category=": "USD/year/2026-09",
+	} {
+		out, raw, code := getInsights(t, ctx, app, "/api/v1/insights/salary/history"+query)
+		if code != fiber.StatusOK {
+			t.Fatalf("%q: status %d, want 200: %s", query, code, raw)
+		}
+		var got []string
+		for _, r := range out["data"].([]any) {
+			row := r.(map[string]any)
+			got = append(got, row["currency"].(string)+"/"+row["period"].(string)+"/"+row["month"].(string))
+		}
+		if strings.Join(got, " ") != want {
+			t.Errorf("%q: rows = %v, want %s", query, got, want)
+		}
+	}
+
+	for _, bad := range []string{"?category=not-a-category", "?seniority=wizard", "?country=germany"} {
 		if _, raw, code := getInsights(t, ctx, app, "/api/v1/insights/salary/history"+bad); code != fiber.StatusBadRequest {
 			t.Errorf("%q: status %d, want 400: %s", bad, code, raw)
 		}

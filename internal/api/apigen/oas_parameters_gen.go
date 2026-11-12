@@ -8754,7 +8754,9 @@ func decodeInsightsSalaryParams(args [0]string, argsEscaped bool, r *http.Reques
 
 // InsightsSalaryHistoryParams is parameters of insightsSalaryHistory operation.
 type InsightsSalaryHistoryParams struct {
-	Category OptString `json:",omitempty,omitzero"`
+	Category  OptString `json:",omitempty,omitzero"`
+	Seniority OptString `json:",omitempty,omitzero"`
+	Country   OptString `json:",omitempty,omitzero"`
 }
 
 func unpackInsightsSalaryHistoryParams(packed middleware.Parameters) (params InsightsSalaryHistoryParams) {
@@ -8765,6 +8767,24 @@ func unpackInsightsSalaryHistoryParams(packed middleware.Parameters) (params Ins
 		}
 		if v, ok := packed[key]; ok {
 			params.Category = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "seniority",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Seniority = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "country",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Country = v.(OptString)
 		}
 	}
 	return params
@@ -8809,6 +8829,88 @@ func decodeInsightsSalaryHistoryParams(args [0]string, argsEscaped bool, r *http
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "category",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: seniority.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "seniority",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotSeniorityVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotSeniorityVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Seniority.SetTo(paramsDotSeniorityVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "seniority",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: country.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "country",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotCountryVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotCountryVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Country.SetTo(paramsDotCountryVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "country",
 			In:   "query",
 			Err:  err,
 		}

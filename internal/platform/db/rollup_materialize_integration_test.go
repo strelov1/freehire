@@ -178,6 +178,21 @@ func materializeInsightsSalaryStatsByCountry(q *Queries) func(context.Context, i
 	}
 }
 
+func materializeInsightsSalaryMonthlyByCountry(q *Queries) func(context.Context, int32) (int64, error) {
+	return func(ctx context.Context, minSample int32) (int64, error) {
+		asOf := pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true}
+		rows, err := q.ComputeInsightsSalaryMonthlyByCountry(ctx, ComputeInsightsSalaryMonthlyByCountryParams{AsOf: asOf, MinSample: minSample})
+		if err != nil {
+			return 0, err
+		}
+		values := make([]CopyInsightsSalaryMonthlyParams, len(rows))
+		for i, row := range rows {
+			values[i] = CopyInsightsSalaryMonthlyParams(row)
+		}
+		return q.CopyInsightsSalaryMonthly(ctx, values)
+	}
+}
+
 func materializeInsightsSalaryMonthly(q *Queries) func(context.Context, int32) (int64, error) {
 	return func(ctx context.Context, minSample int32) (int64, error) {
 		asOf := pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true}

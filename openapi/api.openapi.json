@@ -3315,10 +3315,28 @@
     "/insights/salary/history": {
       "get": {
         "operationId": "insightsSalaryHistory",
-        "description": "The category is required.",
+        "description": "One role × grade × country scope's monthly history; an absent part means every value.",
         "parameters": [
           {
             "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "seniority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "country",
             "in": "query",
             "required": false,
             "schema": {
@@ -25819,7 +25837,8 @@
           "sample_size",
           "p25",
           "p50",
-          "p75"
+          "p75",
+          "quantiles"
         ],
         "properties": {
           "seniority": {
@@ -25846,6 +25865,14 @@
           "p75": {
             "type": "integer",
             "format": "int64"
+          },
+          "quantiles": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "The salary at every 5th percentile from 5 to 95 (19 values); empty until the rollup has computed them."
           }
         }
       },
@@ -25863,7 +25890,7 @@
             }
           },
           "meta": {
-            "$ref": "#/components/schemas/CategoryMeta"
+            "$ref": "#/components/schemas/SalaryMeta"
           }
         }
       },

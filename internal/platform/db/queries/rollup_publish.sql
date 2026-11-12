@@ -29,12 +29,12 @@ INSERT INTO insights_skill_stats (skill, category, country, open_count, open_cou
 VALUES (sqlc.arg('skill'), sqlc.arg('category'), sqlc.arg('country'), sqlc.arg('open_count'), sqlc.arg('open_count_prev'));
 
 -- name: CopyInsightsSalaryStats :copyfrom
-INSERT INTO insights_salary_stats (category, seniority, country, currency, period, sample_size, p25, p50, p75)
-VALUES (sqlc.arg('category'), sqlc.arg('seniority'), sqlc.arg('country'), sqlc.arg('currency'), sqlc.arg('period'), sqlc.arg('sample_size'), sqlc.arg('p25'), sqlc.arg('p50'), sqlc.arg('p75'));
+INSERT INTO insights_salary_stats (category, seniority, country, currency, period, sample_size, p25, p50, p75, quantiles)
+VALUES (sqlc.arg('category'), sqlc.arg('seniority'), sqlc.arg('country'), sqlc.arg('currency'), sqlc.arg('period'), sqlc.arg('sample_size'), sqlc.arg('p25'), sqlc.arg('p50'), sqlc.arg('p75'), sqlc.arg('quantiles'));
 
 -- name: CopyInsightsSalaryMonthly :copyfrom
-INSERT INTO insights_salary_monthly (category, currency, period, month, sample_size, p25, p50, p75)
-VALUES (sqlc.arg('category'), sqlc.arg('currency'), sqlc.arg('period'), sqlc.arg('month'), sqlc.arg('sample_size'), sqlc.arg('p25'), sqlc.arg('p50'), sqlc.arg('p75'));
+INSERT INTO insights_salary_monthly (category, seniority, country, currency, period, month, sample_size, p25, p50, p75)
+VALUES (sqlc.arg('category'), sqlc.arg('seniority'), sqlc.arg('country'), sqlc.arg('currency'), sqlc.arg('period'), sqlc.arg('month'), sqlc.arg('sample_size'), sqlc.arg('p25'), sqlc.arg('p50'), sqlc.arg('p75'));
 
 -- name: CopyInsightsVelocityDaily :copyfrom
 INSERT INTO insights_velocity_daily (day, facet_kind, facet_value, added, removed)
