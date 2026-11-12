@@ -72,12 +72,6 @@ export interface ApiPlan {
   until?: string;
 }
 
-/** One charge as the receipt list shows it (`GET /api/v1/billing/subscription`).
- *
- *  Not exported: it is reached through `BillingOverview.invoices`, and nothing outside
- *  this module names it on its own — which is the line knip.config.js draws. */
-type BillingInvoice = components['schemas']['BillingInvoice'];
-
 /** What the caller is paying and what has been taken. Read through to the payment provider
  *  on every request rather than mirrored: a receipt list that has quietly missed a refund is
  *  worse than no receipt list.
