@@ -27,3 +27,10 @@ checks.positive_data_acceptance.expected-statuses = ["2xx", 400, 401, 402, 403, 
 [[operations]]
 include-path-regex = '^/me/(mailbox|gmail/sync)$'
 checks.positive_data_acceptance.expected-statuses = ["2xx", 400, 401, 402, 403, 404, 405, 409, 422, 429]
+
+# AI search answers 503 when no model is configured (the CI stack has none): a stated
+# refusal, not a fault.
+[[operations]]
+include-path-regex = '^/search/interpret$'
+checks.not_a_server_error.enabled = false
+checks.positive_data_acceptance.expected-statuses = ["2xx", 400, 401, 402, 403, 404, 409, 415, 422, 429, 503]
