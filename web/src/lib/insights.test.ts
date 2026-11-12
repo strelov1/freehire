@@ -6,6 +6,8 @@ import {
   sortBandsBySeniority,
   salaryScopeFromParams,
   scopeBands,
+  salaryView,
+  salaryScopeKey,
   formatSalary,
   salaryIntro,
   skillsIntro,
@@ -279,5 +281,32 @@ describe('scopeBands', () => {
     ];
     const got = scopeBands(bands, { category: 'backend', seniority: '', country: '' });
     expect(got.map((b) => b.currency)).toEqual(['USD', 'GBP', 'EUR']);
+  });
+});
+
+describe('salaryView', () => {
+  const de = { category: 'backend', seniority: 'senior', country: 'de' };
+  const fr = { ...de, country: 'fr' };
+  const deBand: InsightSalaryBand = {
+    seniority: 'senior',
+    currency: 'EUR',
+    period: 'year',
+    sample_size: 18,
+    p25: 1,
+    p50: 2,
+    p75: 3,
+  };
+
+  it("never shows another scope's figures while its own answer is pending", () => {
+    // A country change keeps the seniority, so a seniority-only check would pass DE's band.
+    expect(salaryView({ key: salaryScopeKey(de), bands: [deBand] }, fr)).toBe('pending');
+  });
+
+  it('reports a failed read for this scope as unavailable', () => {
+    expect(salaryView({ key: salaryScopeKey(fr), bands: null }, fr)).toBeNull();
+  });
+
+  it("shows the scope's own bands once they land", () => {
+    expect(salaryView({ key: salaryScopeKey(de), bands: [deBand] }, de)).toEqual([deBand]);
   });
 });

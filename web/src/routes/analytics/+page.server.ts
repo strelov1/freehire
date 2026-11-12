@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ url, fetch }) => {
   const sal = salaryScopeFromParams(url.searchParams);
   const [initial, initialSalary] = await Promise.all([
     api.facetCounts(url.searchParams),
-    sal ? api.insightsSalary(sal.scope).catch(() => []) : Promise.resolve([]),
+    sal ? api.insightsSalary(sal.scope).catch(() => null) : Promise.resolve(null),
   ]);
   return { initial, initialSalary };
 };

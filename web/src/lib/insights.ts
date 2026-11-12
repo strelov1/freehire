@@ -182,6 +182,25 @@ export function scopeBands(bands: InsightSalaryBand[], scope: SalaryScope, limit
     .slice(0, limit);
 }
 
+/** A salary answer with the scope it was fetched for (`salaryScopeKey`); `bands` is
+ *  null when that read failed. */
+export interface FetchedSalary {
+  key: string;
+  bands: InsightSalaryBand[] | null;
+}
+
+export function salaryScopeKey(s: SalaryScope): string {
+  return `${s.category}|${s.seniority}|${s.country}`;
+}
+
+/** What the salary card shows for `scope`: 'pending' until an answer for this very
+ *  scope lands, so another scope's figures never sit under its name; null when that
+ *  read failed; else the scope's own bands. */
+export function salaryView(fetched: FetchedSalary, scope: SalaryScope): InsightSalaryBand[] | null | 'pending' {
+  if (fetched.key !== salaryScopeKey(scope)) return 'pending';
+  return fetched.bands && scopeBands(fetched.bands, scope);
+}
+
 // --- Deterministic auto-intro sentences (no LLM) -----------------------------
 
 /** Pick the richest yearly band for the intro figure, preferring the category-wide

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { FacetDef } from '#lib/facets.js';
+  import { dynamicLabel, languageFlag, type FacetDef } from '#lib/facets.js';
+  import { CountryFlag } from '#lib/ui/index.js';
   import type { FilterStore } from '#lib/filters.js';
 
   // One facet's distribution as a horizontal bar chart. `dist` is the value→count
@@ -11,9 +12,15 @@
   // can carry hundreds of values; the rest are summarized as "+N more".
   const TOP = 15;
 
-  // value → label from the facet's option list; tokens facets (skills/countries)
-  // have no options, so the raw value is its own label.
+  // value → label from the facet's option list; a dynamic facet (countries, job
+  // language) has none, so its value is named the way the filter panel names it.
   const labels = $derived(new Map((def.options ?? []).map((o) => [o.value, o.label])));
+  const label = (value: string) => labels.get(value) ?? (def.dynamic ? dynamicLabel(def.param, value) : value);
+  function flag(value: string): string | undefined {
+    if (def.param === 'countries') return value;
+    if (def.param === 'posting_language') return languageFlag(value);
+    return undefined;
+  }
 
   // Entries sorted by count descending; bar widths scale to the top count.
   const entries = $derived(Object.entries(dist ?? {}).sort((a, b) => b[1] - a[1]));
@@ -45,7 +52,12 @@
               class="pointer-events-none absolute inset-y-0 left-0 rounded-md bg-brand/10 transition-[width] group-hover:bg-brand/15"
               style:width={`${max > 0 ? (count / max) * 100 : 0}%`}
             ></span>
-            <span class="relative truncate">{labels.get(value) ?? value}</span>
+            <span class="relative flex min-w-0 items-center gap-1.5">
+              {#if flag(value)}<span aria-hidden="true" class="shrink-0"
+                  ><CountryFlag code={flag(value) ?? ''} label={label(value)} /></span
+                >{/if}
+              <span class="truncate">{label(value)}</span>
+            </span>
             <span class="relative shrink-0 font-medium tabular-nums text-muted-foreground">
               {count.toLocaleString()}
             </span>

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { Check, ChevronDown, Globe, Languages, X } from '@lucide/svelte';
   import { api } from '#lib/api.js';
-  import { dynamicLabel, type FacetOption } from '#lib/facets.js';
+  import { dynamicLabel, languageFlag, type FacetOption } from '#lib/facets.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, t } from '#lib/i18n/t.js';
   import { profileStore } from '#lib/profile.svelte.js';
@@ -48,12 +48,6 @@
   /** Resolve a posting-language code in the account locale. */
   function languageLabel(code: string): string {
     return languageNames.of(code) ?? dynamicLabel('posting_language', code);
-  }
-
-  // Flags are representative regions, never the source of the available language list.
-  function languageFlag(code: string): string | undefined {
-    const region = code === 'en' ? 'GB' : code === 'pt' ? 'PT' : new Intl.Locale(code).maximize().region;
-    return region && /^[A-Z]{2}$/.test(region) ? region.toLowerCase() : undefined;
   }
 
   /** Load the available choices from the unfiltered live job-language facet. */

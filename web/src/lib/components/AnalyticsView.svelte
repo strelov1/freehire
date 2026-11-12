@@ -8,7 +8,8 @@
   import { FACETS, countryLabel } from '#lib/facets.js';
   import type { FacetCounts } from '#lib/types.js';
   import type { InsightSalaryBand } from '#lib/api.js';
-  import { formatSalary, salaryScopeFromParams, scopeBands, seniorityLabel } from '#lib/insights.js';
+  import { formatSalary, salaryScopeFromParams, salaryScopeKey, salaryView, seniorityLabel } from '#lib/insights.js';
+  import type { FetchedSalary } from '#lib/insights.js';
   import { categoryLabel } from '#lib/labels.js';
   import FilterSummary from './filters/FilterSummary.svelte';
   import FilterModal from './filters/FilterModal.svelte';
@@ -19,7 +20,7 @@
   // The first counts are server-rendered (route `load`) and arrive as `initial`,
   // so the breakdowns are in the initial HTML. Filters live in the URL; changing
   // one re-fetches the counts client-side over the same filter model as /jobs.
-  let { initial, initialSalary }: { initial: FacetCounts; initialSalary: InsightSalaryBand[] } = $props();
+  let { initial, initialSalary }: { initial: FacetCounts; initialSalary: InsightSalaryBand[] | null } = $props();
 
   // Seed filters from the URL so server and hydrated client render the same view.
   const filters = new FilterStore(new URLSearchParams(page.url.search));
@@ -28,7 +29,12 @@
   // proxying a large object we never mutate in place. Seeded once from the SSR
   // prop (untrack marks it an intentional snapshot, not a live binding).
   let counts = $state.raw<FacetCounts>(untrack(() => initial));
-  let salaryBands = $state.raw<InsightSalaryBand[]>(untrack(() => initialSalary));
+  // The SSR salary answer was read for the URL's filters, which seeded `filters`.
+  const initialScope = salaryScopeFromParams(filtersToParams(filters.applied));
+  let fetchedSalary = $state.raw<FetchedSalary>({
+    key: initialScope ? salaryScopeKey(initialScope.scope) : '',
+    bands: untrack(() => initialSalary),
+  });
   let status = $state<'ready' | 'loading' | 'error'>('ready');
   let modalOpen = $state(false);
   let started = false;
@@ -43,6 +49,20 @@
   // stale data. The reload debounce now lives in FilterStore (value -> applied),
   // so there is no second timer here.
   let generation = 0;
+
+  // Market breakdowns only: facets that are internal curation, too fine-grained or
+  // about one employer read as noise on a market overview. They stay filterable.
+  const HIDDEN = new Set([
+    'ai_archetype',
+    'role_type',
+    'collections',
+    'metros',
+    'english_level',
+    'reality',
+    'salary_currency',
+    'company_slug',
+  ]);
+  const breakdowns = FACETS.filter((def) => !HIDDEN.has(def.param));
 
   // Cancel a pending debounced apply on unmount so it can't fire afterwards.
   onMount(() => () => filters.dispose());
@@ -65,25 +85,37 @@
       status = 'loading';
       const params = filtersToParams(filters.applied);
       const gen = ++generation;
-      const sal = salaryScopeFromParams(params);
-      // A salary read failing leaves the counts standing: no figure, not an error page.
-      Promise.all([api.facetCounts(params), sal ? api.insightsSalary(sal.scope).catch(() => []) : []])
-        .then(([next, bands]) => {
+      api
+        .facetCounts(params)
+        .then((next) => {
           if (gen !== generation) return; // a newer fetch superseded this one
           counts = next;
-          salaryBands = bands;
           status = 'ready';
         })
         .catch(() => {
           if (gen === generation) status = 'error';
         });
+      // Salary is read on its own, so a failed count leaves it standing. A filter
+      // change outside role, grade and country keeps the answer already held.
+      const sal = salaryScopeFromParams(params);
+      if (!sal) return;
+      const key = salaryScopeKey(sal.scope);
+      if (key === fetchedSalary.key && fetchedSalary.bands) return;
+      api.insightsSalary(sal.scope).then(
+        (bands) => {
+          if (gen === generation) fetchedSalary = { key, bands };
+        },
+        () => {
+          if (gen === generation) fetchedSalary = { key, bands: null };
+        },
+      );
     });
   });
 
   // Median pay comes from the role × grade × country rollup, so only those three
   // filters shape it; the note says so when other filters narrow the counts.
   const salaryScope = $derived(salaryScopeFromParams(filtersToParams(filters.applied)));
-  const medianBands = $derived(salaryScope ? scopeBands(salaryBands, salaryScope.scope) : []);
+  const medianBands = $derived(salaryScope ? salaryView(fetchedSalary, salaryScope.scope) : null);
   const scopeName = $derived.by(() => {
     const s = salaryScope?.scope;
     if (!s) return '';
@@ -144,6 +176,10 @@
         <p class="mt-1 text-sm text-muted-foreground">
           Pick at most one specialization, one seniority and one country, with no exclusions, to see pay.
         </p>
+      {:else if medianBands === 'pending'}
+        <p class="mt-1 text-sm text-muted-foreground italic">Updating…</p>
+      {:else if medianBands === null}
+        <p class="mt-1 text-sm text-muted-foreground">Salary figures are unavailable right now.</p>
       {:else if medianBands.length === 0}
         <p class="mt-1 text-sm text-muted-foreground">
           {scopeName}: too few open postings state a salary to show one.
@@ -177,7 +213,7 @@
       <States state="error" message="Failed to load analytics." />
     {:else}
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {#each FACETS as def (def.param)}
+        {#each breakdowns as def (def.param)}
           <FacetBreakdown {def} dist={counts.facets[def.param]} store={filters} />
         {/each}
       </div>
