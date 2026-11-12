@@ -46,7 +46,12 @@ mail-preview: ## Render every outgoing email and open the contact sheet in a bro
 api-contract: ## Compile typespec/ to openapi/api.openapi.json, then generate internal/api/apigen from it
 	pnpm exec tsp compile typespec
 	node scripts/openapi-time-format.mjs openapi/api.openapi.json
-	go tool ogen --config ogen.yml --target internal/api/apigen --package apigen --clean openapi/api.openapi.json
+	@# Generated into a scratch dir and synced by content, so an unchanged contract touches no
+	@# file: the pre-commit hooks run in parallel, and go vet/govulncheck compiling apigen
+	@# while ogen --clean rewrote it in place saw a half-written package.
+	@tmp=$$(mktemp -d) && \
+		go tool ogen --config ogen.yml --target $$tmp --package apigen --clean openapi/api.openapi.json && \
+		rsync -rc --delete $$tmp/ internal/api/apigen/; status=$$?; rm -rf $$tmp; exit $$status
 
 gen-contracts: ## Regenerate web/src/lib/generated/contracts.ts from Go contracts
 	go run ./cmd/gen-contracts
