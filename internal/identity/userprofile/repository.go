@@ -59,6 +59,28 @@ func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializa
 	return profileFromRow(row), nil
 }
 
+// CreateIfAbsent maps a concurrent profile creation to ErrConflict without replacing it.
+func (r *QueriesRepository) CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (Profile, error) {
+	row, err := r.q.CreateUserProfileIfAbsent(ctx, db.CreateUserProfileIfAbsentParams{
+		UserID:              userID,
+		Specializations:     specializations,
+		Skills:              skills,
+		Seniorities:         seniorities,
+		ExcludedSkills:      excludedSkills,
+		ExcludedSources:     excludedSources,
+		ExcludedCompanies:   excludedCompanies,
+		JobLanguages:        jobLanguages,
+		LocationPreferences: locationPreferences,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Profile{}, ErrConflict
+	}
+	if err != nil {
+		return Profile{}, err
+	}
+	return profileFromRow(row), nil
+}
+
 // UpsertIfUnchanged behaves like Upsert but only writes when the row's updated_at still
 // matches expectedUpdatedAt, mapping no matching row to ErrConflict.
 func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error) {

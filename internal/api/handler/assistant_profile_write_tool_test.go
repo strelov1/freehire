@@ -97,6 +97,60 @@ func TestUpdateProfile_CreatesAProfileWhenNoneExists(t *testing.T) {
 	}
 }
 
+func TestUpdateProfile_ConcurrentInitialSavePreservesOmittedFields(t *testing.T) {
+	stamp := time.Now()
+	concurrent := userprofile.Profile{
+		UserID: 1, UpdatedAt: &stamp, Skills: []string{"go"},
+		Specializations: []string{"backend"}, Seniorities: []string{"senior"},
+		ExcludedSkills: []string{"php"}, ExcludedSources: []string{"hh"},
+		ExcludedCompanies: []string{"acme"}, JobLanguages: []string{"en"},
+		LocationPreferences: json.RawMessage(`{"work_modes":["remote"]}`),
+	}
+	repo := &fakeProfileRepo{createErr: userprofile.ErrConflict}
+	reads := 0
+	repo.getFn = func() (userprofile.Profile, error) {
+		reads++
+		if reads == 1 {
+			// A website save creates the row after this missing-row snapshot.
+			return userprofile.Profile{}, userprofile.ErrNotFound
+		}
+		return concurrent, nil
+	}
+	if _, err := runUpdateProfile(t, repo, `{"add_skills":["Python"]}`); err != nil {
+		t.Fatalf("update_profile: %v", err)
+	}
+	got := repo.upserted
+	if reads != 2 || repo.creates != 1 {
+		t.Errorf("reads=%d creates=%d, want one conflicted create and a reload", reads, repo.creates)
+	}
+	if !slices.Equal(got.Skills, []string{"go", "python"}) ||
+		!slices.Equal(got.Specializations, concurrent.Specializations) ||
+		!slices.Equal(got.Seniorities, concurrent.Seniorities) ||
+		!slices.Equal(got.ExcludedSkills, concurrent.ExcludedSkills) ||
+		!slices.Equal(got.ExcludedSources, concurrent.ExcludedSources) ||
+		!slices.Equal(got.ExcludedCompanies, concurrent.ExcludedCompanies) ||
+		!slices.Equal(got.JobLanguages, concurrent.JobLanguages) ||
+		!strings.Contains(string(got.LocationPreferences), `"remote"`) {
+		t.Errorf("concurrent preferences were lost: %+v", got)
+	}
+}
+
+func TestUpdateProfile_InitialCreateConflictIsBounded(t *testing.T) {
+	repo := &fakeProfileRepo{getErr: userprofile.ErrNotFound, createErr: userprofile.ErrConflict}
+	_, err := runUpdateProfile(t, repo, `{"add_skills":["go"]}`)
+	if !errors.Is(err, userprofile.ErrConflict) || repo.creates != updateProfileAttempts {
+		t.Fatalf("err=%v creates=%d, want ErrConflict after %d attempts", err, repo.creates, updateProfileAttempts)
+	}
+}
+
+func TestUpdateProfile_InitialCreateFaultIsNotRetried(t *testing.T) {
+	repo := &fakeProfileRepo{getErr: userprofile.ErrNotFound, createErr: errors.New("database unavailable")}
+	_, err := runUpdateProfile(t, repo, `{"add_skills":["go"]}`)
+	if err == nil || repo.creates != 1 {
+		t.Fatalf("err=%v creates=%d, want failure after one attempt", err, repo.creates)
+	}
+}
+
 func TestUpdateProfile_IsAccountOnlyAndDeclaresItsEffect(t *testing.T) {
 	h := assistantWithProfile(savedProfile(), nil)
 	tool := toolByName(t, mcpAccountTools(h, "https://x"), "update_profile")

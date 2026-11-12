@@ -307,8 +307,8 @@ func (h *assistantHandlers) savePreferencesOnce(ctx context.Context, userID int6
 		pick(in.Seniorities, cur.Seniorities), pick(in.JobLanguages, cur.JobLanguages)
 	var saved userprofile.Profile
 	if cur.UpdatedAt == nil {
-		// No stored profile (or no version to guard on): a plain create-or-replace.
-		saved, err = h.profile.userProfile.Save(ctx, userID, specs, skills, levels,
+		// Another writer may have created the profile since our missing-row read.
+		saved, err = h.profile.userProfile.CreateIfAbsent(ctx, userID, specs, skills, levels,
 			excluded, cur.ExcludedSources, cur.ExcludedCompanies, loc, languages...)
 	} else {
 		saved, err = h.profile.userProfile.SaveIfUnchanged(ctx, userID, *cur.UpdatedAt, specs, skills, levels,

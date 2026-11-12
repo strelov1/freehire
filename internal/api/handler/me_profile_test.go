@@ -37,21 +37,34 @@ type profileUpsert struct {
 type fakeProfileRepo struct {
 	getRet    userprofile.Profile
 	getErr    error
+	getFn     func() (userprofile.Profile, error)
+	createErr error
+	creates   int
 	upsertRet userprofile.Profile
 	upserted  profileUpsert
 	delErr    error
 }
 
 func (f *fakeProfileRepo) Get(context.Context, int64) (userprofile.Profile, error) {
+	if f.getFn != nil {
+		return f.getFn()
+	}
 	return f.getRet, f.getErr
+}
+
+func (f *fakeProfileRepo) CreateIfAbsent(ctx context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	f.creates++
+	if f.createErr != nil {
+		return userprofile.Profile{}, f.createErr
+	}
+	return f.Upsert(ctx, userID, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages, locationPreferences)
 }
 func (f *fakeProfileRepo) Upsert(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
 	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, JobLanguages: jobLanguages, LocationPreferences: locationPreferences}
 	return f.upsertRet, nil
 }
 
-// UpsertIfUnchanged is exercised by userprofile's own tests (MergeSkills' retry loop);
-// no handler here calls MergeSkills, so this fake just satisfies the interface.
+// UpsertIfUnchanged records the merged partial update just as Upsert records a full save.
 func (f *fakeProfileRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, seniorities, excludedSkills, excludedSources, excludedCompanies, jobLanguages []string, locationPreferences json.RawMessage, _ time.Time) (userprofile.Profile, error) {
 	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, Seniorities: seniorities, ExcludedSkills: excludedSkills, ExcludedSources: excludedSources, ExcludedCompanies: excludedCompanies, JobLanguages: jobLanguages, LocationPreferences: locationPreferences}
 	return f.upsertRet, nil

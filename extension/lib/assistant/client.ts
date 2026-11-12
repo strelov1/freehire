@@ -3,8 +3,8 @@
 //
 // A turn is a single POST whose response body streams the turn as SSE. That is the
 // whole transport: no connection held open between turns, no attach, no input
-// lease. Cancelling is aborting the fetch — the backend notices its next write fail
-// and stops the loop before spending another model call.
+// lease. Cancelling explicitly asks the server to stop the turn, then aborts the
+// local reader: a reader disconnect alone deliberately leaves the turn running.
 //
 // Divergence from the web's copy: an absolute origin and a Bearer credential, since
 // extension code cannot see hire's httpOnly cookie across origins.
@@ -22,6 +22,20 @@ export interface Turn {
   cancel: () => void;
 }
 
+/** Cancellation is independent of the reader: its signal must not abort this request. */
+async function cancelTurn(sessionId: string, token: string): Promise<void> {
+  try {
+    await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    // Best-effort while offline. The local reader still stops, and the server's
+    // own step and timeout bounds limit work if cancellation cannot reach it.
+  }
+}
+
 /**
  * Send a message and stream the turn. `onEvent` receives every frame in order,
  * ending with exactly one `result`. The returned promise resolves when the stream
@@ -30,36 +44,39 @@ export interface Turn {
  */
 export function sendTurn(sessionId: string, text: string, token: string, onEvent: (e: TurnEvent) => void): Turn {
   const controller = new AbortController();
+  let cancellationRequested = false;
+  let accepted = false;
+
+  const stopAcceptedTurn = () => {
+    void cancelTurn(sessionId, token);
+    controller.abort();
+  };
 
   const done = (async () => {
-    // Divergence from the web's copy: the fetch is inside the abort guard, not
-    // outside it. Stop renders the moment a turn starts, so it is reachable before
-    // the response headers arrive — and there the abort rejects the fetch itself,
-    // which the web surfaces as a raw AbortError on screen.
-    let res: Response;
-    try {
-      res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`, {
-        method: 'POST',
-        credentials: 'omit',
-        headers: {
-          'content-type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ text }),
-        signal: controller.signal,
-      });
-    } catch (e) {
-      if (controller.signal.aborted) {
-        onEvent({ type: 'result', stop_reason: 'cancelled' });
-        return;
-      }
-      throw e;
-    }
+    const res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ text }),
+      signal: controller.signal,
+    });
     if (res.status === 402) {
       throw await planRefusal(res);
     }
     if (!res.ok) {
       throw new Error(`could not send the message (${res.status})`);
+    }
+    // Successful headers prove the server has claimed the turn. An earlier
+    // cancel request could arrive before that claim and do nothing; keep the
+    // message request alive until this point even if Stop was already pressed.
+    accepted = true;
+    if (cancellationRequested) {
+      stopAcceptedTurn();
+      onEvent({ type: 'result', stop_reason: 'cancelled' });
+      return;
     }
     if (!res.body) {
       throw new Error('the assistant returned no stream');
@@ -81,7 +98,13 @@ export function sendTurn(sessionId: string, text: string, token: string, onEvent
     }
   })();
 
-  return { done, cancel: () => controller.abort() };
+  return {
+    done,
+    cancel: () => {
+      cancellationRequested = true;
+      if (accepted && !controller.signal.aborted) stopAcceptedTurn();
+    },
+  };
 }
 
 /** Read a 402's body into a PlanRefused. An unreadable body must still surface as

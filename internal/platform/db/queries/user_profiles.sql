@@ -4,6 +4,14 @@
 SELECT * FROM user_profiles
 WHERE user_id = $1;
 
+-- name: CreateUserProfileIfAbsent :one
+-- A partial update based on a missing-row snapshot must not replace a profile that
+-- another writer created meanwhile. No returned row means the caller must reload.
+INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies, location_preferences, job_languages)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE(sqlc.arg(job_languages)::text[], '{}'::text[]))
+ON CONFLICT (user_id) DO NOTHING
+RETURNING *;
+
 -- name: UpsertUserProfile :one
 -- Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an
 -- idempotent upsert: first save inserts, later saves overwrite specializations/skills/
