@@ -79,7 +79,7 @@ const PLOT_H = 220;
 const PAD = 28;
 
 /** "2026-03" → the next month's key, by calendar arithmetic on the key itself. */
-function nextMonth(key: string): string {
+export function nextMonth(key: string): string {
   const [y, m] = key.split('-').map(Number) as [number, number];
   return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
 }

@@ -132,5 +132,21 @@
   "success-muted": {
     "$value": "oklch(0.95 0.05 155)",
     "$description": "Soft success tint behind success-strong text."
+  },
+  "chart-1": {
+    "$value": "#2a78d6",
+    "$description": "Chart series, categorical slots 1-5 in fixed order (blue, orange, aqua, yellow, magenta), never cycled. Validated as a set for colour-vision deficiency and contrast against the light surface; slots 3-5 fall under 3:1 on light, so a chart using them carries a legend and a table of its figures."
+  },
+  "chart-2": {
+    "$value": "#eb6834"
+  },
+  "chart-3": {
+    "$value": "#1baf7a"
+  },
+  "chart-4": {
+    "$value": "#eda100"
+  },
+  "chart-5": {
+    "$value": "#e87ba4"
   }
 }

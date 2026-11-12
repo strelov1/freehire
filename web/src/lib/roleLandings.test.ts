@@ -26,6 +26,7 @@ const band = (over: Partial<InsightSalaryBand> = {}): InsightSalaryBand => ({
   p25: 70000,
   p50: 90000,
   p75: 110000,
+  quantiles: [],
   ...over,
 });
 

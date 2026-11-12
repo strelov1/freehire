@@ -80,6 +80,7 @@ describe('sortBandsBySeniority', () => {
       p25: 1,
       p50: 2,
       p75: 3,
+      quantiles: [],
     });
     const sorted = sortBandsBySeniority([band('senior'), band(''), band('junior')]).map((b) => b.seniority);
     expect(sorted).toEqual(['junior', 'senior', '']);
@@ -101,7 +102,16 @@ describe('formatSalary', () => {
 describe('auto-intros', () => {
   it('salaryIntro states the median from the richest yearly band', () => {
     const bands: InsightSalaryBand[] = [
-      { seniority: '', currency: 'USD', period: 'year', sample_size: 200, p25: 130000, p50: 155000, p75: 180000 },
+      {
+        seniority: '',
+        currency: 'USD',
+        period: 'year',
+        sample_size: 200,
+        p25: 130000,
+        p50: 155000,
+        p75: 180000,
+        quantiles: [],
+      },
     ];
     const intro = salaryIntro('backend', bands);
     expect(intro).toContain('Backend');
@@ -269,6 +279,7 @@ describe('scopeBands', () => {
     p25: 1,
     p50: 2,
     p75: 3,
+    quantiles: [],
   });
 
   it("keeps only the scope's own seniority, richest first, capped", () => {
@@ -295,6 +306,7 @@ describe('salaryView', () => {
     p25: 1,
     p50: 2,
     p75: 3,
+    quantiles: [],
   };
 
   it("never shows another scope's figures while its own answer is pending", () => {
