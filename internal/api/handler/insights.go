@@ -679,13 +679,3 @@ func salaryBands(ctx context.Context, q salaryReader, category, seniority, count
 	}
 	return bands, false, nil
 }
-
-// int64s widens rollup integers to the contract's int64, never nil: the field is a
-// required array, so an absent value is [] rather than null.
-func int64s(v []int32) []int64 {
-	out := make([]int64, len(v))
-	for i, x := range v {
-		out[i] = int64(x)
-	}
-	return out
-}
