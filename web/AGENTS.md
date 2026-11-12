@@ -92,6 +92,14 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 
 ## Worth knowing
 
+- **API wire types come from the contract**: `src/lib/generated/api.ts` is generated
+  from `openapi/api.openapi.json` by `make api-contract` (CI fails when it is stale), so
+  a field the server renames breaks this build, not production. A response type in
+  `api-types.ts` or `wire-types/` for a route in the contract is an alias
+  (`export type EmailPrefs = components['schemas']['EmailPrefs']`), and a request body
+  is checked with `satisfies components['schemas'][...]`. Hand-written shapes remain
+  for routes that stay on Fiber (streams, uploads) and for client-side shapes the UI
+  maps from; move the rest over when you touch them.
 - **Job-fit analysis**: the standalone `/match/[slug]/` page is gone — its
   `+page.server.ts` is only a 308 redirect to `/tailor/[slug]`, and the Tailor workspace
   is the sole surface for viewing and triggering the analysis. The analysis UI is

@@ -20,6 +20,7 @@
     "@typespec/openapi": "^1.17.0",
     "@typespec/openapi3": "^1.17.0",
     "knip": "^6.33.0",
+    "openapi-typescript": "^7.13.0",
     "squawk-cli": "^2.63.0"
   }
 }

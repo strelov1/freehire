@@ -3,6 +3,7 @@
 
 import type { ATSReport, Company, CompanyRef, CompanyResponse, EmailLinking, Job, ListMeta, Verdict } from './types';
 import type { JobMatch } from '#lib/generated/contracts.js';
+import type { components } from '#lib/generated/api.js';
 
 /** A page of list items, optionally the total matching the query (endpoints that
  *  report one), and whether more remain. */
@@ -34,19 +35,7 @@ export interface Page<T> {
  *  it is a bearer credential somebody could have forwarded, so it carries the address
  *  the mail already went to, three switches, and the names of the searches those
  *  switches govern — and nothing else about the account. */
-export interface EmailPrefs {
-  email: string;
-  alerts_enabled: boolean;
-  activity_enabled: boolean;
-  news_enabled: boolean;
-  searches: EmailPrefsSearch[];
-}
-
-interface EmailPrefsSearch {
-  id: number;
-  name: string;
-  active: boolean;
-}
+export type EmailPrefs = components['schemas']['EmailPrefs'];
 
 /** A patch, not a replace: an omitted switch keeps its stored value.
  *  `deactivateSearches` can only turn a digest OFF — a link that can only subtract

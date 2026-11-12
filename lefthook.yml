@@ -105,14 +105,15 @@ pre-commit:
         fi
 
     # The HTTP contract, the same trap as sqlc: openapi/api.openapi.json and
-    # internal/api/apigen are generated from typespec/ and committed.
+    # internal/api/apigen (and web/src/lib/generated/api.ts) are generated from
+    # typespec/ and committed.
     api-contract-drift:
       glob: "{typespec/*.tsp,typespec/tspconfig.yaml,ogen.yml}"
       run: |
         set -e
         make api-contract
-        unstaged="$(git diff --name-only -- openapi internal/api/apigen)"
-        untracked="$(git ls-files --others --exclude-standard -- openapi internal/api/apigen)"
+        unstaged="$(git diff --name-only -- openapi internal/api/apigen web/src/lib/generated/api.ts)"
+        untracked="$(git ls-files --others --exclude-standard -- openapi internal/api/apigen web/src/lib/generated/api.ts)"
         if [ -n "$unstaged$untracked" ]; then
           printf '%s\n' $unstaged $untracked
           echo 'Generated contract was stale — make api-contract has just fixed it; stage the result.'
