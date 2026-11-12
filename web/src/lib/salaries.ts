@@ -105,6 +105,21 @@ export function histogramFromQuantiles(q: readonly number[] | undefined, target 
   return bins;
 }
 
+/** The unit every figure on the page is in: the shown band's, so the cards and the
+ *  chart agree; without a band, the requested unit if any line has history in it,
+ *  else the richest unit of the first line that has any. A comparison line can carry
+ *  the chart when the scope itself has no figures. '' when no line has history. */
+export function pageUnit(
+  band: InsightSalaryBand | null,
+  requested: string,
+  histories: (InsightSalaryMonth[] | null)[],
+): string {
+  if (band) return unitOf(band);
+  const units = histories.map((rows) => historySeries(rows ?? []).map(unitOf));
+  if (requested && units.some((u) => u.includes(requested))) return requested;
+  return units.find((u) => u.length > 0)?.[0] ?? '';
+}
+
 /** One line's stored months in one unit, oldest first; [] when it has too few months. */
 export function lineMonths(rows: InsightSalaryMonth[] | null, unit: string): InsightSalaryMonth[] {
   return historySeries(rows ?? []).find((s) => unitOf(s) === unit)?.months ?? [];

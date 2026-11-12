@@ -9,8 +9,15 @@
   import { CATEGORY_OPTIONS, SENIORITY_OPTIONS, countryLabel } from '#lib/facets.js';
   import { formatSalary, seniorityLabel } from '#lib/insights.js';
   import { categoryLabel } from '#lib/labels.js';
-  import { MAX_COMPARE, lineMonths, pickBand, salariesSearch, unitOf, type SalariesQuery } from '#lib/salaries.js';
-  import { historySeries } from '#lib/salaryHistoryChart.js';
+  import {
+    MAX_COMPARE,
+    lineMonths,
+    pageUnit,
+    pickBand,
+    salariesSearch,
+    unitOf,
+    type SalariesQuery,
+  } from '#lib/salaries.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -19,8 +26,7 @@
   const scope = $derived(q.scope);
   const bands = $derived(data.bands ?? []);
   const band = $derived(pickBand(bands, q.unit));
-  // The unit every figure is in: the shown band's, else the scope's richest history series.
-  const unit = $derived(band ? unitOf(band) : (historySeries(data.histories[0] ?? []).map(unitOf)[0] ?? ''));
+  const unit = $derived(pageUnit(band, q.unit, data.histories));
   const [currency = '', period = ''] = $derived(unit.split('-'));
 
   const lineName = (category: string, country: string) =>

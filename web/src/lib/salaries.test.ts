@@ -4,6 +4,7 @@ import {
   buildCompareChart,
   histogramFromQuantiles,
   lineMonths,
+  pageUnit,
   pickBand,
   readSalariesQuery,
   salariesSearch,
@@ -92,6 +93,41 @@ describe('histogramFromQuantiles', () => {
     expect(histogramFromQuantiles([])).toEqual([]);
     expect(histogramFromQuantiles(undefined)).toEqual([]);
     expect(histogramFromQuantiles(Array(19).fill(5000))).toEqual([]);
+  });
+});
+
+describe('pageUnit', () => {
+  const months = (currency: string, period: string, sample_size = 40) =>
+    ['2026-07', '2026-08', '2026-09'].map((month) => ({
+      currency,
+      period,
+      month,
+      sample_size,
+      p25: 1,
+      p50: 2,
+      p75: 3,
+    }));
+  const band = {
+    seniority: '',
+    currency: 'EUR',
+    period: 'year',
+    sample_size: 9,
+    p25: 1,
+    p50: 2,
+    p75: 3,
+    quantiles: [],
+  };
+
+  it('follows the shown band so the cards and the chart agree', () => {
+    expect(pageUnit(band, 'USD-year', [months('USD', 'year')])).toBe('EUR-year');
+  });
+
+  it('lets a comparison line carry the chart when the scope has no figures', () => {
+    const histories = [null, [...months('USD', 'year'), ...months('PLN', 'month', 10)]];
+    expect(pageUnit(null, '', histories)).toBe('USD-year');
+    expect(pageUnit(null, 'PLN-month', histories)).toBe('PLN-month');
+    expect(pageUnit(null, 'GBP-year', histories)).toBe('USD-year');
+    expect(pageUnit(null, '', [null, []])).toBe('');
   });
 });
 
