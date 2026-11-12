@@ -72,15 +72,16 @@ func run() int {
 		return 1
 	}
 	defer analytics.Close()
+	// A failed rollup still fails the run, but does not take the snapshots below with
+	// it: they read other data, and skipping them lets the public figures expire.
+	exit := 0
 	if err := rebuildRollups(ctx, analytics, pool); err != nil {
 		log.Printf("rebuild rollups: %v", err)
-		return 1
+		exit = 1
 	}
 
-	// The catalogue-scale snapshot rides along after the rollups have committed. It is
-	// a separate concern with its own failure mode, so it neither joins their
-	// transaction nor changes this run's exit code: the rollups are the worker's job,
-	// and they are already done.
+	// The catalogue-scale snapshot is a separate concern with its own failure mode, so
+	// it neither joins the rollups' transaction nor changes this run's exit code.
 	done := worker.Stage("catalogue snapshot")
 	publish(ctx, cfg.RedisURL, cfg.MeiliURL, cfg.MeiliKey, db.New(analytics))
 	done()
@@ -97,7 +98,7 @@ func run() int {
 	rebuildEmbedProgress(ctx, analytics, cfg.RedisURL)
 	done()
 
-	return 0
+	return exit
 }
 
 // publish measures the catalogue and stores the snapshot every public surface reads.
