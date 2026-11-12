@@ -188,10 +188,16 @@ func (h *assistantHandlers) RateSupportSession(ctx context.Context, req *apigen.
 	if err != nil {
 		return err
 	}
-	_, err = h.queries.RateSupportSession(ctx, db.RateSupportSessionParams{
+	n, err := h.queries.RateSupportSession(ctx, db.RateSupportSessionParams{
 		ID: sess.ID, UserID: userID, Helpful: pgtype.Bool{Bool: req.Helpful, Valid: true},
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fiber.NewError(fiber.StatusConflict, "nothing to rate yet — the assistant has not replied")
+	}
+	return nil
 }
 
 func (h *assistantHandlers) boundSupportRunner(ctx context.Context, sess assistant.Session) (*assistant.Runner, error) {

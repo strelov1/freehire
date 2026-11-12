@@ -40,6 +40,7 @@
     sessionId = null;
     answered = false;
     rated = null;
+    saving = false;
   }
 
   async function rate(helpful: boolean) {
@@ -54,7 +55,7 @@
       // Not after "New conversation": the old verdict does not belong to the new one.
       if (conversation === chatKey) rated = previous;
     } finally {
-      saving = false;
+      if (conversation === chatKey) saving = false;
     }
   }
 </script>

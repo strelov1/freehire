@@ -771,8 +771,15 @@ func TestSupportRatingRecordsTheOwnersVerdictOnly(t *testing.T) {
 	if got := rate(other, `{"helpful":true}`); got != fiber.StatusNotFound {
 		t.Errorf("another account's rating = %d, want 404", got)
 	}
+	if got := rate(owner, `{"helpful":true}`); got != fiber.StatusConflict {
+		t.Errorf("rating before any reply = %d, want 409", got)
+	}
 	if v := helpful(); v != nil {
 		t.Fatalf("helpful = %v after refused votes, want NULL", *v)
+	}
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO assistant_messages (session_id, seq, role, content) VALUES ($1, 1, 'user', '{"text":"hi"}'), ($1, 2, 'assistant', '{"text":"hello"}')`, id); err != nil {
+		t.Fatal(err)
 	}
 	if got := rate(owner, `{"helpful":true}`); got != fiber.StatusNoContent {
 		t.Fatalf("owner rating = %d, want 204", got)

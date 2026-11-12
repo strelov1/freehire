@@ -6202,8 +6202,9 @@ type Querier interface {
 	// scheduled runs says cmd/push-receipts is not draining — the one failure this queue can
 	// have and the one it would otherwise report as a perfectly healthy backlog.
 	PushTicketOutboxMetrics(ctx context.Context) (PushTicketOutboxMetricsRow, error)
-	// The owner's verdict on their own support conversation; 0 rows means it is not theirs or not
-	// a support session.
+	// The owner's verdict on their own support conversation, only once it holds a reply: a blank
+	// session is handed back on the next create, so a vote on it would land on a conversation not
+	// yet had. 0 rows means not theirs, not support, or nothing answered yet.
 	RateSupportSession(ctx context.Context, arg RateSupportSessionParams) (int64, error)
 	// A withdrawn mentor resubmits for review: back to pending, pause switch cleared, no
 	// auto-approval. The status guard is symmetric with DecideMentorProfile's — it makes
