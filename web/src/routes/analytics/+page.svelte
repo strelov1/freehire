@@ -10,12 +10,12 @@
 </script>
 
 <Seo
-  title="Job market analytics · freehire"
-  description="See how many tech vacancies match your criteria — counts by region, stack, seniority, work mode and more, across the freehire catalogue."
+  title="Job market and salary analytics · freehire"
+  description="See how many tech vacancies match your criteria — counts by region, stack, seniority, work mode and more, and the median advertised salary for a role, grade and country."
   {canonical}
 />
 
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
-  <h1 class="mb-4 text-xl font-semibold tracking-tight">Job market analytics</h1>
-  <AnalyticsView initial={data.initial} />
+  <h1 class="mb-4 text-xl font-semibold tracking-tight">Job market and salary analytics</h1>
+  <AnalyticsView initial={data.initial} initialSalary={data.initialSalary} />
 </div>

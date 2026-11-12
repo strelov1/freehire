@@ -49,6 +49,7 @@
         { label: 'Discussions', href: resolve('/discussions') },
         { label: 'Blog', href: resolve('/blog') },
         { label: 'Insights', href: resolve('/insights') },
+        { label: 'Salary analytics', href: resolve('/analytics') },
         { label: 'Hiring signal', href: resolve('/insights/companies') },
         { label: 'Trends', href: resolve('/trends') },
         { label: 'For AI agents', href: resolve('/agents') },

@@ -4,6 +4,10 @@ import {
   coveredCategories,
   isCovered,
   sortBandsBySeniority,
+  salaryScopeFromParams,
+  scopeBands,
+  salaryView,
+  salaryScopeKey,
   formatSalary,
   salaryIntro,
   skillsIntro,
@@ -228,5 +232,81 @@ describe('roleSkillsIntro', () => {
     const intro = roleSkillsIntro({ ...role('backend', 'senior', 40), sample_size: 0, skills: [] });
 
     expect(intro).toContain('Not enough');
+  });
+});
+
+describe('salaryScopeFromParams', () => {
+  const read = (q: string) => salaryScopeFromParams(new URLSearchParams(q));
+
+  it('reads one value per part, lowercasing the country', () => {
+    expect(read('category=backend&seniority=senior&countries=DE')).toEqual({
+      scope: { category: 'backend', seniority: 'senior', country: 'de' },
+      partial: false,
+    });
+  });
+
+  it('treats no filters as the whole catalogue', () => {
+    expect(read('')).toEqual({ scope: { category: '', seniority: '', country: '' }, partial: false });
+  });
+
+  it('has no scope for two values in a part or an exclusion', () => {
+    expect(read('category=backend,frontend')).toBeNull();
+    expect(read('countries_exclude=us')).toBeNull();
+  });
+
+  it('flags other filters as not reflected, but not the sort', () => {
+    expect(read('category=backend&sort=salary')?.partial).toBe(false);
+    expect(read('category=backend&skills=go')?.partial).toBe(true);
+  });
+});
+
+describe('scopeBands', () => {
+  const band = (seniority: string, currency: string, sample_size: number): InsightSalaryBand => ({
+    seniority,
+    currency,
+    period: 'year',
+    sample_size,
+    p25: 1,
+    p50: 2,
+    p75: 3,
+  });
+
+  it("keeps only the scope's own seniority, richest first, capped", () => {
+    const bands = [
+      band('senior', 'USD', 900),
+      band('', 'EUR', 50),
+      band('', 'USD', 400),
+      band('', 'GBP', 70),
+      band('', 'INR', 10),
+    ];
+    const got = scopeBands(bands, { category: 'backend', seniority: '', country: '' });
+    expect(got.map((b) => b.currency)).toEqual(['USD', 'GBP', 'EUR']);
+  });
+});
+
+describe('salaryView', () => {
+  const de = { category: 'backend', seniority: 'senior', country: 'de' };
+  const fr = { ...de, country: 'fr' };
+  const deBand: InsightSalaryBand = {
+    seniority: 'senior',
+    currency: 'EUR',
+    period: 'year',
+    sample_size: 18,
+    p25: 1,
+    p50: 2,
+    p75: 3,
+  };
+
+  it("never shows another scope's figures while its own answer is pending", () => {
+    // A country change keeps the seniority, so a seniority-only check would pass DE's band.
+    expect(salaryView({ key: salaryScopeKey(de), bands: [deBand] }, fr)).toBe('pending');
+  });
+
+  it('reports a failed read for this scope as unavailable', () => {
+    expect(salaryView({ key: salaryScopeKey(fr), bands: null }, fr)).toBeNull();
+  });
+
+  it("shows the scope's own bands once they land", () => {
+    expect(salaryView({ key: salaryScopeKey(de), bands: [deBand] }, de)).toEqual([deBand]);
   });
 });
