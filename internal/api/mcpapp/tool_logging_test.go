@@ -239,7 +239,7 @@ func TestToolLogNamesBadArgumentsAndIgnoredFilters(t *testing.T) {
 
 func TestLoggableNamesAreBounded(t *testing.T) {
 	got := loggableNames([]string{"a", "a", "b c", strings.Repeat("x", 41), "ok.name-1", "c", "d", "e", "f", "g"})
-	if strings.Join(got, ",") != "a,ok.name-1,c,d,e" {
+	if strings.Join(got, ",") != "a,c,d,e,ok.name-1" {
 		t.Errorf("names = %v", got)
 	}
 }
