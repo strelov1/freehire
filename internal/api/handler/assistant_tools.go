@@ -89,8 +89,8 @@ func (f assistantFilterArgs) values() (url.Values, error) {
 	vals := url.Values{}
 	for name, list := range f {
 		if _, ok := search.StringFacets[name]; !ok {
-			return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("unknown filter %q — call the facets tool for the valid filter names and values; valid names are: %s",
-				name, strings.Join(assistantFacetNames(), ", ")))
+			return nil, assistant.BadArg("filters."+name, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("unknown filter %q — call the facets tool for the valid filter names and values; valid names are: %s",
+				name, strings.Join(assistantFacetNames(), ", "))))
 		}
 		for _, v := range list {
 			if v = strings.TrimSpace(v); v != "" {
@@ -168,7 +168,7 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 			if !full && facet != "" {
 				// Count only the named facet: one attribute costs Meili a fraction of all of them.
 				if !listableFacet(facet) {
-					return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("unknown facet %q; valid facets are: %s", facet, strings.Join(listableFacets(), ", ")))
+					return nil, assistant.BadArg("facet", fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("unknown facet %q; valid facets are: %s", facet, strings.Join(listableFacets(), ", "))))
 				}
 				attrs = facetAttributes(facet)
 			}
@@ -394,9 +394,9 @@ func (h *assistantHandlers) searchJobs(full bool) assistant.Tool {
 func searchToolError(err error) error {
 	switch {
 	case errors.Is(err, search.ErrTooManyAlternatives):
-		return fiber.NewError(fiber.StatusBadRequest, search.ErrTooManyAlternatives.Error())
+		return assistant.BadArg("query", fiber.NewError(fiber.StatusBadRequest, search.ErrTooManyAlternatives.Error()))
 	case errors.Is(err, search.ErrBadQuery):
-		return fiber.NewError(fiber.StatusBadRequest, "invalid search query")
+		return assistant.BadArg("query", fiber.NewError(fiber.StatusBadRequest, "invalid search query"))
 	}
 	return err
 }
@@ -438,7 +438,7 @@ func (h *assistantHandlers) getJobTool() assistant.Tool {
 				return nil, err
 			}
 			if in.Slug == "" {
-				return nil, fiber.NewError(fiber.StatusBadRequest, "slug is required")
+				return nil, assistant.BadArg("slug", fiber.NewError(fiber.StatusBadRequest, "slug is required"))
 			}
 			job, err := agentJobBySlug(ctx, h.queries, in.Slug)
 			if err != nil {
@@ -476,7 +476,7 @@ func (h *assistantHandlers) getCompanyTool() assistant.Tool {
 				return nil, err
 			}
 			if in.Slug == "" {
-				return nil, fiber.NewError(fiber.StatusBadRequest, "slug is required")
+				return nil, assistant.BadArg("slug", fiber.NewError(fiber.StatusBadRequest, "slug is required"))
 			}
 			company, canonical, err := companyBySlugOrAlias(ctx, h.queries, in.Slug)
 			if canonical != "" {
@@ -538,10 +538,10 @@ func (h *assistantHandlers) marketFitTool() assistant.Tool {
 			}
 			skills := nonEmptyStrings(in.Skills)
 			if len(skills) == 0 {
-				return nil, fiber.NewError(fiber.StatusBadRequest, "skills is required — list the canonical slugs to measure")
+				return nil, assistant.BadArg("skills", fiber.NewError(fiber.StatusBadRequest, "skills is required — list the canonical slugs to measure"))
 			}
 			if len(skills) > maxCoverageSkills {
-				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("too many skills (max %d)", maxCoverageSkills))
+				return nil, assistant.BadArg("skills", fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("too many skills (max %d)", maxCoverageSkills)))
 			}
 			vals, err := in.Filters.values()
 			if err != nil {

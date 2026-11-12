@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/engage/subscription"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/observability"
@@ -129,5 +130,16 @@ func TestAlertSavedSearchError_GivesUserCausedRefusalsACode(t *testing.T) {
 				t.Errorf("code = %q, want %q", got, tc.code)
 			}
 		})
+	}
+}
+
+func TestUnknownFilterAndBadQueryNameTheirArgument(t *testing.T) {
+	_, err := assistantFilterArgs{"bogus_facet": {"x"}}.values()
+	if got := assistant.ArgField(err); got != "filters.bogus_facet" || observability.ErrorCode(err) != "invalid_request" {
+		t.Errorf("unknown filter: field=%q code=%q", got, observability.ErrorCode(err))
+	}
+	err = searchToolError(search.ErrTooManyAlternatives)
+	if got := assistant.ArgField(err); got != "query" || observability.ErrorCode(err) != "invalid_request" {
+		t.Errorf("too many alternatives: field=%q code=%q", got, observability.ErrorCode(err))
 	}
 }

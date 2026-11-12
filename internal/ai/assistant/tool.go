@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/tmc/langchaingo/llms"
 )
@@ -171,6 +173,44 @@ func failed(msg string) Result {
 // caller's mistake rather than a server fault.
 var ErrInvalidArguments = errors.New("invalid arguments")
 
+// ArgError is an invalid call caused by one named argument. Err keeps carrying the cause
+// and its status; Field is what a surface may log: the NAME of the argument, never its value.
+type ArgError struct {
+	Field string
+	Err   error
+}
+
+func (e *ArgError) Error() string { return e.Err.Error() }
+func (e *ArgError) Unwrap() error { return e.Err }
+
+// BadArg blames err on the argument field.
+func BadArg(field string, err error) error { return &ArgError{Field: field, Err: err} }
+
+// ArgField returns the argument an error blames, or "" when it blames none.
+func ArgField(err error) string {
+	var a *ArgError
+	if errors.As(err, &a) {
+		return a.Field
+	}
+	return ""
+}
+
+// decodeField names the argument a decode failure is about. encoding/json types a
+// mismatch (UnmarshalTypeError.Field) but reports an unknown field only as text, so that
+// one case is read from its fixed `json: unknown field "<name>"` shape.
+func decodeField(err error) string {
+	var typed *json.UnmarshalTypeError
+	if errors.As(err, &typed) {
+		return typed.Field
+	}
+	if rest, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
+		if name, err := strconv.Unquote(rest); err == nil {
+			return name
+		}
+	}
+	return ""
+}
+
 func DecodeArgs(args json.RawMessage, dst any) error {
 	raw := bytes.TrimSpace(args)
 	if len(raw) == 0 {
@@ -179,7 +219,11 @@ func DecodeArgs(args json.RawMessage, dst any) error {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
-		return fmt.Errorf("%w: %w", ErrInvalidArguments, err)
+		invalid := fmt.Errorf("%w: %w", ErrInvalidArguments, err)
+		if field := decodeField(err); field != "" {
+			return BadArg(field, invalid)
+		}
+		return invalid
 	}
 	// A second value means the model concatenated objects; decoding only the first
 	// would run the call with arguments it did not intend.
