@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"strings"
@@ -94,14 +93,10 @@ func (h *assistantHandlers) interviewContextTool(jobID int64) assistant.Tool {
 			"experience bank already holds for it, and the employer's own invitation when the mailbox has " +
 			"one. Call this first. The requirements are where your questions come from — one with evidence " +
 			"is a question they can answer, one without is where they will struggle.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
-		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
-			var in struct{}
-			if err := assistant.DecodeArgs(raw, &in); err != nil {
-				return nil, err
-			}
+		Schema: assistant.EmptySchema,
+		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
 			return h.rehearsalContext(ctx, userID, jobID)
-		},
+		}),
 	}
 }
 

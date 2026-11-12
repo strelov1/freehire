@@ -107,7 +107,7 @@ func (h *assistantHandlers) addCV(ctx context.Context, userID int64, text, profi
 		return nil, fmt.Errorf("%w: text is longer than %d characters", assistant.ErrInvalidArguments, cvTextMaxRunes)
 	}
 	if h.resume == nil || !h.resume.resume.Enabled() {
-		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "CV storage is not available")
+		return nil, unavailable("CV storage")
 	}
 	meta, err := h.resume.storeFirstCV(ctx, userID, resumeUpload{
 		Data: []byte(text), ContentType: "text/plain; charset=utf-8", Text: text,

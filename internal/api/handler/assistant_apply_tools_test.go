@@ -72,7 +72,9 @@ func TestApplyToolsTakeNoJobFromTheModel(t *testing.T) {
 func TestBindToJobOverridesTheModelsSlug(t *testing.T) {
 	var got string
 	tool := assistant.Tool{Name: "t", Schema: jobSlugSchema, Run: func(_ context.Context, _ int64, raw json.RawMessage) (any, error) {
-		var in jobSlugArgs
+		var in struct {
+			JobSlug string `json:"job_slug"`
+		}
 		_ = json.Unmarshal(raw, &in)
 		got = in.JobSlug
 		return nil, nil
@@ -103,7 +105,9 @@ func TestBlockedNextStepAsksForOneNumberedList(t *testing.T) {
 func TestBindToJobAcceptsNullArguments(t *testing.T) {
 	var got string
 	tool := assistant.Tool{Name: "t", Schema: jobSlugSchema, Run: func(_ context.Context, _ int64, raw json.RawMessage) (any, error) {
-		var in jobSlugArgs
+		var in struct {
+			JobSlug string `json:"job_slug"`
+		}
 		_ = json.Unmarshal(raw, &in)
 		got = in.JobSlug
 		return nil, nil

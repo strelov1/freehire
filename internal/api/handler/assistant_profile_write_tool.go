@@ -183,7 +183,7 @@ const updateProfileAttempts = 3
 // shared transaction, so each is attempted on its own and the result lists what landed.
 func (h *assistantHandlers) updateProfile(ctx context.Context, userID int64, in updateProfileArgs) (any, error) {
 	if h.profile == nil || h.profile.userProfile == nil {
-		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "the saved profile is not available")
+		return nil, unavailable("the saved profile")
 	}
 	if in.Skills != nil && in.AddSkills != nil {
 		return nil, fmt.Errorf("%w: send either skills (replace) or add_skills (add), not both", assistant.ErrInvalidArguments)
@@ -334,7 +334,7 @@ func (h *assistantHandlers) savePreferencesOnce(ctx context.Context, userID int6
 // resume.Store if this is ever seen.
 func (h *assistantHandlers) saveProfileText(ctx context.Context, userID int64, in updateProfileArgs) (resume.Owned, []string, error) {
 	if h.profile.resume == nil {
-		return resume.Owned{}, nil, fiber.NewError(fiber.StatusServiceUnavailable, "the profile text is not available")
+		return resume.Owned{}, nil, unavailable("the profile text")
 	}
 	owned, err := h.profile.resume.CandidateOwned(ctx, userID)
 	if err != nil {

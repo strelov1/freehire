@@ -164,11 +164,6 @@ func failed(msg string) Result {
 	return Result{Content: string(payload), Failed: true}
 }
 
-// DecodeArgs strictly decodes a tool call's arguments into dst. Unknown fields,
-// type mismatches and trailing content are rejected, so a mis-addressed call
-// fails with a reason the model can act on instead of silently running with
-// half the arguments dropped. Empty arguments decode as an empty object, which
-// is what models send for a no-argument tool.
 // ErrInvalidArguments marks a call the MODEL got wrong, so a surface can report it as the
 // caller's mistake rather than a server fault.
 var ErrInvalidArguments = errors.New("invalid arguments")
@@ -211,6 +206,11 @@ func decodeField(err error) string {
 	return ""
 }
 
+// DecodeArgs strictly decodes a tool call's arguments into dst. Unknown fields,
+// type mismatches and trailing content are rejected, so a mis-addressed call
+// fails with a reason the model can act on instead of silently running with
+// half the arguments dropped. Empty arguments decode as an empty object, which
+// is what models send for a no-argument tool.
 func DecodeArgs(args json.RawMessage, dst any) error {
 	raw := bytes.TrimSpace(args)
 	if len(raw) == 0 {
@@ -231,4 +231,22 @@ func DecodeArgs(args json.RawMessage, dst any) error {
 		return fmt.Errorf("%w: expected a single JSON object", ErrInvalidArguments)
 	}
 	return nil
+}
+
+// EmptySchema is the schema of a tool that takes no arguments; ClosedEmptySchema also sets
+// additionalProperties false. Both are shared, read-only values.
+var (
+	EmptySchema       = map[string]any{"type": "object", "properties": map[string]any{}}
+	ClosedEmptySchema = map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
+)
+
+// NoArgs runs a tool that takes no arguments, still refusing unexpected ones.
+func NoArgs(run func(ctx context.Context, userID int64) (any, error)) func(context.Context, int64, json.RawMessage) (any, error) {
+	return func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
+		var in struct{}
+		if err := DecodeArgs(raw, &in); err != nil {
+			return nil, err
+		}
+		return run(ctx, userID)
+	}
 }

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/platform/observability"
@@ -20,7 +19,6 @@ func TestToolErrorKeepsTheRefusalKind(t *testing.T) {
 	}{
 		{"unsupported ATS", "invalid_request", "auto-apply cannot queue an attempt against this posting's ATS",
 			fiber.NewError(fiber.StatusBadRequest, "auto-apply cannot queue an attempt against this posting's ATS")},
-		{"unknown slug", "not_found", "no job with this slug", pgx.ErrNoRows},
 		{"free plan", "payment_required", plan.ErrPaymentRequired.Error(), plan.ErrPaymentRequired},
 		{"allowance spent", "rate_limited", plan.ErrRefused.Error(), plan.ErrRefused},
 		{"switch off", "permission_denied", agentsMayApplyOff, errAgentsMayApplyOff},

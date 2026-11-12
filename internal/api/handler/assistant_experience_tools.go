@@ -232,7 +232,7 @@ func (h *assistantHandlers) experienceEmploymentsTool() assistant.Tool {
 		Name: "experience_employments",
 		Description: "List the candidate's known roles and projects, with their ids. Call this before " +
 			"recording an achievement so it attaches to the role it belongs to. Takes no arguments.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Schema: assistant.EmptySchema,
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
 			employments, err := h.experience.ListEmployments(ctx, userID)
 			if err != nil {

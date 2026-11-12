@@ -6,8 +6,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
-
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/resume"
@@ -72,7 +70,7 @@ func (h *assistantHandlers) setupStatusTool(origin string) assistant.Tool {
 			"connected agents apply. Returns each step with done or not, which preferences are missing, " +
 			"and next_step: the one thing to do now, as a tool name or a page URL to send the person to. " +
 			"Takes no arguments.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
+		Schema: assistant.ClosedEmptySchema,
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
 			f, err := h.setupFacts(ctx, userID)
 			if err != nil {
@@ -87,7 +85,7 @@ func (h *assistantHandlers) setupStatusTool(origin string) assistant.Tool {
 // done because its read failed would send the person to redo something they did.
 func (h *assistantHandlers) setupFacts(ctx context.Context, userID int64) (setupFacts, error) {
 	if h.profile == nil || h.profile.userProfile == nil || h.resume == nil {
-		return setupFacts{}, fiber.NewError(fiber.StatusServiceUnavailable, "the account setup is not available")
+		return setupFacts{}, unavailable("the account setup")
 	}
 	var f setupFacts
 	if store := h.resume.resume; store.Enabled() {

@@ -57,37 +57,17 @@ func (h *assistantHandlers) assistantTrackingTools() []assistant.Tool {
 // slugActionTool builds the tools that take a single vacancy slug and perform one
 // idempotent action on the caller's interaction with it.
 func (h *assistantHandlers) slugActionTool(name, title, description string, effect assistant.Effect, idempotent bool, act func(context.Context, int64, string) (jobtracking.Interaction, error)) assistant.Tool {
-	return assistant.Tool{
-		Name:        name,
-		Title:       title,
-		Description: description,
-		Effect:      effect,
-		Idempotent:  idempotent,
-		Schema: map[string]any{
-			"type":       "object",
-			"properties": map[string]any{"slug": map[string]any{"type": "string", "description": "The vacancy's public_slug."}},
-			"required":   []string{"slug"},
-		},
-		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
-			var in struct {
-				Slug string `json:"slug"`
-			}
-			if err := assistant.DecodeArgs(raw, &in); err != nil {
-				return nil, err
-			}
-			if in.Slug == "" {
-				return nil, fiber.NewError(fiber.StatusBadRequest, "slug is required")
-			}
+	return slugTool("slug", name, title, description, effect, idempotent,
+		func(ctx context.Context, userID int64, slug string) (any, error) {
 			if h.tracking == nil || h.tracking.tracking == nil {
-				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "job tracking is not available")
+				return nil, unavailable("job tracking")
 			}
-			res, err := act(ctx, userID, in.Slug)
+			res, err := act(ctx, userID, slug)
 			if err != nil {
-				return nil, trackingToolError(in.Slug, err)
+				return nil, trackingToolError(slug, err)
 			}
 			return toResponse(res), nil
-		},
-	}
+		})
 }
 
 // trackJobTool sets a vacancy's application stage and/or free-text note.
@@ -102,7 +82,7 @@ func (h *assistantHandlers) trackJobTool() assistant.Tool {
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"slug":  map[string]any{"type": "string", "description": "The vacancy's public_slug."},
+				"slug":  vacancySlugProperty,
 				"stage": map[string]any{"type": "string", "enum": userjob.Stages, "description": "The application stage to set."},
 				"note":  map[string]any{"type": "string", "description": "A free-text note to store against the application."},
 			},
@@ -117,8 +97,8 @@ func (h *assistantHandlers) trackJobTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if in.Slug == "" {
-				return nil, fiber.NewError(fiber.StatusBadRequest, "slug is required")
+			if err := requireSlug("slug", in.Slug); err != nil {
+				return nil, err
 			}
 			if in.Stage == nil && in.Note == nil {
 				return nil, fiber.NewError(fiber.StatusBadRequest, "nothing to change — pass a stage, a note, or both")
@@ -129,7 +109,7 @@ func (h *assistantHandlers) trackJobTool() assistant.Tool {
 				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("unknown stage %q — valid stages are: %s", *in.Stage, strings.Join(userjob.Stages, ", ")))
 			}
 			if h.tracking == nil || h.tracking.tracking == nil {
-				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "job tracking is not available")
+				return nil, unavailable("job tracking")
 			}
 			res, err := h.tracking.tracking.Track(ctx, userID, in.Slug, in.Stage, in.Note, appevent.SourceAssistant)
 			if err != nil {
@@ -165,15 +145,11 @@ func (h *assistantHandlers) myJobsTool() assistant.Tool {
 				return nil, err
 			}
 			if h.tracking == nil || h.tracking.tracking == nil {
-				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "job tracking is not available")
+				return nil, unavailable("job tracking")
 			}
-			limit := in.Limit
-			if limit <= 0 {
-				limit = assistantDefaultSearchLimit
-			}
-			limit = min(limit, assistantMaxSearchLimit)
+			limit, offset := toolPage(in.Limit, in.Offset)
 
-			listing, err := h.tracking.tracking.ListTracked(ctx, userID, in.Filter, jobtracking.CardFull, int32(limit), int32(min(max(in.Offset, 0), math.MaxInt32)))
+			listing, err := h.tracking.tracking.ListTracked(ctx, userID, in.Filter, jobtracking.CardFull, int32(limit), int32(min(offset, math.MaxInt32)))
 			if errors.Is(err, jobtracking.ErrInvalidFilter) {
 				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("unknown filter %q — use all, viewed, saved, applied, board or dismissed", in.Filter))
 			}
@@ -189,12 +165,11 @@ func (h *assistantHandlers) myJobsTool() assistant.Tool {
 	}
 }
 
-// trackingToolError renders a tracking failure for the model. An unknown slug is
-// the one case worth naming precisely — it is usually the model quoting a slug it
-// invented rather than one a search returned.
+// trackingToolError renders a tracking failure for the model; an unknown slug is named
+// precisely (jobNotFound).
 func trackingToolError(slug string, err error) error {
 	if errors.Is(err, jobtracking.ErrJobNotFound) {
-		return fiber.NewError(fiber.StatusNotFound, fmt.Sprintf("no vacancy with slug %q — use the public_slug from a search result", slug))
+		return jobNotFound(slug)
 	}
 	return err
 }

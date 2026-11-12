@@ -49,7 +49,7 @@ func (h *assistantHandlers) readCurrentPageTool() assistant.Tool {
 			"front of them (\"this role\", \"this company\", \"here\"), and again after they may " +
 			"have navigated — it reports what the tab shows now. It works on any site, not only " +
 			"on vacancies freehire already has.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Schema: assistant.EmptySchema,
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
 			if h.browserTools == nil {
 				return nil, errors.New(noBrowserAttached)

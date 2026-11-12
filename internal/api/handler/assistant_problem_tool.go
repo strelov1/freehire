@@ -42,7 +42,7 @@ func (h *assistantHandlers) problemMCPTools() []assistant.Tool {
 				return nil, err
 			}
 			if h.problems == nil {
-				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "problem reporting is unavailable")
+				return nil, unavailable("problem reporting")
 			}
 			receipt, err := h.problems.Record(ctx, userID, input)
 			if errors.Is(err, problemreport.ErrInvalid) {
