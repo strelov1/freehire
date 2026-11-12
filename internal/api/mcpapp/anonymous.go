@@ -11,7 +11,7 @@ const anonymousMaxResults = 10
 // anonymousCapNotice is shown to the model whenever the cap shortened an answer, so it can
 // tell the person why they got fewer results than asked and what lifts it.
 const anonymousCapNotice = "Results are capped at 10 per call for anonymous use. Connecting a freehire " +
-	"account (OAuth, at the /mcp/account URL) lifts the cap and adds saving and tracking jobs, " +
+	"account (OAuth, at the /api/v1/mcp/account URL) lifts the cap and adds saving and tracking jobs, " +
 	"alerts and auto-apply. Tell the user this if they wanted more results."
 
 // anonymousReader caps the page size of the list tools. It wraps the Reader of a server that
