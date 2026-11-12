@@ -139,7 +139,7 @@ func TestAuthRoutes_NoCacheHeaders(t *testing.T) {
 	h.register(api, middleware{
 		cookie: namedGate("cookie"),
 		cvKey:  namedGate("cvKey"),
-	})
+	}, newContract(contractHandlers{authHandlers: h}))
 
 	routes := []struct {
 		method string
@@ -271,7 +271,7 @@ func timezoneApp(repo accounts.Repository) (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &authHandlers{issuer: iss, accounts: accounts.New(repo, authHasher{})}
 	app := fiber.New()
-	app.Patch("/me/timezone", auth.RequireAuth(iss, testVersions), h.UpdateTimezone)
+	app.Patch("/api/v1/me/timezone", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 	return app, iss
 }
 
@@ -292,7 +292,7 @@ func patchJSON(t *testing.T, app *fiber.App, path, token, body string) int {
 
 func TestUpdateTimezone_RequiresAuth(t *testing.T) {
 	app, _ := timezoneApp(fakeRepoTimezone{})
-	if got := patchJSON(t, app, "/me/timezone", "", `{"timezone":"Europe/Moscow"}`); got != fiber.StatusUnauthorized {
+	if got := patchJSON(t, app, "/api/v1/me/timezone", "", `{"timezone":"Europe/Moscow"}`); got != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", got)
 	}
 }
@@ -300,7 +300,7 @@ func TestUpdateTimezone_RequiresAuth(t *testing.T) {
 func TestUpdateTimezone_Valid(t *testing.T) {
 	app, iss := timezoneApp(fakeRepoTimezone{user: accounts.User{ID: 7}})
 	token, _ := iss.Issue(7, testTokenVersion)
-	if got := patchJSON(t, app, "/me/timezone", token, `{"timezone":"Europe/Moscow"}`); got != fiber.StatusOK {
+	if got := patchJSON(t, app, "/api/v1/me/timezone", token, `{"timezone":"Europe/Moscow"}`); got != fiber.StatusOK {
 		t.Errorf("status = %d, want 200", got)
 	}
 }
@@ -308,7 +308,7 @@ func TestUpdateTimezone_Valid(t *testing.T) {
 func TestUpdateTimezone_RejectsInvalid(t *testing.T) {
 	app, iss := timezoneApp(fakeRepoTimezone{err: accounts.ErrInvalidTimezone})
 	token, _ := iss.Issue(7, testTokenVersion)
-	if got := patchJSON(t, app, "/me/timezone", token, `{"timezone":"Not/AZone"}`); got != fiber.StatusBadRequest {
+	if got := patchJSON(t, app, "/api/v1/me/timezone", token, `{"timezone":"Not/AZone"}`); got != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", got)
 	}
 }
@@ -327,13 +327,13 @@ func languageApp(repo accounts.Repository) (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &authHandlers{issuer: iss, accounts: accounts.New(repo, authHasher{})}
 	app := fiber.New()
-	app.Patch("/me/language", auth.RequireAuth(iss, testVersions), h.UpdateLanguage)
+	app.Patch("/api/v1/me/language", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 	return app, iss
 }
 
 func TestUpdateLanguage_RequiresAuth(t *testing.T) {
 	app, _ := languageApp(fakeRepoLanguage{})
-	if got := patchJSON(t, app, "/me/language", "", `{"language":"ru"}`); got != fiber.StatusUnauthorized {
+	if got := patchJSON(t, app, "/api/v1/me/language", "", `{"language":"ru"}`); got != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", got)
 	}
 }
@@ -341,7 +341,7 @@ func TestUpdateLanguage_RequiresAuth(t *testing.T) {
 func TestUpdateLanguage_Valid(t *testing.T) {
 	app, iss := languageApp(fakeRepoLanguage{user: accounts.User{ID: 7, Language: "ru"}})
 	token, _ := iss.Issue(7, testTokenVersion)
-	if got := patchJSON(t, app, "/me/language", token, `{"language":"ru"}`); got != fiber.StatusOK {
+	if got := patchJSON(t, app, "/api/v1/me/language", token, `{"language":"ru"}`); got != fiber.StatusOK {
 		t.Errorf("status = %d, want 200", got)
 	}
 }
@@ -349,7 +349,7 @@ func TestUpdateLanguage_Valid(t *testing.T) {
 func TestUpdateLanguage_RejectsInvalid(t *testing.T) {
 	app, iss := languageApp(fakeRepoLanguage{err: accounts.ErrInvalidLanguage})
 	token, _ := iss.Issue(7, testTokenVersion)
-	if got := patchJSON(t, app, "/me/language", token, `{"language":"xx"}`); got != fiber.StatusBadRequest {
+	if got := patchJSON(t, app, "/api/v1/me/language", token, `{"language":"xx"}`); got != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", got)
 	}
 }
@@ -357,7 +357,7 @@ func TestUpdateLanguage_RejectsInvalid(t *testing.T) {
 func TestUpdateTimezone_Adoption(t *testing.T) {
 	app, iss := timezoneApp(fakeRepoTimezone{user: accounts.User{ID: 7}, expectedOnlyIfUnset: true})
 	token, _ := iss.Issue(7, testTokenVersion)
-	if got := patchJSON(t, app, "/me/timezone", token, `{"timezone":"Europe/Moscow","only_if_unset":true}`); got != fiber.StatusOK {
+	if got := patchJSON(t, app, "/api/v1/me/timezone", token, `{"timezone":"Europe/Moscow","only_if_unset":true}`); got != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", got)
 	}
 }

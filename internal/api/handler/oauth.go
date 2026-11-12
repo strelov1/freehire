@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 )
 
@@ -57,12 +59,12 @@ func servedHostsOrDefault(configured []string, frontendOrigin string) []string {
 	return []string{u.Hostname()}
 }
 
-// ListOAuthProviders returns the names of enabled OAuth providers, so the SPA
+// ListOauthProviders returns the names of enabled OAuth providers, so the SPA
 // renders only usable sign-in buttons.
-func (h *authHandlers) ListOAuthProviders(c *fiber.Ctx) error {
+func (h *authHandlers) ListOauthProviders(ctx context.Context) (*apigen.ListOauthProvidersOK, error) {
 	names := h.oauth.Names()
 	sort.Strings(names)
-	return c.JSON(fiber.Map{"data": names})
+	return &apigen.ListOauthProvidersOK{Data: names}, nil
 }
 
 // OAuthStart begins the authorization-code flow: it stores a fresh CSRF state

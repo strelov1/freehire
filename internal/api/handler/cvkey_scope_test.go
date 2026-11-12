@@ -19,7 +19,7 @@ import (
 // mounted on it would silently widen what a narrow key can spend, and no per-route test
 // would catch a route nobody thought to write one for.
 func TestCVScopedKeyGateIsMountedOnlyOnTheIdentityRead(t *testing.T) {
-	const allowed = "auth.go" // authGroup.Get("/me", mw.cvKey, h.Me)
+	const allowed = "auth.go" // authGroup.Get("/me", mw.cvKey, contract)
 
 	entries, err := os.ReadDir(".")
 	if err != nil {

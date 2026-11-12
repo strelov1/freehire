@@ -2532,6 +2532,70 @@ func decodeCancelSupportTurnParams(args [1]string, argsEscaped bool, r *http.Req
 	return params, nil
 }
 
+// CheckUsernameParams is parameters of checkUsername operation.
+type CheckUsernameParams struct {
+	Value OptString `json:",omitempty,omitzero"`
+}
+
+func unpackCheckUsernameParams(packed middleware.Parameters) (params CheckUsernameParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "value",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Value = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeCheckUsernameParams(args [0]string, argsEscaped bool, r *http.Request) (params CheckUsernameParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: value.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "value",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotValueVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotValueVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Value.SetTo(paramsDotValueVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "value",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // ClearApplicationStageParams is parameters of clearApplicationStage operation.
 type ClearApplicationStageParams struct {
 	ID string
@@ -6897,6 +6961,71 @@ func decodeGetMyCalendarParams(args [0]string, argsEscaped bool, r *http.Request
 		return params, &ogenerrors.DecodeParamError{
 			Name: "month",
 			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// GetNotificationParams is parameters of getNotification operation.
+type GetNotificationParams struct {
+	ID string
+}
+
+func unpackGetNotificationParams(packed middleware.Parameters) (params GetNotificationParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeGetNotificationParams(args [1]string, argsEscaped bool, r *http.Request) (params GetNotificationParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
 			Err:  err,
 		}
 	}
@@ -11381,6 +11510,121 @@ func decodeListMySessionsParams(args [0]string, argsEscaped bool, r *http.Reques
 	return params, nil
 }
 
+// ListNotificationsParams is parameters of listNotifications operation.
+type ListNotificationsParams struct {
+	Limit  OptString `json:",omitempty,omitzero"`
+	Offset OptString `json:",omitempty,omitzero"`
+}
+
+func unpackListNotificationsParams(packed middleware.Parameters) (params ListNotificationsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "limit",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Limit = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "offset",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Offset = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeListNotificationsParams(args [0]string, argsEscaped bool, r *http.Request) (params ListNotificationsParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: limit.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "limit",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotLimitVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotLimitVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Limit.SetTo(paramsDotLimitVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "limit",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: offset.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "offset",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotOffsetVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotOffsetVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Offset.SetTo(paramsDotOffsetVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "offset",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // ListRecentThreadsParams is parameters of listRecentThreads operation.
 type ListRecentThreadsParams struct {
 	Cursor OptString `json:",omitempty,omitzero"`
@@ -13034,6 +13278,71 @@ func unpackMarkConversationReadParams(packed middleware.Parameters) (params Mark
 }
 
 func decodeMarkConversationReadParams(args [1]string, argsEscaped bool, r *http.Request) (params MarkConversationReadParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// MarkNotificationReadParams is parameters of markNotificationRead operation.
+type MarkNotificationReadParams struct {
+	ID string
+}
+
+func unpackMarkNotificationReadParams(packed middleware.Parameters) (params MarkNotificationReadParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeMarkNotificationReadParams(args [1]string, argsEscaped bool, r *http.Request) (params MarkNotificationReadParams, _ error) {
 	// Decode path: id.
 	if err := func() error {
 		param := args[0]
@@ -15148,6 +15457,71 @@ func decodeReviewSessionParams(args [1]string, argsEscaped bool, r *http.Request
 	return params, nil
 }
 
+// RevokeApiKeyParams is parameters of revokeApiKey operation.
+type RevokeApiKeyParams struct {
+	ID string
+}
+
+func unpackRevokeApiKeyParams(packed middleware.Parameters) (params RevokeApiKeyParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeRevokeApiKeyParams(args [1]string, argsEscaped bool, r *http.Request) (params RevokeApiKeyParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // RevokeEmployerAccountParams is parameters of revokeEmployerAccount operation.
 type RevokeEmployerAccountParams struct {
 	UserID string
@@ -15206,6 +15580,71 @@ func decodeRevokeEmployerAccountParams(args [1]string, argsEscaped bool, r *http
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "user_id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// RevokeOauthGrantParams is parameters of revokeOauthGrant operation.
+type RevokeOauthGrantParams struct {
+	ID string
+}
+
+func unpackRevokeOauthGrantParams(packed middleware.Parameters) (params RevokeOauthGrantParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeRevokeOauthGrantParams(args [1]string, argsEscaped bool, r *http.Request) (params RevokeOauthGrantParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
 			In:   "path",
 			Err:  err,
 		}

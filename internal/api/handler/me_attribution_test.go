@@ -68,7 +68,7 @@ func TestReportSignupAttribution_IsCookieOnly(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &authHandlers{}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/me/attribution", auth.RequireAuth(iss, testVersions), h.ReportSignupAttribution)
+	app.Post("/api/v1/me/attribution", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 
 	for _, bearer := range []bool{false, true} {
 		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/attribution", nil)

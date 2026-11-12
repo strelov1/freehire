@@ -25,7 +25,7 @@ func TestMCPOAuthRoutes_LiveAtAPIV1NotUnderAuth(t *testing.T) {
 	h := &authHandlers{}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	passthrough := func(c *fiber.Ctx) error { return c.Next() }
-	h.register(app.Group("/api/v1"), middleware{cookie: passthrough, optionalCookie: passthrough})
+	h.register(app.Group("/api/v1"), middleware{cookie: passthrough, optionalCookie: passthrough}, newContract(contractHandlers{authHandlers: h}))
 
 	for _, tc := range []struct{ method, path string }{
 		{fiber.MethodPost, "/api/v1/oauth/register"},

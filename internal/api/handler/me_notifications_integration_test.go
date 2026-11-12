@@ -27,10 +27,10 @@ import (
 func notificationsIntegrationApp(queries *db.Queries, iss *auth.Issuer) *fiber.App {
 	h := &authHandlers{queries: queries}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/notifications", auth.RequireAuth(iss, testVersions), h.GetNotifications)
-	app.Get("/api/v1/me/notifications/:id", auth.RequireAuth(iss, testVersions), h.GetNotification)
-	app.Post("/api/v1/me/notifications/:id/read", auth.RequireAuth(iss, testVersions), h.MarkNotificationRead)
-	app.Post("/api/v1/me/notifications/read-all", auth.RequireAuth(iss, testVersions), h.MarkAllNotificationsRead)
+	app.Get("/api/v1/me/notifications", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Get("/api/v1/me/notifications/:id", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Post("/api/v1/me/notifications/:id/read", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
+	app.Post("/api/v1/me/notifications/read-all", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 	return app
 }
 
@@ -98,7 +98,7 @@ func TestNotificationsEndToEnd_ListAndCounts(t *testing.T) {
 		t.Fatalf("list status = %d, want 200 (body %s)", resp.StatusCode, body)
 	}
 	var out struct {
-		Data []notificationResponse `json:"data"`
+		Data []notificationWire `json:"data"`
 		Meta struct {
 			Total       int64 `json:"total"`
 			UnreadCount int64 `json:"unread_count"`
@@ -222,7 +222,7 @@ func TestNotificationsEndToEnd_GetOne(t *testing.T) {
 			t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, body)
 		}
 		var out struct {
-			Data notificationResponse `json:"data"`
+			Data notificationWire `json:"data"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 			t.Fatalf("decode: %v", err)
@@ -300,4 +300,16 @@ func TestNotificationsEndToEnd_MarkAllRead(t *testing.T) {
 	if unread != 0 {
 		t.Errorf("unread remaining = %d, want 0", unread)
 	}
+}
+
+// notificationWire is the notification as the API writes it.
+type notificationWire struct {
+	ID         int64           `json:"id"`
+	Kind       string          `json:"kind"`
+	Title      string          `json:"title"`
+	Body       string          `json:"body"`
+	PublicSlug *string         `json:"public_slug"`
+	Jobs       json.RawMessage `json:"jobs,omitempty"`
+	CreatedAt  *time.Time      `json:"created_at"`
+	ReadAt     *time.Time      `json:"read_at"`
 }

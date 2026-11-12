@@ -72,7 +72,7 @@ func TestSubmissionsEndToEnd(t *testing.T) {
 	app.Get("/api/v1/submissions", keyAuth, requireMod, submissionsContract(sh))
 	app.Post("/api/v1/submissions/:id/approve", keyAuth, requireMod, submissionsContract(sh))
 	app.Post("/api/v1/submissions/:id/reject", keyAuth, requireMod, submissionsContract(sh))
-	app.Get("/api/v1/auth/me", keyAuth, h.Me)
+	app.Get("/api/v1/auth/me", keyAuth, newContract(contractHandlers{authHandlers: h}))
 
 	req := func(method, path, cookie, body string) *http.Request {
 		var r *http.Request

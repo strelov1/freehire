@@ -51,7 +51,7 @@ func TestSignupAttributionEndToEnd(t *testing.T) {
 	ga := &fakeGA4{}
 	h := &authHandlers{queries: db.New(pool), ga4: ga}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/me/attribution", auth.RequireAuth(iss, testVersions), h.ReportSignupAttribution)
+	app.Post("/api/v1/me/attribution", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: h}))
 
 	var lastSent bool
 	post := func(cookie, body string) int {
@@ -127,7 +127,7 @@ func TestSignupAttributionEndToEnd(t *testing.T) {
 		cookie, _ := iss.Issue(id, testTokenVersion)
 		failing := &authHandlers{queries: db.New(pool), ga4: &fakeGA4{err: tc.err}}
 		app2 := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		app2.Post("/api/v1/me/attribution", auth.RequireAuth(iss, testVersions), failing.ReportSignupAttribution)
+		app2.Post("/api/v1/me/attribution", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{authHandlers: failing}))
 		req := httptest.NewRequestWithContext(ctx, fiber.MethodPost, "/api/v1/me/attribution", bytes.NewBufferString(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})

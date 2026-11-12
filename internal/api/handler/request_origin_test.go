@@ -361,7 +361,7 @@ func TestAuthRoutes_SessionRoutesRequireSameOrigin(t *testing.T) {
 	h.register(api, middleware{
 		cookie: namedGate("cookie"),
 		cvKey:  namedGate("cvKey"),
-	})
+	}, newContract(contractHandlers{authHandlers: h}))
 
 	for _, path := range []string{
 		"/api/v1/auth/login",
