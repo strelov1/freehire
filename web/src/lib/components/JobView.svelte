@@ -737,9 +737,7 @@
     >
       {autoApply.label}
       {#if autoApply.pro}
-        <span
-          class="rounded-sm bg-foreground px-1.5 py-0.5 text-xs font-semibold uppercase leading-none tracking-wide text-background"
-        >
+        <span class="rounded-sm bg-foreground px-1.5 py-0.5 text-xs font-semibold leading-none text-background">
           Pro
         </span>
       {/if}

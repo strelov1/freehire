@@ -171,7 +171,7 @@
       <div class="flex flex-col gap-4 p-4 sm:p-5">
         {#each demoRows as row (row.label)}
           <div>
-            <p class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{row.label}</p>
+            <p class="mb-2 text-xs font-medium text-muted-foreground">{row.label}</p>
             <div class="flex flex-wrap gap-2">
               {#each row.options as opt (opt.value)}
                 {@const state = demoState[opt.value] ?? 'off'}

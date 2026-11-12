@@ -232,7 +232,7 @@
 
       <section class="mt-6">
         <div class="flex items-baseline justify-between">
-          <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// providers</p>
+          <p class="font-mono text-xs text-muted-foreground">// providers</p>
           <!-- A raw JSON API endpoint, not a SvelteKit page route — there is nothing
                for resolve() to map, so the internal-navigation rule doesn't apply. -->
           <!-- eslint-disable svelte/no-navigation-without-resolve -->

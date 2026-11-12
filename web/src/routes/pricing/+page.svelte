@@ -262,7 +262,7 @@
   <!-- The daily amounts of the metered features, as the backend states them. -->
   {#snippet allowanceList(items: PlansMatrix['features'], tier: 'free' | 'pro' | 'ultra')}
     <div class="flex flex-col gap-2">
-      <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Daily allowance</p>
+      <p class="text-xs font-medium text-muted-foreground">Daily allowance</p>
       <ul class="flex flex-col gap-2 text-sm">
         {#each items as f (f.feature)}
           <li class="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">

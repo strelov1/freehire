@@ -123,7 +123,7 @@
 {:else if phase === 'claim'}
   <div class="flex flex-col gap-6">
     <header class="flex flex-col gap-2 border-b border-border pb-6">
-      <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-strong">
+      <p class="flex items-center gap-1.5 text-xs font-semibold text-brand-strong">
         <Building2 class="size-3.5" />
         {s.headTitle}
       </p>

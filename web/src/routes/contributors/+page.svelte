@@ -53,7 +53,7 @@
     <div class="min-w-0">
       <p class="truncate font-semibold tracking-tight group-hover:underline">{entry.login}</p>
       <p class="mt-1 text-sm text-muted-foreground">{contributionSummary(entry)}</p>
-      <p class="mt-2 font-mono text-xs uppercase tracking-wide text-muted-foreground">
+      <p class="mt-2 font-mono text-xs text-muted-foreground">
         since {since(entry)}
       </p>
     </div>

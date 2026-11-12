@@ -69,13 +69,13 @@
               <span class="truncate font-medium">{it.title}</span>
               {#if it.closed}
                 <span
-                  class="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-muted-foreground"
+                  class="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-xs font-semibold text-muted-foreground"
                   >{s.closed}</span
                 >
               {/if}
               {#if it.stale}
                 <span
-                  class="shrink-0 rounded-full border border-warning/40 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-warning-strong"
+                  class="shrink-0 rounded-full border border-warning/40 px-1.5 py-0.5 text-xs font-semibold text-warning-strong"
                   >{s.stale}</span
                 >
               {/if}

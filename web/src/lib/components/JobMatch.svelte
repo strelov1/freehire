@@ -274,7 +274,7 @@
 />
 
 <section class="flex flex-col gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0" aria-label="Profile match">
-  <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profile match</p>
+  <p class="text-xs font-semibold text-muted-foreground">Profile match</p>
 
   {#if blockState === 'no-skills'}
     <p class="text-sm text-muted-foreground">Not enough data to compare this job to your profile.</p>
@@ -309,8 +309,8 @@
       </span>
     </div>
     <div class="flex h-2 overflow-hidden rounded bg-secondary">
-      <div class="h-full bg-brand transition-all" style="width: {segments.exact}%"></div>
-      <div class="h-full bg-warning transition-all" style="width: {segments.adjacent}%"></div>
+      <div class="h-full bg-brand" style="width: {segments.exact}%"></div>
+      <div class="h-full bg-warning" style="width: {segments.adjacent}%"></div>
     </div>
 
     {#if view.matched.length}

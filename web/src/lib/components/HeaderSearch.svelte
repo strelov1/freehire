@@ -1172,10 +1172,7 @@
         {#if heading}
           <!-- A caption, not a choice: presentation keeps it out of the option count while
                its text still reads in place. -->
-          <li
-            role="presentation"
-            class="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
-          >
+          <li role="presentation" class="px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground">
             {heading}
           </li>
         {/if}

@@ -82,7 +82,7 @@
       {#each posts as post (post.slug)}
         <li class="py-5">
           <div class="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-            <span class="rounded-full border border-border px-2 py-0.5 font-medium uppercase tracking-wide">
+            <span class="rounded-full border border-border px-2 py-0.5 font-medium">
               {post.type}
             </span>
             <time datetime={post.date}>{formatDate(post.date)}</time>

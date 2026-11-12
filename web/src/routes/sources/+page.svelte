@@ -18,9 +18,7 @@
 
 <div class="mx-auto w-full max-w-4xl px-4 py-10 sm:py-14">
   <header class="mb-10">
-    <!-- tracking-widest, not the arbitrary tracking-[0.2em] the older pages carry: the
-         token-coverage check holds a per-file baseline and a new file starts at zero. -->
-    <p class="font-mono text-xs uppercase tracking-widest text-muted-foreground">// sources</p>
+    <p class="font-mono text-xs text-muted-foreground">// sources</p>
     <h1 class="mt-4 text-4xl font-semibold tracking-tighter sm:text-5xl">Where the jobs come from.</h1>
     <p class="mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground">
       Every place we read postings from, what each one currently carries, and when we last read it. For aggregators we

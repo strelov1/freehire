@@ -267,19 +267,7 @@
     weak: 'border-warning/30 bg-warning/10 text-warning-strong',
     poor: 'border-destructive/30 bg-destructive/10 text-destructive-strong',
   };
-  const toneGlow: Record<Tone, string> = {
-    strong: 'color-mix(in oklch, var(--brand) 16%, transparent)',
-    good: 'color-mix(in oklch, var(--brand) 16%, transparent)',
-    moderate: 'color-mix(in oklch, var(--warning) 10%, transparent)',
-    weak: 'color-mix(in oklch, var(--warning) 10%, transparent)',
-    poor: 'color-mix(in oklch, var(--destructive) 10%, transparent)',
-  };
-
-  // Section headings read as tiny wide-tracked uppercase labels on the full-width /match page;
-  // in the narrow stacked panel that looks cramped, so use a plain readable weight there.
-  const headingClass = $derived(
-    stacked ? 'text-sm font-semibold' : 'text-[0.7rem] font-semibold uppercase tracking-[0.2em]',
-  );
+  const headingClass = 'text-sm font-medium';
 </script>
 
 <div class="flex flex-col gap-8">
@@ -320,11 +308,6 @@
         class="fit-reveal relative overflow-hidden rounded-2xl border border-border bg-card p-6 sm:p-8"
         style="--i:1"
       >
-        <div
-          class="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full blur-3xl"
-          style="background: radial-gradient(circle, {toneGlow[tone]}, transparent 70%)"
-          aria-hidden="true"
-        ></div>
         <div class="relative flex flex-col items-center gap-8 sm:flex-row sm:items-center sm:gap-10">
           <!-- Radial gauge -->
           <div class="relative shrink-0">
@@ -342,7 +325,7 @@
               />
             </svg>
             <div class="absolute inset-0 flex flex-col items-center justify-center">
-              <span class="text-4xl font-bold tabular-nums leading-none tracking-tight {toneText[tone]}"
+              <span class="text-4xl font-medium tabular-nums leading-none tracking-tight {toneText[tone]}"
                 >{analysis.overall_score}</span
               >
               <span class="text-xs font-medium text-muted-foreground">/ 100</span>
@@ -350,9 +333,7 @@
           </div>
           <!-- Verdict copy -->
           <div class="flex flex-1 flex-col items-center gap-3 text-center sm:items-start sm:text-left">
-            <span class="rounded-full border px-3 py-1 text-sm font-semibold uppercase tracking-wide {toneChip[tone]}"
-              >{analysis.verdict}</span
-            >
+            <span class="rounded-full border px-3 py-1 text-sm font-semibold {toneChip[tone]}">{analysis.verdict}</span>
             <p class="text-sm text-muted-foreground">
               Across <strong class="font-semibold text-foreground">{dimensions.length}</strong> dimensions, covering
               <strong class="font-semibold text-foreground">{covered}</strong>
@@ -452,7 +433,7 @@
           <div class="mt-6 border-t border-border pt-4">
             <button
               type="button"
-              class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              class="flex items-center gap-2 text-xs font-semibold text-muted-foreground"
               onclick={() => (showThinking = !showThinking)}
               aria-expanded={showThinking}
               aria-controls={thinkingId}
@@ -583,7 +564,7 @@
                status, replacing the repeated pills. -->
           {#if attentionReqs.length}
             <div class="rounded-xl border border-destructive/25 bg-destructive/5 p-4">
-              <h3 class="mb-2 text-[0.7rem] font-semibold uppercase tracking-wider text-destructive-strong">
+              <h3 class="mb-2 text-xs font-semibold text-destructive-strong">
                 Needs attention · {attentionReqs.length}
               </h3>
               <ul class={['grid gap-x-10 gap-y-0.5', !stacked && 'sm:grid-cols-2']}>
@@ -593,9 +574,7 @@
                     <span class="h-4 w-[3px] shrink-0 rounded-full {toneBar[meta.tone]}"></span>
                     <span class="min-w-0 flex-1 text-sm font-medium leading-snug text-foreground">{r.text}</span>
                     {#if r.priority && r.priority.toLowerCase() !== 'required'}
-                      <span class="shrink-0 text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground"
-                        >{r.priority}</span
-                      >
+                      <span class="shrink-0 text-xs font-medium text-muted-foreground">{r.priority}</span>
                     {/if}
                     <span class="shrink-0 text-xs font-semibold {toneText[meta.tone]}">{meta.label}</span>
                   </li>
@@ -609,7 +588,7 @@
                instead of a wall of identical pills. `preferred` sits on the right. -->
           {#if coveredReqs.length}
             <div class="flex flex-col gap-2.5">
-              <h3 class="text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground">
+              <h3 class="text-xs font-semibold text-muted-foreground">
                 Covered · {reqTally.covered}
               </h3>
               <ul class={['grid gap-x-10', !stacked && 'sm:grid-cols-2 xl:grid-cols-3']}>
@@ -628,19 +607,14 @@
                     >
                     {#if r.evidence_strength}
                       <span
-                        class={[
-                          'shrink-0 text-[0.6rem] font-medium lowercase tracking-wide',
-                          weak ? 'text-warning-strong' : 'text-muted-foreground',
-                        ]}
+                        class={['shrink-0 text-xs font-medium', weak ? 'text-warning-strong' : 'text-muted-foreground']}
                         title={weak
                           ? 'Only a bare mention in your CV — back it with a concrete result'
                           : 'Backed by ' + r.evidence_strength + ' evidence in your CV'}>{r.evidence_strength}</span
                       >
                     {/if}
                     {#if r.priority && r.priority.toLowerCase() !== 'required'}
-                      <span class="shrink-0 text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground"
-                        >{r.priority}</span
-                      >
+                      <span class="shrink-0 text-xs font-medium text-muted-foreground">{r.priority}</span>
                     {/if}
                   </li>
                 {/each}
@@ -729,12 +703,13 @@
   }
   /* Meters and the gauge arc sweep in. */
   .fit-meter {
+    transform-origin: left;
     animation: fit-grow 0.7s cubic-bezier(0.16, 1, 0.3, 1) backwards;
     animation-delay: 0.15s;
   }
   @keyframes fit-grow {
     from {
-      width: 0 !important;
+      transform: scaleX(0);
     }
   }
   .fit-arc {

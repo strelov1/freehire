@@ -132,7 +132,7 @@
         {#each board as col (col.id)}
           <div class="bg-background p-4">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{col.label}</span>
+              <span class="text-xs font-medium text-muted-foreground">{col.label}</span>
               <span class="font-mono text-[11px] text-muted-foreground">{col.count}</span>
             </div>
             <div class="mt-3 flex flex-col gap-2">

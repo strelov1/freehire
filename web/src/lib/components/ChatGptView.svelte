@@ -39,9 +39,7 @@
   <section class="grid-bg relative -mx-4 px-4 pb-16 pt-12 sm:pt-16">
     <div class="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
       <div>
-        <p class="reveal font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground" style="--d:0ms">
-          // freehire app for ChatGPT
-        </p>
+        <p class="reveal font-mono text-xs text-muted-foreground" style="--d:0ms">// freehire app for ChatGPT</p>
 
         <h1
           class="reveal mt-6 max-w-2xl text-balance text-4xl font-semibold leading-[0.98] tracking-tighter sm:text-6xl"
@@ -105,7 +103,7 @@
 
   <!-- What it answers. -->
   <section class="border-t border-border py-14 sm:py-16">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// what it answers</p>
+    <p class="font-mono text-xs text-muted-foreground">// what it answers</p>
     <dl class="mt-8 grid gap-x-12 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
       {#each answers as row (row.title)}
         <div>
@@ -118,7 +116,7 @@
 
   <!-- Setup. -->
   <section class="border-t border-border py-14 sm:py-16">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// setup</p>
+    <p class="font-mono text-xs text-muted-foreground">// setup</p>
     <ol class="mt-6 max-w-2xl space-y-3 text-sm leading-relaxed text-muted-foreground">
       <li>
         <span class="font-medium text-foreground">1.</span>
@@ -138,7 +136,7 @@
     </ol>
 
     <!-- Personal tools use OAuth on the same MCP connection as public search. -->
-    <h2 class="mt-10 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Save and track</h2>
+    <h2 class="mt-10 text-sm font-semibold text-muted-foreground">Save and track</h2>
     <p class="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
       Use the same freehire connection to save jobs and update your
       <a href={resolve('/my/tracking')} class="font-medium text-foreground underline-offset-4 hover:underline"

@@ -65,7 +65,7 @@
             : 'bg-brand-muted text-brand-strong'}"
           aria-hidden="true"
         >
-          <span class="text-xs font-medium uppercase">{when.weekday}</span>
+          <span class="text-xs font-medium">{when.weekday}</span>
           <span class="mt-1 text-xl font-semibold tabular-nums">{when.day}</span>
           <span class="mt-0.5 text-xs">{when.month}</span>
         </div>

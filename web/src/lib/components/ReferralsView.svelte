@@ -142,7 +142,7 @@
   {:else}
     <Table class="mt-4">
       {#snippet header()}
-        <tr class="text-xs uppercase tracking-wide text-muted-foreground">
+        <tr class="text-xs text-muted-foreground">
           <th class="pb-2 pr-4 text-left font-semibold">{s.requests.columns.company}</th>
           <th class="pb-2 pr-4 text-left font-semibold">{s.requests.columns.cvShared}</th>
           <th class="pb-2 pr-4 text-left font-semibold">{s.requests.columns.status}</th>

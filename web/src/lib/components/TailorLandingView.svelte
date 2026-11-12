@@ -120,11 +120,11 @@
       {#each DEMO_BULLETS as b (b.req)}
         <li class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
           <div class="bg-background p-4">
-            <p class="text-xs uppercase tracking-wide text-muted-foreground">Before</p>
+            <p class="text-xs text-muted-foreground">Before</p>
             <p class="mt-1 text-sm text-muted-foreground text-pretty">{b.before}</p>
           </div>
           <div class="bg-background p-4">
-            <p class="text-xs uppercase tracking-wide text-foreground">After</p>
+            <p class="text-xs text-foreground">After</p>
             <p class="mt-1 text-sm text-pretty">
               {#each highlight(b.after, b.keywords) as part, i (i)}
                 {#if part.hit}<mark class="rounded bg-brand/15 px-0.5 text-foreground">{part.text}</mark
@@ -215,7 +215,7 @@
     </h2>
     <div class="mt-10 overflow-x-auto rounded-xl border border-border">
       <table class="w-full min-w-xl text-left text-sm">
-        <thead class="bg-secondary/50 text-xs uppercase tracking-wide text-muted-foreground">
+        <thead class="bg-secondary/50 text-xs text-muted-foreground">
           <tr>
             <th scope="col" class="px-4 py-3 font-medium"><span class="sr-only">Feature</span></th>
             <th scope="col" class="px-4 py-3 font-semibold text-foreground">freehire</th>

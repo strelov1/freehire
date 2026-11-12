@@ -176,7 +176,7 @@
      places — and they differ only in what they list, so they are one shape. -->
 {#snippet chipRow(label: string, chips: Chip[])}
   <div class="flex flex-col items-center gap-2">
-    <p class="text-xs uppercase tracking-wide text-muted-foreground/80" aria-hidden="true">{label}</p>
+    <p class="text-xs text-muted-foreground" aria-hidden="true">{label}</p>
     <nav aria-label={label} class="flex flex-wrap justify-center gap-2">
       {#each chips as chip (chip.href)}
         <!-- eslint-disable svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->

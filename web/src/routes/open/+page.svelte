@@ -219,7 +219,7 @@
 <div class="mx-auto w-full max-w-4xl px-4 py-10 sm:py-14">
   <!-- Intro -->
   <header class="dot-grid -mx-4 mb-12 px-4 pb-8 pt-4">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// open startup</p>
+    <p class="font-mono text-xs text-muted-foreground">// open startup</p>
     <h1 class="mt-4 text-4xl font-semibold tracking-tighter sm:text-5xl">All our numbers, live.</h1>
     <p class="mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground">
       freehire is an open, free search engine for jobs — so our metrics are open too. Every figure below is pulled live
@@ -229,7 +229,7 @@
 
   <!-- A. Catalogue scale -->
   <section class="mb-14">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// the catalogue</p>
+    <p class="font-mono text-xs text-muted-foreground">// the catalogue</p>
     <!-- Wrapping flex, not a fixed grid: the strip holds five figures and drops any the
          snapshot could not measure, so a fixed column count leaves a hole in the last row
          — and with the separators drawn by the container's own colour showing through a
@@ -242,7 +242,7 @@
           <!-- A two-line label must not push its figure down: the tile is a column and the
                figure is pinned to its bottom, so every figure in a row shares one baseline. -->
           <div class="flex min-w-36 flex-1 flex-col border-b border-r border-border p-5 sm:p-6">
-            <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">{s.label}</dt>
+            <dt class="font-mono text-xs text-balance text-muted-foreground">{s.label}</dt>
             <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
               {#if s.href}
                 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- links to the JSON API endpoint, not a SvelteKit route -->
@@ -260,7 +260,7 @@
   <!-- B. Catalogue movement -->
   <section class="mb-14">
     <div class="flex items-baseline justify-between">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// daily movement</p>
+      <p class="font-mono text-xs text-muted-foreground">// daily movement</p>
       {@render sourceLink('/api/v1/stats/jobs-activity', '/stats/jobs-activity')}
     </div>
     <h2 class="mt-3 text-xl font-semibold tracking-tight">Jobs added vs. removed</h2>
@@ -273,7 +273,7 @@
   <!-- F. Member growth -->
   <section class="mb-14">
     <div class="flex items-baseline justify-between">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// members</p>
+      <p class="font-mono text-xs text-muted-foreground">// members</p>
       {@render sourceLink('/api/v1/stats/user-growth', '/stats/user-growth')}
     </div>
     <h2 class="mt-3 text-xl font-semibold tracking-tight">
@@ -293,7 +293,7 @@
   <!-- Engagement -->
   <section class="mb-14">
     <div class="flex items-baseline justify-between">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// engagement</p>
+      <p class="font-mono text-xs text-muted-foreground">// engagement</p>
       {@render sourceLink('/api/v1/stats/engagement', '/stats/engagement')}
     </div>
     <h2 class="mt-3 text-xl font-semibold tracking-tight">What people do here</h2>
@@ -315,7 +315,7 @@
                  numbers are bottom-aligned across the row by `mt-auto`, so a caption
                  below one of them would lift that cell's number out of line with its
                  seven neighbours. -->
-              <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">
+              <dt class="font-mono text-xs text-balance text-muted-foreground">
                 {e.label}{#if e.note}<span class="block font-normal normal-case">{e.note}</span>{/if}
               </dt>
               <!-- This type size is safe only because the view count is rendered compactly:
@@ -336,7 +336,7 @@
   <!-- C. What's inside -->
   <section class="mb-14">
     <div class="flex items-baseline justify-between">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// what's inside</p>
+      <p class="font-mono text-xs text-muted-foreground">// what's inside</p>
       {@render sourceLink('/api/v1/stats/facets', '/stats/facets')}
     </div>
     {#if hasFacets}
@@ -370,7 +370,7 @@
   <!-- D. Open source -->
   <section class="mb-6">
     <div class="flex items-baseline justify-between">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// open source</p>
+      <p class="font-mono text-xs text-muted-foreground">// open source</p>
       {@render sourceLink('https://github.com/strelov1/freehire', 'github.com/strelov1/freehire')}
     </div>
     <div class="mt-6 rounded-xl border border-border p-6 sm:p-8">
@@ -378,11 +378,11 @@
         <div class="flex flex-wrap gap-x-12 gap-y-6">
           <div>
             <div class="text-3xl font-semibold tabular-nums">{nf.format(gh.stars)}</div>
-            <div class="font-mono text-xs uppercase tracking-wide text-muted-foreground">stars</div>
+            <div class="font-mono text-xs text-muted-foreground">stars</div>
           </div>
           <div>
             <div class="text-3xl font-semibold tabular-nums">{nf.format(gh.forks)}</div>
-            <div class="font-mono text-xs uppercase tracking-wide text-muted-foreground">forks</div>
+            <div class="font-mono text-xs text-muted-foreground">forks</div>
           </div>
           {#if gh.contributors != null}
             <!-- The one figure here that is about people rather than the repository, so
@@ -393,13 +393,13 @@
               <div class="text-3xl font-semibold tabular-nums group-hover:underline">
                 {nf.format(gh.contributors)}
               </div>
-              <div class="font-mono text-xs uppercase tracking-wide text-muted-foreground">contributors</div>
+              <div class="font-mono text-xs text-muted-foreground">contributors</div>
             </a>
           {/if}
           {#if gh.license}
             <div>
               <div class="text-3xl font-semibold">{gh.license}</div>
-              <div class="font-mono text-xs uppercase tracking-wide text-muted-foreground">license</div>
+              <div class="font-mono text-xs text-muted-foreground">license</div>
             </div>
           {/if}
         </div>
@@ -417,7 +417,7 @@
        only honest while this section renders. Kept last so the numbers stay the
        page's opening subject. -->
   <section class="mt-14">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// about these numbers</p>
+    <p class="font-mono text-xs text-muted-foreground">// about these numbers</p>
     <dl class="mt-6 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each OPEN_FAQ as item (item.question)}
         <div class="bg-background p-5 sm:p-6">

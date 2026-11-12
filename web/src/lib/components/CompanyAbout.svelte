@@ -24,7 +24,7 @@
 
 {#if description}
   <section class="rounded-xl border border-border bg-card p-4">
-    <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">About</p>
+    <p class="mb-3 text-xs font-semibold text-muted-foreground">About</p>
     <p
       bind:this={para}
       class={['whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground', !expanded && 'line-clamp-3']}

@@ -44,7 +44,7 @@
     aria-valuemax={100}
     aria-valuenow={percent ?? undefined}
   >
-    <div class="h-full rounded-full bg-brand transition-all duration-700" style:width="{percent ?? 0}%"></div>
+    <div class="h-full rounded-full bg-brand" style:width="{percent ?? 0}%"></div>
   </div>
 
   <dl class="mt-8 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
