@@ -17,6 +17,7 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -162,30 +163,30 @@ func shortlistPresentTool(candidates shortlistCandidates, shown int) assistant.T
 	return tool
 }
 
-func (h *assistantHandlers) createShortlistSession(c *fiber.Ctx, userID int64, query, requestID string) error {
+func (h *assistantHandlers) createShortlistSession(ctx context.Context, userID int64, query, requestID string) (apigen.CreateAssistantSessionRes, error) {
 	query, err := normalizeShortlistQuery(query)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	id, err := uuid.Parse(requestID)
 	if err != nil || id == uuid.Nil {
-		return fiber.NewError(fiber.StatusBadRequest, "a search session requires a valid request_id")
+		return nil, fiber.NewError(fiber.StatusBadRequest, "a search session requires a valid request_id")
 	}
-	_, err = h.queries.CreateAssistantSearchSession(c.Context(), db.CreateAssistantSearchSessionParams{ID: id, UserID: userID, SearchQuery: pgtype.Text{String: query, Valid: true}})
+	_, err = h.queries.CreateAssistantSearchSession(ctx, db.CreateAssistantSearchSessionParams{ID: id, UserID: userID, SearchQuery: pgtype.Text{String: query, Valid: true}})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return err
+		return nil, err
 	}
-	sess, err := h.store.Session(c.Context(), id, userID)
+	sess, err := h.store.Session(ctx, id, userID)
 	if errors.Is(err, assistant.ErrNotFound) {
-		return fiber.ErrNotFound
+		return nil, fiber.ErrNotFound
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if sess.SearchContext == nil || sess.SearchContext.Query != query {
-		return fiber.NewError(fiber.StatusConflict, "request_id already belongs to another search")
+		return nil, fiber.NewError(fiber.StatusConflict, "request_id already belongs to another search")
 	}
-	return c.JSON(fiber.Map{"data": sessionView(sess)})
+	return assistantSessionOK(sess)
 }
 
 func (h *assistantHandlers) shortlistDiscoveryTools(sess assistant.Session, shown int) []assistant.Tool {

@@ -269,8 +269,8 @@ func TestJobAutoApplyRetryAndCancelRoutes(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	api.Post("/jobs/:slug/auto-apply/retry", mw.cookie, h.PostJobAutoApplyRetry)
-	api.Delete("/jobs/:slug/auto-apply", mw.cookie, h.DeleteJobAutoApply)
+	api.Post("/jobs/:slug/auto-apply/retry", mw.cookie, newContract(contractHandlers{assistantHandlers: h}))
+	api.Delete("/jobs/:slug/auto-apply", mw.cookie, newContract(contractHandlers{assistantHandlers: h}))
 	do := func(method, path string) int {
 		req := httptest.NewRequestWithContext(context.Background(), method, path, nil)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})

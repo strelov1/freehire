@@ -19,6 +19,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/browsertools"
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
@@ -226,20 +227,20 @@ func newAssistantHandlers(
 // and now BOUNDED: it draws on the caller's plan before the stream opens, and a spent
 // allowance is a 402. Measured over three August weeks, the assistant was 99.4% of model
 // spend and the only surface charging nothing for it.
-func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
-	api.Post("/assistant/sessions", mw.key, h.CreateAssistantSession)
-	api.Get("/assistant/sessions", mw.key, h.ListAssistantSessions)
-	api.Get("/assistant/sessions/:id", mw.key, h.GetAssistantSession)
-	api.Delete("/assistant/sessions/:id", mw.key, h.DeleteAssistantSession)
+func (h *assistantHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Post("/assistant/sessions", mw.key, contract)
+	api.Get("/assistant/sessions", mw.key, contract)
+	api.Get("/assistant/sessions/:id", mw.key, contract)
+	api.Delete("/assistant/sessions/:id", mw.key, contract)
 	api.Post("/assistant/sessions/:id/messages", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantMessage)
 	// Read a PDF to attach to the next message. No model call, so no paidAI gate: it only
 	// extracts, and the turn that carries the text is what is metered.
 	api.Post("/assistant/attachments", mw.key, h.PostAssistantAttachment)
-	api.Post("/assistant/sessions/:id/cancel", mw.key, h.CancelAssistantTurn)
+	api.Post("/assistant/sessions/:id/cancel", mw.key, contract)
 	// Buy this tailoring session another ceiling's worth of turns. Separate from starting
 	// a session because it is a distinct decision the candidate makes with what they know
 	// now — they have seen the work so far and are choosing to spend more of the day on it.
-	api.Post("/assistant/sessions/:id/extend", mw.key, h.PostAssistantExtend)
+	api.Post("/assistant/sessions/:id/extend", mw.key, contract)
 	api.Post("/assistant/sessions/:id/opening", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantOpening)
 	api.Post("/assistant/sessions/:id/sync", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantSync)
 	// Resume after a transport/model failure without appending another user message —
@@ -247,8 +248,8 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/assistant/sessions/:id/retry", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantRetry)
 	// Voice mode: mint one call's credential, then append each completed spoken turn
 	// as it finishes. The audio itself never transits here — see PostAssistantVoiceToken.
-	api.Post("/assistant/sessions/:id/voice-token", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantVoiceToken)
-	api.Post("/assistant/sessions/:id/voice-turns", mw.key, h.PostAssistantVoiceTurn)
+	api.Post("/assistant/sessions/:id/voice-token", mw.key, mw.paidAI(plan.FeatureAssistant), contract)
+	api.Post("/assistant/sessions/:id/voice-turns", mw.key, contract)
 	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
 	// the candidate can watch it happen and undo it.
 	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, mw.paidAI(plan.FeatureTailor), h.PostAssistantAutopilot)
@@ -258,17 +259,17 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	// See auto_apply_tailor.go's own doc comment for why these are not variants of
 	// /autopilot above.
 	api.Post("/me/auto-apply/:queueId/tailor", mw.autoApplyGate, h.PostAutoApplyTailor)
-	api.Post("/me/auto-apply/:queueId/review", mw.autoApplyGate, h.PostAutoApplyReview)
+	api.Post("/me/auto-apply/:queueId/review", mw.autoApplyGate, contract)
 
 	// The candidate-facing trigger for the sequence above (openspec/changes/
 	// auto-apply-submit-trigger) — cookie-only, never mw.key or mw.autoApplyGate: see
 	// auto_apply_enqueue.go's own doc comment for why.
-	api.Post("/jobs/:slug/auto-apply", mw.cookie, mw.paidAI(plan.FeatureAutoApply), h.PostJobAutoApply)
+	api.Post("/jobs/:slug/auto-apply", mw.cookie, mw.paidAI(plan.FeatureAutoApply), contract)
 	// Retry and cancel an existing attempt (openspec/changes/auto-apply-over-mcp). Cookie-only
 	// like the start route: the one other door is the signed-in MCP server, behind the
 	// account's agents_may_apply switch, and an API key would be a third that skips it.
-	api.Post("/jobs/:slug/auto-apply/retry", mw.cookie, h.PostJobAutoApplyRetry)
-	api.Delete("/jobs/:slug/auto-apply", mw.cookie, h.DeleteJobAutoApply)
+	api.Post("/jobs/:slug/auto-apply/retry", mw.cookie, contract)
+	api.Delete("/jobs/:slug/auto-apply", mw.cookie, contract)
 }
 
 // defaultAssistantMaxPrompt bounds one user message when ASSISTANT_MAX_PROMPT is
@@ -313,10 +314,6 @@ func cvIDString(id *uuid.UUID) *string {
 	return &s
 }
 
-func assistantSessionID(c *fiber.Ctx) (uuid.UUID, error) {
-	return parseAssistantSessionID(c.Params("id"))
-}
-
 // parseAssistantSessionID is assistantSessionID for a raw id.
 func parseAssistantSessionID(raw string) (uuid.UUID, error) {
 	id, err := uuid.Parse(raw)
@@ -333,32 +330,24 @@ func parseAssistantSessionID(raw string) (uuid.UUID, error) {
 // Only the presets that bind to NOTHING can be minted here. A tailoring session is
 // created by the tailoring bootstrap, which knows the CV and the vacancy to bind; letting
 // this endpoint name that preset would produce a session whose tools point at nothing.
-func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *assistantHandlers) CreateAssistantSession(ctx context.Context, req apigen.OptAssistantSessionRequest, params apigen.CreateAssistantSessionParams) (apigen.CreateAssistantSessionRes, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	preset, err := creatablePreset(c.Query("preset"))
+	preset, err := creatablePreset(params.Preset.Value)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var input struct {
-		SearchQuery *string `json:"search_query"`
-		RequestID   string  `json:"request_id"`
-	}
-	if len(c.Body()) > 0 {
-		if err := json.Unmarshal(c.Body(), &input); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid session request")
-		}
-	}
-	if input.SearchQuery != nil {
+	input := req.Value
+	if input.SearchQuery.Set && !input.SearchQuery.Null {
 		if preset != assistant.PresetChat {
-			return fiber.NewError(fiber.StatusBadRequest, "only general chat can bind a search")
+			return nil, fiber.NewError(fiber.StatusBadRequest, "only general chat can bind a search")
 		}
-		return h.createShortlistSession(c, userID, *input.SearchQuery, input.RequestID)
+		return h.createShortlistSession(ctx, userID, input.SearchQuery.Value, input.RequestID.Value)
 	}
-	if input.RequestID != "" {
-		return fiber.NewError(fiber.StatusBadRequest, "request_id requires search_query")
+	if input.RequestID.Value != "" {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "request_id requires search_query")
 	}
 
 	// The creatable presets that bind to something all bind to the same thing: an
@@ -367,50 +356,79 @@ func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 	var jobID *int64
 	var vacancy db.Job
 	if bindsToApplication(preset) {
-		job, err := h.applicationVacancy(c, userID)
+		job, err := h.applicationVacancy(ctx, userID, params.Job.Value)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		vacancy, jobID = job, &job.ID
 	}
 	// An application holds ONE apply conversation: its numbered questions and the answers
 	// given to them must stay in one transcript, so opening it again resumes it.
 	if preset == assistant.PresetApply {
-		existing, ok, err := h.store.SessionForJob(c.Context(), userID, preset, *jobID)
+		existing, ok, err := h.store.SessionForJob(ctx, userID, preset, *jobID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if ok {
-			return c.JSON(fiber.Map{"data": sessionView(existing)})
+			return assistantSessionOK(existing)
 		}
 	}
-	sess, err := h.store.CreateSession(c.Context(), userID, preset, nil, jobID)
+	sess, err := h.store.CreateSession(ctx, userID, preset, nil, jobID)
 	if name, dup := pgerr.UniqueViolationConstraint(err); dup && name == "assistant_sessions_one_apply_per_job" {
 		// Another open of the same application won the race to create it; that one is the
 		// conversation, so return it rather than failing the second click.
-		existing, ok, err := h.store.SessionForJob(c.Context(), userID, preset, *jobID)
+		existing, ok, err := h.store.SessionForJob(ctx, userID, preset, *jobID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if ok {
-			return c.JSON(fiber.Map{"data": sessionView(existing)})
+			return assistantSessionOK(existing)
 		}
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Name it after its vacancy now, while we hold it. A session is otherwise named from
 	// its first user message — which for these presets is the server's own brief,
 	// identical every time, so every such session in the rail would carry the same string
 	// and none would say which interview it was.
 	if label := applicationSessionLabel(preset, vacancy); label != "" {
-		if err := h.store.LabelSession(c.Context(), sess.ID, sess.UserID, label); err != nil {
+		if err := h.store.LabelSession(ctx, sess.ID, sess.UserID, label); err != nil {
 			log.Printf("assistant: could not name %s session %s: %v", preset, sess.ID, err)
 		} else {
 			sess.Label = label
 		}
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": sessionView(sess)})
+	view, err := assistantSessionView(sess)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.CreateAssistantSessionCreated{Data: view}, nil
+}
+
+// assistantSessionView is sessionView for the contract's assistant operations.
+func assistantSessionView(s assistant.Session) (apigen.AssistantSession, error) {
+	v := sessionView(s)
+	out := apigen.AssistantSession{ID: v.ID, Preset: v.Preset, Label: v.Label}
+	optNil(v.CVID, out.CvID.SetTo)
+	optNil(v.JobID, out.JobID.SetTo)
+	if v.SearchContext != nil {
+		raw, err := json.Marshal(v.SearchContext)
+		if err != nil {
+			return apigen.AssistantSession{}, err
+		}
+		out.SearchContext = raw
+	}
+	return out, nil
+}
+
+// assistantSessionOK answers 200 with a session that already existed.
+func assistantSessionOK(s assistant.Session) (apigen.CreateAssistantSessionRes, error) {
+	view, err := assistantSessionView(s)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.CreateAssistantSessionOK{Data: view}, nil
 }
 
 // creatablePreset resolves the preset a client asked for. Naming the value it rejected
@@ -490,8 +508,8 @@ func applicationSessionLabel(preset string, job db.Job) string {
 // The application row IS the authorisation: user_jobs holds one per (user, vacancy), so
 // its absence answers "not yours" and "no such thing" with the same 404 — the same way a
 // session the caller does not own is reported as missing.
-func (h *assistantHandlers) applicationVacancy(c *fiber.Ctx, userID int64) (db.Job, error) {
-	slug := strings.TrimSpace(c.Query("job"))
+func (h *assistantHandlers) applicationVacancy(ctx context.Context, userID int64, rawSlug string) (db.Job, error) {
+	slug := strings.TrimSpace(rawSlug)
 	if slug == "" {
 		return db.Job{}, fiber.NewError(fiber.StatusBadRequest,
 			"this conversation needs the `job` slug of an application you hold")
@@ -501,14 +519,14 @@ func (h *assistantHandlers) applicationVacancy(c *fiber.Ctx, userID int64) (db.J
 	}
 	// The vacancy is named by its public slug, like everywhere else on this API — the
 	// numeric id is ours and never leaves the backend.
-	job, err := h.stages.GetJobBySlug(c.Context(), slug)
+	job, err := h.stages.GetJobBySlug(ctx, slug)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return db.Job{}, fiber.NewError(fiber.StatusNotFound, "application not found")
 		}
 		return db.Job{}, err
 	}
-	if _, err := h.stages.GetUserJobStage(c.Context(),
+	if _, err := h.stages.GetUserJobStage(ctx,
 		db.GetUserJobStageParams{UserID: userID, JobID: job.ID}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return db.Job{}, fiber.NewError(fiber.StatusNotFound, "application not found")
@@ -521,50 +539,60 @@ func (h *assistantHandlers) applicationVacancy(c *fiber.Ctx, userID int64) (db.J
 // ListAssistantSessions returns the caller's chat conversations, newest activity
 // first. Tailoring conversations are not chats — each belongs to a CV — so they
 // never appear here.
-func (h *assistantHandlers) ListAssistantSessions(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *assistantHandlers) ListAssistantSessions(ctx context.Context) (*apigen.AssistantSessionList, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	sessions, err := h.store.ChatSessions(c.Context(), userID)
+	sessions, err := h.store.ChatSessions(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]sessionResponse, 0, len(sessions))
+	out := make([]apigen.AssistantSession, 0, len(sessions))
 	for _, s := range sessions {
-		out = append(out, sessionView(s))
+		view, err := assistantSessionView(s)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, view)
 	}
-	return c.JSON(fiber.Map{"data": out, "meta": fiber.Map{"total": len(out)}})
+	return &apigen.AssistantSessionList{Data: out, Meta: apigen.AssistantSessionListMeta{Total: int64(len(out))}}, nil
 }
 
 // GetAssistantSession returns one owned conversation with its full transcript, so
 // the client can repaint it through the same reducer live events fold through.
-func (h *assistantHandlers) GetAssistantSession(c *fiber.Ctx) error {
-	sess, err := h.ownedSession(c)
+func (h *assistantHandlers) GetAssistantSession(ctx context.Context, params apigen.GetAssistantSessionParams) (*apigen.GetAssistantSessionOK, error) {
+	sess, err := h.ownedSessionByID(ctx, params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	messages, err := h.store.Transcript(c.Context(), sess.ID)
+	messages, err := h.store.Transcript(ctx, sess.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{
-		"session":  sessionView(sess),
-		"messages": messages,
-	}})
+	// The transcript is stored JSON the model also reads: pass it through as written.
+	raw, err := json.Marshal(messages)
+	if err != nil {
+		return nil, err
+	}
+	view, err := assistantSessionView(sess)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetAssistantSessionOK{Data: apigen.AssistantSessionDetail{Session: view, Messages: raw}}, nil
 }
 
 // DeleteAssistantSession removes an owned conversation and its transcript.
-func (h *assistantHandlers) DeleteAssistantSession(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *assistantHandlers) DeleteAssistantSession(ctx context.Context, params apigen.DeleteAssistantSessionParams) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	id, err := assistantSessionID(c)
+	id, err := parseAssistantSessionID(params.ID)
 	if err != nil {
 		return err
 	}
-	sess, err := h.store.Session(c.Context(), id, userID)
+	sess, err := h.store.Session(ctx, id, userID)
 	if err != nil {
 		return mapAssistantError(err)
 	}
@@ -573,10 +601,7 @@ func (h *assistantHandlers) DeleteAssistantSession(c *fiber.Ctx) error {
 	if sess.Preset == assistant.PresetSupport {
 		return errSessionNotFound
 	}
-	if err := h.store.DeleteSession(c.Context(), id, userID); err != nil {
-		return mapAssistantError(err)
-	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return mapAssistantError(h.store.DeleteSession(ctx, id, userID))
 }
 
 // CancelAssistantTurn stops the session's running turn.
@@ -589,16 +614,16 @@ func (h *assistantHandlers) DeleteAssistantSession(c *fiber.Ctx) error {
 // A session with nothing running is not an error. A client cancels a turn whose end it cannot
 // see; requiring it to first prove the turn is alive would ask it for the one fact it does not
 // have. The ownership check comes first either way, so an id cannot be probed for existence.
-func (h *assistantHandlers) CancelAssistantTurn(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *assistantHandlers) CancelAssistantTurn(ctx context.Context, params apigen.CancelAssistantTurnParams) error {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	id, err := assistantSessionID(c)
+	id, err := parseAssistantSessionID(params.ID)
 	if err != nil {
 		return err
 	}
-	sess, err := h.store.Session(c.Context(), id, userID)
+	sess, err := h.store.Session(ctx, id, userID)
 	if err != nil {
 		return mapAssistantError(err)
 	}
@@ -606,7 +631,7 @@ func (h *assistantHandlers) CancelAssistantTurn(c *fiber.Ctx) error {
 		return errSessionNotFound
 	}
 	h.turns.cancel(id)
-	return c.SendStatus(fiber.StatusNoContent)
+	return nil
 }
 
 // PostAssistantMessage runs one turn and streams it as SSE. Every frame the loop
@@ -1236,15 +1261,20 @@ func (h *assistantHandlers) layDownRunPlan(ctx context.Context, sess assistant.S
 
 // ownedSession resolves the :id route param to a session the caller owns.
 func (h *assistantHandlers) ownedSession(c *fiber.Ctx) (assistant.Session, error) {
-	userID, err := requireUserID(c)
+	return h.ownedSessionByID(c.Context(), c.Params("id"))
+}
+
+// ownedSessionByID is ownedSession for a contract handler, which holds the raw id.
+func (h *assistantHandlers) ownedSessionByID(ctx context.Context, rawID string) (assistant.Session, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return assistant.Session{}, err
 	}
-	id, err := assistantSessionID(c)
+	id, err := parseAssistantSessionID(rawID)
 	if err != nil {
 		return assistant.Session{}, err
 	}
-	sess, err := h.store.Session(c.Context(), id, userID)
+	sess, err := h.store.Session(ctx, id, userID)
 	if err != nil {
 		return assistant.Session{}, mapAssistantError(err)
 	}

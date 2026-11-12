@@ -15,6 +15,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -27,8 +28,8 @@ import (
 // "why not widen /autopilot".
 
 // autoApplyQueueID parses the :queueId route param.
-func autoApplyQueueID(c *fiber.Ctx) (int64, error) {
-	id, err := strconv.ParseInt(c.Params("queueId"), 10, 64)
+func autoApplyQueueID(raw string) (int64, error) {
+	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
 		return 0, fiber.NewError(fiber.StatusBadRequest, "invalid queue entry id")
 	}
@@ -58,19 +59,19 @@ type autoApplyEntry struct {
 // not as any particular candidate, so it has no ownership claim of its own to check the
 // row against. It reads by id alone (GetAutoApplyQueueEntryByID) and acts as whichever
 // user the row itself names.
-func (h *assistantHandlers) resolveAutoApplyEntry(c *fiber.Ctx, queueID int64) (autoApplyEntry, error) {
-	if isAutoApplySystemCaller(c) {
-		row, err := h.queries.GetAutoApplyQueueEntryByID(c.Context(), queueID)
+func (h *assistantHandlers) resolveAutoApplyEntry(ctx context.Context, queueID int64) (autoApplyEntry, error) {
+	if isAutoApplySystemCaller(ctx) {
+		row, err := h.queries.GetAutoApplyQueueEntryByID(ctx, queueID)
 		// The generated row is field-for-field identical to autoApplyEntry (same names,
 		// types, order) — a direct conversion, not a copy, so the two reads below can
 		// never drift apart from what this type actually carries.
 		return autoApplyEntry(row), err
 	}
-	userID, err := requireUserID(c)
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
 		return autoApplyEntry{}, err
 	}
-	row, err := h.queries.GetAutoApplyQueueEntryForReview(c.Context(), db.GetAutoApplyQueueEntryForReviewParams{
+	row, err := h.queries.GetAutoApplyQueueEntryForReview(ctx, db.GetAutoApplyQueueEntryForReviewParams{
 		ID: queueID, UserID: userID,
 	})
 	return autoApplyEntry(row), err
@@ -116,7 +117,7 @@ type autoApplyTailorResponse struct {
 // own ownership check), and an entry whose review has already been recorded as 409, rather
 // than re-tailoring it.
 func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
-	queueID, err := autoApplyQueueID(c)
+	queueID, err := autoApplyQueueID(c.Params("queueId"))
 	if err != nil {
 		return err
 	}
@@ -124,7 +125,7 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
 
-	entry, err := h.resolveAutoApplyEntry(c, queueID)
+	entry, err := h.resolveAutoApplyEntry(c.Context(), queueID)
 	if err != nil {
 		return err // foreign or missing → pgx.ErrNoRows → 404, per RenderError's own mapping
 	}
@@ -312,11 +313,6 @@ func (h *assistantHandlers) recordTailoringFailure(c *fiber.Ctx, queueID int64, 
 	}
 }
 
-// autoApplyReviewRequest is the candidate's decision on one queue entry's tailored CV.
-type autoApplyReviewRequest struct {
-	Decision string `json:"decision"`
-}
-
 const (
 	autoApplyReviewApproved = "approved"
 	autoApplyReviewDeclined = "declined"
@@ -333,23 +329,20 @@ const autoApplyDeclineReason = "candidate declined the tailored CV"
 // parks it — through the same fields MarkAutoApplyBlocked sets, with a distinct reason — so
 // it is never claimed and never confused with a form-field park. A decision may be recorded
 // only once; a second attempt is refused as 409, and the existing decision is unchanged.
-func (h *assistantHandlers) PostAutoApplyReview(c *fiber.Ctx) error {
-	queueID, err := autoApplyQueueID(c)
+func (h *assistantHandlers) PostAutoApplyReview(ctx context.Context, in *apigen.AutoApplyReviewRequest, params apigen.PostAutoApplyReviewParams) (*apigen.PostAutoApplyReviewOK, error) {
+	queueID, err := autoApplyQueueID(params.QueueId)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var in autoApplyReviewRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	entry, err := h.resolveAutoApplyEntry(c, queueID)
+	entry, err := h.resolveAutoApplyEntry(ctx, queueID)
 	if err != nil {
-		return err // foreign or missing → pgx.ErrNoRows → 404
+		return nil, err // foreign or missing → pgx.ErrNoRows → 404
 	}
-	if err := h.decideAutoApplyReview(c.Context(), entry, in.Decision); err != nil {
-		return err
+	decision := in.Decision.Value
+	if err := h.decideAutoApplyReview(ctx, entry, decision); err != nil {
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"decision": in.Decision}})
+	return &apigen.PostAutoApplyReviewOK{Data: apigen.AutoApplyDecision{Decision: decision}}, nil
 }
 
 // decideAutoApplyReview records decision ("approved" or "declined") for an entry the caller

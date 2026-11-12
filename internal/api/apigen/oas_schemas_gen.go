@@ -394,6 +394,401 @@ func (s *ApproveSubmissionOK) SetData(val Submission) {
 	s.Data = val
 }
 
+// Ref: #/components/schemas/AssistantExtension
+type AssistantExtension struct {
+	Turns     int64  `json:"turns"`
+	Ceiling   int64  `json:"ceiling"`
+	Unlimited bool   `json:"unlimited"`
+	Allowance jx.Raw `json:"allowance"`
+}
+
+// GetTurns returns the value of Turns.
+func (s *AssistantExtension) GetTurns() int64 {
+	return s.Turns
+}
+
+// GetCeiling returns the value of Ceiling.
+func (s *AssistantExtension) GetCeiling() int64 {
+	return s.Ceiling
+}
+
+// GetUnlimited returns the value of Unlimited.
+func (s *AssistantExtension) GetUnlimited() bool {
+	return s.Unlimited
+}
+
+// GetAllowance returns the value of Allowance.
+func (s *AssistantExtension) GetAllowance() jx.Raw {
+	return s.Allowance
+}
+
+// SetTurns sets the value of Turns.
+func (s *AssistantExtension) SetTurns(val int64) {
+	s.Turns = val
+}
+
+// SetCeiling sets the value of Ceiling.
+func (s *AssistantExtension) SetCeiling(val int64) {
+	s.Ceiling = val
+}
+
+// SetUnlimited sets the value of Unlimited.
+func (s *AssistantExtension) SetUnlimited(val bool) {
+	s.Unlimited = val
+}
+
+// SetAllowance sets the value of Allowance.
+func (s *AssistantExtension) SetAllowance(val jx.Raw) {
+	s.Allowance = val
+}
+
+// The 402 a spent or missing allowance answers with.
+// Ref: #/components/schemas/AssistantPlanRefusal
+type AssistantPlanRefusal struct {
+	Error     string `json:"error"`
+	Allowance jx.Raw `json:"allowance"`
+	// Absent for a fair-use refusal and for a caller already on the top plan.
+	UpgradeURL OptString `json:"upgrade_url"`
+}
+
+// GetError returns the value of Error.
+func (s *AssistantPlanRefusal) GetError() string {
+	return s.Error
+}
+
+// GetAllowance returns the value of Allowance.
+func (s *AssistantPlanRefusal) GetAllowance() jx.Raw {
+	return s.Allowance
+}
+
+// GetUpgradeURL returns the value of UpgradeURL.
+func (s *AssistantPlanRefusal) GetUpgradeURL() OptString {
+	return s.UpgradeURL
+}
+
+// SetError sets the value of Error.
+func (s *AssistantPlanRefusal) SetError(val string) {
+	s.Error = val
+}
+
+// SetAllowance sets the value of Allowance.
+func (s *AssistantPlanRefusal) SetAllowance(val jx.Raw) {
+	s.Allowance = val
+}
+
+// SetUpgradeURL sets the value of UpgradeURL.
+func (s *AssistantPlanRefusal) SetUpgradeURL(val OptString) {
+	s.UpgradeURL = val
+}
+
+func (*AssistantPlanRefusal) postAssistantExtendRes() {}
+func (*AssistantPlanRefusal) postJobAutoApplyRes()    {}
+
+// One conversation.
+// Ref: #/components/schemas/AssistantSession
+type AssistantSession struct {
+	ID            string    `json:"id"`
+	Preset        string    `json:"preset"`
+	Label         string    `json:"label"`
+	SearchContext jx.Raw    `json:"search_context"`
+	CvID          OptString `json:"cv_id"`
+	JobID         OptInt64  `json:"job_id"`
+}
+
+// GetID returns the value of ID.
+func (s *AssistantSession) GetID() string {
+	return s.ID
+}
+
+// GetPreset returns the value of Preset.
+func (s *AssistantSession) GetPreset() string {
+	return s.Preset
+}
+
+// GetLabel returns the value of Label.
+func (s *AssistantSession) GetLabel() string {
+	return s.Label
+}
+
+// GetSearchContext returns the value of SearchContext.
+func (s *AssistantSession) GetSearchContext() jx.Raw {
+	return s.SearchContext
+}
+
+// GetCvID returns the value of CvID.
+func (s *AssistantSession) GetCvID() OptString {
+	return s.CvID
+}
+
+// GetJobID returns the value of JobID.
+func (s *AssistantSession) GetJobID() OptInt64 {
+	return s.JobID
+}
+
+// SetID sets the value of ID.
+func (s *AssistantSession) SetID(val string) {
+	s.ID = val
+}
+
+// SetPreset sets the value of Preset.
+func (s *AssistantSession) SetPreset(val string) {
+	s.Preset = val
+}
+
+// SetLabel sets the value of Label.
+func (s *AssistantSession) SetLabel(val string) {
+	s.Label = val
+}
+
+// SetSearchContext sets the value of SearchContext.
+func (s *AssistantSession) SetSearchContext(val jx.Raw) {
+	s.SearchContext = val
+}
+
+// SetCvID sets the value of CvID.
+func (s *AssistantSession) SetCvID(val OptString) {
+	s.CvID = val
+}
+
+// SetJobID sets the value of JobID.
+func (s *AssistantSession) SetJobID(val OptInt64) {
+	s.JobID = val
+}
+
+// A conversation with its full transcript; `messages` is the stored transcript as is.
+// Ref: #/components/schemas/AssistantSessionDetail
+type AssistantSessionDetail struct {
+	Session  AssistantSession `json:"session"`
+	Messages jx.Raw           `json:"messages"`
+}
+
+// GetSession returns the value of Session.
+func (s *AssistantSessionDetail) GetSession() AssistantSession {
+	return s.Session
+}
+
+// GetMessages returns the value of Messages.
+func (s *AssistantSessionDetail) GetMessages() jx.Raw {
+	return s.Messages
+}
+
+// SetSession sets the value of Session.
+func (s *AssistantSessionDetail) SetSession(val AssistantSession) {
+	s.Session = val
+}
+
+// SetMessages sets the value of Messages.
+func (s *AssistantSessionDetail) SetMessages(val jx.Raw) {
+	s.Messages = val
+}
+
+// Ref: #/components/schemas/AssistantSessionList
+type AssistantSessionList struct {
+	Data []AssistantSession       `json:"data"`
+	Meta AssistantSessionListMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *AssistantSessionList) GetData() []AssistantSession {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *AssistantSessionList) GetMeta() AssistantSessionListMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *AssistantSessionList) SetData(val []AssistantSession) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *AssistantSessionList) SetMeta(val AssistantSessionListMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/AssistantSessionListMeta
+type AssistantSessionListMeta struct {
+	Total int64 `json:"total"`
+}
+
+// GetTotal returns the value of Total.
+func (s *AssistantSessionListMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// SetTotal sets the value of Total.
+func (s *AssistantSessionListMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
+// Optional body of a session create: binds a general chat to a fixed search.
+// Ref: #/components/schemas/AssistantSessionRequest
+type AssistantSessionRequest struct {
+	SearchQuery OptNilString `json:"search_query"`
+	RequestID   OptString    `json:"request_id"`
+}
+
+// GetSearchQuery returns the value of SearchQuery.
+func (s *AssistantSessionRequest) GetSearchQuery() OptNilString {
+	return s.SearchQuery
+}
+
+// GetRequestID returns the value of RequestID.
+func (s *AssistantSessionRequest) GetRequestID() OptString {
+	return s.RequestID
+}
+
+// SetSearchQuery sets the value of SearchQuery.
+func (s *AssistantSessionRequest) SetSearchQuery(val OptNilString) {
+	s.SearchQuery = val
+}
+
+// SetRequestID sets the value of RequestID.
+func (s *AssistantSessionRequest) SetRequestID(val OptString) {
+	s.RequestID = val
+}
+
+// Ref: #/components/schemas/AssistantVoiceToken
+type AssistantVoiceToken struct {
+	Value    string `json:"value"`
+	Model    string `json:"model"`
+	CallsURL string `json:"calls_url"`
+}
+
+// GetValue returns the value of Value.
+func (s *AssistantVoiceToken) GetValue() string {
+	return s.Value
+}
+
+// GetModel returns the value of Model.
+func (s *AssistantVoiceToken) GetModel() string {
+	return s.Model
+}
+
+// GetCallsURL returns the value of CallsURL.
+func (s *AssistantVoiceToken) GetCallsURL() string {
+	return s.CallsURL
+}
+
+// SetValue sets the value of Value.
+func (s *AssistantVoiceToken) SetValue(val string) {
+	s.Value = val
+}
+
+// SetModel sets the value of Model.
+func (s *AssistantVoiceToken) SetModel(val string) {
+	s.Model = val
+}
+
+// SetCallsURL sets the value of CallsURL.
+func (s *AssistantVoiceToken) SetCallsURL(val string) {
+	s.CallsURL = val
+}
+
+// Ref: #/components/schemas/AssistantVoiceTurn
+type AssistantVoiceTurn struct {
+	Role    OptString `json:"role"`
+	Content OptString `json:"content"`
+}
+
+// GetRole returns the value of Role.
+func (s *AssistantVoiceTurn) GetRole() OptString {
+	return s.Role
+}
+
+// GetContent returns the value of Content.
+func (s *AssistantVoiceTurn) GetContent() OptString {
+	return s.Content
+}
+
+// SetRole sets the value of Role.
+func (s *AssistantVoiceTurn) SetRole(val OptString) {
+	s.Role = val
+}
+
+// SetContent sets the value of Content.
+func (s *AssistantVoiceTurn) SetContent(val OptString) {
+	s.Content = val
+}
+
+// Ref: #/components/schemas/AutoApplyCancelled
+type AutoApplyCancelled struct {
+	Cancelled bool `json:"cancelled"`
+}
+
+// GetCancelled returns the value of Cancelled.
+func (s *AutoApplyCancelled) GetCancelled() bool {
+	return s.Cancelled
+}
+
+// SetCancelled sets the value of Cancelled.
+func (s *AutoApplyCancelled) SetCancelled(val bool) {
+	s.Cancelled = val
+}
+
+// Ref: #/components/schemas/AutoApplyDecision
+type AutoApplyDecision struct {
+	Decision string `json:"decision"`
+}
+
+// GetDecision returns the value of Decision.
+func (s *AutoApplyDecision) GetDecision() string {
+	return s.Decision
+}
+
+// SetDecision sets the value of Decision.
+func (s *AutoApplyDecision) SetDecision(val string) {
+	s.Decision = val
+}
+
+// Ref: #/components/schemas/AutoApplyQueued
+type AutoApplyQueued struct {
+	Status string `json:"status"`
+}
+
+// GetStatus returns the value of Status.
+func (s *AutoApplyQueued) GetStatus() string {
+	return s.Status
+}
+
+// SetStatus sets the value of Status.
+func (s *AutoApplyQueued) SetStatus(val string) {
+	s.Status = val
+}
+
+// Ref: #/components/schemas/AutoApplyRetried
+type AutoApplyRetried struct {
+	Retried bool `json:"retried"`
+}
+
+// GetRetried returns the value of Retried.
+func (s *AutoApplyRetried) GetRetried() bool {
+	return s.Retried
+}
+
+// SetRetried sets the value of Retried.
+func (s *AutoApplyRetried) SetRetried(val bool) {
+	s.Retried = val
+}
+
+// Ref: #/components/schemas/AutoApplyReviewRequest
+type AutoApplyReviewRequest struct {
+	// `approved` or `declined`.
+	Decision OptString `json:"decision"`
+}
+
+// GetDecision returns the value of Decision.
+func (s *AutoApplyReviewRequest) GetDecision() OptString {
+	return s.Decision
+}
+
+// SetDecision sets the value of Decision.
+func (s *AutoApplyReviewRequest) SetDecision(val OptString) {
+	s.Decision = val
+}
+
 // Ref: #/components/schemas/BanRequest
 type BanRequest struct {
 	// 1 to 500 characters.
@@ -2599,6 +2994,9 @@ func (s *BuddyUnreactOK) SetData(val BuddyReactions) {
 	s.Data = val
 }
 
+// CancelAssistantTurnNoContent is response for CancelAssistantTurn operation.
+type CancelAssistantTurnNoContent struct{}
+
 // A single item: `{"data": ...}`.
 type CancelSessionOK struct {
 	Data MentorshipBooking `json:"data"`
@@ -4041,6 +4439,40 @@ func (s *CreateApplicationFromEmailOK) SetData(val InboxEmail) {
 }
 
 // A single item: `{"data": ...}`.
+type CreateAssistantSessionCreated struct {
+	Data AssistantSession `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateAssistantSessionCreated) GetData() AssistantSession {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateAssistantSessionCreated) SetData(val AssistantSession) {
+	s.Data = val
+}
+
+func (*CreateAssistantSessionCreated) createAssistantSessionRes() {}
+
+// A single item: `{"data": ...}`.
+type CreateAssistantSessionOK struct {
+	Data AssistantSession `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateAssistantSessionOK) GetData() AssistantSession {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateAssistantSessionOK) SetData(val AssistantSession) {
+	s.Data = val
+}
+
+func (*CreateAssistantSessionOK) createAssistantSessionRes() {}
+
+// A single item: `{"data": ...}`.
 type CreateCVCreated struct {
 	Data CvRecord `json:"data"`
 }
@@ -5372,6 +5804,9 @@ func (s *DeclineConversationOK) SetData(val Conversation) {
 	s.Data = val
 }
 
+// DeleteAssistantSessionNoContent is response for DeleteAssistantSession operation.
+type DeleteAssistantSessionNoContent struct{}
+
 // DeleteAtomNoContent is response for DeleteAtom operation.
 type DeleteAtomNoContent struct{}
 
@@ -5416,6 +5851,21 @@ type DeleteEmailNoContent struct{}
 
 // DeleteEmploymentNoContent is response for DeleteEmployment operation.
 type DeleteEmploymentNoContent struct{}
+
+// A single item: `{"data": ...}`.
+type DeleteJobAutoApplyOK struct {
+	Data AutoApplyCancelled `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DeleteJobAutoApplyOK) GetData() AutoApplyCancelled {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DeleteJobAutoApplyOK) SetData(val AutoApplyCancelled) {
+	s.Data = val
+}
 
 // DeleteProfileNoContent is response for DeleteProfile operation.
 type DeleteProfileNoContent struct{}
@@ -7406,6 +7856,21 @@ func (s *GetApplicationFollowUpOK) GetData() MailFollowUpDraft {
 
 // SetData sets the value of Data.
 func (s *GetApplicationFollowUpOK) SetData(val MailFollowUpDraft) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetAssistantSessionOK struct {
+	Data AssistantSessionDetail `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetAssistantSessionOK) GetData() AssistantSessionDetail {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetAssistantSessionOK) SetData(val AssistantSessionDetail) {
 	s.Data = val
 }
 
@@ -13795,6 +14260,52 @@ func (o OptApplyJob) Or(d ApplyJob) ApplyJob {
 	return d
 }
 
+// NewOptAssistantSessionRequest returns new OptAssistantSessionRequest with value set to v.
+func NewOptAssistantSessionRequest(v AssistantSessionRequest) OptAssistantSessionRequest {
+	return OptAssistantSessionRequest{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptAssistantSessionRequest is optional AssistantSessionRequest.
+type OptAssistantSessionRequest struct {
+	Value AssistantSessionRequest
+	Set   bool
+}
+
+// IsSet returns true if OptAssistantSessionRequest was set.
+func (o OptAssistantSessionRequest) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptAssistantSessionRequest) Reset() {
+	var v AssistantSessionRequest
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptAssistantSessionRequest) SetTo(v AssistantSessionRequest) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptAssistantSessionRequest) Get() (v AssistantSessionRequest, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptAssistantSessionRequest) Or(d AssistantSessionRequest) AssistantSessionRequest {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptBool returns new OptBool with value set to v.
 func NewOptBool(v bool) OptBool {
 	return OptBool{
@@ -15620,6 +16131,46 @@ func (s *Plans) SetEnforced(val []string) {
 	s.Enforced = val
 }
 
+// PostAssistantExtendNoContent is response for PostAssistantExtend operation.
+type PostAssistantExtendNoContent struct{}
+
+func (*PostAssistantExtendNoContent) postAssistantExtendRes() {}
+
+// A single item: `{"data": ...}`.
+type PostAssistantExtendOK struct {
+	Data AssistantExtension `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PostAssistantExtendOK) GetData() AssistantExtension {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PostAssistantExtendOK) SetData(val AssistantExtension) {
+	s.Data = val
+}
+
+func (*PostAssistantExtendOK) postAssistantExtendRes() {}
+
+// A single item: `{"data": ...}`.
+type PostAssistantVoiceTokenOK struct {
+	Data AssistantVoiceToken `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PostAssistantVoiceTokenOK) GetData() AssistantVoiceToken {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PostAssistantVoiceTokenOK) SetData(val AssistantVoiceToken) {
+	s.Data = val
+}
+
+// PostAssistantVoiceTurnNoContent is response for PostAssistantVoiceTurn operation.
+type PostAssistantVoiceTurnNoContent struct{}
+
 // A single item: `{"data": ...}`.
 type PostAtsReportOK struct {
 	Data jx.Raw `json:"data"`
@@ -15632,6 +16183,53 @@ func (s *PostAtsReportOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *PostAtsReportOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type PostAutoApplyReviewOK struct {
+	Data AutoApplyDecision `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PostAutoApplyReviewOK) GetData() AutoApplyDecision {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PostAutoApplyReviewOK) SetData(val AutoApplyDecision) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type PostJobAutoApplyOK struct {
+	Data AutoApplyQueued `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PostJobAutoApplyOK) GetData() AutoApplyQueued {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PostJobAutoApplyOK) SetData(val AutoApplyQueued) {
+	s.Data = val
+}
+
+func (*PostJobAutoApplyOK) postJobAutoApplyRes() {}
+
+// A single item: `{"data": ...}`.
+type PostJobAutoApplyRetryOK struct {
+	Data AutoApplyRetried `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PostJobAutoApplyRetryOK) GetData() AutoApplyRetried {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PostJobAutoApplyRetryOK) SetData(val AutoApplyRetried) {
 	s.Data = val
 }
 

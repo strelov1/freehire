@@ -470,6 +470,12 @@ func encodeBuddyUnreactResponse(response *BuddyUnreactOK, w http.ResponseWriter)
 	return nil
 }
 
+func encodeCancelAssistantTurnResponse(response *CancelAssistantTurnNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
 func encodeCancelSessionResponse(response *CancelSessionOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -682,6 +688,37 @@ func encodeCreateApplicationFromEmailResponse(response *CreateApplicationFromEma
 	}
 
 	return nil
+}
+
+func encodeCreateAssistantSessionResponse(response CreateAssistantSessionRes, w http.ResponseWriter) error {
+	switch response := response.(type) {
+	case *CreateAssistantSessionOK:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(200)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *CreateAssistantSessionCreated:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(201)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
 }
 
 func encodeCreateCVResponse(response *CreateCVCreated, w http.ResponseWriter) error {
@@ -897,6 +934,12 @@ func encodeDeclineConversationResponse(response *DeclineConversationOK, w http.R
 	return nil
 }
 
+func encodeDeleteAssistantSessionResponse(response *DeleteAssistantSessionNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
 func encodeDeleteAtomResponse(response *DeleteAtomNoContent, w http.ResponseWriter) error {
 	w.WriteHeader(204)
 
@@ -949,6 +992,19 @@ func encodeDeleteEmailResponse(response *DeleteEmailNoContent, w http.ResponseWr
 
 func encodeDeleteEmploymentResponse(response *DeleteEmploymentNoContent, w http.ResponseWriter) error {
 	w.WriteHeader(204)
+
+	return nil
+}
+
+func encodeDeleteJobAutoApplyResponse(response *DeleteJobAutoApplyOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
 
 	return nil
 }
@@ -1113,6 +1169,19 @@ func encodeGetAgentPermissionsResponse(response *GetAgentPermissionsOK, w http.R
 }
 
 func encodeGetApplicationFollowUpResponse(response *GetApplicationFollowUpOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeGetAssistantSessionResponse(response *GetAssistantSessionOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -2162,6 +2231,19 @@ func encodeListAppliedCompanySlugsResponse(response *ListAppliedCompanySlugsOK, 
 	return nil
 }
 
+func encodeListAssistantSessionsResponse(response *AssistantSessionList, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeListBankedAnswersResponse(response *ListBankedAnswersOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -2873,7 +2955,119 @@ func encodePauseMentorProfileResponse(response *PauseMentorProfileOK, w http.Res
 	return nil
 }
 
+func encodePostAssistantExtendResponse(response PostAssistantExtendRes, w http.ResponseWriter) error {
+	switch response := response.(type) {
+	case *PostAssistantExtendOK:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(200)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *PostAssistantExtendNoContent:
+		w.WriteHeader(204)
+
+		return nil
+
+	case *AssistantPlanRefusal:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(402)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
+func encodePostAssistantVoiceTokenResponse(response *PostAssistantVoiceTokenOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodePostAssistantVoiceTurnResponse(response *PostAssistantVoiceTurnNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
 func encodePostAtsReportResponse(response *PostAtsReportOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodePostAutoApplyReviewResponse(response *PostAutoApplyReviewOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodePostJobAutoApplyResponse(response PostJobAutoApplyRes, w http.ResponseWriter) error {
+	switch response := response.(type) {
+	case *PostJobAutoApplyOK:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(200)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	case *AssistantPlanRefusal:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(402)
+
+		e := new(jx.Encoder)
+		response.Encode(e)
+		if _, err := e.WriteTo(w); err != nil {
+			return errors.Wrap(err, "write")
+		}
+
+		return nil
+
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
+func encodePostJobAutoApplyRetryResponse(response *PostJobAutoApplyRetryOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 

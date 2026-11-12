@@ -182,6 +182,12 @@ type Handler interface {
 	//
 	// DELETE /me/buddies/feed/{id}/reaction
 	BuddyUnreact(ctx context.Context, params BuddyUnreactParams) (*BuddyUnreactOK, error)
+	// CancelAssistantTurn implements cancelAssistantTurn operation.
+	//
+	// Stops the turn running in the session; a session with nothing running is not an error.
+	//
+	// POST /assistant/sessions/{id}/cancel
+	CancelAssistantTurn(ctx context.Context, params CancelAssistantTurnParams) error
 	// CancelSession implements cancelSession operation.
 	//
 	// POST /me/mentorship/sessions/{id}/cancel
@@ -271,6 +277,14 @@ type Handler interface {
 	//
 	// POST /me/emails/{id}/application
 	CreateApplicationFromEmail(ctx context.Context, req OptInboxLinkTarget, params CreateApplicationFromEmailParams) (*CreateApplicationFromEmailOK, error)
+	// CreateAssistantSession implements createAssistantSession operation.
+	//
+	// Starts a conversation. `preset` picks the kind; `job` names the application an interview, debrief or
+	// apply session is held against. A session already held for the same application, or the same search
+	// request, is handed back (200); a new one is a 201.
+	//
+	// POST /assistant/sessions
+	CreateAssistantSession(ctx context.Context, req OptAssistantSessionRequest, params CreateAssistantSessionParams) (CreateAssistantSessionRes, error)
 	// CreateCV implements createCV operation.
 	//
 	// POST /me/cvs
@@ -359,6 +373,12 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/decline
 	DeclineConversation(ctx context.Context, params DeclineConversationParams) (*DeclineConversationOK, error)
+	// DeleteAssistantSession implements deleteAssistantSession operation.
+	//
+	// Removes an owned conversation and its transcript.
+	//
+	// DELETE /assistant/sessions/{id}
+	DeleteAssistantSession(ctx context.Context, params DeleteAssistantSessionParams) error
 	// DeleteAtom implements deleteAtom operation.
 	//
 	// DELETE /me/experience/atoms/{id}
@@ -393,6 +413,12 @@ type Handler interface {
 	//
 	// DELETE /me/experience/employments/{id}
 	DeleteEmployment(ctx context.Context, params DeleteEmploymentParams) error
+	// DeleteJobAutoApply implements deleteJobAutoApply operation.
+	//
+	// Withdraws the caller's attempt on the job.
+	//
+	// DELETE /jobs/{slug}/auto-apply
+	DeleteJobAutoApply(ctx context.Context, params DeleteJobAutoApplyParams) (*DeleteJobAutoApplyOK, error)
 	// DeleteProfile implements deleteProfile operation.
 	//
 	// Clears the profile. Idempotent: deleting when none exists is still a 204.
@@ -467,6 +493,12 @@ type Handler interface {
 	//
 	// GET /me/tracking/{slug}/followup
 	GetApplicationFollowUp(ctx context.Context, params GetApplicationFollowUpParams) (*GetApplicationFollowUpOK, error)
+	// GetAssistantSession implements getAssistantSession operation.
+	//
+	// One owned conversation with its transcript.
+	//
+	// GET /assistant/sessions/{id}
+	GetAssistantSession(ctx context.Context, params GetAssistantSessionParams) (*GetAssistantSessionOK, error)
 	// GetAtsReport implements getAtsReport operation.
 	//
 	// The ATS-readiness report of the caller's stored CV, with any cached model review folded in. `has_cv`
@@ -882,6 +914,12 @@ type Handler interface {
 	//
 	// GET /me/tracking/applied-companies
 	ListAppliedCompanySlugs(ctx context.Context) (*ListAppliedCompanySlugsOK, error)
+	// ListAssistantSessions implements listAssistantSessions operation.
+	//
+	// The caller's chat conversations, newest activity first.
+	//
+	// GET /assistant/sessions
+	ListAssistantSessions(ctx context.Context) (*AssistantSessionList, error)
 	// ListBankedAnswers implements listBankedAnswers operation.
 	//
 	// GET /me/answer-bank
@@ -1187,12 +1225,48 @@ type Handler interface {
 	//
 	// POST /me/mentorship/profile/pause
 	PauseMentorProfile(ctx context.Context, req *MentorshipPauseBody) (*PauseMentorProfileOK, error)
+	// PostAssistantExtend implements postAssistantExtend operation.
+	//
+	// Buys a tailoring session another ceiling's worth of turns. 204 when plan limits are not wired.
+	//
+	// POST /assistant/sessions/{id}/extend
+	PostAssistantExtend(ctx context.Context, params PostAssistantExtendParams) (PostAssistantExtendRes, error)
+	// PostAssistantVoiceToken implements postAssistantVoiceToken operation.
+	//
+	// Mints the short-lived credential for a voice call on an interview session.
+	//
+	// POST /assistant/sessions/{id}/voice-token
+	PostAssistantVoiceToken(ctx context.Context, params PostAssistantVoiceTokenParams) (*PostAssistantVoiceTokenOK, error)
+	// PostAssistantVoiceTurn implements postAssistantVoiceTurn operation.
+	//
+	// Appends one completed spoken turn to an interview session's transcript.
+	//
+	// POST /assistant/sessions/{id}/voice-turns
+	PostAssistantVoiceTurn(ctx context.Context, req *AssistantVoiceTurn, params PostAssistantVoiceTurnParams) error
 	// PostAtsReport implements postAtsReport operation.
 	//
 	// Runs the model review (paid) over the stored CV, caches it and returns the report.
 	//
 	// POST /me/profile/ats-report
 	PostAtsReport(ctx context.Context) (*PostAtsReportOK, error)
+	// PostAutoApplyReview implements postAutoApplyReview operation.
+	//
+	// Records the approve or decline decision for a tailored queue entry.
+	//
+	// POST /me/auto-apply/{queueId}/review
+	PostAutoApplyReview(ctx context.Context, req *AutoApplyReviewRequest, params PostAutoApplyReviewParams) (*PostAutoApplyReviewOK, error)
+	// PostJobAutoApply implements postJobAutoApply operation.
+	//
+	// Starts an auto-apply attempt for the job; a repeat for a live attempt succeeds too.
+	//
+	// POST /jobs/{slug}/auto-apply
+	PostJobAutoApply(ctx context.Context, params PostJobAutoApplyParams) (PostJobAutoApplyRes, error)
+	// PostJobAutoApplyRetry implements postJobAutoApplyRetry operation.
+	//
+	// Re-arms a stuck attempt, or refreshes the answer preview of one awaiting review.
+	//
+	// POST /jobs/{slug}/auto-apply/retry
+	PostJobAutoApplyRetry(ctx context.Context, params PostJobAutoApplyRetryParams) (*PostJobAutoApplyRetryOK, error)
 	// PrefillSubmission implements prefillSubmission operation.
 	//
 	// Writes nothing. An unrecognised URL answers 200 with every field empty.
