@@ -45,12 +45,14 @@
   async function rate(helpful: boolean) {
     if (!sessionId || saving) return;
     const previous = rated;
+    const conversation = chatKey;
     rated = helpful;
     saving = true;
     try {
       await rateSupportSession(sessionId, helpful);
     } catch {
-      rated = previous;
+      // Not after "New conversation": the old verdict does not belong to the new one.
+      if (conversation === chatKey) rated = previous;
     } finally {
       saving = false;
     }
