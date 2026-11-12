@@ -115,7 +115,11 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 				code = "invalid_request"
 			}
 			result := errorResult(agentErrorText(err))
-			result.Meta = mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": code}}
+			diagnostics := map[string]any{"error_code": code}
+			if field := assistant.ArgField(err); field != "" && code == "invalid_request" {
+				diagnostics[badArgsKey] = []string{field}
+			}
+			result.Meta = mcp.Meta{diagnosticsMetaKey: diagnostics}
 			return result, nil
 		}
 		payload, err := json.Marshal(out)

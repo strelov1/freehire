@@ -81,6 +81,9 @@ func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolRe
 			if code == "" {
 				code = resultErrorCode(result)
 			}
+			if code == "invalid_request" && badArgs == nil {
+				badArgs = handlerBadArgs(result)
+			}
 			if result.Meta == nil {
 				result.Meta = mcp.Meta{}
 			}
@@ -114,6 +117,17 @@ func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolRe
 }
 
 const diagnosticsMetaKey = "freehire.me/diagnostics"
+
+// badArgsKey carries, inside the diagnostics, the names of the arguments a handler blamed
+// for an invalid_request. observeTool logs them and replaces the diagnostics before the
+// result leaves, so they never reach the client.
+const badArgsKey = "bad_args"
+
+func handlerBadArgs(result *mcp.CallToolResult) []string {
+	diagnostics, _ := result.Meta[diagnosticsMetaKey].(map[string]any)
+	names, _ := diagnostics[badArgsKey].([]string)
+	return loggableNames(names)
+}
 
 func resultErrorCode(result *mcp.CallToolResult) string {
 	diagnostics, _ := result.Meta[diagnosticsMetaKey].(map[string]any)

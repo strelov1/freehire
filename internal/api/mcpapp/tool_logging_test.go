@@ -243,3 +243,36 @@ func TestLoggableNamesAreBounded(t *testing.T) {
 		t.Errorf("names = %v", got)
 	}
 }
+
+// An account tool that refuses an argument logs its name, from the typed error rather than
+// the message, and the name does not travel back in the response diagnostics.
+func TestToolLogNamesTheArgumentAHandlerRefused(t *testing.T) {
+	records := captureToolLogs(t)
+	tool := assistant.Tool{Name: "strict", Schema: map[string]any{"type": "object"},
+		Run: func(_ context.Context, _ int64, raw json.RawMessage) (any, error) {
+			var in struct{}
+			return nil, assistant.DecodeArgs(raw, &in)
+		}}
+	server := NewAccountServer([]assistant.Tool{tool}, 1, "", nil)
+	clientT, serverT := mcp.NewInMemoryTransports()
+	go func() { _ = server.Run(t.Context(), serverT) }()
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(t.Context(), clientT, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "strict", Arguments: map[string]any{"bogus": "private-value"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextToolLog(t, records)
+	finish := nextToolLog(t, records)
+	raw, _ := json.Marshal(finish)
+	if finish["outcome"] != "tool_error" || finish["error_code"] != "invalid_request" || finish["bad_args"] != "bogus" || strings.Contains(string(raw), "private-value") {
+		t.Errorf("unexpected log: %s", raw)
+	}
+	if diag, _ := res.Meta[diagnosticsMetaKey].(map[string]any); diag[badArgsKey] != nil {
+		t.Errorf("bad_args leaked into the response diagnostics: %v", diag)
+	}
+}

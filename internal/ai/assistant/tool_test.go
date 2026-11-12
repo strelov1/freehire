@@ -150,3 +150,23 @@ func TestDecodeArgsRejectsTrailingContent(t *testing.T) {
 		t.Fatal("DecodeArgs accepted two concatenated objects; only one argument object is valid")
 	}
 }
+
+// A decode failure names the argument, never its value, so a surface can log which field
+// the model got wrong.
+func TestDecodeArgs_NamesTheBadArgument(t *testing.T) {
+	var in struct {
+		Limit int `json:"limit"`
+	}
+	for name, tc := range map[string]struct{ raw, want string }{
+		"unknown field": {`{"bogus": "secret"}`, "bogus"},
+		"wrong type":    {`{"limit": "secret"}`, "limit"},
+		"not an object": {`[1]`, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := DecodeArgs(json.RawMessage(tc.raw), &in)
+			if !errors.Is(err, ErrInvalidArguments) || ArgField(err) != tc.want {
+				t.Errorf("err=%v field=%q, want %q", err, ArgField(err), tc.want)
+			}
+		})
+	}
+}
