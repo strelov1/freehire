@@ -200,7 +200,7 @@
     </p>
   </header>
 
-  <SectionLabel text="for job seekers" class="-mb-6 text-center" />
+  <SectionLabel text="For job seekers" class="-mb-6 text-center" />
 
   {#if monthly && annual}
     <div class="flex justify-center">
@@ -440,7 +440,7 @@
 
   {#if plans}
     {#if plans.prices.some((p) => p.tier === 'api' || p.tier === 'api_data')}
-      <SectionLabel text="for builders" class="-mb-6 text-center" />
+      <SectionLabel text="For builders" class="-mb-6 text-center" />
     {/if}
     <ApiPlans prices={plans.prices} buttonVariant="outline" />
   {/if}

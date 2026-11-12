@@ -20,7 +20,7 @@
 
 <div class="mx-auto w-full max-w-4xl px-4 py-10 sm:py-14">
   <header class="mb-10">
-    <SectionLabel text="semantic search" />
+    <SectionLabel text="Semantic search" />
     <h1 class="mt-4 text-4xl font-semibold tracking-tighter sm:text-5xl">Semantic search.</h1>
     <p class="mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground">
       Every technical posting gets a semantic embedding, which is how freehire finds postings that mean the same thing

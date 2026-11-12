@@ -136,7 +136,7 @@
 {#if entries.length > 0}
   <section class="border-t border-border py-10">
     <div class="flex items-center justify-between gap-3">
-      <SectionLabel as="h2" text="just added" />
+      <SectionLabel as="h2" text="Just added" />
       <button
         type="button"
         onclick={() => (paused = !paused)}

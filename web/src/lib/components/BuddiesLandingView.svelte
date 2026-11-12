@@ -99,7 +99,7 @@
   <!-- Hero -->
   <section class="dot-grid -mx-4 grid items-center gap-10 px-4 pb-12 pt-6 lg:grid-cols-2">
     <div>
-      <SectionLabel text="interview buddies · free" />
+      <SectionLabel text="Interview buddies · free" />
       <h1 class="mt-5 max-w-2xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-5xl">
         Find people interviewing where you are.
       </h1>
@@ -128,7 +128,7 @@
 
   <!-- How it works -->
   <section id="how-it-works" class="scroll-mt-20 py-16 sm:py-20">
-    <SectionLabel text="how it works" />
+    <SectionLabel text="How it works" />
     <h2 class="mt-6 max-w-2xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
       From a handle to a conversation.
     </h2>
@@ -137,7 +137,7 @@
 
   <!-- Why it works -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="why it works" />
+    <SectionLabel text="Why it works" />
     <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       Why help someone applying where you are?
     </h2>
@@ -157,7 +157,7 @@
 
   <!-- Visibility -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="what others see" />
+    <SectionLabel text="What others see" />
     <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       Your progress is visible. You aren't.
     </h2>
@@ -181,7 +181,7 @@
 
   <!-- Control -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="you stay in control" />
+    <SectionLabel text="You stay in control" />
     <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       Leave, block or report at any time.
     </h2>
@@ -197,7 +197,7 @@
 
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share BUDDIES_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="faq" />
+    <SectionLabel text="FAQ" />
     <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       Questions people ask before joining.
     </h2>

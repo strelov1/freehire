@@ -80,7 +80,7 @@
   <!-- Hero. Left: the pitch. Right: the panel, docked to a posting. -->
   <section class="dot-grid -mx-4 grid items-center gap-12 px-4 pb-16 pt-8 lg:grid-cols-[1.05fr_0.95fr]">
     <div>
-      <SectionLabel text="browser extension" />
+      <SectionLabel text="Browser extension" />
       <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-6xl">
         Apply where you already are.
       </h1>
@@ -115,7 +115,7 @@
 
   <!-- The match card. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="before you spend the hour" />
+    <SectionLabel text="Before you spend the hour" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
         <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -156,7 +156,7 @@
             <p class="text-sm text-muted-foreground">19 of 25 skills covered</p>
           </div>
           <div class="mt-5">
-            <SectionLabel text="you have" />
+            <SectionLabel text="You have" />
             <div class="mt-2.5 flex flex-wrap gap-1.5">
               {#each ['Distributed systems', 'Kafka', 'Postgres', 'AWS', 'Go'] as skill (skill)}
                 <span
@@ -168,7 +168,7 @@
             </div>
           </div>
           <div class="mt-5">
-            <SectionLabel text="they want, you don't" />
+            <SectionLabel text="They want, you don't" />
             <div class="mt-2.5 flex flex-wrap gap-1.5">
               {#each ['Scala', 'JVM tuning'] as skill (skill)}
                 <span class="rounded-md border border-warning/50 px-2 py-0.5 font-mono text-xs text-warning-strong">
@@ -187,7 +187,7 @@
 
   <!-- Autofill. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="autofill" />
+    <SectionLabel text="Autofill" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">It reads the form and fills it in. You send it.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -240,7 +240,7 @@
 
   <!-- The agent. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="the agent" />
+    <SectionLabel text="The agent" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
         <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Ask about the page in front of you.</h2>
@@ -290,7 +290,7 @@
 
   <!-- Where it works. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="where it works" />
+    <SectionLabel text="Where it works" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">On the page you are on.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -313,7 +313,7 @@
 
   <!-- The bounds. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="what it can and cannot see" />
+    <SectionLabel text="What it can and cannot see" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Nothing is read in the background.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -337,13 +337,13 @@
 
   <!-- Getting started. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="getting started" />
+    <SectionLabel text="Getting started" />
     <NumberedGrid items={start} class="mt-10 sm:grid-cols-3" />
   </section>
 
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share EXTENSION_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="faq" />
+    <SectionLabel text="FAQ" />
     <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Frequently asked questions.</h2>
     <!-- An odd entry count would leave the last row half empty, which in a hairline
          grid reads as a slab of border colour. The last answer fills the row instead. -->

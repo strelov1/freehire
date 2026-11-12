@@ -11,8 +11,8 @@ export const messages = defineMessages(
     jobsFound: 'jobs found',
     companiesHiring: 'companies hiring',
     unavailable: 'Not available',
-    whereJobsAre: 'where the jobs are',
-    companiesSection: 'companies hiring',
+    whereJobsAre: 'Where the jobs are',
+    companiesSection: 'Companies hiring',
   },
   {
     ru: {
@@ -35,8 +35,8 @@ export const messages = defineMessages(
       jobsFound: 'вакансий найдено',
       companiesHiring: 'компаний нанимают',
       unavailable: 'Нет данных',
-      whereJobsAre: 'где вакансии',
-      companiesSection: 'кто нанимает',
+      whereJobsAre: 'Где вакансии',
+      companiesSection: 'Кто нанимает',
     },
   },
 );

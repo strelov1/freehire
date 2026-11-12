@@ -83,7 +83,7 @@
 </Card>
 
 <section class="mt-10">
-  <SectionLabel text="help speed it up" />
+  <SectionLabel text="Help speed it up" />
   <h2 class="mt-3 text-2xl font-semibold tracking-tight">Lend your machine for a while.</h2>
   <p class="mt-3 max-w-2xl leading-relaxed text-muted-foreground">
     The volunteer client runs the embedding model on your own computer and sends back vectors for postings in the queue.

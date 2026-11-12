@@ -80,7 +80,7 @@
 
 <div class="jobs-api">
   <section class="grid-bg relative -mx-4 px-4 pb-14 pt-12 sm:pt-16">
-    <SectionLabel text="jobs api · commercial use" />
+    <SectionLabel text="Jobs API · commercial use" />
     <h1 class="mt-6 max-w-3xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
       Millions of open jobs, one API, one flat price.
     </h1>
@@ -114,7 +114,7 @@
   </section>
 
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="who it is for" />
+    <SectionLabel text="Who it is for" />
     <h2 class="mt-6 max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">
       Built for products that show jobs to people.
     </h2>
@@ -129,7 +129,7 @@
   </section>
 
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="what you get" />
+    <SectionLabel text="What you get" />
     <h2 class="mt-6 max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">A posting, already structured.</h2>
     <p class="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
       Every field on every plan, and every filter the site’s own search has — country, region, city, category,
@@ -154,7 +154,7 @@
   </section>
 
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="how it is priced" />
+    <SectionLabel text="How it is priced" />
     <h2 class="mt-6 max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">
       You pay for the rate, not for the rows.
     </h2>
@@ -190,7 +190,7 @@
   </section>
 
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="the licence" />
+    <SectionLabel text="The licence" />
     <h2 class="mt-6 max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">
       What a plan lets you do, in four lines.
     </h2>
@@ -217,7 +217,7 @@
   </section>
 
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="questions" />
+    <SectionLabel text="Questions" />
     <h2 class="mt-6 max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">Before you ask.</h2>
     <div class="mt-8 flex max-w-3xl flex-col divide-y divide-border border-y border-border">
       {#each JOBS_API_FAQ as item (item.question)}

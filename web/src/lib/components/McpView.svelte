@@ -33,7 +33,7 @@
 <!-- Hero: the pitch. -->
 <section class="pb-10 pt-12 sm:pt-16">
   <div>
-    <SectionLabel text="mcp" />
+    <SectionLabel text="MCP" />
     <h1 class="mt-6 max-w-3xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
       Search jobs right inside your AI assistant.
     </h1>

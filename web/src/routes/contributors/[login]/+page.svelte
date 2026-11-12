@@ -107,7 +107,7 @@
 
   {#if who.recentPullRequests.length > 0}
     <section class="mt-12">
-      <SectionLabel text="merged" />
+      <SectionLabel text="Merged" />
       <h2 class="mt-3 text-xl font-semibold tracking-tight">
         {who.recentPullRequests.length === who.mergedPullRequests
           ? 'Every pull request'
