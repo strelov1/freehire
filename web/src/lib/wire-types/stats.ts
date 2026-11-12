@@ -117,125 +117,35 @@ export type CatalogScale = components['schemas']['CatalogScale'];
 /** Semantic-embedding coverage of the catalogue, behind the public /semantic-search
  *  page (`GET /api/v1/stats/embeddings` and its stream). Every figure is `null`
  *  until it has been measured — render that as "measuring", never as 0. */
-export interface EmbedProgress {
-  eligible: number | null;
-  covered: number | null;
-  snapshot_covered: number | null;
-  queued: number | null;
-  rate_per_minute: number | null;
-  eta_seconds: number | null;
-  snapshot_at: string | null;
-  measured_at: string | null;
-}
+export type EmbedProgress = components['schemas']['EmbeddingProgress'];
 
 /** The derived health verdict for a provider (and the fleet) on the public
  *  /status page. */
-export type HealthStatus = 'operational' | 'degraded' | 'down';
+export type HealthStatus = components['schemas']['HealthStatus'];
 
 /** How a source is shaped: a multi-tenant ATS platform, a many-company job
  *  aggregator, a single company's own careers page, or an unclassified source. */
-export type ProviderKind = 'ats' | 'aggregator' | 'company' | 'social' | 'other';
+export type ProviderKind = components['schemas']['ProviderKind'];
 
-/** One provider's health on the public /status page: board counts, freshness, and
- *  the derived status. Sanitized — no error text or board identifiers are exposed.
- *  Timestamps are RFC3339 strings, or null when the provider has never run/succeeded. */
-interface ProviderHealth {
-  provider: string;
-  kind: ProviderKind;
-  status: HealthStatus;
-  total_boards: number;
-  healthy_boards: number;
-  cooled_boards: number;
-  last_run: string | null;
-  last_success: string | null;
-  ingested_total: number;
-}
+/** The public status read (`GET /api/v1/status`): the site/API's own live status (`site`,
+ *  with the trailing 90 days of recorded daily status, oldest first, omitting any day with
+ *  no sample), the ingest-fleet overall (worst-provider) verdict, the generation timestamp,
+ *  `last_job_added_at` (when the pipeline last wrote a public job, null before any), and
+ *  one sanitized entry per provider: no error text or board identifiers.
+ *  `site.pool_pressure` is reported, never judged: it is a single instant. */
+export type IngestStatus = components['schemas']['IngestStatus'];
 
-/** One day's recorded worst-of-day site status. A day with no recorded
- *  sample simply has no entry in `SiteHealth.history` — it is never
- *  reported as "operational" by default. */
-interface SiteHistoryEntry {
-  day: string;
-  status: HealthStatus;
-}
-
-/** The site/API's own live health, independent of the ingest fleet's status
- *  (`overall`). `database` is "up" or "down"; `error_rate` is the fraction of
- *  5xx responses over the trailing `window_minutes`, computed from the
- *  server's own recent traffic. `history` is the trailing 90 days' recorded
- *  daily status, oldest first, omitting any day with no recorded sample. */
-interface SiteHealth {
-  status: HealthStatus;
-  database: 'up' | 'down';
-  error_rate: number;
-  /** Fraction of the database connection pool held at once, 0..1. Answers a different
-   *  question from `error_rate`: that one describes requests that FINISHED, this one
-   *  describes requests that cannot start. Reported, never judged: it is a single
-   *  instant, and the live pool touches its ceiling in ordinary bursts, so `status`
-   *  above does not read it. Judging it needs an average over minutes, which the
-   *  Grafana rule does and this page cannot. */
-  pool_pressure: number;
-  window_minutes: number;
-  history: SiteHistoryEntry[];
-}
-
-/** The public status read: the site/API's own live status, plus the
- *  ingest-fleet overall (worst-provider) verdict, the generation timestamp,
- *  and one entry per provider. */
-export interface IngestStatus {
-  overall: HealthStatus;
-  generated_at: string;
-  providers: ProviderHealth[];
-  site: SiteHealth;
-}
-
-/** What the catalogue currently holds under one source, as measured by the daily
- *  snapshot. Two counts on purpose: `open` is every open posting, duplicates and all,
- *  and is the denominator the overlap figures are arithmetic on; `browsable` is the
- *  de-duplicated count the search index holds, which is what /jobs?source=… actually
- *  shows and therefore what the page displays.
+/** One entry on the public source catalogue (`GET /api/v1/sources`).
  *
- *  `browsable` is null when the search index could not be measured — NOT zero. A zero
- *  meaning "we could not measure this" must never be rendered as "this source has no
- *  jobs".
+ *  `jobs.open` is every open posting, duplicates and all; `jobs.browsable` is the
+ *  de-duplicated count the search index holds, and is null when that could not be
+ *  measured, NOT zero: a zero meaning "we could not measure this" must never be rendered
+ *  as "this source has no jobs". `ats_matched`/`ats_unmatched` are present for aggregators
+ *  only; "unmatched" is the absence of evidence, never "exclusive".
  *
- *  `ats_matched`/`ats_unmatched` are present for aggregators only. "Unmatched" means the
- *  dedup pass found no first-party ATS posting to pair a posting with — the absence of
- *  evidence, not evidence of absence. Do not render it as "exclusive". */
-interface SourceJobs {
-  open: number;
-  browsable: number | null;
-  ats_matched?: number;
-  ats_unmatched?: number;
-  measured_at: string;
-}
-
-/** One source's crawl-fleet health, derived exactly as the /status page derives it.
- *  Absent on a source with no board_health record at all — the normal state for a source
- *  that is not a crawl adapter. */
-interface SourceHealth {
-  status: HealthStatus;
-  total_boards: number;
-  healthy_boards: number;
-  cooled_boards: number;
-  last_run: string | null;
-  last_success: string | null;
-  ingested_total: number;
-}
-
-/** One entry on the public source catalogue. `jobs` is null when the snapshot has never
- *  covered this source; `health` is null when it has no crawl-health record. Both absences
- *  are answers, not missing data.
+ *  `jobs` is null when the snapshot has never covered the source; `health` is null when it
+ *  has no crawl-health record. Both absences are answers, not missing data.
  *
  *  No logo field: a source's brand mark is resolved from its DISPLAY NAME client-side (see
- *  sourceLogoUrl). A host was tried and shipped the wrong brand — an ATS posting's URL is
- *  often on the employer's own domain. */
-export interface SourceEntry {
-  source: string;
-  kind: ProviderKind;
-  /** Whether the source is a crawl adapter; false for the Telegram pipeline, employer
-   *  vacancies and hand-curated intake, which have no board to crawl. */
-  adapter: boolean;
-  jobs: SourceJobs | null;
-  health: SourceHealth | null;
-}
+ *  sourceLogoUrl). A host was tried and shipped the wrong brand. */
+export type SourceEntry = components['schemas']['SourceEntry'];

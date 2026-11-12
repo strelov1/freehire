@@ -5007,8 +5007,11 @@ export interface components {
             token: string;
         };
         ApiKeyPlan: {
-            /** @description The API product tier the account holds. */
-            tier: string;
+            /**
+             * @description The API product tier the account holds; empty for none.
+             * @enum {string}
+             */
+            tier: "" | "api" | "api_data";
             /** Format: date-time */
             until?: string;
         };
@@ -5219,30 +5222,8 @@ export interface components {
             slug: string;
             name: string;
         };
-        BuddyConversation: {
-            /** Format: int64 */
-            id: number;
-            kind: string;
-            status_for_me: string;
-            counterpart: components["schemas"]["BuddyConversationCounterpart"];
-            /** Format: int64 */
-            unread: number;
-            last_message_at: string | null;
-            /** Format: date-time */
-            created_at: string;
-        };
-        BuddyConversationCounterpart: {
-            persona: string;
-            reachable: boolean;
-            detail: components["schemas"]["BuddyCounterpartDetail"] | null;
-        };
         /** @description The buddy persona's own shape. Nothing here names the account behind it. */
         BuddyCounterpart: {
-            handle: string;
-            card_summary: components["schemas"]["ConversationCardSummary"];
-        };
-        /** @description The persona's own detail; null when the other side is not reachable. */
-        BuddyCounterpartDetail: {
             handle: string;
             card_summary: components["schemas"]["BuddyCardSummary"];
         };
@@ -5256,7 +5237,8 @@ export interface components {
             job_slug: string | null;
             job_location: string | null;
             reactions: components["schemas"]["BuddyReactions"];
-            type: string;
+            /** @enum {string} */
+            type: "applied" | "interview" | "offer";
             day: string;
         };
         BuddyFeedMeta: {
@@ -5272,14 +5254,16 @@ export interface components {
         };
         BuddyMock: {
             id: string;
-            role: string;
+            /** @enum {string} */
+            role: "host" | "guest";
             counterpart: string | null;
             /** Format: date-time */
             starts_at: string;
             /** Format: date-time */
             ends_at: string;
-            topic: string;
-            status: string;
+            topic: components["schemas"]["BuddyMockTopic"];
+            /** @enum {string} */
+            status: "confirmed" | "cancelled";
             meeting_url: string | null;
             can_cancel: boolean;
             can_review: boolean;
@@ -5295,7 +5279,7 @@ export interface components {
         BuddyMockHost: {
             handle: string;
             card_summary: components["schemas"]["BuddyCardSummary"];
-            topics: string[] | null;
+            topics: components["schemas"]["BuddyMockTopic"][];
             next_slot: components["schemas"]["BuddyMockNextSlot"];
             /** Format: double */
             rating_avg: number;
@@ -5361,7 +5345,7 @@ export interface components {
         BuddyMockSettingsOut: {
             timezone: string;
             meeting_url: string;
-            topics: string[] | null;
+            topics: components["schemas"]["BuddyMockTopic"][];
             paused: boolean;
         };
         BuddyMockSlot: {
@@ -5377,7 +5361,7 @@ export interface components {
             timezone: string;
             /** Format: int64 */
             count: number;
-            topics: string[] | null;
+            topics: components["schemas"]["BuddyMockTopic"][];
         };
         BuddyMockSlotsPage: {
             data: components["schemas"]["BuddyMockSlot"][];
@@ -5392,6 +5376,11 @@ export interface components {
             rating_avg: number;
             recent: components["schemas"]["BuddyRevealedReview"][];
         };
+        /**
+         * @description The mock-interview topics.
+         * @enum {string}
+         */
+        BuddyMockTopic: "coding" | "system_design" | "behavioral";
         BuddyMockWeekly: {
             rules?: components["schemas"]["BuddyMockRule"][];
         };
@@ -5404,18 +5393,23 @@ export interface components {
         BuddyReactBody: {
             kind?: string;
         };
+        /**
+         * @description The reactions a member may give a feed event; "" is none.
+         * @enum {string}
+         */
+        BuddyReactionChoice: "" | "congrats" | "luck" | "rooting" | "same" | "insight";
         /** @description Count per kind (no key for a kind nobody chose) and the viewer's own choice, "" for none. */
         BuddyReactions: {
             counts: {
                 [key: string]: number;
             };
-            mine: string;
+            mine: components["schemas"]["BuddyReactionChoice"];
         };
         BuddyRevealedReview: {
             /** Format: int64 */
             rating: number;
             comment: string;
-            topic: string;
+            topic: components["schemas"]["BuddyMockTopic"];
             day: string;
         };
         BuddySimilar: {
@@ -5577,8 +5571,10 @@ export interface components {
         Conversation: {
             /** Format: int64 */
             id: number;
-            kind: string;
-            status_for_me: string;
+            /** @enum {string} */
+            kind: "buddy";
+            /** @enum {string} */
+            status_for_me: "incoming" | "outgoing" | "open" | "closed";
             counterpart: components["schemas"]["ConversationCounterpart"];
             /** Format: int64 */
             unread: number;
@@ -5586,15 +5582,10 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
-        /** @description A buddy's card, reduced to what an invitation shows. */
-        ConversationCardSummary: {
-            category: string;
-            seniority: string;
-            country: string;
-        };
         /** @description The other side, as the persona they speak as draws them. `detail` is null when not reachable. */
         ConversationCounterpart: {
-            persona: string;
+            /** @enum {string} */
+            persona: "buddy";
             reachable: boolean;
             detail: components["schemas"]["BuddyCounterpart"] | null;
         };
@@ -5616,8 +5607,10 @@ export interface components {
             id: number;
             /** Format: int64 */
             conversation_id: number;
-            kind: string;
-            reason: string;
+            /** @enum {string} */
+            kind: "buddy";
+            /** @enum {string} */
+            reason: "spam" | "harassment" | "scam" | "other";
             note: string;
             /** Format: date-time */
             created_at: string;
@@ -5922,6 +5915,17 @@ export interface components {
             news_enabled?: boolean;
             deactivate_searches?: number[];
         };
+        /** @description Every figure is null until it has been measured. */
+        EmbeddingProgress: {
+            eligible: number | null;
+            covered: number | null;
+            snapshot_covered: number | null;
+            queued: number | null;
+            rate_per_minute: number | null;
+            eta_seconds: number | null;
+            snapshot_at: string | null;
+            measured_at: string | null;
+        };
         /** @description A company account. `user_id` is the address the moderator and admin actions take. */
         EmployerAccount: {
             /** Format: int64 */
@@ -6159,6 +6163,11 @@ export interface components {
              */
             new: number;
         };
+        /**
+         * @description The derived health verdict for a provider, the fleet or the site.
+         * @enum {string}
+         */
+        HealthStatus: "operational" | "degraded" | "down";
         /** @description The meta of a single-item answer, sent only to carry a warning. */
         IgnoredMeta: {
             ignored_params?: components["schemas"]["IgnoredParam"][];
@@ -6293,7 +6302,7 @@ export interface components {
             confidence?: number | null;
         };
         IngestStatus: {
-            overall: string;
+            overall: components["schemas"]["HealthStatus"];
             generated_at: string;
             last_job_added_at: string | null;
             providers: components["schemas"]["StatusProvider"][];
@@ -6845,16 +6854,23 @@ export interface components {
              */
             amount_cents: number;
             currency: string;
-            /** @description `month` or `year`. */
-            interval: string;
+            interval: components["schemas"]["PlanPriceInterval"];
             /** @description The price a new subscriber is sold unless they choose another. */
             default: boolean;
-            /** @description The plan the price buys: `pro`, `ultra`, `api` or `api_data`. */
-            tier: string;
+            /** @description The plan the price buys. */
+            tier: components["schemas"]["PlanPriceTier"];
         };
+        /** @enum {string} */
+        PlanPriceInterval: "month" | "year";
+        /** @enum {string} */
+        PlanPriceTier: "pro" | "ultra" | "api" | "api_data";
+        /**
+         * @description Where a paid plan was bought.
+         * @enum {string}
+         */
+        PlanSource: "stripe" | "revenuecat" | "granted";
         PlanStanding: {
-            /** @description The tier name: `free`, `pro`, `ultra`. */
-            plan: string;
+            plan: components["schemas"]["PlanTier"];
             /** Format: date-time */
             resets_at: string;
             /**
@@ -6862,10 +6878,15 @@ export interface components {
              * @description When the paid plan lapses, absent on the free plan.
              */
             pro_until?: string;
-            /** @description Where the plan was bought: `stripe`, `revenuecat` or `granted`. Absent on the free plan. */
-            pro_source?: string;
+            /** @description Where the plan was bought. Absent on the free plan. */
+            pro_source?: components["schemas"]["PlanSource"];
             allowances: components["schemas"]["PlanAllowance"][];
         };
+        /**
+         * @description The tiers a caller can be on.
+         * @enum {string}
+         */
+        PlanTier: "free" | "pro" | "ultra";
         /** @description What one tier allows for one feature in a UTC day. */
         PlanTierAllowance: {
             /**
@@ -6982,6 +7003,11 @@ export interface components {
             /** Format: int64 */
             percent_off: number;
         };
+        /**
+         * @description How a source is shaped.
+         * @enum {string}
+         */
+        ProviderKind: "ats" | "aggregator" | "company" | "social" | "other";
         PulseCompetition: {
             /** Format: int64 */
             views: number;
@@ -7375,10 +7401,9 @@ export interface components {
         };
         /** @description The site's own verdict, independent of the ingest fleet's `overall`. */
         SiteHealth: {
-            /** @description operational, degraded or down. */
-            status: string;
-            /** @description "up" or "down". */
-            database: string;
+            status: components["schemas"]["HealthStatus"];
+            /** @enum {string} */
+            database: "up" | "down";
             /**
              * Format: double
              * @description Fraction of 5xx responses over the trailing `window_minutes`, from the process's own traffic.
@@ -7395,7 +7420,7 @@ export interface components {
         };
         SiteHistoryEntry: {
             day: string;
-            status: string;
+            status: components["schemas"]["HealthStatus"];
         };
         SkillInsight: {
             skill: string;
@@ -7445,7 +7470,7 @@ export interface components {
         };
         SourceEntry: {
             source: string;
-            kind: string;
+            kind: components["schemas"]["ProviderKind"];
             /** @description Whether the source is a crawl adapter at all. */
             adapter: boolean;
             /** @description Null until a snapshot has been taken for this source. */
@@ -7454,7 +7479,7 @@ export interface components {
             health: components["schemas"]["SourceHealth"] | null;
         };
         SourceHealth: {
-            status: string;
+            status: components["schemas"]["HealthStatus"];
             /** Format: int64 */
             total_boards: number;
             /** Format: int64 */
@@ -7482,8 +7507,8 @@ export interface components {
         };
         StatusProvider: {
             provider: string;
-            kind: string;
-            status: string;
+            kind: components["schemas"]["ProviderKind"];
+            status: components["schemas"]["HealthStatus"];
             /** Format: int64 */
             total_boards: number;
             /** Format: int64 */
@@ -12272,7 +12297,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["BuddyConversation"];
+                        data: components["schemas"]["Conversation"];
                     };
                 };
             };
@@ -18743,7 +18768,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: unknown;
+                        data: components["schemas"]["EmbeddingProgress"];
                     };
                 };
             };

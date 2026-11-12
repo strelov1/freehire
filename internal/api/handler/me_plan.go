@@ -101,11 +101,14 @@ func (h *planHandlers) GetMyPlan(ctx context.Context) (*apigen.GetMyPlanOK, erro
 		return nil, err
 	}
 	data := apigen.PlanStanding{
-		Plan: out.Plan, ResetsAt: out.ResetsAt, ProSource: optString(out.ProSource),
+		Plan: apigen.PlanTier(out.Plan), ResetsAt: out.ResetsAt,
 		Allowances: make([]apigen.PlanAllowance, len(out.Allowances)),
 	}
 	if out.ProUntil != nil {
 		data.ProUntil = apigen.NewOptDateTime(*out.ProUntil)
+	}
+	if out.ProSource != "" {
+		data.ProSource = apigen.NewOptPlanSource(apigen.PlanSource(out.ProSource))
 	}
 	for i, a := range out.Allowances {
 		data.Allowances[i] = apigen.PlanAllowance{Feature: a.Feature, Used: int64(a.Used),

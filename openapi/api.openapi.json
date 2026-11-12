@@ -6641,7 +6641,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/BuddyConversation"
+                      "$ref": "#/components/schemas/Conversation"
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
@@ -15945,7 +15945,9 @@
                     "data"
                   ],
                   "properties": {
-                    "data": {}
+                    "data": {
+                      "$ref": "#/components/schemas/EmbeddingProgress"
+                    }
                   },
                   "description": "A single item: `{\"data\": ...}`."
                 }
@@ -17930,7 +17932,12 @@
         "properties": {
           "tier": {
             "type": "string",
-            "description": "The API product tier the account holds."
+            "enum": [
+              "",
+              "api",
+              "api_data"
+            ],
+            "description": "The API product tier the account holds; empty for none."
           },
           "until": {
             "type": "string",
@@ -18585,97 +18592,7 @@
           }
         }
       },
-      "BuddyConversation": {
-        "type": "object",
-        "required": [
-          "id",
-          "kind",
-          "status_for_me",
-          "counterpart",
-          "unread",
-          "last_message_at",
-          "created_at"
-        ],
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "status_for_me": {
-            "type": "string"
-          },
-          "counterpart": {
-            "$ref": "#/components/schemas/BuddyConversationCounterpart"
-          },
-          "unread": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "last_message_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time",
-                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
-          }
-        }
-      },
-      "BuddyConversationCounterpart": {
-        "type": "object",
-        "required": [
-          "persona",
-          "reachable",
-          "detail"
-        ],
-        "properties": {
-          "persona": {
-            "type": "string"
-          },
-          "reachable": {
-            "type": "boolean"
-          },
-          "detail": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BuddyCounterpartDetail"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
       "BuddyCounterpart": {
-        "type": "object",
-        "required": [
-          "handle",
-          "card_summary"
-        ],
-        "properties": {
-          "handle": {
-            "type": "string"
-          },
-          "card_summary": {
-            "$ref": "#/components/schemas/ConversationCardSummary"
-          }
-        },
-        "description": "The buddy persona's own shape. Nothing here names the account behind it."
-      },
-      "BuddyCounterpartDetail": {
         "type": "object",
         "required": [
           "handle",
@@ -18689,7 +18606,7 @@
             "$ref": "#/components/schemas/BuddyCardSummary"
           }
         },
-        "description": "The persona's own detail; null when the other side is not reachable."
+        "description": "The buddy persona's own shape. Nothing here names the account behind it."
       },
       "BuddyFeedEntry": {
         "type": "object",
@@ -18753,7 +18670,12 @@
             "$ref": "#/components/schemas/BuddyReactions"
           },
           "type": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "applied",
+              "interview",
+              "offer"
+            ]
           },
           "day": {
             "type": "string"
@@ -18828,7 +18750,11 @@
             "type": "string"
           },
           "role": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "host",
+              "guest"
+            ]
           },
           "counterpart": {
             "anyOf": [
@@ -18851,10 +18777,14 @@
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "topic": {
-            "type": "string"
+            "$ref": "#/components/schemas/BuddyMockTopic"
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "cancelled"
+            ]
           },
           "meeting_url": {
             "anyOf": [
@@ -18929,17 +18859,10 @@
             "$ref": "#/components/schemas/BuddyCardSummary"
           },
           "topics": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMockTopic"
+            }
           },
           "next_slot": {
             "$ref": "#/components/schemas/BuddyMockNextSlot"
@@ -19188,17 +19111,10 @@
             "type": "string"
           },
           "topics": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMockTopic"
+            }
           },
           "paused": {
             "type": "boolean"
@@ -19252,17 +19168,10 @@
             "format": "int64"
           },
           "topics": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMockTopic"
+            }
           }
         }
       },
@@ -19313,6 +19222,15 @@
           }
         }
       },
+      "BuddyMockTopic": {
+        "type": "string",
+        "enum": [
+          "coding",
+          "system_design",
+          "behavioral"
+        ],
+        "description": "The mock-interview topics."
+      },
       "BuddyMockWeekly": {
         "type": "object",
         "properties": {
@@ -19355,6 +19273,18 @@
           }
         }
       },
+      "BuddyReactionChoice": {
+        "type": "string",
+        "enum": [
+          "",
+          "congrats",
+          "luck",
+          "rooting",
+          "same",
+          "insight"
+        ],
+        "description": "The reactions a member may give a feed event; \"\" is none."
+      },
       "BuddyReactions": {
         "type": "object",
         "required": [
@@ -19370,7 +19300,7 @@
             }
           },
           "mine": {
-            "type": "string"
+            "$ref": "#/components/schemas/BuddyReactionChoice"
           }
         },
         "description": "Count per kind (no key for a kind nobody chose) and the viewer's own choice, \"\" for none."
@@ -19392,7 +19322,7 @@
             "type": "string"
           },
           "topic": {
-            "type": "string"
+            "$ref": "#/components/schemas/BuddyMockTopic"
           },
           "day": {
             "type": "string"
@@ -19899,10 +19829,19 @@
             "format": "int64"
           },
           "kind": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "buddy"
+            ]
           },
           "status_for_me": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "incoming",
+              "outgoing",
+              "open",
+              "closed"
+            ]
           },
           "counterpart": {
             "$ref": "#/components/schemas/ConversationCounterpart"
@@ -19931,26 +19870,6 @@
         },
         "description": "`unread` and `last_message_at` mean something on the list only; elsewhere they are 0 and null."
       },
-      "ConversationCardSummary": {
-        "type": "object",
-        "required": [
-          "category",
-          "seniority",
-          "country"
-        ],
-        "properties": {
-          "category": {
-            "type": "string"
-          },
-          "seniority": {
-            "type": "string"
-          },
-          "country": {
-            "type": "string"
-          }
-        },
-        "description": "A buddy's card, reduced to what an invitation shows."
-      },
       "ConversationCounterpart": {
         "type": "object",
         "required": [
@@ -19960,7 +19879,10 @@
         ],
         "properties": {
           "persona": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "buddy"
+            ]
           },
           "reachable": {
             "type": "boolean"
@@ -20037,10 +19959,19 @@
             "format": "int64"
           },
           "kind": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "buddy"
+            ]
           },
           "reason": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "spam",
+              "harassment",
+              "scam",
+              "other"
+            ]
           },
           "note": {
             "type": "string"
@@ -20976,6 +20907,112 @@
         },
         "description": "A patch: an absent switch keeps its stored value. Searches can only be turned off."
       },
+      "EmbeddingProgress": {
+        "type": "object",
+        "required": [
+          "eligible",
+          "covered",
+          "snapshot_covered",
+          "queued",
+          "rate_per_minute",
+          "eta_seconds",
+          "snapshot_at",
+          "measured_at"
+        ],
+        "properties": {
+          "eligible": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "covered": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "snapshot_covered": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "queued": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rate_per_minute": {
+            "anyOf": [
+              {
+                "type": "number",
+                "format": "double"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eta_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "snapshot_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "measured_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "description": "Every figure is null until it has been measured."
+      },
       "EmployerAccount": {
         "type": "object",
         "required": [
@@ -21808,6 +21845,15 @@
           }
         }
       },
+      "HealthStatus": {
+        "type": "string",
+        "enum": [
+          "operational",
+          "degraded",
+          "down"
+        ],
+        "description": "The derived health verdict for a provider, the fleet or the site."
+      },
       "IgnoredMeta": {
         "type": "object",
         "properties": {
@@ -22272,7 +22318,7 @@
         ],
         "properties": {
           "overall": {
-            "type": "string"
+            "$ref": "#/components/schemas/HealthStatus"
           },
           "generated_at": {
             "type": "string"
@@ -24309,18 +24355,42 @@
             "type": "string"
           },
           "interval": {
-            "type": "string",
-            "description": "`month` or `year`."
+            "$ref": "#/components/schemas/PlanPriceInterval"
           },
           "default": {
             "type": "boolean",
             "description": "The price a new subscriber is sold unless they choose another."
           },
           "tier": {
-            "type": "string",
-            "description": "The plan the price buys: `pro`, `ultra`, `api` or `api_data`."
+            "$ref": "#/components/schemas/PlanPriceTier",
+            "description": "The plan the price buys."
           }
         }
+      },
+      "PlanPriceInterval": {
+        "type": "string",
+        "enum": [
+          "month",
+          "year"
+        ]
+      },
+      "PlanPriceTier": {
+        "type": "string",
+        "enum": [
+          "pro",
+          "ultra",
+          "api",
+          "api_data"
+        ]
+      },
+      "PlanSource": {
+        "type": "string",
+        "enum": [
+          "stripe",
+          "revenuecat",
+          "granted"
+        ],
+        "description": "Where a paid plan was bought."
       },
       "PlanStanding": {
         "type": "object",
@@ -24331,8 +24401,7 @@
         ],
         "properties": {
           "plan": {
-            "type": "string",
-            "description": "The tier name: `free`, `pro`, `ultra`."
+            "$ref": "#/components/schemas/PlanTier"
           },
           "resets_at": {
             "type": "string",
@@ -24346,8 +24415,8 @@
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           },
           "pro_source": {
-            "type": "string",
-            "description": "Where the plan was bought: `stripe`, `revenuecat` or `granted`. Absent on the free plan."
+            "$ref": "#/components/schemas/PlanSource",
+            "description": "Where the plan was bought. Absent on the free plan."
           },
           "allowances": {
             "type": "array",
@@ -24356,6 +24425,15 @@
             }
           }
         }
+      },
+      "PlanTier": {
+        "type": "string",
+        "enum": [
+          "free",
+          "pro",
+          "ultra"
+        ],
+        "description": "The tiers a caller can be on."
       },
       "PlanTierAllowance": {
         "type": "object",
@@ -24848,6 +24926,17 @@
             "format": "int64"
           }
         }
+      },
+      "ProviderKind": {
+        "type": "string",
+        "enum": [
+          "ats",
+          "aggregator",
+          "company",
+          "social",
+          "other"
+        ],
+        "description": "How a source is shaped."
       },
       "PulseCompetition": {
         "type": "object",
@@ -26387,12 +26476,14 @@
         ],
         "properties": {
           "status": {
-            "type": "string",
-            "description": "operational, degraded or down."
+            "$ref": "#/components/schemas/HealthStatus"
           },
           "database": {
             "type": "string",
-            "description": "\"up\" or \"down\"."
+            "enum": [
+              "up",
+              "down"
+            ]
           },
           "error_rate": {
             "type": "number",
@@ -26428,7 +26519,7 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/HealthStatus"
           }
         }
       },
@@ -26609,7 +26700,7 @@
             "type": "string"
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/ProviderKind"
           },
           "adapter": {
             "type": "boolean",
@@ -26652,7 +26743,7 @@
         ],
         "properties": {
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/HealthStatus"
           },
           "total_boards": {
             "type": "integer",
@@ -26748,10 +26839,10 @@
             "type": "string"
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/ProviderKind"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/HealthStatus"
           },
           "total_boards": {
             "type": "integer",

@@ -98,7 +98,7 @@ func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealt
 	entries := make([]apigen.SourceEntry, 0, len(names))
 	for _, name := range names {
 		_, adapter := reg[name]
-		entry := apigen.SourceEntry{Source: name, Kind: sources.ProviderKind(reg, name), Adapter: adapter,
+		entry := apigen.SourceEntry{Source: name, Kind: apigen.ProviderKind(sources.ProviderKind(reg, name)), Adapter: adapter,
 			Jobs: apigen.NilSourceJobs{Null: true}, Health: apigen.NilSourceHealth{Null: true}}
 		if row, ok := bySnapshot[name]; ok {
 			entry.Jobs = apigen.NewNilSourceJobs(jobsBlock(row, sources.IsAggregator(reg, name)))
@@ -132,7 +132,7 @@ func jobsBlock(row db.ListSourceStatsRow, aggregator bool) apigen.SourceJobs {
 // deriveStatus the /status page uses.
 func healthBlock(row db.ProviderHealthRollupRow, now time.Time) apigen.SourceHealth {
 	return apigen.SourceHealth{
-		Status: string(deriveStatus(providerRollup{
+		Status: apigen.HealthStatus(deriveStatus(providerRollup{
 			total:       row.TotalBoards,
 			healthy:     row.HealthyBoards,
 			lastSuccess: tsTime(row.LastSuccessAt),

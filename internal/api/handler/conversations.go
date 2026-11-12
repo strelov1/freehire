@@ -64,13 +64,12 @@ func messagingError(err error) error {
 // toContractConversation is a conversation in its wire shape.
 func toContractConversation(cv messaging.Conversation) apigen.Conversation {
 	out := apigen.Conversation{
-		ID: cv.ID, Kind: cv.Kind, StatusForMe: cv.StatusForMe, Unread: int64(cv.Unread), CreatedAt: cv.CreatedAt,
-		Counterpart: apigen.ConversationCounterpart{Persona: cv.Counterpart.Persona, Reachable: cv.Counterpart.Reachable},
+		ID: cv.ID, Kind: apigen.ConversationKind(cv.Kind), StatusForMe: apigen.ConversationStatusForMe(cv.StatusForMe), Unread: int64(cv.Unread), CreatedAt: cv.CreatedAt,
+		Counterpart: apigen.ConversationCounterpart{Persona: apigen.ConversationCounterpartPersona(cv.Counterpart.Persona), Reachable: cv.Counterpart.Reachable},
 	}
 	out.Counterpart.Detail.SetToNull()
 	if d, ok := cv.Counterpart.Detail.(buddy.Counterpart); ok {
-		out.Counterpart.Detail.SetTo(apigen.BuddyCounterpart{Handle: d.Handle, CardSummary: apigen.ConversationCardSummary{
-			Category: d.Card.Category, Seniority: d.Card.Seniority, Country: d.Card.Country}})
+		out.Counterpart.Detail.SetTo(apigen.BuddyCounterpart{Handle: d.Handle, CardSummary: buddyCardSummaryOut(d.Card)})
 	}
 	if cv.LastMessageAt.IsZero() {
 		out.LastMessageAt.SetToNull()
@@ -238,7 +237,7 @@ func (h *conversationHandlers) ListConversationReports(ctx context.Context, _ ap
 			msgs[j] = apigen.ConversationReportMessage{Sender: m.Sender, Body: m.Body, CreatedAt: m.CreatedAt}
 		}
 		out[i] = apigen.ConversationReport{
-			ID: r.ID, ConversationID: r.ConversationID, Kind: r.Kind, Reason: r.Reason, Note: r.Note,
+			ID: r.ID, ConversationID: r.ConversationID, Kind: apigen.ConversationReportKind(r.Kind), Reason: apigen.ConversationReportReason(r.Reason), Note: r.Note,
 			CreatedAt: r.CreatedAt, Reporter: r.Reporter, Reported: r.Reported, Messages: msgs,
 		}
 		if r.ResolvedAt != nil {

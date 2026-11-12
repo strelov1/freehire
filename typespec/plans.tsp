@@ -19,6 +19,18 @@ model PlanFeature {
   ultra: PlanTierAllowance;
 }
 
+union PlanPriceInterval {
+  "month",
+  "year",
+}
+
+union PlanPriceTier {
+  "pro",
+  "ultra",
+  "api",
+  "api_data",
+}
+
 model PlanPrice {
   id: string;
 
@@ -27,14 +39,13 @@ model PlanPrice {
 
   currency: string;
 
-  /** `month` or `year`. */
-  interval: string;
+  interval: PlanPriceInterval;
 
   /** The price a new subscriber is sold unless they choose another. */
   default: boolean;
 
-  /** The plan the price buys: `pro`, `ultra`, `api` or `api_data`. */
-  tier: string;
+  /** The plan the price buys. */
+  tier: PlanPriceTier;
 }
 
 model Plans {

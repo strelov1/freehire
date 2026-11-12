@@ -202,7 +202,7 @@ func siteHistoryFromRows(rows []db.SiteStatusHistoryRow) []apigen.SiteHistoryEnt
 	for i, r := range rows {
 		entries[i] = apigen.SiteHistoryEntry{
 			Day:    r.Day.Time.Format(dateLayout),
-			Status: string(severityToStatus(r.WorstSeverity)),
+			Status: apigen.HealthStatus(severityToStatus(r.WorstSeverity)),
 		}
 	}
 	return entries
@@ -232,8 +232,8 @@ func currentSiteHealth(ctx context.Context, pool *pgxpool.Pool) (health apigen.S
 	pressure := poolPressure(stat.AcquiredConns(), stat.MaxConns())
 
 	return apigen.SiteHealth{
-		Status:        string(deriveSiteStatus(dbUp, errorRate, totalRequests)),
-		Database:      dbStatusLabel(dbUp),
+		Status:        apigen.HealthStatus(deriveSiteStatus(dbUp, errorRate, totalRequests)),
+		Database:      apigen.SiteHealthDatabase(dbStatusLabel(dbUp)),
 		ErrorRate:     errorRate,
 		WindowMinutes: int64(siteErrorWindow / time.Minute),
 		PoolPressure:  pressure,
@@ -307,8 +307,8 @@ func (h *statsHandlers) IngestStatus(ctx context.Context) (*apigen.IngestStatusO
 		}
 		providers[i] = apigen.StatusProvider{
 			Provider:      r.Provider,
-			Kind:          sources.ProviderKind(reg, r.Provider),
-			Status:        string(deriveStatus(rolls[i], now)),
+			Kind:          apigen.ProviderKind(sources.ProviderKind(reg, r.Provider)),
+			Status:        apigen.HealthStatus(deriveStatus(rolls[i], now)),
 			TotalBoards:   r.TotalBoards,
 			HealthyBoards: r.HealthyBoards,
 			CooledBoards:  r.CooledBoards,
@@ -326,7 +326,7 @@ func (h *statsHandlers) IngestStatus(ctx context.Context) (*apigen.IngestStatusO
 // by construction rather than by two hand-kept copies of the same map.
 func statusResponse(now time.Time, overall providerStatus, lastJobAddedAt apigen.NilString, providers []apigen.StatusProvider, site apigen.SiteHealth) *apigen.IngestStatusOK {
 	return &apigen.IngestStatusOK{Data: apigen.IngestStatus{
-		Overall:        string(overall),
+		Overall:        apigen.HealthStatus(overall),
 		GeneratedAt:    now.Format(time.RFC3339),
 		LastJobAddedAt: lastJobAddedAt,
 		Providers:      providers,

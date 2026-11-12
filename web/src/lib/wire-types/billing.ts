@@ -18,18 +18,7 @@ export type Allowance = components['schemas']['PlanAllowance'];
  *  provider, never from our configuration: a price written beside its id in an env file is a
  *  second source of truth about what something costs, and the two disagree the first time
  *  one is changed — on the page a customer can hold us to. */
-export interface PublicPrice {
-  id: string;
-  /** Smallest currency unit, as the provider stores it. Formatting happens in the view. */
-  amount_cents: number;
-  currency: string;
-  interval: 'month' | 'year';
-  /** The price a new subscriber is sold unless they choose otherwise — one per tier. */
-  default: boolean;
-  /** Which plan this price buys. Derived on the server from the same lists that decide what
-   *  a subscription confers, so a column can never offer another plan's price. */
-  tier: 'pro' | 'ultra' | 'api' | 'api_data';
-}
+export type PublicPrice = components['schemas']['PlanPrice'];
 
 /** Where a buyer goes to pay, and which offer was applied on the way
  *  (`GET /api/v1/billing/checkout`).
@@ -60,17 +49,10 @@ export type PlanTierAllowance = components['schemas']['PlanTierAllowance'];
  *  ceiling really refuses today; while the shadow run is on it is empty, and a page claiming
  *  otherwise would be selling a limit nobody meets. */
 
-export interface PlansMatrix {
-  features: { feature: string; free: PlanTierAllowance; pro: PlanTierAllowance; ultra: PlanTierAllowance }[];
-  prices: PublicPrice[];
-  enforced: string[];
-}
+export type PlansMatrix = components['schemas']['Plans'];
 
 /** The caller's paid API product entitlement (`GET /api/v1/me/api-plan`). */
-export interface ApiPlan {
-  tier: '' | 'api' | 'api_data';
-  until?: string;
-}
+export type ApiPlan = components['schemas']['ApiKeyPlan'];
 
 /** What the caller is paying and what has been taken. Read through to the payment provider
  *  on every request rather than mirrored: a receipt list that has quietly missed a refund is
@@ -80,19 +62,8 @@ export interface ApiPlan {
  *  cancelled" is the kind of contradiction that generates support mail. */
 export type BillingOverview = components['schemas']['BillingOverview'];
 
-export interface PlanState {
-  plan: 'free' | 'pro' | 'ultra';
-  resets_at: string;
-  /** When the caller's PAID plan lapses — whichever tier they are on, Pro or Ultra. Absent
-   *  on the free plan, and absent once it has lapsed: the server omits a past value, so a
-   *  date here is always still in force. Read from the stored column, never from the billing
-   *  provider, so this endpoint keeps answering when the provider does not.
-   *
-   *  The `pro_` spelling is historical and stays because clients read it; what it has always
-   *  meant is "when does the plan you are paying for run out". */
-  pro_until?: string;
-  allowances: Allowance[];
-}
+/** The caller's plan (`GET /api/v1/me/plan`); `pro_until` is when whichever paid tier they are on lapses. */
+export type PlanState = components['schemas']['PlanStanding'];
 
 /** What the caller's account did this period (`GET /api/v1/me/usage`), read from the LLM
  *  gateway. Counts, never currency: the gateway's cost figure is a list price against a

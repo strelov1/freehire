@@ -63,7 +63,7 @@ func (h *plansHandlers) GetPlans(ctx context.Context) (*apigen.GetPlansOK, error
 		for _, p := range h.billing.PublicPrices(ctx) {
 			out.Prices = append(out.Prices, apigen.PlanPrice{
 				ID: p.ID, AmountCents: p.AmountCents, Currency: p.Currency,
-				Interval: p.Interval, Default: p.Default, Tier: p.Tier,
+				Interval: apigen.PlanPriceInterval(p.Interval), Default: p.Default, Tier: apigen.PlanPriceTier(p.Tier),
 			})
 		}
 	}

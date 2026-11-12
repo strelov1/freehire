@@ -35,10 +35,10 @@ func TestBuildSourceEntriesClassifiesByTheAdapterRegistry(t *testing.T) {
 
 	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))
 
-	if got["greenhouse"].Kind != sources.KindATS {
+	if string(got["greenhouse"].Kind) != sources.KindATS {
 		t.Errorf("greenhouse kind = %q, want %q", got["greenhouse"].Kind, sources.KindATS)
 	}
-	if got["adzuna"].Kind != sources.KindAggregator {
+	if string(got["adzuna"].Kind) != sources.KindAggregator {
 		t.Errorf("adzuna kind = %q, want %q", got["adzuna"].Kind, sources.KindAggregator)
 	}
 }
@@ -108,7 +108,7 @@ func TestBuildSourceEntriesHasNoHealthBlockWithoutAHealthRecord(t *testing.T) {
 	if !ok {
 		t.Fatal("a source with postings but no adapter was dropped")
 	}
-	if tg.Kind != sources.KindSocial {
+	if string(tg.Kind) != sources.KindSocial {
 		t.Errorf("telegram kind = %q, want %q", tg.Kind, sources.KindSocial)
 	}
 	if tg.Adapter {
@@ -137,7 +137,7 @@ func TestBuildSourceEntriesCarriesHealthWhenThereIsARecord(t *testing.T) {
 	if got.Health.Value.IngestedTotal != 4321 || got.Health.Value.TotalBoards != 900 {
 		t.Errorf("health = %+v, want the rollup's figures", got.Health)
 	}
-	if got.Health.Value.Status != string(statusOperational) {
+	if string(got.Health.Value.Status) != string(statusOperational) {
 		t.Errorf("status = %q, want operational", got.Health.Value.Status)
 	}
 }

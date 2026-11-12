@@ -7,22 +7,15 @@ namespace Freehire;
 // The messaging core: every conversation of every kind, its messages, read state, blocks
 // and reports. Every route is session-cookie only; the report queue is moderators only.
 
-/** A buddy's card, reduced to what an invitation shows. */
-model ConversationCardSummary {
-  category: string;
-  seniority: string;
-  country: string;
-}
-
 /** The buddy persona's own shape. Nothing here names the account behind it. */
 model BuddyCounterpart {
   handle: string;
-  card_summary: ConversationCardSummary;
+  card_summary: BuddyCardSummary;
 }
 
 /** The other side, as the persona they speak as draws them. `detail` is null when not reachable. */
 model ConversationCounterpart {
-  persona: string;
+  persona: "buddy";
   reachable: boolean;
   detail: BuddyCounterpart | null;
 }
@@ -30,8 +23,8 @@ model ConversationCounterpart {
 /** `unread` and `last_message_at` mean something on the list only; elsewhere they are 0 and null. */
 model Conversation {
   id: int64;
-  kind: string;
-  status_for_me: string;
+  kind: "buddy";
+  status_for_me: "incoming" | "outgoing" | "open" | "closed";
   counterpart: ConversationCounterpart;
   unread: int64;
   last_message_at: utcDateTime | null;
@@ -55,8 +48,8 @@ model ConversationReportMessage {
 model ConversationReport {
   id: int64;
   conversation_id: int64;
-  kind: string;
-  reason: string;
+  kind: "buddy";
+  reason: "spam" | "harassment" | "scam" | "other";
   note: string;
   created_at: utcDateTime;
   resolved_at: utcDateTime | null;
