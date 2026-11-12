@@ -55,6 +55,33 @@ func TestAccountPrompts_AreListedAndRenderTheirToolOrder(t *testing.T) {
 	}
 }
 
+// With the setup tools served, setting up starts from what is missing — a CV first — and
+// saves only what the person confirms.
+func TestAccountPrompts_SetUpWalksTheGuidedSetup(t *testing.T) {
+	granted := connectAccountCatalogue(t,
+		namedTools("get_profile", "update_profile", "get_setup_status", "add_cv"), nil)
+	text, err := promptText(t, granted, "set_up_my_profile", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	order := []string{"get_setup_status", "add_cv", "update_profile"}
+	for i, name := range order {
+		if !strings.Contains(text, name) {
+			t.Fatalf("set-up prompt does not name %s: %q", name, text)
+		}
+		if i > 0 && strings.Index(text, order[i-1]) > strings.Index(text, name) {
+			t.Errorf("set-up prompt names %s before %s: %q", name, order[i-1], text)
+		}
+	}
+	if !strings.Contains(text, "confirm") {
+		t.Errorf("set-up prompt does not ask for confirmation: %q", text)
+	}
+	// add_cv takes the person's own CV only; an agent never composes one from a chat.
+	if !strings.Contains(text, "verbatim") || strings.Contains(text, "work history") {
+		t.Errorf("set-up prompt invites a composed CV: %q", text)
+	}
+}
+
 func TestAccountPrompts_FollowTheServedTools(t *testing.T) {
 	keyed := connectAccountCatalogue(t, namedTools("get_profile", "search_jobs"), nil)
 	got := promptNames(t, keyed)

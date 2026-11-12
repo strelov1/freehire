@@ -5,9 +5,10 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 type failingUploadBlobs struct{ *fakeBlobs }
@@ -22,10 +23,22 @@ func (f failingUploadRepo) Set(context.Context, int64, string) error {
 	return errors.New("database unavailable")
 }
 
-type failingReadbackRepo struct{ *fakeRepo }
+// WithUploadLock hands fn this wrapper, not the embedded fake, so the failing Set is the one
+// the upload reaches.
+func (f failingUploadRepo) WithUploadLock(_ context.Context, _ int64, fn func(Repository) error) error {
+	return fn(f)
+}
 
-func (f failingReadbackRepo) Get(context.Context, int64) (db.GetUserResumeRow, error) {
-	return db.GetUserResumeRow{}, errors.New("readback failed after saving")
+// racingUploadRepo lets another upload commit right after this one: once fn returns, the
+// pointer's stamp moves on, as a concurrent upload's commit would move it.
+type racingUploadRepo struct{ *fakeRepo }
+
+func (r racingUploadRepo) WithUploadLock(ctx context.Context, userID int64, fn func(Repository) error) error {
+	if err := fn(r.fakeRepo); err != nil {
+		return err
+	}
+	r.uploadedAt[userID] = pgtype.Timestamptz{Time: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC), Valid: true}
+	return nil
 }
 
 // uploadCount reads the same process registry that the metrics listener exports.
@@ -50,15 +63,16 @@ func uploadCount(t *testing.T, outcome string) float64 {
 	return 0
 }
 
-// A metadata read failure cannot undo an upload whose object and pointer were saved.
-func TestUploadMetricsCountPersistenceEvenWhenReadbackFails(t *testing.T) {
-	before := uploadCount(t, "success")
-	store := New(newFakeBlobs(), failingReadbackRepo{newFakeRepo()})
-	if _, err := store.Put(context.Background(), 1, "text/plain", []byte("CV")); err == nil {
-		t.Fatal("expected metadata readback failure")
+// The stamp an upload returns is the one it wrote, read under its lock — never a later
+// upload's, which would let this upload's extraction pass the stamp guard as that one's.
+func TestPutReturnsTheStampItWrote(t *testing.T) {
+	repo := racingUploadRepo{newFakeRepo()}
+	meta, err := New(newFakeBlobs(), repo).Put(context.Background(), 1, "text/plain", []byte("CV"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := uploadCount(t, "success") - before; got != 1 {
-		t.Fatalf("persisted uploads = %v, want 1", got)
+	if meta.UploadedAt == nil || meta.UploadedAt.Year() == 2030 {
+		t.Fatalf("UploadedAt = %v, want the stamp this upload wrote", meta.UploadedAt)
 	}
 }
 

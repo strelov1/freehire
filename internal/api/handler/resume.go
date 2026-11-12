@@ -262,13 +262,11 @@ func (h *resumeHandlers) ExtractResumeProfile(c *fiber.Ctx) error {
 	prof := resumeProfile(up.Text)
 
 	if signedIn && h.resume.Enabled() {
-		if meta, err := h.resume.Put(c.Context(), userID, up.ContentType, up.Data); err != nil {
-			// Best-effort: log (never the résumé bytes) and still return the profile.
+		// This is the résumé-upload path the app actually uses, so it is where the CV gets
+		// structured for the profile. Best-effort: log (never the résumé bytes) and still
+		// return the profile.
+		if _, err := h.storeCV(c.Context(), userID, up); err != nil {
 			log.Printf("resume: store on extract failed for user %d: %v", userID, err)
-		} else {
-			// This is the résumé-upload path the app actually uses, so it is where the CV
-			// gets structured for the profile.
-			h.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
 		}
 	}
 
@@ -327,21 +325,43 @@ func (h *resumeHandlers) PutResume(c *fiber.Ctx) error {
 	if strings.TrimSpace(up.Text) == "" {
 		return fiber.NewError(fiber.StatusBadRequest, errResumeNoText)
 	}
-	meta, err := h.resume.Put(c.Context(), userID, up.ContentType, up.Data)
+	meta, err := h.storeCV(c.Context(), userID, up)
 	if err != nil {
 		return err
 	}
-	// Derive the structured résumé in the background: it must not block the upload
-	// response (best-effort, off the response path). The structure is stamped with
-	// this upload's time so it is served only while it describes the current CV.
-	h.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
 	return c.JSON(fiber.Map{"data": newResumeMeta(true, meta)})
+}
+
+// storeCV is the CV upload use case every entry point shares — PutResume, the extract path
+// and (as storeFirstCV) the MCP add_cv tool: store the bytes, then derive the structured résumé in the
+// background. The derivation must not block the caller (best-effort, off the response path),
+// and it is stamped with this upload's time so it is served only while it describes the
+// current CV. Its model call is marked free (plan.WithFreeAI) inside the derivation itself,
+// so no entry point has to remember to.
+func (h *resumeHandlers) storeCV(ctx context.Context, userID int64, up resumeUpload) (resume.Meta, error) {
+	return h.storeAndDerive(ctx, userID, up, h.resume.Put)
+}
+
+// storeFirstCV is storeCV for an account with no CV yet, and resume.ErrAlreadyStored for one
+// that has one — decided under the per-user lock every upload takes.
+func (h *resumeHandlers) storeFirstCV(ctx context.Context, userID int64, up resumeUpload) (resume.Meta, error) {
+	return h.storeAndDerive(ctx, userID, up, h.resume.PutIfAbsent)
+}
+
+func (h *resumeHandlers) storeAndDerive(ctx context.Context, userID int64, up resumeUpload,
+	put func(context.Context, int64, string, []byte) (resume.Meta, error)) (resume.Meta, error) {
+	meta, err := put(ctx, userID, up.ContentType, up.Data)
+	if err != nil {
+		return resume.Meta{}, err
+	}
+	h.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
+	return meta, nil
 }
 
 // deriveResumeArtifacts kicks the background best-effort derivation a fresh upload feeds:
 // the structured résumé (profile view + fit context). Runs detached on its own timeout
-// context. Defined once so the two upload paths (PutResume, ExtractResumeProfile) can't
-// drift out of sync.
+// context. Upload paths reach it through storeCV, so they can't drift out of sync;
+// RetryResumeExtract re-runs it over the bytes already stored.
 //
 // Intentionally does NOT write cvs rows. Applying the seed into a base or tailored CV is
 // the candidate's explicit Reset from résumé on the tailor workspace — or, for a *new*

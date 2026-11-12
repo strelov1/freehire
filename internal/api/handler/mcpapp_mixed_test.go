@@ -81,8 +81,8 @@ func TestMixedMCPAnonymousDiscoveryAndStepUp(t *testing.T) {
 		if err := json.Unmarshal([]byte(payload), &envelope); err != nil {
 			t.Fatalf("%s: %v", body, err)
 		}
-		if tc.method == "tools/list" && len(envelope.Result.Tools) != 54 {
-			t.Fatalf("tools=%d want54", len(envelope.Result.Tools))
+		if tc.method == "tools/list" && len(envelope.Result.Tools) != 56 {
+			t.Fatalf("tools=%d want56", len(envelope.Result.Tools))
 		}
 		if tc.method == "tools/call" && (!envelope.Result.IsError || envelope.Result.Meta["mcp/www_authenticate"] == nil) {
 			t.Fatalf("missing OAuth challenge: %s", body)

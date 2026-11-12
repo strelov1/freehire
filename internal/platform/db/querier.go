@@ -5642,6 +5642,10 @@ type Querier interface {
 	// snapshot missing the other's user_jobs row, permanently undercounting the target
 	// until the next uncontended vote. Called first in the vote transaction.
 	LockJobForVote(ctx context.Context, id int64) error
+	// Serializes one user's CV pointer writes (uploads and deletes) for the transaction, so a
+	// first-CV-only upload's presence check and pointer write are one step. Never held across
+	// the object upload itself.
+	LockUserResumeUpload(ctx context.Context, userID int64) error
 	// Same shape and same reasoning as SearchOutboxMetrics.
 	//
 	// This queue was the one of the four that nothing measured, and it is the one that failed

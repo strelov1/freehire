@@ -599,7 +599,8 @@ func Register(app *fiber.App, cfg Config) {
 	surveyH := newSurveyHandlers(survey.New(survey.NewQueriesRepository(queries)), queries)
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
-	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
+	// The pool serialises one user's uploads, so add_cv's first-CV check holds.
+	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries).WithUploadLocks(cfg.Pool))
 	// The headshot rides the same bucket and the same nil-degradation: no Blob means the
 	// photo endpoints 501 while the photo-bearing CV templates still render a placeholder.
 	photoStore := headshot.New(cfg.Blob, headshot.NewQueriesRepository(queries))
@@ -949,7 +950,7 @@ func Register(app *fiber.App, cfg Config) {
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals/incoming"
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})
-	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore, queries)
+	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore, queries, resumeStore)
 	// Conversations are the messaging core's; each persona a participant may speak as is
 	// registered here.
 	buddyRepo := buddy.NewQueriesRepository(queries, cfg.Pool)

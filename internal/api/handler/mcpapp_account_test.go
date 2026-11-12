@@ -102,6 +102,9 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"report_problem":          assistant.EffectAdds,
 		// Replaces whichever preference lists the call sends.
 		"update_profile": assistant.EffectOverwrites,
+		// Stores a first CV and refuses to replace one, so nothing held is lost.
+		"add_cv":           assistant.EffectAdds,
+		"get_setup_status": assistant.EffectReads,
 
 		"auto_apply_list":       assistant.EffectReads,
 		"auto_apply_get":        assistant.EffectReads,

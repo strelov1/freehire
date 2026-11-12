@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
+	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/engage/referral"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
 )
@@ -32,6 +33,9 @@ type referralHandlers struct {
 	photos *headshot.Store
 	// jobs resolves the vacancy a request is made from, which the page names by its slug.
 	jobs jobIDBySlug
+	// resumes serves the seeker's uploaded CV when that is the one attached, read through its
+	// pointer: each upload has its own object, so the key is never derived from the user id.
+	resumes *resume.Store
 }
 
 // jobIDBySlug resolves a vacancy's public slug to its id. *db.Queries satisfies it.
@@ -39,8 +43,8 @@ type jobIDBySlug interface {
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
 }
 
-func newReferralHandlers(referral *referral.Service, blob blobstore.Store, cvRenderer cv.Renderer, cvStore *cv.Store, photos *headshot.Store, jobs jobIDBySlug) *referralHandlers {
-	return &referralHandlers{referral: referral, blob: blob, cvRenderer: cvRenderer, cvStore: cvStore, photos: photos, jobs: jobs}
+func newReferralHandlers(referral *referral.Service, blob blobstore.Store, cvRenderer cv.Renderer, cvStore *cv.Store, photos *headshot.Store, jobs jobIDBySlug, resumes *resume.Store) *referralHandlers {
+	return &referralHandlers{referral: referral, blob: blob, cvRenderer: cvRenderer, cvStore: cvStore, photos: photos, jobs: jobs, resumes: resumes}
 }
 
 // requestJobID is the vacancy a request is about: job_slug when the page names one, else
@@ -407,7 +411,7 @@ func (h *referralHandlers) ViewReferralRequestCV(c *fiber.Ctx) error {
 	}
 	switch req.CVKind {
 	case referral.CVOriginal:
-		return h.streamBlobPDF(c, blobstore.ResumeKey(req.SeekerUserID))
+		return h.streamUploadedCV(c, req.SeekerUserID)
 	case referral.CVBuilt:
 		if req.CVID == nil {
 			return fiber.NewError(fiber.StatusNotFound, "the attached CV is no longer available")
@@ -453,6 +457,34 @@ func (h *referralHandlers) streamBlobPDF(c *fiber.Ctx, key string) error {
 	c.Set(fiber.HeaderContentType, "application/pdf")
 	c.Set(fiber.HeaderContentDisposition, `inline; filename="cv.pdf"`)
 	return c.Send(data)
+}
+
+// streamUploadedCV serves the CV a seeker uploaded, as streamBlobPDF serves a proof: 503 without
+// storage, 404 when they have none any more.
+func (h *referralHandlers) streamUploadedCV(c *fiber.Ctx, seekerID int64) error {
+	if !h.resumes.Enabled() {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "file storage is unavailable")
+	}
+	data, err := h.resumes.File(c.Context(), seekerID)
+	if errors.Is(err, resume.ErrNotStored) {
+		return fiber.NewError(fiber.StatusNotFound, "CV not available")
+	}
+	if err != nil {
+		return err
+	}
+	contentType, filename := uploadedCVType(data)
+	c.Set(fiber.HeaderContentType, contentType)
+	c.Set(fiber.HeaderContentDisposition, `inline; filename="`+filename+`"`)
+	return c.Send(data)
+}
+
+// uploadedCVType names a stored CV's type the way the store reads it (resume.extractText): a
+// PDF by its magic number, otherwise the pasted text it was stored as.
+func uploadedCVType(data []byte) (contentType, filename string) {
+	if bytes.HasPrefix(data, []byte("%PDF")) {
+		return "application/pdf", "cv.pdf"
+	}
+	return "text/plain; charset=utf-8", "cv.txt"
 }
 
 // renderOwnerCV renders a builder CV owned by ownerID to PDF. cvStore.Get is owner-scoped,

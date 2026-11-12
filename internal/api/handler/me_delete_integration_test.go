@@ -44,6 +44,16 @@ func newMemBlobs(keys ...string) *memBlobs {
 func (m *memBlobs) Put(context.Context, string, string, io.Reader, int64) error { return nil }
 func (m *memBlobs) Get(context.Context, string) (io.ReadCloser, error)          { return nil, nil }
 
+func (m *memBlobs) List(_ context.Context, prefix string) ([]string, error) {
+	var out []string
+	for k := range m.objects {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
 func (m *memBlobs) Delete(_ context.Context, key string) error {
 	if m.failOn != "" && key == m.failOn {
 		return io.ErrUnexpectedEOF

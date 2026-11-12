@@ -46,6 +46,16 @@ func (f *fakeResumeBlobs) Get(_ context.Context, key string) (io.ReadCloser, err
 	return io.NopCloser(bytes.NewReader(b)), nil
 }
 
+func (f *fakeResumeBlobs) List(_ context.Context, prefix string) ([]string, error) {
+	var out []string
+	for k := range f.objs {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeResumeBlobs) Delete(_ context.Context, key string) error {
 	delete(f.objs, key)
 	return nil
@@ -111,6 +121,10 @@ func (r *fakeResumeRepo) Clear(_ context.Context, _ int64) error {
 	r.structured, r.structModel, r.structAt = nil, "", pgtype.Timestamptz{}
 	r.extractStatus, r.extractDetail, r.extractFor = "", "", pgtype.Timestamptz{}
 	return nil
+}
+
+func (r *fakeResumeRepo) WithUploadLock(_ context.Context, _ int64, fn func(resume.Repository) error) error {
+	return fn(r)
 }
 
 func (r *fakeResumeRepo) SetExtractPending(_ context.Context, _ int64, _ time.Time) error {
