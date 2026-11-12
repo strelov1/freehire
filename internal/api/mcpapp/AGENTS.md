@@ -298,7 +298,10 @@ screening facts. The four that ACT on an attempt refuse unless the account turne
 `users.agents_may_apply`, which only a browser session can write — reading never needs it.
 An answer saved here is the CANDIDATE's (`answerbank.AuthorCandidate`, so it is sent): this
 server only ever acts for the person who approved the connection. `accountInstructions`
-describes the account boundary and the tool groups actually served. Search and application
+describes the account boundary and the tool groups actually served, opens with one line on what
+freehire can do (search, save/track, alerts, auto-apply prepared for review) and says to call
+`get_profile` before the first search. Its budget is 720 characters (the public server keeps 512);
+Claude Code cuts server instructions at 2048. Search and application
 workflows belong to the packaged skill; initialization describes capabilities and result
 states without prescribing a call sequence or presentation.
 
