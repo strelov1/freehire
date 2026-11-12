@@ -2,11 +2,13 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvmatch"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
@@ -19,12 +21,6 @@ import (
 // and a vacancy nothing could be matched against: from the panel's side they are the same
 // answer, and giving the client one falsy case to handle is worth more than telling the two
 // apart in a field nobody would branch on.
-type cvJobMatchResponse struct {
-	Available bool           `json:"available"`
-	Reason    string         `json:"reason,omitempty"`
-	Score     *cvmatch.Score `json:"score,omitempty"`
-}
-
 // GetCVJobMatch serves how well a tailored CV matches the vacancy it was written for,
 // measured on the rendered PDF's text layer and against that vacancy alone.
 //
@@ -34,60 +30,64 @@ type cvJobMatchResponse struct {
 //
 // Cookie-only and owner-scoped (a foreign id is the same 404 as a missing one). A CV with
 // no vacancy has nothing to be matched against and is a 409 naming which case it is.
-func (h *cvHandlers) GetCVJobMatch(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *cvHandlers) GetCVJobMatch(ctx context.Context, params apigen.GetCVJobMatchParams) (*apigen.GetCVJobMatchOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	id, err := cvPathID(c)
+	id, err := cvID(params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	tailored, err := h.cvStore.Get(c.Context(), id, userID)
+	tailored, err := h.cvStore.Get(ctx, id, userID)
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
 	// Two different reasons a CV has no vacancy, and the caller cannot act on the wrong
 	// one. A pruned vacancy leaves a tailored copy with no job_id, so JobID alone cannot
 	// tell them apart.
 	if !tailored.IsTailored {
-		return fiber.NewError(fiber.StatusConflict, "this is a base CV: it is not bound to a vacancy")
+		return nil, fiber.NewError(fiber.StatusConflict, "this is a base CV: it is not bound to a vacancy")
 	}
 	if tailored.JobID == 0 {
-		return fiber.NewError(fiber.StatusConflict, "the vacancy this CV was tailored for no longer exists")
+		return nil, fiber.NewError(fiber.StatusConflict, "the vacancy this CV was tailored for no longer exists")
 	}
 	tmpl, err := cv.ResolveTemplate(tailored.TemplateID)
 	if err != nil {
-		return mapCVError(err)
+		return nil, mapCVError(err)
 	}
-	job, err := h.jobReader.GetJob(c.Context(), tailored.JobID)
+	job, err := h.jobReader.GetJob(ctx, tailored.JobID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// A missing analysis degrades Requirements Coverage; it does not fail the read. The
 	// workspace opens before any analysis is guaranteed current, and a score of the other
 	// three categories is worth more than a refusal.
-	analysis, hasAnalysis := h.fit.Optional(c.Context(), userID, tailored.JobID)
+	analysis, hasAnalysis := h.fit.Optional(ctx, userID, tailored.JobID)
 
-	score, err := h.cvJobMatchScore(c.Context(), tailored.Document, tmpl, cvmatch.Input{
+	score, err := h.cvJobMatchScore(ctx, tailored.Document, tmpl, cvmatch.Input{
 		JobTitle:     job.Title,
 		JobSkills:    job.Skills,
 		Requirements: cvJobMatchRequirements(analysis),
 		HasAnalysis:  hasAnalysis,
 	})
 	if err != nil {
-		return h.cvJobMatchUnavailable(c, err)
+		return h.cvJobMatchUnavailable(err)
 	}
 	// Nothing about this vacancy could be evaluated. Reporting a zero would read as a CV
 	// that matched nothing, which is a different and defamatory claim.
 	if len(score.Contributing) == 0 {
-		return c.JSON(fiber.Map{"data": cvJobMatchResponse{
+		return &apigen.GetCVJobMatchOK{Data: apigen.CvJobMatch{
 			Available: false,
-			Reason:    "nothing about this vacancy could be matched automatically",
-		}})
+			Reason:    apigen.NewOptString("nothing about this vacancy could be matched automatically"),
+		}}, nil
 	}
-	return c.JSON(fiber.Map{"data": cvJobMatchResponse{Available: true, Score: &score}})
+	rawScore, err := json.Marshal(score)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetCVJobMatchOK{Data: apigen.CvJobMatch{Available: true, Score: rawScore}}, nil
 }
 
 // cvJobMatchScore fills the document half of a job-match input from the rendered CV and
@@ -128,12 +128,12 @@ func cvJobMatchRequirements(analysis *matchanalysis.Analysis) []cvmatch.Requirem
 // the workspace this read serves must keep loading and editing when the renderer is missing
 // or a compile fails. The reason is a stable short string — the underlying error is logged,
 // not served, so a toolchain detail never reaches the client.
-func (h *cvHandlers) cvJobMatchUnavailable(c *fiber.Ctx, err error) error {
+func (h *cvHandlers) cvJobMatchUnavailable(err error) (*apigen.GetCVJobMatchOK, error) {
 	reason := "could not read the rendered CV"
 	if errors.Is(err, errNoRenderer) {
 		reason = "CV rendering is not available"
 	} else {
 		log.Printf("cv job-match: %v", err)
 	}
-	return c.JSON(fiber.Map{"data": cvJobMatchResponse{Available: false, Reason: reason}})
+	return &apigen.GetCVJobMatchOK{Data: apigen.CvJobMatch{Available: false, Reason: apigen.NewOptString(reason)}}, nil
 }

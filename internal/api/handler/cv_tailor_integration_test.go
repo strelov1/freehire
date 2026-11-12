@@ -88,10 +88,10 @@ func buildTailorApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	// point of the test: a harness on the full-scope-only middleware would reject the
 	// very credential the flow issues.
 	keyAuth := auth.RequireAuthOrScopedKey(iss, testVersions, apiKeys{h.queries}, auth.ScopeCV)
-	app.Get("/api/v1/me/cvs/:id", keyAuth, h.GetCV)
-	app.Post("/api/v1/me/cvs/tailor", saved, markPaidAI(plan.FeatureTailor), h.TailorCV)
-	app.Patch("/api/v1/me/cvs/:id", keyAuth, h.PatchCV)
-	app.Get("/api/v1/me/cvs/:id/tailor-context", keyAuth, h.TailorContext)
+	app.Get("/api/v1/me/cvs/:id", keyAuth, cvContract(h))
+	app.Post("/api/v1/me/cvs/tailor", saved, markPaidAI(plan.FeatureTailor), cvContract(h))
+	app.Patch("/api/v1/me/cvs/:id", keyAuth, cvContract(h))
+	app.Get("/api/v1/me/cvs/:id/tailor-context", keyAuth, cvContract(h))
 	return app
 }
 
@@ -451,7 +451,17 @@ func TestTailorCVOutOfCredits(t *testing.T) {
 	if resp.StatusCode != fiber.StatusPaymentRequired {
 		t.Fatalf("out-of-credits tailor = %d, want 402", resp.StatusCode)
 	}
-	resp.Body.Close()
+	// The contract writes the refusal body the Fiber route wrote: the sentence, the
+	// allowance as a view and the upgrade link.
+	var refusal struct {
+		Error      string         `json:"error"`
+		Allowance  map[string]any `json:"allowance"`
+		UpgradeURL string         `json:"upgrade_url"`
+	}
+	decodeJSON(t, resp, &refusal)
+	if refusal.Error == "" || refusal.Allowance["feature"] != "tailor" || refusal.UpgradeURL != upgradePath {
+		t.Errorf("402 body = %+v, want the error, the tailor allowance and %q", refusal, upgradePath)
+	}
 	var cvs int
 	_ = pool.QueryRow(ctx, `SELECT count(*) FROM cvs WHERE user_id=$1`, user).Scan(&cvs)
 	if cvs != 0 {
@@ -1225,7 +1235,7 @@ func TestListCVsAndPDFDoNotHealHeader(t *testing.T) {
 	h.pdf = ownedCVPDF{store: h.cvStore, renderer: h.cvRenderer, photos: h.photos}
 	app := buildTailorApp(h, iss)
 	saved := auth.RequireAuth(iss, testVersions)
-	app.Get("/api/v1/me/cvs", saved, h.ListCVs)
+	app.Get("/api/v1/me/cvs", saved, cvContract(h))
 	app.Get("/api/v1/me/cvs/:id/pdf", saved, h.RenderCVPDF)
 	ctx := context.Background()
 

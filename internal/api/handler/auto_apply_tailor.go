@@ -154,7 +154,7 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		return err
 	}
 
-	if err := h.cv.reseedBaseIfStaleVsUpload(c, userID, uuid.Nil); err != nil {
+	if err := h.cv.reseedBaseIfStaleVsUpload(c.Context(), userID, uuid.Nil); err != nil {
 		log.Printf("auto-apply: base refresh before tailor bootstrap user=%d: %v", userID, err)
 	}
 	_, tailored, _, err := h.cv.cvStore.Tailor(c.Context(), userID, job.ID, uuid.Nil, tailoredCVTitle(job.Title), h.cv.seedSource(), skilltag.PreferredFromText(job.Description))

@@ -1127,7 +1127,8 @@ func Register(app *fiber.App, cfg Config) {
 		directApplyHandlers:          directApplyH,
 		jobsHandlers:                 jobsH,
 		searchHandlers:               searchH,
-		companiesHandlers:            companiesH})
+		companiesHandlers:            companiesH,
+		cvHandlers:                   cvH})
 	emailPrefsH.register(api, mw, contract)
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -1256,7 +1257,7 @@ func Register(app *fiber.App, cfg Config) {
 	talentCatalogH.register(api, contract)
 
 	// CV builder + AI tailoring (see cvHandlers).
-	cvH.register(api, mw)
+	cvH.register(api, mw, contract)
 	referralMessageH.register(api, mw)
 
 	// Mail inbox (Gmail connect + hosted mailbox) and email ↔ application linking

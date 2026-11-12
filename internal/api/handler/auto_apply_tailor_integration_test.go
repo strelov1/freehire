@@ -110,7 +110,7 @@ func newAutoApplyTailorAppFull(pool *pgxpool.Pool, iss *auth.Issuer, model assis
 		autoApplyGate: autoApplyOrchestratorGate(orchestratorSecret, keyAuth),
 	}
 	h.register(api, mw)
-	h.cv.register(api, mw)
+	h.cv.register(api, mw, cvContract(h.cv))
 	return app, h, mw
 }
 

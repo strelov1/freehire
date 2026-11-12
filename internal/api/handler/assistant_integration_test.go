@@ -97,7 +97,7 @@ func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model
 	h.register(api, mw)
 	// The CV routes ride along: the autopilot's undo and the CV read that carries a run's
 	// report are the other half of the tailoring surface these tests exercise.
-	h.cv.register(api, mw)
+	h.cv.register(api, mw, cvContract(h.cv))
 	return app, h
 }
 

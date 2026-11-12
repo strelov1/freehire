@@ -130,8 +130,31 @@ func isRefusal(err error) bool { return errors.Is(err, plan.ErrRefused) }
 // one person for whom the next plan is worth something, and that refusal is the exact moment
 // it is worth it.
 func refuse(c *fiber.Ctx, d plan.Decision) error {
+	return decisionRefusal(d).write(c)
+}
+
+// planRefusal is the body of a plan 402, held apart from the response it is written to so
+// a Fiber handler (write) and a contract handler (see cvHandlers) answer it identically.
+type planRefusal struct {
+	allowance    allowanceView
+	message      string
+	offerUpgrade bool
+}
+
+// decisionRefusal is the refusal for a consumption the plan turned away (see refuse).
+func decisionRefusal(d plan.Decision) planRefusal {
 	a := viewDecision(d)
-	return write402(c, a, refusalMessage(d.Feature, d.FairUse, planIncludes(a)), !d.FairUse && hasSomethingToBuy(d.Tier))
+	return planRefusal{a, refusalMessage(d.Feature, d.FairUse, planIncludes(a)), !d.FairUse && hasSomethingToBuy(d.Tier)}
+}
+
+// standingRefusal is the refusal for a pre-check, which holds a Standing (see refuseStanding).
+func standingRefusal(st plan.Standing) planRefusal {
+	a := viewStanding(st)
+	return planRefusal{a, refusalMessage(st.Feature, false, planIncludes(a)), hasSomethingToBuy(st.Tier)}
+}
+
+func (r planRefusal) write(c *fiber.Ctx) error {
+	return write402(c, r.allowance, r.message, r.offerUpgrade)
 }
 
 // hasSomethingToBuy reports whether a tier has a bigger one above it.
@@ -147,8 +170,7 @@ func hasSomethingToBuy(tier plan.Tier) bool { return tier != plan.TierUltra }
 // It exists so a caller does not have to assemble a Decision it never made — a fake one
 // filled in field by field is a lie that reads as fact at the next call site.
 func refuseStanding(c *fiber.Ctx, st plan.Standing) error {
-	a := viewStanding(st)
-	return write402(c, a, refusalMessage(st.Feature, false, planIncludes(a)), hasSomethingToBuy(st.Tier))
+	return standingRefusal(st).write(c)
 }
 
 // upgradePath is where a refused free caller is sent. It is the plan page rather than a

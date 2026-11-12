@@ -21,8 +21,8 @@ import (
 func buildCVAppearanceDefaultsApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	saved := auth.RequireAuth(iss, testVersions)
-	app.Get("/api/v1/me/cv-appearance-defaults", saved, h.GetCVAppearanceDefaults)
-	app.Put("/api/v1/me/cv-appearance-defaults", saved, h.SetCVAppearanceDefaults)
+	app.Get("/api/v1/me/cv-appearance-defaults", saved, cvContract(h))
+	app.Put("/api/v1/me/cv-appearance-defaults", saved, cvContract(h))
 	return app
 }
 

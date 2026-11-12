@@ -16,7 +16,7 @@ import (
 // with its display metadata. It needs no DB: the handler just projects cv.Templates().
 func TestListCVTemplates(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/cv-templates", (&cvHandlers{}).ListCVTemplates)
+	app.Get("/api/v1/cv-templates", cvContract(&cvHandlers{}))
 
 	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/cv-templates", nil)
 	resp, err := app.Test(req)
@@ -56,7 +56,7 @@ func TestListCVTemplates(t *testing.T) {
 // A second registry in TypeScript is exactly what this is here to prevent.
 func TestListCVFonts(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/cv-fonts", (&cvHandlers{}).ListCVFonts)
+	app.Get("/api/v1/cv-fonts", cvContract(&cvHandlers{}))
 
 	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/cv-fonts", nil)
 	resp, err := app.Test(req)

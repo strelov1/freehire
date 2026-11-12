@@ -164,7 +164,7 @@ func newAutopilotHarness(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, tur
 		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
 	}
 	h.register(api, mw)
-	h.cv.register(api, mw)
+	h.cv.register(api, mw, cvContract(h.cv))
 	return h, app
 }
 

@@ -147,7 +147,7 @@ func gatedApp(t *testing.T, plans paidEntitlement) *fiber.App {
 	api := app.Group("/api/v1")
 	(&matchHandlers{}).register(api, mw)
 	(&assistantHandlers{}).register(api, mw)
-	(&cvHandlers{}).register(api, mw)
+	(&cvHandlers{}).register(api, mw, cvContract(&cvHandlers{}))
 	(&referralMessageHandlers{}).register(api, mw)
 	resumeH := &resumeHandlers{}
 	resumeH.register(api, mw, newContract(contractHandlers{resumeHandlers: resumeH}))

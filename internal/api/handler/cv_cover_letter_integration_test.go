@@ -100,7 +100,7 @@ func newCoverLetterFixture(t *testing.T, pool *pgxpool.Pool) coverLetterFixture 
 		paidAI: markPaidAI,
 		cookie: auth.RequireAuth(iss, testVersions),
 		key:    auth.RequireAuth(iss, testVersions),
-	})
+	}, cvContract(h))
 
 	userID := seedAccount(t, pool, "coverletter@example.test", false)
 	token, _ := iss.Issue(userID, testTokenVersion)
