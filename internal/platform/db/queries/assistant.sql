@@ -180,3 +180,12 @@ WHERE id = $1 AND user_id = $2 AND preset = 'support';
 SELECT count(*)
 FROM assistant_sessions
 WHERE user_id = $1 AND escalated_at >= $2;
+
+-- name: RateSupportSession :execrows
+-- The owner's verdict on their own support conversation, only once it holds a reply: a blank
+-- session is handed back on the next create, so a vote on it would land on a conversation not
+-- yet had. 0 rows means not theirs, not support, or nothing answered yet.
+UPDATE assistant_sessions
+SET helpful = $3
+WHERE id = $1 AND user_id = $2 AND preset = 'support'
+  AND EXISTS (SELECT 1 FROM assistant_messages m WHERE m.session_id = $1 AND m.role = 'assistant');

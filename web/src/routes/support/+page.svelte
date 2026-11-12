@@ -1,7 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
   import Seo from '#lib/components/Seo.svelte';
+  import SupportPanel from '#lib/components/SupportPanel.svelte';
 
   const repoUrl = 'https://github.com/strelov1/freehire';
   const issuesUrl = 'https://github.com/strelov1/freehire/issues';
@@ -11,6 +13,9 @@
   const canonical = $derived(`${page.url.origin}/support`);
 
   const link = 'font-medium text-foreground underline-offset-4 hover:underline';
+
+  // The help assistant runs on the session cookie, so it is offered to a signed-in visitor only.
+  let helpOpen = $state(false);
 </script>
 
 <Seo
@@ -32,6 +37,23 @@
       a bug, an issue on
       <a href={issuesUrl} class={link}>GitHub</a> is even better: freehire is open source, so you can watch the fix happen.
     </p>
+
+    {#if isAuthenticated()}
+      <div class="flex flex-col items-start gap-2 rounded-lg border border-border p-4 text-sm text-muted-foreground">
+        <p>
+          <span class="text-foreground">Ask the help assistant.</span> It answers right away, sees your plan and limits, and
+          hands the question to a person when it cannot help.
+        </p>
+        <button
+          type="button"
+          onclick={() => (helpOpen = true)}
+          class="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          Open the help assistant
+        </button>
+      </div>
+      <SupportPanel open={helpOpen} onClose={() => (helpOpen = false)} />
+    {/if}
 
     <section class="flex flex-col gap-3">
       <h2 class="text-xl font-semibold tracking-tight">Get in touch</h2>

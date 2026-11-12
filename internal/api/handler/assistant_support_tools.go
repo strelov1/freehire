@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -81,6 +82,29 @@ type accountSummary struct {
 	Allowances   []accountAllowance    `json:"allowances_today"`
 	SupportToday supportAllowance      `json:"support_messages_today"`
 	Recent       []accountHistoryEntry `json:"recent_activity"`
+	// Prices is what each plan costs today, so a charge the user names can be matched to a
+	// plan ("$29 is the API plan") instead of being handed over unexplained.
+	Prices []accountPrice `json:"current_prices,omitempty"`
+}
+
+type accountPrice struct {
+	Plan     string `json:"plan"`
+	Amount   string `json:"amount"`
+	Interval string `json:"interval"`
+}
+
+// accountPrices formats the provider's prices for the model; an amount in cents is the one
+// thing it would otherwise get wrong by a factor of a hundred.
+func accountPrices(prices []billing.PublicPrice) []accountPrice {
+	out := make([]accountPrice, 0, len(prices))
+	for _, p := range prices {
+		out = append(out, accountPrice{
+			Plan:     p.Tier,
+			Amount:   fmt.Sprintf("%d.%02d %s", p.AmountCents/100, p.AmountCents%100, strings.ToUpper(p.Currency)),
+			Interval: p.Interval,
+		})
+	}
+	return out
 }
 
 func paymentSourceLabel(source string) string {
@@ -102,7 +126,7 @@ func (h *assistantHandlers) myAccountTool() assistant.Tool {
 		Title:  "Read my plan and usage",
 		Effect: assistant.EffectReads,
 		Description: "Read the signed-in user's own plan: the tier, when it is valid until, how it was paid " +
-			"(card, app store or granted), their API plan if they hold one (a separate subscription from Pro), what is left of today's allowances, how many support messages are left today and their latest plan activity. " +
+			"(card, app store or granted), their API plan if they hold one (a separate subscription from Pro), what each plan costs today, what is left of today's allowances, how many support messages are left today and their latest plan activity. " +
 			"Call it before saying anything about their plan, payment or limits. Takes no arguments.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
@@ -153,6 +177,9 @@ func (h *assistantHandlers) myAccountTool() assistant.Tool {
 			}
 			for _, e := range history {
 				out.Recent = append(out.Recent, accountHistoryEntry{Label: e.Label, Date: e.Day})
+			}
+			if h.support.prices != nil {
+				out.Prices = accountPrices(h.support.prices(ctx))
 			}
 			return out, nil
 		},

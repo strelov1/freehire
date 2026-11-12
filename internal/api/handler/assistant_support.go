@@ -2,14 +2,19 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/identity/billing"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
@@ -31,6 +36,10 @@ type supportDeps struct {
 	runner *assistant.Runner
 	mail   supportMail
 
+	// prices reads what each plan costs now, from the same provider cache as the pricing
+	// page. Without billing (or nil, in tests) my_account carries no prices.
+	prices func(context.Context) []billing.PublicPrice
+
 	// pool opens the transaction that makes a blank session's get-or-create atomic.
 	pool *pgxpool.Pool
 }
@@ -39,45 +48,70 @@ type supportDeps struct {
 // not, so none of these routes sits behind the paid-AI gate; what bounds it instead is the
 // flat allowance, the per-session ceiling and the day's global budget (meterSupport).
 // Cookie only: an API key is a programmatic caller, and a free surface must not be one.
-func (h *assistantHandlers) registerSupport(api fiber.Router, mw middleware) {
-	api.Post("/support/sessions", mw.cookie, h.CreateSupportSession)
+func (h *assistantHandlers) registerSupport(api fiber.Router, mw middleware, contract fiber.Handler) {
+	api.Post("/support/sessions", mw.cookie, contract)
 	api.Post("/support/sessions/:id/messages", mw.cookie, h.PostSupportMessage)
-	api.Post("/support/sessions/:id/cancel", mw.cookie, h.CancelSupportTurn)
+	api.Post("/support/sessions/:id/cancel", mw.cookie, contract)
+	api.Post("/support/sessions/:id/rating", mw.cookie, contract)
 }
 
-func (h *assistantHandlers) CreateSupportSession(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *assistantHandlers) CreateSupportSession(ctx context.Context) (apigen.CreateSupportSessionRes, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// An owner cannot delete a support session, and this route is not metered, so it hands
 	// back the blank session it already made rather than adding one per call. That bounds
 	// the rows by the messages actually sent, which the daily allowance already bounds. The
 	// read and the insert share one transaction under a per-user lock: two parallel calls
 	// would otherwise both find none and both insert.
-	tx, err := h.support.pool.Begin(c.Context())
+	tx, err := h.support.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer func() { _ = tx.Rollback(c.Context()) }()
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := h.queries.WithTx(tx)
-	if err := q.LockAssistantSessionCreation(c.Context(), userID); err != nil {
-		return err
+	if err := q.LockAssistantSessionCreation(ctx, userID); err != nil {
+		return nil, err
 	}
 	store := assistant.NewStore(q)
-	if sess, ok, err := store.EmptySession(c.Context(), userID, assistant.PresetSupport); err != nil {
-		return err
+	if sess, ok, err := store.EmptySession(ctx, userID, assistant.PresetSupport); err != nil {
+		return nil, err
 	} else if ok {
-		return c.JSON(fiber.Map{"data": sessionView(sess)})
+		view, err := supportSessionView(sess)
+		if err != nil {
+			return nil, err
+		}
+		return &apigen.CreateSupportSessionOK{Data: view}, nil
 	}
-	sess, err := store.CreateSession(c.Context(), userID, assistant.PresetSupport, nil, nil)
+	sess, err := store.CreateSession(ctx, userID, assistant.PresetSupport, nil, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := tx.Commit(c.Context()); err != nil {
-		return err
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": sessionView(sess)})
+	view, err := supportSessionView(sess)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.CreateSupportSessionCreated{Data: view}, nil
+}
+
+// supportSessionView is sessionView for the contract's support operations.
+func supportSessionView(s assistant.Session) (apigen.SupportSession, error) {
+	v := sessionView(s)
+	out := apigen.SupportSession{ID: v.ID, Preset: v.Preset, Label: v.Label}
+	optNil(v.CVID, out.CvID.SetTo)
+	optNil(v.JobID, out.JobID.SetTo)
+	if v.SearchContext != nil {
+		raw, err := json.Marshal(v.SearchContext)
+		if err != nil {
+			return apigen.SupportSession{}, err
+		}
+		out.SearchContext = raw
+	}
+	return out, nil
 }
 
 // ownedSupportSession is ownedSession's mirror: only a support session answers here, so a
@@ -87,11 +121,16 @@ func (h *assistantHandlers) ownedSupportSession(c *fiber.Ctx) (assistant.Session
 	if err != nil {
 		return assistant.Session{}, err
 	}
-	id, err := assistantSessionID(c)
+	return h.supportSession(c.Context(), userID, c.Params("id"))
+}
+
+// supportSession loads the caller's support session named by a raw id.
+func (h *assistantHandlers) supportSession(ctx context.Context, userID int64, rawID string) (assistant.Session, error) {
+	id, err := parseAssistantSessionID(rawID)
 	if err != nil {
 		return assistant.Session{}, err
 	}
-	sess, err := h.store.Session(c.Context(), id, userID)
+	sess, err := h.store.Session(ctx, id, userID)
 	if err != nil {
 		return assistant.Session{}, mapAssistantError(err)
 	}
@@ -126,13 +165,39 @@ func (h *assistantHandlers) PostSupportMessage(c *fiber.Ctx) error {
 	})
 }
 
-func (h *assistantHandlers) CancelSupportTurn(c *fiber.Ctx) error {
-	sess, err := h.ownedSupportSession(c)
+func (h *assistantHandlers) CancelSupportTurn(ctx context.Context, params apigen.CancelSupportTurnParams) error {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	sess, err := h.supportSession(ctx, userID, params.ID)
 	if err != nil {
 		return err
 	}
 	h.turns.cancel(sess.ID)
-	return c.SendStatus(fiber.StatusNoContent)
+	return nil
+}
+
+// RateSupportSession records whether the caller's own support conversation helped.
+func (h *assistantHandlers) RateSupportSession(ctx context.Context, req *apigen.SupportRating, params apigen.RateSupportSessionParams) error {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	sess, err := h.supportSession(ctx, userID, params.ID)
+	if err != nil {
+		return err
+	}
+	n, err := h.queries.RateSupportSession(ctx, db.RateSupportSessionParams{
+		ID: sess.ID, UserID: userID, Helpful: pgtype.Bool{Bool: req.Helpful, Valid: true},
+	})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fiber.NewError(fiber.StatusConflict, "nothing to rate yet — the assistant has not replied")
+	}
+	return nil
 }
 
 func (h *assistantHandlers) boundSupportRunner(ctx context.Context, sess assistant.Session) (*assistant.Runner, error) {

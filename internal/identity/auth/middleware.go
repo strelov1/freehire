@@ -97,6 +97,13 @@ func IsExtensionBearer(c *fiber.Ctx) bool {
 	return !ViaCookie(c) && !ViaAPIKey(c)
 }
 
+// IsExtensionBearerFromContext is IsExtensionBearer for a contract handler, which holds the
+// request context and not the Fiber one.
+func IsExtensionBearerFromContext(ctx context.Context) bool {
+	cookie, _ := ctx.Value(localsViaCookie).(bool)
+	return !cookie && !ViaAPIKeyFromContext(ctx)
+}
+
 type sessionResult int
 
 const (

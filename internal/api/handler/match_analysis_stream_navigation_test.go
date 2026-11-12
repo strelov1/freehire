@@ -68,7 +68,7 @@ func mountFitStream(iss *auth.Issuer, gate *countingPaidAI) *fiber.App {
 	(&matchHandlers{}).register(app.Group("/api/v1"), middleware{
 		key:    keyAuthFor(iss),
 		paidAI: gate.handler,
-	})
+	}, newContract(contractHandlers{}))
 	return app
 }
 

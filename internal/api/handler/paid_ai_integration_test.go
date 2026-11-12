@@ -99,7 +99,7 @@ func TestPaidAIFitStreamRefusesFree(t *testing.T) {
 	(&matchHandlers{}).register(app.Group("/api/v1"), middleware{
 		paidAI: paidAIGate(entitlementOf(plans)),
 		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-	})
+	}, newContract(contractHandlers{}))
 
 	userID, token := assistantUser(t, pool, iss, "paid-gate-fit@example.test", false)
 	insertAutoApplyJob(t, pool, "any-job")

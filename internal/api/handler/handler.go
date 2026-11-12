@@ -835,6 +835,7 @@ func Register(app *fiber.App, cfg Config) {
 		screeningAnswersSvc,
 		plans,
 		letterDeps,
+		billingSvc.PublicPrices,
 	)
 	// Same nil-interface trap as stt above: only assign when cfg.Realtime is
 	// genuinely non-nil, or "no voice mode here" becomes a panic on the first mint.
@@ -1069,6 +1070,11 @@ func Register(app *fiber.App, cfg Config) {
 	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
 	contract := newContract(contractHandlers{conversationHandlers: conversationH,
 		resumeHandlers:               resumeH,
+		matchHandlers:                matchH,
+		autofillHandlers:             autofillH,
+		intentHandlers:               intentH,
+		embedProgressHandlers:        embedProgressH,
+		assistantHandlers:            assistantH,
 		communityHandlers:            communityH,
 		companyFeedbackHandlers:      companyFeedbackH,
 		companyRelationHandlers:      companyRelationH,
@@ -1125,7 +1131,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Beside the search it builds a filter for, though it shares none of its
 	// dependencies: interpretation needs a model and the caller's profile, not the
 	// index.
-	intentH.register(api, mw)
+	intentH.register(api, mw, contract)
 	sitemapH.register(api, mw)
 	// Before jobsH for the same reason searchH is: /ojcp/v1/jobs/:slug is a literal path,
 	// not a slug.
@@ -1154,7 +1160,7 @@ func Register(app *fiber.App, cfg Config) {
 	// The homepage's live "recently added jobs" SSE feed (see recentFeedHandlers).
 	recentFeedH.register(api)
 	// The public /embeddings page's coverage figures and their live stream.
-	embedProgressH.register(api)
+	embedProgressH.register(api, contract)
 	// The /open and /about pages' OG preview cards (see ogHandlers) — reads the
 	// same snapshot statsH.CatalogScale serves.
 	ogH.register(api)
@@ -1173,10 +1179,10 @@ func Register(app *fiber.App, cfg Config) {
 	userModerationH.register(api, mw, contract)
 	companyProcessReportH.register(api, mw, contract)
 	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
-	matchH.register(api, mw)
+	matchH.register(api, mw, contract)
 	// The contact block the extension writes into forms, plain and agent-driven (see
 	// autofillHandlers).
-	autofillH.register(api, mw)
+	autofillH.register(api, mw, contract)
 	// The bank's own management surface: list, save, delete (see me_answer_bank.go).
 	answerBankH.register(api, mw, contract)
 	agentPermissionsH.register(api, mw, contract)
@@ -1258,6 +1264,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Dictation for the assistant composer.
 	speechH.register(api, mw)
 	assistantH.register(api, mw)
+	assistantH.registerSupport(api, mw, contract)
 
 	// Filter subscriptions (see subscriptionHandlers).
 	subscriptionH.register(api, mw, contract)

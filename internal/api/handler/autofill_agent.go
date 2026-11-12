@@ -1,17 +1,20 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/autofillagent"
 	"github.com/strelov1/freehire/internal/ai/browsertools"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// RunAgentAutofill fills the form on whatever page the caller's browser is
+// RunAutofill fills the form on whatever page the caller's browser is
 // showing: it attaches to that user's browser-tool channel as the harness end,
 // reads the form, maps their profile onto it, and writes back what it can.
 //
@@ -25,30 +28,30 @@ import (
 // to: autofill WRITES into the live form on that page, so a request that did not
 // authenticate as the extension's own Bearer session JWT is refused outright rather
 // than run against a browser the caller on this surface never opened.
-func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *autofillHandlers) RunAutofill(ctx context.Context) (*apigen.RunAutofillOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if !auth.IsExtensionBearer(c) {
-		return fiber.NewError(fiber.StatusForbidden, "autofill runs only from the browser extension's own connection")
-	}
-
-	profile, err := h.autofillProfile(c.Context(), userID)
-	if err != nil {
-		return err
+	if !auth.IsExtensionBearerFromContext(ctx) {
+		return nil, fiber.NewError(fiber.StatusForbidden, "autofill runs only from the browser extension's own connection")
 	}
 
-	model, err := h.llm.bind(c.UserContext(), userID, llm.Feature(tagAutofill))
+	profile, err := h.autofillProfile(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	model, err := h.llm.bind(ctx, userID, llm.Feature(tagAutofill))
+	if err != nil {
+		return nil, err
 	}
 
 	caller := h.browserTools.NewCaller(userID)
 	defer caller.Close()
 
 	report, err := autofillagent.Run(
-		c.Context(),
+		ctx,
 		caller,
 		autofillagent.NewJevPlanner(
 			autofillagent.LLMPlanner{Client: model},
@@ -70,11 +73,11 @@ func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 		case errors.Is(err, browsertools.ErrNotConnected),
 			errors.Is(err, browsertools.ErrExecutorReported),
 			errors.Is(err, autofillagent.ErrNoFillableFields):
-			return fiber.NewError(fiber.StatusConflict, err.Error())
+			return nil, fiber.NewError(fiber.StatusConflict, err.Error())
 		// Autofill is not configured on this deployment — the same answer the other
 		// model-backed endpoints give for the same reason.
 		case errors.Is(err, autofillagent.ErrUnavailable):
-			return fiber.NewError(fiber.StatusServiceUnavailable, err.Error())
+			return nil, fiber.NewError(fiber.StatusServiceUnavailable, err.Error())
 		default:
 			// Handed to the shared mapper, as the cover letter's endpoint does with the
 			// same shape of failure. Run makes two live model calls, so this branch holds
@@ -84,8 +87,12 @@ func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 			// a broken gateway, kept them out of the error reports, and printed the raw error in the
 			// extension's panel. classify already knows a caller who navigated away is a
 			// 499 and not a fault, so nothing here has to guess at that.
-			return err
+			return nil, err
 		}
 	}
-	return c.JSON(fiber.Map{"data": report})
+	raw, err := json.Marshal(report)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.RunAutofillOK{Data: raw}, nil
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/identity/billing"
 )
 
 func TestSupportRegistryHoldsExactlyThreeTools(t *testing.T) {
@@ -71,5 +72,19 @@ func TestSafeReplyTo(t *testing.T) {
 func TestSupportTurnIsCappedAtThreeSteps(t *testing.T) {
 	if got := turnBounds(assistant.Session{Preset: assistant.PresetSupport}, "").MaxSteps; got != 3 {
 		t.Errorf("support MaxSteps = %d, want 3", got)
+	}
+}
+
+func TestAccountPricesFormatsCentsAsAnAmount(t *testing.T) {
+	got := accountPrices([]billing.PublicPrice{
+		{Tier: "pro", AmountCents: 500, Currency: "usd", Interval: "month"},
+		{Tier: "api", AmountCents: 2905, Currency: "eur", Interval: "year"},
+	})
+	want := []accountPrice{
+		{Plan: "pro", Amount: "5.00 USD", Interval: "month"},
+		{Plan: "api", Amount: "29.05 EUR", Interval: "year"},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("accountPrices = %+v, want %+v", got, want)
 	}
 }

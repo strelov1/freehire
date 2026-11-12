@@ -196,6 +196,19 @@ const languageNames = (() => {
   }
 })();
 
+/** A representative country flag code for an ISO 639-1 language (en → gb), or
+ *  undefined when none is clear. A flag only decorates a language; it never decides
+ *  which languages exist. */
+export function languageFlag(code: string): string | undefined {
+  let region: string | undefined;
+  try {
+    region = code === 'en' ? 'GB' : code === 'pt' ? 'PT' : new Intl.Locale(code).maximize().region;
+  } catch {
+    return undefined;
+  }
+  return region && /^[A-Z]{2}$/.test(region) ? region.toLowerCase() : undefined;
+}
+
 function languageLabel(code: string): string {
   if (!code) return code;
   try {

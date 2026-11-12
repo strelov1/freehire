@@ -31,7 +31,7 @@ func intentApp(t *testing.T, h *intentHandlers, userID int64) *fiber.App {
 		}
 		return c.Next()
 	})
-	app.Post("/api/v1/search/interpret", h.InterpretSearch)
+	app.Post("/api/v1/search/interpret", refuseEncodedGuestBody, newContract(contractHandlers{intentHandlers: h}))
 	return app
 }
 

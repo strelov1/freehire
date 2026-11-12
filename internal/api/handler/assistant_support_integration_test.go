@@ -66,11 +66,13 @@ func supportApp(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, model assist
 		h.support.mail = supportMail{sender: sender, from: "freehire <noreply@example.test>", to: "support@example.test"}
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h.register(app.Group("/api/v1"), middleware{
+	mw := middleware{
 		paidAI: paidAIGate(entitlementOf(plans)),
 		cookie: auth.RequireAuth(iss, testVersions),
 		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-	})
+	}
+	h.register(app.Group("/api/v1"), mw)
+	h.registerSupport(app.Group("/api/v1"), mw, newContract(contractHandlers{assistantHandlers: h}))
 	return app, h
 }
 
@@ -741,5 +743,56 @@ func TestMyAccountReportsTheSupportAllowanceFromTheLedger(t *testing.T) {
 	}
 	if got := read(aID); got.Used != 2 || got.Remaining != 5 {
 		t.Errorf("after release = %+v, want used 2, remaining 5", got)
+	}
+}
+
+func TestSupportRatingRecordsTheOwnersVerdictOnly(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := supportApp(t, pool, iss, &gateCountingModel{}, plan.DefaultConfig().Enforcing(), nil)
+	_, owner := assistantSubscriber(t, pool, iss, "support-rate-owner@example.test", false)
+	_, other := assistantSubscriber(t, pool, iss, "support-rate-other@example.test", false)
+	id := newSupportSession(t, app, owner)
+	rate := func(token, body string) int {
+		status, _ := supportPost(t, app, "/api/v1/support/sessions/"+id+"/rating", token, body)
+		return status
+	}
+	helpful := func() *bool {
+		var v *bool
+		if err := pool.QueryRow(context.Background(), `SELECT helpful FROM assistant_sessions WHERE id = $1`, id).Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+
+	if got := rate(owner, `{}`); got != fiber.StatusBadRequest {
+		t.Errorf("rating without the field = %d, want 400", got)
+	}
+	if got := rate(other, `{"helpful":true}`); got != fiber.StatusNotFound {
+		t.Errorf("another account's rating = %d, want 404", got)
+	}
+	if got := rate(owner, `{"helpful":true}`); got != fiber.StatusConflict {
+		t.Errorf("rating before any reply = %d, want 409", got)
+	}
+	if v := helpful(); v != nil {
+		t.Fatalf("helpful = %v after refused votes, want NULL", *v)
+	}
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO assistant_messages (session_id, seq, role, content) VALUES ($1, 1, 'user', '{"text":"hi"}'), ($1, 2, 'assistant', '{"text":"hello"}')`, id); err != nil {
+		t.Fatal(err)
+	}
+	if got := rate(owner, `{"helpful":true}`); got != fiber.StatusNoContent {
+		t.Fatalf("owner rating = %d, want 204", got)
+	}
+	if got := rate(owner, `{"helpful":false}`); got != fiber.StatusNoContent {
+		t.Fatalf("owner re-rating = %d, want 204", got)
+	}
+	if v := helpful(); v == nil || *v {
+		t.Errorf("helpful = %v, want false (the later vote)", v)
+	}
+
+	chat := createAssistantSession(t, app, owner, assistant.PresetChat)
+	if status, _ := supportPost(t, app, "/api/v1/support/sessions/"+chat+"/rating", owner, `{"helpful":true}`); status != fiber.StatusNotFound {
+		t.Errorf("rating a chat session = %d, want 404", status)
 	}
 }

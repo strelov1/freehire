@@ -145,16 +145,19 @@ func gatedApp(t *testing.T, plans paidEntitlement) *fiber.App {
 		paidAI:        paidAIGate(plans),
 	}
 	api := app.Group("/api/v1")
-	(&matchHandlers{}).register(api, mw)
-	(&assistantHandlers{}).register(api, mw)
+	matchH, assistantH, intentH, autofillH, inboxH := &matchHandlers{}, &assistantHandlers{}, &intentHandlers{}, &autofillHandlers{}, &inboxHandlers{}
+	contract := newContract(contractHandlers{matchHandlers: matchH, assistantHandlers: assistantH, intentHandlers: intentH,
+		autofillHandlers: autofillH, inboxHandlers: inboxH})
+	matchH.register(api, mw, contract)
+	assistantH.register(api, mw)
 	(&cvHandlers{}).register(api, mw, cvContract(&cvHandlers{}))
 	(&referralMessageHandlers{}).register(api, mw)
 	resumeH := &resumeHandlers{}
 	resumeH.register(api, mw, newContract(contractHandlers{resumeHandlers: resumeH}))
 	(&speechHandlers{}).register(api, mw)
-	(&intentHandlers{}).register(api, mw)
-	(&inboxHandlers{}).register(api, mw, newContract(contractHandlers{}))
-	(&autofillHandlers{}).register(api, mw)
+	intentH.register(api, mw, contract)
+	inboxH.register(api, mw, contract)
+	autofillH.register(api, mw, contract)
 	return app
 }
 

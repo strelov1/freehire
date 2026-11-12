@@ -1,8 +1,10 @@
 package handler
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"context"
+	"encoding/json"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
 	"github.com/strelov1/freehire/internal/candidate/jobmatch"
 )
@@ -23,28 +25,32 @@ type jobMatchResponse struct {
 // unknown slug is a 404 (pgx.ErrNoRows via the central handler) and a caller without
 // a profile is a 404 (profileError). The SPA only calls this once the viewer is
 // signed in with a non-empty profile, so the not-found paths are defensive.
-func (h *matchHandlers) JobMatch(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *matchHandlers) GetJobMatch(ctx context.Context, params apigen.GetJobMatchParams) (*apigen.GetJobMatchOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
+	job, err := h.queries.GetJobBySlug(ctx, params.Slug)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := jobVisibleToCaller(job, userID, true); err != nil {
-		return err
+		return nil, err
 	}
-	profile, err := h.userProfile.Get(c.Context(), userID)
+	profile, err := h.userProfile.Get(ctx, userID)
 	if err != nil {
-		return profileError(err)
+		return nil, profileError(err)
 	}
-	blockers := h.jobBlockers(c.Context(), userID, job, profile)
+	blockers := h.jobBlockers(ctx, userID, job, profile)
 	if blockers == nil {
 		blockers = []hardconstraint.Blocker{}
 	}
-	return c.JSON(fiber.Map{"data": jobMatchResponse{
+	raw, err := json.Marshal(jobMatchResponse{
 		JobMatch: jobmatch.Compute(job.Skills, profile.Skills),
 		Blockers: blockers,
-	}})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetJobMatchOK{Data: raw}, nil
 }
