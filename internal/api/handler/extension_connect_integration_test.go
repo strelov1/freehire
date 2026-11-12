@@ -249,3 +249,53 @@ func fragmentValues(t *testing.T, location string) url.Values {
 	}
 	return vals
 }
+
+func TestExtensionConnectSubmit_SwitchAccountSignsOutAndRestartsSignIn(t *testing.T) {
+	pool := startPostgres(t)
+	var userID int64
+	if err := pool.QueryRow(context.Background(), `INSERT INTO users (email) VALUES ('ext-switch@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	const extID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	redirectURI := "https://" + extID + ".chromiumapp.org/"
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
+	h := &authHandlers{
+		queries: db.New(pool), issuer: iss, frontendOrigin: "https://freehire.me",
+		browserOrigins: []string{"https://freehire.me"}, extensionRedirectAllowlist: []string{extID},
+	}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Post("/api/v1/auth/extension/connect", auth.OptionalCookieAuth(iss, testVersions), h.ExtensionConnectSubmit)
+
+	post := func(origin string) (status int, loc string, cookies []*http.Cookie) {
+		form := url.Values{"decision": {"switch"}, "redirect_uri": {redirectURI}, "state": {"s1"}}
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/auth/extension/connect", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Origin", origin)
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test: %v", err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode, resp.Header.Get("Location"), resp.Cookies()
+	}
+
+	if status, _, _ := post("https://evil.example"); status != fiber.StatusForbidden {
+		t.Fatalf("cross-site switch status = %d, want 403", status)
+	}
+	status, loc, cookies := post("https://freehire.me")
+	if status != fiber.StatusFound || !strings.HasPrefix(loc, "https://freehire.me/extension/connect?") {
+		t.Fatalf("status = %d, Location = %q, want 302 to the web connect page", status, loc)
+	}
+	cleared := false
+	for _, c := range cookies {
+		if c.Name == auth.CookieName && c.Value == "" {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Error("session cookie was not cleared")
+	}
+}

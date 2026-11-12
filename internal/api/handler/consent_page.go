@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"html/template"
 	"strings"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 // consentScreen is what one server-rendered approval screen says. The OAuth
@@ -24,6 +26,22 @@ type consentScreen struct {
 }
 
 type hiddenField struct{ Name, Value string }
+
+// decisionSwitch is the consent form's third answer: "this is not my account".
+const decisionSwitch = "switch"
+
+// switchAccount ends the session and sends the person to sign in again, back to
+// the same request. Origin-gated like /auth/logout: the consent routes are not, and
+// a cross-site form post must not be able to sign someone out.
+func (h *authHandlers) switchAccount(c *fiber.Ctx, signInURL string) error {
+	if err := h.checkSameOrigin(c); err != nil {
+		return err
+	}
+	if err := h.endSession(c); err != nil {
+		return err
+	}
+	return c.Redirect(signInURL, fiber.StatusFound)
+}
 
 // noticeScreen is the same card without a decision: a dead end that tells the
 // visitor what to do instead.
@@ -80,6 +98,8 @@ button:hover,.btn:hover{background:var(--tile)}
 .primary{background:var(--brand);border-color:var(--brand);color:var(--brand-fg)}
 .primary:hover{background:var(--brand);filter:brightness(1.08)}
 button:focus-visible,.btn:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+button.link{display:inline;height:auto;border:0;padding:0;font-size:inherit;font-weight:inherit;color:var(--fg);text-decoration:underline}
+button.link:hover{background:none}
 .foot{margin:1.25rem 0 0;text-align:center;color:var(--muted);font-size:.8125rem}
 .foot a{color:inherit}
 `
@@ -101,7 +121,7 @@ const consentLayout = `{{define "page"}}<!doctype html>
 </body>
 </html>{{end}}`
 
-const consentContent = `{{define "content"}}{{if .SignedIn}}    <p class="who">Signed in as {{.SignedIn}}</p>
+const consentContent = `{{define "content"}}{{if .SignedIn}}    <p class="who">Signed in as {{.SignedIn}} · <button type="submit" form="consent" name="decision" value="switch" class="link">Not you? Switch account</button></p>
 {{end}}    <div class="section">
       <p class="label">This allows</p>
       <ul>
@@ -110,7 +130,7 @@ const consentContent = `{{define "content"}}{{if .SignedIn}}    <p class="who">S
 {{end}}      </ul>
       <p class="caution">{{if .Destination}}Access will be sent to <strong>{{.Destination}}</strong>. {{end}}{{.Caution}}</p>
     </div>
-    <form method="post" action="{{.Action}}">
+    <form id="consent" method="post" action="{{.Action}}">
 {{range .Hidden}}      <input type="hidden" name="{{.Name}}" value="{{.Value}}">
 {{end}}      <button type="submit" name="decision" value="deny">Cancel</button>
       <button type="submit" name="decision" value="allow" class="primary">Connect</button>

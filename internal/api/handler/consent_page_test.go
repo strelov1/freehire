@@ -78,3 +78,20 @@ func TestNoSessionPage_LinksToSignIn(t *testing.T) {
 		t.Errorf("no-session page does not link to sign-in:\n%s", page)
 	}
 }
+
+func TestConsentScreen_OffersSwitchAccountOnlyWhenSignedIn(t *testing.T) {
+	signed, err := renderConsentScreen(consentScreen{SignedIn: "me@example.com", Action: "/x", Origin: "https://freehire.me"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(signed, `form="consent" name="decision" value="switch"`) || !strings.Contains(signed, `<form id="consent"`) {
+		t.Errorf("no switch-account button bound to the consent form:\n%s", signed)
+	}
+	anon, err := renderConsentScreen(consentScreen{Action: "/x", Origin: "https://freehire.me"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(anon, "Switch account") {
+		t.Error("switch-account shown with no signed-in account")
+	}
+}
