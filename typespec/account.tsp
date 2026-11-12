@@ -9,6 +9,12 @@ namespace Freehire;
 // the OAuth redirects and the MCP OAuth provider (RFC formats) are not here: they stay
 // hand-written. Every answer is one person's own; the whole /me and /auth tree is no-store.
 
+enum AuthUserTier {
+  free,
+  pro,
+  ultra,
+}
+
 /** The account as the SPA and the CLI read it. */
 model AuthUser {
   id: int64;
@@ -32,8 +38,8 @@ model AuthUser {
   /** Null for an account that never finished (or declined) the onboarding wizard. */
   onboarding_completed_at: utcDateTime | null;
 
-  /** The resolved plan: `free`, `pro` or `ultra`. */
-  tier: string;
+  /** The resolved plan. */
+  tier: AuthUserTier;
 
   /** Whether the account holds a live API key or MCP grant. */
   agent_connected: boolean;
@@ -170,15 +176,47 @@ model PushTokenTestResult {
   failed: int64;
 }
 
+/**
+ * What a `user_notifications` row can be about. The column is free text; these are the kinds
+ * the engines write (notify, reminder, nudge, buddy, messaging, auto-apply), plus
+ * `auto_apply_tailor_ready`, which only historical rows carry.
+ */
+enum NotificationKind {
+  subscription_digest,
+  reminder,
+  nudge_follow_up,
+  nudge_interview_prep,
+  nudge_job_closed,
+  nudge_auto_apply_submitted,
+  nudge_auto_apply_blocked,
+  nudge_auto_apply_failed,
+  auto_apply_tailor_ready,
+  auto_apply_ready_for_review,
+  auto_apply_tailoring_failed,
+  buddy_mock_booked,
+  buddy_mock_cancelled,
+  buddy_mock_reminder,
+  buddy_reaction,
+  buddy_message,
+  buddy_invitation,
+}
+
+/** One job of a multi-job digest, as recorded at delivery (notify.SnapshotJob). */
+model NotificationDigestJob {
+  title: string;
+  company: string;
+  slug: string;
+}
+
 model Notification {
   id: int64;
-  kind: string;
+  kind: NotificationKind;
   title: string;
   body: string;
   public_slug: string | null;
 
   /** The stored snapshot of a multi-job digest; left out for every other kind. */
-  jobs?: unknown;
+  jobs?: NotificationDigestJob[];
 
   created_at: utcDateTime | null;
   read_at: utcDateTime | null;

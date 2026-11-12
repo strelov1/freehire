@@ -7,12 +7,27 @@ namespace Freehire;
 // Job reports: a signed-in person (cookie or API key) flags a problem with a live
 // vacancy, and moderators review them. Resolving may soft-close the reported job.
 
+/** The closed reason vocabulary (internal/engage/report validReasons and the CHECK on job_reports). */
+enum JobReportReason {
+  no_response,
+  not_relevant,
+  spam,
+  fraud,
+  other,
+}
+
+enum JobReportStatus {
+  pending,
+  resolved,
+  dismissed,
+}
+
 model JobReport {
   id: int64;
-  reason: string;
+  reason: JobReportReason;
   details: string;
   contact_telegram?: string;
-  status: string;
+  status: JobReportStatus;
   review_reason?: string;
   reviewed_at?: utcDateTime;
   created_at: utcDateTime | null;

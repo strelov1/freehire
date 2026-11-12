@@ -443,7 +443,7 @@ func authUserOut(r userResponse) apigen.AuthUser {
 		EmailVerified: r.EmailVerified, HasPassword: r.HasPassword, CreatedAt: nilDateTime(r.CreatedAt),
 		Timezone: nilString(r.Timezone), Language: r.Language,
 		OnboardingCompletedAt: nilDateTime(r.OnboardingCompletedAt),
-		Tier:                  string(r.Tier), AgentConnected: r.AgentConnected}
+		Tier:                  apigen.AuthUserTier(r.Tier), AgentConnected: r.AgentConnected}
 }
 
 // accountsError maps the accounts service sentinels to HTTP errors, preserving

@@ -9,15 +9,26 @@ namespace Freehire;
 // cookie and closing a thread is for moderators.
 
 /** The author is the persona handle, "AI" for a system reply or "[deleted]" once the account is gone. */
+enum ThreadSubjectType {
+  company,
+  job,
+}
+
+/** A thread is open until a moderator closes it. */
+enum ThreadStatus {
+  open,
+  closed,
+}
+
 model Thread {
   id: int64;
-  subject_type: string;
+  subject_type: ThreadSubjectType;
   subject_slug: string;
   title: string;
   body: string;
   author: string;
   reply_count: int64;
-  status: string;
+  status: ThreadStatus;
   created_at: utcDateTime;
 }
 
@@ -68,7 +79,7 @@ model ThreadDetailPage {
 
 model ThreadClosed {
   id: int64;
-  status: string;
+  status: ThreadStatus;
 }
 
 model CreateThreadRequest {

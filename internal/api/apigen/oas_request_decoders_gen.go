@@ -5355,7 +5355,7 @@ func (s *Server) decodeSendDirectApplyRequest(r *http.Request) (
 }
 
 func (s *Server) decodeSetAgentPermissionsRequest(r *http.Request) (
-	req *AgentPermissions,
+	req *AgentPermissionsUpdate,
 	rawBody []byte,
 	close func() error,
 	rerr error,
@@ -5402,7 +5402,7 @@ func (s *Server) decodeSetAgentPermissionsRequest(r *http.Request) (
 		rawBody = append(rawBody, buf...)
 		d := jx.DecodeBytes(buf)
 
-		var request AgentPermissions
+		var request AgentPermissionsUpdate
 		if err := func() error {
 			if err := request.Decode(d); err != nil {
 				return err

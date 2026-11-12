@@ -10,6 +10,7 @@ const baseProfile: UserProfile = {
   excluded_skills: ['java'],
   excluded_sources: ['greenhouse'],
   excluded_companies: ['acme'],
+  job_languages: [],
   location_preferences: null,
   derived_location: null,
   cv: null,

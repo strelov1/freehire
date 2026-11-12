@@ -32,6 +32,7 @@ const job = {
 
 const item: MyJob = {
   id: 'app-1',
+  added_to_board_at: null,
   company_slug: 'acme',
   role_title: 'Staff Cloud Native Software Engineer',
   job,

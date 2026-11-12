@@ -5580,7 +5580,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AgentPermissions"
+                "$ref": "#/components/schemas/AgentPermissionsUpdate"
               }
             }
           }
@@ -17743,10 +17743,22 @@
       },
       "AgentPermissions": {
         "type": "object",
+        "required": [
+          "agents_may_apply"
+        ],
         "properties": {
           "agents_may_apply": {
             "type": "boolean",
-            "description": "Whether an agent acting for the account may submit applications. Absent reads as false."
+            "description": "Whether an agent acting for the account may submit applications."
+          }
+        }
+      },
+      "AgentPermissionsUpdate": {
+        "type": "object",
+        "properties": {
+          "agents_may_apply": {
+            "type": "boolean",
+            "description": "Absent reads as false."
           }
         }
       },
@@ -18251,8 +18263,8 @@
             "description": "Null for an account that never finished (or declined) the onboarding wizard."
           },
           "tier": {
-            "type": "string",
-            "description": "The resolved plan: `free`, `pro` or `ultra`."
+            "$ref": "#/components/schemas/AuthUserTier",
+            "description": "The resolved plan."
           },
           "agent_connected": {
             "type": "boolean",
@@ -18260,6 +18272,14 @@
           }
         },
         "description": "The account as the SPA and the CLI read it."
+      },
+      "AuthUserTier": {
+        "type": "string",
+        "enum": [
+          "free",
+          "pro",
+          "ultra"
+        ]
       },
       "AutoApplyCancelled": {
         "type": "object",
@@ -18283,6 +18303,39 @@
           }
         }
       },
+      "AutoApplyPreviewField": {
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "description": "One resolved question and answer in an auto-apply answer preview."
+      },
+      "AutoApplyPreviewPending": {
+        "type": "object",
+        "required": [
+          "label",
+          "will_draft_at_submission"
+        ],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "will_draft_at_submission": {
+            "type": "boolean",
+            "description": "Whether the real submission will fill it in on its own."
+          }
+        },
+        "description": "A required question the preview has no answer for yet."
+      },
       "AutoApplyQueued": {
         "type": "object",
         "required": [
@@ -18293,6 +18346,27 @@
             "type": "string"
           }
         }
+      },
+      "AutoApplyResolvedPreview": {
+        "type": "object",
+        "required": [
+          "fields"
+        ],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutoApplyPreviewField"
+            }
+          },
+          "pending": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutoApplyPreviewPending"
+            }
+          }
+        },
+        "description": "What an unattended submission would send, computed once before review."
       },
       "AutoApplyRetried": {
         "type": "object",
@@ -18305,6 +18379,39 @@
           }
         }
       },
+      "AutoApplyReviewInfo": {
+        "type": "object",
+        "required": [
+          "status",
+          "queue_id"
+        ],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/AutoApplyReviewStatus"
+          },
+          "queue_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Addresses the attempt for the review call."
+          },
+          "resolved_preview": {
+            "$ref": "#/components/schemas/AutoApplyResolvedPreview",
+            "description": "Only when `status` is `pending_review`."
+          },
+          "unmapped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutoApplyUnmappedField"
+            },
+            "description": "Only when `status` is `blocked`."
+          },
+          "may_have_reached_employer": {
+            "type": "boolean",
+            "description": "Only on a `failed` attempt the employer may already hold; such an attempt is never retried."
+          }
+        },
+        "description": "The live auto-apply attempt of one job, as the application drawer reads it."
+      },
       "AutoApplyReviewRequest": {
         "type": "object",
         "properties": {
@@ -18313,6 +18420,43 @@
             "description": "`approved` or `declined`."
           }
         }
+      },
+      "AutoApplyReviewStatus": {
+        "type": "string",
+        "enum": [
+          "tailoring",
+          "pending_review",
+          "approved",
+          "blocked",
+          "declined",
+          "failed",
+          "tailor_failed"
+        ],
+        "description": "The candidate-facing status of a live auto-apply attempt (autoapply.Status)."
+      },
+      "AutoApplyUnmappedField": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "required",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "description": "A question the attempt could not answer. The attempt's internal error text is never here."
       },
       "BanRequest": {
         "type": "object",
@@ -18363,24 +18507,10 @@
         "type": "object",
         "properties": {
           "country": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "string"
           },
           "city": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "string"
           }
         },
         "description": "The current single place: an ISO country code and a free-text city."
@@ -20590,43 +20720,22 @@
         ],
         "properties": {
           "countries": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "regions": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "cities": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "description": "Where the CV says the caller IS, as the location dictionary resolved it. Read-only."
@@ -21706,30 +21815,16 @@
         "type": "object",
         "properties": {
           "regions": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "countries": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "description": "A geographic reach: regions and/or ISO country codes. Empty means worldwide."
@@ -21965,9 +22060,11 @@
             "description": "The ledger, newest first."
           },
           "stage_suggestion": {
+            "$ref": "#/components/schemas/StageSuggestion",
             "description": "The stage the newest classified message implies; absent when there is nothing to offer."
           },
           "auto_apply": {
+            "$ref": "#/components/schemas/AutoApplyReviewInfo",
             "description": "The caller's live auto-apply attempt for this job; absent when none exists."
           }
         },
@@ -22704,7 +22801,7 @@
             "format": "int64"
           },
           "reason": {
-            "type": "string"
+            "$ref": "#/components/schemas/JobReportReason"
           },
           "details": {
             "type": "string"
@@ -22713,7 +22810,7 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/JobReportStatus"
           },
           "review_reason": {
             "type": "string"
@@ -22751,6 +22848,17 @@
           }
         }
       },
+      "JobReportReason": {
+        "type": "string",
+        "enum": [
+          "no_response",
+          "not_relevant",
+          "spam",
+          "fraud",
+          "other"
+        ],
+        "description": "The closed reason vocabulary (internal/engage/report validReasons and the CHECK on job_reports)."
+      },
       "JobReportRequest": {
         "type": "object",
         "properties": {
@@ -22765,6 +22873,14 @@
             "type": "string"
           }
         }
+      },
+      "JobReportStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "resolved",
+          "dismissed"
+        ]
       },
       "JobSearchMeta": {
         "type": "object",
@@ -22935,52 +23051,29 @@
       },
       "LocationPreferences": {
         "type": "object",
+        "required": [
+          "remote",
+          "base",
+          "relocation"
+        ],
         "properties": {
           "work_modes": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "remote": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/GeoSet"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/GeoSet"
           },
           "base": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BaseLocation"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/BaseLocation"
           },
           "relocation": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Relocation"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Relocation"
           }
         },
-        "description": "Where and how the caller wants to work. Every member is optional on a save; an\nentirely empty block clears it. Echoed back normalised, with `remote`, `base` and\n`relocation` always present."
+        "description": "Where and how the caller wants to work, as it is stored and echoed back: normalised,\nwith `remote`, `base` and `relocation` always present and empty lists left out. Every\nmember is optional on a save, and an entirely empty block clears it."
       },
       "MailFollowUpDraft": {
         "type": "object",
@@ -23873,7 +23966,7 @@
             "format": "int64"
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/NotificationKind"
           },
           "title": {
             "type": "string"
@@ -23892,6 +23985,10 @@
             ]
           },
           "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationDigestJob"
+            },
             "description": "The stored snapshot of a multi-job digest; left out for every other kind."
           },
           "created_at": {
@@ -23919,6 +24016,49 @@
             ]
           }
         }
+      },
+      "NotificationDigestJob": {
+        "type": "object",
+        "required": [
+          "title",
+          "company",
+          "slug"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "description": "One job of a multi-job digest, as recorded at delivery (notify.SnapshotJob)."
+      },
+      "NotificationKind": {
+        "type": "string",
+        "enum": [
+          "subscription_digest",
+          "reminder",
+          "nudge_follow_up",
+          "nudge_interview_prep",
+          "nudge_job_closed",
+          "nudge_auto_apply_submitted",
+          "nudge_auto_apply_blocked",
+          "nudge_auto_apply_failed",
+          "auto_apply_tailor_ready",
+          "auto_apply_ready_for_review",
+          "auto_apply_tailoring_failed",
+          "buddy_mock_booked",
+          "buddy_mock_cancelled",
+          "buddy_mock_reminder",
+          "buddy_reaction",
+          "buddy_message",
+          "buddy_invitation"
+        ],
+        "description": "What a `user_notifications` row can be about. The column is free text; these are the kinds\nthe engines write (notify, reminder, nudge, buddy, messaging, auto-apply), plus\n`auto_apply_tailor_ready`, which only historical rows carry."
       },
       "NotificationListMeta": {
         "type": "object",
@@ -24513,7 +24653,7 @@
         ],
         "properties": {
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/ProcessReportKind"
           },
           "count": {
             "type": "integer",
@@ -24522,6 +24662,13 @@
           }
         },
         "description": "What a person reported about a company's hiring process."
+      },
+      "ProcessReportKind": {
+        "type": "string",
+        "enum": [
+          "ai_interview"
+        ],
+        "description": "What a candidate can report about a company's hiring (vocab.CompanyProcessReportKindValues)."
       },
       "ProcessReportRequest": {
         "type": "object",
@@ -24549,95 +24696,46 @@
         ],
         "properties": {
           "specializations": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "skills": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "seniorities": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "excluded_skills": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "excluded_sources": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "job_languages": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "excluded_companies": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "location_preferences": {
             "description": "What the caller asserted, shaped like LocationPreferences, sent exactly as stored;\nnull when they set none."
@@ -25139,7 +25237,7 @@
             "format": "int64"
           },
           "subject_type": {
-            "type": "string"
+            "$ref": "#/components/schemas/ThreadSubjectType"
           },
           "subject_slug": {
             "type": "string"
@@ -25158,7 +25256,7 @@
             "format": "int64"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/ThreadStatus"
           },
           "created_at": {
             "type": "string",
@@ -25486,55 +25584,30 @@
       },
       "Relocation": {
         "type": "object",
+        "required": [
+          "open"
+        ],
         "properties": {
           "open": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "boolean"
           },
           "regions": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "countries": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "cities": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "description": "The willingness to move. Open with empty targets means anywhere."
@@ -26464,6 +26537,15 @@
           }
         }
       },
+      "SilenceState": {
+        "type": "string",
+        "enum": [
+          "active",
+          "silent",
+          "unconfirmed"
+        ],
+        "description": "Where an application sits against the silence thresholds of its stage (internal/job/silence)."
+      },
       "SiteHealth": {
         "type": "object",
         "required": [
@@ -26820,6 +26902,27 @@
             "type": "string"
           }
         }
+      },
+      "StageSuggestion": {
+        "type": "object",
+        "required": [
+          "stage",
+          "signal",
+          "email_id"
+        ],
+        "properties": {
+          "stage": {
+            "type": "string"
+          },
+          "signal": {
+            "type": "string"
+          },
+          "email_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "An offer to move the application to the stage its newest classified message implies."
       },
       "StatusProvider": {
         "type": "object",
@@ -27634,8 +27737,7 @@
         ],
         "properties": {
           "talent_network_visibility": {
-            "type": "string",
-            "description": "`off` or `anonymous`."
+            "$ref": "#/components/schemas/TalentNetworkVisibility"
           },
           "talent_handle": {
             "type": "string",
@@ -27645,7 +27747,14 @@
             "type": "boolean",
             "description": "Whether the catalogue shows the member right now."
           }
-        },
+        }
+      },
+      "TalentNetworkVisibility": {
+        "type": "string",
+        "enum": [
+          "off",
+          "anonymous"
+        ],
         "description": "The caller's own place in the Talent Network."
       },
       "TalentNetworkVisibilityUpdate": {
@@ -27706,7 +27815,7 @@
             "format": "int64"
           },
           "subject_type": {
-            "type": "string"
+            "$ref": "#/components/schemas/ThreadSubjectType"
           },
           "subject_slug": {
             "type": "string"
@@ -27725,15 +27834,14 @@
             "format": "int64"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/ThreadStatus"
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
-        },
-        "description": "The author is the persona handle, \"AI\" for a system reply or \"[deleted]\" once the account is gone."
+        }
       },
       "ThreadClosed": {
         "type": "object",
@@ -27747,7 +27855,7 @@
             "format": "int64"
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/ThreadStatus"
           }
         }
       },
@@ -27840,6 +27948,22 @@
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         }
+      },
+      "ThreadStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed"
+        ],
+        "description": "A thread is open until a moderator closes it."
+      },
+      "ThreadSubjectType": {
+        "type": "string",
+        "enum": [
+          "company",
+          "job"
+        ],
+        "description": "The author is the persona handle, \"AI\" for a system reply or \"[deleted]\" once the account is gone."
       },
       "ThreadWithReplies": {
         "type": "object",
@@ -28099,7 +28223,7 @@
           "silence_state": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/SilenceState"
               },
               {
                 "type": "null"
@@ -28131,7 +28255,7 @@
             ]
           },
           "auto_apply_status": {
-            "type": "string",
+            "$ref": "#/components/schemas/AutoApplyReviewStatus",
             "description": "The status of this job's live auto-apply attempt; absent when it has none."
           }
         }

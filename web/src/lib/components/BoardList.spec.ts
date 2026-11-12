@@ -33,6 +33,7 @@ afterEach(() => {
 
 const row = (n: number): BoardItem => ({
   id: `app-${n}`,
+  added_to_board_at: null,
   company_slug: 'acme',
   role_title: `Role ${n}`,
   job: null,

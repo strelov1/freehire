@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -19,11 +18,15 @@ import (
 // then left out of the answer).
 func notificationOut(id int64, kind, title, body string, publicSlug pgtype.Text, jobs json.RawMessage, createdAt, readAt pgtype.Timestamptz) apigen.Notification {
 	out := apigen.Notification{
-		ID: id, Kind: kind, Title: title, Body: body,
+		ID: id, Kind: apigen.NotificationKind(kind), Title: title, Body: body,
 		PublicSlug: nilString(nil),
-		Jobs:       jx.Raw(jobs),
 		CreatedAt:  nilDateTime(pgconv.TimePtr(createdAt)),
 		ReadAt:     nilDateTime(pgconv.TimePtr(readAt)),
+	}
+	// Written by notify.JobsSnapshot, so the stored JSON is always this shape; a NULL or a
+	// literal null leaves the field out.
+	if len(jobs) > 0 {
+		_ = json.Unmarshal(jobs, &out.Jobs)
 	}
 	if publicSlug.Valid {
 		out.PublicSlug = nilString(&publicSlug.String)

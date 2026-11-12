@@ -10,6 +10,7 @@ vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }
 
 const card = (n: number): BoardItem => ({
   id: `app-${n}`,
+  added_to_board_at: null,
   company_slug: 'acme',
   role_title: `Role ${n}`,
   job: null,

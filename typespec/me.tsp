@@ -5,7 +5,12 @@ using Http;
 namespace Freehire;
 
 model AgentPermissions {
-  /** Whether an agent acting for the account may submit applications. Absent reads as false. */
+  /** Whether an agent acting for the account may submit applications. */
+  agents_may_apply: boolean;
+}
+
+model AgentPermissionsUpdate {
+  /** Absent reads as false. */
   agents_may_apply?: boolean;
 }
 
@@ -31,7 +36,7 @@ op getAgentPermissions(): Data<AgentPermissions> | Problem;
 @tag("Account")
 @route("/me/agent-permissions")
 @put
-op setAgentPermissions(@body body: AgentPermissions): Data<AgentPermissions> | Problem;
+op setAgentPermissions(@body body: AgentPermissionsUpdate): Data<AgentPermissions> | Problem;
 
 /** With a session or an API key. Zeroes when the gateway cannot be read. */
 @tag("Account")

@@ -160,6 +160,7 @@
         excluded_skills: [],
         excluded_sources: [],
         excluded_companies: [],
+        job_languages: [],
         derived_location: null,
         cv: null,
         created_at: null,

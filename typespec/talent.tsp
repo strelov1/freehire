@@ -125,9 +125,13 @@ op getTalentPhoto(@path handle: string): {
 } | Problem;
 
 /** The caller's own place in the Talent Network. */
+enum TalentNetworkVisibility {
+  off,
+  anonymous,
+}
+
 model TalentNetworkMembership {
-  /** `off` or `anonymous`. */
-  talent_network_visibility: string;
+  talent_network_visibility: TalentNetworkVisibility;
 
   /** The handle in the member's public URL, once they have one. */
   talent_handle?: string;

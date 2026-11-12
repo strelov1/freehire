@@ -1,7 +1,5 @@
 import type { components } from '#lib/generated/api.js';
 import type { Job } from '../generated/contracts';
-import type { TimelineEvent } from './experience';
-import type { AutoApplyReviewInfo } from './tracking';
 
 /** The classification/link overlay an inbox email carries: its classified status
  *  and, when resolved, the linked application (slug + company) or a pending
@@ -30,34 +28,12 @@ export type MailRecallResult = components['schemas']['MailRecallResult'];
  *  Present only when the two disagree and the candidate has not already answered — mail
  *  never settles an application by itself, and this is how that rule is stated rather
  *  than left to be inferred from a stage that did not move. */
-export interface StageSuggestion {
-  stage: string;
-  signal: string;
-  email_id: number;
-}
+export type StageSuggestion = components['schemas']['StageSuggestion'];
 
 /** The caller's application for one job slug, with the emails linked to it. */
-export interface TrackedApplication {
+export type TrackedApplication = Omit<components['schemas']['InboxApplicationDetail'], 'job'> & {
+  /** The job in the shared wire shape; raw in the contract, whose Job type is generated from Go. */
   job: Job;
-  viewed_at: string | null;
-  saved_at: string | null;
-  applied_at: string | null;
-  stage?: string;
-  notes?: string;
-  /** When the caller last recorded chasing this application, or null for never. */
-  followed_up_at: string | null;
-  /** When somebody last opened a CV sent for this application. Outside the silence derivation:
-   *  a recruiter reading a CV is not a reply. */
-  cv_opened_at: string | null;
-  emails: ApplicationEmail[];
-  stage_suggestion?: StageSuggestion;
-  /** The application's history from the ledger, newest first — what happened to it, as
-   *  against the marks on the posting the listing row carries. Empty when nothing has. */
-  events: TimelineEvent[];
-  /** The caller's live auto-apply attempt for this job, absent when none exists
-   *  (openspec/changes/auto-apply-review-tracking). The drawer's own approve/decline
-   *  banner reads this. */
-  auto_apply?: AutoApplyReviewInfo;
-}
+};
 
 export type FollowUpDraft = components['schemas']['MailFollowUpDraft'];

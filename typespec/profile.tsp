@@ -10,34 +10,34 @@ namespace Freehire;
 
 /** A geographic reach: regions and/or ISO country codes. Empty means worldwide. */
 model GeoSet {
-  regions?: string[] | null;
-  countries?: string[] | null;
+  regions?: string[];
+  countries?: string[];
 }
 
 /** The current single place: an ISO country code and a free-text city. */
 model BaseLocation {
-  country?: string | null;
-  city?: string | null;
+  country?: string;
+  city?: string;
 }
 
 /** The willingness to move. Open with empty targets means anywhere. */
 model Relocation {
-  open?: boolean | null;
-  regions?: string[] | null;
-  countries?: string[] | null;
-  cities?: string[] | null;
+  open: boolean;
+  regions?: string[];
+  countries?: string[];
+  cities?: string[];
 }
 
 /**
- * Where and how the caller wants to work. Every member is optional on a save; an
- * entirely empty block clears it. Echoed back normalised, with `remote`, `base` and
- * `relocation` always present.
+ * Where and how the caller wants to work, as it is stored and echoed back: normalised,
+ * with `remote`, `base` and `relocation` always present and empty lists left out. Every
+ * member is optional on a save, and an entirely empty block clears it.
  */
 model LocationPreferences {
-  work_modes?: string[] | null;
-  remote?: GeoSet | null;
-  base?: BaseLocation | null;
-  relocation?: Relocation | null;
+  work_modes?: string[];
+  remote: GeoSet;
+  base: BaseLocation;
+  relocation: Relocation;
 }
 
 /** The profile as saved. */
@@ -94,19 +94,19 @@ model ProfileCV {
 
 /** Where the CV says the caller IS, as the location dictionary resolved it. Read-only. */
 model DerivedLocation {
-  countries: string[] | null;
-  regions: string[] | null;
-  cities: string[] | null;
+  countries: string[];
+  regions: string[];
+  cities: string[];
 }
 
 model Profile {
-  specializations: string[] | null;
-  skills: string[] | null;
-  seniorities: string[] | null;
-  excluded_skills: string[] | null;
-  excluded_sources: string[] | null;
-  job_languages: string[] | null;
-  excluded_companies: string[] | null;
+  specializations: string[];
+  skills: string[];
+  seniorities: string[];
+  excluded_skills: string[];
+  excluded_sources: string[];
+  job_languages: string[];
+  excluded_companies: string[];
 
   /**
    * What the caller asserted, shaped like LocationPreferences, sent exactly as stored;

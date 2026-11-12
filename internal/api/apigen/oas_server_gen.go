@@ -1656,7 +1656,7 @@ type Handler interface {
 	// Session cookie only: an agent must not grant itself the right to apply.
 	//
 	// PUT /me/agent-permissions
-	SetAgentPermissions(ctx context.Context, req *AgentPermissions) (*SetAgentPermissionsOK, error)
+	SetAgentPermissions(ctx context.Context, req *AgentPermissionsUpdate) (*SetAgentPermissionsOK, error)
 	// SetCVAppearanceDefaults implements setCVAppearanceDefaults operation.
 	//
 	// PUT /me/cv-appearance-defaults
