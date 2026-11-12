@@ -35,7 +35,7 @@ func (h *assistantHandlers) reportMCPTools() []assistant.Tool {
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"slug": map[string]any{"type": "string", "description": "The vacancy's public_slug."},
+				"slug": vacancySlugProperty,
 				"reason": map[string]any{
 					"type": "string",
 					"enum": []string{"no_response", "not_relevant", "spam", "fraud", "other"},
@@ -58,15 +58,15 @@ func (h *assistantHandlers) reportMCPTools() []assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if in.Slug == "" {
-				return nil, fiber.NewError(fiber.StatusBadRequest, "slug is required")
+			if err := requireSlug("slug", in.Slug); err != nil {
+				return nil, err
 			}
 			if h.reports == nil {
 				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "job reports are not available")
 			}
 			jobID, err := h.reports.queries.GetJobIDBySlug(ctx, in.Slug)
 			if errors.Is(err, pgx.ErrNoRows) {
-				return nil, fiber.NewError(fiber.StatusNotFound, fmt.Sprintf("no vacancy with slug %q — use the public_slug from a search result", in.Slug))
+				return nil, jobNotFound(in.Slug)
 			}
 			if err != nil {
 				return nil, fmt.Errorf("could not look up the vacancy: %w", err)

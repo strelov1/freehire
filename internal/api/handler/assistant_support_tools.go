@@ -128,7 +128,7 @@ func (h *assistantHandlers) myAccountTool() assistant.Tool {
 		Description: "Read the signed-in user's own plan: the tier, when it is valid until, how it was paid " +
 			"(card, app store or granted), their API plan if they hold one (a separate subscription from Pro), what each plan costs today, what is left of today's allowances, how many support messages are left today and their latest plan activity. " +
 			"Call it before saying anything about their plan, payment or limits. Takes no arguments.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Schema: assistant.EmptySchema,
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
 			if h.plans == nil || h.queries == nil {
 				return nil, errors.New("account information is unavailable")

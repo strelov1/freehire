@@ -91,7 +91,7 @@ func (h *assistantHandlers) planMCPTool(origin string) assistant.Tool {
 			"nothing remaining refuses new starts until resets_at; an unenforced limit is only measured, so it " +
 			"carries no remaining. An unlimited feature still has a high fair-use cap. " +
 			"Prices and payments are not shown; they are on plan_url. Takes no arguments.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
+		Schema: assistant.ClosedEmptySchema,
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
 			if h.plans == nil || h.queries == nil {
 				return nil, errors.New("plan information is unavailable")

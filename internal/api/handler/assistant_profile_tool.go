@@ -7,7 +7,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
@@ -85,14 +84,14 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 			"`cv` repeats it under its old name. The experience section reports the SHAPE of what they have told us — " +
 			"which roles we know and how much evidence each carries — not the achievements " +
 			"themselves. Takes no arguments.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Schema: assistant.EmptySchema,
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
 			// Registered for every session, so it is registered on every assembly — and the
 			// assistant's constructor takes each surface as a pointer that may be nil (it
 			// guards cvH itself). Without this the absence is a nil dereference inside the
 			// SSE stream's goroutine, which the candidate reads as a turn that died.
 			if h.profile == nil || h.profile.userProfile == nil {
-				return nil, fiber.NewError(fiber.StatusServiceUnavailable, "the saved profile is not available")
+				return nil, unavailable("the saved profile")
 			}
 			profile, err := h.profile.userProfile.Get(ctx, userID)
 			if errors.Is(err, userprofile.ErrNotFound) {

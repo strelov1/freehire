@@ -521,12 +521,8 @@ func (h *assistantHandlers) listSubscriptionsTool(origin string) assistant.Tool 
 			"salary_min/max; `other` holds website-only filters an update keeps), whether it is paused, and " +
 			"each delivery channel with its active flag, pending matches and last delivery. delivery_schedule " +
 			"is the account-wide digest timing every alert shares. Effect: none, read-only.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
-		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
-			var in struct{}
-			if err := assistant.DecodeArgs(raw, &in); err != nil {
-				return nil, err
-			}
+		Schema: assistant.EmptySchema,
+		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
 			all, err := h.alerts(ctx, userID)
 			if err != nil {
 				return nil, err
@@ -539,7 +535,7 @@ func (h *assistantHandlers) listSubscriptionsTool(origin string) assistant.Tool 
 				all = []alert{}
 			}
 			return map[string]any{"alerts": all, "delivery_schedule": schedule}, nil
-		},
+		}),
 	}
 }
 

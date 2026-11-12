@@ -238,12 +238,8 @@ func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 			"existing bullet) and missing_gap (a real gap — ASK the candidate before writing anything). " +
 			"job.requirements is a separate, fuller list: everything the posting itself asks for, in its own " +
 			"words, including what the CV already covers — those are worth keeping prominent, not editing away.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
-		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
-			var in struct{}
-			if err := assistant.DecodeArgs(raw, &in); err != nil {
-				return nil, err
-			}
+		Schema: assistant.EmptySchema,
+		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
 			// A tool error is a sentence the model can act on; a nil dereference here is a
 			// panic inside the SSE writer's goroutine, where Registry.Call's error path
 			// cannot reach it and Fiber's recover is not listening. Production always wires
@@ -260,7 +256,7 @@ func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 				return nil, err
 			}
 			return h.withBankEvidence(ctx, userID, base), nil
-		},
+		}),
 	}
 }
 
@@ -277,12 +273,8 @@ func (h *assistantHandlers) cvJobMatchTool(cvID uuid.UUID, jobID int64) assistan
 		Description: "Read how well the CV currently scores against this vacancy — Requirements Coverage, " +
 			"Keyword Match, Job Title Match, Seniority Fit — recomputed fresh from what the CV says right now, " +
 			"not the cached fit analysis. Call it after a batch of edits to see their effect; no model call.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
-		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
-			var in struct{}
-			if err := assistant.DecodeArgs(raw, &in); err != nil {
-				return nil, err
-			}
+		Schema: assistant.EmptySchema,
+		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
 			// Same reason cv_context guards: a nil dereference here is a panic on the SSE
 			// writer's goroutine, which takes the process down rather than one request.
 			// This tool needs both the CV surface and the vacancy read.
@@ -315,7 +307,7 @@ func (h *assistantHandlers) cvJobMatchTool(cvID uuid.UUID, jobID int64) assistan
 				return map[string]any{"available": false, "reason": "nothing about this vacancy could be matched automatically"}, nil
 			}
 			return map[string]any{"available": true, "score": score}, nil
-		},
+		}),
 	}
 }
 
@@ -331,12 +323,8 @@ func (h *assistantHandlers) cvPageCountTool(cvID uuid.UUID) assistant.Tool {
 			"this after a batch of edits that might have pushed the CV over its page target — trimming or " +
 			"tightening bullets does not always shorten a page the way it looks like it would from the text " +
 			"alone. No model call.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
-		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
-			var in struct{}
-			if err := assistant.DecodeArgs(raw, &in); err != nil {
-				return nil, err
-			}
+		Schema: assistant.EmptySchema,
+		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
 			rec, err := h.cv.cvStore.GetForModel(ctx, cvID, userID)
 			if err != nil {
 				return nil, cvToolError(err)
@@ -350,7 +338,7 @@ func (h *assistantHandlers) cvPageCountTool(cvID uuid.UUID) assistant.Tool {
 				return map[string]any{"available": false, "reason": "could not render the CV right now"}, nil
 			}
 			return map[string]any{"available": true, "pages": pages}, nil
-		},
+		}),
 	}
 }
 
@@ -498,18 +486,14 @@ func (h *assistantHandlers) cvGetTool(cvID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name:        "cv_get",
 		Description: "Read the current CV document being tailored, so edits are grounded in what it actually says.",
-		Schema:      map[string]any{"type": "object", "properties": map[string]any{}},
-		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
-			var in struct{}
-			if err := assistant.DecodeArgs(raw, &in); err != nil {
-				return nil, err
-			}
+		Schema:      assistant.EmptySchema,
+		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
 			rec, err := h.cv.cvStore.GetForModel(ctx, cvID, userID)
 			if err != nil {
 				return nil, cvToolError(err)
 			}
 			return map[string]any{"title": rec.Title, "template_id": rec.TemplateID, "document": rec.Document}, nil
-		},
+		}),
 	}
 }
 

@@ -69,7 +69,7 @@ func (h *assistantHandlers) inboxOverviewTool() assistant.Tool {
 			"broad (\"what's happening with my applications?\") — it is one cheap call that tells you which " +
 			"inbox_search to make, instead of reading messages until an answer appears. It returns no message " +
 			"text at all.",
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Schema: assistant.EmptySchema,
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
 			svc, err := h.mailService()
 			if err != nil {
@@ -395,7 +395,7 @@ func (h *assistantHandlers) inboxRecordApplicationTool() assistant.Tool {
 // surface was not wired up.
 func (h *assistantHandlers) mailService() (*inbox.Service, error) {
 	if h.mail == nil || h.mail.inbox == nil {
-		return nil, errors.New("mail is not available")
+		return nil, unavailable("mail")
 	}
 	return h.mail.inbox, nil
 }

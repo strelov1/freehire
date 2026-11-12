@@ -74,13 +74,11 @@ func (h *assistantHandlers) requireAgentsMayApply(ctx context.Context, userID in
 // toolError turns what the shared methods return into a sentence an agent can act on, and
 // keeps its kind: a *fiber.Error already reads as its message, and its status is what the MCP
 // metrics and logs classify a refusal by (observability.ErrorCode). Rebuilding each one as a
-// bare error counted every refusal as internal_error. pgx.ErrNoRows from a slug lookup and the
-// plan's refusals are the bare errors they return that mean something to the caller.
+// bare error counted every refusal as internal_error. The plan's refusals are the bare errors
+// they return that mean something to the caller.
 func toolError(err error) error {
 	var refused *autoApplyAllowanceRefusal
 	switch {
-	case errors.Is(err, pgx.ErrNoRows):
-		return fiber.NewError(fiber.StatusNotFound, "no job with this slug")
 	// The day's auto-apply allowance is spent: the 402 the start route answers it with.
 	case errors.As(err, &refused):
 		return fiber.NewError(fiber.StatusPaymentRequired, err.Error())
@@ -92,49 +90,38 @@ func toolError(err error) error {
 	return err
 }
 
-var jobSlugProperty = map[string]any{"type": "string", "description": "The vacancy's slug, as search_jobs and my_jobs return it."}
-
-var jobSlugSchema = map[string]any{
-	"type":                 "object",
-	"properties":           map[string]any{"job_slug": jobSlugProperty},
-	"required":             []string{"job_slug"},
-	"additionalProperties": false,
+// slugToolError is toolError for a call that looked a vacancy up by slug: a row that does not
+// exist is jobNotFound.
+func slugToolError(slug string, err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return jobNotFound(slug)
+	}
+	return toolError(err)
 }
 
-type jobSlugArgs struct {
-	JobSlug string `json:"job_slug"`
-}
+var jobSlugSchema = slugSchema("job_slug")
 
-// slugTool builds a tool whose only argument is a job slug. gated decides whether it needs
-// the account switch.
-func (h *assistantHandlers) slugTool(name, title, description string, effect assistant.Effect, gated bool,
+// autoApplySlugTool is slugTool over job_slug for the auto-apply tools. gated decides whether
+// it needs the account switch.
+func (h *assistantHandlers) autoApplySlugTool(name, title, description string, effect assistant.Effect, gated bool,
 	run func(ctx context.Context, userID int64, slug string) (any, error)) assistant.Tool {
-	return assistant.Tool{
-		Name: name, Title: title, Description: description, Effect: effect, Schema: jobSlugSchema,
-		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
-			var in jobSlugArgs
-			if err := assistant.DecodeArgs(raw, &in); err != nil {
-				return nil, err
-			}
-			if in.JobSlug == "" {
-				return nil, fiber.NewError(fiber.StatusBadRequest, "job_slug is required")
-			}
+	return slugTool("job_slug", name, title, description, effect, false,
+		func(ctx context.Context, userID int64, slug string) (any, error) {
 			if gated {
 				if err := h.requireAgentsMayApply(ctx, userID); err != nil {
 					return nil, err
 				}
 			}
-			out, err := run(ctx, userID, in.JobSlug)
+			out, err := run(ctx, userID, slug)
 			if err != nil {
-				return nil, toolError(err)
+				return nil, slugToolError(slug, err)
 			}
 			return out, nil
-		},
-	}
+		})
 }
 
 func (h *assistantHandlers) autoApplyStartTool() assistant.Tool {
-	return h.slugTool("auto_apply_start", "Start an automatic application",
+	return h.autoApplySlugTool("auto_apply_start", "Start an automatic application",
 		"Start applying to a vacancy automatically on the person's behalf. freehire tailors their CV "+
 			"to the vacancy, checks the employer's application form against their saved answers, and "+
 			"waits for a review (auto_apply_review) before submitting. Spends one of today's auto-apply "+
@@ -151,7 +138,7 @@ func (h *assistantHandlers) autoApplyStartTool() assistant.Tool {
 }
 
 func (h *assistantHandlers) autoApplyGetTool() assistant.Tool {
-	return h.slugTool("auto_apply_get", "Check an automatic application",
+	return h.autoApplySlugTool("auto_apply_get", "Check an automatic application",
 		"Read where one automatic application stands: its status, the questions it stopped on, the "+
 			"answers still missing before submission, its full history, and what to do next. Call it "+
 			"again to follow progress — history only grows.",
@@ -159,7 +146,7 @@ func (h *assistantHandlers) autoApplyGetTool() assistant.Tool {
 }
 
 func (h *assistantHandlers) autoApplyRetryTool() assistant.Tool {
-	return h.slugTool("auto_apply_retry", "Retry an automatic application",
+	return h.autoApplySlugTool("auto_apply_retry", "Retry an automatic application",
 		"Restart an automatic application that stopped — on an unanswered question, after repeated "+
 			"errors, or because the CV could not be tailored — or refresh one awaiting review so newly "+
 			"saved answers are reflected. Answer the open questions with answer_bank_save or "+
@@ -175,7 +162,7 @@ func (h *assistantHandlers) autoApplyRetryTool() assistant.Tool {
 }
 
 func (h *assistantHandlers) autoApplyCancelTool() assistant.Tool {
-	return h.slugTool("auto_apply_cancel", "Cancel an automatic application",
+	return h.autoApplySlugTool("auto_apply_cancel", "Cancel an automatic application",
 		"Withdraw an automatic application that has not been submitted. Refused while it is being "+
 			"submitted. Its history is kept.",
 		assistant.EffectOverwrites, true,
@@ -198,7 +185,7 @@ func (h *assistantHandlers) autoApplyReviewTool() assistant.Tool {
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"job_slug": jobSlugProperty,
+				"job_slug": vacancySlugProperty,
 				"decision": map[string]any{"type": "string", "enum": []string{autoApplyReviewApproved, autoApplyReviewDeclined}},
 			},
 			"required":             []string{"job_slug", "decision"},
@@ -212,15 +199,15 @@ func (h *assistantHandlers) autoApplyReviewTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if in.JobSlug == "" {
-				return nil, fiber.NewError(fiber.StatusBadRequest, "job_slug is required")
+			if err := requireSlug("job_slug", in.JobSlug); err != nil {
+				return nil, err
 			}
 			if err := h.requireAgentsMayApply(ctx, userID); err != nil {
 				return nil, err
 			}
 			job, row, err := h.autoApplyEntryForSlug(ctx, userID, in.JobSlug)
 			if err != nil {
-				return nil, toolError(err)
+				return nil, slugToolError(in.JobSlug, err)
 			}
 			entry := autoApplyEntry{ID: row.ID, UserID: userID, JobID: job.ID, TailoredCvID: row.TailoredCvID, ReviewDecision: row.ReviewDecision}
 			if err := h.decideAutoApplyReview(ctx, entry, in.Decision); err != nil {
@@ -344,7 +331,7 @@ func (h *assistantHandlers) autoApplyListTool() assistant.Tool {
 			"anything last happened to it, and the ones submitted in the last 30 days. Use auto_apply_get " +
 			"for one attempt's questions and history.",
 		Effect: assistant.EffectReads,
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
+		Schema: assistant.ClosedEmptySchema,
 		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
 			if err := assistant.DecodeArgs(raw, &struct{}{}); err != nil {
 				return nil, err
@@ -402,7 +389,7 @@ func (h *assistantHandlers) answerBankListTool() assistant.Tool {
 			"(\"Why do you want to work here?\", \"Desired start date?\"). Automatic applications reuse " +
 			"them on every form that asks the same question.",
 		Effect: assistant.EffectReads,
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
+		Schema: assistant.ClosedEmptySchema,
 		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
 			if err := assistant.DecodeArgs(raw, &struct{}{}); err != nil {
 				return nil, err
@@ -491,7 +478,7 @@ func (h *assistantHandlers) screeningAnswersGetTool() assistant.Tool {
 			"employer's privacy / personal-data terms being accepted for them on every application. A " +
 			"missing field has not been stated.",
 		Effect: assistant.EffectReads,
-		Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
+		Schema: assistant.ClosedEmptySchema,
 		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
 			if err := assistant.DecodeArgs(raw, &struct{}{}); err != nil {
 				return nil, err

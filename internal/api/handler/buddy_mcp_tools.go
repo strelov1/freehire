@@ -45,24 +45,11 @@ func mockToolError(ctx context.Context, err error) error {
 	return mockError(err)
 }
 
-var emptyToolSchema = map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
-
 var timezoneProperty = map[string]any{"type": "string", "description": "IANA time zone the times are shown in, e.g. Europe/Berlin. An unknown or missing zone falls back to UTC; the result names the zone it used."}
 
 var clockProperties = map[string]any{
 	"start": map[string]any{"type": "string", "description": "Start of the window, HH:MM in the person's mock time zone."},
 	"end":   map[string]any{"type": "string", "description": "End of the window, HH:MM; 24:00 means until midnight."},
-}
-
-// noArgs runs a tool that takes no arguments, still refusing unexpected ones.
-func noArgs(run func(ctx context.Context, userID int64) (any, error)) func(context.Context, int64, json.RawMessage) (any, error) {
-	return func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
-		var in struct{}
-		if err := assistant.DecodeArgs(raw, &in); err != nil {
-			return nil, err
-		}
-		return run(ctx, userID)
-	}
 }
 
 func (h *buddyHandlers) status(ctx context.Context, userID int64) (buddyStatusResponse, error) {
@@ -79,10 +66,10 @@ func (h *buddyHandlers) statusTool() assistant.Tool {
 		Description: "Whether the person is a member of freehire's interview buddy network, and their " +
 			"anonymous handle there. Members are known to each other only by handle. Membership is needed " +
 			"for every mock-interview action.",
-		Schema: emptyToolSchema,
+		Schema: assistant.ClosedEmptySchema,
 		// No Touch, unlike GET /me/buddies: a read-only tool an agent may poll must not
 		// rewrite the member's ranking keys on every call.
-		Run: noArgs(func(ctx context.Context, userID int64) (any, error) {
+		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
 			return h.status(ctx, userID)
 		}),
 	}
@@ -94,8 +81,8 @@ func (h *buddyHandlers) joinTool() assistant.Tool {
 		Description: "Join freehire's interview buddy network under a generated anonymous handle, or rejoin " +
 			"under the old one. Members can book and host 60-minute mock interviews with each other. " +
 			"Returns the membership status.",
-		Schema: emptyToolSchema,
-		Run: noArgs(func(ctx context.Context, userID int64) (any, error) {
+		Schema: assistant.ClosedEmptySchema,
+		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
 			if _, err := h.buddy.Join(ctx, userID); err != nil {
 				return nil, err
 			}
@@ -110,8 +97,8 @@ func (h *buddyHandlers) leaveTool() assistant.Tool {
 		Description: "Leave the interview buddy network. Closes the person's buddy conversations and cancels " +
 			"every upcoming mock interview they host or attend; the other participants are told. Rejoining " +
 			"later restores the same handle.",
-		Schema: emptyToolSchema,
-		Run: noArgs(func(ctx context.Context, userID int64) (any, error) {
+		Schema: assistant.ClosedEmptySchema,
+		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
 			if err := h.buddy.Leave(ctx, userID); err != nil {
 				return nil, buddyError(err)
 			}
@@ -244,8 +231,8 @@ func (h *buddyHandlers) mockListTool() assistant.Tool {
 		Description: "The person's own mock interviews, upcoming and past, as host or guest: id, role, the " +
 			"counterpart's handle, times, topic, status, the meeting link while confirmed, whether it can " +
 			"still be cancelled, and the reviews.",
-		Schema: emptyToolSchema,
-		Run: noArgs(func(ctx context.Context, userID int64) (any, error) {
+		Schema: assistant.ClosedEmptySchema,
+		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
 			list, err := h.mocks.List(ctx, userID)
 			if err != nil {
 				return nil, mockToolError(ctx, err)
@@ -303,8 +290,8 @@ func (h *buddyHandlers) mockScheduleGetTool() assistant.Tool {
 		Description: "The person's own mock-interview hosting setup: settings (time zone, meeting link, " +
 			"topics offered, paused) or null before they were first saved, and the schedule rules — weekly " +
 			"rules by weekday (0 = Sunday) and dated overrides, each with the id needed to delete it.",
-		Schema: emptyToolSchema,
-		Run: noArgs(func(ctx context.Context, userID int64) (any, error) {
+		Schema: assistant.ClosedEmptySchema,
+		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
 			s, ok, err := h.mocks.Settings(ctx, userID)
 			if err != nil {
 				return nil, mockToolError(ctx, err)
