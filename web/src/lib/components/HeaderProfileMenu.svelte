@@ -105,8 +105,9 @@
       <div
         role="menu"
         aria-label="Profile"
+        style:max-height="calc(100dvh - 20 * var(--spacing))"
         {@attach menuNav({ onclose: closeSelf })}
-        class="absolute right-0 top-full z-50 mt-2 flex w-64 flex-col rounded-md border border-border bg-background py-1 shadow-lg"
+        class="absolute right-0 top-full z-50 mt-2 flex w-64 flex-col overflow-y-auto overscroll-contain rounded-md border border-border bg-background py-1 shadow-lg"
       >
         <WorkspaceSwitcher rowClass={rowBase} onselect={() => (open = false)} />
 

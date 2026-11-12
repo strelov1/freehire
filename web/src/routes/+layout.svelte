@@ -86,8 +86,8 @@
   );
 
   // The account area (/my/*) is an app-like surface with its own sidebar nav — the
-  // marketing footer's link columns don't belong there, but a compact one (just
-  // copyright/cookie settings/social/open-source note) still anchors the page.
+  // compact footer with essential site links and the shared bottom bar anchors
+  // the page in place of the marketing footer's link columns.
   // The full-bleed account routes (the assistant chat, CV tailoring — see
   // isFullBleedRoute) size themselves to the exact viewport height and get no
   // footer at all, same as /onboarding and /signin, both their own full-screen
