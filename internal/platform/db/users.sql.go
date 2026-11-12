@@ -874,6 +874,17 @@ func (q *Queries) ListUserBlobKeys(ctx context.Context, id int64) ([]pgtype.Text
 	return items, nil
 }
 
+const lockUserResumeUpload = `-- name: LockUserResumeUpload :exec
+SELECT pg_advisory_xact_lock(hashtextextended('resume_upload:' || $1::bigint::text, 0))
+`
+
+// Serializes one user's CV uploads for the transaction, so a first-CV-only upload cannot
+// see no CV while another upload is between its blob write and its pointer write.
+func (q *Queries) LockUserResumeUpload(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, lockUserResumeUpload, userID)
+	return err
+}
+
 const markOnboardingComplete = `-- name: MarkOnboardingComplete :exec
 UPDATE users
 SET onboarding_completed_at = now()

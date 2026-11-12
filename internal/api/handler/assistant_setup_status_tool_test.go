@@ -33,8 +33,8 @@ func stepNamed(t *testing.T, s setupStatus, name string) setupStep {
 	return setupStep{}
 }
 
-// next_step is the first step not done, in the order a person gets value from them: a CV,
-// then the preferences it suggests, then an alert, then the optional auto-apply prerequisites.
+// next_step is the first core step not done, in the order a person gets value from them: a
+// CV, then the preferences it suggests, then an alert.
 func TestSetupStatus_NextStepIsTheFirstNotDone(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -49,8 +49,9 @@ func TestSetupStatus_NextStepIsTheFirstNotDone(t *testing.T) {
 		{"no specializations", func(f *setupFacts) { f.specializations = false }, "preferences", "update_profile", ""},
 		{"no skills", func(f *setupFacts) { f.skills = false }, "preferences", "update_profile", ""},
 		{"no active alert", func(f *setupFacts) { f.activeAlerts = 0 }, "alerts", "subscribe", ""},
-		{"free plan", func(f *setupFacts) { f.tier = plan.TierFree }, "paid_plan", "", "/pricing"},
-		{"agents may not apply", func(f *setupFacts) { f.agentsMayApply = false }, "agents_may_apply", "", "/my/integrations/api-keys"},
+		// The optional auto-apply steps are never the next step: once the core is done, search.
+		{"free plan", func(f *setupFacts) { f.tier = plan.TierFree }, "done", "search_jobs", ""},
+		{"agents may not apply", func(f *setupFacts) { f.agentsMayApply = false }, "done", "search_jobs", ""},
 		{"done", func(*setupFacts) {}, "done", "search_jobs", ""},
 	}
 	for _, tc := range cases {
@@ -93,8 +94,14 @@ func TestSetupStatus_CompleteIgnoresOptionalSteps(t *testing.T) {
 	if !s.Complete {
 		t.Error("complete = false with only optional steps left")
 	}
-	if !stepNamed(t, s, "paid_plan").Optional || !stepNamed(t, s, "agents_may_apply").Optional {
-		t.Error("auto-apply prerequisites are not marked optional")
+	if paid := stepNamed(t, s, "paid_plan"); !paid.Optional || paid.Done {
+		t.Errorf("paid_plan = %+v, want visible as optional and not done", paid)
+	}
+	if !stepNamed(t, s, "agents_may_apply").Optional {
+		t.Error("agents_may_apply is not marked optional")
+	}
+	if s.NextStep.Tool != "search_jobs" {
+		t.Errorf("next_step = %+v, want search_jobs once the core is done", s.NextStep)
 	}
 	f.activeAlerts = 0
 	if buildSetupStatus(f, testMCPOrigin).Complete {

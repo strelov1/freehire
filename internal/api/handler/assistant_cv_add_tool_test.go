@@ -70,8 +70,8 @@ func TestAddCV_StoresTheTextAndSuggestsProfileValues(t *testing.T) {
 	if len(res.Suggested.Specializations) == 0 {
 		t.Errorf("suggested specializations empty, want the backend category")
 	}
-	if res.Next == "" {
-		t.Error("result carries no next sentence")
+	if !strings.Contains(res.Next, "update_profile") || !strings.Contains(res.Next, "added to the profile's skills") {
+		t.Errorf("next = %q, want it to say confirmed values are saved and found skills are added", res.Next)
 	}
 }
 
@@ -115,6 +115,26 @@ func TestAddCV_StorageDisabled(t *testing.T) {
 	_, err := runAddCV(t, addCVHandlers(nil, &fakeResumeRepo{}), addCVText)
 	if fiberStatus(err) != fiber.StatusServiceUnavailable {
 		t.Fatalf("err = %v, want 503", err)
+	}
+}
+
+// The tool takes the person's own CV and says so; it never invites the agent to write one, and
+// it is honest that found skills reach the profile.
+func TestAddCV_DescriptionTakesOnlyThePersonsCV(t *testing.T) {
+	tool := (&assistantHandlers{}).addCVTool(testMCPOrigin)
+	for _, banned := range []string{"told you", "dictat", "changes no profile"} {
+		if strings.Contains(tool.Description, banned) {
+			t.Errorf("description contains %q: %s", banned, tool.Description)
+		}
+	}
+	for _, want := range []string{"verbatim", "Never compose", "added to the profile's skills"} {
+		if !strings.Contains(tool.Description, want) {
+			t.Errorf("description lacks %q: %s", want, tool.Description)
+		}
+	}
+	text := tool.Schema["properties"].(map[string]any)["text"].(map[string]any)
+	if text["minLength"] != cvTextMinRunes || text["maxLength"] != cvTextMaxRunes {
+		t.Errorf("text schema = %v, want minLength %d and maxLength %d", text, cvTextMinRunes, cvTextMaxRunes)
 	}
 }
 

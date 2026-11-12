@@ -22,6 +22,12 @@ func (f failingUploadRepo) Set(context.Context, int64, string) error {
 	return errors.New("database unavailable")
 }
 
+// WithUploadLock hands fn this wrapper, not the embedded fake, so the failing Set is the one
+// the upload reaches.
+func (f failingUploadRepo) WithUploadLock(_ context.Context, _ int64, fn func(Repository) error) error {
+	return fn(f)
+}
+
 type failingReadbackRepo struct{ *fakeRepo }
 
 func (f failingReadbackRepo) Get(context.Context, int64) (db.GetUserResumeRow, error) {

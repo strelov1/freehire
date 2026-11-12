@@ -43,14 +43,20 @@ A narrow (`cv`) key is a 403.
 For a person who connects before uploading a CV (`internal/api/handler/assistant_setup_status_tool.go`,
 `assistant_cv_add_tool.go`, openspec/changes/mcp-cv-setup). `get_setup_status` derives, on every
 call and from existing state only, the steps `cv` → `preferences` → `alerts` → optional
-`paid_plan` and `agents_may_apply`, and ONE `next_step` (a tool or a page URL). `add_cv` takes
-the CV as text (100–30,000 characters) through `storeCV`, the website's own upload use case —
-so the stored document, the free extraction (`plan.WithFreeAI`, set inside the derivation) and
-the experience import are a paste on the profile page. Its atoms are `cv_import`: the text IS
-the stored CV they trace to, and a flag the agent set could not honestly tell a pasted CV from
-dictated history (`stated_in_chat` needs a transcript freehire holds). It refuses an account
-that already has a CV — replacing the person's document stays a website act — and returns
-suggested `specializations`/`seniorities`/`skills` that `update_profile` saves once confirmed.
+`paid_plan` and `agents_may_apply`, and ONE `next_step` (a tool or a page URL) — always a core
+step; once those are done it is `search_jobs`. `add_cv` takes the person's OWN CV, verbatim, as
+text (100–30,000 characters) — a CV they pasted or a CV file they gave the agent, never one an
+agent composed or summarised; a person with no CV is sent to `/my/profile`. It goes through
+`storeFirstCV`, the website's own upload use case — so the stored document, the free extraction
+(`plan.WithFreeAI`, set inside the derivation) and the experience import are a paste on the
+profile page, including its skills merge: once the work history is read, skills found in it are
+added to the profile's skills (removable with `update_profile`). Its atoms are `cv_import`,
+which is honest only because the text is the person's CV document. It refuses an account that
+already has a CV (409) — replacing the person's document stays a website act — under the
+per-user upload lock (`resume.Store.PutIfAbsent`, `pg_advisory_xact_lock`) every upload takes,
+so a concurrent website upload or second call cannot slip between the check and the write. It
+returns suggested `specializations`/`seniorities`/`skills` that `update_profile` saves once
+confirmed.
 
 OAuth clients use `suggest_dictionary_term` when a user-requested specialization, skill
 or company industry cannot be resolved; zero search hits alone do not prove a gap.

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/candidate/resume"
 )
 
 // cvTextMaxRunes and cvTextMinRunes bound the CV add_cv accepts. The ceiling is room for a
@@ -48,34 +50,38 @@ type addCVResult struct {
 	Next       string           `json:"next"`
 }
 
-const addCVNext = "Nothing was saved to the profile. Show the person every suggested value, ask which " +
-	"to keep, and save only the ones they confirm with update_profile. Their work history is read " +
-	"in the background; get_setup_status reports when that is done."
+const addCVNext = "Show the person every suggested value, ask which to keep, and save only the ones " +
+	"they confirm with update_profile. Their work history is read in the background; skills found " +
+	"in it are then added to the profile's skills, and can be removed with update_profile. " +
+	"get_setup_status reports when reading is done."
 
-// addCVTool stores CV text for an account that has none, through storeCV — the website's own
-// upload use case, so the document, the free background extraction and the experience-bank
-// import (cv_import: the text IS the stored CV each atom traces to) are the same as a paste on
-// the profile page. See openspec/changes/mcp-cv-setup/design.md for why it refuses to replace.
+// addCVTool stores a CV the person supplied, as text, for an account that has none, through
+// storeFirstCV — the website's own upload use case, so the document, the free background
+// extraction and the experience-bank import (cv_import: the text IS the stored CV each atom
+// traces to) are the same as a paste on the profile page. It takes only the person's own CV,
+// never one an agent composed: a model-written history banked as cv_import would read as the
+// candidate's own words. See openspec/changes/mcp-cv-setup/design.md.
 func (h *assistantHandlers) addCVTool(origin string) assistant.Tool {
 	profileURL := strings.TrimSuffix(origin, "/") + "/my/profile"
 	return assistant.Tool{
 		Name:   "add_cv",
 		Title:  "Add my CV",
 		Effect: assistant.EffectAdds,
-		Description: "Give freehire the person's CV as text, for an account that has no CV yet. Send the " +
-			"CV exactly as the person provided it — text they pasted, or the content of a file they " +
-			"shared that you can read — or the work history, education and skills they told you, in " +
-			"their words. Never invent, embellish or summarise: it is stored as their CV and its work " +
-			"history is recorded as theirs. Between 100 and 30000 characters. Refused when the account " +
-			"already has a CV; it is replaced on the website. Returns the profile values the CV " +
-			"suggests (specializations, seniorities, skills) for the person to confirm; it changes no " +
-			"profile setting.",
+		Description: "Store the person's own CV, as text, for an account that has no CV yet. Pass the CV " +
+			"they supplied verbatim — text they pasted, or the content of a CV file they gave you. Never " +
+			"compose, summarise or embellish a CV: it is stored as theirs and its work history is recorded " +
+			"as their own words. If they have no CV, they upload or write one on the website instead. " +
+			"Between 100 and 30000 characters. Refused when the account already has a CV; it is replaced " +
+			"on the website. Returns the profile values the CV suggests (specializations, seniorities, " +
+			"skills) for the person to confirm. Once the work history has been read in the background, " +
+			"skills found in it are added to the profile's skills, as with an upload on the website.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"text": map[string]any{
 					"type":        "string",
-					"description": "The CV text, as the person gave it.",
+					"description": "The person's CV text, verbatim.",
+					"minLength":   cvTextMinRunes,
 					"maxLength":   cvTextMaxRunes,
 				},
 			},
@@ -95,25 +101,22 @@ func (h *assistantHandlers) addCVTool(origin string) assistant.Tool {
 func (h *assistantHandlers) addCV(ctx context.Context, userID int64, text, profileURL string) (any, error) {
 	switch n := utf8.RuneCountInString(text); {
 	case n < cvTextMinRunes:
-		return nil, fmt.Errorf("%w: text is too short to be a CV; ask the person for their work history, education and skills", assistant.ErrInvalidArguments)
+		return nil, fmt.Errorf("%w: text is too short to be a CV; pass the person's CV verbatim, or send them to %s to add one",
+			assistant.ErrInvalidArguments, profileURL)
 	case n > cvTextMaxRunes:
 		return nil, fmt.Errorf("%w: text is longer than %d characters", assistant.ErrInvalidArguments, cvTextMaxRunes)
 	}
 	if h.resume == nil || !h.resume.resume.Enabled() {
 		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "CV storage is not available")
 	}
-	current, err := h.resume.resume.Status(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if current.Present {
+	meta, err := h.resume.storeFirstCV(ctx, userID, resumeUpload{
+		Data: []byte(text), ContentType: "text/plain; charset=utf-8", Text: text,
+	})
+	if errors.Is(err, resume.ErrAlreadyStored) {
 		return nil, fiber.NewError(fiber.StatusConflict, "this account already has a CV. "+
 			"A CV is replaced only on the website, at "+profileURL+", so the document the person chose "+
 			"is never overwritten from a chat")
 	}
-	meta, err := h.resume.storeCV(ctx, userID, resumeUpload{
-		Data: []byte(text), ContentType: "text/plain; charset=utf-8", Text: text,
-	})
 	if err != nil {
 		return nil, err
 	}

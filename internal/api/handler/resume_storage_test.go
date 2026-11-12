@@ -113,6 +113,10 @@ func (r *fakeResumeRepo) Clear(_ context.Context, _ int64) error {
 	return nil
 }
 
+func (r *fakeResumeRepo) WithUploadLock(_ context.Context, _ int64, fn func(resume.Repository) error) error {
+	return fn(r)
+}
+
 func (r *fakeResumeRepo) SetExtractPending(_ context.Context, _ int64, _ time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -168,6 +168,10 @@ func (r *fakeRepo) SetExtractFailed(_ context.Context, userID int64, detail stri
 	return nil
 }
 
+func (r *fakeRepo) WithUploadLock(_ context.Context, _ int64, fn func(Repository) error) error {
+	return fn(r)
+}
+
 func (r *fakeRepo) SetExtractPending(_ context.Context, userID int64, uploadedAt time.Time) error {
 	if cur, ok := r.uploadedAt[userID]; !ok || !cur.Valid || !cur.Time.Equal(uploadedAt) {
 		return nil
@@ -220,6 +224,21 @@ func TestStore_PutStatusTextRoundTrip(t *testing.T) {
 	}
 	if text != "Go and PostgreSQL" {
 		t.Errorf("Text = %q, want the stored text", text)
+	}
+}
+
+// PutIfAbsent stores a first résumé and refuses a second, leaving the first in place.
+func TestStore_PutIfAbsentStoresOnlyAFirstResume(t *testing.T) {
+	s := New(newFakeBlobs(), newFakeRepo())
+	ctx := context.Background()
+	if _, err := s.PutIfAbsent(ctx, 7, "text/plain", []byte("first")); err != nil {
+		t.Fatalf("first PutIfAbsent: %v", err)
+	}
+	if _, err := s.PutIfAbsent(ctx, 7, "text/plain", []byte("second")); !errors.Is(err, ErrAlreadyStored) {
+		t.Fatalf("second PutIfAbsent err = %v, want ErrAlreadyStored", err)
+	}
+	if text, _ := s.Text(ctx, 7); text != "first" {
+		t.Errorf("stored text = %q, want the first", text)
 	}
 }
 

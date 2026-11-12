@@ -196,6 +196,11 @@ SELECT resume_object_key, resume_uploaded_at
 FROM users
 WHERE id = $1;
 
+-- name: LockUserResumeUpload :exec
+-- Serializes one user's CV uploads for the transaction, so a first-CV-only upload cannot
+-- see no CV while another upload is between its blob write and its pointer write.
+SELECT pg_advisory_xact_lock(hashtextextended('resume_upload:' || sqlc.arg(user_id)::bigint::text, 0));
+
 -- name: SetUserResume :exec
 -- Record (or replace) the user's stored-résumé pointer, stamping the upload time.
 -- Owner-scoped by id; the object key is derived from the id, never client input.

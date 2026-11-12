@@ -333,13 +333,24 @@ func (h *resumeHandlers) PutResume(c *fiber.Ctx) error {
 }
 
 // storeCV is the CV upload use case every entry point shares — PutResume, the extract path
-// and the MCP add_cv tool: store the bytes, then derive the structured résumé in the
+// and (as storeFirstCV) the MCP add_cv tool: store the bytes, then derive the structured résumé in the
 // background. The derivation must not block the caller (best-effort, off the response path),
 // and it is stamped with this upload's time so it is served only while it describes the
 // current CV. Its model call is marked free (plan.WithFreeAI) inside the derivation itself,
 // so no entry point has to remember to.
 func (h *resumeHandlers) storeCV(ctx context.Context, userID int64, up resumeUpload) (resume.Meta, error) {
-	meta, err := h.resume.Put(ctx, userID, up.ContentType, up.Data)
+	return h.storeAndDerive(ctx, userID, up, h.resume.Put)
+}
+
+// storeFirstCV is storeCV for an account with no CV yet, and resume.ErrAlreadyStored for one
+// that has one — decided under the per-user lock every upload takes.
+func (h *resumeHandlers) storeFirstCV(ctx context.Context, userID int64, up resumeUpload) (resume.Meta, error) {
+	return h.storeAndDerive(ctx, userID, up, h.resume.PutIfAbsent)
+}
+
+func (h *resumeHandlers) storeAndDerive(ctx context.Context, userID int64, up resumeUpload,
+	put func(context.Context, int64, string, []byte) (resume.Meta, error)) (resume.Meta, error) {
+	meta, err := put(ctx, userID, up.ContentType, up.Data)
 	if err != nil {
 		return resume.Meta{}, err
 	}

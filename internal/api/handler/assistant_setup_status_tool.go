@@ -145,7 +145,7 @@ func (h *assistantHandlers) setupFacts(ctx context.Context, userID int64) (setup
 
 // buildSetupStatus orders the steps the way a person gets value from them — a CV, the
 // preferences it suggests, an alert, then the optional auto-apply prerequisites — and names
-// the first one not done.
+// the first core one not done.
 func buildSetupStatus(f setupFacts, origin string) setupStatus {
 	page := func(path string) string { return strings.TrimSuffix(origin, "/") + path }
 	type candidate struct {
@@ -157,9 +157,9 @@ func buildSetupStatus(f setupFacts, origin string) setupStatus {
 	cv := candidate{step: setupStep{Name: "cv", Done: f.cvPresent}}
 	switch {
 	case !f.cvPresent && f.cvStorage:
-		cv.next = setupNext{Tool: "add_cv", URL: page("/my/profile"), Do: "Ask the person for their CV: " +
-			"they can paste it, share a file you can read, or tell you their work history, education and " +
-			"skills. Submit it in their own words with add_cv, or they can upload a PDF at the URL."}
+		cv.next = setupNext{Tool: "add_cv", URL: page("/my/profile"), Do: "Ask the person for their CV. " +
+			"If they paste it or give you a CV file, pass it verbatim with add_cv. If they have no CV, " +
+			"send them to the URL to upload or write one; never compose one for them."}
 	case !f.cvPresent:
 		cv.next = setupNext{URL: page("/my/profile"), Do: "Ask the person to upload their CV on their profile page."}
 	case f.cvReading == resume.ExtractStatusFailed:
@@ -209,21 +209,20 @@ func buildSetupStatus(f setupFacts, origin string) setupStatus {
 		})
 	}
 
+	// Only a core step is ever the next one: the optional ones stay visible in steps, and once
+	// the core is done the person is pointed at a search rather than at a plan.
 	out := setupStatus{Complete: true, NextStep: setupNext{Step: "done", Tool: "search_jobs",
 		Do: "Setup is complete. Search for jobs that fit the person's profile."}}
-	picked := false
 	for _, c := range steps {
 		out.Steps = append(out.Steps, c.step)
-		if c.step.Done {
+		if c.step.Done || c.step.Optional {
 			continue
 		}
-		if !c.step.Optional {
-			out.Complete = false
-		}
-		if !picked {
-			out.NextStep, picked = c.next, true
+		if out.Complete {
+			out.NextStep = c.next
 			out.NextStep.Step = c.step.Name
 		}
+		out.Complete = false
 	}
 	return out
 }

@@ -21,7 +21,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/dict/location"
@@ -52,6 +54,8 @@ var (
 	// ErrNotStored is returned when the user has no stored résumé (the handler maps it to
 	// a conflict — the SPA prompts a single upload).
 	ErrNotStored = errors.New("resume: no résumé stored")
+	// ErrAlreadyStored is PutIfAbsent's refusal: the user already has a stored résumé.
+	ErrAlreadyStored = errors.New("resume: a résumé is already stored")
 )
 
 // Meta reports whether a résumé is stored and, if so, when it was uploaded.
@@ -82,6 +86,10 @@ type Repository interface {
 	SetCandidateContacts(ctx context.Context, userID int64, blob []byte) error
 	SetExtractFailed(ctx context.Context, userID int64, detail string, uploadedAt time.Time) error
 	SetExtractPending(ctx context.Context, userID int64, uploadedAt time.Time) error
+	// WithUploadLock runs fn holding the user's CV-upload lock, passing the repository fn's
+	// reads and writes must go through so they share it. Every upload takes it, which is
+	// what makes PutIfAbsent's presence check and the write after it one step.
+	WithUploadLock(ctx context.Context, userID int64, fn func(Repository) error) error
 }
 
 // Geography is where the candidate is, as derived from their CV and stored. Countries is
@@ -142,15 +150,40 @@ func (s *Store) Enabled() bool {
 // user's key and the pointer is stamped with the upload time. contentType is recorded on
 // the object for a correct future download. Returns the resulting metadata.
 func (s *Store) Put(ctx context.Context, userID int64, contentType string, data []byte) (Meta, error) {
+	return s.put(ctx, userID, contentType, data, false)
+}
+
+// PutIfAbsent stores the user's résumé only when none is stored, and returns
+// ErrAlreadyStored otherwise. The check and the write hold the same per-user lock every
+// upload takes, so two first uploads cannot both see no résumé.
+func (s *Store) PutIfAbsent(ctx context.Context, userID int64, contentType string, data []byte) (Meta, error) {
+	return s.put(ctx, userID, contentType, data, true)
+}
+
+func (s *Store) put(ctx context.Context, userID int64, contentType string, data []byte, firstOnly bool) (Meta, error) {
 	if !s.Enabled() {
 		return Meta{}, ErrStorageDisabled
 	}
-	key := blobstore.ResumeKey(userID)
-	if err := s.blobs.Put(ctx, key, contentType, bytes.NewReader(data), int64(len(data))); err != nil {
-		observability.RecordCVUpload(false)
+	err := s.repo.WithUploadLock(ctx, userID, func(repo Repository) error {
+		if firstOnly {
+			ptr, err := repo.Get(ctx, userID)
+			if err != nil {
+				return err
+			}
+			if metaFromPointer(ptr).Present {
+				return ErrAlreadyStored
+			}
+		}
+		key := blobstore.ResumeKey(userID)
+		if err := s.blobs.Put(ctx, key, contentType, bytes.NewReader(data), int64(len(data))); err != nil {
+			return err
+		}
+		return repo.Set(ctx, userID, key)
+	})
+	if errors.Is(err, ErrAlreadyStored) {
 		return Meta{}, err
 	}
-	if err := s.repo.Set(ctx, userID, key); err != nil {
+	if err != nil {
 		observability.RecordCVUpload(false)
 		return Meta{}, err
 	}
@@ -544,11 +577,36 @@ func trimPartialRune(s string) string {
 }
 
 // QueriesRepository adapts *db.Queries to Repository, mapping the pointer to the nullable
-// users columns.
-type QueriesRepository struct{ q *db.Queries }
+// users columns. pool is what WithUploadLock opens its transaction on.
+type QueriesRepository struct {
+	q    *db.Queries
+	pool *pgxpool.Pool
+}
 
 // NewQueriesRepository wraps *db.Queries as a Repository.
 func NewQueriesRepository(q *db.Queries) *QueriesRepository { return &QueriesRepository{q: q} }
+
+// WithUploadLocks gives the repository the pool WithUploadLock needs. Every wiring that
+// stores CVs must set it; one that only reads them (a worker) has nothing to serialise.
+func (r *QueriesRepository) WithUploadLocks(pool *pgxpool.Pool) *QueriesRepository {
+	r.pool = pool
+	return r
+}
+
+// WithUploadLock runs fn in a transaction holding the user's upload lock, with a repository
+// bound to that transaction. Without a pool it runs fn unlocked.
+func (r *QueriesRepository) WithUploadLock(ctx context.Context, userID int64, fn func(Repository) error) error {
+	if r.pool == nil {
+		return fn(r)
+	}
+	return pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		if err := q.LockUserResumeUpload(ctx, userID); err != nil {
+			return err
+		}
+		return fn(&QueriesRepository{q: q})
+	})
+}
 
 func (r *QueriesRepository) Get(ctx context.Context, userID int64) (db.GetUserResumeRow, error) {
 	return r.q.GetUserResume(ctx, userID)

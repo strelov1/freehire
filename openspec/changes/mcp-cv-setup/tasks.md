@@ -20,3 +20,11 @@
 ## 5. Docs + ship
 - [x] 5.1 `internal/api/mcpapp/AGENTS.md`.
 - [ ] 5.2 gofmt, vet (incl. integration tag), tests, size check, PR.
+
+## 6. Review fixes
+- [x] 6.1 `add_cv` takes only the person's own CV, verbatim; no composed history anywhere.
+- [x] 6.2 Honest wording on the skills merge the import performs, as on the website.
+- [x] 6.3 Atomic first-CV admission: `resume.Store.PutIfAbsent` under a per-user advisory
+      lock every upload takes; concurrent integration test.
+- [x] 6.4 `minLength` in the input schema.
+- [x] 6.5 `next_step` never pushes the optional steps; search once the core is done.

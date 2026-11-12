@@ -8,8 +8,11 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,11 +29,43 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-func TestMCPAccountSetup_AddsAFirstCVAndRefusesAReplacement(t *testing.T) {
+// setupFixture is a signed-in MCP account server over a real Postgres, with the CV store wired
+// as production wires it (the per-user upload lock included) over in-memory blobs.
+type setupFixture struct {
+	userID int64
+	blobs  *lockedResumeBlobs
+	store  *resume.Store
+	url    string
+	token  string
+}
+
+// lockedResumeBlobs is fakeResumeBlobs made safe for concurrent writers, with a write as slow as
+// an object-store round trip: that is the window between the presence check and the pointer
+// write two first uploads would both slip through without the upload lock.
+type lockedResumeBlobs struct {
+	mu sync.Mutex
+	*fakeResumeBlobs
+}
+
+func (b *lockedResumeBlobs) Put(ctx context.Context, key, ct string, r io.Reader, n int64) error {
+	time.Sleep(100 * time.Millisecond)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.fakeResumeBlobs.Put(ctx, key, ct, r, n)
+}
+
+func (b *lockedResumeBlobs) object(key string) string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return string(b.objs[key])
+}
+
+func newSetupFixture(t *testing.T, email string) setupFixture {
+	t.Helper()
 	ctx := context.Background()
 	pool := startPostgres(t)
 	queries := db.New(pool)
-	userID := seedOAuthUser(t, pool, "mcp-setup@example.test")
+	userID := seedOAuthUser(t, pool, email)
 	seedOAuthTestClient(t, queries, "client-mcp-setup", []string{"http://127.0.0.1:9999/callback"})
 	version, err := queries.GetUserTokenVersion(ctx, userID)
 	if err != nil {
@@ -45,8 +80,8 @@ func TestMCPAccountSetup_AddsAFirstCVAndRefusesAReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blobs := newFakeResumeBlobs()
-	store := resume.New(blobs, resume.NewQueriesRepository(queries))
+	blobs := &lockedResumeBlobs{fakeResumeBlobs: newFakeResumeBlobs()}
+	store := resume.New(blobs, resume.NewQueriesRepository(queries).WithUploadLocks(pool))
 	profiles := userprofile.New(userprofile.NewQueriesRepository(queries))
 	assistants := &assistantHandlers{
 		queries: queries,
@@ -57,17 +92,51 @@ func TestMCPAccountSetup_AddsAFirstCVAndRefusesAReplacement(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	mountMCPAccount(app.Group("/api/v1"), middleware{}, assistants, newMCPAppHandlers(nil, nil, queries, testMCPOrigin))
 	server := httptest.NewServer(adaptor.FiberApp(app))
-	defer server.Close()
+	t.Cleanup(server.Close)
+	// The background derivation has no extractor here and records a failure; wait for it so
+	// the goroutine is done with the database before the test tears it down.
+	t.Cleanup(func() { waitForExtractOutcome(t, store, userID) })
+	return setupFixture{userID: userID, blobs: blobs, store: store, url: server.URL + "/api/v1/mcp/account", token: token}
+}
 
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(ctx,
+func (f setupFixture) connect(t *testing.T) *mcp.ClientSession {
+	t.Helper()
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(context.Background(),
 		&mcp.StreamableClientTransport{
-			Endpoint:   server.URL + "/api/v1/mcp/account",
-			HTTPClient: &http.Client{Transport: bearerRoundTripper{token: token}},
+			Endpoint:   f.url,
+			HTTPClient: &http.Client{Transport: bearerRoundTripper{token: f.token}},
 		}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = session.Close() }()
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
+func waitForExtractOutcome(t *testing.T, store *resume.Store, userID int64) {
+	t.Helper()
+	ctx := context.Background()
+	if meta, err := store.Status(ctx, userID); err != nil || !meta.Present {
+		return
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		row, err := store.StructuredRow(ctx, userID)
+		if err == nil && resume.ResolveExtractStatus(row).Status == resume.ExtractStatusFailed {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Error("the background CV derivation never finished")
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestMCPAccountSetup_AddsAFirstCVAndRefusesAReplacement(t *testing.T) {
+	ctx := context.Background()
+	f := newSetupFixture(t, "mcp-setup@example.test")
+	session, userID, store, blobs := f.connect(t), f.userID, f.store, f.blobs
 
 	call := func(name string, args map[string]any) *mcp.CallToolResult {
 		t.Helper()
@@ -112,19 +181,7 @@ func TestMCPAccountSetup_AddsAFirstCVAndRefusesAReplacement(t *testing.T) {
 	if meta, err := store.Status(ctx, userID); err != nil || !meta.Present {
 		t.Fatalf("stored CV status = %+v, %v; want present", meta, err)
 	}
-	// The background derivation has no extractor here and records a failure; wait for it so
-	// the goroutine is done with the database before the test tears it down.
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		row, err := store.StructuredRow(ctx, userID)
-		if err == nil && resume.ResolveExtractStatus(row).Status == resume.ExtractStatusFailed {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the background CV derivation never finished")
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	waitForExtractOutcome(t, store, userID)
 	if after := status(); after.NextStep.Tool == "add_cv" {
 		t.Errorf("after add_cv, next_step still asks for a CV: %+v", after.NextStep)
 	}
@@ -133,7 +190,55 @@ func TestMCPAccountSetup_AddsAFirstCVAndRefusesAReplacement(t *testing.T) {
 	if !res.IsError {
 		t.Fatal("a second add_cv replaced the stored CV")
 	}
-	if got := string(blobs.objs[blobstore.ResumeKey(userID)]); got != addCVText {
+	if got := blobs.object(blobstore.ResumeKey(userID)); got != addCVText {
 		t.Errorf("stored CV = %q, want the first text", got)
+	}
+}
+
+// Two first CVs at once: the upload lock makes the presence check and the write one step, so
+// exactly one is stored and the other is refused as already having a CV.
+func TestMCPAccountSetup_ConcurrentFirstCVsStoreExactlyOne(t *testing.T) {
+	f := newSetupFixture(t, "mcp-setup-race@example.test")
+	texts := []string{addCVText + " First.", addCVText + " Second."}
+	sessions := []*mcp.ClientSession{f.connect(t), f.connect(t)}
+	results := make([]*mcp.CallToolResult, len(texts))
+	var wg sync.WaitGroup
+	for i := range texts {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			res, err := sessions[i].CallTool(context.Background(), &mcp.CallToolParams{
+				Name: "add_cv", Arguments: map[string]any{"text": texts[i]},
+			})
+			if err != nil {
+				t.Errorf("add_cv %d: %v", i, err)
+				return
+			}
+			results[i] = res
+		}(i)
+	}
+	wg.Wait()
+	if t.Failed() {
+		return
+	}
+	stored := -1
+	for i, res := range results {
+		if res.IsError {
+			continue
+		}
+		if stored >= 0 {
+			t.Fatal("both concurrent add_cv calls stored a CV")
+		}
+		stored = i
+	}
+	if stored < 0 {
+		t.Fatal("neither concurrent add_cv call stored a CV")
+	}
+	refused := results[1-stored].Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(refused, "already has a CV") {
+		t.Errorf("refusal = %q, want the already-has-a-CV answer", refused)
+	}
+	if got := f.blobs.object(blobstore.ResumeKey(f.userID)); got != texts[stored] {
+		t.Errorf("stored CV = %q, want the winner's text %q", got, texts[stored])
 	}
 }

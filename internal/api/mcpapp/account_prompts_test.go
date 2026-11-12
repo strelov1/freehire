@@ -76,6 +76,10 @@ func TestAccountPrompts_SetUpWalksTheGuidedSetup(t *testing.T) {
 	if !strings.Contains(text, "confirm") {
 		t.Errorf("set-up prompt does not ask for confirmation: %q", text)
 	}
+	// add_cv takes the person's own CV only; an agent never composes one from a chat.
+	if !strings.Contains(text, "verbatim") || strings.Contains(text, "work history") {
+		t.Errorf("set-up prompt invites a composed CV: %q", text)
+	}
 }
 
 func TestAccountPrompts_FollowTheServedTools(t *testing.T) {

@@ -1,9 +1,12 @@
 ## ADDED Requirements
 
 ### Requirement: A first CV can be added as text over MCP
-The signed-in MCP server SHALL offer an OAuth grant an `add_cv` tool that stores CV text
-through the same use case the website's CV upload uses, and SHALL return the profile values
-the CV suggests without saving them to the profile.
+The signed-in MCP server SHALL offer an OAuth grant an `add_cv` tool that stores the person's
+own CV, passed verbatim as text, through the same use case the website's CV upload uses, and
+SHALL return the profile values the CV suggests. The tool SHALL NOT invite an agent to compose,
+summarise or embellish a CV; a person with no CV is sent to the website. As with a website
+upload, skills found in the work history SHALL be added to the profile's skills once the
+background read finishes, removable afterwards with `update_profile`.
 
 #### Scenario: An account with no CV adds one
 - **WHEN** an account with no stored CV calls `add_cv` with its CV text
@@ -14,6 +17,10 @@ the CV suggests without saving them to the profile.
 - **WHEN** an account with a stored CV calls `add_cv`
 - **THEN** the call is refused, the stored CV is unchanged, and the message names the website
   page where a CV is replaced
+
+#### Scenario: Two first CVs at once
+- **WHEN** two `add_cv` calls for an account with no CV run concurrently
+- **THEN** exactly one CV is stored and the other call is refused as already having a CV
 
 #### Scenario: Text outside the bounds
 - **WHEN** `add_cv` is called with fewer than 100 or more than 30,000 characters
@@ -35,3 +42,8 @@ agents-may-apply switch, and exactly one next step naming a tool or a page.
 #### Scenario: A CV but no preferences
 - **WHEN** an account with a CV and no saved specializations calls `get_setup_status`
 - **THEN** `next_step` names `update_profile`
+
+#### Scenario: Core setup done, no paid plan
+- **WHEN** an account with a CV, preferences and an active alert but no paid plan calls
+  `get_setup_status`
+- **THEN** `next_step` names `search_jobs` and `paid_plan` is listed as an optional step not done
