@@ -221,5 +221,7 @@ func loggableNames(names []string) []string {
 		}
 		out = append(out, name)
 	}
+	// The SDK names rejected properties in map order; sorted, a log line is stable.
+	slices.Sort(out)
 	return out
 }
