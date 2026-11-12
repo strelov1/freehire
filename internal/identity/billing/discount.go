@@ -68,6 +68,20 @@ func (c *client) createCoupon(ctx context.Context, percentOff int32, name, idemp
 	return out.ID, nil
 }
 
+// couponValid reports whether a coupon can still be applied.
+//
+// Asked because the coupon a checkout reuses comes back from an idempotent create, and a
+// replayed create answers with the coupon as it was born, not as it is now.
+func (c *client) couponValid(ctx context.Context, id string) (bool, error) {
+	var out struct {
+		Valid bool `json:"valid"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/coupons/"+url.PathEscape(id), nil, "", &out); err != nil {
+		return false, err
+	}
+	return out.Valid, nil
+}
+
 // createCustomer registers an account with the provider before it has bought anything, and
 // returns the customer id.
 //

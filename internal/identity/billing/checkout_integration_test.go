@@ -22,7 +22,11 @@ type checkoutRouter struct {
 	subscriptions http.HandlerFunc // GET /subscriptions
 
 	checkoutCalled bool
+	checkoutForm   string
 	couponCalled   bool
+	spent          map[string]bool   // coupon ids GET /coupons/{id} reports as no longer valid
+	couponKeys     []string          // Idempotency-Key of every POST /coupons, in order
+	couponByKey    map[string]string // the provider's idempotency: one coupon per key
 	updateCalled   bool
 	updatePath     string
 	updateForm     string
@@ -35,10 +39,24 @@ func (r *checkoutRouter) handler() http.HandlerFunc {
 			r.subscriptions(w, req)
 		case req.URL.Path == "/checkout/sessions":
 			r.checkoutCalled = true
+			_ = req.ParseForm()
+			r.checkoutForm = req.Form.Encode()
 			_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_123"}`))
 		case req.URL.Path == "/coupons":
 			r.couponCalled = true
-			_, _ = w.Write([]byte(`{"id":"co_test"}`))
+			key := req.Header.Get("Idempotency-Key")
+			r.couponKeys = append(r.couponKeys, key)
+			if r.couponByKey == nil {
+				r.couponByKey = map[string]string{}
+			}
+			id, ok := r.couponByKey[key]
+			if !ok || key == "" {
+				id = fmt.Sprintf("co_test%d", len(r.couponByKey)+1)
+				r.couponByKey[key] = id
+			}
+			_, _ = fmt.Fprintf(w, `{"id":%q}`, id)
+		case strings.HasPrefix(req.URL.Path, "/coupons/"):
+			_, _ = fmt.Fprintf(w, `{"valid":%t}`, !r.spent[strings.TrimPrefix(req.URL.Path, "/coupons/")])
 		case strings.HasPrefix(req.URL.Path, "/subscriptions/"):
 			r.updateCalled = true
 			r.updatePath = req.URL.Path
@@ -232,5 +250,69 @@ func TestCheckoutURLAppliesNoDiscountToTheAPIProduct(t *testing.T) {
 	}
 	if applied != (Discount{}) {
 		t.Fatalf("applied discount = %+v, want none", applied)
+	}
+}
+
+// A declined card spends the coupon's one redemption at the provider. The checkout must carry
+// a replacement, not the spent coupon the idempotent create replays — which made every later
+// checkout fail outright.
+func TestCheckoutURLReplacesACouponADeclinedAttemptSpent(t *testing.T) {
+	router := &checkoutRouter{spent: map[string]bool{"co_test1": true}}
+	s, pool := newTieredService(t, router.handler())
+	userID := insertUser(t, pool, "declined-once@example.com")
+
+	offer := Discount{PercentOff: 90, Label: "promo", Key: "promo_k"}
+	_, applied, err := s.CheckoutURL(context.Background(), userID, "", offer)
+	if err != nil {
+		t.Fatalf("CheckoutURL: %v", err)
+	}
+	if want := []string{"promo_k", "promo_k_after_co_test1"}; strings.Join(router.couponKeys, ",") != strings.Join(want, ",") {
+		t.Fatalf("coupon keys = %v, want %v", router.couponKeys, want)
+	}
+	if !strings.Contains(router.checkoutForm, "co_test2") {
+		t.Fatalf("checkout carried %q, want the replacement co_test2", router.checkoutForm)
+	}
+	if applied != offer {
+		t.Fatalf("applied = %+v, want %+v", applied, offer)
+	}
+}
+
+// Two checkouts opened after a decline must share ONE replacement: its single redemption is
+// what stops both from being paid at the discount.
+func TestCheckoutURLSharesOneReplacementAcrossCheckouts(t *testing.T) {
+	router := &checkoutRouter{spent: map[string]bool{"co_test1": true}}
+	s, pool := newTieredService(t, router.handler())
+	userID := insertUser(t, pool, "two-tabs@example.com")
+	offer := Discount{PercentOff: 90, Label: "promo", Key: "promo_t"}
+
+	var forms []string
+	for range 2 {
+		if _, _, err := s.CheckoutURL(context.Background(), userID, "", offer); err != nil {
+			t.Fatalf("CheckoutURL: %v", err)
+		}
+		forms = append(forms, router.checkoutForm)
+	}
+	if len(router.couponByKey) != 2 {
+		t.Fatalf("coupons minted = %v, want the spent one and one replacement", router.couponByKey)
+	}
+	for _, f := range forms {
+		if !strings.Contains(f, "co_test2") {
+			t.Fatalf("a checkout carried %q, want the shared replacement co_test2", f)
+		}
+	}
+}
+
+// A replacement spent by a second decline is itself replaced: the chain is walked to its
+// first usable link.
+func TestCheckoutURLWalksPastASpentReplacement(t *testing.T) {
+	router := &checkoutRouter{spent: map[string]bool{"co_test1": true, "co_test2": true}}
+	s, pool := newTieredService(t, router.handler())
+	userID := insertUser(t, pool, "declined-twice@example.com")
+
+	if _, _, err := s.CheckoutURL(context.Background(), userID, "", Discount{PercentOff: 90, Label: "promo", Key: "promo_w"}); err != nil {
+		t.Fatalf("CheckoutURL: %v", err)
+	}
+	if !strings.Contains(router.checkoutForm, "co_test3") {
+		t.Fatalf("checkout carried %q, want co_test3", router.checkoutForm)
 	}
 }
