@@ -202,8 +202,9 @@ describe('ApiKeysView — creating', () => {
     expect(await screen.findByLabelText('Name')).toBeTruthy();
   });
 
-  it('shows the plaintext token once, after a key is created', async () => {
+  it('keeps a new token available before a potentially failing account refresh', async () => {
     signedIn(true);
+    invalidateAll.mockRejectedValue(new Error('account refresh failed'));
     createApiKey.mockResolvedValue({ ...key, id: 8, name: 'deploy', token: 'plaintext-token-shown-once' });
     render(ApiKeysView);
     await screen.findByText('CI bot');
@@ -218,7 +219,7 @@ describe('ApiKeysView — creating', () => {
     await fireEvent.click(within(openDialog()).getByRole('button', { name: 'Create key' }));
 
     expect(await screen.findByText('plaintext-token-shown-once')).toBeTruthy();
-    await vi.waitFor(() => expect(invalidateAll).toHaveBeenCalledOnce());
+    expect(invalidateAll).not.toHaveBeenCalled();
   });
 });
 
@@ -234,6 +235,19 @@ describe('ApiKeysView — the one-time secret', () => {
     await fireEvent.click(within(openDialog()).getByRole('button', { name: 'Create key' }));
     await screen.findByText('plaintext-token-shown-once');
   }
+
+  it('keeps an uncopied token when another key is revoked before an account refresh', async () => {
+    await createKey();
+    invalidateAll.mockRejectedValue(new Error('account refresh failed'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Revoke CI bot' }));
+    const dialog = openDialog();
+    await fireEvent.input(within(dialog).getByLabelText('Password'), { target: { value: 'hunter2' } });
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke' }));
+
+    await vi.waitFor(() => expect(screen.queryByText('CI bot')).toBeNull());
+    expect(screen.getByText('plaintext-token-shown-once')).toBeTruthy();
+    expect(invalidateAll).not.toHaveBeenCalled();
+  });
 
   it('says a failed copy failed and selects the token for a manual one', async () => {
     await createKey();
@@ -256,6 +270,7 @@ describe('ApiKeysView — the one-time secret', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Yes, dismiss' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Yes, dismiss' }));
     expect(screen.queryByText('plaintext-token-shown-once')).toBeNull();
+    await vi.waitFor(() => expect(invalidateAll).toHaveBeenCalledOnce());
     // The panel took the focused control with it; focus lands on the nearest one left.
     expect(document.activeElement?.textContent?.trim()).toBe('Create key');
   });
