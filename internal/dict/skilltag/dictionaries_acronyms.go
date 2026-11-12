@@ -1,5 +1,7 @@
 package skilltag
 
+import "slices"
+
 // nonCorroboratingPhrases are the phrase canonicals that tag on their own but do NOT
 // vouch for the gated single-word canonicals in ambiguousWords. Every phrase match is
 // otherwise a strong match, and a strong match rescues a weak one — which is right for
@@ -127,7 +129,7 @@ var nonCorroboratingPhrases = func() map[string]bool {
 	// Enablon or Cority is naming a product you administer, the same shape as "Ahrefs"
 	// evidencing an SEO role) and the word aliases osha/epa/nfpa/rcra/hazop, where a
 	// regulator's name is not English prose. Both stay corroborating.
-	for _, p := range occupationalSafetyPhraseAliases {
+	for _, p := range slices.Concat(occupationalSafetyPhraseAliases, industrialMaintenancePhraseAliases) {
 		out[p.canonical] = true
 	}
 	return out
@@ -140,7 +142,12 @@ var nonCorroboratingPhrases = func() map[string]bool {
 // that already exists in the vocabulary — an acronym is another alias, never a new
 // facet value.
 var sharedAcronyms = map[string]string{
-	"ML": "machine-learning",
+	"ML":   "machine-learning",
+	"LOTO": "lockout-tagout",
+	"OEE":  "overall-equipment-effectiveness",
+	"MTBF": "mtbf",
+	"MTTR": "mttr",
+	"HVAC": "hvac",
 }
 
 // resumeAcronyms resolve ONLY when parsing résumés (Parse with WithResumeAcronyms).
@@ -169,6 +176,16 @@ type categoryScopedAcronym struct {
 // and the acronym is the dominant real-world spelling (vs. the spelled-out
 // "retrieval augmented generation" phrase).
 var categoryScopedAcronyms = map[string]categoryScopedAcronym{
+	// MEP also means Member of the European Parliament; qualified physical-system
+	// phrases remain available when the title has no construction category.
+	"MEP": {canonical: "mep", allowedCategories: map[string]bool{
+		"industrial_engineering": true, "engineering_design": true, "architecture": true, "skilled_trades": true,
+	}},
+	// These abbreviations have unrelated software or business meanings outside industrial roles.
+	"RCM": {canonical: "reliability-centered-maintenance", allowedCategories: industrialMaintenanceCategories},
+	"TPM": {canonical: "total-productive-maintenance", allowedCategories: industrialMaintenanceCategories},
+	"APM": {canonical: "asset-performance-management", allowedCategories: industrialMaintenanceCategories},
+	"ППР": {canonical: "preventive-maintenance", allowedCategories: industrialMaintenanceCategories},
 	"RAG": {canonical: "rag", allowedCategories: map[string]bool{"ai_engineering": true, "ml_ai": true}},
 	// Each collides with another meaning in general job text — CSM with Customer
 	// Success Manager, PSM/PMP are short enough to be noise, bare SAFe is the common

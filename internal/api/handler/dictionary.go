@@ -34,7 +34,8 @@ func dictionaryKnown(kind, term string) (bool, error) {
 	case "specialization":
 		return dictclassify.Parse(term).Category != "", nil
 	case "skill":
-		return len(skilltag.Canonicalize([]string{term})) > 0, nil
+		_, known := skilltag.Resolve(term)
+		return known, nil
 	case "industry":
 		return len(industrytag.Canonicalize([]string{term})) > 0, nil
 	}

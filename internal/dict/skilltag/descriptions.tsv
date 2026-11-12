@@ -1119,3 +1119,24 @@ sglang	SGLang is an open-source inference engine and structured generation runti
 ux-design	UX design is the practice of shaping how a product works and feels for its users, covering flows, wireframes and usability.
 hr-operations	HR operations is the administrative side of human resources: employee records, onboarding paperwork, HR systems and process upkeep.
 sla-management	SLA management is the practice of defining, tracking and meeting service level agreements, the response and resolution times promised to customers.
+sap-pm	SAP PM (Plant Maintenance) is the SAP module for planning equipment maintenance, recording work orders and tracking asset history.
+preventive-maintenance	Preventive maintenance schedules inspections and servicing to reduce equipment failures before they occur.
+predictive-maintenance	Predictive maintenance uses equipment condition and performance data to anticipate failures and plan servicing.
+maintenance-planning	Maintenance planning organizes repair tasks, schedules, labor, materials and work orders for equipment and facilities.
+reliability-engineering	Reliability engineering studies failures and equipment performance to improve availability and reduce breakdowns.
+reliability-centered-maintenance	Reliability-centered maintenance (RCM) selects maintenance tasks according to asset functions, failure modes and the consequences of failure.
+condition-monitoring	Condition monitoring tracks equipment measurements and operating condition to identify deterioration and maintenance needs.
+asset-performance-management	Asset performance management (APM) combines asset condition, reliability and maintenance information to improve the performance of physical equipment.
+total-productive-maintenance	Total productive maintenance (TPM) involves operators and maintenance teams in reducing equipment losses and improving production reliability.
+overall-equipment-effectiveness	Overall equipment effectiveness (OEE) measures production equipment performance through availability, operating performance and quality.
+mtbf	Mean time between failures (MTBF) measures the average operating time between failures of a repairable system.
+mttr	Mean time to repair (MTTR) measures the average time required to repair a failed system and restore operation.
+rotating-equipment	Rotating equipment includes machinery such as pumps, compressors and turbines whose moving components require maintenance and reliability management.
+hydraulics	Hydraulics uses pressurized liquids to transmit power and control machinery, including the diagnosis and maintenance of hydraulic systems.
+pneumatics	Pneumatics uses compressed gas to transmit power and control machinery, including the diagnosis and maintenance of pneumatic systems.
+shutdown-management	Shutdown management plans and coordinates work during a scheduled interruption of plant or equipment operation.
+turnaround-management	Turnaround management coordinates major planned plant maintenance, inspections and overhauls within an agreed schedule and budget.
+hvac	HVAC covers heating, ventilation and air conditioning systems, including their design, operation and maintenance.
+mep	MEP covers the coordination of mechanical, electrical and plumbing systems in buildings and construction projects.
+iso-17025	ISO/IEC 17025 specifies competence requirements for testing and calibration laboratories, including their methods, equipment and quality controls.
+equipment-calibration	Equipment calibration compares instrument measurements with reference standards to establish measurement accuracy.

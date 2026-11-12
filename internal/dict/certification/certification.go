@@ -41,6 +41,11 @@ var aliases = map[string]string{
 	"pmp":                             "pmp",
 	"project management professional": "pmp",
 
+	// Industrial maintenance and reliability.
+	"cmrp": "cmrp",
+	"certified maintenance & reliability professional":   "cmrp",
+	"certified maintenance and reliability professional": "cmrp",
+
 	// Occupational safety. This is the first non-IT family in the vocabulary, and it is
 	// here rather than in skilltag because these name credentials, not skills — a
 	// distinction skilltag enforces itself: a scoped acronym there must resolve to a
