@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -123,7 +124,7 @@ func observeSearchQuality(surface, name string, result *mcp.CallToolResult) []an
 	var summary struct {
 		Jobs          []json.RawMessage `json:"jobs"`
 		Results       []json.RawMessage `json:"results"`
-		IgnoredParams []json.RawMessage `json:"ignored_params"`
+		IgnoredParams []string          `json:"ignored_params"`
 		Semantic      string            `json:"semantic"`
 	}
 	if json.Unmarshal(payload, &summary) != nil {
@@ -153,5 +154,72 @@ func observeSearchQuality(surface, name string, result *mcp.CallToolResult) []an
 	if semantic != "not_requested" {
 		mcpSearchQuality.WithLabelValues(surface, "semantic_requested").Inc()
 	}
-	return []any{"returned_results", returned, "ignored_filters", ignored, "semantic", semantic}
+	attrs := []any{"returned_results", returned, "ignored_filters", ignored, "semantic", semantic}
+	if ignored {
+		// ignored_params entries read param=value; only the name may reach a log, and an
+		// entry without the "=" is not that shape, so it is not trusted to be a name.
+		var names []string
+		for _, entry := range summary.IgnoredParams {
+			if name, _, ok := strings.Cut(entry, "="); ok {
+				names = append(names, name)
+			}
+		}
+		attrs = append(attrs, "ignored", strings.Join(loggableNames(names), ","))
+	}
+	return attrs
+}
+
+const (
+	maxLoggedNames   = 5
+	maxLoggedNameLen = 40
+)
+
+var (
+	// The SDK's schema rejection is text: "validating /properties/limit: type: ..." for a
+	// wrong type, "unexpected additional properties [\"a\" \"b\"]" for an unknown argument.
+	// Both carry the argument name and, for a type error, the caller's value, so only the
+	// name is cut out of them.
+	identifier         = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+	rejectedProperty   = regexp.MustCompile(`/properties/([A-Za-z0-9_.-]+)`)
+	rejectedUnexpected = regexp.MustCompile(`unexpected additional properties \[([^\]]*)\]`)
+	rejectedQuoted     = regexp.MustCompile(`"([A-Za-z0-9_.-]+)"`)
+)
+
+// badArgNames returns the names of the arguments an SDK schema rejection blames — names
+// only, never values, which can carry personal text.
+func badArgNames(result *mcp.CallToolResult) []string {
+	if result == nil || !result.IsError || len(result.Content) != 1 {
+		return nil
+	}
+	content, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		return nil
+	}
+	text := content.Text[:min(len(content.Text), 2048)]
+	var names []string
+	if m := rejectedProperty.FindStringSubmatch(text); m != nil {
+		names = append(names, m[1])
+	}
+	if m := rejectedUnexpected.FindStringSubmatch(text); m != nil {
+		for _, q := range rejectedQuoted.FindAllStringSubmatch(m[1], -1) {
+			names = append(names, q[1])
+		}
+	}
+	return loggableNames(names)
+}
+
+// loggableNames keeps the first few distinct names that look like identifiers, each
+// bounded, so a caller cannot put free text or an unbounded list into a log line.
+func loggableNames(names []string) []string {
+	var out []string
+	for _, name := range names {
+		if len(out) == maxLoggedNames {
+			break
+		}
+		if name == "" || len(name) > maxLoggedNameLen || slices.Contains(out, name) || !identifier.MatchString(name) {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out
 }

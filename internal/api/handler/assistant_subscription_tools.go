@@ -260,7 +260,9 @@ func (a *alertSearch) addOther(k string, vs []string) {
 	a.Other[k] = strings.Join(vs, ",")
 }
 
-// alertSavedSearchError words savedsearch's sentinels for an agent.
+// alertSavedSearchError words savedsearch's sentinels for an agent, then the search layer's
+// (a q the parser refuses) and the subscription service's (no push device, bad channel). An
+// error none of them knows stays as it is, and reads as internal_error.
 func alertSavedSearchError(err error, name string) error {
 	switch {
 	case errors.Is(err, savedsearch.ErrDuplicateName):
@@ -273,7 +275,7 @@ func alertSavedSearchError(err error, name string) error {
 	case errors.Is(err, savedsearch.ErrQueryTooLong):
 		return fiber.NewError(fiber.StatusBadRequest, "this search has too many filters to save — narrow it to fewer values")
 	}
-	return err
+	return subscriptionError(searchToolError(err))
 }
 
 // alertChannel is one channel an alert is delivered on — one subscriptions row.
@@ -439,7 +441,7 @@ func (h *assistantHandlers) subscribeTool(origin string) assistant.Tool {
 				case errors.Is(err, subscription.ErrUnfilteredSearch):
 					return nil, fiber.NewError(fiber.StatusBadRequest, unfilteredRefusal)
 				case err != nil:
-					return nil, err
+					return nil, alertSavedSearchError(err, "")
 				default:
 					out.Outcomes = append(out.Outcomes, subscribeOutcome{Channel: ch, Status: "created"})
 				}
@@ -641,7 +643,7 @@ func (h *assistantHandlers) updateSubscriptionTool(origin string) assistant.Tool
 			subs := h.subscriptions()
 			for _, c := range add {
 				if _, err := subs.Create(ctx, userID, current.ID, c.Channel); err != nil && !errors.Is(err, subscription.ErrDuplicate) {
-					return nil, err
+					return nil, alertSavedSearchError(err, "")
 				}
 			}
 			for _, c := range remove {
