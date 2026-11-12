@@ -49,9 +49,11 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string, reade
 			Capabilities: &mcp.ServerCapabilities{
 				Logging: &mcp.LoggingCapabilities{}, //nolint:staticcheck // Preserve the SDK default for older MCP clients.
 				Tools:   &mcp.ToolCapabilities{},
+				Prompts: &mcp.PromptCapabilities{},
 			},
 		})
 	ObserveServer(server, "account")
+	addPromptSpecs(server, accountPrompts(tools))
 
 	if reader != nil {
 		registerCatalogueTools(server, reader, "account")

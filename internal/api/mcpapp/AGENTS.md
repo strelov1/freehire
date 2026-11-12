@@ -218,6 +218,12 @@ person types — the vocabulary itself, never a copy. A free-text argument (`sta
 `postings`) offers nothing: a client replaces the whole field with what it picks, so a
 suggestion for one word of "Go and Kubernetes" would erase the rest.
 
+A signed-in session (the account alias, and the canonical endpoint with a grant or key) also gets
+`accountPrompts` (`account_prompts.go`): `jobs_for_my_profile`, `set_up_my_profile`,
+`whats_new_in_my_alerts` and `apply_to_saved_jobs`. They DO name tools and their order, since the
+sequence is the point; each is offered only when every tool it needs is served, so an API key
+never sees the auto-apply one. Anonymous connections get the catalogue prompts alone.
+
 ## The widget
 
 `search_jobs` and `get_job` render in an MCP Apps widget (`widget.go`, `widget/jobs.html`):
