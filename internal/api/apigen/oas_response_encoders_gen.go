@@ -39,6 +39,19 @@ func encodeAddAtomResponse(response *AddAtomCreated, w http.ResponseWriter) erro
 	return nil
 }
 
+func encodeAddAvailabilityOverrideResponse(response *AddAvailabilityOverrideCreated, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeAddEmploymentResponse(response *AddEmploymentCreated, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(201)
@@ -151,6 +164,19 @@ func encodeBanUserResponse(response *BanUserOK, w http.ResponseWriter) error {
 
 func encodeBlockConversationResponse(response *BlockConversationNoContent, w http.ResponseWriter) error {
 	w.WriteHeader(204)
+
+	return nil
+}
+
+func encodeBookSessionResponse(response *BookSessionCreated, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
 
 	return nil
 }
@@ -432,6 +458,19 @@ func encodeBuddyStatusResponse(response *BuddyStatusOK, w http.ResponseWriter) e
 }
 
 func encodeBuddyUnreactResponse(response *BuddyUnreactOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeCancelSessionResponse(response *CancelSessionOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -743,6 +782,19 @@ func encodeCreateThreadResponse(response *CreateThreadCreated, w http.ResponseWr
 	return nil
 }
 
+func encodeDecideMentorProfileResponse(response *DecideMentorProfileOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeDecideReferralOfferResponse(response *DecideReferralOfferOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -770,6 +822,12 @@ func encodeDeclineConversationResponse(response *DeclineConversationOK, w http.R
 }
 
 func encodeDeleteAtomResponse(response *DeleteAtomNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
+func encodeDeleteAvailabilityRuleResponse(response *DeleteAvailabilityRuleNoContent, w http.ResponseWriter) error {
 	w.WriteHeader(204)
 
 	return nil
@@ -1193,6 +1251,19 @@ func encodeGetMarketPulseResponse(response *GetMarketPulseOK, w http.ResponseWri
 	return nil
 }
 
+func encodeGetMentorResponse(response *GetMentorOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeGetMentorProfileSuggestionsResponse(response *GetMentorProfileSuggestionsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -1206,7 +1277,59 @@ func encodeGetMentorProfileSuggestionsResponse(response *GetMentorProfileSuggest
 	return nil
 }
 
+func encodeGetMentorSlotsResponse(response *MentorshipSlotsPage, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeGetMyAvailabilityResponse(response *MentorshipRulesPage, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeGetMyCalendarResponse(response *MentorshipCalendarPage, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeGetMyEmailGroupsResponse(response *GetMyEmailGroupsOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeGetMyMentorProfileResponse(response *GetMyMentorProfileOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -1324,6 +1447,19 @@ func encodeGetResumeVerdictResponse(response *GetResumeVerdictOK, w http.Respons
 }
 
 func encodeGetScreeningAnswersResponse(response *GetScreeningAnswersOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeGetSessionResponse(response *GetSessionOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -1970,6 +2106,32 @@ func encodeListJobsResponse(response *ListJobsOK, w http.ResponseWriter) error {
 	return nil
 }
 
+func encodeListMentorBookingsResponse(response *MentorshipSessionsPage, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeListMentorsResponse(response *MentorshipDirectoryPage, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeListMyContributionsResponse(response *ListMyContributionsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -2009,6 +2171,19 @@ func encodeListMyReferralRequestsResponse(response *ListMyReferralRequestsOK, w 
 	return nil
 }
 
+func encodeListMySessionsResponse(response *MentorshipSessionsPage, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeListMySubmissionsResponse(response *ListMySubmissionsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -2036,6 +2211,19 @@ func encodeListPendingCompanyRelationsResponse(response *ListPendingCompanyRelat
 }
 
 func encodeListPendingJobReportsResponse(response *ListPendingJobReportsOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeListPendingMentorProfilesResponse(response *ListPendingMentorProfilesOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -2343,6 +2531,19 @@ func encodePatchCVResponse(response *PatchCVOK, w http.ResponseWriter) error {
 	return nil
 }
 
+func encodePauseMentorProfileResponse(response *PauseMentorProfileOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodePostAtsReportResponse(response *PostAtsReportOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -2409,6 +2610,19 @@ func encodePutProfileResponse(response *PutProfileOK, w http.ResponseWriter) err
 }
 
 func encodePutResumeContactsResponse(response *PutResumeContactsOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeReactivateMentorProfileResponse(response *ReactivateMentorProfileOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -2527,6 +2741,12 @@ func encodeReplaceResumeContactsFromCvResponse(response *ReplaceResumeContactsFr
 	if _, err := e.WriteTo(w); err != nil {
 		return errors.Wrap(err, "write")
 	}
+
+	return nil
+}
+
+func encodeReplaceWeeklyAvailabilityResponse(response *ReplaceWeeklyAvailabilityNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
 
 	return nil
 }
@@ -2691,6 +2911,19 @@ func encodeRetractProcessReportResponse(response *RetractProcessReportOK, w http
 
 func encodeRetryResumeExtractResponse(response *RetryResumeExtractAccepted, w http.ResponseWriter) error {
 	w.WriteHeader(202)
+
+	return nil
+}
+
+func encodeReviewSessionResponse(response *ReviewSessionOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
 
 	return nil
 }
@@ -2937,6 +3170,19 @@ func encodeStartTailorSessionResponse(response *StartTailorSessionCreated, w htt
 func encodeStatsFacetsResponse(response *StatsFacetsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeSubmitMentorProfileResponse(response *SubmitMentorProfileCreated, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
 
 	e := new(jx.Encoder)
 	response.Encode(e)
@@ -3225,6 +3471,19 @@ func encodeUpdateJobResponse(response *UpdateJobOK, w http.ResponseWriter) error
 	return nil
 }
 
+func encodeUpdateMentorProfileResponse(response *UpdateMentorProfileOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeUpdateMyEmailGroupsResponse(response *UpdateMyEmailGroupsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -3338,6 +3597,12 @@ func encodeVoteJobResponse(response *VoteJobOK, w http.ResponseWriter) error {
 	if _, err := e.WriteTo(w); err != nil {
 		return errors.Wrap(err, "write")
 	}
+
+	return nil
+}
+
+func encodeWithdrawMentorProfileResponse(response *WithdrawMentorProfileNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
 
 	return nil
 }

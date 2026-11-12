@@ -23,6 +23,10 @@ type Handler interface {
 	//
 	// POST /me/experience/atoms
 	AddAtom(ctx context.Context, req jx.Raw) (*AddAtomCreated, error)
+	// AddAvailabilityOverride implements addAvailabilityOverride operation.
+	//
+	// POST /me/mentorship/availability/overrides
+	AddAvailabilityOverride(ctx context.Context, req *BuddyMockRule) (*AddAvailabilityOverrideCreated, error)
 	// AddEmployment implements addEmployment operation.
 	//
 	// The body is a place; its shape is the bank's.
@@ -68,6 +72,10 @@ type Handler interface {
 	//
 	// POST /me/conversations/{id}/block
 	BlockConversation(ctx context.Context, params BlockConversationParams) error
+	// BookSession implements bookSession operation.
+	//
+	// POST /mentors/{slug}/bookings
+	BookSession(ctx context.Context, req *MentorshipBookingBody, params BookSessionParams) (*BookSessionCreated, error)
 	// BuddyActivity implements buddyActivity operation.
 	//
 	// GET /me/buddies/profiles/{handle}/activity
@@ -174,6 +182,10 @@ type Handler interface {
 	//
 	// DELETE /me/buddies/feed/{id}/reaction
 	BuddyUnreact(ctx context.Context, params BuddyUnreactParams) (*BuddyUnreactOK, error)
+	// CancelSession implements cancelSession operation.
+	//
+	// POST /me/mentorship/sessions/{id}/cancel
+	CancelSession(ctx context.Context, req OptMentorshipCancelBody, params CancelSessionParams) (*CancelSessionOK, error)
 	// CatalogScale implements catalogScale operation.
 	//
 	// The catalogue size. Never fails: a cold cache degrades to an estimate and `exact` says so.
@@ -301,6 +313,10 @@ type Handler interface {
 	//
 	// POST /threads
 	CreateThread(ctx context.Context, req *CreateThreadRequest) (*CreateThreadCreated, error)
+	// DecideMentorProfile implements decideMentorProfile operation.
+	//
+	// POST /mentorship/profiles/{id}/decide
+	DecideMentorProfile(ctx context.Context, req *MentorshipDecideBody, params DecideMentorProfileParams) (*DecideMentorProfileOK, error)
 	// DecideReferralOffer implements decideReferralOffer operation.
 	//
 	// Moderators only.
@@ -317,6 +333,10 @@ type Handler interface {
 	//
 	// DELETE /me/experience/atoms/{id}
 	DeleteAtom(ctx context.Context, params DeleteAtomParams) error
+	// DeleteAvailabilityRule implements deleteAvailabilityRule operation.
+	//
+	// DELETE /me/mentorship/availability/{id}
+	DeleteAvailabilityRule(ctx context.Context, params DeleteAvailabilityRuleParams) error
 	// DeleteBankedAnswer implements deleteBankedAnswer operation.
 	//
 	// 400 for an id that is not a number, 404 for one the caller does not own.
@@ -504,14 +524,42 @@ type Handler interface {
 	//
 	// GET /me/market-pulse
 	GetMarketPulse(ctx context.Context) (*GetMarketPulseOK, error)
+	// GetMentor implements getMentor operation.
+	//
+	// GET /mentors/{slug}
+	GetMentor(ctx context.Context, params GetMentorParams) (*GetMentorOK, error)
 	// GetMentorProfileSuggestions implements getMentorProfileSuggestions operation.
 	//
 	// GET /me/mentorship/profile/suggestions
 	GetMentorProfileSuggestions(ctx context.Context) (*GetMentorProfileSuggestionsOK, error)
+	// GetMentorSlots implements getMentorSlots operation.
+	//
+	// The bookable hours in a window, in the viewer's zone.
+	//
+	// GET /mentors/{slug}/slots
+	GetMentorSlots(ctx context.Context, params GetMentorSlotsParams) (*MentorshipSlotsPage, error)
+	// GetMyAvailability implements getMyAvailability operation.
+	//
+	// The mentor's whole schedule, weekly rows and dated overrides together.
+	//
+	// GET /me/mentorship/availability
+	GetMyAvailability(ctx context.Context) (*MentorshipRulesPage, error)
+	// GetMyCalendar implements getMyCalendar operation.
+	//
+	// The owner's resolved calendar for one month (`month=YYYY-MM`, default the current one).
+	//
+	// GET /me/mentorship/availability/calendar
+	GetMyCalendar(ctx context.Context, params GetMyCalendarParams) (*MentorshipCalendarPage, error)
 	// GetMyEmailGroups implements getMyEmailGroups operation.
 	//
 	// GET /me/email-groups
 	GetMyEmailGroups(ctx context.Context) (*GetMyEmailGroupsOK, error)
+	// GetMyMentorProfile implements getMyMentorProfile operation.
+	//
+	// The owner's own profile whatever its status; null when there is none.
+	//
+	// GET /me/mentorship/profile
+	GetMyMentorProfile(ctx context.Context) (*GetMyMentorProfileOK, error)
 	// GetMyPlan implements getMyPlan operation.
 	//
 	// The caller's plan and today's usage, without consuming anything.
@@ -567,6 +615,10 @@ type Handler interface {
 	//
 	// GET /me/screening-answers
 	GetScreeningAnswers(ctx context.Context) (*GetScreeningAnswersOK, error)
+	// GetSession implements getSession operation.
+	//
+	// GET /me/mentorship/sessions/{id}
+	GetSession(ctx context.Context, params GetSessionParams) (*GetSessionOK, error)
 	// GetSurvey implements getSurvey operation.
 	//
 	// GET /me/survey
@@ -803,6 +855,18 @@ type Handler interface {
 	//
 	// GET /jobs
 	ListJobs(ctx context.Context, params ListJobsParams) (*ListJobsOK, error)
+	// ListMentorBookings implements listMentorBookings operation.
+	//
+	// Who is coming: the mentor's own sessions, each with the seeker's address.
+	//
+	// GET /me/mentorship/bookings
+	ListMentorBookings(ctx context.Context, params ListMentorBookingsParams) (*MentorshipSessionsPage, error)
+	// ListMentors implements listMentors operation.
+	//
+	// The public directory.
+	//
+	// GET /mentors
+	ListMentors(ctx context.Context, params ListMentorsParams) (*MentorshipDirectoryPage, error)
 	// ListMyContributions implements listMyContributions operation.
 	//
 	// GET /me/contributions
@@ -815,6 +879,10 @@ type Handler interface {
 	//
 	// GET /me/referrals/requests
 	ListMyReferralRequests(ctx context.Context) (*ListMyReferralRequestsOK, error)
+	// ListMySessions implements listMySessions operation.
+	//
+	// GET /me/mentorship/sessions
+	ListMySessions(ctx context.Context, params ListMySessionsParams) (*MentorshipSessionsPage, error)
 	// ListMySubmissions implements listMySubmissions operation.
 	//
 	// GET /me/submissions
@@ -831,6 +899,12 @@ type Handler interface {
 	//
 	// GET /reports
 	ListPendingJobReports(ctx context.Context) (*ListPendingJobReportsOK, error)
+	// ListPendingMentorProfiles implements listPendingMentorProfiles operation.
+	//
+	// The moderation queue. Moderators only.
+	//
+	// GET /mentorship/profiles
+	ListPendingMentorProfiles(ctx context.Context) (*ListPendingMentorProfilesOK, error)
 	// ListPendingReferralOffers implements listPendingReferralOffers operation.
 	//
 	// Moderators only: the offers awaiting a decision.
@@ -959,6 +1033,10 @@ type Handler interface {
 	//
 	// PATCH /me/cvs/{id}
 	PatchCV(ctx context.Context, req jx.Raw, params PatchCVParams) (*PatchCVOK, error)
+	// PauseMentorProfile implements pauseMentorProfile operation.
+	//
+	// POST /me/mentorship/profile/pause
+	PauseMentorProfile(ctx context.Context, req *MentorshipPauseBody) (*PauseMentorProfileOK, error)
 	// PostAtsReport implements postAtsReport operation.
 	//
 	// Runs the model review (paid) over the stored CV, caches it and returns the report.
@@ -995,6 +1073,10 @@ type Handler interface {
 	//
 	// PUT /me/resume/contacts
 	PutResumeContacts(ctx context.Context, req jx.Raw) (*PutResumeContactsOK, error)
+	// ReactivateMentorProfile implements reactivateMentorProfile operation.
+	//
+	// POST /me/mentorship/profile/reactivate
+	ReactivateMentorProfile(ctx context.Context) (*ReactivateMentorProfileOK, error)
 	// RecordDictionaryGap implements recordDictionaryGap operation.
 	//
 	// Asks for a term the dictionary does not resolve. 409 when it already does. Session cookie only.
@@ -1045,6 +1127,10 @@ type Handler interface {
 	//
 	// POST /me/resume/contacts/replace-from-cv
 	ReplaceResumeContactsFromCv(ctx context.Context) (*ReplaceResumeContactsFromCvOK, error)
+	// ReplaceWeeklyAvailability implements replaceWeeklyAvailability operation.
+	//
+	// PUT /me/mentorship/availability/weekly
+	ReplaceWeeklyAvailability(ctx context.Context, req *BuddyMockWeekly) error
 	// ReportCompanyFeedback implements reportCompanyFeedback operation.
 	//
 	// The id is declared a string and parsed in Go, which keeps the 400 text. A second report by the same
@@ -1122,6 +1208,10 @@ type Handler interface {
 	//
 	// POST /me/resume/retry-extract
 	RetryResumeExtract(ctx context.Context) error
+	// ReviewSession implements reviewSession operation.
+	//
+	// PUT /me/mentorship/sessions/{id}/review
+	ReviewSession(ctx context.Context, req *MentorshipReviewBody, params ReviewSessionParams) (*ReviewSessionOK, error)
 	// RevokeEmployerAccount implements revokeEmployerAccount operation.
 	//
 	// Admins only: deactivates the account but keeps the company reservation.
@@ -1229,6 +1319,10 @@ type Handler interface {
 	//
 	// GET /stats/facets
 	StatsFacets(ctx context.Context) (*StatsFacetsOK, error)
+	// SubmitMentorProfile implements submitMentorProfile operation.
+	//
+	// POST /me/mentorship/profile
+	SubmitMentorProfile(ctx context.Context, req *MentorshipProfileBody) (*SubmitMentorProfileCreated, error)
 	// Suggest implements suggest operation.
 	//
 	// Search-box suggestions. 503 when search is not configured.
@@ -1329,6 +1423,10 @@ type Handler interface {
 	//
 	// PATCH /jobs/{slug}
 	UpdateJob(ctx context.Context, req *JobUpdate, params UpdateJobParams) (*UpdateJobOK, error)
+	// UpdateMentorProfile implements updateMentorProfile operation.
+	//
+	// PUT /me/mentorship/profile
+	UpdateMentorProfile(ctx context.Context, req *MentorshipProfileBody) (*UpdateMentorProfileOK, error)
 	// UpdateMyEmailGroups implements updateMyEmailGroups operation.
 	//
 	// PATCH /me/email-groups
@@ -1371,6 +1469,10 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/vote
 	VoteJob(ctx context.Context, req *VoteRequest, params VoteJobParams) (*VoteJobOK, error)
+	// WithdrawMentorProfile implements withdrawMentorProfile operation.
+	//
+	// DELETE /me/mentorship/profile
+	WithdrawMentorProfile(ctx context.Context) error
 	// WithdrawReferralOffer implements withdrawReferralOffer operation.
 	//
 	// 404 when the offer is absent or not the caller's.

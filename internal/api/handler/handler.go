@@ -1112,6 +1112,7 @@ func Register(app *fiber.App, cfg Config) {
 		marketPulseHandlers:          marketPulseH,
 		promoHandlers:                promoH,
 		mentorSuggestionsHandlers:    mentorSuggestionsH,
+		mentorshipHandlers:           mentorshipH,
 		savedSearchHandlers:          savedSearchH,
 		subscriptionHandlers:         subscriptionH,
 		timelineHandlers:             timelineH,
@@ -1223,7 +1224,7 @@ func Register(app *fiber.App, cfg Config) {
 	conversationH.register(api, mw, contract)
 
 	// The mentorship marketplace (see mentorshipHandlers).
-	mentorshipH.register(api, mw)
+	mentorshipH.register(api, mw, contract)
 	mentorSuggestionsH.register(api, mw, contract)
 
 	// Job reports + review queue (see reportHandlers).

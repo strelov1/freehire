@@ -8427,6 +8427,495 @@
         ]
       }
     },
+    "/me/mentorship/availability": {
+      "get": {
+        "operationId": "getMyAvailability",
+        "description": "The mentor's whole schedule, weekly rows and dated overrides together.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorshipRulesPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
+    "/me/mentorship/availability/calendar": {
+      "get": {
+        "operationId": "getMyCalendar",
+        "description": "The owner's resolved calendar for one month (`month=YYYY-MM`, default the current one).",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorshipCalendarPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
+    "/me/mentorship/availability/overrides": {
+      "post": {
+        "operationId": "addAvailabilityOverride",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyMockRuleOut"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuddyMockRule"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/mentorship/availability/weekly": {
+      "put": {
+        "operationId": "replaceWeeklyAvailability",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuddyMockWeekly"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/mentorship/availability/{id}": {
+      "delete": {
+        "operationId": "deleteAvailabilityRule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
+    "/me/mentorship/bookings": {
+      "get": {
+        "operationId": "listMentorBookings",
+        "description": "Who is coming: the mentor's own sessions, each with the seeker's address.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorshipSessionsPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
+    "/me/mentorship/profile": {
+      "get": {
+        "operationId": "getMyMentorProfile",
+        "description": "The owner's own profile whatever its status; null when there is none.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/MentorshipMentor"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      },
+      "post": {
+        "operationId": "submitMentorProfile",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MentorshipMentor"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorshipProfileBody"
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateMentorProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MentorshipMentor"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorshipProfileBody"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "withdrawMentorProfile",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
+    "/me/mentorship/profile/pause": {
+      "post": {
+        "operationId": "pauseMentorProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MentorshipMentor"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorshipPauseBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/mentorship/profile/reactivate": {
+      "post": {
+        "operationId": "reactivateMentorProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MentorshipMentor"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
     "/me/mentorship/profile/suggestions": {
       "get": {
         "operationId": "getMentorProfileSuggestions",
@@ -8465,6 +8954,214 @@
         "tags": [
           "Mentorship"
         ]
+      }
+    },
+    "/me/mentorship/sessions": {
+      "get": {
+        "operationId": "listMySessions",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorshipSessionsPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
+    "/me/mentorship/sessions/{id}": {
+      "get": {
+        "operationId": "getSession",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MentorshipBooking"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
+    "/me/mentorship/sessions/{id}/cancel": {
+      "post": {
+        "operationId": "cancelSession",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MentorshipBooking"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorshipCancelBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/mentorship/sessions/{id}/review": {
+      "put": {
+        "operationId": "reviewSession",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MentorshipReview"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorshipReviewBody"
+              }
+            }
+          }
+        }
       }
     },
     "/me/notification-settings": {
@@ -10824,6 +11521,384 @@
         "tags": [
           "Watchlist"
         ]
+      }
+    },
+    "/mentors": {
+      "get": {
+        "operationId": "listMentors",
+        "description": "The public directory.",
+        "parameters": [
+          {
+            "name": "company",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "topic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "seniority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "no_reviews",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorshipDirectoryPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
+    "/mentors/{slug}": {
+      "get": {
+        "operationId": "getMentor",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MentorshipMentor"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
+    "/mentors/{slug}/bookings": {
+      "post": {
+        "operationId": "bookSession",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MentorshipBooking"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorshipBookingBody"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mentors/{slug}/slots": {
+      "get": {
+        "operationId": "getMentorSlots",
+        "description": "The bookable hours in a window, in the viewer's zone.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorshipSlotsPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
+    "/mentorship/profiles": {
+      "get": {
+        "operationId": "listPendingMentorProfiles",
+        "description": "The moderation queue. Moderators only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MentorshipPendingMentor"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MentorshipCountMeta"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ]
+      }
+    },
+    "/mentorship/profiles/{id}/decide": {
+      "post": {
+        "operationId": "decideMentorProfile",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MentorshipMentor"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mentorship"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorshipDecideBody"
+              }
+            }
+          }
+        }
       }
     },
     "/moderation/conversation-reports": {
@@ -16962,6 +18037,630 @@
           }
         },
         "description": "A prefill for the mentor-profile form, from what the account already knows."
+      },
+      "MentorshipBooking": {
+        "type": "object",
+        "required": [
+          "id",
+          "mentor_slug",
+          "headline",
+          "starts_at",
+          "ends_at",
+          "status",
+          "note",
+          "meeting_url",
+          "completed"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "mentor_slug": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "status": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "meeting_url": {
+            "type": "string"
+          },
+          "seeker_email": {
+            "type": "string"
+          },
+          "completed": {
+            "type": "boolean"
+          }
+        },
+        "description": "One session as a party to it sees it; seeker_email only for the mentor."
+      },
+      "MentorshipBookingBody": {
+        "type": "object",
+        "properties": {
+          "starts_at": {
+            "type": "string",
+            "description": "RFC 3339."
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "MentorshipCalendarInterval": {
+        "type": "object",
+        "required": [
+          "starts_at",
+          "ends_at",
+          "status"
+        ],
+        "properties": {
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "status": {
+            "type": "string",
+            "description": "One of booked, busy, free or closed."
+          }
+        }
+      },
+      "MentorshipCalendarPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MentorshipCalendarInterval"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/MentorshipTimezoneMeta"
+          }
+        }
+      },
+      "MentorshipCancelBody": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "MentorshipCountMeta": {
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "MentorshipDecideBody": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "MentorshipDirectoryMeta": {
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ignored_params": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "`ignored_params` lists the query params the directory did not read."
+      },
+      "MentorshipDirectoryPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MentorshipMentor"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/MentorshipDirectoryMeta"
+          }
+        }
+      },
+      "MentorshipMentor": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "company_slug",
+          "company_name",
+          "headline",
+          "bio",
+          "topics",
+          "languages",
+          "timezone",
+          "session_minutes",
+          "rating_count",
+          "rating_avg",
+          "show_photo"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "company_slug": {
+            "type": "string"
+          },
+          "company_name": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string"
+          },
+          "topics": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "languages": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "session_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_avg": {
+            "type": "number",
+            "format": "double"
+          },
+          "show_photo": {
+            "type": "boolean"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "meeting_url": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "buffer_before_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "buffer_after_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notice_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "horizon_days": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "A mentor as the public, the owner and a moderator see them. The owner and moderator\nviews add status, paused and created_at; the owner alone gets meeting_url and the\nsession parameters."
+      },
+      "MentorshipPauseBody": {
+        "type": "object",
+        "properties": {
+          "paused": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MentorshipPendingMentor": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "company_slug",
+          "company_name",
+          "headline",
+          "bio",
+          "topics",
+          "languages",
+          "timezone",
+          "session_minutes",
+          "rating_count",
+          "rating_avg",
+          "show_photo",
+          "id",
+          "has_approved_referral_offer"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "company_slug": {
+            "type": "string"
+          },
+          "company_name": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string"
+          },
+          "topics": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "languages": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "session_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_avg": {
+            "type": "number",
+            "format": "double"
+          },
+          "show_photo": {
+            "type": "boolean"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "meeting_url": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "buffer_before_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "buffer_after_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notice_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "horizon_days": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "has_approved_referral_offer": {
+            "type": "boolean"
+          }
+        },
+        "description": "A pending profile in the moderation queue."
+      },
+      "MentorshipProfileBody": {
+        "type": "object",
+        "properties": {
+          "company_slug": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string"
+          },
+          "topics": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "languages": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "session_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "buffer_before_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "buffer_after_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notice_minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "horizon_days": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "meeting_url": {
+            "type": "string"
+          },
+          "show_photo": {
+            "type": "boolean"
+          },
+          "seniority": {
+            "type": "string"
+          }
+        }
+      },
+      "MentorshipReview": {
+        "type": "object",
+        "required": [
+          "booking_id",
+          "rating",
+          "comment"
+        ],
+        "properties": {
+          "booking_id": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "comment": {
+            "type": "string"
+          }
+        }
+      },
+      "MentorshipReviewBody": {
+        "type": "object",
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "comment": {
+            "type": "string"
+          }
+        }
+      },
+      "MentorshipRulesPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMockRuleOut"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/MentorshipCountMeta"
+          }
+        }
+      },
+      "MentorshipSessions": {
+        "type": "object",
+        "required": [
+          "upcoming",
+          "past"
+        ],
+        "properties": {
+          "upcoming": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MentorshipBooking"
+            }
+          },
+          "past": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MentorshipBooking"
+            }
+          }
+        }
+      },
+      "MentorshipSessionsPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/MentorshipSessions"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/MentorshipCountMeta"
+          }
+        }
+      },
+      "MentorshipSlotsPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMockSlot"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/MentorshipTimezoneMeta"
+          }
+        }
+      },
+      "MentorshipTimezoneMeta": {
+        "type": "object",
+        "required": [
+          "timezone",
+          "count"
+        ],
+        "properties": {
+          "timezone": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "MergeAtoms": {
         "type": "object",
