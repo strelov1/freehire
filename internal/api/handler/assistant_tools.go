@@ -136,7 +136,8 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 		description = "List the live filter vocabulary. Without `facet`: every filter's name with how many values it " +
 			"has, plus numeric ranges. With `facet`: that filter's values with a vacancy count each, optionally only " +
 			"those containing `contains`. Filter values are the market's own; an invented one matches nothing. " +
-			"`company_slug` lists the 50 busiest companies (slug, name, count) under the filters."
+			"`company_slug` lists the 50 busiest companies (slug, name, count) under the filters; `contains` searches the " +
+			"1,200 busiest of them, so narrow the filters to reach a small employer."
 		properties["facet"] = map[string]any{"type": "string", "description": "A filter name to list the values of, e.g. skills, cities, metros, company_slug."}
 		properties["contains"] = map[string]any{"type": "string", "description": "With facet: keep only values containing this text, e.g. berlin; for skills a known alias also finds its value, e.g. golang finds go."}
 	}
@@ -202,6 +203,8 @@ func listableFacet(name string) bool {
 // first and capped at topCompaniesLimit, each with its display name. A space in the text
 // matches the slug's hyphen, so "acme corp" finds acme-corp.
 func (h *assistantHandlers) companyIndex(ctx context.Context, res search.FacetResult, contains string) map[string]any {
+	// shortcut: res holds only the busiest 1,200 companies (the engine's per-facet cap), so a
+	// small employer is found only under filters narrow enough to fit; upgrade to an index facet search.
 	needle := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(contains)), " ", "-")
 	kept := map[string]int64{}
 	for slug, n := range res.Facets[companyAttr] {
