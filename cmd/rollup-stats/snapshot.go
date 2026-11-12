@@ -27,7 +27,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeJobDailyStats")
 		done := worker.Stage("ComputeJobDailyStats")
-		rows, err := reader.ComputeJobDailyStats(ctx, asOf)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeJobDailyStats", func() ([]db.ComputeJobDailyStatsRow, error) {
+			return reader.ComputeJobDailyStats(ctx, asOf)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeJobDailyStats: %w", err)
 		}
@@ -41,7 +43,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsRoleStatsGlobal")
 		done := worker.Stage("ComputeInsightsRoleStatsGlobal")
-		rows, err := reader.ComputeInsightsRoleStatsGlobal(ctx, prevTs)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsRoleStatsGlobal", func() ([]db.ComputeInsightsRoleStatsGlobalRow, error) {
+			return reader.ComputeInsightsRoleStatsGlobal(ctx, prevTs)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsRoleStatsGlobal: %w", err)
 		}
@@ -55,7 +59,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsRoleStatsByCountry")
 		done := worker.Stage("ComputeInsightsRoleStatsByCountry")
-		rows, err := reader.ComputeInsightsRoleStatsByCountry(ctx, prevTs)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsRoleStatsByCountry", func() ([]db.ComputeInsightsRoleStatsByCountryRow, error) {
+			return reader.ComputeInsightsRoleStatsByCountry(ctx, prevTs)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsRoleStatsByCountry: %w", err)
 		}
@@ -69,7 +75,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsRoleCountryStatsGlobal")
 		done := worker.Stage("ComputeInsightsRoleCountryStatsGlobal")
-		rows, err := reader.ComputeInsightsRoleCountryStatsGlobal(ctx, prevTs)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsRoleCountryStatsGlobal", func() ([]db.ComputeInsightsRoleCountryStatsGlobalRow, error) {
+			return reader.ComputeInsightsRoleCountryStatsGlobal(ctx, prevTs)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsRoleCountryStatsGlobal: %w", err)
 		}
@@ -83,7 +91,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsRoleCountryStatsByCountry")
 		done := worker.Stage("ComputeInsightsRoleCountryStatsByCountry")
-		rows, err := reader.ComputeInsightsRoleCountryStatsByCountry(ctx, prevTs)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsRoleCountryStatsByCountry", func() ([]db.ComputeInsightsRoleCountryStatsByCountryRow, error) {
+			return reader.ComputeInsightsRoleCountryStatsByCountry(ctx, prevTs)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsRoleCountryStatsByCountry: %w", err)
 		}
@@ -97,7 +107,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsRolePulse")
 		done := worker.Stage("ComputeInsightsRolePulse")
-		rows, err := reader.ComputeInsightsRolePulse(ctx, db.ComputeInsightsRolePulseParams{AsOf: asOf, PriorStart: priorTs, WindowStart: prevTs})
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsRolePulse", func() ([]db.ComputeInsightsRolePulseRow, error) {
+			return reader.ComputeInsightsRolePulse(ctx, db.ComputeInsightsRolePulseParams{AsOf: asOf, PriorStart: priorTs, WindowStart: prevTs})
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsRolePulse: %w", err)
 		}
@@ -111,7 +123,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsRoleSkillStats")
 		done := worker.Stage("ComputeInsightsRoleSkillStats")
-		rows, err := reader.ComputeInsightsRoleSkillStats(ctx, minRoleSkillSample)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsRoleSkillStats", func() ([]db.ComputeInsightsRoleSkillStatsRow, error) {
+			return reader.ComputeInsightsRoleSkillStats(ctx, minRoleSkillSample)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsRoleSkillStats: %w", err)
 		}
@@ -125,7 +139,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsRoleSkillSample")
 		done := worker.Stage("ComputeInsightsRoleSkillSample")
-		rows, err := reader.ComputeInsightsRoleSkillSample(ctx)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsRoleSkillSample", func() ([]db.ComputeInsightsRoleSkillSampleRow, error) {
+			return reader.ComputeInsightsRoleSkillSample(ctx)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsRoleSkillSample: %w", err)
 		}
@@ -139,7 +155,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsSkillStatsGlobal")
 		done := worker.Stage("ComputeInsightsSkillStatsGlobal")
-		rows, err := reader.ComputeInsightsSkillStatsGlobal(ctx, prevTs)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsSkillStatsGlobal", func() ([]db.ComputeInsightsSkillStatsGlobalRow, error) {
+			return reader.ComputeInsightsSkillStatsGlobal(ctx, prevTs)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsSkillStatsGlobal: %w", err)
 		}
@@ -153,7 +171,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsSkillStatsByCategory")
 		done := worker.Stage("ComputeInsightsSkillStatsByCategory")
-		rows, err := reader.ComputeInsightsSkillStatsByCategory(ctx, prevTs)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsSkillStatsByCategory", func() ([]db.ComputeInsightsSkillStatsByCategoryRow, error) {
+			return reader.ComputeInsightsSkillStatsByCategory(ctx, prevTs)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsSkillStatsByCategory: %w", err)
 		}
@@ -167,7 +187,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsSkillStatsByCountry")
 		done := worker.Stage("ComputeInsightsSkillStatsByCountry")
-		rows, err := reader.ComputeInsightsSkillStatsByCountry(ctx, prevTs)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsSkillStatsByCountry", func() ([]db.ComputeInsightsSkillStatsByCountryRow, error) {
+			return reader.ComputeInsightsSkillStatsByCountry(ctx, prevTs)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsSkillStatsByCountry: %w", err)
 		}
@@ -181,7 +203,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsSalaryStatsGlobal")
 		done := worker.Stage("ComputeInsightsSalaryStatsGlobal")
-		rows, err := reader.ComputeInsightsSalaryStatsGlobal(ctx, minSalarySample)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsSalaryStatsGlobal", func() ([]db.ComputeInsightsSalaryStatsGlobalRow, error) {
+			return reader.ComputeInsightsSalaryStatsGlobal(ctx, minSalarySample)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsSalaryStatsGlobal: %w", err)
 		}
@@ -195,7 +219,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsSalaryStatsByCountry")
 		done := worker.Stage("ComputeInsightsSalaryStatsByCountry")
-		rows, err := reader.ComputeInsightsSalaryStatsByCountry(ctx, minSalarySample)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsSalaryStatsByCountry", func() ([]db.ComputeInsightsSalaryStatsByCountryRow, error) {
+			return reader.ComputeInsightsSalaryStatsByCountry(ctx, minSalarySample)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsSalaryStatsByCountry: %w", err)
 		}
@@ -209,7 +235,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsSalaryMonthly")
 		done := worker.Stage("ComputeInsightsSalaryMonthly")
-		rows, err := reader.ComputeInsightsSalaryMonthly(ctx, db.ComputeInsightsSalaryMonthlyParams{AsOf: asOf, MinSample: minSalaryMonthSample})
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsSalaryMonthly", func() ([]db.ComputeInsightsSalaryMonthlyRow, error) {
+			return reader.ComputeInsightsSalaryMonthly(ctx, db.ComputeInsightsSalaryMonthlyParams{AsOf: asOf, MinSample: minSalaryMonthSample})
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsSalaryMonthly: %w", err)
 		}
@@ -223,7 +251,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsSalaryMonthlyByCountry")
 		done := worker.Stage("ComputeInsightsSalaryMonthlyByCountry")
-		rows, err := reader.ComputeInsightsSalaryMonthlyByCountry(ctx, db.ComputeInsightsSalaryMonthlyByCountryParams{AsOf: asOf, MinSample: minSalaryMonthSample})
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsSalaryMonthlyByCountry", func() ([]db.ComputeInsightsSalaryMonthlyByCountryRow, error) {
+			return reader.ComputeInsightsSalaryMonthlyByCountry(ctx, db.ComputeInsightsSalaryMonthlyByCountryParams{AsOf: asOf, MinSample: minSalaryMonthSample})
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsSalaryMonthlyByCountry: %w", err)
 		}
@@ -237,7 +267,9 @@ func rebuildRollups(ctx context.Context, readerPool, primary *pgxpool.Pool) erro
 	{
 		log.Printf("analytics: starting ComputeInsightsVelocityDaily")
 		done := worker.Stage("ComputeInsightsVelocityDaily")
-		rows, err := reader.ComputeInsightsVelocityDaily(ctx)
+		rows, err := worker.RetryStandbyConflict(ctx, "ComputeInsightsVelocityDaily", func() ([]db.ComputeInsightsVelocityDailyRow, error) {
+			return reader.ComputeInsightsVelocityDaily(ctx)
+		})
 		if err != nil {
 			return fmt.Errorf("ComputeInsightsVelocityDaily: %w", err)
 		}

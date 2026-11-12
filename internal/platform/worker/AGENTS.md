@@ -324,6 +324,9 @@ aggregates from primary vacuum cleanup. Statements retain tuples only for their
 own bounded read transaction; do not hold one snapshot across the entire run.
 Keep replay delay bounded and monitor replica lag and snapshot freshness:
 repeated recovery conflicts must fail the worker and alert on stale results.
+Feedback does not stop the relation-lock and buffer-pin conflicts, so wrap each
+long reader statement in `RetryStandbyConflict`: it reruns a cancelled statement
+twice, 30 seconds apart, and then fails as before.
 Production service units must require the analytics environment file. An unset
 URL logs a warning and uses the development reader on the primary.
 

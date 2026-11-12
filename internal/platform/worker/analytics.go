@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/strelov1/freehire/internal/platform/database"
+	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
 // AnalyticsPool opens the statistics reader. A configured replica never falls back
@@ -69,6 +70,34 @@ func AnalyticsPool(ctx context.Context, primary *pgxpool.Pool) (*pgxpool.Pool, e
 			reader.Close()
 			return nil, fmt.Errorf("analytics catch-up: %w", readyCtx.Err())
 		case <-timer.C:
+		}
+	}
+}
+
+// standbyConflictAttempts bounds how often one statement is rerun after the standby
+// cancelled it. A conflict is a single replay event (a relation lock or buffer pin the
+// primary's vacuum needs), so the rerun usually passes; repeated conflicts still fail.
+const standbyConflictAttempts = 3
+
+// standbyConflictPause lets replay move past the record that cancelled the statement.
+var standbyConflictPause = 30 * time.Second
+
+// RetryStandbyConflict runs one analytics statement and reruns it when the standby
+// cancelled it for a recovery conflict. On a read-only standby that is the only source
+// of SQLSTATE 40001 and 40P01, and hot_standby_feedback cannot prevent the lock and
+// buffer-pin kinds, so one cancel used to fail the whole multi-hour rebuild.
+func RetryStandbyConflict[R any](ctx context.Context, name string, run func() (R, error)) (R, error) {
+	for attempt := 1; ; attempt++ {
+		result, err := run()
+		if err == nil || attempt == standbyConflictAttempts ||
+			(!pgerr.IsSerializationFailure(err) && !pgerr.IsDeadlock(err)) {
+			return result, err
+		}
+		log.Printf("analytics: %s cancelled by a recovery conflict (attempt %d of %d), retrying: %v", name, attempt, standbyConflictAttempts, err)
+		select {
+		case <-ctx.Done():
+			return result, ctx.Err()
+		case <-time.After(standbyConflictPause):
 		}
 	}
 }
