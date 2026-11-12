@@ -17,11 +17,11 @@ func TestAnonymousCapsListTools(t *testing.T) {
 		"signed in": {42, 50, false},
 	} {
 		t.Run(name, func(t *testing.T) {
-			var searchLimit, similarLimit int
+			var searchLimit, searchOffset, similarLimit int
 			r := readerThatFinds(t)
 			r.searchJobs = func(_ context.Context, in SearchInput) (SearchJobsResult, error) {
-				searchLimit, _ = in.Page()
-				return SearchJobsResult{}, nil
+				searchLimit, searchOffset = in.Page()
+				return SearchJobsResult{Offset: searchOffset, Total: 100}, nil
 			}
 			r.similarJobs = func(_ context.Context, _ string, limit int) (SimilarJobsResult, error) {
 				similarLimit = limit
@@ -41,7 +41,10 @@ func TestAnonymousCapsListTools(t *testing.T) {
 			defer func() { _ = session.Close() }()
 
 			var found SearchJobsResult
-			callJSON(t, session, toolSearchJobs, map[string]any{"query": "go", "limit": 50}, &found)
+			callJSON(t, session, toolSearchJobs, map[string]any{"query": "go", "limit": 50, "offset": 10}, &found)
+			if searchOffset != 10 || found.Offset != 10 || found.Total != 100 {
+				t.Errorf("paging changed: offset=%d answered=%d total=%d", searchOffset, found.Offset, found.Total)
+			}
 			if searchLimit != tc.wantLimit || (found.Notice != "") != tc.wantNote {
 				t.Errorf("search_jobs asked %d notice=%q, want %d note=%v", searchLimit, found.Notice, tc.wantLimit, tc.wantNote)
 			}
