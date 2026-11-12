@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -120,6 +121,11 @@ func newContract(h contractHandlers) fiber.Handler {
 			return fiber.NewError(fiber.StatusNotFound, "not found")
 		}
 		query := queryValues(c)
+		// Postgres refuses a NUL byte in any text value, so one that reaches a query is a 500.
+		// No route has a use for it; refuse it here, as the decoder refuses a malformed param.
+		if hasNUL(c.Request().URI().Path()) || hasNULIn(query) {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid params")
+		}
 		c.Locals(localsContractQuery, query)
 		c.Locals(localsContractTarget, fiberTarget(c, query))
 		c.Locals(localsContractUserContext, c.UserContext())
@@ -341,4 +347,20 @@ func contractIgnoredValues(values map[string][]string) jx.Raw {
 	}
 	raw, _ := json.Marshal(values) // a map of string slices always marshals
 	return raw
+}
+
+func hasNUL(b []byte) bool { return bytes.IndexByte(b, 0) >= 0 }
+
+func hasNULIn(query url.Values) bool {
+	for k, vals := range query {
+		if strings.IndexByte(k, 0) >= 0 {
+			return true
+		}
+		for _, v := range vals {
+			if strings.IndexByte(v, 0) >= 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
