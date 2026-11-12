@@ -101,4 +101,48 @@ var campaigns = map[string]Campaign{
 				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
 		},
 	},
+
+	// The Brazil letter goes only to accounts in a Brazilian timezone. Until 2026-11-11 a card
+	// issued in Brazil could not pay at all: the Stripe account is Brazilian, so those cards
+	// are domestic, and Stripe charges domestic cards only in reais while every price was in
+	// dollars. The prices now carry a BRL amount. Written in Portuguese because that is who
+	// reads it; the amounts are the Stripe currency_options and must move with them.
+	"brazil-brl": {
+		// Name is the ledger key: renaming it would mail the audience a second time.
+		Name:      "brazil-brl",
+		Subject:   "Agora dá para pagar o freehire em reais",
+		Preheader: "Cartões brasileiros funcionam: Pro por R$29 por mês.",
+		Heading:   "Agora aceitamos reais",
+		Timezones: brazilTimezones,
+		body: body("brazil-brl", `
+{{template "p" "Oi — uma notícia rápida."}}
+{{template "p" "Até agora, quem tentava assinar o freehire com um cartão brasileiro tinha o pagamento recusado. A culpa era nossa: cobrávamos só em dólar, e cartões emitidos no Brasil não aceitavam."}}
+{{template "lead" "Isso acabou. O pagamento agora é em reais."}}
+{{template "p" "O Pro custa R$29 por mês ou R$279 por ano. Na página de planos o preço ainda aparece em dólar, mas no pagamento o valor aparece e é cobrado em reais."}}
+{{template "button" (mailLink .PricingURL "Ver os planos")}}
+{{template "muted" "Se você tentou pagar antes e não conseguiu, desculpe pelo transtorno. Se algo der errado agora, é só responder este e-mail — eu leio todos."}}`),
+		text: func(base string) string {
+			return "Oi — uma notícia rápida.\n\n" +
+				"Até agora, quem tentava assinar o freehire com um cartão brasileiro tinha o pagamento\n" +
+				"recusado. A culpa era nossa: cobrávamos só em dólar, e cartões emitidos no Brasil não\n" +
+				"aceitavam.\n\n" +
+				"Isso acabou. O pagamento agora é em reais.\n\n" +
+				"O Pro custa R$29 por mês ou R$279 por ano. Na página de planos o preço ainda aparece em\n" +
+				"dólar, mas no pagamento o valor aparece e é cobrado em reais.\n\n" +
+				"Ver os planos: " + base + "/pricing\n\n" +
+				"Se você tentou pagar antes e não conseguiu, desculpe pelo transtorno. Se algo der errado\n" +
+				"agora, é só responder este e-mail — eu leio todos.\n\n" +
+				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
+		},
+	},
+}
+
+// brazilTimezones are the IANA zones of Brazil, including the legacy Brazil/* aliases a
+// browser may still report.
+var brazilTimezones = []string{
+	"America/Sao_Paulo", "America/Fortaleza", "America/Recife", "America/Bahia", "America/Belem",
+	"America/Manaus", "America/Cuiaba", "America/Campo_Grande", "America/Porto_Velho",
+	"America/Boa_Vista", "America/Rio_Branco", "America/Araguaina", "America/Maceio",
+	"America/Santarem", "America/Noronha", "America/Eirunepe",
+	"Brazil/East", "Brazil/West", "Brazil/Acre", "Brazil/DeNoronha",
 }

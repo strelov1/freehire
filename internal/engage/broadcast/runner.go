@@ -54,7 +54,7 @@ type Stats struct {
 // Pending reports how many people the campaign would reach right now, without
 // sending anything.
 func (r *Runner) Pending(ctx context.Context, c Campaign) (int64, error) {
-	return r.store.CountBroadcastCandidates(ctx, db.CountBroadcastCandidatesParams{Campaign: c.Name, Half: c.Half})
+	return r.store.CountBroadcastCandidates(ctx, db.CountBroadcastCandidatesParams{Campaign: c.Name, Half: c.Half, Timezones: c.Timezones})
 }
 
 // Run sends the campaign to one capped batch and reports what is left.
@@ -69,9 +69,10 @@ func (r *Runner) Pending(ctx context.Context, c Campaign) (int64, error) {
 // that burns the campaign for them is already what records the failure.
 func (r *Runner) Run(ctx context.Context, c Campaign) (Stats, error) {
 	rows, err := r.store.ListBroadcastCandidates(ctx, db.ListBroadcastCandidatesParams{
-		Campaign: c.Name,
-		Half:     c.Half,
-		MaxRows:  r.max,
+		Campaign:  c.Name,
+		Half:      c.Half,
+		Timezones: c.Timezones,
+		MaxRows:   r.max,
 	})
 	if err != nil {
 		return Stats{}, fmt.Errorf("broadcast: listing %s candidates: %w", c.Name, err)
