@@ -40,6 +40,7 @@
   const ticks = $derived(model ? pickTickIndices(model.slots.length) : []);
   let hovered = $state<number | null>(null); // a slot index
   let tipX = $state(0);
+  let svgEl = $state<SVGSVGElement | null>(null);
 
   const money = (v: number) => formatSalary(v, currency);
   const monthDate = (key: string) => new Date(`${key}-01T00:00:00Z`);
@@ -52,14 +53,17 @@
 
   function onMove(e: PointerEvent) {
     if (!model) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    if (rect.width === 0) return;
-    const vbX = ((e.clientX - rect.left) / rect.width) * model.width;
+    // The month comes from the plot's own box (the wrapper is padded around it); the
+    // tooltip is placed in the wrapper, which it is positioned against.
+    const plot = svgEl?.getBoundingClientRect();
+    const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (!plot || plot.width === 0) return;
+    const vbX = ((e.clientX - plot.left) / plot.width) * model.width;
     hovered = nearestIndexByX(
       model.slotX.map((x) => ({ x })),
       vbX,
     );
-    tipX = e.clientX - rect.left;
+    tipX = e.clientX - box.left;
   }
   const hoveredMonth = $derived(hovered === null || !model ? null : (model.slots[hovered] ?? null));
 </script>
@@ -83,7 +87,12 @@
       onpointermove={onMove}
       onpointerleave={() => (hovered = null)}
     >
-      <svg viewBox="0 0 {model.width} {model.height}" class="block h-auto w-full overflow-visible" aria-hidden="true">
+      <svg
+        bind:this={svgEl}
+        viewBox="0 0 {model.width} {model.height}"
+        class="block h-auto w-full overflow-visible"
+        aria-hidden="true"
+      >
         <line x1="0" y1={model.topY} x2={model.width} y2={model.topY} class="stroke-border" stroke-dasharray="2 3" />
         <text x="0" y={model.topY - 6} class="fill-muted-foreground max-sm:hidden" font-size="12"
           >{money(model.max)}</text

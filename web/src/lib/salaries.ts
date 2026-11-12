@@ -33,10 +33,13 @@ export function readSalariesQuery(p: URLSearchParams): SalariesQuery {
   const seen = new Set([`${scope.category}.${scope.country}`]);
   const compare: SalaryLine[] = [];
   for (const raw of (p.get('vs') ?? '').split(',')) {
-    const key = raw.trim().toLowerCase();
-    if (!key || seen.has(key) || compare.length === MAX_COMPARE) continue;
+    const text = raw.trim().toLowerCase();
+    if (!text) continue;
+    // Keyed by the parsed pair, not the text: `frontend.de.x` names the same line.
+    const [category = '', country = ''] = text.split('.');
+    const key = `${category}.${country}`;
+    if (seen.has(key) || compare.length === MAX_COMPARE) continue;
     seen.add(key);
-    const [category = '', country = ''] = key.split('.');
     compare.push({ category, country });
   }
   return { scope, compare, unit: (p.get('unit') ?? '').trim() };
@@ -56,11 +59,6 @@ export function salariesSearch(q: SalariesQuery): string {
 }
 
 export const unitOf = (b: { currency: string; period: string }) => `${b.currency}-${b.period}`;
-
-/** The band the page shows: the requested unit when the scope has it, else the richest. */
-export function pickBand(bands: InsightSalaryBand[], unit: string): InsightSalaryBand | null {
-  return bands.find((b) => unitOf(b) === unit) ?? bands[0] ?? null;
-}
 
 export interface HistogramBin {
   lo: number;
@@ -105,19 +103,23 @@ export function histogramFromQuantiles(q: readonly number[] | undefined, target 
   return bins;
 }
 
-/** The unit every figure on the page is in: the shown band's, so the cards and the
- *  chart agree; without a band, the requested unit if any line has history in it,
- *  else the richest unit of the first line that has any. A comparison line can carry
- *  the chart when the scope itself has no figures. '' when no line has history. */
+/** Every unit the page can show, richest first: the scope's bands, then any unit a
+ *  line has history in, so a unit only the comparison carries can still be picked. */
+export function pageUnits(bands: InsightSalaryBand[], histories: (InsightSalaryMonth[] | null)[]): string[] {
+  const units = [...bands.map(unitOf), ...histories.flatMap((rows) => historySeries(rows ?? []).map(unitOf))];
+  return [...new Set(units)];
+}
+
+/** The unit every figure on the page is in, the cards and the chart alike: the
+ *  requested one when the page can show it, else the richest (the scope's first band,
+ *  else the first unit a line has history in). '' when nothing has figures. */
 export function pageUnit(
-  band: InsightSalaryBand | null,
+  bands: InsightSalaryBand[],
   requested: string,
   histories: (InsightSalaryMonth[] | null)[],
 ): string {
-  if (band) return unitOf(band);
-  const units = histories.map((rows) => historySeries(rows ?? []).map(unitOf));
-  if (requested && units.some((u) => u.includes(requested))) return requested;
-  return units.find((u) => u.length > 0)?.[0] ?? '';
+  const units = pageUnits(bands, histories);
+  return units.includes(requested) ? requested : (units[0] ?? '');
 }
 
 /** One line's stored months in one unit, oldest first; [] when it has too few months. */

@@ -13,7 +13,7 @@
     MAX_COMPARE,
     lineMonths,
     pageUnit,
-    pickBand,
+    pageUnits,
     salariesSearch,
     unitOf,
     type SalariesQuery,
@@ -25,8 +25,14 @@
   const q = $derived(data.query);
   const scope = $derived(q.scope);
   const bands = $derived(data.bands ?? []);
-  const band = $derived(pickBand(bands, q.unit));
-  const unit = $derived(pageUnit(band, q.unit, data.histories));
+  // One unit for the whole page, then the band in it: the cards and the chart agree.
+  const unit = $derived(pageUnit(bands, q.unit, data.histories));
+  const units = $derived(pageUnits(bands, data.histories));
+  const band = $derived(bands.find((b) => unitOf(b) === unit) ?? null);
+  // The URL's country stays a choice even when the country list failed to load.
+  const countryOptions = $derived(
+    scope.country && !data.countries.includes(scope.country) ? [scope.country, ...data.countries] : data.countries,
+  );
   const [currency = '', period = ''] = $derived(unit.split('-'));
 
   const lineName = (category: string, country: string) =>
@@ -115,19 +121,19 @@
       >Country
       <select class={selectClass} value={scope.country} onchange={(e) => setScope('country', e.currentTarget.value)}>
         <option value="">All countries</option>
-        {#each data.countries as c (c)}<option value={c}>{countryLabel(c)}</option>{/each}
+        {#each countryOptions as c (c)}<option value={c}>{countryLabel(c)}</option>{/each}
       </select>
     </label>
-    {#if bands.length > 1}
+    {#if units.length > 1}
       <div class="flex flex-wrap gap-1 text-sm" role="group" aria-label="Currency and period">
-        {#each bands.slice(0, 5) as b (unitOf(b))}
+        {#each units as u (u)}
           <button
             type="button"
-            class="rounded-md border px-2.5 py-1 {unitOf(b) === unit
+            class="rounded-md border px-2.5 py-1 {u === unit
               ? 'border-foreground font-medium text-foreground'
               : 'border-border text-muted-foreground hover:text-foreground'}"
-            aria-pressed={unitOf(b) === unit}
-            onclick={() => go({ ...q, unit: unitOf(b) })}>{b.currency} / {b.period}</button
+            aria-pressed={u === unit}
+            onclick={() => go({ ...q, unit: u })}>{u.replace('-', ' / ')}</button
           >
         {/each}
       </div>
@@ -159,7 +165,15 @@
           Middle half {formatSalary(band.p25, band.currency)} – {formatSalary(band.p75, band.currency)}
         </p>
       {:else}
-        <p class="mt-1 text-sm text-muted-foreground">Too few open postings state a salary here.</p>
+        <p class="mt-1 text-sm text-muted-foreground">
+          {#if data.bands === null}
+            Salary figures are unavailable right now.
+          {:else if bands.length}
+            No open postings here state a salary in {currency} per {period}.
+          {:else}
+            Too few open postings state a salary here.
+          {/if}
+        </p>
       {/if}
     </div>
     <div class="rounded-xl border border-border bg-card p-4">

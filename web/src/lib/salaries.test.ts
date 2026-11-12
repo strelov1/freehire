@@ -5,7 +5,7 @@ import {
   histogramFromQuantiles,
   lineMonths,
   pageUnit,
-  pickBand,
+  pageUnits,
   readSalariesQuery,
   salariesSearch,
   MAX_COMPARE,
@@ -33,6 +33,11 @@ describe('salaries address', () => {
     expect(readSalariesQuery(new URLSearchParams(salariesSearch(q)))).toEqual(q);
   });
 
+  it('keys a line by its parsed pair, so trailing text cannot repeat a line', () => {
+    const q = readSalariesQuery(new URLSearchParams('vs=frontend.de,frontend.de.extra'));
+    expect(q.compare).toEqual([{ category: 'frontend', country: 'de' }]);
+  });
+
   it("drops a repeated line and one equal to the scope's own", () => {
     const q = readSalariesQuery(
       new URLSearchParams('category=backend&country=de&vs=backend.de,frontend.,FRONTEND.,.pl'),
@@ -45,25 +50,6 @@ describe('salaries address', () => {
 
   it('writes an empty query as no query string', () => {
     expect(salariesSearch(readSalariesQuery(new URLSearchParams()))).toBe('');
-  });
-});
-
-describe('pickBand', () => {
-  const band = (currency: string, period: string, sample_size: number) => ({
-    seniority: '',
-    currency,
-    period,
-    sample_size,
-    p25: 1,
-    p50: 2,
-    p75: 3,
-    quantiles: [],
-  });
-  it('takes the requested unit, else the first (richest) band', () => {
-    const bands = [band('USD', 'year', 900), band('EUR', 'year', 100)];
-    expect(pickBand(bands, 'EUR-year')?.currency).toBe('EUR');
-    expect(pickBand(bands, 'GBP-year')?.currency).toBe('USD');
-    expect(pickBand([], 'USD-year')).toBeNull();
   });
 });
 
@@ -118,16 +104,24 @@ describe('pageUnit', () => {
     quantiles: [],
   };
 
-  it('follows the shown band so the cards and the chart agree', () => {
-    expect(pageUnit(band, 'USD-year', [months('USD', 'year')])).toBe('EUR-year');
+  it("defaults to the scope's richest band and honours a request the page can show", () => {
+    expect(pageUnit([band], '', [months('USD', 'year')])).toBe('EUR-year');
+    expect(pageUnit([band], 'USD-year', [months('USD', 'year')])).toBe('USD-year');
+    expect(pageUnit([band], 'GBP-year', [months('USD', 'year')])).toBe('EUR-year');
+  });
+
+  it("offers every band's unit, then units only a line's history has", () => {
+    const histories = [months('EUR', 'year'), [...months('USD', 'year'), ...months('PLN', 'month', 10)]];
+    expect(pageUnits([band], histories)).toEqual(['EUR-year', 'USD-year', 'PLN-month']);
+    expect(pageUnits([], [null])).toEqual([]);
   });
 
   it('lets a comparison line carry the chart when the scope has no figures', () => {
     const histories = [null, [...months('USD', 'year'), ...months('PLN', 'month', 10)]];
-    expect(pageUnit(null, '', histories)).toBe('USD-year');
-    expect(pageUnit(null, 'PLN-month', histories)).toBe('PLN-month');
-    expect(pageUnit(null, 'GBP-year', histories)).toBe('USD-year');
-    expect(pageUnit(null, '', [null, []])).toBe('');
+    expect(pageUnit([], '', histories)).toBe('USD-year');
+    expect(pageUnit([], 'PLN-month', histories)).toBe('PLN-month');
+    expect(pageUnit([], 'GBP-year', histories)).toBe('USD-year');
+    expect(pageUnit([], '', [null, []])).toBe('');
   });
 });
 
