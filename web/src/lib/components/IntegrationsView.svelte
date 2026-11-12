@@ -73,7 +73,13 @@
   async function disconnectGmail() {
     try {
       await api.disconnectGmail();
-      gmail = { connected: false, available: gmail?.available, calendar_connected: false };
+      gmail = {
+        connected: false,
+        available: gmail?.available ?? false,
+        calendar_connected: false,
+        mentor_calendar_connected: false,
+        mentor_busy_sync_connected: false,
+      };
     } catch (e) {
       gmailError = errorMessage(e, 'Failed to disconnect.');
       announce(gmailError, 'assertive');

@@ -60,12 +60,7 @@ export interface SitemapEntry {
 
 // Aggregate market-insight wire shapes (the /api/v1/insights/* reads).
 /** One cell of the role × country grid; `country` is '' for the all-countries column. */
-export interface InsightRoleCountryCell {
-  category: string;
-  country: string;
-  open_count: number;
-  open_count_prev: number;
-}
+export type InsightRoleCountryCell = components['schemas']['RoleCountryCell'];
 
 /** The grid: its cells, and the countries the endpoint chose as columns, largest first. */
 export interface InsightRoleCountries {
@@ -76,26 +71,7 @@ export interface InsightRoleCountries {
 /** One category's market pulse (GET /api/v1/insights/role-pulse): raw figures for the
  *  last 30 days and, for competition and time to close, the 30 before. `web/src/lib/rolePulse.ts` turns them into the
  *  page's figures and decides which are too thin to show. */
-export interface InsightRolePulse {
-  category: string;
-  /** Every open canonical posting of the category, whatever its seniority. */
-  open_count: number;
-  competition: {
-    views: number;
-    views_prev: number;
-    exposure_days: number;
-    exposure_days_prev: number;
-    views_through: string | null;
-  };
-  time_to_close: {
-    closed: number;
-    closed_prev: number;
-    median_days: number | null;
-    median_days_prev: number | null;
-  };
-  /** The last 30 days only: no earlier window is served (see rolePulse.ts). */
-  inflow: { count: number };
-}
+export type InsightRolePulse = components['schemas']['RolePulse'];
 
 export interface InsightRole {
   category: string;
@@ -127,68 +103,27 @@ interface InsightRoleSkill {
   share: number;
 }
 
-export interface InsightSkill {
-  skill: string;
-  open_count: number;
-  growth: number;
-}
+export type InsightSkill = components['schemas']['SkillInsight'];
 
 /** One month of a category's salary history (`month` is YYYY-MM). */
-export interface InsightSalaryMonth {
-  currency: string;
-  period: string;
-  month: string;
-  sample_size: number;
-  p25: number;
-  p50: number;
-  p75: number;
-}
+export type InsightSalaryMonth = components['schemas']['SalaryMonth'];
 
-export interface InsightSalaryBand {
-  seniority: string;
-  currency: string;
-  period: string;
-  sample_size: number;
-  p25: number;
-  p50: number;
-  p75: number;
-  /** The salary at every 5th percentile from 5 to 95; [] until the rollup computed it. */
-  quantiles: number[];
-}
+export type InsightSalaryBand = components['schemas']['SalaryBand'];
 
-export interface InsightCompany {
-  company_slug: string;
-  company_name: string;
-  open_now: number;
-  open_prev_30d: number;
-  growth_30d: number;
-}
+export type InsightCompany = components['schemas']['CompanyInsight'];
 
 /** One weekly snapshot in a skill's demand series (GET /me/market-pulse). */
-export interface SkillPulsePoint {
-  week_start: string;
-  open_count: number;
-}
+export type SkillPulsePoint = components['schemas']['SkillPulsePoint'];
 
 /** A signed-in user's own profile skill, joined against its retained weekly
  *  history. change_pct is null with fewer than two snapshots, or when the
  *  earliest snapshot's count is zero. Skills never yet seen in an open job are
  *  omitted by the server rather than reported with a fabricated count. */
-export interface SkillPulse {
-  skill: string;
-  open_count: number;
-  change_pct: number | null;
-  series: SkillPulsePoint[];
-}
+export type SkillPulse = components['schemas']['SkillPulse'];
 
 /** One posting in a role cluster — a single city's opening under a collapsed role
  *  (see the /jobs/:slug/copies endpoint). Each keeps its own location and apply URL. */
-export interface JobCopy {
-  public_slug: string;
-  location: string;
-  apply_url: string;
-  posted_at: string | null;
-}
+export type JobCopy = components['schemas']['JobCopy'];
 
 /** The public roast's wire shape (POST /api/v1/cv/roast, no session — see RoastCV and its
  *  own roastResponse on the backend): the deterministic ATS report plus a live
@@ -213,31 +148,11 @@ export type PlanRefusalBody = { allowance?: { feature?: unknown }; upgrade_url?:
 
 // --- Gmail inbox wire shapes ---------------------------------------------
 
-export interface GmailStatus {
-  connected: boolean;
-  available?: boolean; // whether the connect flow is configured server-side
-  email?: string;
-  status?: string;
-  /** Whether the same Google grant also covers the calendar. Read from the recorded
-   *  scopes rather than from the connection existing: the two consents are separate, so
-   *  a connected mailbox says nothing about the calendar, and a calendar grant may have
-   *  no mailbox behind it at all. */
-  calendar_connected?: boolean;
-  /** Whether the same grant covers calendar.events — the write scope that
-   *  auto-generates a Meet link per booking and makes the mentor profile's own meeting
-   *  link field optional. Asked for on the same consent as calendar_connected. */
-  mentor_calendar_connected?: boolean;
-  /** Whether the grant enrolls a mentor's busy time in slot sync. Granted by the same
-   *  calendar consent; false for a calendar grant made before the consents merged. */
-  mentor_busy_sync_connected?: boolean;
-}
+export type GmailStatus = components['schemas']['GmailStatus'];
 
 /** The hosted-mailbox option: the caller's address (null when none) + whether
  *  the feature is configured server-side. */
-export interface MailboxStatus {
-  available: boolean;
-  address: string | null;
-}
+export type MailboxStatus = components['schemas']['MailboxStatus'];
 
 /** The account switcher value: '' = all sources. 'external' is mail the caller's
  *  own agent harness pushed — it has no connection to configure, it simply
@@ -245,30 +160,9 @@ export interface MailboxStatus {
 export type InboxSource = '' | 'gmail' | 'hosted' | 'external';
 
 /** One row in the flat inbox listing. */
-export interface InboxMessage extends EmailLinking {
-  id: number;
-  source: string;
-  external_id: string;
-  from_addr: string;
-  from_name: string;
-  subject: string;
-  snippet: string;
-  received_at: string;
-  read: boolean;
-}
+export type InboxMessage = components['schemas']['InboxMessage'];
 
 /** One message in full, for the reading pane. */
-export interface EmailBody extends EmailLinking {
-  id: number;
-  source: string;
-  external_id: string;
-  from_addr: string;
-  from_name: string;
-  subject: string;
-  body_text: string;
-  body_html: string;
-  received_at: string;
-  read: boolean;
-}
+export type EmailBody = components['schemas']['InboxEmail'];
 
 export type MyJobsFilter = 'all' | 'viewed' | 'saved' | 'applied' | 'board' | 'dismissed';
