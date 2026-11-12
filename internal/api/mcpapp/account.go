@@ -50,6 +50,7 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string, reade
 		registerCatalogueTools(server, reader, "account")
 	}
 
+	next := signedInNext(tools)
 	for _, t := range tools {
 		server.AddTool(&mcp.Tool{
 			Name:        t.Name,
@@ -57,7 +58,7 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string, reade
 			Description: t.Description,
 			InputSchema: t.Schema,
 			Annotations: accountAnnotations(t),
-		}, loggedAccountTool(t.Name, accountToolHandler(t, userID)))
+		}, loggedAccountTool(t.Name, withNext(accountToolHandler(t, userID), next.nextFor(t.Name))))
 	}
 	return server
 }
