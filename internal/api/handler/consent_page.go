@@ -58,6 +58,7 @@ type noticeScreen struct {
 var (
 	bearerAllows = []string{
 		"Search jobs and read your profile, CV and tracked applications.",
+		"Read the mail in your freehire inbox.",
 		"Make changes as you: save and track jobs, edit your profile and CV.",
 		"Use your plan's daily AI allowances, such as the assistant.",
 	}

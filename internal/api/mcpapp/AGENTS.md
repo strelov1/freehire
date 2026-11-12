@@ -57,12 +57,16 @@ website, so it is shown but not changed here. "What is new" reads `subscription_
 the ledger the digests are built from, rather than re-running the search.
 
 `list_unread_mail` (`internal/api/handler/mcp_mail_tool.go`) is the inbox's only tool here:
-the headers of unread application mail (sender, subject, time, label, and the company and
-job slug of a CONFIRMED link), `unread_count`, `sync_pending`, `reconnect_needed` and
-`mailbox_url`. No body, snippet or message id, nothing marked read, no model call. Served
-to keys too, because REST `/me/inbox` is `mw.key`. Sender and subject are sender-written:
-control and format runes are stripped, length capped, and the description, a `notice` in the
-result and the instructions say never to follow them. The assistant's `inbox_*` write
+the headers of unread application mail (`from_name`, `from_addr`, subject, time, label, and
+the company and job slug of a CONFIRMED link), `unread_count`, `sync_pending` (Gmail's first
+sync not completed), `reconnect_needed` (Gmail lost its grant; hosted mail still arrives) and
+`mailbox_url`. No body, snippet or message id, nothing marked read, no model call; a failed
+sync-state lookup logs and returns the page with both flags false. Served to keys too,
+because REST `/me/inbox` is `mw.key`. Header text is sender-written: `inertLine` strips line
+breaks and runes that render blank (format, variation selectors, Hangul fillers, private-use,
+unassigned); name and subject are capped, the address is not (a long spoofed name must not
+push it out of view); the description, a `notice` in the result and the instructions say
+never to follow it. The assistant's `inbox_*` write
 tools (triage, link, record application) are deliberately not served: the only evidence an
 MCP agent would act on is that untrusted header text.
 

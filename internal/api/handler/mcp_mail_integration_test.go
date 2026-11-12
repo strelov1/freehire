@@ -143,7 +143,7 @@ func testMCPUnreadMail(t *testing.T, endpoint string) {
 				t.Errorf("notice=%q mailbox_url=%q", got.Notice, got.MailboxURL)
 			}
 			first := got.Messages[0]
-			if first.Subject != strings.ReplaceAll(injected, "\n", " ") || first.Sender != "Mallory <x@sender.test>" {
+			if first.Subject != strings.ReplaceAll(injected, "\n", " ") || first.FromName != "Mallory" || first.FromAddr != "x@sender.test" {
 				t.Errorf("injected message = %+v, want the subject as one line of data", first)
 			}
 			if second := got.Messages[1]; second.Company != "Acme" || second.JobSlug != "mcp-mail-job" || second.Label != "rejection" {
@@ -161,6 +161,44 @@ func testMCPUnreadMail(t *testing.T, endpoint string) {
 			}
 			if !stillUnread {
 				t.Error("listing marked a message read")
+			}
+		})
+	}
+}
+
+// gmailSyncState reads the connection row: a first sync not yet completed is pending, a lost
+// grant needs reconnecting, a calendar-only grant (no address) and no row are no mailbox.
+func TestGmailSyncState(t *testing.T) {
+	ctx := context.Background()
+	pool := startPostgres(t)
+	h := &inboxHandlers{queries: db.New(pool)}
+	for _, tc := range []struct {
+		name, email, status    string
+		synced, row            bool
+		wantPending, wantRecon bool
+	}{
+		{name: "first sync pending", email: "a@gmail.test", status: "connected", row: true, wantPending: true},
+		{name: "sync completed", email: "b@gmail.test", status: "connected", synced: true, row: true},
+		{name: "needs reconsent", email: "c@gmail.test", status: "needs_reconsent", row: true, wantRecon: true},
+		{name: "calendar only", email: "", status: "connected", row: true},
+		{name: "no row"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			uid := seedOAuthUser(t, pool, "sync-"+strings.ReplaceAll(tc.name, " ", "-")+"@example.test")
+			if tc.row {
+				if _, err := pool.Exec(ctx,
+					`INSERT INTO gmail_connections (user_id, email, refresh_token_enc, status, last_synced_at)
+					 VALUES ($1, $2, 'enc', $3, CASE WHEN $4::bool THEN now() END)`,
+					uid, tc.email, tc.status, tc.synced); err != nil {
+					t.Fatal(err)
+				}
+			}
+			pending, reconnect, err := h.gmailSyncState(ctx, uid)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if pending != tc.wantPending || reconnect != tc.wantRecon {
+				t.Errorf("pending=%v reconnect=%v, want %v %v", pending, reconnect, tc.wantPending, tc.wantRecon)
 			}
 		})
 	}
