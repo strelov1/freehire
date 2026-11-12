@@ -846,6 +846,7 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	assistantH.answerBank = answerBank
 	assistantH.support.pool = cfg.Pool
+	assistantH.support.prices = billingSvc.PublicPrices
 	if cfg.SupportLLM != nil {
 		supportLLM := cfg.SupportLLM.WithTimeout(assistantLLMTimeout)
 		assistantH.support.llm = supportLLM

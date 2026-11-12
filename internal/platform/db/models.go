@@ -173,6 +173,7 @@ type AssistantSession struct {
 	SearchQuery     pgtype.Text        `json:"search_query"`
 	SelectionBrief  string             `json:"selection_brief"`
 	EscalatedAt     pgtype.Timestamptz `json:"escalated_at"`
+	Helpful         pgtype.Bool        `json:"helpful"`
 }
 
 type AutoApplyEvent struct {

@@ -180,3 +180,10 @@ WHERE id = $1 AND user_id = $2 AND preset = 'support';
 SELECT count(*)
 FROM assistant_sessions
 WHERE user_id = $1 AND escalated_at >= $2;
+
+-- name: RateSupportSession :execrows
+-- The owner's verdict on their own support conversation; 0 rows means it is not theirs or not
+-- a support session.
+UPDATE assistant_sessions
+SET helpful = $3
+WHERE id = $1 AND user_id = $2 AND preset = 'support';

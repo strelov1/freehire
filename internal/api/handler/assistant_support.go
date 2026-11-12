@@ -6,10 +6,13 @@ import (
 	"log"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/identity/billing"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
@@ -31,6 +34,10 @@ type supportDeps struct {
 	runner *assistant.Runner
 	mail   supportMail
 
+	// prices reads what each plan costs now, from the same provider cache as the pricing
+	// page. Without billing (or nil, in tests) my_account carries no prices.
+	prices func(context.Context) []billing.PublicPrice
+
 	// pool opens the transaction that makes a blank session's get-or-create atomic.
 	pool *pgxpool.Pool
 }
@@ -43,6 +50,7 @@ func (h *assistantHandlers) registerSupport(api fiber.Router, mw middleware) {
 	api.Post("/support/sessions", mw.cookie, h.CreateSupportSession)
 	api.Post("/support/sessions/:id/messages", mw.cookie, h.PostSupportMessage)
 	api.Post("/support/sessions/:id/cancel", mw.cookie, h.CancelSupportTurn)
+	api.Post("/support/sessions/:id/rating", mw.cookie, h.RateSupportSession)
 }
 
 func (h *assistantHandlers) CreateSupportSession(c *fiber.Ctx) error {
@@ -132,6 +140,27 @@ func (h *assistantHandlers) CancelSupportTurn(c *fiber.Ctx) error {
 		return err
 	}
 	h.turns.cancel(sess.ID)
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// RateSupportSession records whether the conversation helped. A pointer, so a body without
+// the field is refused rather than read as "did not help".
+func (h *assistantHandlers) RateSupportSession(c *fiber.Ctx) error {
+	sess, err := h.ownedSupportSession(c)
+	if err != nil {
+		return err
+	}
+	var in struct {
+		Helpful *bool `json:"helpful"`
+	}
+	if err := c.BodyParser(&in); err != nil || in.Helpful == nil {
+		return fiber.NewError(fiber.StatusBadRequest, "helpful must be true or false")
+	}
+	if _, err := h.queries.RateSupportSession(c.Context(), db.RateSupportSessionParams{
+		ID: sess.ID, UserID: sess.UserID, Helpful: pgtype.Bool{Bool: *in.Helpful, Valid: true},
+	}); err != nil {
+		return err
+	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 

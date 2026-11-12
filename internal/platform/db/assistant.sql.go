@@ -565,6 +565,28 @@ func (q *Queries) LockAssistantSessionCreation(ctx context.Context, userID int64
 	return err
 }
 
+const rateSupportSession = `-- name: RateSupportSession :execrows
+UPDATE assistant_sessions
+SET helpful = $3
+WHERE id = $1 AND user_id = $2 AND preset = 'support'
+`
+
+type RateSupportSessionParams struct {
+	ID      uuid.UUID   `json:"id"`
+	UserID  int64       `json:"user_id"`
+	Helpful pgtype.Bool `json:"helpful"`
+}
+
+// The owner's verdict on their own support conversation; 0 rows means it is not theirs or not
+// a support session.
+func (q *Queries) RateSupportSession(ctx context.Context, arg RateSupportSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, rateSupportSession, arg.ID, arg.UserID, arg.Helpful)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const releaseSupportEscalation = `-- name: ReleaseSupportEscalation :exec
 UPDATE assistant_sessions
 SET escalated_at = NULL

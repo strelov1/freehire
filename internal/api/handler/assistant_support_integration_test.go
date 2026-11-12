@@ -743,3 +743,47 @@ func TestMyAccountReportsTheSupportAllowanceFromTheLedger(t *testing.T) {
 		t.Errorf("after release = %+v, want used 2, remaining 5", got)
 	}
 }
+
+func TestSupportRatingRecordsTheOwnersVerdictOnly(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := supportApp(t, pool, iss, &gateCountingModel{}, plan.DefaultConfig().Enforcing(), nil)
+	_, owner := assistantSubscriber(t, pool, iss, "support-rate-owner@example.test", false)
+	_, other := assistantSubscriber(t, pool, iss, "support-rate-other@example.test", false)
+	id := newSupportSession(t, app, owner)
+	rate := func(token, body string) int {
+		status, _ := supportPost(t, app, "/api/v1/support/sessions/"+id+"/rating", token, body)
+		return status
+	}
+	helpful := func() *bool {
+		var v *bool
+		if err := pool.QueryRow(context.Background(), `SELECT helpful FROM assistant_sessions WHERE id = $1`, id).Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+
+	if got := rate(owner, `{}`); got != fiber.StatusBadRequest {
+		t.Errorf("rating without the field = %d, want 400", got)
+	}
+	if got := rate(other, `{"helpful":true}`); got != fiber.StatusNotFound {
+		t.Errorf("another account's rating = %d, want 404", got)
+	}
+	if v := helpful(); v != nil {
+		t.Fatalf("helpful = %v after refused votes, want NULL", *v)
+	}
+	if got := rate(owner, `{"helpful":true}`); got != fiber.StatusNoContent {
+		t.Fatalf("owner rating = %d, want 204", got)
+	}
+	if got := rate(owner, `{"helpful":false}`); got != fiber.StatusNoContent {
+		t.Fatalf("owner re-rating = %d, want 204", got)
+	}
+	if v := helpful(); v == nil || *v {
+		t.Errorf("helpful = %v, want false (the later vote)", v)
+	}
+
+	chat := createAssistantSession(t, app, owner, assistant.PresetChat)
+	if status, _ := supportPost(t, app, "/api/v1/support/sessions/"+chat+"/rating", owner, `{"helpful":true}`); status != fiber.StatusNotFound {
+		t.Errorf("rating a chat session = %d, want 404", status)
+	}
+}
