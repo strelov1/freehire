@@ -169,9 +169,7 @@
          you applied and then edited keeps a muted dot as the "base". -->
     {#if items.length > 0}
       <section class="flex flex-col gap-1.5">
-        <span
-          class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-        >
+        <span class="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
           <Bookmark class="size-3.5" aria-hidden="true" /> Your saved filters
         </span>
         <p class="-mt-0.5 text-xs text-muted-foreground">Click one to apply it to the list.</p>

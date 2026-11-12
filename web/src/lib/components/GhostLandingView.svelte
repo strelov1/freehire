@@ -49,7 +49,7 @@
        after the first screen must still have read it. -->
   <header class="flex flex-col items-start gap-10 lg:flex-row lg:gap-16">
     <div class="flex max-w-2xl flex-col gap-6">
-      <SectionLabel text="ghost jobs" />
+      <SectionLabel text="Ghost jobs" />
       <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">
         Some postings are not being filled. freehire tells you which, and why it thinks so.
       </h1>
@@ -88,7 +88,7 @@
 
   <!-- The four criteria, each with its own picture. -->
   <section class="flex flex-col gap-6">
-    <SectionLabel text="what lights the mark" />
+    <SectionLabel text="What lights the mark" />
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
       Two of them look at the <strong class="font-medium text-foreground">posting</strong>. Two look at what happened to
       <strong class="font-medium text-foreground">people who applied</strong>. Only the second kind can tell you nobody
@@ -132,7 +132,7 @@
        was the heaviest thing on the page, and the table already says what it demonstrated
        — the strongest wording sits in one corner, and the posting alone cannot reach it. -->
   <section class="flex flex-col gap-6">
-    <SectionLabel text="why the level is what it is" />
+    <SectionLabel text="Why the level is what it is" />
 
     <GateMatrix />
 
@@ -153,7 +153,7 @@
        gate are not restated here — the reports diagram above draws both, and saying it
        twice says it the second time more weakly. -->
   <section class="flex flex-col gap-5">
-    <SectionLabel text="your part" />
+    <SectionLabel text="Your part" />
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
       The strongest signal is one only you can give: you applied and nobody answered. There are two ways it reaches us.
     </p>
@@ -179,7 +179,7 @@
   <!-- Honest limits of coverage — a different thing from the limit on the claim, which is
        in the hero where a reader cannot miss it. -->
   <section class="flex flex-col gap-4">
-    <SectionLabel text="where it is blind" />
+    <SectionLabel text="Where it is blind" />
     <ul class="flex max-w-3xl flex-col gap-3 text-sm leading-relaxed text-muted-foreground">
       <li>
         <strong class="font-medium text-foreground">We only check pages we crawl.</strong>
@@ -207,7 +207,7 @@
   <!-- FAQ; shares GHOST_FAQ with the page's JSON-LD. Collapsed with <details>, so every
        answer is still in the served HTML and the structured data cannot disagree with it. -->
   <section class="flex flex-col gap-4">
-    <SectionLabel text="questions" />
+    <SectionLabel text="Questions" />
     <div class="flex flex-col divide-y divide-border border-y border-border">
       {#each GHOST_FAQ as item (item.question)}
         <Disclosure summary={item.question} class="py-3">

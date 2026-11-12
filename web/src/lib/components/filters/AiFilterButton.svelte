@@ -29,7 +29,7 @@
 >
   <MessageSquareText class="size-4" />
   {s.describeWithAi}
-  <span class="rounded bg-primary/15 px-1 text-xs font-semibold uppercase tracking-wide">{s.beta}</span>
+  <span class="rounded bg-primary/15 px-1 text-xs font-semibold">{s.beta}</span>
 </button>
 
 {#if open}

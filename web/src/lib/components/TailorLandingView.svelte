@@ -78,7 +78,7 @@
   <!-- Hero -->
   <section class="dot-grid -mx-4 grid items-center gap-12 px-4 pb-16 pt-8 lg:grid-cols-2">
     <div>
-      <SectionLabel text="cv tailoring · pro" />
+      <SectionLabel text="CV tailoring · Pro" />
       <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
         Your CV, rewritten for this job. Nothing made up.
       </h1>
@@ -108,7 +108,7 @@
 
   <!-- Before and after -->
   <section class="py-16 sm:py-20">
-    <SectionLabel text="before → after" />
+    <SectionLabel text="Before → after" />
     <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       Same facts. Said for this job.
     </h2>
@@ -120,11 +120,11 @@
       {#each DEMO_BULLETS as b (b.req)}
         <li class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
           <div class="bg-background p-4">
-            <p class="text-xs uppercase tracking-wide text-muted-foreground">Before</p>
+            <p class="text-xs text-muted-foreground">Before</p>
             <p class="mt-1 text-sm text-muted-foreground text-pretty">{b.before}</p>
           </div>
           <div class="bg-background p-4">
-            <p class="text-xs uppercase tracking-wide text-foreground">After</p>
+            <p class="text-xs text-foreground">After</p>
             <p class="mt-1 text-sm text-pretty">
               {#each highlight(b.after, b.keywords) as part, i (i)}
                 {#if part.hit}<mark class="rounded bg-brand/15 px-0.5 text-foreground">{part.text}</mark
@@ -139,7 +139,7 @@
 
   <!-- Honesty split -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="it doesn't make things up" />
+    <SectionLabel text="It doesn't make things up" />
     <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       It knows the difference between burying something and not having it.
     </h2>
@@ -167,7 +167,7 @@
 
   <!-- How it works -->
   <section id="how-it-works" class="scroll-mt-20 border-t border-border py-16 sm:py-20">
-    <SectionLabel text="how it works" />
+    <SectionLabel text="How it works" />
     <h2 class="mt-6 max-w-2xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
       From a posting to a PDF.
     </h2>
@@ -176,7 +176,7 @@
 
   <!-- What Pro gets you -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="pro" />
+    <SectionLabel text="Pro" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
         <h2 class="text-balance max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -209,13 +209,13 @@
 
   <!-- Comparison -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="compared" />
+    <SectionLabel text="Compared" />
     <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       Why not just ask a chatbot?
     </h2>
     <div class="mt-10 overflow-x-auto rounded-xl border border-border">
       <table class="w-full min-w-xl text-left text-sm">
-        <thead class="bg-secondary/50 text-xs uppercase tracking-wide text-muted-foreground">
+        <thead class="bg-secondary/50 text-xs text-muted-foreground">
           <tr>
             <th scope="col" class="px-4 py-3 font-medium"><span class="sr-only">Feature</span></th>
             <th scope="col" class="px-4 py-3 font-semibold text-foreground">freehire</th>
@@ -252,7 +252,7 @@
 
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share TAILOR_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="faq" />
+    <SectionLabel text="FAQ" />
     <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       Questions people ask before buying.
     </h2>

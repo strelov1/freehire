@@ -48,7 +48,7 @@
 <div class="flex flex-col gap-16">
   <!-- Hero -->
   <section class="dot-grid -mx-4 flex flex-col gap-7 px-4 pb-4 pt-2">
-    <SectionLabel text="contribute" />
+    <SectionLabel text="Contribute" />
     <h1 class="max-w-3xl text-balance text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-6xl">
       A search engine is only as good as its coverage.
     </h1>

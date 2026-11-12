@@ -125,7 +125,7 @@
 <div class="flex flex-col gap-1.5">
   <div class="flex flex-wrap items-center gap-2">
     {#if showLabel}
-      <span class="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <span class="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
         <Bell class="size-3.5" aria-hidden="true" /> Alerts
       </span>
     {/if}

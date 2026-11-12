@@ -176,7 +176,7 @@
      places — and they differ only in what they list, so they are one shape. -->
 {#snippet chipRow(label: string, chips: Chip[])}
   <div class="flex flex-col items-center gap-2">
-    <p class="text-xs uppercase tracking-wide text-muted-foreground/80" aria-hidden="true">{label}</p>
+    <p class="text-xs text-muted-foreground" aria-hidden="true">{label}</p>
     <nav aria-label={label} class="flex flex-wrap justify-center gap-2">
       {#each chips as chip (chip.href)}
         <!-- eslint-disable svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->
@@ -296,7 +296,7 @@
        and a figure the snapshot could not measure is dropped rather than shown as a
        zero. `tabular-nums` keeps the row from twitching as the counts move. -->
   <section class="border-t border-border py-10">
-    <SectionLabel as="h2" text="the catalogue, today" />
+    <SectionLabel as="h2" text="The catalogue, today" />
     <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
       {#each figures as f (f.label)}
         <!-- `flex-col-reverse` so the number reads first and the label sits under it,
@@ -322,7 +322,7 @@
      them would make the second read as an afterthought. Each card carries its own
      evidence: the CLI its install line, the extension what the panel actually does. -->
 <section class="border-t border-border py-12 sm:py-16">
-  <SectionLabel as="h2" text="for your agent and your browser" />
+  <SectionLabel as="h2" text="For your agent and your browser" />
   <!-- `grid-cols-1` is load-bearing, not the default written out: with no column template
        the single track below `lg` is `auto`, which sizes to its widest content — the
        install line in the `pre`, which does not wrap. That took the track to 416px on a

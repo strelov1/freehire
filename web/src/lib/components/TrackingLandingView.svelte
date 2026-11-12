@@ -109,7 +109,7 @@
   <!-- Hero. Headline and pitch, then the board itself, full width — a kanban
        needs the room a side-column hero figure doesn't have. -->
   <section class="dot-grid -mx-4 px-4 pb-16 pt-8">
-    <SectionLabel text="job tracking" />
+    <SectionLabel text="Job tracking" />
     <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-6xl">
       Every application, one board. Nothing falls through.
     </h1>
@@ -132,7 +132,7 @@
         {#each board as col (col.id)}
           <div class="bg-background p-4">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{col.label}</span>
+              <span class="text-xs font-medium text-muted-foreground">{col.label}</span>
               <span class="font-mono text-[11px] text-muted-foreground">{col.count}</span>
             </div>
             <div class="mt-3 flex flex-col gap-2">
@@ -185,7 +185,7 @@
 
   <!-- What a card carries. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="every card, at a glance" />
+    <SectionLabel text="Every card, at a glance" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">The card tells you where things stand.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -214,7 +214,7 @@
   <!-- Nudges — trimmed to a pointer at the dedicated Notifications page, which
        covers this alongside job alerts and shows what the emails look like. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="nudges" />
+    <SectionLabel text="Nudges" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">It follows up before you have to remember to.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -234,7 +234,7 @@
 
   <!-- Your pipeline — the funnel view of the same board. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="your pipeline" />
+    <SectionLabel text="Your pipeline" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">See where every application lands.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -256,7 +256,7 @@
 
   <!-- Four views over the same data. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="four ways to look at it" />
+    <SectionLabel text="Four ways to look at it" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Board, List, Pipeline, Calendar.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -277,7 +277,7 @@
 
   <!-- Terminal / agents. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="from the terminal" />
+    <SectionLabel text="From the terminal" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
         <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -314,7 +314,7 @@ freehire <span class="text-foreground">note &lt;slug&gt; "referred by a former t
 
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share TRACKING_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="faq" />
+    <SectionLabel text="FAQ" />
     <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Frequently asked questions.</h2>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each TRACKING_FAQ as item (item.question)}

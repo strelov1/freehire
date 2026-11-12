@@ -44,7 +44,7 @@
     aria-valuemax={100}
     aria-valuenow={percent ?? undefined}
   >
-    <div class="h-full rounded-full bg-brand transition-all duration-700" style:width="{percent ?? 0}%"></div>
+    <div class="h-full rounded-full bg-brand" style:width="{percent ?? 0}%"></div>
   </div>
 
   <dl class="mt-8 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
@@ -83,7 +83,7 @@
 </Card>
 
 <section class="mt-10">
-  <SectionLabel text="help speed it up" />
+  <SectionLabel text="Help speed it up" />
   <h2 class="mt-3 text-2xl font-semibold tracking-tight">Lend your machine for a while.</h2>
   <p class="mt-3 max-w-2xl leading-relaxed text-muted-foreground">
     The volunteer client runs the embedding model on your own computer and sends back vectors for postings in the queue.

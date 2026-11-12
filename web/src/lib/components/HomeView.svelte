@@ -172,7 +172,7 @@
   <section class="grid-bg relative -mx-4 px-4 pb-16 pt-14 sm:pt-20">
     <div class="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
       <div>
-        <SectionLabel text="open-source · free &amp; transparent" class="reveal" style="--d:0ms" />
+        <SectionLabel text="Open-source · free &amp; transparent" class="reveal" style="--d:0ms" />
 
         <h1
           class="reveal mt-6 max-w-2xl text-balance text-5xl font-semibold leading-[0.95] tracking-tighter sm:text-7xl"
@@ -233,13 +233,13 @@
   <!-- Catalogue scale, right under the fold: two live totals (server-loaded, with
        a static "+" fallback) and two constants. The first proof of the hero's claim. -->
   <section class="py-10 sm:py-12">
-    <SectionLabel text="the catalogue" />
+    <SectionLabel text="The catalogue" />
     <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
       {#each figures as f (f.label)}
         <!-- A two-line label must not push its figure down: the cell is a column and the
              figure is pinned to its bottom, so every figure in a row shares one baseline. -->
         <div class="flex flex-col bg-background p-5 sm:p-6">
-          <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">{f.label}</dt>
+          <dt class="font-mono text-xs text-balance text-muted-foreground">{f.label}</dt>
           <dd class="mt-auto pt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{f.value}</dd>
         </div>
       {/each}
@@ -248,13 +248,13 @@
 
   <!-- Straight from the source — what separates freehire from an aggregator. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="straight from the source" as="h2" />
+    <SectionLabel text="Straight from the source" as="h2" />
     <NumberedGrid items={sourced} class="mt-10 sm:grid-cols-3" />
   </section>
 
   <!-- Sourced-from marquee: the real adapters, scrolling. Honest list only. -->
   <section class="flex items-center gap-6 overflow-hidden border-y border-border py-4">
-    <span class="shrink-0 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground"> sourced from </span>
+    <span class="shrink-0 font-mono text-xs text-muted-foreground"> sourced from </span>
     <div class={['marquee-viewport flex-1 overflow-hidden', paused && 'is-paused']}>
       <div class="marquee-track flex items-center gap-8 whitespace-nowrap">
         {#each sourcesMarquee as src, i (i)}
@@ -268,7 +268,7 @@
 
   <!-- Mission. A single large statement carries this section. -->
   <section class="py-16 sm:py-20">
-    <SectionLabel text="mission" />
+    <SectionLabel text="Mission" />
     <p class="mt-6 max-w-3xl text-2xl font-medium leading-snug tracking-tight sm:text-3xl">
       A job board that works for you, not for recruiters. No paywalls, no sponsored listings, no CV harvesting. Free to
       use, and free to fork.
@@ -277,14 +277,14 @@
 
   <!-- How it works — three steps that mirror the actual ingest pipeline. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="how it works" as="h2" />
+    <SectionLabel text="How it works" as="h2" />
     <NumberedGrid items={steps} class="mt-10 sm:grid-cols-3" />
   </section>
 
   <!-- Track your search — trimmed to a pointer at the dedicated feature page,
        which carries the full board preview and explains how tracking works. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="track your search" />
+    <SectionLabel text="Track your search" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Track every application on your board.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -307,7 +307,7 @@
        Sankey snapshot of where applications land. The counts are illustrative,
        not live data (see `funnel` above). -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="your pipeline" />
+    <SectionLabel text="Your pipeline" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">See where every application lands.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -332,7 +332,7 @@
 
   <!-- The feature landings. Each has a page of its own; this is the doorway. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="features" as="h2" />
+    <SectionLabel text="Features" as="h2" />
     <!-- An odd number of cards would leave the last row half empty, and in a hairline
          grid that empty half renders as a slab of border colour rather than as nothing.
          The last card fills the row instead when the count is odd. -->
@@ -354,7 +354,7 @@
 
   <!-- Notifications — save a filter, get matching jobs pushed to Telegram. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="stay in the loop" />
+    <SectionLabel text="Stay in the loop" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">New jobs, straight to Telegram.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -383,7 +383,7 @@
   <!-- CLI / agents — the same API from the terminal. Mirrors the open-source
        section's two-column copy + terminal figure. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="for agents" />
+    <SectionLabel text="For agents" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
         <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -423,7 +423,7 @@ freehire save <span class="text-foreground">&lt;slug&gt;</span></pre>
 
   <!-- Open source / contribute. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="open source" />
+    <SectionLabel text="Open source" />
     <div class="mt-6">
       <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
         Built in the open. Add your own source.
@@ -446,7 +446,7 @@ freehire save <span class="text-foreground">&lt;slug&gt;</span></pre>
   <!-- FAQ. Visible answers mirror the FAQPage JSON-LD (see homeFaq.ts) so the
        structured data always matches what's on the page. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="faq" />
+    <SectionLabel text="FAQ" />
     <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Frequently asked questions.</h2>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each HOME_FAQ as item (item.question)}

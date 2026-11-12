@@ -17,7 +17,7 @@
 <div class="mx-auto w-full max-w-3xl px-4 py-6">
   <div class="flex flex-col gap-8">
     <header class="flex flex-col gap-3">
-      <p class="font-mono text-xs uppercase tracking-widest text-muted-foreground">// legal</p>
+      <p class="font-mono text-xs text-muted-foreground">// legal</p>
       <h1 class="text-4xl font-semibold leading-none tracking-tighter sm:text-5xl">Job Posting Removal Requests</h1>
     </header>
 

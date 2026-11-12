@@ -17,7 +17,7 @@
 
 <article class="flex flex-col gap-14">
   <header class="flex flex-col items-start gap-5">
-    <SectionLabel text="how it works" />
+    <SectionLabel text="How it works" />
     <h1 class="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       Five steps before a posting reaches you.
     </h1>
@@ -38,7 +38,7 @@
        facts stay the same specific example end to end (StageIllustration's five cards)
        so the sequence reads as one job's actual journey, not five unrelated icons. -->
   <section class="flex flex-col gap-6">
-    <SectionLabel text="the pipeline" as="h2" />
+    <SectionLabel text="The pipeline" as="h2" />
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
       Follow one posting below — the picture at each step is that same job, at that stage.
     </p>
@@ -83,7 +83,7 @@
   <!-- FAQ; shares PIPELINE_FAQ with the page's JSON-LD. Collapsed with <details>, so every
        answer is still in the served HTML and the structured data cannot disagree with it. -->
   <section class="flex flex-col gap-4">
-    <SectionLabel as="h2" text="questions" />
+    <SectionLabel as="h2" text="Questions" />
     <div class="flex flex-col divide-y divide-border border-y border-border">
       {#each PIPELINE_FAQ as item (item.question)}
         <Disclosure summary={item.question} class="py-3">

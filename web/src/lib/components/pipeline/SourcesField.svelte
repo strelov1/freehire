@@ -391,7 +391,7 @@
     aria-hidden="true"
   ></canvas>
   <div class="relative z-10 flex h-full flex-col justify-start gap-2 p-6 sm:p-8">
-    <SectionLabel text="where it starts" />
+    <SectionLabel text="Where it starts" />
     <p class="font-mono text-4xl font-bold tracking-tight sm:text-5xl">
       {companiesLabel ?? 'thousands of'}
       <span class="text-muted-foreground">companies</span>

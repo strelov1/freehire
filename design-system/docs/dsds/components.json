@@ -314,7 +314,7 @@
       "id": "component.tabs",
       "type": "component",
       "name": "Tabs",
-      "description": "Tab list with arrow-key navigation and ARIA roles. Active tab styled via tailwind-variants.",
+      "description": "Tab list with arrow-key navigation and ARIA roles. Active tab styled via tailwind-variants, with color-only transitions that respect reduced motion.",
       "source": {
         "file": "../../src/tabs.svelte"
       },
@@ -733,7 +733,7 @@
       "id": "component.section-label",
       "type": "component",
       "name": "SectionLabel",
-      "description": "Small uppercase label that heads a page section, in the same eyebrow voice as every other section label (medium weight, wide tracking, muted). Callers pass the bare section name; `as` makes it a heading where it is the section's only title.",
+      "description": "Quiet sentence-case label that heads a page section (medium weight, normal tracking, muted). Callers pass the bare section name; `as` makes it a heading where it is the section's only title.",
       "source": {
         "file": "../../src/section-label.svelte"
       },

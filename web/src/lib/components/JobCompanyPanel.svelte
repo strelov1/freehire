@@ -113,7 +113,7 @@
     <dl class="grid grid-cols-2 gap-x-8 gap-y-5 sm:grid-cols-4">
       {#each facts as fact (fact.term)}
         <div class="flex min-w-0 flex-col gap-1">
-          <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <dt class="text-xs font-medium text-muted-foreground">
             {fact.term}
           </dt>
           <dd class="flex min-w-0 items-center gap-1.5 text-sm font-medium">
@@ -131,7 +131,7 @@
        jobs filter for a country would promise roles there that may not exist. -->
   {#if offices.length}
     <div class="flex flex-col gap-2">
-      <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Offices</p>
+      <p class="text-xs font-medium text-muted-foreground">Offices</p>
       <CountryFlagStack codes={offices} max={12} />
     </div>
   {/if}

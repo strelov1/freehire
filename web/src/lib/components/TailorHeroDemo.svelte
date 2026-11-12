@@ -75,7 +75,7 @@
   </p>
   <div aria-hidden="true" class="grid gap-px bg-border sm:grid-cols-5">
     <div class="bg-background p-4 sm:col-span-2">
-      <p class="text-xs uppercase tracking-wide text-muted-foreground">Vacancy</p>
+      <p class="text-xs text-muted-foreground">Vacancy</p>
       <p class="mt-1 text-sm font-semibold">{DEMO_ROLE}</p>
       <ul class="mt-3 flex flex-wrap gap-1.5">
         {#each DEMO_REQUIREMENTS as r (r.id)}
@@ -97,7 +97,7 @@
         <p class="text-3xl font-semibold tabular-nums">{score}</p>
         <p class="text-xs text-muted-foreground">job match</p>
       </div>
-      <p class="text-xs uppercase tracking-wide text-muted-foreground">Your CV</p>
+      <p class="text-xs text-muted-foreground">Your CV</p>
       <ul class="mt-3 space-y-2 pr-20 text-xs leading-snug">
         {#each DEMO_BULLETS as b, i (b.req)}
           <li class="grid">

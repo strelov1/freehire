@@ -92,13 +92,7 @@
     <div class="flex items-center justify-between">
       <!-- Focusable from script only: where focus lands once the control holding it has
            removed itself and no chip is left (see `removeThenRefocus`). -->
-      <h2
-        bind:this={heading}
-        tabindex="-1"
-        class="text-xs font-medium uppercase tracking-wider text-muted-foreground outline-none"
-      >
-        Filters
-      </h2>
+      <h2 bind:this={heading} tabindex="-1" class="text-xs font-medium text-muted-foreground outline-none">Filters</h2>
       {#if active > 0}
         <button
           type="button"
@@ -121,7 +115,7 @@
     <span>All filters</span>
     {#if active > 0}
       <span
-        class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-brand-foreground"
+        class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-xs font-semibold text-brand-foreground"
         >{active}</span
       >
     {/if}
@@ -137,7 +131,7 @@
     {#each groups as g (g.label)}
       <div class="flex flex-col gap-2">
         <div class="flex items-center gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</span>
+          <span class="text-xs font-semibold text-muted-foreground">{g.label}</span>
           <button
             type="button"
             aria-label="Clear {g.label}"

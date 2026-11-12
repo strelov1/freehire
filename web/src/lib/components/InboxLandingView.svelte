@@ -94,7 +94,7 @@
   <!-- Hero. Left: the pitch. Right: the inbox itself, chips and all. -->
   <section class="dot-grid -mx-4 grid items-center gap-12 px-4 pb-16 pt-8 lg:grid-cols-[1.05fr_0.95fr]">
     <div>
-      <SectionLabel text="inbox" />
+      <SectionLabel text="Inbox" />
       <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-6xl">
         Your recruiter replies, sorted automatically.
       </h1>
@@ -141,7 +141,7 @@
   <!-- Connect. The hosted address leads because it works for everyone; Gmail is
        second while its OAuth app is still in Google review (test users only). -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="connect" />
+    <SectionLabel text="Connect" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Two ways to get mail in.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">Pick either, or run both — they feed the same inbox.</p>
@@ -177,7 +177,7 @@
 
   <!-- Statuses. Rendered from the product's own vocabulary and chip styles. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="statuses" />
+    <SectionLabel text="Statuses" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">It reads each message and tags it.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -201,7 +201,7 @@
 
   <!-- The board. Where the mail stops being mail and becomes your pipeline. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="on your board" />
+    <SectionLabel text="On your board" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
         Every reply lands on the application it belongs to.
@@ -276,7 +276,7 @@
 
   <!-- Privacy: the objection this feature has to answer before anything else. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="what we don't do" />
+    <SectionLabel text="What we don't do" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Handing over your mail is a big ask.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">So here is the shape of it, written down.</p>
@@ -286,7 +286,7 @@
 
   <!-- Agents: the third, unmetered tier. Mirrors HomeView's terminal figure. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="for agents" />
+    <SectionLabel text="For agents" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
         <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Bring your own mail client.</h2>
@@ -339,7 +339,7 @@ freehire <span class="text-foreground">inbox list --link unlinked</span>    <spa
 
   <!-- FAQ. The visible answers and the FAQPage JSON-LD share INBOX_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="faq" />
+    <SectionLabel text="FAQ" />
     <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Frequently asked questions.</h2>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each INBOX_FAQ as item (item.question)}

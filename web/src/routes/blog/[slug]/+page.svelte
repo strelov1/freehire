@@ -39,7 +39,7 @@
   <article class="mt-4">
     <header class="mb-6">
       <div class="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-        <span class="rounded-full border border-border px-2 py-0.5 font-medium uppercase tracking-wide">
+        <span class="rounded-full border border-border px-2 py-0.5 font-medium">
           {data.meta.type}
         </span>
         <time datetime={data.meta.date}>{formatDate(data.meta.date)}</time>

@@ -61,7 +61,7 @@
 <div class="flex flex-col gap-16">
   <!-- Hero -->
   <section class="dot-grid -mx-4 flex flex-col gap-7 px-4 pb-4 pt-2">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// for companies &amp; employers</p>
+    <p class="font-mono text-xs text-muted-foreground">// for companies &amp; employers</p>
     <h1 class="max-w-2xl text-balance text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-6xl">
       Get your whole job board indexed.
     </h1>

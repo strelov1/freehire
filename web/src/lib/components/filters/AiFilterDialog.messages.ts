@@ -28,7 +28,7 @@ export const messages = defineMessages(
       'DevOps lead, Germany',
     ],
     cvFallback: 'Find jobs that fit my CV',
-    searchLabel: 'search',
+    searchLabel: 'Search',
     keepChattingPrompt:
       'Sure — what should I change? For example: "remote only", "only startups", "add Python", "posted this week" or "not in the US".',
     emptyPlan:
@@ -78,7 +78,7 @@ export const messages = defineMessages(
         'DevOps-лид, Германия',
       ],
       cvFallback: 'Найди вакансии под моё CV',
-      searchLabel: 'поиск',
+      searchLabel: 'Поиск',
       keepChattingPrompt:
         'Хорошо — что поменять? Например: «только удалённо», «только стартапы», «добавь Python», «за эту неделю» или «не в США».',
       emptyPlan:

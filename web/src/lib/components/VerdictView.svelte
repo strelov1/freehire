@@ -92,12 +92,12 @@
           })}
         </span>
       </div>
-      <Badge variant="outline" class="uppercase tracking-[0.14em]">
+      <Badge variant="outline">
         {format(plural(locale(), uncovered, s.outOfReach), { count: uncovered.toLocaleString('en-US') })}
       </Badge>
     </div>
     <div class="h-2 overflow-hidden rounded bg-secondary">
-      <div class="h-full rounded bg-brand transition-all" style="width: {verdict.coverage_percent}%"></div>
+      <div class="h-full rounded bg-brand" style="width: {verdict.coverage_percent}%"></div>
     </div>
     <p class="text-sm text-muted-foreground">
       {s.coverageExplanation}
@@ -116,15 +116,15 @@
              covered/total ratio is undefined — show a dash instead of a broken "0/0". -->
         <span class="text-3xl font-semibold leading-none text-muted-foreground" title={s.mustHaveNone}> — </span>
       {/if}
-      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.mustHaveCovered}</span>
+      <span class="text-xs font-medium text-muted-foreground">{s.mustHaveCovered}</span>
     </div>
     <div class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
       <span class="text-3xl font-semibold tabular-nums leading-none">{verdict.stack_match_percent}%</span>
-      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.stackMatch}</span>
+      <span class="text-xs font-medium text-muted-foreground">{s.stackMatch}</span>
     </div>
     <div class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
       <span class="text-3xl font-semibold tabular-nums leading-none">{verdict.coherence_percent}%</span>
-      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.coherence}</span>
+      <span class="text-xs font-medium text-muted-foreground">{s.coherence}</span>
     </div>
   </div>
 
@@ -225,9 +225,7 @@
                   <span class="truncate text-sm font-medium">{skill.name}</span>
                 {/if}
                 {#if skill.must_have}
-                  <span
-                    class="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                  >
+                  <span class="rounded bg-secondary px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
                     {s.mustHaveBadge}
                   </span>
                 {/if}
@@ -235,11 +233,7 @@
                   >{format(s.marketFrequency, { pct: String(skill.market_frequency) })}</span
                 >
               </div>
-              <span
-                class="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide {statusStyle[
-                  skill.status
-                ]}"
-              >
+              <span class="shrink-0 rounded px-2 py-0.5 text-xs font-semibold {statusStyle[skill.status]}">
                 {tokenLabel(s.status, skill.status)}
               </span>
               {#if skill.status !== 'strong'}{@render addButton(skill.name)}{/if}

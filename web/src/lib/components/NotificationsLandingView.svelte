@@ -36,7 +36,7 @@
        controls in miniature — the same ones on the job feed's filter sidebar. -->
   <section class="dot-grid -mx-4 grid items-center gap-12 px-4 pb-16 pt-8 lg:grid-cols-[1.05fr_0.95fr]">
     <div>
-      <SectionLabel text="notifications" />
+      <SectionLabel text="Notifications" />
       <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-6xl">
         You don't refresh the feed. It comes to you.
       </h1>
@@ -101,7 +101,7 @@
 
   <!-- The two triggers. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="two things worth knowing about" />
+    <SectionLabel text="Two things worth knowing about" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">A new match, or your own board gone quiet.</h2>
     </div>
@@ -137,7 +137,7 @@
 
   <!-- What the two emails actually look like. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="what it looks like" />
+    <SectionLabel text="What it looks like" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Two kinds of email, one settings page.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -176,7 +176,7 @@
 
   <!-- Every trigger, on your channel. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="every trigger, on your channel" />
+    <SectionLabel text="Every trigger, on your channel" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-start">
       <div>
         <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Four things trigger a notification.</h2>
@@ -211,7 +211,7 @@
 
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share NOTIFICATIONS_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="faq" />
+    <SectionLabel text="FAQ" />
     <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Frequently asked questions.</h2>
     <!-- An odd number of items would leave the last row half empty (see the
          features doorway grid in HomeView.svelte) — the last card fills the

@@ -22,7 +22,7 @@
 <div class="mx-auto w-full max-w-3xl px-4 py-6">
   <div class="flex flex-col gap-8">
     <header class="flex flex-col gap-3">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// legal</p>
+      <p class="font-mono text-xs text-muted-foreground">// legal</p>
       <h1 class="text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-5xl">Terms of Service</h1>
       <p class="text-sm text-muted-foreground">Last updated: {lastUpdated}</p>
     </header>

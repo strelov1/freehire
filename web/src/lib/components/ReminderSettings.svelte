@@ -164,7 +164,7 @@
   // Shared by every section label below, so the arbitrary 11px size is written once
   // rather than repeated per section (design-system/scripts/check-token-coverage.mjs
   // counts occurrences, not unique values).
-  const sectionLabel = 'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
+  const sectionLabel = 'text-xs font-semibold text-muted-foreground';
 </script>
 
 <section class="rounded-xl border border-border bg-card p-4">

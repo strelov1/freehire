@@ -66,7 +66,7 @@
 
 {#each groups as group, i (group.group)}
   {#if group.group !== 'main' && !compact}
-    <div class="mt-4 px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
+    <div class="mt-4 px-3 pb-1 text-xs font-medium text-muted-foreground">
       {s.navGroups[group.group]}
     </div>
   {:else if i > 0}

@@ -157,7 +157,7 @@
             aria-label={`Show highlight ${i + 1} of ${SLIDES.length}`}
             onclick={() => select(i)}
             class={[
-              'h-1.5 rounded-full transition-all',
+              'h-1.5 rounded-full transition-colors motion-reduce:transition-none',
               // /30 and /50 (this card's earlier near-transparent backdrop) blend to
               // under 3:1 against the now-opaque brand-foreground card — /80 clears it.
               active === i ? 'w-6 bg-brand' : 'w-1.5 bg-brand/80 hover:bg-brand',

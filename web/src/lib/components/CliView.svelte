@@ -253,7 +253,7 @@
   <!-- Demo — a real Claude Code session driving the CLI against the live API,
        recorded with asciinema and rendered by agg (sped up 1.5×). -->
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="in claude code" />
+    <SectionLabel text="In Claude Code" />
     <div class="mt-6 grid gap-x-12 gap-y-8 lg:grid-cols-5 lg:items-center">
       <div class="lg:col-span-2">
         <h2 class="text-2xl font-semibold tracking-tight">Ask in plain words. The agent runs the CLI.</h2>
@@ -283,7 +283,7 @@
 
   <!-- Commands — one tab per job to be done. -->
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="commands" />
+    <SectionLabel text="Commands" />
     <div class="mt-6 flex flex-wrap items-end justify-between gap-4">
       <h2 class="text-2xl font-semibold tracking-tight">What it can do</h2>
       <p class="text-sm text-muted-foreground">
@@ -324,7 +324,7 @@
 
   <!-- MCP — the second surface over the same API and the same sign-in. -->
   <section id="mcp" class="scroll-mt-20 border-t border-border py-14 sm:py-16">
-    <SectionLabel text="mcp" />
+    <SectionLabel text="MCP" />
     <div class="mt-6 grid gap-x-12 gap-y-8 lg:grid-cols-[0.95fr_1.05fr]">
       <div>
         <h2 class="text-2xl font-semibold tracking-tight">Same sign-in, any AI host</h2>
@@ -390,7 +390,7 @@
 
   <!-- For AI agents — the task-shaped skills and their slash commands. -->
   <section class="border-t border-border py-14 sm:py-16">
-    <SectionLabel text="for ai agents" />
+    <SectionLabel text="For AI agents" />
     <div class="mt-6 flex flex-wrap items-end justify-between gap-6">
       <div class="max-w-xl">
         <h2 class="text-2xl font-semibold tracking-tight">Five skills, one per job</h2>

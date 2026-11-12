@@ -200,7 +200,7 @@
     </p>
   </header>
 
-  <SectionLabel text="for job seekers" class="-mb-6 text-center" />
+  <SectionLabel text="For job seekers" class="-mb-6 text-center" />
 
   {#if monthly && annual}
     <div class="flex justify-center">
@@ -262,7 +262,7 @@
   <!-- The daily amounts of the metered features, as the backend states them. -->
   {#snippet allowanceList(items: PlansMatrix['features'], tier: 'free' | 'pro' | 'ultra')}
     <div class="flex flex-col gap-2">
-      <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Daily allowance</p>
+      <p class="text-xs font-medium text-muted-foreground">Daily allowance</p>
       <ul class="flex flex-col gap-2 text-sm">
         {#each items as f (f.feature)}
           <li class="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
@@ -440,7 +440,7 @@
 
   {#if plans}
     {#if plans.prices.some((p) => p.tier === 'api' || p.tier === 'api_data')}
-      <SectionLabel text="for builders" class="-mb-6 text-center" />
+      <SectionLabel text="For builders" class="-mb-6 text-center" />
     {/if}
     <ApiPlans prices={plans.prices} buttonVariant="outline" />
   {/if}

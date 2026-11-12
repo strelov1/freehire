@@ -172,7 +172,7 @@
              get a title without adding headings to the page outline. -->
         {#each groups as group (group.title)}
           <nav class="flex flex-col gap-3" aria-label={group.title}>
-            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <p class="text-xs font-medium text-muted-foreground">
               {group.title}
             </p>
             <ul class="flex flex-col gap-2">
@@ -193,7 +193,7 @@
            discover links by parsing markup, and these landing pages had none from the
            homepage at all. -->
       <nav class="mt-8 border-t border-border pt-6" aria-label="Popular collections">
-        <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Popular</p>
+        <p class="text-xs font-medium text-muted-foreground">Popular</p>
         <ul class="mt-3 flex flex-wrap gap-x-4 gap-y-2">
           {#each popular as collection (collection.slug)}
             <li>
@@ -252,7 +252,7 @@
           >
             <ProviderIcon provider={store.provider} class="size-7 shrink-0" />
             <span class="flex flex-col leading-tight">
-              <span class="text-xs uppercase tracking-wider text-muted-foreground">
+              <span class="text-xs text-muted-foreground">
                 {store.kicker}
               </span>
               <span class="text-sm font-semibold">{store.name}</span>

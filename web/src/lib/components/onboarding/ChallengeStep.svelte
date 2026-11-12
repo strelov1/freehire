@@ -125,7 +125,7 @@
     aria-label="What helps"
     class="scroll-mt-4 rounded-xl border border-border bg-secondary/40 px-4 pb-2 pt-4"
   >
-    <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What helps</p>
+    <p class="text-xs font-semibold text-muted-foreground">What helps</p>
     {#if tips.length === 0}
       <div class="flex flex-col items-center px-4 pb-6 pt-4 text-center">
         <SproutIllustration />

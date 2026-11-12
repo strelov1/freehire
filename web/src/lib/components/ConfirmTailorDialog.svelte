@@ -79,7 +79,7 @@
   {:else if match}
     <div class="flex flex-col gap-4">
       <div class="flex flex-col gap-1.5">
-        <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Skills coverage</p>
+        <p class="text-xs font-semibold text-muted-foreground">Skills coverage</p>
         <div class="flex items-baseline justify-between gap-2">
           <span class="text-xs text-muted-foreground">{matchedCount} of {total} required skills</span>
           <span class="text-sm font-bold tabular-nums">{pct}%</span>
@@ -105,7 +105,7 @@
 
       {#if blockers.unmet.length || blockers.met.length}
         <div class="flex flex-col gap-1.5">
-          <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Requirements</p>
+          <p class="text-xs font-semibold text-muted-foreground">Requirements</p>
           <ul class="flex flex-col gap-1">
             {#each blockers.unmet as b (b.category + b.reason)}
               <li class="flex items-start gap-1.5 text-xs {toneText(b.severity)}">

@@ -356,10 +356,8 @@
           {#each sections as section (section)}
             {@const entries = rail.filter((e) => e.section === section)}
             {#if entries.length}
-              <div
-                class="px-2.5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:px-3"
-              >
-                {section}
+              <div class="px-2.5 pb-1 pt-3 text-xs font-semibold text-muted-foreground sm:px-3">
+                {section.charAt(0) + section.slice(1).toLowerCase()}
               </div>
               {#each entries as e (e.key)}
                 {@const n = entryCount(e)}
@@ -378,7 +376,7 @@
                   {#if n > 0}
                     <span
                       class={[
-                        'shrink-0 rounded-full px-1.5 text-[11px] font-semibold',
+                        'shrink-0 rounded-full px-1.5 text-xs font-semibold',
                         shownKey === e.key ? 'bg-brand text-brand-foreground' : 'bg-secondary text-muted-foreground',
                       ]}><span aria-hidden="true">{n}</span><span class="sr-only">, {n} selected</span></span
                     >

@@ -228,7 +228,7 @@
 {:else}
   <div class="flex flex-col gap-8">
     <header class="flex flex-col gap-2 border-b border-border pb-6">
-      <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-strong">
+      <p class="flex items-center gap-1.5 text-xs font-semibold text-brand-strong">
         <Briefcase class="size-3.5" /> For employers
       </p>
       <h1 class="text-3xl font-semibold tracking-tight">Post your opening</h1>
@@ -293,7 +293,7 @@
       <form onsubmit={submit} class={cn('flex flex-col divide-y divide-border', activeTab !== 'details' && 'hidden')}>
         <!-- Basics: the required identity of the posting. -->
         <fieldset class="flex flex-col gap-4 py-6">
-          <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"> Basics </legend>
+          <legend class="px-1 text-xs font-semibold text-muted-foreground"> Basics </legend>
           <div class="flex flex-col gap-1">
             <span class="flex items-center gap-1.5 text-sm font-medium">
               <Link2 class="size-3.5 text-muted-foreground" />
@@ -351,7 +351,7 @@
 
         <!-- Details: the structured facets that make the vacancy searchable. -->
         <fieldset class="flex flex-col gap-4 py-6">
-          <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"> Details </legend>
+          <legend class="px-1 text-xs font-semibold text-muted-foreground"> Details </legend>
           <div class="flex flex-col gap-4 sm:flex-row">
             <label class="flex flex-1 flex-col gap-1">
               <span class="flex items-center gap-1.5 text-sm font-medium">
@@ -495,7 +495,7 @@
 
         <!-- Description: the tracker's markdown editor; converted to HTML on submit. -->
         <fieldset class="flex flex-col gap-2 py-6">
-          <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <legend class="px-1 text-xs font-semibold text-muted-foreground">
             <span class="flex items-center gap-1.5">
               <FileText class="size-3.5" />
               Description

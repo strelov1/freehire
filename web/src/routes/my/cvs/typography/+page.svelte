@@ -21,7 +21,7 @@
   <StyleSettings bind:style={cvAppearance.style} fonts={cvAppearance.fonts} />
 
   <section class="space-y-2">
-    <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <h2 class="text-xs font-semibold text-muted-foreground">
       {s.marginsHeading} <span class="font-normal normal-case tracking-normal">{s.marginsUnit}</span>
     </h2>
     <MarginSettings bind:margins={cvAppearance.margins} />

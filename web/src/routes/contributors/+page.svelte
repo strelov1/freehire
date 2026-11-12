@@ -53,7 +53,7 @@
     <div class="min-w-0">
       <p class="truncate font-semibold tracking-tight group-hover:underline">{entry.login}</p>
       <p class="mt-1 text-sm text-muted-foreground">{contributionSummary(entry)}</p>
-      <p class="mt-2 font-mono text-xs uppercase tracking-wide text-muted-foreground">
+      <p class="mt-2 font-mono text-xs text-muted-foreground">
         since {since(entry)}
       </p>
     </div>
@@ -62,7 +62,7 @@
 
 <div class="mx-auto w-full max-w-4xl px-4 py-10 sm:py-14">
   <header class="dot-grid -mx-4 mb-12 px-4 pb-8 pt-4">
-    <SectionLabel text="contributors" />
+    <SectionLabel text="Contributors" />
     <h1 class="mt-4 text-4xl font-semibold tracking-tighter sm:text-5xl">
       {people} people build freehire.
     </h1>
@@ -74,7 +74,7 @@
 
   {#if data.maintainers.length > 0}
     <section class="mb-14">
-      <SectionLabel text="maintained by" />
+      <SectionLabel text="Maintained by" />
       <div class="mt-6 grid gap-3 sm:grid-cols-2">
         {#each data.maintainers as entry (entry.login)}
           {@render contributorCard(entry)}
@@ -84,7 +84,7 @@
   {/if}
 
   <section class="mb-14">
-    <SectionLabel text="contributed by" />
+    <SectionLabel text="Contributed by" />
     <h2 class="mt-3 text-xl font-semibold tracking-tight">Most recent first</h2>
     <p class="mb-6 mt-1 text-sm text-muted-foreground">
       Ordered by when someone last contributed, not by how much — so the newest arrival is at the top, where they should

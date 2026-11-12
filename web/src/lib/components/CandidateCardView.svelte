@@ -81,7 +81,7 @@ right. The panel follows the card in the DOM so a narrow screen reads the card f
   {#if card.skills.length}
     <aside class="w-full shrink-0 lg:order-first lg:w-80">
       <div class="sticky top-20 flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
-        <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Skills</p>
+        <p class="text-xs font-semibold text-muted-foreground">Skills</p>
         <div class="flex flex-wrap gap-1.5">
           {#each card.skills as skill (skill)}
             <Chip>{skillLabel(skill)}</Chip>
