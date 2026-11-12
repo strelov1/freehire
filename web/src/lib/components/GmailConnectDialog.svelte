@@ -1,34 +1,31 @@
 <script lang="ts">
-  import { Mail, X, Lock, ExternalLink } from '@lucide/svelte';
+  import { Mail, X, Lock, Search, Link, Tags, TrendingUp, ArrowRight, Check } from '@lucide/svelte';
   import { Button, lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
 
   // The parent owns open/close; onConnect proceeds to the Google OAuth redirect.
   let { onClose, onConnect }: { onClose: () => void; onConnect: () => void } = $props();
 
-  const REPO = 'https://github.com/strelov1/freehire/blob/main';
-  // The pipeline stages, each linking to the exact source that implements it — the
-  // project is open source, so "how it works" is verifiable, not a promise.
-  const steps: { title: string; body: string; href: string }[] = [
+  const steps = [
     {
-      title: 'Read',
-      body: 'A Gmail search scoped to recruiting/ATS platforms only — never your personal mail. Read-only access; the token is encrypted at rest.',
-      href: `${REPO}/internal/gmailsync/senders.go`,
+      title: 'Find job-related mail',
+      body: 'Searches for recruiting messages and replies about your applications, so you spend less time digging through Gmail.',
+      icon: Search,
     },
     {
-      title: 'Match',
-      body: 'Each email is linked to one of your tracked applications by the company name in the sender/subject — deterministic, and it never guesses.',
-      href: `${REPO}/internal/mailmatch`,
+      title: 'Connect it to your application',
+      body: 'Uses the company in the sender or subject to match a reply to an application you track, keeping the conversation together.',
+      icon: Link,
     },
     {
-      title: 'Classify',
-      body: 'An LLM reads the body and tags a status: acknowledgement · screening · interview · assessment · offer · rejection.',
-      href: `${REPO}/internal/mailclassify`,
+      title: 'Recognize the update',
+      body: 'AI reads the message and labels it — from an application received to an interview, offer or rejection — so you can see what changed.',
+      icon: Tags,
     },
     {
-      title: 'Sort',
-      body: 'The email appears under its application with a status badge; a confident interview/offer advances your pipeline stage (never backward).',
-      href: `${REPO}/cmd/classify-mail`,
+      title: 'Keep your pipeline current',
+      body: 'Files the email under the application. A confident interview or offer update moves its stage forward, never backward.',
+      icon: TrendingUp,
     },
   ];
 
@@ -52,8 +49,9 @@
   <div
     role="dialog"
     aria-modal="true"
-    aria-label="Connect Gmail"
-    class="relative z-10 flex animate-modal-pop max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl"
+    aria-labelledby="gmail-connect-title"
+    aria-describedby="gmail-connect-description"
+    class="relative z-10 flex animate-modal-pop max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl"
     {@attach focusTrap()}
   >
     <div class="flex items-start gap-3 border-b border-border p-5">
@@ -61,9 +59,9 @@
         <Mail class="size-5 text-brand-strong" />
       </div>
       <div class="min-w-0 flex-1">
-        <h2 class="text-lg font-semibold leading-tight">Connect Gmail</h2>
-        <p class="mt-0.5 text-sm text-muted-foreground">
-          freehire reads only your recruiting mail and sorts it under your applications — automatically.
+        <h2 id="gmail-connect-title" class="text-lg font-semibold leading-tight">Connect Gmail</h2>
+        <p id="gmail-connect-description" class="mt-1 text-sm text-muted-foreground">
+          Turn recruiting emails into application updates, without sorting them by hand.
         </p>
       </div>
       <button
@@ -77,47 +75,56 @@
     </div>
 
     <div class="flex-1 overflow-y-auto overscroll-contain p-5">
-      <ol class="flex flex-col gap-4">
+      <ol>
         {#each steps as step, i (step.title)}
-          <li class="flex gap-3">
+          <li class="relative flex gap-4 pb-6 last:pb-0">
+            {#if i < steps.length - 1}
+              <span aria-hidden="true" class="absolute bottom-0 left-5 top-10 w-px bg-border"></span>
+            {/if}
             <span
-              class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
+              class="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-muted text-brand-strong"
+              aria-hidden="true"
             >
-              {i + 1}
+              <step.icon class="size-4.5" />
             </span>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-medium">{step.title}</span>
-                <!-- eslint-disable svelte/no-navigation-without-resolve -- external setup-doc link, not an internal route -->
-                <a
-                  href={step.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center gap-0.5 text-xs text-brand-strong hover:underline"
-                >
-                  <!-- eslint-enable svelte/no-navigation-without-resolve -->
-                  source <ExternalLink class="size-3" />
-                </a>
-              </div>
-              <p class="mt-0.5 text-sm text-muted-foreground">{step.body}</p>
+            <div class="min-w-0 pt-0.5">
+              <h3 class="text-sm font-semibold">{step.title}</h3>
+              <p class="mt-1 text-sm leading-relaxed text-muted-foreground">{step.body}</p>
             </div>
           </li>
         {/each}
       </ol>
 
-      <div
-        class="mt-5 flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground"
-      >
-        <Lock class="mt-0.5 size-3.5 shrink-0" />
-        <span>
-          Read-only Gmail scope, only mail from recruiting platforms is fetched, and it's all
-          <a
-            href="https://github.com/strelov1/freehire"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="font-medium text-brand-strong hover:underline">open source</a
-          > — you can read exactly what runs.
-        </span>
+      <figure class="mt-6 rounded-xl border border-border p-4">
+        <figcaption class="mb-3 text-xs font-medium text-muted-foreground">
+          For example: an interview invitation
+        </figcaption>
+        <div class="flex flex-wrap items-center gap-3 text-sm">
+          <span class="inline-flex items-center gap-2">
+            <Mail class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            “Let’s meet”
+          </span>
+          <ArrowRight class="size-4 text-muted-foreground" aria-hidden="true" />
+          <span
+            class="inline-flex items-center gap-1.5 rounded-md bg-brand-muted px-2 py-1 font-medium text-brand-strong"
+          >
+            <Check class="size-3.5" aria-hidden="true" /> Interview
+          </span>
+        </div>
+        <p class="mt-2 text-xs leading-relaxed text-muted-foreground">
+          The reply and its status live with the application, so your next step is easy to find.
+        </p>
+      </figure>
+
+      <div class="mt-5 flex items-start gap-3 text-xs leading-relaxed text-muted-foreground">
+        <Lock class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <div>
+          <p class="font-medium text-foreground">Read-only access. You stay in control.</p>
+          <p class="mt-1">
+            Google grants read access to Gmail; freehire uses job-related searches to find relevant mail. It cannot
+            send, edit or delete messages. Your connection token is stored encrypted.
+          </p>
+        </div>
       </div>
     </div>
 

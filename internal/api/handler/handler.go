@@ -1263,7 +1263,7 @@ func Register(app *fiber.App, cfg Config) {
 	photoH.register(api, mw)
 	// Dictation for the assistant composer.
 	speechH.register(api, mw)
-	assistantH.register(api, mw)
+	assistantH.register(api, mw, contract)
 	assistantH.registerSupport(api, mw, contract)
 
 	// Filter subscriptions (see subscriptionHandlers).

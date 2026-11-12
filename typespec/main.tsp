@@ -46,6 +46,7 @@ import "./autofill.tsp";
 import "./search-intent.tsp";
 import "./embeddings.tsp";
 import "./support.tsp";
+import "./assistant.tsp";
 
 using Http;
 

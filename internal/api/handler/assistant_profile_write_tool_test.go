@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/candidate/resume"
+	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 )
 
@@ -105,5 +107,91 @@ func TestUpdateProfile_IsAccountOnlyAndDeclaresItsEffect(t *testing.T) {
 		if k.Name == "update_profile" {
 			t.Error("update_profile must not be offered to an API key")
 		}
+	}
+}
+
+func runUpdateProfileWith(t *testing.T, repo *fakeProfileRepo, cv structuredResumeReader, args string) (any, error) {
+	t.Helper()
+	return toolByName(t, assistantWithProfile(repo, cv).profileMCPTools(), "update_profile").
+		Run(context.Background(), 1, json.RawMessage(args))
+}
+
+func TestUpdateProfile_TextWritesOnlyHeadlineAndSummaryAndKeepsContacts(t *testing.T) {
+	var written resume.Owned
+	cv := fakeStructuredResume{ok: true, written: &written, ret: resumeextract.Structured{
+		FullName: "Ada Lovelace", Email: "ada@example.com", Phone: "+351 900 000 000",
+		Links: []string{"https://github.com/ada"}, Summary: "old summary",
+	}}
+	repo := savedProfile()
+
+	out, err := runUpdateProfileWith(t, repo, cv, `{"headline":"Staff Backend Engineer"}`)
+	if err != nil {
+		t.Fatalf("update_profile: %v", err)
+	}
+
+	if written.Headline != "Staff Backend Engineer" || !written.HeadlineSet {
+		t.Errorf("headline not written: %+v", written)
+	}
+	if written.Email != "ada@example.com" || written.Phone != "+351 900 000 000" ||
+		!slices.Equal(written.Links, []string{"https://github.com/ada"}) || written.Summary != "old summary" {
+		t.Errorf("fields outside the call changed: %+v", written)
+	}
+	// Text only: the preferences row must not be written, let alone created.
+	if repo.upserted.UserID != 0 {
+		t.Errorf("preferences were written by a text-only call: %+v", repo.upserted)
+	}
+	res := out.(profileUpdateResult)
+	if !slices.Equal(res.Saved, []string{"headline"}) || res.Headline == nil || *res.Headline != "Staff Backend Engineer" {
+		t.Errorf("bad result: %+v", res)
+	}
+	if !slices.Equal(res.Skills, []string{"go"}) {
+		t.Errorf("a text-only call should still answer with the preferences as they stand: %+v", res)
+	}
+}
+
+func TestUpdateProfile_TextIsCutToTheProfilePageLimitAndReported(t *testing.T) {
+	var written resume.Owned
+	cv := fakeStructuredResume{written: &written}
+
+	out, err := runUpdateProfileWith(t, savedProfile(), cv, `{"summary":"`+strings.Repeat("x", 5000)+`"}`)
+	if err != nil {
+		t.Fatalf("update_profile: %v", err)
+	}
+	res := out.(profileUpdateResult)
+	if !slices.Equal(res.Truncated, []string{"summary"}) || len(written.Summary) >= 5000 {
+		t.Errorf("want summary cut and reported, got truncated=%v len=%d", res.Truncated, len(written.Summary))
+	}
+}
+
+func TestUpdateProfile_EmptyStringClearsTheText(t *testing.T) {
+	var written resume.Owned
+	cv := fakeStructuredResume{ok: true, written: &written, ret: resumeextract.Structured{Headline: "Old"}}
+	if _, err := runUpdateProfileWith(t, savedProfile(), cv, `{"headline":""}`); err != nil {
+		t.Fatalf("update_profile: %v", err)
+	}
+	if written.Headline != "" || !written.HeadlineSet {
+		t.Errorf("want an explicit clear, got %+v", written)
+	}
+}
+
+func TestUpdateProfile_SaysWhichFieldsLandedWhenOneStoreFails(t *testing.T) {
+	cv := fakeStructuredResume{setErr: errors.New("db down")}
+	out, err := runUpdateProfileWith(t, savedProfile(), cv, `{"add_skills":["python"],"headline":"Lead"}`)
+	if err != nil {
+		t.Fatalf("a half-saved call is a result, not an error: %v", err)
+	}
+	res := out.(profileUpdateResult)
+	if !slices.Equal(res.Saved, []string{"add_skills"}) || !slices.Equal(res.NotSaved, []string{"headline"}) || res.Error == "" {
+		t.Errorf("result does not say what landed: %+v", res)
+	}
+	if strings.Contains(res.Error, "db down") {
+		t.Errorf("an internal error leaked to the agent: %q", res.Error)
+	}
+}
+
+func TestUpdateProfile_FailsPlainlyWhenNothingLanded(t *testing.T) {
+	cv := fakeStructuredResume{setErr: errors.New("db down")}
+	if _, err := runUpdateProfileWith(t, savedProfile(), cv, `{"headline":"Lead"}`); err == nil {
+		t.Error("want an error when nothing was saved")
 	}
 }

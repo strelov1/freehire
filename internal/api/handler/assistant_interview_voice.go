@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/api/apigen"
 )
 
 // realtimeMinter is internal/api/realtime seen from here. An interface rather than the
@@ -24,38 +25,38 @@ type realtimeMinter interface {
 // hands-free voice call on an existing `interview` session. The audio itself never
 // reaches this server: the browser takes the returned secret to the gateway's own
 // /realtime/calls (see CallsURL) to negotiate the WebRTC call directly.
-func (h *assistantHandlers) PostAssistantVoiceToken(c *fiber.Ctx) error {
-	sess, err := h.ownedSession(c)
+func (h *assistantHandlers) PostAssistantVoiceToken(ctx context.Context, params apigen.PostAssistantVoiceTokenParams) (*apigen.PostAssistantVoiceTokenOK, error) {
+	sess, err := h.ownedSessionByID(ctx, params.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if sess.Preset != assistant.PresetInterview {
-		return fiber.NewError(fiber.StatusConflict, "voice mode is only available on an interview session")
+		return nil, fiber.NewError(fiber.StatusConflict, "voice mode is only available on an interview session")
 	}
 	if h.realtime == nil {
-		return fiber.NewError(fiber.StatusNotImplemented, "voice mode is not configured")
+		return nil, fiber.NewError(fiber.StatusNotImplemented, "voice mode is not configured")
 	}
 	if sess.JobID == nil {
 		// Every interview session carries a vacancy — see bindsToApplication — so this
 		// guards a partially-wired deployment, not a real client path.
-		return fiber.NewError(fiber.StatusConflict, "this session has no vacancy to rehearse")
+		return nil, fiber.NewError(fiber.StatusConflict, "this session has no vacancy to rehearse")
 	}
 
-	rehearsal, err := h.rehearsalContext(c.Context(), sess.UserID, *sess.JobID)
+	rehearsal, err := h.rehearsalContext(ctx, sess.UserID, *sess.JobID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	instructions := voiceInterviewInstructions(rehearsal, h.userLanguage(c.Context(), sess.UserID))
+	instructions := voiceInterviewInstructions(rehearsal, h.userLanguage(ctx, sess.UserID))
 	// Minting a realtime credential hands the browser a live voice model, and it never
 	// passes through the user-call binding — so it makes the binding's check itself.
-	if err := requirePaidCall(c.UserContext()); err != nil {
-		return err
+	if err := requirePaidCall(ctx); err != nil {
+		return nil, err
 	}
-	value, err := h.realtime.MintClientSecret(c.Context(), instructions)
+	value, err := h.realtime.MintClientSecret(ctx, instructions)
 	if err != nil {
 		// Every failure from here is the gateway's: a refusal, a fault, an answer we
 		// could not read. The caller did nothing wrong and has no remedy.
-		return fiber.NewError(fiber.StatusBadGateway, "could not start voice mode")
+		return nil, fiber.NewError(fiber.StatusBadGateway, "could not start voice mode")
 	}
 	// model: the WebRTC SDP exchange names the model on its own URL, and the browser
 	// has no other way to learn which one this deployment runs.
@@ -64,16 +65,9 @@ func (h *assistantHandlers) PostAssistantVoiceToken(c *fiber.Ctx) error {
 	// /realtime/calls (see realtime.Client.CallsURL's doc). Hardcoding
 	// api.openai.com in the frontend sends that wrapped value to an endpoint that
 	// cannot read it and rejects it as a malformed API key.
-	return c.JSON(fiber.Map{"data": fiber.Map{
-		"value": value, "model": h.realtime.Model(), "calls_url": h.realtime.CallsURL(),
-	}})
-}
-
-// assistantVoiceTurnRequest is one completed exchange from a voice-mode call: the
-// candidate's transcribed line, or the agent's spoken one.
-type assistantVoiceTurnRequest struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	return &apigen.PostAssistantVoiceTokenOK{Data: apigen.AssistantVoiceToken{
+		Value: value, Model: h.realtime.Model(), CallsURL: h.realtime.CallsURL(),
+	}}, nil
 }
 
 // PostAssistantVoiceTurn appends one completed voice-mode turn to the session's
@@ -83,19 +77,15 @@ type assistantVoiceTurnRequest struct {
 // typing gets the voice turns back in the model's context (see design.md's Decisions
 // — this endpoint does NOT exist for interview-debrief, which never reads another
 // session's transcript).
-func (h *assistantHandlers) PostAssistantVoiceTurn(c *fiber.Ctx) error {
-	sess, err := h.ownedSession(c)
+func (h *assistantHandlers) PostAssistantVoiceTurn(ctx context.Context, in *apigen.AssistantVoiceTurn, params apigen.PostAssistantVoiceTurnParams) error {
+	sess, err := h.ownedSessionByID(ctx, params.ID)
 	if err != nil {
 		return err
 	}
 	if sess.Preset != assistant.PresetInterview {
 		return fiber.NewError(fiber.StatusConflict, "voice mode is only available on an interview session")
 	}
-	var in assistantVoiceTurnRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	content := strings.TrimSpace(in.Content)
+	content := strings.TrimSpace(in.Content.Value)
 	if content == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "content is required")
 	}
@@ -106,7 +96,7 @@ func (h *assistantHandlers) PostAssistantVoiceTurn(c *fiber.Ctx) error {
 	}
 
 	var msg assistant.Message
-	switch in.Role {
+	switch in.Role.Value {
 	case assistant.RoleUser:
 		msg, err = assistant.EncodeUser(content)
 	case assistant.RoleAssistant:
@@ -117,15 +107,15 @@ func (h *assistantHandlers) PostAssistantVoiceTurn(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if _, err := h.store.Append(c.Context(), sess.ID, msg); err != nil {
+	if _, err := h.store.Append(ctx, sess.ID, msg); err != nil {
 		return err
 	}
 	// A convenience, not correctness: the session's last-activity stamp should not
 	// cost the candidate their turn if it fails.
-	if err := h.store.Touch(c.Context(), sess.ID, sess.UserID); err != nil {
+	if err := h.store.Touch(ctx, sess.ID, sess.UserID); err != nil {
 		log.Printf("assistant: touch session %s: %v", sess.ID, err)
 	}
-	return c.SendStatus(fiber.StatusNoContent)
+	return nil
 }
 
 // voicePersona frames the rehearsal for a spoken call. It is adapted from, not shared

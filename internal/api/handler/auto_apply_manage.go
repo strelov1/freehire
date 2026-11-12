@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -109,25 +110,25 @@ func (h *assistantHandlers) cancelAutoApply(ctx context.Context, userID int64, s
 const autoApplyCancelled = "cancelled"
 
 // PostJobAutoApplyRetry is retryAutoApply over HTTP.
-func (h *assistantHandlers) PostJobAutoApplyRetry(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *assistantHandlers) PostJobAutoApplyRetry(ctx context.Context, params apigen.PostJobAutoApplyRetryParams) (*apigen.PostJobAutoApplyRetryOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := h.retryAutoApply(c.Context(), userID, c.Params("slug")); err != nil {
-		return err
+	if err := h.retryAutoApply(ctx, userID, params.Slug); err != nil {
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"retried": true}})
+	return &apigen.PostJobAutoApplyRetryOK{Data: apigen.AutoApplyRetried{Retried: true}}, nil
 }
 
 // DeleteJobAutoApply is cancelAutoApply over HTTP.
-func (h *assistantHandlers) DeleteJobAutoApply(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *assistantHandlers) DeleteJobAutoApply(ctx context.Context, params apigen.DeleteJobAutoApplyParams) (*apigen.DeleteJobAutoApplyOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := h.cancelAutoApply(c.Context(), userID, c.Params("slug")); err != nil {
-		return err
+	if err := h.cancelAutoApply(ctx, userID, params.Slug); err != nil {
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"cancelled": true}})
+	return &apigen.DeleteJobAutoApplyOK{Data: apigen.AutoApplyCancelled{Cancelled: true}}, nil
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -65,13 +66,6 @@ func autoApplyEntryStatus(reviewDecision pgtype.Text, failedAt, blockedAt pgtype
 		return autoApplyStatusFailed
 	}
 	return autoApplyStatusQueued
-}
-
-// autoApplyQueuedResponse is the success body for both a fresh enqueue and an idempotent
-// repeat against an existing, undecided entry — the caller cannot (and need not) tell
-// the two apart.
-func autoApplyQueuedResponse(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{"data": fiber.Map{"status": autoApplyStatusQueued}})
 }
 
 // autoApplyEligibilityEnforce gates whether an eligibility mismatch (see
@@ -142,19 +136,19 @@ func firstEligibilityBlocker(blockers []hardconstraint.Blocker) (hardconstraint.
 // submitted job application, not only an unattended CV rewrite. The one other door is the
 // signed-in MCP server, and only for an account that switched agents_may_apply on from
 // this same browser session (openspec/changes/auto-apply-over-mcp).
-func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *assistantHandlers) PostJobAutoApply(ctx context.Context, params apigen.PostJobAutoApplyParams) (apigen.PostJobAutoApplyRes, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var refused *autoApplyAllowanceRefusal
-	switch err := h.startAutoApply(c.Context(), userID, c.Params("slug")); {
+	switch err := h.startAutoApply(ctx, userID, params.Slug); {
 	case errors.As(err, &refused):
-		return refuse(c, refused.decision)
+		return decisionRefusal(refused.decision).assistant()
 	case err != nil:
-		return err
+		return nil, err
 	}
-	return autoApplyQueuedResponse(c)
+	return &apigen.PostJobAutoApplyOK{Data: apigen.AutoApplyQueued{Status: autoApplyStatusQueued}}, nil
 }
 
 // autoApplyAllowanceRefusal is startAutoApply's answer when the day's allowance is spent. A

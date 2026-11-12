@@ -163,7 +163,7 @@ func newAutopilotHarness(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, tur
 		cookie: auth.RequireAuth(iss, testVersions),
 		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
 	}
-	h.register(api, mw)
+	h.register(api, mw, newContract(contractHandlers{assistantHandlers: h}))
 	h.cv.register(api, mw, cvContract(h.cv))
 	return h, app
 }

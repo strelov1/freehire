@@ -124,3 +124,45 @@ func TestGetProfileTool_ReturnsSenioritiesAndJobLanguages(t *testing.T) {
 		}
 	}
 }
+
+func TestGetProfileTool_ServesTheBackgroundAndKeepsCVAsItsAlias(t *testing.T) {
+	h := assistantWithProfile(savedProfile(), fakeStructuredResume{
+		ok: true, ret: resumeextract.Structured{Headline: "Staff Backend Engineer"},
+	})
+	out, err := toolByName(t, h.assistantDiscoveryTools(), "get_profile").
+		Run(context.Background(), 1, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("get_profile: %v", err)
+	}
+	var got struct {
+		Background, CV *resumeextract.Professional
+	}
+	blob, _ := json.Marshal(out)
+	if err := json.Unmarshal(blob, &struct {
+		B **resumeextract.Professional `json:"background"`
+		C **resumeextract.Professional `json:"cv"`
+	}{&got.Background, &got.CV}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Background == nil || got.CV == nil || got.Background.Headline != "Staff Backend Engineer" || got.CV.Headline != got.Background.Headline {
+		t.Errorf("background and its deprecated cv alias must carry the same data:\n%s", blob)
+	}
+}
+
+func TestGetProfileTool_NoPreferencesRowStillServesTheSavedText(t *testing.T) {
+	repo := &fakeProfileRepo{getErr: userprofile.ErrNotFound}
+	h := assistantWithProfile(repo, fakeStructuredResume{
+		ok: true, ret: resumeextract.Structured{Headline: "Staff Backend Engineer"},
+	})
+	out, err := toolByName(t, h.assistantDiscoveryTools(), "get_profile").
+		Run(context.Background(), 1, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("get_profile: %v", err)
+	}
+	blob, _ := json.Marshal(out)
+	// update_profile can save the headline without a preferences row; hiding it behind
+	// "no profile yet" would make the agent write it again.
+	if !strings.Contains(string(blob), `"background":{"headline":"Staff Backend Engineer"`) || !strings.Contains(string(blob), `"next"`) {
+		t.Errorf("want the saved text and the no-preferences hint:\n%s", blob)
+	}
+}

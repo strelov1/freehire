@@ -37,23 +37,15 @@ export const messages = defineMessages(
       expandSidebar: 'Expand sidebar',
       collapseSidebar: 'Collapse sidebar',
       accountSections: 'Account sections',
-      workspace: 'Workspace',
       settings: 'Settings',
     },
     // Keyed by WorkspaceId / NavGroupId; accountNav.ts carries no English copy of these.
     workspaces: {
-      seeker: 'Profile',
+      seeker: 'My job search',
       buddies: 'Interview buddies',
       mentor: 'Mentor',
       referrer: 'Referrer',
       employer: 'Employer',
-    },
-    workspaceHints: {
-      seeker: 'Your profile and applications',
-      buddies: 'Anonymous peers in the same search',
-      mentor: 'Sessions you give',
-      referrer: 'Refer candidates to your company',
-      employer: 'Your company and vacancies',
     },
     // `main` has no heading: it is the workspace itself.
     navGroups: {
@@ -103,22 +95,14 @@ export const messages = defineMessages(
         expandSidebar: 'Развернуть панель',
         collapseSidebar: 'Свернуть панель',
         accountSections: 'Разделы аккаунта',
-        workspace: 'Кабинет',
         settings: 'Настройки',
       },
       workspaces: {
-        seeker: 'Профиль',
+        seeker: 'Мой поиск работы',
         buddies: 'Бадди для интервью',
         mentor: 'Ментор',
         referrer: 'Рекомендатель',
         employer: 'Работодатель',
-      },
-      workspaceHints: {
-        seeker: 'Ваш профиль и отклики',
-        buddies: 'Анонимные коллеги в том же поиске',
-        mentor: 'Сессии, которые вы проводите',
-        referrer: 'Рекомендуете кандидатов в свою компанию',
-        employer: 'Ваша компания и вакансии',
       },
       navGroups: {
         network: 'Сеть',

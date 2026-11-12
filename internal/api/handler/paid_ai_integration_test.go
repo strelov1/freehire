@@ -52,7 +52,7 @@ func realGateAssistantApp(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, mo
 		paidAI: paidAIGate(entitlementOf(plans)),
 		cookie: auth.RequireAuth(iss, testVersions),
 		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-	})
+	}, newContract(contractHandlers{assistantHandlers: h}))
 	return app
 }
 
