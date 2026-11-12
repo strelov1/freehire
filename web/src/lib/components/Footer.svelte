@@ -97,6 +97,15 @@
 
   const year = new Date().getFullYear();
 
+  const compactLinks = [
+    { label: 'Jobs', href: resolve('/jobs') },
+    { label: 'Pricing', href: resolve('/pricing') },
+    { label: 'Support', href: resolve('/support') },
+    { label: 'Status', href: resolve('/status') },
+    { label: 'Privacy', href: resolve('/privacy') },
+    { label: 'Terms', href: resolve('/terms') },
+  ];
+
   // Product Hunt "featured" badge. Two embed URLs — one per theme — swapped by the
   // `dark` class variant rather than by reading themeStore, so the right one is
   // already in the SSR markup (the anti-FOUC script in app.html sets `.dark` before
@@ -146,9 +155,9 @@
 
   // Compact: the account shell (/my/*) is an app-like surface with its own sidebar
   // nav, so the four link columns, the popular-collections strip and the Product
-  // Hunt badge below are marketing chrome that doesn't belong there — only the
-  // bottom bar (copyright, cookie settings, social links, open-source note) still
-  // applies. Full-bleed account routes (/my/assistant/*, /tailor/*) render no
+  // Hunt badge below give way to a short list of essential site links and the
+  // bottom bar (copyright, cookie settings, social links, open-source note).
+  // Full-bleed account routes (/my/assistant/*, /tailor/*) render no
   // footer at all, compact or otherwise — see routes/+layout.svelte's hideFooter.
   let { compact = false }: { compact?: boolean } = $props();
 </script>
@@ -250,6 +259,24 @@
         {/each}
       </div>
     </div>
+  {/if}
+
+  {#if compact}
+    <nav class="mx-auto max-w-6xl px-4 pt-4" aria-label="Essential links">
+      <ul class="flex flex-wrap gap-x-5 gap-y-1">
+        {#each compactLinks as link (link.href)}
+          <li>
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- internal route already passed through resolve() in compactLinks -->
+            <a
+              href={link.href}
+              class="inline-flex min-h-8 items-center rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {link.label}
+            </a><!-- eslint-enable svelte/no-navigation-without-resolve -->
+          </li>
+        {/each}
+      </ul>
+    </nav>
   {/if}
 
   <!-- Bottom bar: copyright + social links on the left, open-source note on the
