@@ -10,7 +10,7 @@ export const messages = defineMessages(
       examples: [
         'Find jobs for my profile.',
         "What's new in my job alerts?",
-        'Apply to my saved jobs and prepare the applications for my review.',
+        'Prepare applications for my saved jobs, and do not send any until I approve.',
         'Help me set up my job-search profile.',
       ],
     },
@@ -53,7 +53,7 @@ export const messages = defineMessages(
         examples: [
           'Найди вакансии под мой профиль.',
           'Что нового в моих подписках на вакансии?',
-          'Откликнись на сохранённые вакансии и подготовь отклики мне на проверку.',
+          'Подготовь отклики на сохранённые вакансии и ничего не отправляй, пока я не одобрю.',
           'Помоги заполнить мой профиль для поиска работы.',
         ],
       },
