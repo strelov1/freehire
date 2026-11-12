@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/search/searchintent"
@@ -36,7 +39,7 @@ func newIntentHandlers(llm llmBinding) *intentHandlers {
 	return &intentHandlers{llm: llm}
 }
 
-func (h *intentHandlers) register(api fiber.Router, mw middleware) {
+func (h *intentHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Optional session: open to signed-out visitors as well. The AI search is how a
 	// visitor first finds the catalogue, and asking them to sign in before they have seen
 	// it hid the feature from exactly the people it is for. A signed-in caller is unchanged
@@ -47,15 +50,7 @@ func (h *intentHandlers) register(api fiber.Router, mw middleware) {
 	// Deliberately NOT behind mw.paidAI: the interpretation is one of the model calls every
 	// account gets (plan.WithFreeAI, marked in the handler). It is a short call on a cheap
 	// model. Every call answered 402 to free on 2026-10-19.
-	api.Post("/search/interpret", mw.optional, h.InterpretSearch)
-}
-
-// interpretRequest is what the dialog posts: a description, optionally refining a
-// result the caller is already looking at.
-type interpretRequest struct {
-	Text string `json:"text"`
-	// Previous is the result being refined, echoed back from a prior response.
-	Previous *interpretResult `json:"previous"`
+	api.Post("/search/interpret", mw.optional, refuseEncodedGuestBody, contract)
 }
 
 // interpretResult is the wire shape of one interpretation. It round-trips: the dialog
@@ -115,42 +110,57 @@ func (v interpretResult) result() searchintent.Result {
 //
 // Response: {"data": {...}}. A result that resolved nothing is a 200 carrying
 // empty:true, not an error — the request was fine, the description was not usable.
-func (h *intentHandlers) InterpretSearch(c *fiber.Ctx) error {
-	userID, signedIn := auth.UserID(c)
-	if !signedIn {
+func (h *intentHandlers) InterpretSearch(ctx context.Context, body *apigen.SearchIntentRequest) (*apigen.InterpretSearchOK, error) {
+	userID, signedIn := auth.UserIDFromContext(ctx)
+	// The previous result travels as raw JSON and is decoded here, so a malformed one is
+	// the same "invalid request body" a malformed request always was.
+	var previous *interpretResult
+	if len(body.Previous) > 0 {
+		if err := json.Unmarshal(body.Previous, &previous); err != nil {
+			return nil, fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+		}
+	}
+	text := body.Text.Value
+	if len([]rune(text)) > searchintent.MaxTextRunes {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "description is too long")
+	}
+
+	req := searchintent.Request{Text: text}
+	if previous != nil {
+		prev := previous.result()
+		req.Previous = &prev
+	}
+
+	model, err := h.model(ctx, userID, signedIn)
+	if err != nil {
+		return nil, err
+	}
+	interpreter := searchintent.NewInterpreter(model)
+	res, err := interpreter.Interpret(ctx, req)
+	switch {
+	case errors.Is(err, searchintent.ErrDisabled):
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "AI search is not available")
+	case errors.Is(err, searchintent.ErrNothingToInterpret):
+		return nil, fiber.NewError(fiber.StatusBadRequest, "describe the search you are looking for")
+	case err != nil:
+		return nil, err
+	}
+	raw, err := json.Marshal(resultView(res))
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.InterpretSearchOK{Data: raw}, nil
+}
+
+// refuseEncodedGuestBody refuses a signed-out caller's encoded body before the contract
+// decodes it (see refuseEncodedBody): the generated server cannot see the header.
+func refuseEncodedGuestBody(c *fiber.Ctx) error {
+	if _, signedIn := auth.UserID(c); !signedIn {
 		if err := refuseEncodedBody(c); err != nil {
 			return err
 		}
 	}
-	var in interpretRequest
-	if err := c.BodyParser(&in); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
-	}
-	if len([]rune(in.Text)) > searchintent.MaxTextRunes {
-		return fiber.NewError(fiber.StatusBadRequest, "description is too long")
-	}
-
-	req := searchintent.Request{Text: in.Text}
-	if in.Previous != nil {
-		previous := in.Previous.result()
-		req.Previous = &previous
-	}
-
-	model, err := h.model(c, userID, signedIn)
-	if err != nil {
-		return err
-	}
-	interpreter := searchintent.NewInterpreter(model)
-	res, err := interpreter.Interpret(c.Context(), req)
-	switch {
-	case errors.Is(err, searchintent.ErrDisabled):
-		return fiber.NewError(fiber.StatusServiceUnavailable, "AI search is not available")
-	case errors.Is(err, searchintent.ErrNothingToInterpret):
-		return fiber.NewError(fiber.StatusBadRequest, "describe the search you are looking for")
-	case err != nil:
-		return err
-	}
-	return c.JSON(fiber.Map{"data": resultView(res)})
+	return c.Next()
 }
 
 // model is the client one interpretation runs on.
@@ -159,9 +169,9 @@ func (h *intentHandlers) InterpretSearch(c *fiber.Ctx) error {
 // service client, tagged with the feature, and NEVER goes through the binding: there is
 // no account to attribute to, and llmkey's resolver asked about account 0 would read and
 // then MINT a gateway credential for it — a key nobody owns, created on every guest call.
-func (h *intentHandlers) model(c *fiber.Ctx, userID int64, signedIn bool) (*llm.Client, error) {
+func (h *intentHandlers) model(ctx context.Context, userID int64, signedIn bool) (*llm.Client, error) {
 	if signedIn {
-		return h.llm.bind(plan.WithFreeAI(c.UserContext()), userID, llm.Feature(tagSearchIntent))
+		return h.llm.bind(plan.WithFreeAI(ctx), userID, llm.Feature(tagSearchIntent))
 	}
 	return h.llm.client.As("", nil, llm.Feature(tagSearchIntent)), nil
 }

@@ -2,11 +2,14 @@ package handler
 
 import (
 	"bufio"
+	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/search/embedprogress"
 )
 
@@ -29,18 +32,22 @@ func newEmbedProgressHandlers(source embedProgressSource) *embedProgressHandlers
 	return &embedProgressHandlers{source: source, pingInterval: sseKeepalive}
 }
 
-func (h *embedProgressHandlers) register(api fiber.Router) {
-	api.Get("/stats/embeddings", h.Progress)
+func (h *embedProgressHandlers) register(api fiber.Router, contract fiber.Handler) {
+	api.Get("/stats/embeddings", contract)
 	api.Get("/stats/embeddings/stream",
 		h.Stream)
 }
 
-// Progress answers the current progress document. Unmeasured figures are null.
-func (h *embedProgressHandlers) Progress(c *fiber.Ctx) error {
+// GetEmbeddingProgress answers the current progress document. Unmeasured figures are null.
+func (h *embedProgressHandlers) GetEmbeddingProgress(context.Context) (*apigen.GetEmbeddingProgressOK, error) {
 	if h.source == nil {
-		return fiber.ErrServiceUnavailable
+		return nil, fiber.ErrServiceUnavailable
 	}
-	return c.JSON(fiber.Map{"data": h.source.Current()})
+	raw, err := json.Marshal(h.source.Current())
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetEmbeddingProgressOK{Data: raw}, nil
 }
 
 // Stream sends the current document at once (once one has been sampled) and then one

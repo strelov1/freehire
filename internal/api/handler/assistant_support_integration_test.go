@@ -66,11 +66,13 @@ func supportApp(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, model assist
 		h.support.mail = supportMail{sender: sender, from: "freehire <noreply@example.test>", to: "support@example.test"}
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h.register(app.Group("/api/v1"), middleware{
+	mw := middleware{
 		paidAI: paidAIGate(entitlementOf(plans)),
 		cookie: auth.RequireAuth(iss, testVersions),
 		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-	})
+	}
+	h.register(app.Group("/api/v1"), mw)
+	h.registerSupport(app.Group("/api/v1"), mw, newContract(contractHandlers{assistantHandlers: h}))
 	return app, h
 }
 

@@ -55,7 +55,7 @@ func TestEmbedProgress_JSON(t *testing.T) {
 	src := &fakeProgress{current: queuedProgress(123)}
 	h := newEmbedProgressHandlers(src)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/stats/embeddings", h.Progress)
+	app.Get("/api/v1/stats/embeddings", newContract(contractHandlers{embedProgressHandlers: h}))
 
 	status, body := doGet(t, app, "/api/v1/stats/embeddings")
 	if status != fiber.StatusOK {

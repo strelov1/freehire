@@ -252,7 +252,6 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
 	// the candidate can watch it happen and undo it.
 	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, mw.paidAI(plan.FeatureTailor), h.PostAssistantAutopilot)
-	h.registerSupport(api, mw)
 
 	// The external auto-apply pipeline's own two endpoints (openspec/changes/
 	// auto-apply-tailored-resume) — API key or cookie, never a session id from the caller.
@@ -315,7 +314,12 @@ func cvIDString(id *uuid.UUID) *string {
 }
 
 func assistantSessionID(c *fiber.Ctx) (uuid.UUID, error) {
-	id, err := uuid.Parse(c.Params("id"))
+	return parseAssistantSessionID(c.Params("id"))
+}
+
+// parseAssistantSessionID is assistantSessionID for a raw id.
+func parseAssistantSessionID(raw string) (uuid.UUID, error) {
+	id, err := uuid.Parse(raw)
 	if err != nil {
 		return uuid.Nil, fiber.NewError(fiber.StatusNotFound, "session not found")
 	}

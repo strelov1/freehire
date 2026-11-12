@@ -111,7 +111,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	if err := jobVisibleToCaller(job, userID, true); err != nil {
 		return err
 	}
-	cvUploadedAt, hasCV := h.cvUploadedAt(c, userID)
+	cvUploadedAt, hasCV := h.cvUploadedAt(c.Context(), userID)
 	// Reserve the credit before opening the stream (the fiber ctx is still valid here, so an
 	// out-of-credits new job returns a real 402 instead of an SSE error). Only a CV-backed
 	// request would run the LLM; without one the stream just reports has_cv. A recompute is
@@ -184,7 +184,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		// happens after the stream's own goroutine outlives this request, so the language it
 		// stamps must be the one the chain actually ran under, not whatever a profile edit
 		// changes it to mid-stream.
-		req.Input = h.buildAnalysisInput(c, job, userID, profile, blockers, h.callerLanguage(c.Context(), userID))
+		req.Input = h.buildAnalysisInput(c.Context(), job, userID, profile, blockers, h.callerLanguage(c.Context(), userID))
 	}
 
 	sseHeaders(c)
