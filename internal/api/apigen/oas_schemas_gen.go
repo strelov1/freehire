@@ -2614,6 +2614,9 @@ func (s *CancelSessionOK) SetData(val MentorshipBooking) {
 	s.Data = val
 }
 
+// CancelSupportTurnNoContent is response for CancelSupportTurn operation.
+type CancelSupportTurnNoContent struct{}
+
 // The size of the catalogue, from one published snapshot.
 // Ref: #/components/schemas/CatalogScale
 type CatalogScale struct {
@@ -4213,6 +4216,40 @@ func (s *CreateSubscriptionCreated) GetData() Subscription {
 func (s *CreateSubscriptionCreated) SetData(val Subscription) {
 	s.Data = val
 }
+
+// A single item: `{"data": ...}`.
+type CreateSupportSessionCreated struct {
+	Data SupportSession `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateSupportSessionCreated) GetData() SupportSession {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateSupportSessionCreated) SetData(val SupportSession) {
+	s.Data = val
+}
+
+func (*CreateSupportSessionCreated) createSupportSessionRes() {}
+
+// A single item: `{"data": ...}`.
+type CreateSupportSessionOK struct {
+	Data SupportSession `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateSupportSessionOK) GetData() SupportSession {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateSupportSessionOK) SetData(val SupportSession) {
+	s.Data = val
+}
+
+func (*CreateSupportSessionOK) createSupportSessionRes() {}
 
 // A single item: `{"data": ...}`.
 type CreateThreadCreated struct {
@@ -7058,6 +7095,290 @@ func (s *FindModeratedUserOK) SetData(val ModeratedUser) {
 	s.Data = val
 }
 
+// One analysed job in the caller's list.
+// Ref: #/components/schemas/FitAnalysedJob
+type FitAnalysedJob struct {
+	Slug         string    `json:"slug"`
+	Title        string    `json:"title"`
+	Company      string    `json:"company"`
+	Closed       bool      `json:"closed"`
+	OverallScore int64     `json:"overall_score"`
+	Verdict      string    `json:"verdict"`
+	AnalysedAt   time.Time `json:"analysed_at"`
+	Stale        bool      `json:"stale"`
+}
+
+// GetSlug returns the value of Slug.
+func (s *FitAnalysedJob) GetSlug() string {
+	return s.Slug
+}
+
+// GetTitle returns the value of Title.
+func (s *FitAnalysedJob) GetTitle() string {
+	return s.Title
+}
+
+// GetCompany returns the value of Company.
+func (s *FitAnalysedJob) GetCompany() string {
+	return s.Company
+}
+
+// GetClosed returns the value of Closed.
+func (s *FitAnalysedJob) GetClosed() bool {
+	return s.Closed
+}
+
+// GetOverallScore returns the value of OverallScore.
+func (s *FitAnalysedJob) GetOverallScore() int64 {
+	return s.OverallScore
+}
+
+// GetVerdict returns the value of Verdict.
+func (s *FitAnalysedJob) GetVerdict() string {
+	return s.Verdict
+}
+
+// GetAnalysedAt returns the value of AnalysedAt.
+func (s *FitAnalysedJob) GetAnalysedAt() time.Time {
+	return s.AnalysedAt
+}
+
+// GetStale returns the value of Stale.
+func (s *FitAnalysedJob) GetStale() bool {
+	return s.Stale
+}
+
+// SetSlug sets the value of Slug.
+func (s *FitAnalysedJob) SetSlug(val string) {
+	s.Slug = val
+}
+
+// SetTitle sets the value of Title.
+func (s *FitAnalysedJob) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetCompany sets the value of Company.
+func (s *FitAnalysedJob) SetCompany(val string) {
+	s.Company = val
+}
+
+// SetClosed sets the value of Closed.
+func (s *FitAnalysedJob) SetClosed(val bool) {
+	s.Closed = val
+}
+
+// SetOverallScore sets the value of OverallScore.
+func (s *FitAnalysedJob) SetOverallScore(val int64) {
+	s.OverallScore = val
+}
+
+// SetVerdict sets the value of Verdict.
+func (s *FitAnalysedJob) SetVerdict(val string) {
+	s.Verdict = val
+}
+
+// SetAnalysedAt sets the value of AnalysedAt.
+func (s *FitAnalysedJob) SetAnalysedAt(val time.Time) {
+	s.AnalysedAt = val
+}
+
+// SetStale sets the value of Stale.
+func (s *FitAnalysedJob) SetStale(val bool) {
+	s.Stale = val
+}
+
+// Ref: #/components/schemas/FitAnalysedJobs
+type FitAnalysedJobs struct {
+	Data []FitAnalysedJob    `json:"data"`
+	Meta FitAnalysedJobsMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *FitAnalysedJobs) GetData() []FitAnalysedJob {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *FitAnalysedJobs) GetMeta() FitAnalysedJobsMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *FitAnalysedJobs) SetData(val []FitAnalysedJob) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *FitAnalysedJobs) SetMeta(val FitAnalysedJobsMeta) {
+	s.Meta = val
+}
+
+// Ref: #/components/schemas/FitAnalysedJobsMeta
+type FitAnalysedJobsMeta struct {
+	// Where the caller stands on the fit allowance today; null when it cannot be read.
+	Allowance jx.Raw `json:"allowance"`
+}
+
+// GetAllowance returns the value of Allowance.
+func (s *FitAnalysedJobsMeta) GetAllowance() jx.Raw {
+	return s.Allowance
+}
+
+// SetAllowance sets the value of Allowance.
+func (s *FitAnalysedJobsMeta) SetAllowance(val jx.Raw) {
+	s.Allowance = val
+}
+
+// The fit analysis for one job. `has_cv` is false when the caller has no stored CV; `stale` marks a
+// cached analysis whose CV or job changed since; `analysis` is null when none is cached or the model
+// is unconfigured. The allowances ride on reads only and are absent when they cannot be read.
+// Ref: #/components/schemas/FitAnalysis
+type FitAnalysis struct {
+	HasCv           bool   `json:"has_cv"`
+	Stale           bool   `json:"stale"`
+	Analysis        jx.Raw `json:"analysis"`
+	Allowance       jx.Raw `json:"allowance"`
+	TailorAllowance jx.Raw `json:"tailor_allowance"`
+}
+
+// GetHasCv returns the value of HasCv.
+func (s *FitAnalysis) GetHasCv() bool {
+	return s.HasCv
+}
+
+// GetStale returns the value of Stale.
+func (s *FitAnalysis) GetStale() bool {
+	return s.Stale
+}
+
+// GetAnalysis returns the value of Analysis.
+func (s *FitAnalysis) GetAnalysis() jx.Raw {
+	return s.Analysis
+}
+
+// GetAllowance returns the value of Allowance.
+func (s *FitAnalysis) GetAllowance() jx.Raw {
+	return s.Allowance
+}
+
+// GetTailorAllowance returns the value of TailorAllowance.
+func (s *FitAnalysis) GetTailorAllowance() jx.Raw {
+	return s.TailorAllowance
+}
+
+// SetHasCv sets the value of HasCv.
+func (s *FitAnalysis) SetHasCv(val bool) {
+	s.HasCv = val
+}
+
+// SetStale sets the value of Stale.
+func (s *FitAnalysis) SetStale(val bool) {
+	s.Stale = val
+}
+
+// SetAnalysis sets the value of Analysis.
+func (s *FitAnalysis) SetAnalysis(val jx.Raw) {
+	s.Analysis = val
+}
+
+// SetAllowance sets the value of Allowance.
+func (s *FitAnalysis) SetAllowance(val jx.Raw) {
+	s.Allowance = val
+}
+
+// SetTailorAllowance sets the value of TailorAllowance.
+func (s *FitAnalysis) SetTailorAllowance(val jx.Raw) {
+	s.TailorAllowance = val
+}
+
+// Ref: #/components/schemas/FitAnalysisResponse
+type FitAnalysisResponse struct {
+	Data FitAnalysis `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *FitAnalysisResponse) GetData() FitAnalysis {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *FitAnalysisResponse) SetData(val FitAnalysis) {
+	s.Data = val
+}
+
+func (*FitAnalysisResponse) runJobFitRes()        {}
+func (*FitAnalysisResponse) runMatchAnalysisRes() {}
+
+// A job posting scraped off any page.
+// Ref: #/components/schemas/FitMatchTextRequest
+type FitMatchTextRequest struct {
+	Title OptString `json:"title"`
+	Text  OptString `json:"text"`
+}
+
+// GetTitle returns the value of Title.
+func (s *FitMatchTextRequest) GetTitle() OptString {
+	return s.Title
+}
+
+// GetText returns the value of Text.
+func (s *FitMatchTextRequest) GetText() OptString {
+	return s.Text
+}
+
+// SetTitle sets the value of Title.
+func (s *FitMatchTextRequest) SetTitle(val OptString) {
+	s.Title = val
+}
+
+// SetText sets the value of Text.
+func (s *FitMatchTextRequest) SetText(val OptString) {
+	s.Text = val
+}
+
+// The 402 a spent or missing fit allowance answers with.
+// Ref: #/components/schemas/FitRefusal
+type FitRefusal struct {
+	Error     string `json:"error"`
+	Allowance jx.Raw `json:"allowance"`
+	// Absent for a fair-use refusal and for a caller already on the top plan.
+	UpgradeURL OptString `json:"upgrade_url"`
+}
+
+// GetError returns the value of Error.
+func (s *FitRefusal) GetError() string {
+	return s.Error
+}
+
+// GetAllowance returns the value of Allowance.
+func (s *FitRefusal) GetAllowance() jx.Raw {
+	return s.Allowance
+}
+
+// GetUpgradeURL returns the value of UpgradeURL.
+func (s *FitRefusal) GetUpgradeURL() OptString {
+	return s.UpgradeURL
+}
+
+// SetError sets the value of Error.
+func (s *FitRefusal) SetError(val string) {
+	s.Error = val
+}
+
+// SetAllowance sets the value of Allowance.
+func (s *FitRefusal) SetAllowance(val jx.Raw) {
+	s.Allowance = val
+}
+
+// SetUpgradeURL sets the value of UpgradeURL.
+func (s *FitRefusal) SetUpgradeURL(val OptString) {
+	s.UpgradeURL = val
+}
+
+func (*FitRefusal) runJobFitRes()        {}
+func (*FitRefusal) runMatchAnalysisRes() {}
+
 // A single item: `{"data": ...}`.
 type GetAgentPermissionsOK struct {
 	Data AgentPermissions `json:"data"`
@@ -7100,6 +7421,21 @@ func (s *GetAtsReportOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *GetAtsReportOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetAutofillProfileOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetAutofillProfileOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetAutofillProfileOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
@@ -7284,6 +7620,21 @@ func (s *GetEmailPrefsOK) SetData(val EmailPrefs) {
 }
 
 // A single item: `{"data": ...}`.
+type GetEmbeddingProgressOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetEmbeddingProgressOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetEmbeddingProgressOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type GetEmployerCompanyOK struct {
 	Data EmployerCompany `json:"data"`
 }
@@ -7335,6 +7686,21 @@ func (s *GetInviteOK) GetData() Invite {
 
 // SetData sets the value of Data.
 func (s *GetInviteOK) SetData(val Invite) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetJobMatchOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetJobMatchOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetJobMatchOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
@@ -9087,6 +9453,21 @@ func (s *Interaction) SetStage(val NilString) {
 // SetNotes sets the value of Notes.
 func (s *Interaction) SetNotes(val NilString) {
 	s.Notes = val
+}
+
+// A single item: `{"data": ...}`.
+type InterpretSearchOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *InterpretSearchOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *InterpretSearchOK) SetData(val jx.Raw) {
+	s.Data = val
 }
 
 // Ref: #/components/schemas/Invite
@@ -10911,6 +11292,21 @@ func (s *MarketPulseMeta) GetWeekStart() string {
 // SetWeekStart sets the value of WeekStart.
 func (s *MarketPulseMeta) SetWeekStart(val string) {
 	s.WeekStart = val
+}
+
+// A single item: `{"data": ...}`.
+type MatchTextOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *MatchTextOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *MatchTextOK) SetData(val jx.Raw) {
+	s.Data = val
 }
 
 // A prefill for the mentor-profile form, from what the account already knows.
@@ -17555,6 +17951,21 @@ func (s *RolesMeta) SetSkillsGeographyScoped(val OptBool) {
 	s.SkillsGeographyScoped = val
 }
 
+// A single item: `{"data": ...}`.
+type RunAutofillOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RunAutofillOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RunAutofillOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
 // Ref: #/components/schemas/SalaryAnswer
 type SalaryAnswer struct {
 	Data []SalaryBand `json:"data"`
@@ -18409,6 +18820,34 @@ func (s *SearchCitiesOK) GetData() []CityMatch {
 // SetData sets the value of Data.
 func (s *SearchCitiesOK) SetData(val []CityMatch) {
 	s.Data = val
+}
+
+// Ref: #/components/schemas/SearchIntentRequest
+type SearchIntentRequest struct {
+	// The description of the search; refused over the length limit.
+	Text OptString `json:"text"`
+	// The result being refined, echoed back from a prior answer.
+	Previous jx.Raw `json:"previous"`
+}
+
+// GetText returns the value of Text.
+func (s *SearchIntentRequest) GetText() OptString {
+	return s.Text
+}
+
+// GetPrevious returns the value of Previous.
+func (s *SearchIntentRequest) GetPrevious() jx.Raw {
+	return s.Previous
+}
+
+// SetText sets the value of Text.
+func (s *SearchIntentRequest) SetText(val OptString) {
+	s.Text = val
+}
+
+// SetPrevious sets the value of Previous.
+func (s *SearchIntentRequest) SetPrevious(val jx.Raw) {
+	s.Previous = val
 }
 
 // A single item: `{"data": ...}`.
@@ -20177,6 +20616,76 @@ func (s *SuggestionPart) SetSlug(val OptString) {
 // SetText sets the value of Text.
 func (s *SuggestionPart) SetText(val string) {
 	s.Text = val
+}
+
+// Ref: #/components/schemas/SupportSession
+type SupportSession struct {
+	ID            string    `json:"id"`
+	Preset        string    `json:"preset"`
+	Label         string    `json:"label"`
+	SearchContext jx.Raw    `json:"search_context"`
+	CvID          OptString `json:"cv_id"`
+	JobID         OptInt64  `json:"job_id"`
+}
+
+// GetID returns the value of ID.
+func (s *SupportSession) GetID() string {
+	return s.ID
+}
+
+// GetPreset returns the value of Preset.
+func (s *SupportSession) GetPreset() string {
+	return s.Preset
+}
+
+// GetLabel returns the value of Label.
+func (s *SupportSession) GetLabel() string {
+	return s.Label
+}
+
+// GetSearchContext returns the value of SearchContext.
+func (s *SupportSession) GetSearchContext() jx.Raw {
+	return s.SearchContext
+}
+
+// GetCvID returns the value of CvID.
+func (s *SupportSession) GetCvID() OptString {
+	return s.CvID
+}
+
+// GetJobID returns the value of JobID.
+func (s *SupportSession) GetJobID() OptInt64 {
+	return s.JobID
+}
+
+// SetID sets the value of ID.
+func (s *SupportSession) SetID(val string) {
+	s.ID = val
+}
+
+// SetPreset sets the value of Preset.
+func (s *SupportSession) SetPreset(val string) {
+	s.Preset = val
+}
+
+// SetLabel sets the value of Label.
+func (s *SupportSession) SetLabel(val string) {
+	s.Label = val
+}
+
+// SetSearchContext sets the value of SearchContext.
+func (s *SupportSession) SetSearchContext(val jx.Raw) {
+	s.SearchContext = val
+}
+
+// SetCvID sets the value of CvID.
+func (s *SupportSession) SetCvID(val OptString) {
+	s.CvID = val
+}
+
+// SetJobID sets the value of JobID.
+func (s *SupportSession) SetJobID(val OptInt64) {
+	s.JobID = val
 }
 
 // The onboarding survey. Each field is optional.

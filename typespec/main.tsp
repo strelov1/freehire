@@ -41,6 +41,11 @@ import "./resume.tsp";
 import "./cv.tsp";
 import "./mentorship.tsp";
 import "./mail.tsp";
+import "./fit.tsp";
+import "./autofill.tsp";
+import "./search-intent.tsp";
+import "./embeddings.tsp";
+import "./support.tsp";
 
 using Http;
 

@@ -74,6 +74,11 @@ type contractHandlers struct {
 	*directApplyHandlers
 	*jobsHandlers
 	*searchHandlers
+	*matchHandlers
+	*autofillHandlers
+	*intentHandlers
+	*embedProgressHandlers
+	*assistantHandlers
 	*companiesHandlers
 	*resumeHandlers
 	*cvHandlers

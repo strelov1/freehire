@@ -176,8 +176,8 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 		h := fitAPI(pool, queries, iss, store, an)
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		g := auth.RequireAuth(iss, testVersions)
-		app.Get("/api/v1/jobs/:slug/fit", g, h.GetMatchAnalysis)
-		app.Post("/api/v1/jobs/:slug/fit", g, markPaidAI(plan.FeatureFit), h.PostMatchAnalysis)
+		app.Get("/api/v1/jobs/:slug/fit", g, newContract(contractHandlers{matchHandlers: h}))
+		app.Post("/api/v1/jobs/:slug/fit", g, markPaidAI(plan.FeatureFit), newContract(contractHandlers{matchHandlers: h}))
 		return app
 	}
 
@@ -320,8 +320,8 @@ func TestMatchAnalysisAllowance(t *testing.T) {
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		g := auth.RequireAuth(iss, testVersions)
-		app.Get("/api/v1/jobs/:slug/fit", g, h.GetMatchAnalysis)
-		app.Post("/api/v1/jobs/:slug/fit", g, markPaidAI(plan.FeatureFit), h.PostMatchAnalysis)
+		app.Get("/api/v1/jobs/:slug/fit", g, newContract(contractHandlers{matchHandlers: h}))
+		app.Post("/api/v1/jobs/:slug/fit", g, markPaidAI(plan.FeatureFit), newContract(contractHandlers{matchHandlers: h}))
 		app.Get("/api/v1/jobs/:slug/fit/stream", g, markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 		return app
 	}

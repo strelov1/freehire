@@ -186,6 +186,12 @@ type Handler interface {
 	//
 	// POST /me/mentorship/sessions/{id}/cancel
 	CancelSession(ctx context.Context, req OptMentorshipCancelBody, params CancelSessionParams) (*CancelSessionOK, error)
+	// CancelSupportTurn implements cancelSupportTurn operation.
+	//
+	// Stops the turn running in a support session.
+	//
+	// POST /support/sessions/{id}/cancel
+	CancelSupportTurn(ctx context.Context, params CancelSupportTurnParams) error
 	// CatalogScale implements catalogScale operation.
 	//
 	// The catalogue size. Never fails: a cold cache degrades to an estimate and `exact` says so.
@@ -324,6 +330,13 @@ type Handler interface {
 	//
 	// POST /me/subscriptions
 	CreateSubscription(ctx context.Context, req *SubscriptionCreate) (*CreateSubscriptionCreated, error)
+	// CreateSupportSession implements createSupportSession operation.
+	//
+	// Starts a support conversation. The blank one the caller already has is handed back (200) rather than
+	// adding another; a new one is a 201.
+	//
+	// POST /support/sessions
+	CreateSupportSession(ctx context.Context) (CreateSupportSessionRes, error)
 	// CreateThread implements createThread operation.
 	//
 	// Opens a thread on a company or job.
@@ -461,6 +474,13 @@ type Handler interface {
 	//
 	// GET /me/profile/ats-report
 	GetAtsReport(ctx context.Context) (*GetAtsReportOK, error)
+	// GetAutofillProfile implements getAutofillProfile operation.
+	//
+	// The caller's canonical form fields, all empty bar the account email when no source states a contact.
+	// Keys are the profile's own and the set grows with it.
+	//
+	// GET /me/autofill-profile
+	GetAutofillProfile(ctx context.Context) (*GetAutofillProfileOK, error)
 	// GetBillingCheckout implements getBillingCheckout operation.
 	//
 	// 404 when checkout is unconfigured or the price is not offered. Cookie session only.
@@ -526,6 +546,13 @@ type Handler interface {
 	//
 	// GET /email-prefs
 	GetEmailPrefs(ctx context.Context, params GetEmailPrefsParams) (*GetEmailPrefsOK, error)
+	// GetEmbeddingProgress implements getEmbeddingProgress operation.
+	//
+	// The embedding backfill's current progress document. Figures not yet measured are null. The
+	// `/stats/embeddings/stream` route is Server-Sent Events and stays hand-written.
+	//
+	// GET /stats/embeddings
+	GetEmbeddingProgress(ctx context.Context) (*GetEmbeddingProgressOK, error)
 	// GetEmployerCompany implements getEmployerCompany operation.
 	//
 	// The caller's own account in any status, with the company profile.
@@ -559,6 +586,19 @@ type Handler interface {
 	//
 	// GET /jobs/{slug}
 	GetJob(ctx context.Context, params GetJobParams) (*GetJobOK, error)
+	// GetJobFit implements getJobFit operation.
+	//
+	// Alias of `getMatchAnalysis`.
+	//
+	// GET /jobs/{slug}/fit
+	GetJobFit(ctx context.Context, params GetJobFitParams) (*FitAnalysisResponse, error)
+	// GetJobMatch implements getJobMatch operation.
+	//
+	// How well the job's skills are covered by the caller's profile, plus the advisory hard-constraint
+	// blockers. Deterministic, no model. A caller without a profile is a 404.
+	//
+	// GET /jobs/{slug}/match
+	GetJobMatch(ctx context.Context, params GetJobMatchParams) (*GetJobMatchOK, error)
 	// GetMailbox implements getMailbox operation.
 	//
 	// GET /me/mailbox
@@ -569,6 +609,12 @@ type Handler interface {
 	//
 	// GET /me/market-pulse
 	GetMarketPulse(ctx context.Context) (*GetMarketPulseOK, error)
+	// GetMatchAnalysis implements getMatchAnalysis operation.
+	//
+	// The cached fit analysis for a job; never calls the model.
+	//
+	// GET /jobs/{slug}/match-analysis
+	GetMatchAnalysis(ctx context.Context, params GetMatchAnalysisParams) (*FitAnalysisResponse, error)
 	// GetMentor implements getMentor operation.
 	//
 	// GET /mentors/{slug}
@@ -788,6 +834,13 @@ type Handler interface {
 	//
 	// GET /insights/velocity
 	InsightsVelocity(ctx context.Context, params InsightsVelocityParams) (*VelocityAnswer, error)
+	// InterpretSearch implements interpretSearch operation.
+	//
+	// Turns a written description of a job search into filter values. Open to signed-out callers too, and
+	// a free AI route for every account. A description that resolved nothing is a 200 with `empty: true`.
+	//
+	// POST /search/interpret
+	InterpretSearch(ctx context.Context, req *SearchIntentRequest) (*InterpretSearchOK, error)
 	// JobApplyForm implements jobApplyForm operation.
 	//
 	// The application form captured for the job. 404 when none was captured.
@@ -946,6 +999,12 @@ type Handler interface {
 	//
 	// GET /mentors
 	ListMentors(ctx context.Context, params ListMentorsParams) (*MentorshipDirectoryPage, error)
+	// ListMyAnalyses implements listMyAnalyses operation.
+	//
+	// The jobs the caller has run the fit analysis on, newest first.
+	//
+	// GET /me/tracking/analyses
+	ListMyAnalyses(ctx context.Context) (*FitAnalysedJobs, error)
 	// ListMyContributions implements listMyContributions operation.
 	//
 	// GET /me/contributions
@@ -1087,6 +1146,12 @@ type Handler interface {
 	//
 	// POST /market/coverage
 	MarketCoverage(ctx context.Context, req *ResumeCoverageRequest) (*MarketCoverageOK, error)
+	// MatchText implements matchText operation.
+	//
+	// The same coverage for a posting that need not be in the catalogue.
+	//
+	// POST /me/match-text
+	MatchText(ctx context.Context, req *FitMatchTextRequest) (*MatchTextOK, error)
 	// MergeAtoms implements mergeAtoms operation.
 	//
 	// Folds two owned achievements into one. 409 when they conflict.
@@ -1327,6 +1392,26 @@ type Handler interface {
 	//
 	// POST /employer/claims/{user_id}/revoke
 	RevokeEmployerAccount(ctx context.Context, params RevokeEmployerAccountParams) (*RevokeEmployerAccountOK, error)
+	// RunAutofill implements runAutofill operation.
+	//
+	// Fills the form in the caller's own browser through the browser-tool channel. Paid AI route
+	// (unmetered). Only the extension's own Bearer session is admitted; anything else is a 403. The report
+	// names what was filled, deferred and left unmapped.
+	//
+	// POST /me/autofill/run
+	RunAutofill(ctx context.Context) (*RunAutofillOK, error)
+	// RunJobFit implements runJobFit operation.
+	//
+	// Alias of `runMatchAnalysis`.
+	//
+	// POST /jobs/{slug}/fit
+	RunJobFit(ctx context.Context, params RunJobFitParams) (RunJobFitRes, error)
+	// RunMatchAnalysis implements runMatchAnalysis operation.
+	//
+	// Runs the fit analysis and caches it. An unconfigured or failing model answers a null analysis.
+	//
+	// POST /jobs/{slug}/match-analysis
+	RunMatchAnalysis(ctx context.Context, params RunMatchAnalysisParams) (RunMatchAnalysisRes, error)
 	// SaveBankedAnswer implements saveBankedAnswer operation.
 	//
 	// Saves under the question's topic, replacing the answer already there.

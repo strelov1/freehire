@@ -80,7 +80,7 @@ func TestListMyAnalysesEndpoint(t *testing.T) {
 			plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing()), an),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking/analyses", auth.RequireAuth(iss, testVersions), h.ListMyAnalyses)
+	app.Get("/api/v1/me/tracking/analyses", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{matchHandlers: h}))
 
 	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/tracking/analyses", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})

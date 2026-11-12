@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
@@ -82,23 +84,24 @@ func meterOrNil(s *plan.Store) fitanalysis.Meter {
 	return s
 }
 
-func (h *matchHandlers) register(api fiber.Router, mw middleware) {
+func (h *matchHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Read-only per-job skill match against the caller's profile (no writes).
-	api.Get("/jobs/:slug/match", mw.key, h.JobMatch)
+	api.Get("/jobs/:slug/match", mw.key, contract)
 	// Ad-hoc skill match for a job posting scraped off any page (title + text),
 	// no catalog job required — powers the browser extension's on-any-page card.
-	api.Post("/me/match-text", mw.key, h.MatchText)
-	// The on-demand LLM match analysis (GET cached / POST run / SSE stream).
-	api.Get("/jobs/:slug/match-analysis", mw.key, h.GetMatchAnalysis)
-	api.Post("/jobs/:slug/match-analysis", mw.key, mw.paidAI(plan.FeatureFit), h.PostMatchAnalysis)
+	api.Post("/me/match-text", mw.key, contract)
+	// The on-demand LLM match analysis (GET cached / POST run through the contract, SSE stream
+	// on Fiber).
+	api.Get("/jobs/:slug/match-analysis", mw.key, contract)
+	api.Post("/jobs/:slug/match-analysis", mw.key, mw.paidAI(plan.FeatureFit), contract)
 	api.Get("/jobs/:slug/match-analysis/stream", mw.key, mw.paidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 	// Deprecated pre-rename aliases (was "fit") — kept so existing API-key clients and the
-	// CLI don't break; they hit the same handlers. Remove once callers have migrated.
-	api.Get("/jobs/:slug/fit", mw.key, h.GetMatchAnalysis)
-	api.Post("/jobs/:slug/fit", mw.key, mw.paidAI(plan.FeatureFit), h.PostMatchAnalysis)
+	// CLI don't break; they hit the same code. Remove once callers have migrated.
+	api.Get("/jobs/:slug/fit", mw.key, contract)
+	api.Post("/jobs/:slug/fit", mw.key, mw.paidAI(plan.FeatureFit), contract)
 	api.Get("/jobs/:slug/fit/stream", mw.key, mw.paidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 	// analyses lists the jobs the caller has run the AI fit analysis on.
-	api.Get("/me/tracking/analyses", mw.key, h.ListMyAnalyses)
+	api.Get("/me/tracking/analyses", mw.key, contract)
 }
 
 // callerLanguage reads the caller's preferred interface language for the fit-analysis
@@ -125,6 +128,23 @@ func renderRefusal(c *fiber.Ctx, err error) (error, bool) {
 	return refuse(c, refused.Decision), true
 }
 
+// fitRefusal is renderRefusal for the contract's two run operations: the same 402 body
+// refuse writes, as the generated response.
+func fitRefusal(err error) (*apigen.FitRefusal, bool) {
+	var refused *fitanalysis.RefusedError
+	if !errors.As(err, &refused) {
+		return nil, false
+	}
+	d := refused.Decision
+	a := viewDecision(d)
+	allowance, _ := json.Marshal(a) // plain fields: cannot fail
+	out := &apigen.FitRefusal{Error: refusalMessage(d.Feature, d.FairUse, planIncludes(a)), Allowance: allowance}
+	if !d.FairUse && hasSomethingToBuy(d.Tier) {
+		out.UpgradeURL = apigen.NewOptString(upgradePath)
+	}
+	return out, true
+}
+
 // liveStamps assembles what a cached analysis is judged fresh against right now. cvUploadedAt
 // is passed in rather than re-read: the caller captured it up front, and a second read could
 // date an analysis by a CV that replaced the one it was computed from.
@@ -137,7 +157,7 @@ func (h *matchHandlers) liveStamps(ctx context.Context, userID int64, job db.Job
 	}
 }
 
-// matchAnalysisResponse is the wire shape for the LLM fit analysis. HasCV is false when the
+// fitAnalysisResponse is the wire shape for the LLM fit analysis. HasCV is false when the
 // caller has no stored CV — the SPA then prompts an upload instead of an empty report.
 // Stale marks a cached analysis whose CV or job changed since (the SPA offers a
 // recompute); Analysis is nil when none is cached or the LLM is unconfigured. Allowance is
@@ -154,56 +174,64 @@ func (h *matchHandlers) liveStamps(ctx context.Context, userID int64, job db.Job
 // allowance from its own /me/plan read at the moment the candidate commits. The field stays
 // because it is part of a documented public API and because the fit standing alone has
 // never been the whole answer for anyone offering both.
-type matchAnalysisResponse struct {
-	HasCV           bool                    `json:"has_cv"`
-	Stale           bool                    `json:"stale"`
-	Analysis        *matchanalysis.Analysis `json:"analysis"`
-	Allowance       *allowanceView          `json:"allowance,omitempty"`
-	TailorAllowance *allowanceView          `json:"tailor_allowance,omitempty"`
+func fitAnalysisResponse(hasCV, stale bool, analysis *matchanalysis.Analysis, allowance, tailor *allowanceView) (*apigen.FitAnalysisResponse, error) {
+	// The analysis and the allowances travel as the Go types marshal them. A nil analysis
+	// is the JSON null the field always carried.
+	raw, err := json.Marshal(analysis)
+	if err != nil {
+		return nil, err
+	}
+	out := &apigen.FitAnalysisResponse{Data: apigen.FitAnalysis{HasCv: hasCV, Stale: stale, Analysis: raw}}
+	if allowance != nil {
+		if out.Data.Allowance, err = json.Marshal(allowance); err != nil {
+			return nil, err
+		}
+	}
+	if tailor != nil {
+		if out.Data.TailorAllowance, err = json.Marshal(tailor); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // GetMatchAnalysis serves the cached fit analysis for one of the caller's jobs, never calling
 // the LLM. It returns the cached analysis (flagged stale when the CV or job changed
 // since it was computed), or a null analysis when none is cached. Cookie or API key;
 // an unknown slug is a 404. has_cv=false (no LLM ever) when no CV is stored.
-func (h *matchHandlers) GetMatchAnalysis(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *matchHandlers) GetMatchAnalysis(ctx context.Context, params apigen.GetMatchAnalysisParams) (*apigen.FitAnalysisResponse, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
+	job, err := h.queries.GetJobBySlug(ctx, params.Slug)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := jobVisibleToCaller(job, userID, true); err != nil {
-		return err
+		return nil, err
 	}
-	cvUploadedAt, hasCV := h.cvUploadedAt(c, userID)
+	cvUploadedAt, hasCV := h.cvUploadedAt(ctx, userID)
 	if !hasCV {
 		// No CV means no analysis is possible, so usage is moot — skip the count query.
-		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: false}})
+		return fitAnalysisResponse(false, false, nil, nil, nil)
 	}
 	// The standings are the same either way, so they are read once and the analysis is
 	// filled in below when there is one.
-	resp := matchAnalysisResponse{
-		HasCV:           true,
-		Allowance:       h.allowanceView(c.Context(), userID),
-		TailorAllowance: h.tailorAllowanceView(c.Context(), userID),
-	}
-	analysis, stored, err := h.fit.Cached(c.Context(), userID, job.ID)
+	allowance, tailor := h.allowanceView(ctx, userID), h.tailorAllowanceView(ctx, userID)
+	analysis, stored, err := h.fit.Cached(ctx, userID, job.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if analysis == nil {
-		return c.JSON(fiber.Map{"data": resp})
+		return fitAnalysisResponse(true, false, nil, allowance, tailor)
 	}
 	// Recompute the hard-constraint ceiling from the current job/résumé/dictionary and
 	// apply it to the cached analysis on read — the cap is never stored, so a dictionary
 	// change takes effect without marking the cache stale.
-	h.capServedAnalysis(c.Context(), userID, job, analysis)
-	resp.Analysis = analysis
-	resp.Stale = !h.liveStamps(c.Context(), userID, job, cvUploadedAt).Fresh(stored)
-	return c.JSON(fiber.Map{"data": resp})
+	h.capServedAnalysis(ctx, userID, job, analysis)
+	stale := !h.liveStamps(ctx, userID, job, cvUploadedAt).Fresh(stored)
+	return fitAnalysisResponse(true, stale, analysis, allowance, tailor)
 }
 
 // allowanceView reports where the caller stands on the fit-analysis allowance today, or nil
@@ -238,75 +266,108 @@ func (h *matchHandlers) tailorAllowanceView(ctx context.Context, userID int64) *
 // job, caches the result per (user, job), and returns it fresh. Best-effort: an
 // unconfigured or failing LLM returns has_cv with a null analysis (200) and caches
 // nothing. Cookie or API key; unknown slug 404; has_cv=false when no CV is stored.
-func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
+func (h *matchHandlers) RunMatchAnalysis(ctx context.Context, params apigen.RunMatchAnalysisParams) (apigen.RunMatchAnalysisRes, error) {
+	ok, refusal, err := h.runMatchAnalysis(ctx, params.Slug)
+	switch {
+	case err != nil:
+		return nil, err
+	case refusal != nil:
+		return refusal, nil
 	}
-	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
+	return ok, nil
+}
+
+// RunJobFit is the pre-rename alias of RunMatchAnalysis.
+func (h *matchHandlers) RunJobFit(ctx context.Context, params apigen.RunJobFitParams) (apigen.RunJobFitRes, error) {
+	ok, refusal, err := h.runMatchAnalysis(ctx, params.Slug)
+	switch {
+	case err != nil:
+		return nil, err
+	case refusal != nil:
+		return refusal, nil
+	}
+	return ok, nil
+}
+
+// GetJobFit is the pre-rename alias of GetMatchAnalysis.
+func (h *matchHandlers) GetJobFit(ctx context.Context, params apigen.GetJobFitParams) (*apigen.FitAnalysisResponse, error) {
+	return h.GetMatchAnalysis(ctx, apigen.GetMatchAnalysisParams(params))
+}
+
+// runMatchAnalysis answers either the analysis or the 402 refusal, never both.
+func (h *matchHandlers) runMatchAnalysis(ctx context.Context, slug string) (*apigen.FitAnalysisResponse, *apigen.FitRefusal, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, nil, err
+	}
+	job, err := h.queries.GetJobBySlug(ctx, slug)
+	if err != nil {
+		return nil, nil, err
 	}
 	if err := jobVisibleToCaller(job, userID, true); err != nil {
-		return err
+		return nil, nil, err
 	}
-	cvUploadedAt, hasCV := h.cvUploadedAt(c, userID)
+	cvUploadedAt, hasCV := h.cvUploadedAt(ctx, userID)
 	if !hasCV {
-		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: false}})
+		out, err := fitAnalysisResponse(false, false, nil, nil, nil)
+		return out, nil, err
 	}
 	// The upload time above doubles as the cache stamp, captured up front so the cache
 	// is stamped with the CV that was actually analyzed even if the user re-uploads
 	// mid-analysis (the three-stage chain takes seconds); re-reading it afterwards would
 	// risk stamping a newer CV's time on an older CV's analysis. language is captured the
 	// same way, for the same reason.
-	language := h.callerLanguage(c.Context(), userID)
+	language := h.callerLanguage(ctx, userID)
 	// Bound before the reservation below, so a binding that refuses (a route mounted without
 	// the paid gate) leaves nothing reserved behind it.
-	analyzer, err := h.boundAnalyzer(c.UserContext(), userID)
+	analyzer, err := h.boundAnalyzer(ctx, userID)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	// Take the credit before touching the LLM: the atomic debit IS the gate, so two
 	// concurrent runs cannot both pass a balance only one of them could afford. A recompute
 	// is free, and a run that produces nothing gives the credit back. The rule and the
 	// refusal are the service's; only the status code is ours.
-	reserved, err := h.fit.Reserve(c.Context(), userID, job.ID)
+	reserved, err := h.fit.Reserve(ctx, userID, job.ID)
 	if err != nil {
-		if refusal, refused := renderRefusal(c, err); refused {
-			return refusal
+		if refusal, refused := fitRefusal(err); refused {
+			return nil, refusal, nil
 		}
-		return err
+		return nil, nil, err
 	}
 
 	// The caller's profile drives both the deterministic skills anchor and the location
 	// dimension; a missing profile is tolerated (zero value → empty skills/preferences).
-	profile, _ := h.userProfile.Get(c.Context(), userID)
+	profile, _ := h.userProfile.Get(ctx, userID)
 
 	// Compute the hard-constraint blockers once: the unmet ones ground the prompt
 	// (below) and the same list caps the served score (applyBlockers, after caching).
-	blockers := h.jobBlockers(c.Context(), userID, job, profile)
+	blockers := h.jobBlockers(ctx, userID, job, profile)
 
-	analysis, err := h.fit.Run(c.Context(), fitanalysis.Request{
+	analysis, err := h.fit.Run(ctx, fitanalysis.Request{
 		UserID:       userID,
 		Job:          job,
 		Analyzer:     analyzer,
-		Input:        h.buildAnalysisInput(c, job, userID, profile, blockers, language),
+		Input:        h.buildAnalysisInput(ctx, job, userID, profile, blockers, language),
 		CVUploadedAt: cvUploadedAt,
 		Reserved:     reserved,
 	}, nil)
 	if err != nil {
 		// Best-effort: log (never the CV/job text) and serve no analysis.
 		log.Printf("matchanalysis: analyze failed for user %d job %d: %v", userID, job.ID, err)
-		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true}})
+		out, err := fitAnalysisResponse(true, false, nil, nil, nil)
+		return out, nil, err
 	}
 	if analysis == nil {
 		// LLM unconfigured — nothing was cached.
-		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true}})
+		out, err := fitAnalysisResponse(true, false, nil, nil, nil)
+		return out, nil, err
 	}
 	// Cache holds the uncapped LLM analysis; cap the served copy from the blockers we
 	// already computed for the prompt (same recompute-on-read the GET path does).
 	applyBlockers(analysis, blockers)
-	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: false, Analysis: analysis}})
+	out, err := fitAnalysisResponse(true, false, analysis, nil, nil)
+	return out, nil, err
 }
 
 // buildAnalysisInput assembles the fit chain's input from the candidate's profile and the
@@ -314,12 +375,12 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 // context — the autopilot's post-run refresh, which runs from the SSE writer's detached
 // goroutine after the fiber ctx is gone — can build the Input once, while c is still
 // valid, and carry only the plain value into that goroutine.
-func (h *matchHandlers) buildAnalysisInput(c *fiber.Ctx, job db.Job, userID int64, profile userprofile.Profile, blockers []hardconstraint.Blocker, language string) matchanalysis.Input {
+func (h *matchHandlers) buildAnalysisInput(ctx context.Context, job db.Job, userID int64, profile userprofile.Profile, blockers []hardconstraint.Blocker, language string) matchanalysis.Input {
 	return matchanalysis.Input{
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
-		CompanyInfo:         h.companyInfo(c, job.CompanySlug),
-		StructuredResume:    h.candidateProfile(c, userID),
+		CompanyInfo:         h.companyInfo(ctx, job.CompanySlug),
+		StructuredResume:    h.candidateProfile(ctx, userID),
 		Match:               jobmatch.Compute(job.Skills, profile.Skills),
 		JobWorkMode:         job.WorkMode,
 		JobRemote:           job.Remote,
@@ -380,14 +441,14 @@ func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.J
 	profile, _ := h.userProfile.Get(c.Context(), userID)
 	blockers := h.jobBlockers(c.Context(), userID, job, profile)
 	language := h.callerLanguage(c.Context(), userID)
-	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
+	cvUploadedAt, _ := h.cvUploadedAt(c.Context(), userID)
 	return &autopilotAnalysis{
 		fit: h.fit,
 		req: fitanalysis.Request{
 			UserID:       userID,
 			Job:          job,
 			Analyzer:     analyzer,
-			Input:        h.buildAnalysisInput(c, job, userID, profile, blockers, language),
+			Input:        h.buildAnalysisInput(c.Context(), job, userID, profile, blockers, language),
 			CVUploadedAt: cvUploadedAt,
 		},
 	}, nil
@@ -422,11 +483,11 @@ func (a *autopilotAnalysis) refresh(ctx context.Context) {
 
 // cvUploadedAt reports the caller's stored-CV upload time; ok=false (no error) when CV
 // storage is disabled or the caller has none stored.
-func (h *matchHandlers) cvUploadedAt(c *fiber.Ctx, userID int64) (*time.Time, bool) {
+func (h *matchHandlers) cvUploadedAt(ctx context.Context, userID int64) (*time.Time, bool) {
 	if !h.resume.Enabled() {
 		return nil, false
 	}
-	meta, err := h.resume.Status(c.Context(), userID)
+	meta, err := h.resume.Status(ctx, userID)
 	if err != nil || !meta.Present {
 		return nil, false
 	}
@@ -437,8 +498,8 @@ func (h *matchHandlers) cvUploadedAt(c *fiber.Ctx, userID int64) (*time.Time, bo
 // the zero value when the caller has none current (no résumé, unconfigured LLM, not yet
 // extracted, or stale) — the fit chain then produces no analysis (the raw CV is never sent as
 // a fallback). Best-effort: a read error degrades to the zero value.
-func (h *matchHandlers) candidateProfile(c *fiber.Ctx, userID int64) resumeextract.Professional {
-	return candidateProfileFrom(c.Context(), h.resume, h.candidateBank(), userID)
+func (h *matchHandlers) candidateProfile(ctx context.Context, userID int64) resumeextract.Professional {
+	return candidateProfileFrom(ctx, h.resume, h.candidateBank(), userID)
 }
 
 // candidateProfileFrom composes the contact-free projection the model-facing surfaces read:
@@ -504,11 +565,11 @@ func newCandidateProfiler(queries *db.Queries) candidateProfiler {
 
 // companyInfo returns the raw company_info JSON for the job's company, or "" when the
 // company is unknown or has none — the analysis then grounds on the job text alone.
-func (h *matchHandlers) companyInfo(c *fiber.Ctx, companySlug string) string {
+func (h *matchHandlers) companyInfo(ctx context.Context, companySlug string) string {
 	if companySlug == "" {
 		return ""
 	}
-	company, err := h.queries.GetCompany(c.Context(), companySlug)
+	company, err := h.queries.GetCompany(ctx, companySlug)
 	if err != nil {
 		return ""
 	}

@@ -2,10 +2,12 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/browsertools"
+	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/api/candidateprofile"
 )
 
@@ -39,15 +41,15 @@ func newAutofillHandlers(cvs candidateprofile.CVReader, resumes candidateprofile
 	}
 }
 
-func (h *autofillHandlers) register(api fiber.Router, mw middleware) {
+func (h *autofillHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Canonical autofill fields (name/email/phone/location/links) for the browser
 	// extension to write into application forms. keyAuth (Bearer).
-	api.Get("/me/autofill-profile", mw.key, h.AutofillProfile)
+	api.Get("/me/autofill-profile", mw.key, contract)
 	// Agent-driven autofill: the caller's own browser is driven over the browser-tool
 	// wire. keyAuth admits the cookie too, same as every other mw.key route — the
 	// handler itself refuses anything but the extension's own Bearer session JWT,
 	// because unlike a read this one writes into a live form.
-	api.Post("/me/autofill/run", mw.key, mw.paidAI(unmeteredAI), h.RunAgentAutofill)
+	api.Post("/me/autofill/run", mw.key, mw.paidAI(unmeteredAI), contract)
 }
 
 // autofillProfile assembles a user's canonical autofill fields via internal/api/candidateprofile.
@@ -55,17 +57,21 @@ func (h *autofillHandlers) autofillProfile(ctx context.Context, userID int64) (c
 	return h.profiles.Assemble(ctx, userID)
 }
 
-// AutofillProfile returns the caller's canonical autofill fields. keyAuth so the
+// GetAutofillProfile returns the caller's canonical autofill fields. keyAuth so the
 // browser extension (Bearer) can read it. All-empty (bar the account email) when no
 // source states a contact.
-func (h *autofillHandlers) AutofillProfile(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+func (h *autofillHandlers) GetAutofillProfile(ctx context.Context) (*apigen.GetAutofillProfileOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	profile, err := h.autofillProfile(c.Context(), userID)
+	profile, err := h.autofillProfile(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.JSON(fiber.Map{"data": profile})
+	raw, err := json.Marshal(profile)
+	if err != nil {
+		return nil, err
+	}
+	return &apigen.GetAutofillProfileOK{Data: raw}, nil
 }
