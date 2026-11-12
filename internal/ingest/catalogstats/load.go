@@ -16,8 +16,9 @@ const snapshotKey = "catalogstats:snapshot"
 // near the cron interval would mean one skipped or slow run drops every surface back to
 // the estimate; a long window degrades a missed run to "stale but exact", which is
 // strictly better than "fresh but wrong". ComputedAt travels in the snapshot, so the
-// staleness is observable rather than hidden.
-const snapshotTTL = 24 * time.Hour
+// staleness is observable rather than hidden. The worker runs daily, so a day-long TTL
+// blanked every figure after one failed run (2026-11-11).
+const snapshotTTL = 7 * 24 * time.Hour
 
 // readTimeout bounds a single cache read. Long enough for a healthy same-host round
 // trip, short enough that an unreachable backend degrades the figure instead of holding
