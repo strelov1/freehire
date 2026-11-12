@@ -565,6 +565,30 @@ func (q *Queries) LockAssistantSessionCreation(ctx context.Context, userID int64
 	return err
 }
 
+const rateSupportSession = `-- name: RateSupportSession :execrows
+UPDATE assistant_sessions
+SET helpful = $3
+WHERE id = $1 AND user_id = $2 AND preset = 'support'
+  AND EXISTS (SELECT 1 FROM assistant_messages m WHERE m.session_id = $1 AND m.role = 'assistant')
+`
+
+type RateSupportSessionParams struct {
+	ID      uuid.UUID   `json:"id"`
+	UserID  int64       `json:"user_id"`
+	Helpful pgtype.Bool `json:"helpful"`
+}
+
+// The owner's verdict on their own support conversation, only once it holds a reply: a blank
+// session is handed back on the next create, so a vote on it would land on a conversation not
+// yet had. 0 rows means not theirs, not support, or nothing answered yet.
+func (q *Queries) RateSupportSession(ctx context.Context, arg RateSupportSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, rateSupportSession, arg.ID, arg.UserID, arg.Helpful)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const releaseSupportEscalation = `-- name: ReleaseSupportEscalation :exec
 UPDATE assistant_sessions
 SET escalated_at = NULL

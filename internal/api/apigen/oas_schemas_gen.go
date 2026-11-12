@@ -16209,6 +16209,9 @@ func (s *PutResumeContactsOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
+// RateSupportSessionNoContent is response for RateSupportSession operation.
+type RateSupportSessionNoContent struct{}
+
 // A single item: `{"data": ...}`.
 type ReactivateMentorProfileOK struct {
 	Data MentorshipMentor `json:"data"`
@@ -20616,6 +20619,22 @@ func (s *SuggestionPart) SetSlug(val OptString) {
 // SetText sets the value of Text.
 func (s *SuggestionPart) SetText(val string) {
 	s.Text = val
+}
+
+// Ref: #/components/schemas/SupportRating
+type SupportRating struct {
+	// Whether the conversation helped. A later vote replaces an earlier one.
+	Helpful bool `json:"helpful"`
+}
+
+// GetHelpful returns the value of Helpful.
+func (s *SupportRating) GetHelpful() bool {
+	return s.Helpful
+}
+
+// SetHelpful sets the value of Helpful.
+func (s *SupportRating) SetHelpful(val bool) {
+	s.Helpful = val
 }
 
 // Ref: #/components/schemas/SupportSession

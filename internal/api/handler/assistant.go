@@ -25,6 +25,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/engage/problemreport"
 	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -167,6 +168,7 @@ func newAssistantHandlers(
 	screeningAnswers *screeninganswers.Store,
 	plans *plan.Store,
 	letter coverLetterDeps,
+	prices func(context.Context) []billing.PublicPrice,
 ) *assistantHandlers {
 	h := &assistantHandlers{
 		experience:       bank,
@@ -187,6 +189,7 @@ func newAssistantHandlers(
 		stages:           queries,
 		plans:            plans,
 		extractPDFText:   resume.ExtractPDFText,
+		support:          supportDeps{prices: prices},
 	}
 	// The fit reads come from the service, not from whichever handler happens to hold it:
 	// a tool that grounds on the cached analysis must not break because the CV surface was

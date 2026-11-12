@@ -8,7 +8,7 @@ import type { ChatPreset } from './presets';
 
 const BASE = '/api/v1/assistant';
 
-/** The support agent's own routes: create, messages and cancel, and nothing else. */
+/** The support agent's own routes: create, messages, cancel and rating, and nothing else. */
 export const SUPPORT_BASE = '/api/v1/support';
 
 /** One conversation plus its stored transcript. */
@@ -57,6 +57,15 @@ export function createSession(preset: ChatPreset = 'chat'): Promise<SessionSumma
   }
   const query = preset === 'chat' ? '' : `?preset=${preset}`;
   return request<SessionSummary>(`/sessions${query}`, { method: 'POST', body: '{}' });
+}
+
+/** Record whether a support conversation helped; a later vote replaces an earlier one. */
+export function rateSupportSession(id: string, helpful: boolean): Promise<void> {
+  return request(
+    `/sessions/${encodeURIComponent(id)}/rating`,
+    { method: 'POST', body: JSON.stringify({ helpful }) },
+    SUPPORT_BASE,
+  );
 }
 
 /** Open the conversation held against one automatic application. The server reuses its

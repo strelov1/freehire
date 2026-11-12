@@ -1223,6 +1223,12 @@ type Handler interface {
 	//
 	// PUT /me/resume/contacts
 	PutResumeContacts(ctx context.Context, req jx.Raw) (*PutResumeContactsOK, error)
+	// RateSupportSession implements rateSupportSession operation.
+	//
+	// Records the caller's verdict on their own support conversation.
+	//
+	// POST /support/sessions/{id}/rating
+	RateSupportSession(ctx context.Context, req *SupportRating, params RateSupportSessionParams) error
 	// ReactivateMentorProfile implements reactivateMentorProfile operation.
 	//
 	// POST /me/mentorship/profile/reactivate

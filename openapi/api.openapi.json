@@ -14913,6 +14913,50 @@
         ]
       }
     },
+    "/support/sessions/{id}/rating": {
+      "post": {
+        "operationId": "rateSupportSession",
+        "description": "Records the caller's verdict on their own support conversation.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful. "
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Support"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportRating"
+              }
+            }
+          }
+        }
+      }
+    },
     "/talent": {
       "get": {
         "operationId": "listTalent",
@@ -24517,6 +24561,18 @@
           }
         },
         "description": "One recognised piece of the query: a dictionary term, or text still being typed."
+      },
+      "SupportRating": {
+        "type": "object",
+        "required": [
+          "helpful"
+        ],
+        "properties": {
+          "helpful": {
+            "type": "boolean",
+            "description": "Whether the conversation helped. A later vote replaces an earlier one."
+          }
+        }
       },
       "SupportSession": {
         "type": "object",

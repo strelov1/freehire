@@ -835,6 +835,7 @@ func Register(app *fiber.App, cfg Config) {
 		screeningAnswersSvc,
 		plans,
 		letterDeps,
+		billingSvc.PublicPrices,
 	)
 	// Same nil-interface trap as stt above: only assign when cfg.Realtime is
 	// genuinely non-nil, or "no voice mode here" becomes a panic on the first mint.

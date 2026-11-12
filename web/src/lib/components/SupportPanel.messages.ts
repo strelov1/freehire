@@ -7,6 +7,10 @@ export const messages = defineMessages(
     askLimits: 'How much of today’s allowance is left?',
     askProblem: 'Something is not working',
     newChat: 'New conversation',
+    helpedQuestion: 'Did this help?',
+    helpedYes: 'Yes, it helped',
+    helpedNo: 'No, it did not help',
+    helpedThanks: 'Thanks for telling us.',
   },
   {
     ru: {
@@ -15,6 +19,10 @@ export const messages = defineMessages(
       askLimits: 'Сколько осталось от дневного лимита?',
       askProblem: 'Что-то не работает',
       newChat: 'Новый разговор',
+      helpedQuestion: 'Это помогло?',
+      helpedYes: 'Да, помогло',
+      helpedNo: 'Нет, не помогло',
+      helpedThanks: 'Спасибо, что сказали.',
     },
   },
 );

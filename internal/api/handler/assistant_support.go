@@ -7,11 +7,14 @@ import (
 	"log"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/identity/billing"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
@@ -33,6 +36,10 @@ type supportDeps struct {
 	runner *assistant.Runner
 	mail   supportMail
 
+	// prices reads what each plan costs now, from the same provider cache as the pricing
+	// page. Without billing (or nil, in tests) my_account carries no prices.
+	prices func(context.Context) []billing.PublicPrice
+
 	// pool opens the transaction that makes a blank session's get-or-create atomic.
 	pool *pgxpool.Pool
 }
@@ -45,6 +52,7 @@ func (h *assistantHandlers) registerSupport(api fiber.Router, mw middleware, con
 	api.Post("/support/sessions", mw.cookie, contract)
 	api.Post("/support/sessions/:id/messages", mw.cookie, h.PostSupportMessage)
 	api.Post("/support/sessions/:id/cancel", mw.cookie, contract)
+	api.Post("/support/sessions/:id/rating", mw.cookie, contract)
 }
 
 func (h *assistantHandlers) CreateSupportSession(ctx context.Context) (apigen.CreateSupportSessionRes, error) {
@@ -167,6 +175,28 @@ func (h *assistantHandlers) CancelSupportTurn(ctx context.Context, params apigen
 		return err
 	}
 	h.turns.cancel(sess.ID)
+	return nil
+}
+
+// RateSupportSession records whether the caller's own support conversation helped.
+func (h *assistantHandlers) RateSupportSession(ctx context.Context, req *apigen.SupportRating, params apigen.RateSupportSessionParams) error {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	sess, err := h.supportSession(ctx, userID, params.ID)
+	if err != nil {
+		return err
+	}
+	n, err := h.queries.RateSupportSession(ctx, db.RateSupportSessionParams{
+		ID: sess.ID, UserID: userID, Helpful: pgtype.Bool{Bool: req.Helpful, Valid: true},
+	})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fiber.NewError(fiber.StatusConflict, "nothing to rate yet — the assistant has not replied")
+	}
 	return nil
 }
 

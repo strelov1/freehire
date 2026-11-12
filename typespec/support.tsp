@@ -41,3 +41,16 @@ op createSupportSession():
 op cancelSupportTurn(@path id: string): {
   @statusCode _: 204;
 } | Problem;
+
+model SupportRating {
+  /** Whether the conversation helped. A later vote replaces an earlier one. */
+  helpful: boolean;
+}
+
+/** Records the caller's verdict on their own support conversation. */
+@tag("Support")
+@route("/support/sessions/{id}/rating")
+@post
+op rateSupportSession(@path id: string, @body body: SupportRating): {
+  @statusCode _: 204;
+} | Problem;

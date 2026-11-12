@@ -2951,6 +2951,12 @@ func encodePutResumeContactsResponse(response *PutResumeContactsOK, w http.Respo
 	return nil
 }
 
+func encodeRateSupportSessionResponse(response *RateSupportSessionNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
 func encodeReactivateMentorProfileResponse(response *ReactivateMentorProfileOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)

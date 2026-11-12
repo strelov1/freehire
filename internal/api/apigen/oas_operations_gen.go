@@ -230,6 +230,7 @@ const (
 	ProposeCompanyRelationOperation       OperationName = "ProposeCompanyRelation"
 	PutProfileOperation                   OperationName = "PutProfile"
 	PutResumeContactsOperation            OperationName = "PutResumeContacts"
+	RateSupportSessionOperation           OperationName = "RateSupportSession"
 	ReactivateMentorProfileOperation      OperationName = "ReactivateMentorProfile"
 	RecallApplicationMailOperation        OperationName = "RecallApplicationMail"
 	RecordApplicationFollowUpOperation    OperationName = "RecordApplicationFollowUp"

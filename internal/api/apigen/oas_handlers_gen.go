@@ -20487,6 +20487,116 @@ func (s *Server) handlePutResumeContactsRequest(args [0]string, argsEscaped bool
 	}
 }
 
+// handleRateSupportSessionRequest handles rateSupportSession operation.
+//
+// Records the caller's verdict on their own support conversation.
+//
+// POST /support/sessions/{id}/rating
+func (s *Server) handleRateSupportSessionRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: RateSupportSessionOperation,
+			ID:   "rateSupportSession",
+		}
+	)
+	params, err := decodeRateSupportSessionParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeRateSupportSessionRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *RateSupportSessionNoContent
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    RateSupportSessionOperation,
+			OperationSummary: "",
+			OperationID:      "rateSupportSession",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = *SupportRating
+			Params   = RateSupportSessionParams
+			Response = *RateSupportSessionNoContent
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackRateSupportSessionParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				err = s.h.RateSupportSession(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		err = s.h.RateSupportSession(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeRateSupportSessionResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleReactivateMentorProfileRequest handles reactivateMentorProfile operation.
 //
 // POST /me/mentorship/profile/reactivate
